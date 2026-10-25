@@ -162,9 +162,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// generation to surface dependencies the tree does not itself provide.
 	let receivedProperties: Set<Property>
 
+	/// - Parameter propertiesGeneratedLater: Unwrapped properties that this subtree
+	///   receives `onlyIfAvailable` and that an enclosing scope declares but generates
+	///   after this code (see `orderedPropertiesToGenerate`), so they are unavailable
+	///   here. Restricting it to this subtree's `onlyIfAvailable` receives also drops a
+	///   property a scope in this subtree declares itself, since that declaration
+	///   fulfills the receives beneath it.
 	func generateCode(
 		codeGeneration: CodeGeneration = .dependencyTree,
 		propertiesAlreadyGeneratedAtThisScope: Set<Property> = [],
+		propertiesGeneratedLater: Set<Property> = [],
 		leadingWhitespace: String = "",
 	) async throws -> String {
 		let generatedCode: String
@@ -172,26 +179,33 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.filter {
 				!(propertiesAlreadyGeneratedAtThisScope.contains($0) || propertiesAlreadyGeneratedAtThisScope.contains($0.asUnwrappedProperty))
 			}
+			.union(onlyIfAvailableDependencies(fulfilledByPropertiesGeneratedLater: propertiesGeneratedLater))
 		// Mock code is not cached — the context varies per call site.
-		// Dependency tree code is cached by unavailable properties.
+		// Dependency tree code is cached by the properties that are unavailable.
 		switch codeGeneration {
 		case .dependencyTree:
-			if let generateCodeTask = unavailablePropertiesToGenerateCodeTask[unavailableProperties] {
+			let cacheKey = UnavailablePropertiesCacheKey(
+				unavailableProperties: unavailableProperties,
+				propertiesGeneratedLater: propertiesGeneratedLater,
+			)
+			if let generateCodeTask = unavailablePropertiesToGenerateCodeTask[cacheKey] {
 				generatedCode = try await generateCodeTask.value
 			} else {
 				let generateCodeTask = Task {
 					try await generatePropertyCode(
 						codeGeneration: .dependencyTree,
 						unavailableProperties: unavailableProperties,
+						propertiesGeneratedLater: propertiesGeneratedLater,
 					)
 				}
-				unavailablePropertiesToGenerateCodeTask[unavailableProperties] = generateCodeTask
+				unavailablePropertiesToGenerateCodeTask[cacheKey] = generateCodeTask
 				generatedCode = try await generateCodeTask.value
 			}
 		case .mock:
 			generatedCode = try await generatePropertyCode(
 				codeGeneration: codeGeneration,
 				unavailableProperties: unavailableProperties,
+				propertiesGeneratedLater: propertiesGeneratedLater,
 			)
 		}
 		if leadingWhitespace.isEmpty {
@@ -303,53 +317,156 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private let propertiesToDeclare: Set<Property>
 	private let property: Property?
 
-	private var unavailablePropertiesToGenerateCodeTask = [Set<Property>: Task<String, Error>]()
+	private struct UnavailablePropertiesCacheKey: Hashable {
+		let unavailableProperties: Set<Property>
+		let propertiesGeneratedLater: Set<Property>
+	}
 
+	private var unavailablePropertiesToGenerateCodeTask = [UnavailablePropertiesCacheKey: Task<String, Error>]()
+
+	/// The children of this scope in the order their code is emitted: every child
+	/// follows the siblings it depends on.
+	///
+	/// A child depends on a sibling when the child's subtree receives the sibling.
+	/// A required receive must be honored. A `@Received(onlyIfAvailable: true)`
+	/// receive is honored only when it does not close a cycle among the siblings —
+	/// e.g. when `b`'s subtree receives `c` only if available but `c` receives `b`,
+	/// `c` cannot be built before `b`. A child whose `onlyIfAvailable` receive is
+	/// not honored is ordered before that sibling, and its subtree is generated with
+	/// the sibling unavailable (see `propertiesGeneratedLater`), exactly as when no
+	/// ancestor provides it. Receives are considered in sibling order, so the result
+	/// is deterministic, and it matches a plain topological order whenever every
+	/// receive can be honored.
 	private lazy var orderedPropertiesToGenerate: [ScopeGenerator] = {
+		// A property can be listed more than once — a mock root promotes a received
+		// property that a promoted scope receives even when the root already
+		// instantiates it. Only the first child for each property is generated.
+		var siblings = [(property: Property, index: Int)]()
+		var listedProperties = Set<Property>()
+		for (index, scope) in propertiesToGenerate.enumerated() {
+			if let property = scope.property, listedProperties.insert(property).inserted {
+				siblings.append((property, index))
+			}
+		}
+		// Required receives first: they are always honored.
+		var siblingDependencies = propertiesToGenerate.map { scope in
+			Set(siblings.compactMap { sibling in
+				scope.receivedProperties.contains(sibling.property)
+					&& !scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property)
+					? sibling.index
+					: nil
+			})
+		}
+		func dependsOn(_ dependencyIndex: Int, from dependentIndex: Int) -> Bool {
+			var visitedIndices = Set<Int>()
+			var indicesToVisit = [dependentIndex]
+			while let index = indicesToVisit.popLast() {
+				guard index != dependencyIndex else { return true }
+				for siblingIndex in siblingDependencies[index] where visitedIndices.insert(siblingIndex).inserted {
+					indicesToVisit.append(siblingIndex)
+				}
+			}
+			return false
+		}
+		// Then each `onlyIfAvailable` receive, in sibling order, unless the sibling it
+		// would wait on already waits on the receiver.
+		for (index, scope) in propertiesToGenerate.enumerated() where !scope.onlyIfAvailableUnwrappedReceivedProperties.isEmpty {
+			for sibling in siblings
+				where scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property)
+				&& !dependsOn(index, from: sibling.index)
+			{
+				siblingDependencies[index].insert(sibling.index)
+			}
+		}
+
 		var orderedPropertiesToGenerate = [ScopeGenerator]()
-		var propertyToUnfulfilledScopeMap = propertiesToGenerate
-			.reduce(into: [Property: ScopeGenerator]()) { partialResult, scope in
-				if let property = scope.property {
-					partialResult[property] = scope
-				}
-			}
-		func fulfill(_ scope: ScopeGenerator) {
-			guard let property = scope.property,
-			      propertyToUnfulfilledScopeMap[property] != nil
-			else {
-				return
-			}
+		var unfulfilledIndices = Set(siblings.map(\.index))
+		func fulfill(_ index: Int) {
 			// Mark as fulfilled before recursing to prevent cycles.
-			propertyToUnfulfilledScopeMap[property] = nil
-			let receivedAndOnlyIfAvailable = scope.receivedProperties
-				.union(scope.onlyIfAvailableUnwrappedReceivedProperties)
-			let scopeDependencies = propertiesToGenerate
-				.compactMap { childScope -> ScopeGenerator? in
-					guard let childProperty = childScope.property,
-					      propertyToUnfulfilledScopeMap[childProperty] != nil,
-					      receivedAndOnlyIfAvailable.contains(childProperty)
-					else {
-						return nil
-					}
-					return childScope
-				}
+			guard unfulfilledIndices.remove(index) != nil else { return }
 			// Fulfill the scopes we depend upon.
-			for dependentScope in scopeDependencies {
-				fulfill(dependentScope)
+			for siblingIndex in siblingDependencies[index].sorted() {
+				fulfill(siblingIndex)
 			}
-
-			orderedPropertiesToGenerate.append(scope)
+			orderedPropertiesToGenerate.append(propertiesToGenerate[index])
 		}
-
-		for scope in propertiesToGenerate {
-			fulfill(scope)
+		for index in propertiesToGenerate.indices {
+			fulfill(index)
 		}
-
 		return orderedPropertiesToGenerate
 	}()
 
+	/// The index in `orderedPropertiesToGenerate` of the last child declaring each
+	/// unwrapped property.
+	private lazy var orderedIndexByUnwrappedProperty: [Property: Int] = orderedPropertiesToGenerate
+		.enumerated()
+		.reduce(into: [Property: Int]()) { partialResult, indexAndScope in
+			if let property = indexAndScope.element.property {
+				partialResult[property.asUnwrappedProperty] = indexAndScope.offset
+			}
+		}
+
+	/// The properties `child`, at `index` in `orderedPropertiesToGenerate`, receives
+	/// `onlyIfAvailable` but must treat as unavailable: those this scope's ancestors
+	/// generate later (`propertiesGeneratedLater`) and those of the siblings
+	/// generated after it. All are unwrapped, so they match a receive of `x: X?`.
+	private func propertiesGeneratedLater(
+		thanChildAt index: Int,
+		receivedOnlyIfAvailableBy child: ScopeGenerator,
+		propertiesGeneratedLater: Set<Property>,
+	) -> Set<Property> {
+		child.onlyIfAvailableUnwrappedReceivedProperties.filter { property in
+			if propertiesGeneratedLater.contains(property) {
+				true
+			} else if let orderedIndex = orderedIndexByUnwrappedProperty[property] {
+				orderedIndex > index
+			} else {
+				false
+			}
+		}
+	}
+
+	/// The properties this scope's type receives `onlyIfAvailable` that are
+	/// unavailable because an ancestor generates them after this scope — the
+	/// fulfilling property and, for an aliased dependency, the alias, matching how
+	/// `Scope.createScopeGenerator` marks a dependency no ancestor provides.
+	nonisolated private func onlyIfAvailableDependencies(
+		fulfilledByPropertiesGeneratedLater propertiesGeneratedLater: Set<Property>,
+	) -> Set<Property> {
+		switch scopeData {
+		case .root:
+			[]
+		case let .property(instantiable, _, _, _, _):
+			Set(instantiable.dependencies.flatMap { dependency -> [Property] in
+				switch dependency.source {
+				case let .received(onlyIfAvailable):
+					if onlyIfAvailable, propertiesGeneratedLater.contains(dependency.property.asUnwrappedProperty) {
+						[dependency.property]
+					} else {
+						[]
+					}
+				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+					if onlyIfAvailable, propertiesGeneratedLater.contains(fulfillingProperty.asUnwrappedProperty) {
+						[dependency.property, fulfillingProperty]
+					} else {
+						[]
+					}
+				case .instantiated, .forwarded:
+					[]
+				}
+			})
+		case let .alias(_, fulfillingProperty, _, onlyIfAvailable, _):
+			if onlyIfAvailable, propertiesGeneratedLater.contains(fulfillingProperty.asUnwrappedProperty) {
+				[fulfillingProperty]
+			} else {
+				[]
+			}
+		}
+	}
+
 	private func generateProperties(
 		codeGeneration: CodeGeneration = .dependencyTree,
+		propertiesGeneratedLater: Set<Property>,
 		leadingMemberWhitespace: String,
 	) async throws -> [String] {
 		var generatedProperties = [String]()
@@ -358,6 +475,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				childGenerator.generateCode(
 					codeGeneration: codeGeneration,
 					propertiesAlreadyGeneratedAtThisScope: .init(orderedPropertiesToGenerate[0..<index].compactMap(\.property)),
+					propertiesGeneratedLater: self.propertiesGeneratedLater(
+						thanChildAt: index,
+						receivedOnlyIfAvailableBy: childGenerator,
+						propertiesGeneratedLater: propertiesGeneratedLater,
+					),
 					leadingWhitespace: leadingMemberWhitespace,
 				),
 			)
@@ -380,6 +502,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private func generatePropertyCode(
 		codeGeneration: CodeGeneration,
 		unavailableProperties: Set<Property>,
+		propertiesGeneratedLater: Set<Property>,
 	) async throws -> String {
 		switch scopeData {
 		case let .root(instantiable):
@@ -392,7 +515,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					return try await """
 					extension \(instantiable.concreteInstantiable.asSource) {
 					    public \(instantiable.declarationType == .classType ? "convenience " : "")init() {
-					\(generateProperties(leadingMemberWhitespace: "        ").joined(separator: "\n"))
+					\(generateProperties(propertiesGeneratedLater: propertiesGeneratedLater, leadingMemberWhitespace: "        ").joined(separator: "\n"))
 					        self.init(\(argumentList))
 					    }
 					}
@@ -459,6 +582,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					.joined(separator: ", ")
 				let generatedProperties = try await generateProperties(
 					codeGeneration: codeGeneration,
+					propertiesGeneratedLater: propertiesGeneratedLater,
 					leadingMemberWhitespace: Self.standardIndent,
 				)
 				let functionArguments = if forwardedProperties.isEmpty {
@@ -521,6 +645,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			case .constant:
 				let generatedProperties = try await generateProperties(
 					codeGeneration: codeGeneration,
+					propertiesGeneratedLater: propertiesGeneratedLater,
 					leadingMemberWhitespace: Self.standardIndent,
 				)
 
@@ -1040,6 +1165,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let constructionArguments: [Initializer.Argument]
 		/// The type's declared dependencies.
 		let dependencies: [Dependency]
+		/// The `onlyIfAvailable` dependencies that are unavailable where this node is
+		/// built, because an enclosing scope builds them after it. They are passed `nil`.
+		let unavailableProperties: Set<Property>
 		/// Whether a compatible user-defined mock method exists for this type.
 		let useMockInitializer: Bool
 		/// The custom mock method name (e.g., "customMock"), if any.
@@ -1413,15 +1541,30 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `@Received(fulfilledByDependencyNamed:)` needs. Items appear in production's
 	/// `orderedPropertiesToGenerate` order, so an alias always sits after the
 	/// sibling child that fulfills it.
+	///
+	/// `propertiesGeneratedLater` has the same meaning as in `generateCode`: an
+	/// `onlyIfAvailable` receive of one of these properties is passed `nil`, and an
+	/// `onlyIfAvailable` alias of one is not bound, as in the production tree.
 	private func collectMockParameterTree(
 		insideSendableScope: Bool = false,
+		propertiesGeneratedLater: Set<Property> = [],
 	) async -> [MockTreeItem] {
 		var items = [MockTreeItem]()
 
 		// Roots only appear at the top level, never as children here — so the
 		// `.root` case is not part of the reachable pattern space and is omitted.
-		for childGenerator in orderedPropertiesToGenerate {
+		for (index, childGenerator) in orderedPropertiesToGenerate.enumerated() {
+			let childPropertiesGeneratedLater = self.propertiesGeneratedLater(
+				thanChildAt: index,
+				receivedOnlyIfAvailableBy: childGenerator,
+				propertiesGeneratedLater: propertiesGeneratedLater,
+			)
+			let childUnavailableProperties = childGenerator.onlyIfAvailableDependencies(
+				fulfilledByPropertiesGeneratedLater: childPropertiesGeneratedLater,
+			)
 			if case let .alias(property, fulfillingProperty, _, _, declarationLocation) = childGenerator.scopeData {
+				// The dependency this alias binds is passed `nil` instead.
+				guard childUnavailableProperties.isEmpty else { continue }
 				items.append(.alias(MockAliasNode(
 					propertyLabel: property.label,
 					typeDescription: property.typeDescription,
@@ -1436,6 +1579,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// Recurse into children to build the subtree.
 				let childItems = await childGenerator.collectMockParameterTree(
 					insideSendableScope: childInsideSendable,
+					propertiesGeneratedLater: childPropertiesGeneratedLater,
 				)
 
 				// Determine which initializer to use for construction arguments and defaults.
@@ -1488,6 +1632,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					defaultParameters: defaultParameters,
 					constructionArguments: constructionArguments,
 					dependencies: childInstantiable.dependencies,
+					unavailableProperties: childUnavailableProperties,
 					useMockInitializer: useMockInitializer,
 					customMockName: childInstantiable.customMockName,
 					concreteType: childInstantiable.concreteInstantiable,
@@ -2052,7 +2197,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `emitReceiverBindings` in the enclosing wrapper; `.instantiated` is bound
 	/// as a sibling `let`; `.forwarded` is bound as a function parameter;
 	/// undisambiguated `.received` labels reach a flat mock parameter (or
-	/// ancestor tree binding) via Swift lexical scoping. Non-dependency
+	/// ancestor tree binding) via Swift lexical scoping. The node's
+	/// `unavailableProperties` are passed `nil` instead. Non-dependency
 	/// arguments come from `SafeDIOverrides` storage. Unlabeled defaults are
 	/// omitted entirely so Swift's default-argument thunk fires in the callee.
 	private static func resolveBuilderArguments(
@@ -2071,8 +2217,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			? node.callSiteArguments
 			: node.callSiteArgumentsForPrunedOverride
 		return argumentsToSurface.map { argument in
-			if dependenciesByLabel[argument.innerLabel] != nil {
-				argument.innerLabel
+			if let dependency = dependenciesByLabel[argument.innerLabel] {
+				if node.unavailableProperties.contains(dependency.property) {
+					"nil"
+				} else {
+					argument.innerLabel
+				}
 			} else if let sendableOverrideExtractor {
 				sendableOverrideExtractor.extract(
 					"\(nodePath).\(argument.label)",

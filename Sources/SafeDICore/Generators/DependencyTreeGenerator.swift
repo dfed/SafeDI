@@ -817,6 +817,17 @@ public actor DependencyTreeGenerator {
 			mockRootScope,
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 		)
+		// Promotion can also make the mock root's children require one another
+		// (e.g., C @Receives B while B's subtree @Receives C — each must be built
+		// first), which no ancestor stack shows. Detecting that is cheap; production's
+		// walk, which follows received dependencies between scopes, then reports the
+		// cycle. Running that walk on every mock root instead would add a
+		// received-dependency walk for every node of every mock tree.
+		try validatePropertiesAreFulfillable(
+			onRootScopes: Self.childrenRequireEachOther(in: mockRootScope, cache: &cache) ? [mockRootScope] : [],
+			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			cyclesOnly: true,
+		)
 
 		// Build the final ScopeGenerator once.
 		return try mockRootScope.createScopeGenerator(
@@ -873,11 +884,49 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
+	/// Whether the instantiated children of `scope` require one another in a cycle:
+	/// each child's subtree requires (not `onlyIfAvailable`) a sibling that,
+	/// directly or through other siblings, requires it. Such children cannot be
+	/// ordered so that each is built after the siblings it receives.
+	private static func childrenRequireEachOther(
+		in scope: Scope,
+		cache: inout [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)],
+	) -> Bool {
+		var children = [(property: Property, scope: Scope)]()
+		for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
+			children.append((property, childScope))
+		}
+		var childIndexByProperty = [Property: Int]()
+		for (index, child) in children.enumerated() {
+			childIndexByProperty[child.property] = index
+		}
+		let requiredSiblingIndices = children.map { child in
+			let (received, onlyIfAvailable) = collectReceivedProperties(from: child.scope, cache: &cache)
+			return received.compactMap { property in
+				property != child.property && !onlyIfAvailable.contains(property)
+					? childIndexByProperty[property]
+					: nil
+			}
+		}
+		// Depth-first search for a back edge.
+		var visitingIndices = Set<Int>()
+		var visitedIndices = Set<Int>()
+		func reachesVisitingIndex(from index: Int) -> Bool {
+			guard visitedIndices.insert(index).inserted else {
+				return visitingIndices.contains(index)
+			}
+			visitingIndices.insert(index)
+			defer { visitingIndices.remove(index) }
+			return requiredSiblingIndices[index].contains(where: reachesVisitingIndex(from:))
+		}
+		return children.indices.contains(where: reachesVisitingIndex(from:))
+	}
+
 	/// Classifies a detected cycle and throws the appropriate error, or
 	/// returns silently if the cycle is valid. Called from both
-	/// `validatePropertiesAreFulfillable` (production graph) and
-	/// `validateMockRootScopeForCycles` (mock graph after `@Received`
-	/// promotion) — the two validation entry points share this classifier.
+	/// `validatePropertiesAreFulfillable` (production graph, and a mock root whose
+	/// children require one another) and `validateMockRootScopeForCycles` (mock
+	/// graph after `@Received` promotion).
 	///
 	/// Rejected:
 	/// - Constant entry point in a fully-constant cycle → `.constantDependencyCycleDetected`.
@@ -1260,6 +1309,31 @@ public actor DependencyTreeGenerator {
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
 		cyclesOnly: Bool,
 	) throws {
+		var rootScopes = rootInstantiables.compactMap { typeDescriptionToScopeMap[$0] }
+		// When checking cycles only (mock validation), also validate non-root types
+		// that have generateMock enabled — they bypass root entry points.
+		if cyclesOnly {
+			let rootInstantiableSet = Set(rootInstantiables)
+			for scope in Set(typeDescriptionToScopeMap.values)
+				where scope.instantiable.generateMock && !rootInstantiableSet.contains(scope.instantiable.concreteInstantiable)
+			{
+				rootScopes.append(scope)
+			}
+		}
+		try validatePropertiesAreFulfillable(
+			onRootScopes: rootScopes,
+			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			cyclesOnly: cyclesOnly,
+		)
+	}
+
+	/// Validates the trees rooted at `rootScopes` for cycles and optionally for
+	/// unfulfillable properties. See `validatePropertiesAreFulfillable(typeDescriptionToScopeMap:cyclesOnly:)`.
+	private func validatePropertiesAreFulfillable(
+		onRootScopes rootScopes: [Scope],
+		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		cyclesOnly: Bool,
+	) throws {
 		var unfulfillableProperties = Set<DependencyTreeGeneratorError.UnfulfillableProperty>()
 		func validatePropertiesAreFulfillable(
 			on scope: Scope,
@@ -1414,7 +1488,7 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
-		for rootScope in rootInstantiables.compactMap({ typeDescriptionToScopeMap[$0] }) {
+		for rootScope in rootScopes {
 			try validatePropertiesAreFulfillable(
 				on: rootScope,
 				receivableProperties: Set(rootScope.properties),
@@ -1422,23 +1496,6 @@ public actor DependencyTreeGenerator {
 				propertyStack: [],
 				root: rootScope.instantiable.concreteInstantiable,
 			)
-		}
-
-		// When checking cycles only (mock validation), also validate non-root types
-		// that have generateMock enabled — they bypass root entry points.
-		if cyclesOnly {
-			let rootInstantiableSet = Set(rootInstantiables)
-			for scope in Set(typeDescriptionToScopeMap.values)
-				where scope.instantiable.generateMock && !rootInstantiableSet.contains(scope.instantiable.concreteInstantiable)
-			{
-				try validatePropertiesAreFulfillable(
-					on: scope,
-					receivableProperties: Set(scope.properties),
-					property: nil,
-					propertyStack: [],
-					root: scope.instantiable.concreteInstantiable,
-				)
-			}
 		}
 
 		if !unfulfillableProperties.isEmpty {
