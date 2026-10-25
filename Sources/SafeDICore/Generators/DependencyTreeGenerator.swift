@@ -733,17 +733,18 @@ public actor DependencyTreeGenerator {
 		)
 
 		// Worklist: promoted scopes may introduce additional transitive received properties.
+		// Only required properties are walked: a property received only if available becomes
+		// an optional mock parameter with no default construction, so its transitive
+		// dependencies don't need promoting. A property is required when any receiver in the
+		// root's tree or in a promoted scope's tree requires it, even if others receive it
+		// only if available.
 		var allReceived = initialReceived
 		var allOnlyIfAvailable = initialOnlyIfAvailable
+		var allRequired = initialReceived.subtracting(initialOnlyIfAvailable)
 		var visitedTypes = Set<TypeDescription>()
-		var worklist = Array(allReceived)
+		var worklist = Array(allRequired)
 
 		while let property = worklist.popLast() {
-			// Don't walk into scopes for onlyIfAvailable dependencies.
-			// They become optional mock parameters with no default construction,
-			// so their transitive dependencies don't need promoting.
-			guard !allOnlyIfAvailable.contains(property) else { continue }
-
 			var dependencyType = property.typeDescription.asInstantiatedType
 			if typeDescriptionToScopeMap[dependencyType] == nil,
 			   let concreteType = erasedToConcreteTypeMap[property.typeDescription]
@@ -758,11 +759,13 @@ public actor DependencyTreeGenerator {
 				from: promotedScope,
 				cache: &cache,
 			)
-			for newProperty in scopeReceived where allReceived.insert(newProperty).inserted {
+			allReceived.formUnion(scopeReceived)
+			allOnlyIfAvailable.formUnion(scopeOnlyIfAvailable)
+			for newProperty in scopeReceived.subtracting(scopeOnlyIfAvailable) where allRequired.insert(newProperty).inserted {
 				worklist.append(newProperty)
 			}
-			allOnlyIfAvailable.formUnion(scopeOnlyIfAvailable)
 		}
+		allOnlyIfAvailable.subtract(allRequired)
 
 		// Promote all received properties that have scopes.
 		// onlyIfAvailable dependencies are NOT promoted — they become optional
@@ -816,6 +819,17 @@ public actor DependencyTreeGenerator {
 		try validateMockRootScopeForCycles(
 			mockRootScope,
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+		)
+		// Promotion can also make the mock root's children require one another
+		// (e.g., C @Receives B while B's subtree @Receives C — each must be built
+		// first), which no ancestor stack shows. Detecting that is cheap; production's
+		// walk, which follows received dependencies between scopes, then reports the
+		// cycle. Running that walk on every mock root instead would add a
+		// received-dependency walk for every node of every mock tree.
+		try validatePropertiesAreFulfillable(
+			onRootScopes: Self.childrenRequireEachOther(in: mockRootScope, cache: &cache) ? [mockRootScope] : [],
+			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			cyclesOnly: true,
 		)
 
 		// Build the final ScopeGenerator once.
@@ -873,11 +887,49 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
+	/// Whether the instantiated children of `scope` require one another in a cycle:
+	/// each child's subtree requires (not `onlyIfAvailable`) a sibling that,
+	/// directly or through other siblings, requires it. Such children cannot be
+	/// ordered so that each is built after the siblings it receives.
+	private static func childrenRequireEachOther(
+		in scope: Scope,
+		cache: inout [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)],
+	) -> Bool {
+		var children = [(property: Property, scope: Scope)]()
+		for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
+			children.append((property, childScope))
+		}
+		var childIndexByProperty = [Property: Int]()
+		for (index, child) in children.enumerated() {
+			childIndexByProperty[child.property] = index
+		}
+		let requiredSiblingIndices = children.map { child in
+			let (received, onlyIfAvailable) = collectReceivedProperties(from: child.scope, cache: &cache)
+			return received.compactMap { property in
+				property != child.property && !onlyIfAvailable.contains(property)
+					? childIndexByProperty[property]
+					: nil
+			}
+		}
+		// Depth-first search for a back edge.
+		var visitingIndices = Set<Int>()
+		var visitedIndices = Set<Int>()
+		func reachesVisitingIndex(from index: Int) -> Bool {
+			guard visitedIndices.insert(index).inserted else {
+				return visitingIndices.contains(index)
+			}
+			visitingIndices.insert(index)
+			defer { visitingIndices.remove(index) }
+			return requiredSiblingIndices[index].contains(where: reachesVisitingIndex(from:))
+		}
+		return children.indices.contains(where: reachesVisitingIndex(from:))
+	}
+
 	/// Classifies a detected cycle and throws the appropriate error, or
 	/// returns silently if the cycle is valid. Called from both
-	/// `validatePropertiesAreFulfillable` (production graph) and
-	/// `validateMockRootScopeForCycles` (mock graph after `@Received`
-	/// promotion) — the two validation entry points share this classifier.
+	/// `validatePropertiesAreFulfillable` (production graph, and a mock root whose
+	/// children require one another) and `validateMockRootScopeForCycles` (mock
+	/// graph after `@Received` promotion).
 	///
 	/// Rejected:
 	/// - Constant entry point in a fully-constant cycle → `.constantDependencyCycleDetected`.
@@ -930,6 +982,10 @@ public actor DependencyTreeGenerator {
 
 	/// Mirrors ScopeGenerator's `receivedProperties` and `onlyIfAvailableUnwrappedReceivedProperties`
 	/// computation but operates on Scope objects directly, with memoization for O(1) revisits.
+	///
+	/// - Returns: `received`, every property the subtree needs from an ancestor, and
+	///   `onlyIfAvailable`, those of them that every receiver in the subtree receives only if
+	///   available. A property some receiver requires is not in `onlyIfAvailable`.
 	private static func collectReceivedProperties(
 		from scope: Scope,
 		cache: inout [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)],
@@ -958,6 +1014,10 @@ public actor DependencyTreeGenerator {
 
 		var received = Set<Property>()
 		var onlyIfAvailable = Set<Property>()
+		// Received properties some receiver in this subtree requires. A property can be
+		// received both ways — e.g. a required `x: X` and an `onlyIfAvailable` alias
+		// fulfilled by `x: X` — and a required receive wins.
+		var required = Set<Property>()
 
 		// Collect from instantiated children — mirrors ScopeGenerator's receivedProperties aggregation.
 		// Aliases are handled below in the own-dependency loop: alias children's receivedProperties
@@ -968,15 +1028,15 @@ public actor DependencyTreeGenerator {
 				from: childScope,
 				cache: &cache,
 			)
-			received.formUnion(
-				childReceived
-					.subtracting(propertiesToDeclare)
-					.filter { property in
-						!property.typeDescription.isOptional
-							|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
-					}
-					.subtracting(forwardedProperties),
-			)
+			let childReceivedFromAncestors = childReceived
+				.subtracting(propertiesToDeclare)
+				.filter { property in
+					!property.typeDescription.isOptional
+						|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
+				}
+				.subtracting(forwardedProperties)
+			received.formUnion(childReceivedFromAncestors)
+			required.formUnion(childReceivedFromAncestors.subtracting(childOnlyIfAvailable))
 			// Subtract by unwrapped form — a declared `x: X` satisfies onlyIfAvailable `x: X?`.
 			onlyIfAvailable.formUnion(
 				childOnlyIfAvailable.filter { property in
@@ -997,6 +1057,8 @@ public actor DependencyTreeGenerator {
 				received.insert(dependency.property)
 				if isOnlyIfAvailable {
 					onlyIfAvailable.insert(dependency.property)
+				} else {
+					required.insert(dependency.property)
 				}
 			case let .aliased(fulfillingProperty, _, isOnlyIfAvailable):
 				// If the fulfilling property is also locally declared here (e.g., as an
@@ -1006,13 +1068,15 @@ public actor DependencyTreeGenerator {
 				received.insert(fulfillingProperty)
 				if isOnlyIfAvailable {
 					onlyIfAvailable.insert(fulfillingProperty)
+				} else {
+					required.insert(fulfillingProperty)
 				}
 			case .instantiated, .forwarded:
 				break
 			}
 		}
 
-		let result = (received, onlyIfAvailable)
+		let result = (received, onlyIfAvailable.subtracting(required))
 		cache[id] = result
 		return result
 	}
@@ -1260,6 +1324,31 @@ public actor DependencyTreeGenerator {
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
 		cyclesOnly: Bool,
 	) throws {
+		var rootScopes = rootInstantiables.compactMap { typeDescriptionToScopeMap[$0] }
+		// When checking cycles only (mock validation), also validate non-root types
+		// that have generateMock enabled — they bypass root entry points.
+		if cyclesOnly {
+			let rootInstantiableSet = Set(rootInstantiables)
+			for scope in Set(typeDescriptionToScopeMap.values)
+				where scope.instantiable.generateMock && !rootInstantiableSet.contains(scope.instantiable.concreteInstantiable)
+			{
+				rootScopes.append(scope)
+			}
+		}
+		try validatePropertiesAreFulfillable(
+			onRootScopes: rootScopes,
+			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			cyclesOnly: cyclesOnly,
+		)
+	}
+
+	/// Validates the trees rooted at `rootScopes` for cycles and optionally for
+	/// unfulfillable properties. See `validatePropertiesAreFulfillable(typeDescriptionToScopeMap:cyclesOnly:)`.
+	private func validatePropertiesAreFulfillable(
+		onRootScopes rootScopes: [Scope],
+		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		cyclesOnly: Bool,
+	) throws {
 		var unfulfillableProperties = Set<DependencyTreeGeneratorError.UnfulfillableProperty>()
 		func validatePropertiesAreFulfillable(
 			on scope: Scope,
@@ -1414,7 +1503,7 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
-		for rootScope in rootInstantiables.compactMap({ typeDescriptionToScopeMap[$0] }) {
+		for rootScope in rootScopes {
 			try validatePropertiesAreFulfillable(
 				on: rootScope,
 				receivableProperties: Set(rootScope.properties),
@@ -1422,23 +1511,6 @@ public actor DependencyTreeGenerator {
 				propertyStack: [],
 				root: rootScope.instantiable.concreteInstantiable,
 			)
-		}
-
-		// When checking cycles only (mock validation), also validate non-root types
-		// that have generateMock enabled — they bypass root entry points.
-		if cyclesOnly {
-			let rootInstantiableSet = Set(rootInstantiables)
-			for scope in Set(typeDescriptionToScopeMap.values)
-				where scope.instantiable.generateMock && !rootInstantiableSet.contains(scope.instantiable.concreteInstantiable)
-			{
-				try validatePropertiesAreFulfillable(
-					on: scope,
-					receivableProperties: Set(scope.properties),
-					property: nil,
-					propertyStack: [],
-					root: scope.instantiable.concreteInstantiable,
-				)
-			}
 		}
 
 		if !unfulfillableProperties.isEmpty {

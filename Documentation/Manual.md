@@ -82,6 +82,29 @@ import SafeDI
 
 > **Note:** A very large package can fail to build with `swift build` on Swift 6.4 or later with an error like `sandbox-exec: data object length 73741 exceeds maximum (65535)`. This is a Swift Package Manager limit, not a SafeDI one. SafeDI’s plugin declares every Swift file in a target and its first-party dependencies as an input, and SwiftPM’s Swift Build backend, the default since Swift 6.4, writes each declared input into the sandbox profile it runs the plugin’s command under. That profile overflows once a target has roughly a couple thousand input files; the exact number depends on how long the file names are. Building in Xcode is not affected. Until SwiftPM lifts the limit, build with `swift build --build-system native`, or with `swift build --disable-sandbox`, which turns off sandboxing for every plugin and package manifest in the build.
 
+#### Bazel
+
+Add `bazel_dep(name = "safedi", version = "2.1.0")` to your `MODULE.bazel`, then declare each SafeDI module with `safedi_swift_library` in place of `swift_library`:
+
+```python
+load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
+
+safedi_swift_library(
+    name = "App",
+    srcs = glob(["**/*.swift"]),
+    defines = ["STAGING"],
+    safedi_deps = ["//Subproject:Subproject_safedi"],
+    deps = [
+        "//Subproject",
+        "@safedi//Sources/SafeDI",
+    ],
+)
+```
+
+The macro accepts every `swift_library` attribute and declares two targets: the `swift_library` named `App`, and `App_safedi`, which runs `SafeDITool` over the same `srcs` with the same `defines` and `copts`. List another module’s `<name>_safedi` target in `safedi_deps` to use the `@Instantiable` types it declares, and the module itself in `deps`. You can see this integration in practice in the [ExampleBazelIntegration](../Examples/ExampleBazelIntegration) module.
+
+A module that needs a shape the macro does not offer can declare the `safedi_compile` rule and its `swift_library` separately, adding `[":<rule name>"]` to the library’s `srcs` and giving the rule the library’s `defines` and `copts`; see [`bazel/safedi.bzl`](../bazel/safedi.bzl).
+
 ### Additional configurations
 
 `SafeDITool` is designed to integrate into projects of any size or shape. Our [Releases](https://github.com/dfed/SafeDI/releases) page ships a prebuilt, codesigned `SafeDITool.artifactbundle.zip` that can be downloaded and driven directly from a pre-build script — see the embedded shell in [`TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift`](../TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift) for a working reference (it locates the binary via SPM, runs `generate --combined-output` for fixed-path Swift output, and supports the cross-module `.safedi` module-info handoff). For a non-SPM build system, swap the binary-location lookup for a `curl` of the artifact bundle. Set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script. Pass the target's active compilation conditions to `generate --active-compilation-conditions`, or its `SWIFT_ACTIVE_COMPILATION_CONDITIONS` and `OTHER_SWIFT_FLAGS` build settings to `generate --build-setting-active-compilation-conditions` and `--build-setting-other-swift-flags`, so SafeDITool scans the same `#if` clauses the compiler compiles; see [Conditional compilation](#conditional-compilation).
@@ -96,7 +119,7 @@ SafeDI writes its output into the build directory rather than your source tree. 
 | --- | --- |
 | Xcode project with the `SafeDIGenerator` plugin | `<DerivedData>/Build/Intermediates.noindex/BuildToolPluginIntermediates/<Project>.output/<Target>/SafeDIGenerator/SafeDIOutput/` |
 | Swift package built with `swift build` | `.build/plugins/outputs/<package>/<target>/destination/SafeDIGenerator/SafeDIOutput/` |
-| Bazel (`safedi_compile`) | `bazel-bin/<package>/<rule name>.swift`, one combined file per rule |
+| Bazel (`safedi_swift_library` or `safedi_compile`) | `bazel-bin/<package>/<name>_safedi.swift` for a `safedi_swift_library` named `<name>`, or `bazel-bin/<package>/<rule name>.swift` for a hand-written `safedi_compile`; one combined file per module |
 | Tuist (`SafeDITuist` plugin) | `$(DERIVED_FILE_DIR)/SafeDIGenerated.swift` for each target, under the target’s intermediates in DerivedData |
 | Custom build system | Wherever your `generate` invocation points `--combined-output` or the manifest’s output paths |
 
@@ -482,6 +505,8 @@ public struct FeedView: Instantiable {
 }
 ```
 
+A dependency counts as available only if it can be built before the receiver. When a parent instantiates both the dependency and a sibling whose subtree contains the receiver, and the dependency itself receives that sibling, the dependency must be built after the sibling, so the receiver gets `nil`. When two siblings each receive the other `onlyIfAvailable`, the one declared later is built first and receives `nil`.
+
 ### #SafeDIConfiguration
 
 [`#SafeDIConfiguration`](../Sources/SafeDI/Decorators/SafeDIConfiguration.swift) is a freestanding declaration macro that provides build-time configuration for SafeDI’s code generation plugin. Each module may have at most one `#SafeDIConfiguration` invocation. It must appear at the top level of a Swift file (not nested inside a type). All arguments must be literal values. All parameters have defaults, so the simplest valid invocation is `#SafeDIConfiguration()`.
@@ -783,6 +808,8 @@ The table below shows where each dependency kind lands in the three buckets abov
 | `@Received(onlyIfAvailable: true)` | Entry on `SafeDIOverrides`, typed as optional | `nil` |
 | Default-valued non-DI init parameter | Flat `mock()` parameter on a direct mock, or a nested `SafeDIMockConfiguration` field when reached through a parent | The parameter’s original default expression |
 
+A `@Received(onlyIfAvailable: true)` dependency gets no `SafeDIOverrides` entry of its own when the mock already builds that dependency — because the mocked type instantiates it, or because another type in the tree requires it. The receiver is then passed the built instance, unless that instance can only be built after the receiver (see [Conditionally receiving dependencies](#conditionally-receiving-dependencies)). In that case the receiver is passed `nil`, as in production, and a builder closure you set for the receiver in `SafeDIOverrides` is called with `nil`.
+
 A `@Received` dependency is resolved from its declared type, not from the renames in any particular parent. Take `ProfileView` from [Sharing one instance across properties of disparate types](#sharing-one-instance-across-properties-of-disparate-types): `ProfileView.mock()` can build `crashReporter` itself only when `Telemetry` lists `CrashReporter` in `fulfillingAdditionalTypes`. A composition entry such as `(EventTracker & CrashReporter).self` alone does not cover its members. Otherwise `crashReporter` is a required parameter of `ProfileView.mock()`. Because each received dependency is resolved on its own, a mock that receives both `EventTracker` and `CrashReporter` builds a separate `Telemetry` for each. Pass one instance through `safeDIOverrides` if a test needs them to coincide.
 
 ### Mock visibility
@@ -893,7 +920,7 @@ SafeDITool can read the conditions in two ways:
 | Swift package plugin, built by Xcode | The build settings, in every configuration. Xcode hands the plugin a package’s `.when(configuration:)` defines as for a debug build whatever configuration it compiles, so the build settings correct what the plugin sees in Release. |
 | Xcode project plugin | The build settings. |
 | Tuist plugin and other prebuild scripts | The target’s `SWIFT_ACTIVE_COMPILATION_CONDITIONS` build setting, passed as `generate --active-compilation-conditions`. The Tuist plugin does not forward `-D` flags in `OTHER_SWIFT_FLAGS`; a script can pass both settings with the `--build-setting-…` options instead. |
-| Bazel `safedi_compile` | `DEBUG` in the `dbg` and `fastbuild` compilation modes and `NDEBUG` in the `opt` compilation mode, plus the rule’s `defines` attribute, which must mirror the wrapped `swift_library.defines`. |
+| Bazel `safedi_swift_library` and `safedi_compile` | `DEBUG` in the `dbg` and `fastbuild` compilation modes, `NDEBUG` in the `opt` compilation mode, the target’s `defines`, each `-D` flag in the target’s `copts` (after Make variable expansion, so `-D$(NAME)` reports the value of `--define=NAME=…`), and each `-D` flag passed with `--@rules_swift//swift:copt` (`--@rules_swift//swift:exec_copt` for a target built in the exec configuration). `safedi_swift_library` gives its `swift_library` and its `<name>_safedi` target the same `defines` and `copts`; a hand-written `safedi_compile` must repeat the `defines` and `copts` of the `swift_library` that compiles its output. Not reported: `defines` propagated from a dependency, `--@rules_swift//swift:per_module_swiftcopt`, and copts configured on a custom Swift toolchain. `--copt` and `--define` alone do not reach the Swift compiler, so they never need reporting. |
 
 The plugin passes the build-setting options only to a SafeDITool that accepts them, so a plugin paired with an older prebuilt or downloaded SafeDITool keeps reporting what it can see.
 
@@ -1014,7 +1041,7 @@ safeditool generate App.csv \
   --dependent-module-info-file-path deps.csv
 ```
 
-For working reference implementations, see the Bazel rule at [`bazel/safedi.bzl`](../bazel/safedi.bzl) and the Tuist plugin at [`TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift`](../TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift). Both invoke `generate --combined-output --module-info-output` per module and pass dependent modules' `.safedi` artifacts via `--dependent-module-info-file-path`.
+For working reference implementations, see the Bazel rule and macro at [`bazel/safedi.bzl`](../bazel/safedi.bzl) and the Tuist plugin at [`TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift`](../TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift). Both invoke `generate --combined-output --module-info-output` per module and pass dependent modules' `.safedi` artifacts via `--dependent-module-info-file-path`.
 
 If you need per-root output files (one generated `.swift` per `@Instantiable(isRoot: true)` type) instead of a single combined file, use `generate --swift-manifest` with a JSON manifest in the [`SafeDIToolManifest`](../Sources/SafeDICore/Models/SafeDIToolManifest.swift) format. `--swift-manifest` and `--combined-output` are mutually exclusive — pick whichever maps better onto your build system’s output model.
 
