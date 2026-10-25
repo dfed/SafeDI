@@ -154,7 +154,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenBuildSettingValueIsNotBracketed() async throws {
+	mutating func generate_throwsError_whenBuildSettingValueIsNotBracketed() async {
 		await assertThrowsError("--build-setting-active-compilation-conditions must be wrapped in square brackets, e.g. `--build-setting-active-compilation-conditions=[${SWIFT_ACTIVE_COMPILATION_CONDITIONS}]`.") {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [Self.rootContent, Self.loggerContent],
@@ -778,7 +778,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenBuildSettingsActivateRootScanDidNotFind() async throws {
+	mutating func generate_throwsError_whenBuildSettingsActivateRootScanDidNotFind() async {
 		await assertThrowsError(diagnostics: { Self.rootNotInManifestMessage(path: $0["StagingRoot.swift"]) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [Self.guardedRootContent, Self.unconditionalLoggerContent],
@@ -791,7 +791,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenBuildSettingsDeactivateRootScanFound() async throws {
+	mutating func generate_throwsError_whenBuildSettingsDeactivateRootScanFound() async {
 		await assertThrowsError(diagnostics: { Self.noRootFoundMessage(path: $0["StagingRoot.swift"]) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [Self.guardedRootContent, Self.unconditionalLoggerContent],
@@ -805,7 +805,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenBuildSettingsActivateMockGeneratingTypeScanDidNotFind() async throws {
+	mutating func generate_throwsError_whenBuildSettingsActivateMockGeneratingTypeScanDidNotFind() async {
 		await assertThrowsError(diagnostics: { Self.mockNotInManifestMessage(type: "StagingLogger", path: $0["StagingLogger.swift"]) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -835,7 +835,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenBuildSettingsActivateConfigurationScanDidNotFind() async throws {
+	mutating func generate_throwsError_whenBuildSettingsActivateConfigurationScanDidNotFind() async {
 		await assertThrowsError(diagnostics: { Self.configurationNotInManifestMessage(path: $0["SafeDIConfiguration.swift"]) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [Self.rootContent, Self.unconditionalLoggerContent],
@@ -853,7 +853,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenBuildSettingsDeactivateConfigurationScanFound() async throws {
+	mutating func generate_throwsError_whenBuildSettingsDeactivateConfigurationScanFound() async {
 		await assertThrowsError(diagnostics: { Self.noConfigurationFoundMessage(path: $0["SafeDIConfiguration.swift"]) }) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [Self.rootContent, Self.unconditionalLoggerContent],
@@ -871,7 +871,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenBuildSettingsSelectConfigurationWithOtherAdditionalMocks() async throws {
+	mutating func generate_throwsError_whenBuildSettingsSelectConfigurationWithOtherAdditionalMocks() async {
 		await assertThrowsError(diagnostics: { fixtures in
 			"The #SafeDIConfiguration in '\(fixtures["SafeDIConfiguration.swift"])' lists [\"ProductionLogger\"] in additionalMocksToGenerate, but the manifest lists []. If an `#if` block declares the configuration, \(Self.planningExplanation) Declare the configuration outside the `#if` block."
 		}) {
