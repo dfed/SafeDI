@@ -1,19 +1,12 @@
-load("@rules_swift//swift:swift.bzl", "swift_library")
-load("@safedi//bazel:safedi.bzl", "safedi_compile")
+load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
 
-# `safedi_compile` emits both the `.safedi` module-info artifact for
-# cross-module consumers and the combined `.swift` source the
-# subproject compiles against. The host target reaches the
-# `.safedi` via `deps = ["//Subproject:Subproject_safedi"]`.
-safedi_compile(
-    name = "Subproject_safedi",
-    srcs = glob(["*.swift"]),
-    visibility = ["//ExampleBazelIntegration:__pkg__"],
-)
-
-swift_library(
+# `safedi_swift_library` declares `Subproject`, a `swift_library`, and
+# `Subproject_safedi`, which runs SafeDITool over the same sources. The
+# host target reaches this module's `.safedi` module-info artifact via
+# `safedi_deps = ["//Subproject:Subproject_safedi"]`.
+safedi_swift_library(
     name = "Subproject",
-    srcs = glob(["*.swift"]) + [":Subproject_safedi"],
+    srcs = glob(["*.swift"]),
     module_name = "Subproject",
     visibility = ["//ExampleBazelIntegration:__pkg__"],
     deps = [
