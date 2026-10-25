@@ -56,11 +56,10 @@ struct FileModificationTime: Equatable {
 
 	/// Sets the modification time of the item at `path` itself, not following a symbolic link.
 	func apply(toItemAtPath path: String) throws {
-		var times = [
-			// Access time: left as it is.
-			timespec(tv_sec: 0, tv_nsec: Int(UTIME_OMIT)),
-			timespec(tv_sec: time_t(seconds), tv_nsec: nanoseconds),
-		]
+		// The access time is set too: leaving it as it is takes `UTIME_OMIT`, which Glibc does not
+		// expose to Swift, and nothing reads a test file's access time.
+		let time = timespec(tv_sec: time_t(seconds), tv_nsec: nanoseconds)
+		var times = [time, time]
 		guard utimensat(AT_FDCWD, path, &times, AT_SYMLINK_NOFOLLOW) == 0 else {
 			throw CocoaError(.fileWriteUnknown)
 		}
