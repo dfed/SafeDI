@@ -8338,7 +8338,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// cached paths would match the manifest and generate would
 		// succeed.
 		await assertThrowsError(
-			"Manifest lists \'Root.swift\' as containing a dependency tree root, but no @\(InstantiableVisitor.macroName)(isRoot: true) was found in that file.",
+			"Manifest lists \'Root.swift\' as containing a dependency tree root, but no @\(InstantiableVisitor.macroName)(isRoot: true) was found in that file. If an `#if` block declares the root, SafeDI evaluated it differently when it decided which files to generate, which happens before the build with only the compilation conditions the build tool plugin can see, such as a target’s `swiftSettings` defines but not SwiftPM’s `DEBUG`. Declare the root outside the `#if` block.",
 		) {
 			try await (Generate.parse([
 				swiftFileCSV.path,
@@ -8458,7 +8458,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		filesToDelete += [generateCSV]
 
 		await assertThrowsError(
-			"Manifest lists \'Root.swift\' as containing a dependency tree root, but no @\(InstantiableVisitor.macroName)(isRoot: true) was found in that file.",
+			"Manifest lists \'Root.swift\' as containing a dependency tree root, but no @\(InstantiableVisitor.macroName)(isRoot: true) was found in that file. If an `#if` block declares the root, SafeDI evaluated it differently when it decided which files to generate, which happens before the build with only the compilation conditions the build tool plugin can see, such as a target’s `swiftSettings` defines but not SwiftPM’s `DEBUG`. Declare the root outside the `#if` block.",
 		) {
 			try await (Generate.parse([
 				generateCSV.path,
@@ -8572,12 +8572,13 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_bypassesCachedModuleInfo_whenGenerateActivatesAnotherCompilationCondition() async throws {
+	mutating func run_walksCachedFileAgain_whenGenerateActivatesAnotherCompilationCondition() async throws {
 		// Scan with no active conditions skips the root guarded by `STAGING`, so
-		// the manifest lists no root and the cached ModuleInfo has none. Generate
-		// activating `STAGING` must bypass that cache: its fresh parse finds the
-		// root, which the manifest does not list, so manifest validation throws.
-		// A cache hit would find no root and generate nothing.
+		// the manifest lists no root and the file's cached scan has none. Generate
+		// activating `STAGING` must not reuse that scan: walking the file again finds
+		// the root, which the manifest does not list, so manifest validation throws.
+		// Reusing the scan would find no root and generate nothing. The file is
+		// walked again under the name scan cached it by, relative to the project root.
 		let projectRoot = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
 		let targetDirectory = projectRoot.appendingPathComponent("Target")
 		try FileManager.default.createDirectory(at: targetDirectory, withIntermediateDirectories: true)
@@ -8610,7 +8611,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		])).run()
 
 		await assertThrowsError(
-			"Found @Instantiable(isRoot: true) in '\(rootFile.path)', but this file is not listed in the manifest’s dependencyTreeGeneration. Add it to the manifest or remove the isRoot annotation.",
+			"Found @Instantiable(isRoot: true) in 'Target/Root.swift', but this file is not listed in the manifest’s dependencyTreeGeneration. If an `#if` block declares the root, SafeDI evaluated it differently when it decided which files to generate, which happens before the build with only the compilation conditions the build tool plugin can see, such as a target’s `swiftSettings` defines but not SwiftPM’s `DEBUG`. Declare the root outside the `#if` block. A hand-written manifest must list the file, or the type must not be a root.",
 		) {
 			try await (Generate.parse([
 				swiftFileCSV.path,

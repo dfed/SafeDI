@@ -40,9 +40,16 @@ let package = Package(
 			],
 			swiftSettings: [
 				.swiftLanguageMode(.v6),
-				// The SafeDIGenerator plugin forwards this target's compilation conditions to
-				// SafeDITool, but SwiftPM's implicit `DEBUG` is not among them. Declaring it
-				// here lets SafeDITool evaluate the `#if DEBUG` in `EventLogger.swift`.
+				// Only `swift build` on SwiftPM's native backend needs this define. The native
+				// backend is `swift build`'s default through Swift 6.2, the toolchain in
+				// Xcode 26, and `--build-system native` selects it on later toolchains. There
+				// SafeDITool sees only the conditions a plugin can read, which leave out
+				// SwiftPM's implicit `DEBUG`. Xcode builds and `swift build` on the Swift Build
+				// backend, the default in Swift 6.4, hand SafeDITool every condition the
+				// compiler receives and ignore this define. The example can drop it once its
+				// minimum toolchain's `swift build` defaults to Swift Build; Swift 6.4's does.
+				// Without the define, a native-backend build stops at SafeDI's compile-time
+				// assertion rather than generating the wrong code.
 				.define("DEBUG", .when(configuration: .debug)),
 			],
 			plugins: [

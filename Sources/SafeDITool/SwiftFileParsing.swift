@@ -158,12 +158,13 @@ func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<Str
 ///   - configurationFilePaths: The files that belong to the module itself, which are the only ones whose
 ///     `#SafeDIConfiguration` applies. In a multi-module input set these are the current target's files.
 ///   - activeCompilationConditions: The conditions supplied on the command line and through the manifest.
+/// - Returns: The module, and what each file contributed to it.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func parseModule(
 	filePaths: Set<String>,
 	configurationFilePaths: Set<String>,
 	activeCompilationConditions: Set<String>,
-) async throws -> ParsedModule {
+) async throws -> (module: ParsedModule, fileScans: [FileScan]) {
 	let defaultEvaluator = ConditionalCompilationEvaluator(activeCompilationConditions: activeCompilationConditions)
 
 	let conventionalConfigurationFilePaths = filePaths.filter { filePath in
@@ -187,7 +188,7 @@ func parseModule(
 		: conventionalConfigurationFiles.map { file in
 			walk(file.syntaxTree, at: file.path, conditionalCompilation: firstPassEvaluator)
 		})
-		+ walkFiles(filePaths.subtracting(conventionalConfigurationFilePaths), conditionalCompilation: firstPassEvaluator)
+		+ walkFiles(named: filePaths.subtracting(conventionalConfigurationFilePaths), conditionalCompilation: firstPassEvaluator)
 
 	let configurations = fileScans
 		.filter { configurationFilePaths.contains($0.path) }
@@ -201,42 +202,161 @@ func parseModule(
 		configuration: configuration,
 	)
 
-	return try await ParsedModule(
-		moduleInfo: ModuleInfo(
-			evaluator == firstPassEvaluator
-				? fileScans
-				// Only a configuration outside `SafeDIConfiguration.swift` that changes the mock condition gets here.
-				: walkFiles(Set(fileScans.map(\.path)), conditionalCompilation: evaluator),
+	let finalFileScans = try await evaluator == firstPassEvaluator
+		? fileScans
+		// Only a configuration outside `SafeDIConfiguration.swift` that changes the mock condition gets here.
+		: walkFiles(named: Set(fileScans.map(\.path)), conditionalCompilation: evaluator)
+	return (
+		ParsedModule(
+			moduleInfo: ModuleInfo(finalFileScans),
+			configuration: configuration,
+			conditionalCompilationEvaluator: evaluator,
 		),
-		configuration: configuration,
-		conditionalCompilationEvaluator: evaluator,
+		finalFileScans,
 	)
 }
 
 /// Parses files that belong to an already-configured module, such as those reached through
 /// `#SafeDIConfiguration(additionalDirectoriesToInclude:)`, with the module's evaluator.
+/// - Returns: What each file that mentions SafeDI contributes to the module.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func parseSwiftFiles(
 	_ filePaths: Set<String>,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
-) async throws -> ModuleInfo {
-	try await ModuleInfo(walkFiles(filePaths, conditionalCompilation: evaluator))
+) async throws -> [FileScan] {
+	try await walkFiles(named: filePaths, conditionalCompilation: evaluator)
+}
+
+/// Parses files again under the names an earlier parse gave them, so every location recorded in the
+/// result reads as it did then.
+/// - Parameter filePathsByName: The path each file is read from, keyed by the name it is parsed under.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+func parseSwiftFiles(
+	readingFilePathsByName filePathsByName: [String: String],
+	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+) async throws -> [FileScan] {
+	try await walkFiles(readingFilePathsByName: filePathsByName, conditionalCompilation: evaluator)
 }
 
 // MARK: - Private
 
 /// What one file contributed to the module.
-private struct FileScan: Sendable {
+struct FileScan: Codable, Sendable {
 	let path: String
 	let imports: [ImportStatement]
 	let instantiables: [Instantiable]
 	let configurations: [SafeDIConfiguration]
 	let encounteredUnexpectedNodes: Bool
 	let conditionalCompilationDecisions: [ConditionalCompilationDecision]
+	/// Every bare condition whose value decided what this file contributed, except the imports
+	/// `importSegments` can find again. Walking the file with any evaluator that gives each of these
+	/// the same value, and has the same mock condition, contributes the same.
+	let consultedCompilationConditions: Set<String>
+	/// The file's imports, kept only when an `#if` block that guards nothing but imports consults a
+	/// condition, so `imports` can be found again without the file when that condition changes.
+	let importSegments: [FileVisitor.ImportSegment]
+	/// Every bare condition whose value decided which imports `importSegments` hold.
+	let importOnlyConsultedCompilationConditions: Set<String>
+
+	/// Whether any compilation condition decided what the file contributed. A file whose scan consults
+	/// none contributes the same whatever conditions are supplied.
+	var consultsCompilationConditions: Bool {
+		!consultedCompilationConditions.isEmpty || !importOnlyConsultedCompilationConditions.isEmpty
+	}
+
+	/// Whether the file declares anything SafeDI generates code for. A file whose only SafeDI content
+	/// was skipped contributes nothing to generated code, so its imports stay out of the generated code.
+	var declaresSafeDIContent: Bool {
+		!instantiables.isEmpty || !configurations.isEmpty || encounteredUnexpectedNodes
+	}
+
+	/// This scan, with the imports `evaluator` finds in `importSegments`.
+	func withImports(evaluatedWith evaluator: ConditionalCompilationEvaluator) -> FileScan {
+		replacingImports(with: declaresSafeDIContent ? importSegments.flatMap { $0.imports(evaluatedWith: evaluator) } : [])
+	}
+
+	/// This scan, contributing `imports`.
+	fileprivate func replacingImports(with imports: [ImportStatement]) -> FileScan {
+		FileScan(
+			path: path,
+			imports: imports,
+			instantiables: instantiables,
+			configurations: configurations,
+			encounteredUnexpectedNodes: encounteredUnexpectedNodes,
+			conditionalCompilationDecisions: conditionalCompilationDecisions,
+			consultedCompilationConditions: consultedCompilationConditions,
+			importSegments: importSegments,
+			importOnlyConsultedCompilationConditions: importOnlyConsultedCompilationConditions,
+		)
+	}
+
+	/// This scan, with the file and everything declared in it named by `path`.
+	func relocated(to path: String) -> FileScan {
+		FileScan(
+			path: path,
+			imports: imports,
+			instantiables: instantiables.map {
+				var instantiable = $0
+				instantiable.sourceFilePath = path
+				return instantiable
+			},
+			configurations: configurations.map {
+				var configuration = $0
+				configuration.sourceFilePath = path
+				return configuration
+			},
+			encounteredUnexpectedNodes: encounteredUnexpectedNodes,
+			conditionalCompilationDecisions: conditionalCompilationDecisions,
+			consultedCompilationConditions: consultedCompilationConditions,
+			importSegments: importSegments,
+			importOnlyConsultedCompilationConditions: importOnlyConsultedCompilationConditions,
+		)
+	}
+}
+
+extension FileVisitor.ImportSegment {
+	/// The imports this segment holds when evaluated with `evaluator`.
+	fileprivate func imports(evaluatedWith evaluator: ConditionalCompilationEvaluator) -> [ImportStatement] {
+		switch self {
+		case let .imports(importStatements):
+			return importStatements
+		case let .conditionalImports(source):
+			let fileVisitor = FileVisitor(conditionalCompilationEvaluator: evaluator)
+			fileVisitor.walk(Parser.parse(source: source))
+			return fileVisitor.imports
+		}
+	}
 }
 
 extension ModuleInfo {
-	fileprivate init(_ fileScans: [FileScan]) {
+	/// This module with the declarations found in files reached through
+	/// `#SafeDIConfiguration(additionalDirectoriesToInclude:)`, whose configurations do not apply.
+	func including(_ additionalModuleInfo: ModuleInfo) -> ModuleInfo {
+		ModuleInfo(
+			imports: imports + additionalModuleInfo.imports,
+			instantiables: instantiables + additionalModuleInfo.instantiables,
+			configurations: configurations,
+			filesWithUnexpectedNodes: filesWithUnexpectedNodes.map { $0 + (additionalModuleInfo.filesWithUnexpectedNodes ?? []) } ?? additionalModuleInfo.filesWithUnexpectedNodes,
+			conditionalCompilationDecisions: Set(conditionalCompilationDecisions + additionalModuleInfo.conditionalCompilationDecisions).sorted(),
+		)
+	}
+
+	/// This module, parsed from some of a module's files, with what the rest of its files contributed:
+	/// the module `ModuleInfo(_:)` makes from every file's scan.
+	func adding(_ fileScans: [FileScan]) -> ModuleInfo {
+		let addedModuleInfo = ModuleInfo(fileScans)
+		return ModuleInfo(
+			imports: imports + addedModuleInfo.imports,
+			// Each file's instantiables are all in one of the two lists, so sorting keeps each file's declaration order.
+			instantiables: (instantiables + addedModuleInfo.instantiables).sortedByDeclaration(),
+			configurations: configurations + addedModuleInfo.configurations,
+			filesWithUnexpectedNodes: filesWithUnexpectedNodes.map { $0 + (addedModuleInfo.filesWithUnexpectedNodes ?? []) } ?? addedModuleInfo.filesWithUnexpectedNodes,
+			conditionalCompilationDecisions: Set(conditionalCompilationDecisions + addedModuleInfo.conditionalCompilationDecisions).sorted(),
+		)
+	}
+
+	/// The module the files contributed to, with instantiables in declaration order.
+	init(_ fileScans: [FileScan]) {
 		var conditionalCompilationDecisions = Set<ConditionalCompilationDecision>()
 		for fileScan in fileScans {
 			conditionalCompilationDecisions.formUnion(fileScan.conditionalCompilationDecisions)
@@ -255,17 +375,29 @@ extension ModuleInfo {
 /// Reads, parses, and walks every file in parallel, keeping what each file that mentions SafeDI contributes.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 private func walkFiles(
-	_ filePaths: Set<String>,
+	named filePaths: Set<String>,
+	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+) async throws -> [FileScan] {
+	try await walkFiles(
+		readingFilePathsByName: Dictionary(uniqueKeysWithValues: filePaths.map { ($0, $0) }),
+		conditionalCompilation: evaluator,
+	)
+}
+
+/// Reads each file from its value, and parses and walks it in parallel under its key.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+private func walkFiles(
+	readingFilePathsByName filePathsByName: [String: String],
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
 ) async throws -> [FileScan] {
 	try await withThrowingTaskGroup(
 		of: FileScan?.self,
 		returning: [FileScan].self,
 	) { taskGroup in
-		for filePath in filePaths where !filePath.isEmpty {
+		for (name, filePath) in filePathsByName where !name.isEmpty {
 			taskGroup.addTask {
 				try parseFileDeclaringSafeDIContent(atPath: filePath).map { syntaxTree in
-					walk(syntaxTree, at: filePath, conditionalCompilation: evaluator)
+					walk(syntaxTree, at: name, conditionalCompilation: evaluator)
 				}
 			}
 		}
@@ -304,25 +436,17 @@ private func walk(
 		sourceLocationConverter: SourceLocationConverter(fileName: filePath, tree: syntaxTree),
 	)
 	fileVisitor.walk(syntaxTree)
-	let declaresSafeDIContent = !fileVisitor.instantiables.isEmpty
-		|| !fileVisitor.configurations.isEmpty
-		|| fileVisitor.encounteredUnexpectedNodesSyntax
-	return FileScan(
+	let fileScan = FileScan(
 		path: filePath,
-		// A file whose only SafeDI content was skipped contributes nothing to generated
-		// code, so its imports stay out of the generated dependency tree.
-		imports: declaresSafeDIContent ? fileVisitor.imports : [],
-		instantiables: fileVisitor.instantiables.map {
-			var instantiable = $0
-			instantiable.sourceFilePath = filePath
-			return instantiable
-		},
-		configurations: fileVisitor.configurations.map {
-			var configuration = $0
-			configuration.sourceFilePath = filePath
-			return configuration
-		},
+		imports: fileVisitor.imports,
+		instantiables: fileVisitor.instantiables,
+		configurations: fileVisitor.configurations,
 		encounteredUnexpectedNodes: fileVisitor.encounteredUnexpectedNodesSyntax,
 		conditionalCompilationDecisions: fileVisitor.conditionalCompilationDecisions,
+		consultedCompilationConditions: fileVisitor.consultedCompilationConditions,
+		importSegments: fileVisitor.importOnlyConsultedCompilationConditions.isEmpty ? [] : fileVisitor.importSegments,
+		importOnlyConsultedCompilationConditions: fileVisitor.importOnlyConsultedCompilationConditions,
 	)
+	.relocated(to: filePath)
+	return fileScan.declaresSafeDIContent ? fileScan : fileScan.replacingImports(with: [])
 }
