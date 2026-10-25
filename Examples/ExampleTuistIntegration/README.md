@@ -55,10 +55,10 @@ recompiles it on the next `xcodebuild`, no `tuist generate` round-trip.
 2. In `Tuist/Package.swift`, depend on SafeDI so its runtime library and
    `SafeDIToolBinary` artifact bundle are resolved (the plugin requires
    `SafeDITool >= 2.0.0` for the `--combined-output` flag, and forwards the
-   target's compilation conditions when the tool is `2.1.0-beta-1` or newer):
+   target's compilation conditions when the tool is `2.1.0` or newer):
 
    ```swift
-   .package(url: "https://github.com/dfed/SafeDI.git", from: "2.1.0-beta-3"),
+   .package(url: "https://github.com/dfed/SafeDI.git", from: "2.1.0"),
    ```
 
 3. In `Project.swift`, `import SafeDITuist` and call the helpers from each
@@ -72,9 +72,12 @@ Adding/removing `@Instantiable` declarations of any kind: just rebuild — the
 plugin overwrites `SafeDIGenerated.swift` with the new contents, and Xcode
 picks it up incrementally. No `tuist generate` step required for SafeDI.
 
-Bumping SafeDI: edit the version in `Tuist/Package.swift`. Both the runtime
-library and the `SafeDITool` binary the plugin invokes follow from that
-single pin.
+Bumping SafeDI: edit the version in `Tuist/Package.swift`, and the plugin's
+`tag:` in `Tuist.swift` to match. The runtime library and the `SafeDITool`
+binary the plugin invokes follow from the package pin; the script that
+invokes the tool comes from the plugin tag. Bump both together: a plugin
+older than `2.1.0` does not forward compilation conditions, so a newer
+`SafeDITool` would treat every bare `#if` condition as inactive.
 
 Conditional compilation: the script forwards the target's
 `SWIFT_ACTIVE_COMPILATION_CONDITIONS` build setting to
