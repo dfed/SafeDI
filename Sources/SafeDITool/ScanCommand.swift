@@ -90,7 +90,7 @@ func performScan(
 	// Parse all files once to find roots, mocks, and configurations. Only the
 	// mock-scoped files can declare this module's configuration, which decides
 	// how every file's `#if` blocks are evaluated, so they are searched for it first.
-	let parsedModule = try await parseModule(
+	let (parsedModule, fileScans) = try await parseModule(
 		filePaths: allFilePaths,
 		configurationFilePaths: mockScopedFilePaths,
 		activeCompilationConditions: activeCompilationConditions,
@@ -114,6 +114,7 @@ func performScan(
 	// Discover additional directories from configuration.
 	var additionalInputFiles = [String]()
 	var combinedModuleInfo = allModuleInfo
+	var additionalFileScans = [FileScan]()
 	if let configuration, !configuration.additionalDirectoriesToInclude.isEmpty {
 		let additionalFiles = try await findSwiftFiles(inDirectories: configuration.additionalDirectoriesToInclude)
 
@@ -127,15 +128,9 @@ func performScan(
 		// and trip "multiple types fulfilling" validation downstream.
 		let unparsedAdditionalFiles = additionalFiles.subtracting(allFilePaths)
 		if !unparsedAdditionalFiles.isEmpty {
-			let additionalModuleInfo = try await parseSwiftFiles(unparsedAdditionalFiles, conditionalCompilation: evaluator)
+			additionalFileScans = try await parseSwiftFiles(unparsedAdditionalFiles, conditionalCompilation: evaluator)
 			// Merge additional roots/mocks into the combined results.
-			combinedModuleInfo = ModuleInfo(
-				imports: allModuleInfo.imports + additionalModuleInfo.imports,
-				instantiables: allModuleInfo.instantiables + additionalModuleInfo.instantiables,
-				configurations: allModuleInfo.configurations,
-				filesWithUnexpectedNodes: allModuleInfo.filesWithUnexpectedNodes.map { $0 + (additionalModuleInfo.filesWithUnexpectedNodes ?? []) } ?? additionalModuleInfo.filesWithUnexpectedNodes,
-				conditionalCompilationDecisions: Set(allModuleInfo.conditionalCompilationDecisions + additionalModuleInfo.conditionalCompilationDecisions).sorted(),
-			)
+			combinedModuleInfo = allModuleInfo.including(ModuleInfo(additionalFileScans))
 		}
 	}
 
@@ -223,6 +218,10 @@ func performScan(
 		additionalMocksToGenerate: additionalMocksToGenerate,
 		additionalInputFiles: additionalInputFiles,
 		activeCompilationConditions: activeCompilationConditions.sorted(),
+		mockScopedFilePaths: mockScopedFilePaths.map { filePath in
+			relativePath(for: URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL, relativeTo: projectRootURL)
+		}.sorted(),
+		acceptsBuildSettingCompilationConditions: true,
 		projectRoot: projectRootURL.path,
 	)
 
@@ -230,33 +229,20 @@ func performScan(
 	encoder.outputFormatting = [.sortedKeys]
 	try encoder.encode(manifest).write(to: manifestFile.asFileURL)
 
-	// Also persist the parsed ModuleInfo next to the manifest so `generate`
-	// can skip re-parsing the same Swift files. Normalize sourceFilePath
+	// Also persist what each file contributed next to the manifest so `generate`
+	// can skip re-parsing the same Swift files. Normalize each file's path
 	// to project-relative form so the cached entries match both the
 	// manifest's `inputFilePath` (also project-relative) and what Generate
 	// would compute when parsing fresh from the same CSV.
-	func normalize(_ path: String?) -> String? {
-		guard let path else { return nil }
-		return relativePath(
-			for: URL(fileURLWithPath: path, relativeTo: directoryBaseURL).standardizedFileURL,
+	func normalized(_ fileScan: FileScan) -> FileScan {
+		fileScan.relocated(to: relativePath(
+			for: URL(fileURLWithPath: fileScan.path, relativeTo: directoryBaseURL).standardizedFileURL,
 			relativeTo: projectRootURL,
-		)
+		))
 	}
-	let normalizedModuleInfo = ModuleInfo(
-		imports: combinedModuleInfo.imports,
-		instantiables: combinedModuleInfo.instantiables.map { instantiable in
-			var updated = instantiable
-			updated.sourceFilePath = normalize(instantiable.sourceFilePath)
-			return updated
-		},
-		configurations: combinedModuleInfo.configurations.map { configuration in
-			var updated = configuration
-			updated.sourceFilePath = normalize(configuration.sourceFilePath)
-			return updated
-		},
-		filesWithUnexpectedNodes: combinedModuleInfo.filesWithUnexpectedNodes?.compactMap(normalize),
-		conditionalCompilationDecisions: combinedModuleInfo.conditionalCompilationDecisions,
-	)
+	func cached(_ fileScan: FileScan) -> CachedFileScan {
+		CachedFileScan(scannedPath: fileScan.path, fileScan: normalized(fileScan))
+	}
 	// Every path scan parsed for this module — CSV inputs plus any files
 	// reached through `#SafeDIConfiguration.additionalDirectoriesToInclude`.
 	// `generate` uses this list to validate cache freshness against the
@@ -279,7 +265,11 @@ func performScan(
 		URL(fileURLWithPath: directory, relativeTo: directoryBaseURL).standardizedFileURL.path
 	}.sorted() ?? []
 	let cached = CachedScannedModuleInfo(
-		moduleInfo: normalizedModuleInfo,
+		moduleInfo: ModuleInfo(fileScans.filter { !$0.consultsCompilationConditions }.map(normalized)),
+		conditionSensitiveFileScans: fileScans.filter(\.consultsCompilationConditions).map(cached),
+		additionalModuleInfo: ModuleInfo(additionalFileScans.filter { !$0.consultsCompilationConditions }.map(normalized)),
+		additionalConditionSensitiveFileScans: additionalFileScans.filter(\.consultsCompilationConditions).map(cached),
+		projectRoot: projectRootURL.path,
 		scannedInputPaths: allScannedFilePaths,
 		csvInputPaths: inputFilePaths.sorted(),
 		additionalInputAbsolutePaths: additionalInputFiles.sorted(),
@@ -330,7 +320,17 @@ extension SafeDIToolManifest {
 /// `additionalDirectoriesToInclude` files, which don't appear in the
 /// `generate` CSV).
 struct CachedScannedModuleInfo: Codable {
+	/// What the input files whose scans consulted no compilation condition contributed, which is
+	/// what they contribute whatever conditions `generate` uses.
 	let moduleInfo: ModuleInfo
+	/// What each input file whose scan consulted a compilation condition contributed.
+	let conditionSensitiveFileScans: [CachedFileScan]
+	/// What the files reached through `additionalDirectoriesToInclude` and absent from the input files
+	/// contributed, kept the same way. Merged after the input files' module as a fresh parse merges them.
+	let additionalModuleInfo: ModuleInfo
+	let additionalConditionSensitiveFileScans: [CachedFileScan]
+	/// The directory relative paths in the scans are relative to.
+	let projectRoot: String
 	/// Absolute paths of every file `scan` observed — CSV inputs plus
 	/// additional-directory files. Drives the mtime freshness check.
 	let scannedInputPaths: [String]
@@ -346,9 +346,32 @@ struct CachedScannedModuleInfo: Codable {
 	/// during freshness checks so files added to those directories
 	/// between scan and generate correctly invalidate the cache.
 	let additionalDirectories: [String]
-	/// Every compilation condition the scan treated as active. `generate` bypasses the cache
-	/// when its own set differs, since the set decides which `#if` clauses were parsed.
+	/// Every compilation condition the scan treated as active. `generate` reuses a file's cached scan
+	/// only when its own conditions give each of the scan's `consultedCompilationConditions` the value
+	/// this set gives it, because walking the file again would then find the same. Other conditions
+	/// may differ: a build tool plugin hands `scan` only the conditions it can see, while `generate`
+	/// usually reads more from the build settings, such as `DEBUG` and `SWIFT_PACKAGE`.
 	let activeCompilationConditions: [String]
+}
+
+/// What one file contributed to the module that `scan` cached.
+struct CachedFileScan: Codable {
+	init(scannedPath: String, fileScan: FileScan) {
+		self.fileScan = fileScan
+		differingScannedPath = scannedPath == fileScan.path ? nil : scannedPath
+	}
+
+	/// What the file contributed, with the file named relative to the project root as the manifest names files.
+	let fileScan: FileScan
+
+	/// The path `scan` parsed the file under, which the locations recorded in `fileScan` cite.
+	var scannedPath: String {
+		differingScannedPath ?? fileScan.path
+	}
+
+	/// `scannedPath` when it differs from `fileScan.path`, which it seldom does: omitting it keeps the
+	/// cache, which `generate` decodes on every build, small.
+	private let differingScannedPath: String?
 }
 
 /// Path alongside the manifest where `scan` persists the parsed

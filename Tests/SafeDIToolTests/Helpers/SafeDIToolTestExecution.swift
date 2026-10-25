@@ -45,6 +45,9 @@ func executeSafeDIToolTest(
 	skipCompileVerification: Bool = false,
 	inputPathsRelativeToCurrentDirectory: Bool = false,
 	activeCompilationConditions: [String] = [],
+	buildSettingArguments: [String] = [],
+	verificationCompilationConditions: [String]? = nil,
+	swiftFileContentAfterScan: [String]? = nil,
 ) async throws -> TestOutput {
 	// Create additional directory first so its path can be substituted into target file content.
 	var additionalDirectoryFiles = [URL]()
@@ -64,7 +67,7 @@ func executeSafeDIToolTest(
 	try FileManager.default.createDirectory(at: swiftFixtureDirectory, withIntermediateDirectories: true)
 
 	// Replace directory placeholders in target file content with real paths.
-	let resolvedSwiftFileContent = swiftFileContent.map { content in
+	func resolvingDirectoryPlaceholders(in content: String) -> String {
 		var resolved = content.replacingOccurrences(
 			of: "$TARGET_DIRECTORY",
 			with: swiftFixtureDirectory.path,
@@ -77,6 +80,7 @@ func executeSafeDIToolTest(
 		}
 		return resolved
 	}
+	let resolvedSwiftFileContent = swiftFileContent.map(resolvingDirectoryPlaceholders(in:))
 
 	let contentNamedSwiftFiles = try createSwiftFixtureFiles(
 		from: resolvedSwiftFileContent,
@@ -148,6 +152,19 @@ func executeSafeDIToolTest(
 			manifestPath = manifestFile.relativePath
 
 			filesToDelete.append(scanCSV)
+
+			if let swiftFileContentAfterScan {
+				// Rewrite each fixture and date it before scan's cache, so `generate` reads the new content only
+				// when it parses afresh: the generated code shows whether `generate` reused scan's parse.
+				for (fileURL, content) in zip(contentNamedSwiftFiles, swiftFileContentAfterScan) {
+					try resolvingDirectoryPlaceholders(in: content).write(to: fileURL, atomically: true, encoding: .utf8)
+					try FileManager.default.setAttributes(
+						[.modificationDate: Date(timeIntervalSince1970: 0)],
+						ofItemAtPath: fileURL.path,
+					)
+				}
+				filesToDelete.append(scannedModuleInfoURL(forManifestPath: manifestFile.relativePath))
+			}
 		}
 
 		var generateArguments = [swiftFileCSV.relativePath]
@@ -170,6 +187,7 @@ func executeSafeDIToolTest(
 				generateArguments += ["--active-compilation-conditions", condition]
 			}
 		}
+		generateArguments += buildSettingArguments
 		if buildDOTFileOutput {
 			generateArguments += ["--dot-file-output", dotTreeOutput.relativePath]
 		}
@@ -227,7 +245,7 @@ func executeSafeDIToolTest(
 				inputSwiftFiles: swiftFiles,
 				additionalDirectorySwiftFiles: additionalDirectoryFiles,
 				generatedFiles: generatedFiles,
-				activeCompilationConditions: activeCompilationConditions,
+				activeCompilationConditions: verificationCompilationConditions ?? activeCompilationConditions,
 				filesToDelete: &filesToDelete,
 			)
 		}
