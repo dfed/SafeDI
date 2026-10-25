@@ -158,9 +158,6 @@ struct ScanManifest: Codable {
 	var mockConfigurationOutputFilePath: String?
 	var additionalMocksToGenerate: [String]
 	var additionalInputFiles: [String]
-	/// Whether the SafeDITool that wrote this manifest accepts `generate`'s build-setting options.
-	/// Releases that predate the options do not write it.
-	var acceptsBuildSettingCompilationConditions: Bool?
 }
 
 // MARK: - Process Runner
