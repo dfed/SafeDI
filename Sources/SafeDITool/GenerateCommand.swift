@@ -303,18 +303,28 @@ struct Generate: AsyncParsableCommand {
 					}
 					if let mockScopedFilePaths = manifest.mockScopedFilePaths {
 						// Paths are compared as scan wrote them, since this parse may name files as the CSV does.
+						// Resolving a path is far costlier than the comparisons, and this runs over every
+						// mock-generating type in every module the target depends on, so a path is resolved
+						// only when it could matter: resolving never changes a file name, and resolving a
+						// path already written as scan writes it returns it unchanged.
 						let mockScopedFilePathSet = Set(mockScopedFilePaths)
+						let mockScopedFileNames = Set(mockScopedFilePaths.map { ($0 as NSString).lastPathComponent })
+						func mockScopedFilePath(resolving sourceFilePath: String) -> String? {
+							guard mockScopedFileNames.contains((sourceFilePath as NSString).lastPathComponent) else { return nil }
+							let resolvedPath = manifest.resolvedPath(for: sourceFilePath)
+							return mockScopedFilePathSet.contains(resolvedPath) ? resolvedPath : nil
+						}
 						let manifestMockInputPaths = Set(manifest.mockGeneration.map(\.inputFilePath))
 						for instantiable in module.instantiables where instantiable.generateMock {
-							if let sourceFilePath = instantiable.sourceFilePath.map(manifest.resolvedPath(for:)),
-							   mockScopedFilePathSet.contains(sourceFilePath),
-							   !manifestMockInputPaths.contains(sourceFilePath)
+							if let sourceFilePath = instantiable.sourceFilePath,
+							   !manifestMockInputPaths.contains(sourceFilePath),
+							   let mockScopedFilePath = mockScopedFilePath(resolving: sourceFilePath),
+							   !manifestMockInputPaths.contains(mockScopedFilePath)
 							{
-								throw ManifestError.mockNotInManifest(typeName: instantiable.concreteInstantiable.asSource, sourceFilePath: sourceFilePath)
+								throw ManifestError.mockNotInManifest(typeName: instantiable.concreteInstantiable.asSource, sourceFilePath: mockScopedFilePath)
 							}
 						}
-						let configurationFilePaths = Set(module.configurations.compactMap(\.sourceFilePath).map(manifest.resolvedPath(for:)))
-							.intersection(mockScopedFilePathSet)
+						let configurationFilePaths = Set(module.configurations.compactMap(\.sourceFilePath).compactMap(mockScopedFilePath(resolving:)))
 						let manifestConfigurationFilePaths = Set(manifest.configurationFilePaths)
 						if let sourceFilePath = configurationFilePaths.subtracting(manifestConfigurationFilePaths).min() {
 							throw ManifestError.configurationNotInManifest(sourceFilePath: sourceFilePath)
