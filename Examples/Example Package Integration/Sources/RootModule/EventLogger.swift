@@ -23,13 +23,13 @@ import SafeDI
 /// Records what the app does.
 ///
 /// A different `@Instantiable` fulfills `EventLogger` in debug and release builds, so SafeDITool
-/// has to know whether `DEBUG` is active to pick the right one. `DEBUG` reaches SafeDITool through the SafeDIGenerator plugin, which forwards the target's
-/// compilation conditions. SwiftPM's implicit `DEBUG` is not one of them, so `Package.swift` declares
-/// `.define("DEBUG", .when(configuration: .debug))` for this target.
-///
-/// Build this package in release with `swift build -c release`. Xcode evaluates `.when(configuration:)`
-/// defines as for a debug build whatever configuration it compiles, so an Xcode Release build reports
-/// `DEBUG`, scans `ConsoleEventLogger`, and stops at SafeDI's compile-time assertion.
+/// has to know whether `DEBUG` is active to pick the right one. Xcode and `swift build` on the
+/// Swift Build backend, the default in Swift 6.4, hand SafeDITool the conditions the compiler
+/// receives, `DEBUG` included, when the build runs. `swift build` on SwiftPM's native backend does
+/// not. That backend is the default through Swift 6.2, the toolchain in Xcode 26, so it is still
+/// common, and `--build-system native` selects it on later toolchains. There SafeDITool falls back
+/// to the conditions the SafeDIGenerator plugin reads from `Package.swift`, which declares
+/// `.define("DEBUG", .when(configuration: .debug))` for this target for that reason.
 public protocol EventLogger {
 	func record(_ event: String)
 }

@@ -31,10 +31,12 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			return []
 		}
 		// The target's active compilation conditions (`-D` flags from `swiftSettings`
-		// and traits, resolved for the current configuration) let SafeDITool scan the
-		// same `#if` clauses the compiler compiles. SwiftPM's implicit `DEBUG` is not
-		// among them; a target that guards SafeDI declarations with `DEBUG` declares
-		// `.define("DEBUG", .when(configuration: .debug))` in its `swiftSettings`.
+		// and traits, resolved for the current configuration) are all a plugin can see
+		// while it plans the build. `scan` decides which files to generate with them.
+		// SwiftPM's implicit `DEBUG` is not among them, and Xcode reports debug-configuration
+		// defines in Release too, so `generate` replaces them with the conditions the build
+		// settings report when the build system expands them (see
+		// `buildSettingCompilationConditionArguments`).
 		let activeCompilationConditionArguments = activeCompilationConditionArguments(sourceTarget.compilationConditions)
 
 		let tool = try context.tool(named: "SafeDITool").url
@@ -119,7 +121,8 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 					// The manifest already records these conditions, but it is neither an argument nor an
 					// input of this command. Repeating them here changes the command when they change, so a
 					// build in another configuration regenerates instead of reusing the previous output.
-					+ activeCompilationConditionArguments,
+					+ activeCompilationConditionArguments
+					+ buildSettingCompilationConditionArguments,
 				environment: [:],
 				inputFiles: allSwiftFiles + additionalInputFiles,
 				outputFiles: outputFiles,
@@ -160,7 +163,8 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 					"--output-directory", outputDirectory.path(percentEncoded: false),
 					"--mock-scoped-files",
 				] + targetSwiftFiles.map { $0.path(percentEncoded: false) }
-					+ activeCompilationConditionArguments,
+					+ activeCompilationConditionArguments
+					+ buildSettingCompilationConditionArguments,
 				environment: [:],
 				inputFiles: allSwiftFiles + scanResult.additionalInputFiles,
 				outputFiles: scanResult.outputFiles,
@@ -178,6 +182,21 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 		}
 	}
 }
+
+/// Arguments that let SafeDITool read the compilation conditions the compiler receives.
+///
+/// Build tool plugins cannot read those conditions while they plan the build. These arguments name
+/// build settings instead: Swift Build, which runs plugin commands for Xcode and for SwiftPM's
+/// `swiftbuild` backend, expands `${…}` references in a command's arguments to the target's settings
+/// when the command runs, and Xcode project builds run each plugin command through a shell script
+/// that does the same. SwiftPM's native backend passes the references through unexpanded, and
+/// SafeDITool then falls back to the conditions this plugin reported. The `=` form keeps a value that
+/// starts with `-` from parsing as an option, and the brackets keep an empty setting from reading as
+/// a missing value. The braced form matters: the shell treats `$(…)` as a command to run.
+let buildSettingCompilationConditionArguments = [
+	"--build-setting-active-compilation-conditions=[${SWIFT_ACTIVE_COMPILATION_CONDITIONS}]",
+	"--build-setting-other-swift-flags=[${OTHER_SWIFT_FLAGS}]",
+]
 
 extension Target {
 	var sourceModuleRecursiveDependencies: [SwiftSourceModuleTarget] {
@@ -335,7 +354,7 @@ extension Target {
 						inputSourcesFile.path(percentEncoded: false),
 						"--swift-manifest",
 						manifestFile.path(percentEncoded: false),
-					],
+					] + buildSettingCompilationConditionArguments,
 					environment: [:],
 					inputFiles: inputSwiftFiles + additionalInputFiles,
 					outputFiles: outputFiles,
@@ -367,7 +386,8 @@ extension Target {
 						inputSourcesFile.path(percentEncoded: false),
 						"--output-directory", outputDirectory.path(percentEncoded: false),
 						"--mock-scoped-files",
-					] + inputSwiftFiles.map { $0.path(percentEncoded: false) },
+					] + inputSwiftFiles.map { $0.path(percentEncoded: false) }
+						+ buildSettingCompilationConditionArguments,
 					environment: [:],
 					inputFiles: inputSwiftFiles + scanResult.additionalInputFiles,
 					outputFiles: scanResult.outputFiles,

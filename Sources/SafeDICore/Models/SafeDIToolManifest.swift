@@ -65,9 +65,16 @@ public struct SafeDIToolManifest: Codable, Sendable {
 	/// Only populated by the `scan` subcommand; ignored by `generate`.
 	public var additionalInputFiles: [String]
 
-	/// Compilation conditions supplied to `scan`, which `generate` treats as active too.
+	/// Compilation conditions supplied to `scan`, which `generate` treats as active too unless the
+	/// build settings it is handed replace them.
 	/// `nil` in a hand-written manifest that omits them, where no conditions are recorded.
 	public var activeCompilationConditions: [String]?
+
+	/// The current module's own source files, written like `inputFilePath`s: the files whose
+	/// `@Instantiable(generateMock: true)` types `mockGeneration` must list. `generate` rejects such a
+	/// type in a file `mockGeneration` omits, which happens when `scan` evaluated the `#if` block
+	/// declaring it differently. `nil` in a hand-written manifest, where nothing is checked.
+	public var mockScopedFilePaths: [String]?
 
 	/// The directory `scan` resolved input paths against when writing `configurationFilePaths`
 	/// and `inputFilePath`s, so `generate` can resolve its own input paths the same way.
@@ -82,6 +89,7 @@ public struct SafeDIToolManifest: Codable, Sendable {
 		additionalMocksToGenerate: [String] = [],
 		additionalInputFiles: [String] = [],
 		activeCompilationConditions: [String]? = nil,
+		mockScopedFilePaths: [String]? = nil,
 		projectRoot: String? = nil,
 	) {
 		self.dependencyTreeGeneration = dependencyTreeGeneration
@@ -91,6 +99,7 @@ public struct SafeDIToolManifest: Codable, Sendable {
 		self.additionalMocksToGenerate = additionalMocksToGenerate
 		self.additionalInputFiles = additionalInputFiles
 		self.activeCompilationConditions = activeCompilationConditions
+		self.mockScopedFilePaths = mockScopedFilePaths
 		self.projectRoot = projectRoot
 	}
 }

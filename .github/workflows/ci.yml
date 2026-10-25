@@ -272,44 +272,164 @@ jobs:
         with:
           command: xcrun swift package resolve --package-path "Examples/Example Package Integration"
       # `EventLogger.swift` in RootModule declares a different `@Instantiable`
-      # under `#if DEBUG` and `#else`. If the plugin did not report `DEBUG`,
-      # SafeDI would wire `DisabledEventLogger` and the generated compile-time
-      # assertion would fail this build; the grep makes the check explicit.
-      - name: Build Package Integration (swift build)
+      # under `#if DEBUG` and `#else`, so each build below greps the generated
+      # file for the logger its configuration must wire. SafeDI learns whether
+      # `DEBUG` is active in one of two ways. A build system that expands the
+      # build-setting references the plugin puts in its command's arguments
+      # hands SafeDITool the conditions the compiler receives. Otherwise
+      # SafeDITool falls back to the conditions the plugin reads from
+      # Package.swift, which is why the example declares
+      # `.define("DEBUG", .when(configuration: .debug))`. Builds that matter
+      # for that question run verbosely, and
+      # `.github/scripts/report-build-setting-arguments.sh` prints the generate
+      # command from the log, which SafeDITool it ran, and whether the
+      # arguments arrived expanded or unexpanded; it fails the step when the
+      # command does not carry them at all. Every build uses its own scratch or
+      # DerivedData directory, so no step can read a file a previous step
+      # generated, and every step runs even when an earlier one failed, so one
+      # broken expectation does not hide the others. Release builds turn
+      # optimization off because only the configuration matters here, and an
+      # optimized build of swift-syntax takes several times longer.
+      - name: Report swift build Backends
+        id: backends
         run: |
-          xcrun swift build --package-path "Examples/Example Package Integration"
-          grep -q "ConsoleEventLogger()" "$(find "Examples/Example Package Integration/.build/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
-      # Also build via xcodebuild — it exercises the plugin's in-process
-      # PluginScanner fallback, which `swift build` doesn't. A bug in that
-      # path would make Xcode IDE builds fail while the swift build above
-      # still passes.
+          xcrun swift build --help | grep -A 3 -- '--build-system'
+          if xcrun swift build --help | grep -q 'swiftbuild'; then
+            echo "swiftbuild=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "swiftbuild=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::This toolchain's swift build offers no swiftbuild backend; only the native backend is built."
+          fi
+          if xcrun swift build --help | grep -Eq 'default: swiftbuild|swiftbuild .*\(default\)'; then
+            echo "swiftbuild_is_default=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "swiftbuild_is_default=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Build Package Integration (swift build, native backend)
+        if: ${{ !cancelled() }}
+        run: |
+          xcrun swift build --build-system native --scratch-path "$RUNNER_TEMP/native-debug" --package-path "Examples/Example Package Integration"
+          grep -q "ConsoleEventLogger()" "$(find "$RUNNER_TEMP/native-debug/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
+      - name: Build Package Integration in release configuration (swift build, native backend)
+        if: ${{ !cancelled() }}
+        run: |
+          xcrun swift build --build-system native -c release -Xswiftc -Onone --scratch-path "$RUNNER_TEMP/native-release" --package-path "Examples/Example Package Integration"
+          grep -q "DisabledEventLogger()" "$(find "$RUNNER_TEMP/native-release/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
+      # Xcode builds a package's source-built SafeDITool under a path with
+      # unexpanded build settings, so the plugin cannot run it while planning
+      # and uses its in-process PluginScanner fallback, which `swift build`
+      # doesn't. Xcode must expand the build-setting arguments: in Release, the
+      # plugin reads `DEBUG` from Package.swift anyway, because Xcode evaluates
+      # a package's `.when(configuration:)` defines as for a debug build, and
+      # only the build settings let SafeDITool wire `DisabledEventLogger`.
       - name: Build Package Integration (xcodebuild)
-        run: pushd "Examples/Example Package Integration"; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -destination "platform=macOS"; popd
-      # Release-configuration builds prove the plugin stops reporting `DEBUG`
-      # when the configuration does not define it: the generated file must
-      # wire `DisabledEventLogger`. Optimization is turned off because only
-      # the configuration matters here, and an optimized build of swift-syntax
-      # takes several times longer.
-      - name: Build Package Integration in release configuration (swift build)
+        if: ${{ !cancelled() }}
         run: |
-          xcrun swift build -c release -Xswiftc -Onone --package-path "Examples/Example Package Integration"
-          grep -q "DisabledEventLogger()" "$(find "Examples/Example Package Integration/.build/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
-      # Xcode evaluates a package's `.when(configuration:)` defines as for a
-      # debug build whatever configuration it compiles, so it hands the plugin
-      # `DEBUG` in Release too and SafeDI scans the debug clause. The generated
-      # assertion must then stop the Release build. This step fails if the
-      # build succeeds (Xcode started reporting configuration-specific
-      # defines: update the Manual's Swift package plugin row) or if it fails
-      # for any other reason.
-      - name: Build Package Integration in release configuration (xcodebuild, expects the assertion)
-        run: |
+          log="$RUNNER_TEMP/xcodebuild-debug.log"
+          status=0
           pushd "Examples/Example Package Integration"
-          if xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -configuration Release -destination "platform=macOS" -derivedDataPath DerivedData SWIFT_OPTIMIZATION_LEVEL=-Onone SWIFT_COMPILATION_MODE=singlefile GCC_OPTIMIZATION_LEVEL=0 ONLY_ACTIVE_ARCH=YES > xcodebuild-release.log 2>&1; then
-            echo "Expected the Release build to stop at SafeDI's compile-time assertion, but it succeeded." >&2
+          xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -destination "platform=macOS" -derivedDataPath "$RUNNER_TEMP/xcodebuild-debug" > "$log" 2>&1 || status=$?
+          popd
+          arguments=$(.github/scripts/report-build-setting-arguments.sh "$log")
+          echo "Build-setting arguments: $arguments; build exit status: $status"
+          [ "$status" -eq 0 ] || { tail -n 100 "$log"; exit 1; }
+          [ "$arguments" = expanded ]
+          grep -q "ConsoleEventLogger()" "$(find "$RUNNER_TEMP/xcodebuild-debug/Build/Intermediates.noindex/BuildToolPluginIntermediates" -path "*/RootModule/SafeDIGenerator/SafeDIOutput/Root+SafeDI.swift")"
+      - name: Build Package Integration in release configuration (xcodebuild)
+        if: ${{ !cancelled() }}
+        run: |
+          log="$RUNNER_TEMP/xcodebuild-release.log"
+          status=0
+          pushd "Examples/Example Package Integration"
+          xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExamplePackageIntegration -configuration Release -destination "platform=macOS" -derivedDataPath "$RUNNER_TEMP/xcodebuild-release" SWIFT_OPTIMIZATION_LEVEL=-Onone SWIFT_COMPILATION_MODE=singlefile GCC_OPTIMIZATION_LEVEL=0 ONLY_ACTIVE_ARCH=YES > "$log" 2>&1 || status=$?
+          popd
+          arguments=$(.github/scripts/report-build-setting-arguments.sh "$log")
+          echo "Build-setting arguments: $arguments; build exit status: $status"
+          [ "$status" -eq 0 ] || { tail -n 100 "$log"; exit 1; }
+          [ "$arguments" = expanded ]
+          grep -q "DisabledEventLogger()" "$(find "$RUNNER_TEMP/xcodebuild-release/Build/Intermediates.noindex/BuildToolPluginIntermediates" -path "*/RootModule/SafeDIGenerator/SafeDIOutput/Root+SafeDI.swift")"
+      # A copy of the example without its `DEBUG` define shows which builds
+      # read the conditions from the build settings: those must still wire
+      # the right logger, and a build that passes the arguments through
+      # unexpanded must stop at SafeDI's compile-time assertion, as the
+      # Manual documents.
+      - name: Prepare Package Integration without the DEBUG define
+        id: prepare
+        if: ${{ !cancelled() }}
+        run: |
+          copy="$RUNNER_TEMP/PackageIntegrationWithoutDebugDefine"
+          rm -rf "$copy"
+          cp -R "Examples/Example Package Integration" "$copy"
+          rm -rf "$copy/.build"
+          sed -i '' \
+            -e "s|\.package(path: \"\.\./\.\./\"|.package(path: \"$GITHUB_WORKSPACE\"|" \
+            -e '/\.define("DEBUG", \.when(configuration: \.debug)),/d' \
+            "$copy/Package.swift"
+          grep -q "package(path: \"$GITHUB_WORKSPACE\"" "$copy/Package.swift"
+          if grep -q '\.define("DEBUG"' "$copy/Package.swift"; then
+            echo "The DEBUG define is still in $copy/Package.swift." >&2
             exit 1
           fi
-          grep -q 'SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation' xcodebuild-release.log || { cat xcodebuild-release.log; exit 1; }
-          popd
+      - name: Build Package Integration without the DEBUG define (swift build, native backend, expects the assertion)
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        run: |
+          log="$RUNNER_TEMP/native-without-define.log"
+          if xcrun swift build --build-system native -v --scratch-path "$RUNNER_TEMP/native-without-define" --package-path "$RUNNER_TEMP/PackageIntegrationWithoutDebugDefine" > "$log" 2>&1; then
+            echo "Expected the native backend to stop at SafeDI's compile-time assertion without the DEBUG define, but the build succeeded." >&2
+            exit 1
+          fi
+          arguments=$(.github/scripts/report-build-setting-arguments.sh "$log")
+          echo "Build-setting arguments: $arguments"
+          [ "$arguments" = unexpanded ] || { echo "::error::Expected the native backend to pass the build-setting arguments through unexpanded." >&2; exit 1; }
+          grep -q 'SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation' "$log" || { tail -n 100 "$log"; exit 1; }
+      # The debug build's expectation follows what the log shows. Expanded
+      # arguments must wire `ConsoleEventLogger`. Arguments that arrive
+      # unexpanded must fall back to the assertion, as on the native backend,
+      # and a toolchain whose default backend is swiftbuild must expand them.
+      # Swift 6.2 sometimes hands the plugin the prebuilt binary from the
+      # artifact bundle despite the `sourceBuild` trait; that release accepts
+      # the arguments too, so the expectations hold whichever binary ran, and
+      # the report names it.
+      - name: Build Package Integration without the DEBUG define (swift build, Swift Build backend)
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' && steps.backends.outputs.swiftbuild == 'true' }}
+        env:
+          SWIFTBUILD_IS_DEFAULT: ${{ steps.backends.outputs.swiftbuild_is_default }}
+        run: |
+          log="$RUNNER_TEMP/swiftbuild-debug.log"
+          status=0
+          xcrun swift build --build-system swiftbuild -v --scratch-path "$RUNNER_TEMP/swiftbuild-debug" --package-path "$RUNNER_TEMP/PackageIntegrationWithoutDebugDefine" > "$log" 2>&1 || status=$?
+          arguments=$(.github/scripts/report-build-setting-arguments.sh "$log")
+          echo "Build-setting arguments: $arguments; build exit status: $status"
+          case "$arguments" in
+            expanded)
+              [ "$status" -eq 0 ] || { tail -n 100 "$log"; exit 1; }
+              grep -q "ConsoleEventLogger()" "$(find "$RUNNER_TEMP/swiftbuild-debug/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
+              ;;
+            unexpanded)
+              if [ "$SWIFTBUILD_IS_DEFAULT" = true ]; then
+                echo "::error::This toolchain's default swiftbuild backend passed the build-setting arguments through unexpanded." >&2
+                exit 1
+              else
+                echo "::notice::This toolchain's opt-in swiftbuild backend passes build tool plugin arguments through unexpanded, so SafeDITool falls back as on the native backend."
+              fi
+              [ "$status" -ne 0 ] || { echo "Expected the fallback to stop at SafeDI's compile-time assertion, but the build succeeded." >&2; exit 1; }
+              grep -q 'SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation' "$log" || { tail -n 100 "$log"; exit 1; }
+              ;;
+          esac
+      - name: Build Package Integration without the DEBUG define in release configuration (swift build, Swift Build backend)
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' && steps.backends.outputs.swiftbuild == 'true' }}
+        env:
+          SWIFTBUILD_IS_DEFAULT: ${{ steps.backends.outputs.swiftbuild_is_default }}
+        run: |
+          log="$RUNNER_TEMP/swiftbuild-release.log"
+          xcrun swift build --build-system swiftbuild -v -c release -Xswiftc -Onone --scratch-path "$RUNNER_TEMP/swiftbuild-release" --package-path "$RUNNER_TEMP/PackageIntegrationWithoutDebugDefine" > "$log" 2>&1 || { tail -n 100 "$log"; exit 1; }
+          arguments=$(.github/scripts/report-build-setting-arguments.sh "$log")
+          echo "Build-setting arguments: $arguments"
+          if [ "$SWIFTBUILD_IS_DEFAULT" = true ] && [ "$arguments" != expanded ]; then
+            echo "::error::This toolchain's default swiftbuild backend passed the build-setting arguments through unexpanded." >&2
+            exit 1
+          fi
+          grep -q "DisabledEventLogger()" "$(find "$RUNNER_TEMP/swiftbuild-release/plugins/outputs" -path "*/RootModule/*/SafeDIOutput/Root+SafeDI.swift")"
 
   spm-project-integration:
     name: Build Project Integration on Xcode 26
@@ -328,8 +448,26 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: pushd Examples/ExampleProjectIntegration && xcrun xcodebuild -resolvePackageDependencies -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration && popd
+      # `EventLogger.swift` declares a different `@Instantiable` under
+      # `#if DEBUG` and `#else`. Xcode runs the plugin's command through a
+      # shell script that expands the target's
+      # `SWIFT_ACTIVE_COMPILATION_CONDITIONS`, which defines `DEBUG` only in
+      # the Debug configuration, so the generated file must wire
+      # `ConsoleEventLogger` in Debug and `DisabledEventLogger` in Release.
+      # Each configuration builds into its own DerivedData directory, so
+      # neither grep can read the other build's generated file.
       - name: Build Project Integration
-        run: pushd Examples/ExampleProjectIntegration; xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration; popd
+        run: |
+          pushd Examples/ExampleProjectIntegration
+          xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration -derivedDataPath "$RUNNER_TEMP/xcodebuild-debug"
+          popd
+          grep -q "ConsoleEventLogger()" "$(find "$RUNNER_TEMP/xcodebuild-debug/Build/Intermediates.noindex/BuildToolPluginIntermediates" -path "*/SafeDIOutput/NotesApp+SafeDI.swift")"
+      - name: Build Project Integration in release configuration
+        run: |
+          pushd Examples/ExampleProjectIntegration
+          xcrun xcodebuild build -skipPackagePluginValidation -skipMacroValidation -scheme ExampleProjectIntegration -configuration Release -derivedDataPath "$RUNNER_TEMP/xcodebuild-release" SWIFT_OPTIMIZATION_LEVEL=-Onone SWIFT_COMPILATION_MODE=singlefile GCC_OPTIMIZATION_LEVEL=0 ONLY_ACTIVE_ARCH=YES
+          popd
+          grep -q "DisabledEventLogger()" "$(find "$RUNNER_TEMP/xcodebuild-release/Build/Intermediates.noindex/BuildToolPluginIntermediates" -path "*/SafeDIOutput/NotesApp+SafeDI.swift")"
 
   spm-multi-project-integration:
     name: Build Multi Project Integration on Xcode 26
