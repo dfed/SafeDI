@@ -180,7 +180,6 @@ private struct FileScan: Sendable {
 	let configurations: [SafeDIConfiguration]
 	let encounteredUnexpectedNodes: Bool
 	let conditionalCompilationDecisions: [ConditionalCompilationDecision]
-
 }
 
 extension ModuleInfo {
