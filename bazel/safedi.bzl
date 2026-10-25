@@ -147,14 +147,16 @@ def _safedi_compile_impl(ctx):
         command_line_copts = ctx.attr._swift_copts[BuildSettingInfo].value
 
     # `swift_library` expands Make variables in `copts`, so a `-D` flag
-    # can name a value set with `--define`.
-    target_copts = [
-        ctx.expand_make_variables("copts", copt, {})
-        for copt in ctx.attr.copts
+    # can name a value set with `--define`. Only the conditions are
+    # expanded: other copts may use `$(location …)`, which needs the
+    # library's `swiftc_inputs`.
+    target_copt_conditions = [
+        ctx.expand_make_variables("copts", condition, {})
+        for condition in _compilation_conditions_from_copts(ctx.attr.copts)
     ]
 
     active_compilation_conditions = list(ctx.attr.defines)
-    active_compilation_conditions += _compilation_conditions_from_copts(target_copts)
+    active_compilation_conditions += target_copt_conditions
     active_compilation_conditions += _compilation_conditions_from_copts(command_line_copts)
     compilation_mode = ctx.var.get("COMPILATION_MODE")
     if compilation_mode in ("dbg", "fastbuild"):
