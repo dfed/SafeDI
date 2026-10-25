@@ -41,7 +41,7 @@ import PackagePlugin
 		/// callers — the binary format is forward-compatible within a minor
 		/// release line.
 		var safeDIVersion: String {
-			"2.1.0-rc-2"
+			"2.1.0-rc-3"
 		}
 
 		/// Hardcoded source repo (forks must update this to point at their
@@ -158,9 +158,6 @@ struct ScanManifest: Codable {
 	var mockConfigurationOutputFilePath: String?
 	var additionalMocksToGenerate: [String]
 	var additionalInputFiles: [String]
-	/// Whether the SafeDITool that wrote this manifest accepts `generate`'s build-setting options.
-	/// Releases that predate the options do not write it.
-	var acceptsBuildSettingCompilationConditions: Bool?
 }
 
 // MARK: - Process Runner
