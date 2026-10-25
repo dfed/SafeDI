@@ -64,7 +64,7 @@ func executeSafeDIToolTest(
 	}
 
 	let swiftFileCSV = URL.temporaryFile
-	let swiftFixtureDirectory: URL = switch pluginInvocation {
+	let swiftFixtureDirectory = switch pluginInvocation {
 	case .scanDuringGenerate:
 		// The plugin's paths are relative to the project root, which is `generate`'s working directory.
 		URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
