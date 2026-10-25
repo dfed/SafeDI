@@ -71,7 +71,7 @@ extension SafeDIConfiguration {
 		return SourceDiagnostic(
 			severity: .warning,
 			location: declarationLocation,
-			message: "This #\(SafeDIConfigurationVisitor.macroName) sets `\(SafeDIConfigurationVisitor.mockConditionalCompilationArgumentLabel)` and is not in a file named `\(Self.conventionalFileName)`, so SafeDI had to scan this module’s files twice. Move it to a file named `\(Self.conventionalFileName)` so SafeDI can read it first. A #\(SafeDIConfigurationVisitor.macroName) outside `\(Self.conventionalFileName)` will be an error in SafeDI 3.0.",
+			message: "This #\(SafeDIConfigurationVisitor.macroName) sets `\(SafeDIConfigurationVisitor.mockConditionalCompilationArgumentLabel)` and is not in a file named `\(Self.conventionalFileName)`, so SafeDI had to scan this module’s files twice. Move it to a file named `\(Self.conventionalFileName)` so SafeDI can read it first.",
 		)
 	}
 }

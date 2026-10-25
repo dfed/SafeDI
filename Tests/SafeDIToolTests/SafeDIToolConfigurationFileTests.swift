@@ -736,7 +736,7 @@ struct SafeDIToolConfigurationFileTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
-	private static let placementWarningMessage = "This #SafeDIConfiguration sets `mockConditionalCompilation` and is not in a file named `SafeDIConfiguration.swift`, so SafeDI had to scan this module’s files twice. Move it to a file named `SafeDIConfiguration.swift` so SafeDI can read it first. A #SafeDIConfiguration outside `SafeDIConfiguration.swift` will be an error in SafeDI 3.0."
+	private static let placementWarningMessage = "This #SafeDIConfiguration sets `mockConditionalCompilation` and is not in a file named `SafeDIConfiguration.swift`, so SafeDI had to scan this module’s files twice. Move it to a file named `SafeDIConfiguration.swift` so SafeDI can read it first."
 
 	private static let simpleTypeContent = """
 	@Instantiable

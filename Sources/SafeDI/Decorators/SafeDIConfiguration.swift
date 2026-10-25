@@ -30,8 +30,7 @@
 /// Declare it in a file named `SafeDIConfiguration.swift`. SafeDI reads that file before scanning the rest of the
 /// module, so the configuration decides how every other file is scanned. A configuration in any other file still
 /// works, but SafeDI must scan the module to find it, and scan it again when `mockConditionalCompilation` is not
-/// `"DEBUG"`; `SafeDITool` warns in that case. SafeDI 3.0 will require the configuration to be in
-/// `SafeDIConfiguration.swift`.
+/// `"DEBUG"`; `SafeDITool` warns in that case.
 ///
 /// - Parameters:
 ///   - additionalImportedModules: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types.
