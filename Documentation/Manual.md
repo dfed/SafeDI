@@ -480,6 +480,8 @@ public struct FeedView: Instantiable {
 }
 ```
 
+A dependency counts as available only if it can be built before the receiver. When a parent instantiates both the dependency and a sibling whose subtree contains the receiver, and the dependency itself receives that sibling, the dependency must be built after the sibling, so the receiver gets `nil`. When two siblings each receive the other `onlyIfAvailable`, the one declared later is built first and receives `nil`.
+
 ### #SafeDIConfiguration
 
 [`#SafeDIConfiguration`](../Sources/SafeDI/Decorators/SafeDIConfiguration.swift) is a freestanding declaration macro that provides build-time configuration for SafeDI’s code generation plugin. Each module may have at most one `#SafeDIConfiguration` invocation. It must appear at the top level of a Swift file (not nested inside a type). All arguments must be literal values. All parameters have defaults, so the simplest valid invocation is `#SafeDIConfiguration()`.
@@ -780,6 +782,8 @@ The table below shows where each dependency kind lands in the three buckets abov
 | `@Instantiated` | Entry on `SafeDIOverrides` | Built from the real subtree — see [Overriding dependencies](#overriding-dependencies) |
 | `@Received(onlyIfAvailable: true)` | Entry on `SafeDIOverrides`, typed as optional | `nil` |
 | Default-valued non-DI init parameter | Flat `mock()` parameter on a direct mock, or a nested `SafeDIMockConfiguration` field when reached through a parent | The parameter’s original default expression |
+
+A `@Received(onlyIfAvailable: true)` dependency gets no `SafeDIOverrides` entry of its own when the mock already builds that dependency — because the mocked type instantiates it, or because another type in the tree requires it. The receiver is then passed the built instance, unless that instance can only be built after the receiver (see [Conditionally receiving dependencies](#conditionally-receiving-dependencies)). In that case the receiver is passed `nil`, as in production, and a builder closure you set for the receiver in `SafeDIOverrides` is called with `nil`.
 
 A `@Received` dependency is resolved from its declared type, not from the renames in any particular parent. Take `ProfileView` from [Sharing one instance across properties of disparate types](#sharing-one-instance-across-properties-of-disparate-types): `ProfileView.mock()` can build `crashReporter` itself only when `Telemetry` lists `CrashReporter` in `fulfillingAdditionalTypes`. A composition entry such as `(EventTracker & CrashReporter).self` alone does not cover its members. Otherwise `crashReporter` is a required parameter of `ProfileView.mock()`. Because each received dependency is resolved on its own, a mock that receives both `EventTracker` and `CrashReporter` builds a separate `Telemetry` for each. Pass one instance through `safeDIOverrides` if a test needs them to coincide.
 

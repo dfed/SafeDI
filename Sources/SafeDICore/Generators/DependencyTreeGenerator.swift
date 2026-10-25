@@ -809,13 +809,17 @@ public actor DependencyTreeGenerator {
 			))
 		}
 
-		// Validate the promoted mock scope for cycles before generating code.
-		// This catches cycles that only become visible after @Received dependencies
-		// are promoted to the mock root (e.g., B @Receives Instantiator<A> where A
-		// instantiates B — the promotion creates a cycle in the mock root scope).
-		try validateMockRootScopeForCycles(
-			mockRootScope,
+		// Validate the promoted mock scope for cycles before generating code, with the
+		// same walk production uses. This catches cycles that only become visible after
+		// @Received dependencies are promoted to the mock root: one through an ancestor
+		// (e.g., B @Receives Instantiator<A> where A instantiates B — the promotion
+		// creates a cycle in the mock root scope), and one between promoted siblings
+		// (e.g., C @Receives B while B's subtree @Receives C — each needs the other
+		// built first).
+		try validatePropertiesAreFulfillable(
+			onRootScopes: [mockRootScope],
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			cyclesOnly: true,
 		)
 
 		// Build the final ScopeGenerator once.
@@ -828,56 +832,10 @@ public actor DependencyTreeGenerator {
 		)
 	}
 
-	/// Walks a post-promotion mock root scope for dependency cycles.
-	/// The mock root scope has @Received dependencies promoted as children,
-	/// which can create cycles not visible in the pre-promotion scope.
-	private func validateMockRootScopeForCycles(
-		_ scope: Scope,
-		typeDescriptionToScopeMap: [TypeDescription: Scope],
-		propertyStack: [Property] = [],
-	) throws {
-		// Check dependencies for cycles (catches @Received references back to ancestors).
-		// Skip forwarded dependencies — they're runtime Instantiator closure parameters.
-		for dependency in scope.instantiable.dependencies where dependency.source != .forwarded {
-			let propertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
-			guard let cycleIndex = propertyStack.firstIndex(of: propertyForDependency) else {
-				continue
-			}
-			let typesInCycle = (
-				[propertyForDependency]
-					+ propertyStack[0...cycleIndex],
-			).map(\.typeDescription)
-			try throwIfInvalidCycle(
-				typesInCycle: typesInCycle,
-				property: propertyForDependency,
-				declarationLocation: dependency.declarationLocation,
-				directParent: scope.instantiable.concreteInstantiable,
-				isReceived: dependency.source.isReceived,
-			)
-		}
-
-		// Recurse into children.
-		for childPropertyToGenerate in scope.propertiesToGenerate {
-			switch childPropertyToGenerate {
-			case let .instantiated(childProperty, childScope, _):
-				guard !propertyStack.contains(childProperty) else { continue }
-				let nextStack = [childProperty] + propertyStack
-				try validateMockRootScopeForCycles(
-					childScope,
-					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
-					propertyStack: nextStack,
-				)
-			case .aliased:
-				break
-			}
-		}
-	}
-
 	/// Classifies a detected cycle and throws the appropriate error, or
-	/// returns silently if the cycle is valid. Called from both
-	/// `validatePropertiesAreFulfillable` (production graph) and
-	/// `validateMockRootScopeForCycles` (mock graph after `@Received`
-	/// promotion) — the two validation entry points share this classifier.
+	/// returns silently if the cycle is valid. Called from
+	/// `validatePropertiesAreFulfillable`, which walks both the production graph
+	/// and each mock root's graph after `@Received` promotion.
 	///
 	/// Rejected:
 	/// - Constant entry point in a fully-constant cycle → `.constantDependencyCycleDetected`.
@@ -1260,6 +1218,31 @@ public actor DependencyTreeGenerator {
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
 		cyclesOnly: Bool,
 	) throws {
+		var rootScopes = rootInstantiables.compactMap { typeDescriptionToScopeMap[$0] }
+		// When checking cycles only (mock validation), also validate non-root types
+		// that have generateMock enabled — they bypass root entry points.
+		if cyclesOnly {
+			let rootInstantiableSet = Set(rootInstantiables)
+			for scope in Set(typeDescriptionToScopeMap.values)
+				where scope.instantiable.generateMock && !rootInstantiableSet.contains(scope.instantiable.concreteInstantiable)
+			{
+				rootScopes.append(scope)
+			}
+		}
+		try validatePropertiesAreFulfillable(
+			onRootScopes: rootScopes,
+			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			cyclesOnly: cyclesOnly,
+		)
+	}
+
+	/// Validates the trees rooted at `rootScopes` for cycles and optionally for
+	/// unfulfillable properties. See `validatePropertiesAreFulfillable(typeDescriptionToScopeMap:cyclesOnly:)`.
+	private func validatePropertiesAreFulfillable(
+		onRootScopes rootScopes: [Scope],
+		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		cyclesOnly: Bool,
+	) throws {
 		var unfulfillableProperties = Set<DependencyTreeGeneratorError.UnfulfillableProperty>()
 		func validatePropertiesAreFulfillable(
 			on scope: Scope,
@@ -1414,7 +1397,7 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
-		for rootScope in rootInstantiables.compactMap({ typeDescriptionToScopeMap[$0] }) {
+		for rootScope in rootScopes {
 			try validatePropertiesAreFulfillable(
 				on: rootScope,
 				receivableProperties: Set(rootScope.properties),
@@ -1422,23 +1405,6 @@ public actor DependencyTreeGenerator {
 				propertyStack: [],
 				root: rootScope.instantiable.concreteInstantiable,
 			)
-		}
-
-		// When checking cycles only (mock validation), also validate non-root types
-		// that have generateMock enabled — they bypass root entry points.
-		if cyclesOnly {
-			let rootInstantiableSet = Set(rootInstantiables)
-			for scope in Set(typeDescriptionToScopeMap.values)
-				where scope.instantiable.generateMock && !rootInstantiableSet.contains(scope.instantiable.concreteInstantiable)
-			{
-				try validatePropertiesAreFulfillable(
-					on: scope,
-					receivableProperties: Set(scope.properties),
-					property: nil,
-					propertyStack: [],
-					root: scope.instantiable.concreteInstantiable,
-				)
-			}
 		}
 
 		if !unfulfillableProperties.isEmpty {

@@ -131,6 +131,60 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenPromotedDependenciesReceiveEachOther() async {
+		// Child.mock() promotes `c` (Child receives it) and `b` (C receives it).
+		// Worker, built inside `b`, requires `c`, so each promoted dependency must be
+		// built before the other. Production rejects the same graph when one root
+		// instantiates both `b` and `c`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["C.swift"]):4:5: error: Dependency cycle detected: B -> Worker -> C -> B
+				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
+				\(fixtures["Worker.swift"]):1:1: note: `Worker` is part of the cycle
+				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(worker: Worker) { self.worker = worker }
+					    @Instantiated let worker: Worker
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Worker: Instantiable {
+					    public init(c: C) { self.c = c }
+					    @Received let c: C
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(b: B) { self.b = b }
+					    @Received let b: B
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public final class Child: Instantiable {
+					    public init(c: C) { self.c = c }
+					    @Received let c: C
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenUnfulfillableInstantiatedPropertyExists() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
