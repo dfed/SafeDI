@@ -253,10 +253,9 @@ func performScan(
 	// regardless of its CWD — `FileManager.attributesOfItem(atPath:)`
 	// resolves relative paths against the process's CWD, which would
 	// silently fail and invalidate the cache if `generate` runs from a
-	// different directory than `scan`.
-	let absoluteCSVPaths = allFilePaths.map { filePath in
-		URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL.path
-	}.sorted()
+	// different directory than `scan`. The input URLs are already standardized, so
+	// their paths are these absolute paths without resolving every input again.
+	let absoluteCSVPaths = allSwiftFiles.map(\.path)
 	let allScannedFilePaths = (Set(absoluteCSVPaths).union(
 		// `additionalInputFiles` is already normalized to `.standardizedFileURL.path`.
 		Set(additionalInputFiles),
