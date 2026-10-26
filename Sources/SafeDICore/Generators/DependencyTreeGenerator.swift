@@ -1369,11 +1369,11 @@ public actor DependencyTreeGenerator {
 					   let instantiatedScope = typeDescriptionToScopeMap[instantiatedType]
 					{
 						if let error = forwardedPropertyError(
-							for: dependency,
-							instantiable: instantiable,
-							parent: scope.instantiable,
-						),
-							firstForwardedPropertyError.map({ scope.instantiable.concreteInstantiable < $0.parent }) ?? true
+						   	for: dependency,
+						   	instantiable: instantiable,
+						   	parent: scope.instantiable,
+						   ),
+						   firstForwardedPropertyError.map({ scope.instantiable.concreteInstantiable < $0.parent }) ?? true
 						{
 							firstForwardedPropertyError = ForwardedPropertyError(
 								parent: scope.instantiable.concreteInstantiable,
