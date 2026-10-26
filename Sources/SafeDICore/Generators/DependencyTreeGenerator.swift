@@ -575,10 +575,10 @@ public actor DependencyTreeGenerator {
 						[]
 					}
 				} else if property.typeDescription.isOptional,
-				   let nonOptionalAlternative = suggestedAlternatives.first(where: { alternative in
-				   	alternative.label == property.label
-				   		&& alternative.typeDescription == property.typeDescription.unwrapped
-				   })
+				          let nonOptionalAlternative = suggestedAlternatives.first(where: { alternative in
+				          	alternative.label == property.label
+				          		&& alternative.typeDescription == property.typeDescription.unwrapped
+				          })
 				{
 					let onlyIfAvailableAttribute = "@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)"
 					hint = "The non-optional `\(nonOptionalAlternative.asSource)` is available in chain. Did you mean to decorate this property with `\(onlyIfAvailableAttribute)`?"

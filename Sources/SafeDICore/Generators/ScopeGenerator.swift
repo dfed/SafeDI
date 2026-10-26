@@ -124,7 +124,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			requiredOnlyIfAvailableAliasFulfillingProperties.insert(fulfillingProperty)
 		}
 		self.requiredOnlyIfAvailableAliasProperties = requiredOnlyIfAvailableAliasProperties
-		self.requiredAliasFulfillingProperties = receivedFromAncestors(
+		requiredAliasFulfillingProperties = receivedFromAncestors(
 			Set(propertiesToGenerate.flatMap(\.requiredAliasFulfillingProperties))
 				.union(requiredOnlyIfAvailableAliasFulfillingProperties),
 		)
