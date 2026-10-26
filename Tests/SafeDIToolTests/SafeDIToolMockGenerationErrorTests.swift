@@ -181,6 +181,72 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenReceivedPropertyIsHiddenByAliasReusingItsLabelInTreeOfTypeListedInAdditionalMocksToGenerate() async throws {
+		// Top is defined in a dependent module without generateMock: true.
+		let dependentModuleOutput = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Top: Instantiable {
+				    public init(analytics: Analytics, mid: Mid) { self.analytics = analytics; self.mid = mid }
+				    @Instantiated let analytics: Analytics
+				    @Instantiated let mid: Mid
+				}
+				""",
+				"""
+				public protocol EventTracker {}
+				@Instantiable
+				public final class Analytics: Instantiable, EventTracker {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Mid: Instantiable {
+				    public init(analytics: EventTracker, child: Child) { self.analytics = analytics; self.child = child }
+				    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let analytics: EventTracker
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public init(analytics: Analytics) { self.analytics = analytics }
+				    @Received let analytics: Analytics
+				}
+				""",
+			],
+			filesToDelete: &filesToDelete,
+		)
+		let dependentModuleFixtures = dependentModuleOutput.fixtures
+
+		await assertThrowsError(
+			diagnostics: { _ in
+				"""
+				\(dependentModuleFixtures["Child.swift"]):4:5: error: @Received property `analytics: Analytics` is hidden in chain: Top -> Mid -> Child. `Mid` declares `analytics: EventTracker` with the same label, so the types below `Mid` receive `analytics: EventTracker` instead. Give `analytics: EventTracker` on `Mid` a different label to fix.
+				\(dependentModuleFixtures["Mid.swift"]):4:5: note: `analytics: EventTracker` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					#SafeDIConfiguration(
+					    additionalMocksToGenerate: [
+					        "Top",
+					    ]
+					)
+					""",
+				],
+				dependentModuleInfoPaths: [dependentModuleOutput.moduleInfoOutputPath],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenOnlyIfAvailableReceivedPropertyNoAncestorProvidesIsHiddenByPropertyWithSameLabel() async {
 		// Production passes `nil`, because no ancestor provides `analytics: Analytics`, but the mock
 		// declares `analytics: Analytics?` at its root, where `Mid`’s `analytics` hides it from `Child`.

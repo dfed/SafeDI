@@ -123,6 +123,14 @@ public actor DependencyTreeGenerator {
 		// have unfulfillable received properties by design (they become mock parameters).
 		try validatePropertiesAreFulfillable(
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			// The scopes of the types the mock-root loop below generates a mock for because they are listed.
+			additionalMockRootScopes: additionalMocksToGenerate.isEmpty ? [] : Set(
+				typeDescriptionToFulfillingInstantiableMap.values.compactMap { instantiable in
+					additionalMocksToGenerate.contains(instantiable.concreteInstantiable.asSource)
+						? typeDescriptionToScopeMap[instantiable.concreteInstantiable]
+						: nil
+				},
+			),
 			cyclesOnly: true,
 		)
 
@@ -1394,8 +1402,10 @@ public actor DependencyTreeGenerator {
 	/// When `cyclesOnly` is true, unfulfillable property collection is skipped —
 	/// used for mock-only types where unfulfillable received properties are expected
 	/// (they become required mock parameters).
+	/// - Parameter additionalMockRootScopes: See `validatePropertiesAreFulfillable(onRootScopes:additionalMockRootScopes:typeDescriptionToScopeMap:cyclesOnly:)`.
 	private func validatePropertiesAreFulfillable(
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		additionalMockRootScopes: Set<Scope> = [],
 		cyclesOnly: Bool,
 	) throws {
 		var rootScopes = rootInstantiables.compactMap { typeDescriptionToScopeMap[$0] }
@@ -1411,6 +1421,7 @@ public actor DependencyTreeGenerator {
 		}
 		try validatePropertiesAreFulfillable(
 			onRootScopes: rootScopes,
+			additionalMockRootScopes: additionalMockRootScopes,
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 			cyclesOnly: cyclesOnly,
 		)
@@ -1420,8 +1431,11 @@ public actor DependencyTreeGenerator {
 	/// unfulfillable properties. See `validatePropertiesAreFulfillable(typeDescriptionToScopeMap:cyclesOnly:)`.
 	/// Also validates, in production trees and in the trees of types that generate a mock, that no received
 	/// dependency is hidden by a closer ancestor's property with the same label.
+	/// - Parameter additionalMockRootScopes: The scopes of types whose mock is generated because
+	///   `additionalMocksToGenerate` lists them. Their trees are validated for hidden received dependencies only.
 	private func validatePropertiesAreFulfillable(
 		onRootScopes rootScopes: [Scope],
+		additionalMockRootScopes: Set<Scope> = [],
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
 		cyclesOnly: Bool,
 	) throws {
@@ -1430,17 +1444,19 @@ public actor DependencyTreeGenerator {
 		/// - Parameters:
 		///   - closestDeclarationByLabel: The property each label names in `scope`: the one declared by the closest
 		///     ancestor that declares the label.
+		///   - validatesCycles: Whether to validate the tree for dependency cycles.
 		///   - validatesHiddenProperties: Whether to record received dependencies a closer declaration hides.
 		func validatePropertiesAreFulfillable(
 			on scope: Scope,
 			receivableProperties: Set<Property>,
 			closestDeclarationByLabel: [String: DependencyTreeGeneratorError.LabelDeclaration],
+			validatesCycles: Bool,
 			validatesHiddenProperties: Bool,
 			property: Property?,
 			propertyStack: [Property],
 			root: TypeDescription,
 		) throws {
-			if let property {
+			if validatesCycles, let property {
 				// Scopes whose received properties have all been walked, transitively, without throwing
 				// and without bailing out on a cycle that isn't ours. Nothing reachable from such a scope
 				// can complete a cycle back to the scopes on the current walk, so walking it again —
@@ -1583,7 +1599,7 @@ public actor DependencyTreeGenerator {
 			if let property {
 				childPropertyStack.insert(property, at: 0)
 			}
-			for dependency in scope.instantiable.dependencies where dependency.source != .forwarded {
+			for dependency in scope.instantiable.dependencies where validatesCycles && dependency.source != .forwarded {
 				let propertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
 				guard let cycleIndex = childPropertyStack.firstIndex(of: propertyForDependency) else {
 					continue
@@ -1622,6 +1638,7 @@ public actor DependencyTreeGenerator {
 							.union(scope.properties)
 							.removing(childProperty),
 						closestDeclarationByLabel: childClosestDeclarationByLabel,
+						validatesCycles: validatesCycles,
 						validatesHiddenProperties: validatesHiddenProperties,
 						property: childProperty,
 						propertyStack: childPropertyStack,
@@ -1638,8 +1655,25 @@ public actor DependencyTreeGenerator {
 				on: rootScope,
 				receivableProperties: Set(rootScope.properties),
 				closestDeclarationByLabel: [:],
+				validatesCycles: true,
 				// A production root without a mock is validated for production; only mocks generate its tree here.
-				validatesHiddenProperties: !cyclesOnly || rootScope.instantiable.generateMock,
+				validatesHiddenProperties: !cyclesOnly
+					|| rootScope.instantiable.generateMock
+					|| additionalMockRootScopes.contains(rootScope),
+				property: nil,
+				propertyStack: [],
+				root: rootScope.instantiable.concreteInstantiable,
+			)
+		}
+		// Walking the other additional mock roots for cycles here could reject a mock that compiles today. Their
+		// mocks are validated for cycles after promotion, in `createMockRootScopeGenerator`.
+		for rootScope in additionalMockRootScopes.subtracting(rootScopes) {
+			try validatePropertiesAreFulfillable(
+				on: rootScope,
+				receivableProperties: Set(rootScope.properties),
+				closestDeclarationByLabel: [:],
+				validatesCycles: false,
+				validatesHiddenProperties: true,
 				property: nil,
 				propertyStack: [],
 				root: rootScope.instantiable.concreteInstantiable,
