@@ -145,6 +145,13 @@ final class Scope: Hashable {
 		} else {
 			isPropertyCycle = false
 		}
+		/// Whether a scope enclosing this one provides `property` to the scopes this one
+		/// generates: it creates the property, or its unwrapped form, and is not an
+		/// ancestor still being built.
+		func isProvidedByEnclosingScope(_ property: Property) -> Bool {
+			(receivableProperties.contains(property) && !childPropertyStack.contains(property))
+				|| (receivableProperties.contains(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty))
+		}
 		let receivableProperties = receivableProperties.union(createdProperties)
 		func isPropertyUnavailable(_ property: Property) -> Bool {
 			if forMockGeneration {
@@ -196,6 +203,7 @@ final class Scope: Hashable {
 						unavailableOptionalProperties: unavailableOptionalProperties,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
+						isProvidedByEnclosingScope: isProvidedByEnclosingScope(property),
 						declarationReference: declarationReference,
 					)
 				}

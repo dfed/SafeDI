@@ -835,11 +835,13 @@ public actor DependencyTreeGenerator {
 			cyclesOnly: true,
 		)
 
-		// Build the final ScopeGenerator once.
+		// Build the final ScopeGenerator once. The mock root binds every received
+		// property it does not promote — as a `mock()` parameter or a `SafeDIOverrides`
+		// entry — so each is receivable throughout the tree.
 		return try mockRootScope.createScopeGenerator(
 			for: nil,
 			propertyStack: [],
-			receivableProperties: [],
+			receivableProperties: allReceived,
 			erasedToConcreteExistential: false,
 			forMockGeneration: true,
 		)
