@@ -163,8 +163,19 @@ struct Generate: AsyncParsableCommand {
 		   let sourceConfiguration,
 		   !sourceConfiguration.additionalDirectoriesToInclude.isEmpty
 		{
-			let additionalFiles = try await findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude)
-			module = try await initialModule.including(ModuleInfo(parseSwiftFiles(additionalFiles, conditionalCompilation: evaluator)))
+			// Input paths are resolved as scan resolved them: relative to the manifest's project root, or else
+			// to the working directory. The additional files are named as scan named them in the manifest.
+			let projectRootURL = manifest?.projectRoot?.asFileURL
+			let directoryBaseURL = projectRootURL?.appendingPathComponent("", isDirectory: true)
+			let additionalDirectoryFiles = try await parseAdditionalDirectoryFiles(
+				in: sourceConfiguration.additionalDirectoriesToInclude,
+				excludingInputFilesAt: Set(inputFilePaths.map { inputFilePath in
+					URL(fileURLWithPath: inputFilePath, relativeTo: directoryBaseURL).standardizedFileURL.path
+				}),
+				namedRelativeTo: projectRootURL.map(RelativePathBase.init),
+				conditionalCompilation: evaluator,
+			)
+			module = initialModule.including(ModuleInfo(additionalDirectoryFiles.fileScans.map(\.fileScan)))
 		} else {
 			module = initialModule
 		}
