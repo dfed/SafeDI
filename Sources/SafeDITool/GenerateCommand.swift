@@ -164,7 +164,15 @@ struct Generate: AsyncParsableCommand {
 		   !sourceConfiguration.additionalDirectoriesToInclude.isEmpty
 		{
 			let additionalFiles = try await findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude)
-			module = try await initialModule.including(ModuleInfo(parseSwiftFiles(additionalFiles, conditionalCompilation: evaluator)))
+			// Each file is named as scan names it in the manifest, so the manifest lists the roots it declares.
+			// Without a manifest, files are named as found. The found paths are standardized, so no two
+			// resolve to the same name.
+			module = try await initialModule.including(ModuleInfo(parseSwiftFiles(
+				readingFilePathsByName: Dictionary(uniqueKeysWithValues: additionalFiles.map { filePath in
+					(manifest?.resolvedPath(for: filePath) ?? filePath, filePath)
+				}),
+				conditionalCompilation: evaluator,
+			)))
 		} else {
 			module = initialModule
 		}
@@ -300,23 +308,19 @@ struct Generate: AsyncParsableCommand {
 					}
 				}
 
-				// Validate manifest and roots are in sync before writing any
-				// output (manifest mode only). Combined mode has no manifest
-				// to validate against.
+				// The additional mocks that get a file. `scan` lists those of every configuration in every
+				// clause, and this run generates the ones the configuration these conditions select lists.
+				let listedAdditionalMocksToGenerate = manifest?.additionalMocksToGenerate ?? sourceConfiguration?.additionalMocksToGenerate ?? []
+				var additionalMocksToGenerate = listedAdditionalMocksToGenerate
+
+				// `scan` lists a file for every root and mock that any clause of any `#if` block declares, so
+				// every declaration found here has its file unless its source changed since `scan` ran or a
+				// hand-written manifest omits it. Validate before writing any output (manifest mode only).
+				// Combined mode has no manifest to validate against.
 				if let manifest {
-					let currentModuleRootSourceFiles = Set(
-						module.instantiables.filter(\.isRoot).compactMap(\.sourceFilePath),
-					)
 					let manifestInputPaths = Set(manifest.dependencyTreeGeneration.map(\.inputFilePath))
-					for entry in manifest.dependencyTreeGeneration {
-						guard currentModuleRootSourceFiles.contains(entry.inputFilePath) else {
-							throw ManifestError.noRootFound(inputPath: entry.inputFilePath)
-						}
-					}
-					for sourceFile in currentModuleRootSourceFiles {
-						if !manifestInputPaths.contains(sourceFile) {
-							throw ManifestError.rootNotInManifest(sourceFilePath: sourceFile)
-						}
+					if let sourceFilePath = Set(module.instantiables.filter(\.isRoot).compactMap(\.sourceFilePath)).subtracting(manifestInputPaths).min() {
+						throw ManifestError.rootNotInManifest(sourceFilePath: sourceFilePath)
 					}
 					if let mockScopedFilePaths = manifest.mockScopedFilePaths {
 						// Paths are compared as scan wrote them, since this parse may name files as the CSV does.
@@ -342,25 +346,16 @@ struct Generate: AsyncParsableCommand {
 							}
 						}
 						let configurationFilePaths = Set(module.configurations.compactMap(\.sourceFilePath).compactMap(mockScopedFilePath(resolving:)))
-						let manifestConfigurationFilePaths = Set(manifest.configurationFilePaths)
-						if let sourceFilePath = configurationFilePaths.subtracting(manifestConfigurationFilePaths).min() {
+						if let sourceFilePath = configurationFilePaths.subtracting(manifest.configurationFilePaths).min() {
 							throw ManifestError.configurationNotInManifest(sourceFilePath: sourceFilePath)
 						}
-						if let sourceFilePath = manifestConfigurationFilePaths.subtracting(configurationFilePaths).min() {
-							throw ManifestError.noConfigurationFound(sourceFilePath: sourceFilePath)
+						// Only the mocks the selected configuration lists are generated; the files of the others
+						// are written without code.
+						let configuredAdditionalMocksToGenerate = sourceConfiguration?.additionalMocksToGenerate ?? []
+						if let typeName = Set(configuredAdditionalMocksToGenerate).subtracting(manifest.additionalMocksToGenerate).min() {
+							throw ManifestError.additionalMockNotInManifest(typeName: typeName)
 						}
-						// The manifest's mock outputs follow the configuration scan found, which an `#if`
-						// block can make differ from the one found here.
-						if let sourceConfiguration,
-						   sourceConfiguration.additionalMocksToGenerate != manifest.additionalMocksToGenerate
-						{
-							// The configuration's file is the one the manifest lists, as checked above.
-							throw ManifestError.additionalMocksDiffer(
-								sourceFilePaths: manifest.configurationFilePaths,
-								configured: sourceConfiguration.additionalMocksToGenerate,
-								listed: manifest.additionalMocksToGenerate,
-							)
-						}
+						additionalMocksToGenerate = configuredAdditionalMocksToGenerate
 					}
 				}
 
@@ -404,11 +399,6 @@ struct Generate: AsyncParsableCommand {
 				}
 
 				// ---- Mocks ----
-				let additionalMocksToGenerate: [String] = if let manifest {
-					manifest.additionalMocksToGenerate
-				} else {
-					sourceConfiguration?.additionalMocksToGenerate ?? []
-				}
 				let currentModuleMockSourceFiles: [String]
 				if let manifest {
 					let additionalMockTypeNames = Set(manifest.additionalMocksToGenerate)
@@ -422,7 +412,7 @@ struct Generate: AsyncParsableCommand {
 					).sorted()
 				}
 				let hasAnyMockGeneration = !currentModuleMockSourceFiles.isEmpty
-					|| !additionalMocksToGenerate.isEmpty
+					|| !listedAdditionalMocksToGenerate.isEmpty
 
 				if hasAnyMockGeneration {
 					// Use the config's mockConditionalCompilation if a config exists;
@@ -551,38 +541,31 @@ struct Generate: AsyncParsableCommand {
 
 	// MARK: Private
 
-	/// The manifest names the files `generate` writes, and `scan` chose them before the build ran, with
-	/// only the compilation conditions a build tool plugin can see. When `generate` evaluates an `#if`
-	/// block differently, using the conditions the build settings report, the declarations that decide
-	/// which files exist can appear or vanish, and these errors say so instead of omitting code.
+	/// The manifest names the files `generate` writes, and `scan` chose them before the build ran: a file for
+	/// each declaration that decides which files exist, in any clause of any `#if` block. `generate` writes a
+	/// file without code for a declaration these conditions leave inactive, but it cannot write a file the
+	/// manifest does not name, which happens when a source file gained such a declaration after `scan` ran,
+	/// or when a hand-written manifest omits it. These errors say so instead of omitting code.
 	private enum ManifestError: Error, CustomStringConvertible {
-		case noRootFound(inputPath: String)
 		case rootNotInManifest(sourceFilePath: String)
 		case mockNotInManifest(typeName: String, sourceFilePath: String)
 		case configurationNotInManifest(sourceFilePath: String)
-		case noConfigurationFound(sourceFilePath: String)
-		case additionalMocksDiffer(sourceFilePaths: [String], configured: [String], listed: [String])
+		case additionalMockNotInManifest(typeName: String)
 
 		var description: String {
 			switch self {
-			case let .noRootFound(inputPath):
-				"Manifest lists '\(inputPath)' as containing a dependency tree root, but no @\(InstantiableVisitor.macroName)(isRoot: true) was found in that file. \(Self.planningExplanation(declaring: "the root")) Declare the root outside the `#if` block."
 			case let .rootNotInManifest(sourceFilePath):
-				"Found @\(InstantiableVisitor.macroName)(isRoot: true) in '\(sourceFilePath)', but this file is not listed in the manifest’s dependencyTreeGeneration. \(Self.planningExplanation(declaring: "the root")) Declare the root outside the `#if` block. A hand-written manifest must list the file, or the type must not be a root."
+				"Found @\(InstantiableVisitor.macroName)(isRoot: true) in '\(sourceFilePath)', but this file is not listed in the manifest’s dependencyTreeGeneration. \(Self.planningExplanation) A hand-written manifest must list the file, or the type must not be a root."
 			case let .mockNotInManifest(typeName, sourceFilePath):
-				"Found @\(InstantiableVisitor.macroName)(generateMock: true) on `\(typeName)` in '\(sourceFilePath)', but this file is not listed in the manifest’s mockGeneration. \(Self.planningExplanation(declaring: "the type")) Declare the type outside the `#if` block, or remove `generateMock: true`."
+				"Found @\(InstantiableVisitor.macroName)(generateMock: true) on `\(typeName)` in '\(sourceFilePath)', but this file is not listed in the manifest’s mockGeneration. \(Self.planningExplanation) A hand-written manifest must list the file, or the type must not set `generateMock: true`."
 			case let .configurationNotInManifest(sourceFilePath):
-				"Found #\(SafeDIConfigurationVisitor.macroName) in '\(sourceFilePath)', but this file is not listed in the manifest’s configurationFilePaths. \(Self.planningExplanation(declaring: "the configuration")) Declare the configuration outside the `#if` block."
-			case let .additionalMocksDiffer(sourceFilePaths, configured, listed):
-				"The #\(SafeDIConfigurationVisitor.macroName) in '\(sourceFilePaths.joined(separator: "', '"))' lists \(configured) in additionalMocksToGenerate, but the manifest lists \(listed). \(Self.planningExplanation(declaring: "the configuration")) Declare the configuration outside the `#if` block."
-			case let .noConfigurationFound(sourceFilePath):
-				"Manifest lists '\(sourceFilePath)' as declaring a #\(SafeDIConfigurationVisitor.macroName), but none was found in that file. \(Self.planningExplanation(declaring: "the configuration")) Declare the configuration outside the `#if` block."
+				"Found #\(SafeDIConfigurationVisitor.macroName) in '\(sourceFilePath)', but this file is not listed in the manifest’s configurationFilePaths. \(Self.planningExplanation) A hand-written manifest must list the file."
+			case let .additionalMockNotInManifest(typeName):
+				"The #\(SafeDIConfigurationVisitor.macroName) lists `\(typeName)` in additionalMocksToGenerate, but the manifest’s additionalMocksToGenerate does not. \(Self.planningExplanation) A hand-written manifest must list the type in additionalMocksToGenerate and mockGeneration."
 			}
 		}
 
-		private static func planningExplanation(declaring declaration: String) -> String {
-			"If an `#if` block declares \(declaration), SafeDI evaluated it differently when it decided which files to generate, which happens before the build with only the compilation conditions the build tool plugin can see, such as a target’s `swiftSettings` defines but not SwiftPM’s `DEBUG`."
-		}
+		private static let planningExplanation = "SafeDI decides which files to generate before the build runs, listing every file that declares a root, a type that sets `generateMock: true`, or a #\(SafeDIConfigurationVisitor.macroName) in any clause of its `#if` blocks, so the file most likely changed after that decision; building again lists it."
 	}
 
 	private func findGenerateSwiftFiles() async throws -> Set<String> {
@@ -747,10 +730,9 @@ struct Generate: AsyncParsableCommand {
 	/// `SWIFT_PACKAGE`, and only the files whose `#if` blocks consult them are walked again. Each is
 	/// walked under the name scan gave it, so the locations it records read as scan's do.
 	///
-	/// A file that declared a configuration could declare a different one now, which would change the
-	/// evaluator every file is walked with, so then the whole module is parsed afresh. A file that
-	/// declares a configuration only now is not the module's: the manifest does not list it, and
-	/// `generate` rejects it.
+	/// A file that declares a configuration in any clause of its `#if` blocks could declare a different one
+	/// now, or one where it declared none, which would change the evaluator every file is walked with, so
+	/// then the whole module is parsed afresh.
 	private func refreshed(
 		_ cachedFileScans: [CachedFileScan],
 		from cached: CachedScannedModuleInfo,
@@ -764,7 +746,7 @@ struct Generate: AsyncParsableCommand {
 		let staleFileScans = cachedFileScans.filter { cachedFileScan in
 			cachedFileScan.fileScan.consultedCompilationConditions.contains(where: hasChangedValue)
 		}
-		guard staleFileScans.allSatisfy(\.fileScan.configurations.isEmpty) else {
+		guard !staleFileScans.contains(where: \.fileScan.outputFileDeclarations.declaresConfiguration) else {
 			return nil
 		}
 		let projectRootURL = cached.projectRoot.asFileURL.appendingPathComponent("", isDirectory: true)
