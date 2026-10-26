@@ -30,6 +30,11 @@ import Synchronization
 /// This type can be shared across concurrency domains. The instance is created exactly once, while a lock
 /// is held: a read of `instance` that races with the first one waits for it and receives the same instance.
 ///
+/// SafeDI rejects a dependency tree in which creating the instance would require the instance. It does not
+/// inspect what initializers do: an initializer that runs while the instance is being created must not
+/// cause `instance` to be read, whether directly or through a callback. Such a read requests the lock
+/// that is already held.
+///
 /// - SeeAlso: `LazilyInstantiated`
 /// - SeeAlso: `SendableInstantiator`
 @available(macOS 15.0, iOS 18.0, tvOS 18.0, watchOS 11.0, visionOS 2.0, *)

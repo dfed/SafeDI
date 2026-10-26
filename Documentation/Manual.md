@@ -645,6 +645,8 @@ private let userService: LazilyInstantiated<AnyUserService>
 
 A `LazilyInstantiated` is not `Sendable`, and reads of `instance` are not synchronized. To share a lazily instantiated dependency across concurrency domains, use a [`SendableLazilyInstantiated`](../Sources/SafeDI/DelayedInstantiation/SendableLazilyInstantiated.swift), which creates its instance exactly once while holding a lock, and requires the instance to be `Sendable`. `SendableLazilyInstantiated` is available on macOS 15, iOS 18, tvOS 18, watchOS 11, and visionOS 2 and later. The code SafeDI generates is not marked with `@available`, so only use it in a module whose deployment targets are at least those versions.
 
+SafeDI validates the dependency tree, not what an initializer does. Creating a lazily instantiated dependency runs its initializer, along with the initializer of everything created with it. None of those initializers may cause that same dependency to be requested – for example, by posting an event that an existing observer answers by reading `instance`. A request made while the dependency is still being created does not recover: a `LazilyInstantiated` starts creating the instance again, without end, and a `SendableLazilyInstantiated` requests the lock it already holds. Keep the initializers of lazily instantiated types free of side effects that other code reacts to.
+
 In a [generated mock](#mock-generation), a lazily instantiated dependency is overridden like any other `@Instantiated` dependency: its `SafeDIOverrides` entry is a closure that returns the instance, and the mock calls that closure the first time the instance is read.
 
 ## Mock generation

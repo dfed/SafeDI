@@ -27,6 +27,11 @@
 ///
 /// This type is not `Sendable`: reads of `instance` are not synchronized.
 ///
+/// SafeDI rejects a dependency tree in which creating the instance would require the instance. It does not
+/// inspect what initializers do: an initializer that runs while the instance is being created must not
+/// cause `instance` to be read, whether directly or through a callback. Such a read starts creating the
+/// instance again.
+///
 /// - SeeAlso: `SendableLazilyInstantiated`
 /// - SeeAlso: `Instantiator`
 public final class LazilyInstantiated<T> {
