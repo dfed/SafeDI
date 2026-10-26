@@ -1599,29 +1599,35 @@ public actor DependencyTreeGenerator {
 				}
 			}
 
-			if !cyclesOnly {
-				for requiredReceivedProperty in scope.requiredReceivedProperties {
-					let receivedProperty = requiredReceivedProperty.property
-					let parentContainsProperty = receivableProperties.contains(receivedProperty)
-					let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
-					if !parentContainsProperty, !propertyIsCreatedAtThisScope, property != nil {
-						// This property is in a dependency tree and is unfulfillable. Record the problem.
-						unfulfillableProperties.insert(.init(
-							property: receivedProperty,
-							declarationLocation: requiredReceivedProperty.declarationLocation,
-							identifierRange: requiredReceivedProperty.identifierRange,
-							typeAnnotationRange: requiredReceivedProperty.typeAnnotationRange,
-							bareAttributeRange: requiredReceivedProperty.bareAttributeRange,
-							instantiable: scope.instantiable,
-							parentStack: propertyStack.map(\.typeDescription),
-							root: root,
-							suggestedAlternatives: receivableProperties.filter {
-								receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
-									|| receivedProperty.label == $0.label
-							}.sorted(),
-							uncreatedAlias: nil,
-						))
-					}
+			for requiredReceivedProperty in scope.requiredReceivedProperties {
+				let receivedProperty = requiredReceivedProperty.property
+				let parentContainsProperty = receivableProperties.contains(receivedProperty)
+				let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
+				// A mock binds every property its tree receives from above it, so there a property is
+				// unfulfillable only when its receive resolves to the property's non-optional form while that
+				// is still being built. A non-optional property still being built is a cycle, reported below.
+				if !parentContainsProperty, !propertyIsCreatedAtThisScope, property != nil,
+				   !cyclesOnly || (
+				   	instantiationStack.contains(receivedProperty.asUnwrappedProperty)
+				   		&& !receivableProperties.contains(receivedProperty.asUnwrappedProperty)
+				   )
+				{
+					// This property is in a dependency tree and is unfulfillable. Record the problem.
+					unfulfillableProperties.insert(.init(
+						property: receivedProperty,
+						declarationLocation: requiredReceivedProperty.declarationLocation,
+						identifierRange: requiredReceivedProperty.identifierRange,
+						typeAnnotationRange: requiredReceivedProperty.typeAnnotationRange,
+						bareAttributeRange: requiredReceivedProperty.bareAttributeRange,
+						instantiable: scope.instantiable,
+						parentStack: propertyStack.map(\.typeDescription),
+						root: root,
+						suggestedAlternatives: receivableProperties.filter {
+							receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
+								|| receivedProperty.label == $0.label
+						}.sorted(),
+						uncreatedAlias: nil,
+					))
 				}
 			}
 
@@ -1660,7 +1666,26 @@ public actor DependencyTreeGenerator {
 				childReceivableAliases[aliasProperty] = alias
 			}
 			lazy var childReceivableProperties: Set<Property> = {
-				var childReceivableProperties = receivableProperties.union(scope.properties)
+				// An `onlyIfAvailable` receive that is unavailable here is passed `nil`, so it provides nothing to the
+				// scopes below. Availability mirrors `Scope.createScopeGenerator`'s: in a mock, only a property that is
+				// still being built is unavailable.
+				func isAvailable(_ onlyIfAvailableProperty: Property) -> Bool {
+					if cyclesOnly {
+						!instantiationStack.contains(onlyIfAvailableProperty.asUnwrappedProperty)
+					} else {
+						[onlyIfAvailableProperty, onlyIfAvailableProperty.asUnwrappedProperty].contains {
+							receivableProperties.contains($0) && !instantiationStack.contains($0)
+						}
+					}
+				}
+				var childReceivableProperties = receivableProperties.union(scope.instantiable.dependencies.compactMap {
+					switch $0.source {
+					case let .received(onlyIfAvailable):
+						!onlyIfAvailable || isAvailable($0.property) ? $0.property : nil
+					case .instantiated, .forwarded, .aliased:
+						$0.property
+					}
+				})
 				// A mock root also provides the received dependencies it promotes.
 				childReceivableProperties.formUnion(scope.providedProperties)
 				return childReceivableProperties

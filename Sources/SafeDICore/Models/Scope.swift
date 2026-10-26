@@ -167,15 +167,20 @@ final class Scope: Hashable {
 				|| (receivableProperties.contains(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty))
 		}
 		let receivableProperties = receivableProperties.union(createdProperties)
+		/// Whether an `onlyIfAvailable` dependency of `property` is unavailable. A property this scope
+		/// creates is available. Otherwise, the property this scope is built for and its ancestors are
+		/// still being built, so they are unavailable.
 		func isPropertyUnavailable(_ property: Property) -> Bool {
-			if forMockGeneration {
+			if createdProperties.contains(property) {
+				return false
+			} else if forMockGeneration {
 				// A mock builds, or is handed, every property an ancestor does not
 				// create — onlyIfAvailable dependencies become optional mock parameters.
-				// Only an ancestor that is still being built is unavailable, as in production.
-				return propertyStack.contains(property.asUnwrappedProperty)
+				// Only a property that is still being built is unavailable, as in production.
+				return childPropertyStack.contains(property.asUnwrappedProperty)
 			} else {
-				let propertyIsAvailableInParentStack = receivableProperties.contains(property) && !propertyStack.contains(property)
-				let unwrappedPropertyIsAvailableInParentStack = receivableProperties.contains(property.asUnwrappedProperty) && !propertyStack.contains(property.asUnwrappedProperty)
+				let propertyIsAvailableInParentStack = receivableProperties.contains(property) && !childPropertyStack.contains(property)
+				let unwrappedPropertyIsAvailableInParentStack = receivableProperties.contains(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty)
 				return !(propertyIsAvailableInParentStack || unwrappedPropertyIsAvailableInParentStack)
 			}
 		}

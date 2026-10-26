@@ -451,6 +451,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			Set(siblings.compactMap { sibling in
 				(scope.receivedProperties.contains(sibling.property)
 					&& !scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property))
+					// A required optional property can resolve to a sibling of its non-optional form:
+					// in a mock, or through an `onlyIfAvailable` receive of it above the receiver.
+					|| scope.requiredReceivedProperties.contains { $0.asUnwrappedProperty == sibling.property }
 					// An alias's optional property is provided by a sibling of its non-optional form too.
 					|| scope.requiredAliasFulfillingProperties.contains { $0 == sibling.property || $0.asUnwrappedProperty == sibling.property }
 					? sibling.index
