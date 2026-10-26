@@ -576,9 +576,9 @@ jobs:
       # passes exist to catch output that differs between processes
       # (per-process hash seeds), and every pass still compares generated
       # output against the expected strings. Compile verification runs
-      # only on the first pass: it typechecks each generated output with
-      # swiftc, and re-typechecking a string the later passes have already
-      # proven identical adds nothing except ~90% of the pass's runtime.
+      # only on the first pass: it compiles each generated output with
+      # swiftc, and recompiling a string the later passes have already
+      # proven identical adds nothing except ~70% of the pass's runtime.
       - name: Build and Test Framework
         run: |
           xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing --traits sourceBuild

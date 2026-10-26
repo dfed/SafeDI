@@ -405,11 +405,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let sources = staged.inputFiles + staged.generatedFiles
 
 		// The compiler agrees with SafeDI's assumption: the assertion is inert.
-		let agreeing = try runSwiftTypecheck(sources: sources, artifacts: artifacts)
+		let agreeing = try compileSwift(sources: sources, outputDirectory: staged.directory, artifacts: artifacts)
 		#expect(agreeing.exitCode == 0, Comment(rawValue: agreeing.stderr))
 
 		// The compiler activates the condition SafeDI assumed inactive: the assertion fails the build.
-		let disagreeing = try runSwiftTypecheck(sources: sources, artifacts: artifacts, activeCompilationConditions: ["STAGING"])
+		let disagreeing = try compileSwift(sources: sources, outputDirectory: staged.directory, artifacts: artifacts, activeCompilationConditions: ["STAGING"])
 		#expect(disagreeing.exitCode != 0)
 		#expect(disagreeing.stderr.contains("error: SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation."))
 	}

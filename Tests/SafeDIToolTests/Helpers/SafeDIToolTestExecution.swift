@@ -307,18 +307,21 @@ func executeSafeDIToolTest(
 			nil
 		}
 
+		let moduleInfo = try JSONDecoder().decode(ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput))
 		if let generatedFiles, !generatedFiles.isEmpty, !skipCompileVerification {
 			try verifyGeneratedCodeCompiles(
 				inputSwiftFiles: swiftFiles,
 				additionalDirectorySwiftFiles: additionalDirectoryFiles,
 				generatedFiles: generatedFiles,
 				activeCompilationConditions: verificationCompilationConditions ?? activeCompilationConditions,
+				// Without a configuration, mocks are wrapped in `#if DEBUG`, which the verifier always defines.
+				mockConditionalCompilation: moduleInfo.configurations.first?.mockConditionalCompilation,
 				filesToDelete: &filesToDelete,
 			)
 		}
 
 		return try TestOutput(
-			moduleInfo: JSONDecoder().decode(ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput)),
+			moduleInfo: moduleInfo,
 			moduleInfoOutputPath: moduleInfoOutput.relativePath,
 			fixtures: fixtures,
 			warnings: warnings,
