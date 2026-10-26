@@ -462,6 +462,8 @@ public struct ProfileView: Instantiable {
 }
 ```
 
+The renamed property may keep the original label, as in `@Received(fulfilledByDependencyNamed: "userManager", ofType: UserManager.self) private let userManager: UserVendor`. The generated code passes each dependency by its label, though, so below `LoggedInView` the label `userManager` then names the `UserVendor`, and a type further down that receives `userManager: UserManager` cannot be given the original. SafeDI reports an error at that `@Received` property, naming the declaration that hides the original. Give the renamed property a label of its own when anything further down receives the original. The same applies to an `@Instantiated` or `@Forwarded` property that reuses a label declared higher in the tree with a different type.
+
 #### Sharing one instance across properties of disparate types
 
 Renaming can be applied more than once to the same `@Instantiated` or `@Forwarded` property, so a single instance can be received as several different types: any type the instance can be assigned to, such as unrelated protocols it conforms to or a superclass. Instantiate it once, then rename it once per type. Types further down the tree receive whichever type they need, and every one of them gets the same instance:

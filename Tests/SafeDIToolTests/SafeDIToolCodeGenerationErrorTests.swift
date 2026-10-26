@@ -667,6 +667,297 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithReceivedPropertyHiddenByAliasReusingItsLabel_throwsError() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):5:5: error: @Received property `analytics: Analytics` is hidden in chain: Root -> Mid -> Child. `Mid` declares `analytics: EventTracker` with the same label, so the types below `Mid` receive `analytics: EventTracker` instead. Give `analytics: EventTracker` on `Mid` a different label to fix.
+				\(fixtures["Mid.swift"]):5:5: note: `analytics: EventTracker` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					import SafeDI
+
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    @Instantiated let analytics: Analytics
+					    @Instantiated let mid: Mid
+					}
+					""",
+					"""
+					import SafeDI
+
+					public protocol EventTracker {}
+
+					@Instantiable
+					public final class Analytics: Instantiable, EventTracker {}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Mid: Instantiable {
+					    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let analytics: EventTracker
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Child: Instantiable {
+					    @Received let analytics: Analytics
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithReceivedPropertiesHiddenByAliasReusingTheirLabel_throwsErrorForEachInSourceOrder() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):5:5: error: @Received property `analytics: Analytics` is hidden in chain: Root -> Mid -> Child. `Mid` declares `analytics: EventTracker` with the same label, so the types below `Mid` receive `analytics: EventTracker` instead. Give `analytics: EventTracker` on `Mid` a different label to fix.
+				\(fixtures["Mid.swift"]):5:5: note: `analytics: EventTracker` is declared here
+				\(fixtures["Sibling.swift"]):5:5: error: @Received property `analytics: Analytics` is hidden in chain: Root -> Mid -> Sibling. `Mid` declares `analytics: EventTracker` with the same label, so the types below `Mid` receive `analytics: EventTracker` instead. Give `analytics: EventTracker` on `Mid` a different label to fix.
+				\(fixtures["Mid.swift"]):5:5: note: `analytics: EventTracker` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					import SafeDI
+
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    @Instantiated let analytics: Analytics
+					    @Instantiated let mid: Mid
+					}
+					""",
+					"""
+					import SafeDI
+
+					public protocol EventTracker {}
+
+					@Instantiable
+					public final class Analytics: Instantiable, EventTracker {}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Mid: Instantiable {
+					    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let analytics: EventTracker
+					    @Instantiated let sibling: Sibling
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Sibling: Instantiable {
+					    @Received let analytics: Analytics
+					}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Child: Instantiable {
+					    @Received let analytics: Analytics
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithOnlyIfAvailableReceivedPropertyHiddenByAliasReusingItsLabel_throwsError() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):5:5: error: @Received property `analytics: Analytics?` is hidden in chain: Root -> Mid -> Child. `Mid` declares `analytics: EventTracker` with the same label, so the types below `Mid` receive `analytics: EventTracker` instead. Give `analytics: EventTracker` on `Mid` a different label to fix.
+				\(fixtures["Mid.swift"]):5:5: note: `analytics: EventTracker` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					import SafeDI
+
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    @Instantiated let analytics: Analytics
+					    @Instantiated let mid: Mid
+					}
+					""",
+					"""
+					import SafeDI
+
+					public protocol EventTracker {}
+
+					@Instantiable
+					public final class Analytics: Instantiable, EventTracker {}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Mid: Instantiable {
+					    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let analytics: EventTracker
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Child: Instantiable {
+					    @Received(onlyIfAvailable: true) let analytics: Analytics?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithAliasedReceivedPropertyHiddenByAliasReusingItsLabel_throwsError() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):5:5: error: @Received property `analytics: Analytics` is hidden in chain: Root -> Instantiator<Mid> -> Child. `Mid` declares `analytics: EventTracker` with the same label, so the types below `Mid` receive `analytics: EventTracker` instead. Give `analytics: EventTracker` on `Mid` a different label to fix.
+				\(fixtures["Mid.swift"]):5:5: note: `analytics: EventTracker` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					import SafeDI
+
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    @Instantiated let analytics: Analytics
+					    @Instantiated let midBuilder: Instantiator<Mid>
+					}
+					""",
+					"""
+					import SafeDI
+
+					public protocol EventTracker {}
+					public protocol CrashReporter {}
+
+					@Instantiable
+					public final class Analytics: Instantiable, EventTracker, CrashReporter {}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Mid: Instantiable {
+					    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let analytics: EventTracker
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Child: Instantiable {
+					    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let crashReporter: CrashReporter
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithReceivedPropertyHiddenByInstantiatedPropertyWithSameLabel_throwsError() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):5:5: error: @Received property `analytics: Analytics` is hidden in chain: Root -> Mid -> Inner -> Child. `Mid` declares `analytics: OtherAnalytics` with the same label, so the types below `Mid` receive `analytics: OtherAnalytics` instead. Give `analytics: OtherAnalytics` on `Mid` a different label to fix.
+				\(fixtures["Mid.swift"]):5:5: note: `analytics: OtherAnalytics` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					import SafeDI
+
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    @Instantiated let analytics: Analytics
+					    @Instantiated let mid: Mid
+					}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Analytics: Instantiable {}
+
+					@Instantiable
+					public final class OtherAnalytics: Instantiable {}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Mid: Instantiable {
+					    @Instantiated let analytics: OtherAnalytics
+					    @Instantiated let inner: Inner
+					}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Inner: Instantiable {
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Child: Instantiable {
+					    @Received let analytics: Analytics
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithInstantiatedPropertyWithForwardedArgument_throwsError() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
