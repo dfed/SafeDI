@@ -56,6 +56,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let propertiesToDeclare = Set(propertiesToGenerate.compactMap(\.property))
 		self.propertiesToDeclare = propertiesToDeclare
 		self.unavailableOptionalProperties = unavailableOptionalProperties
+		aliasPropertyIsProvidedByEnclosingScope = false
 		let forwardedProperties = scopeData.forwardedProperties
 		/// The properties a child requires be passed in that this scope must itself receive.
 		func receivedFromAncestors(_ childReceivedProperties: Set<Property>) -> Set<Property> {
@@ -115,10 +116,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// An `onlyIfAvailable` alias a receiver in this subtree requires must be created, so its
 		// fulfilling property is built before it, unless an enclosing scope provides the alias's
 		// property in its place.
+		func isRequiredByChild(_ property: Property) -> Bool {
+			propertiesToGenerate.contains {
+				$0.requiredReceivedProperties.contains(property) || $0.requiredAliasFulfillingProperties.contains(property)
+			}
+		}
 		var requiredOnlyIfAvailableAliasProperties = Set<Property>()
 		var requiredOnlyIfAvailableAliasFulfillingProperties = Set<Property>()
 		for case let (aliasProperty?, fulfillingProperty?) in propertiesToGenerate.lazy.map({ ($0.property, $0.onlyIfAvailableAliasFulfillingProperty) })
-			where propertiesToGenerate.contains(where: { $0.requiredReceivedProperties.contains(aliasProperty) })
+			where isRequiredByChild(aliasProperty)
 		{
 			requiredOnlyIfAvailableAliasProperties.insert(aliasProperty)
 			requiredOnlyIfAvailableAliasFulfillingProperties.insert(fulfillingProperty)
@@ -128,7 +134,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			Set(propertiesToGenerate.flatMap(\.requiredAliasFulfillingProperties))
 				.union(requiredOnlyIfAvailableAliasFulfillingProperties),
 		)
+		// A receiver of an alias that is never created and that an enclosing scope provides
+		// resolves to the enclosing scope's property, so it requires that property instead.
+		.union(
+			propertiesToGenerate
+				.compactMap(\.uncreatedAliasPropertyProvidedByEnclosingScope)
+				.filter(isRequiredByChild),
+		)
 		onlyIfAvailableAliasFulfillingProperty = nil
+		uncreatedAliasPropertyProvidedByEnclosingScope = nil
 		onlyIfAvailableUnwrappedReceivedProperties = Set(
 			propertiesToGenerate.flatMap { propertyToGenerate in
 				propertyToGenerate.onlyIfAvailableUnwrappedReceivedProperties
@@ -171,7 +185,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		unavailableOptionalProperties: Set<Property>,
 		erasedToConcreteExistential: Bool,
 		onlyIfAvailable: Bool,
-		enclosingScopeProvidesProperty: Bool,
+		isProvidedByEnclosingScope: Bool,
 		declarationReference: AliasDeclarationReferences.Reference?,
 	) {
 		scopeData = .alias(
@@ -189,7 +203,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			requiredReceivedProperties = [fulfillingProperty]
 			onlyIfAvailableUnwrappedReceivedProperties = []
 		}
-		onlyIfAvailableAliasFulfillingProperty = onlyIfAvailable && !enclosingScopeProvidesProperty ? fulfillingProperty : nil
+		onlyIfAvailableAliasFulfillingProperty = onlyIfAvailable && !isProvidedByEnclosingScope ? fulfillingProperty : nil
+		uncreatedAliasPropertyProvidedByEnclosingScope = onlyIfAvailable
+			&& isProvidedByEnclosingScope
+			&& unavailableOptionalProperties.contains(fulfillingProperty)
+			? property
+			: nil
 		requiredOnlyIfAvailableAliasProperties = []
 		requiredAliasFulfillingProperties = []
 		description = property.asSource
@@ -197,6 +216,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		propertiesToDeclare = []
 		self.unavailableOptionalProperties = unavailableOptionalProperties
 		self.property = property
+		aliasPropertyIsProvidedByEnclosingScope = isProvidedByEnclosingScope
 	}
 
 	// MARK: CustomStringConvertible
@@ -367,6 +387,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// the alias's fulfilling property; `nil` for every other scope. A receiver that requires such
 	/// an alias can be handed it only if the alias is created.
 	private let onlyIfAvailableAliasFulfillingProperty: Property?
+	/// For an `@Received(onlyIfAvailable: true)` alias that is never created, because its fulfilling
+	/// property is unavailable wherever the alias is built, and whose property an enclosing scope
+	/// provides, the alias's property; `nil` for every other scope. A receiver of the property
+	/// resolves to the enclosing scope's property, which must be built before the receiver.
+	private let uncreatedAliasPropertyProvidedByEnclosingScope: Property?
 	/// The `onlyIfAvailable` aliases among this scope's children that a receiver in this scope's
 	/// subtree requires. Each is built after its fulfilling property, as a required alias would be.
 	private let requiredOnlyIfAvailableAliasProperties: Set<Property>
@@ -381,6 +406,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private let propertiesToGenerate: [ScopeGenerator]
 	/// Properties that this scope declares as a `let` constant.
 	private let propertiesToDeclare: Set<Property>
+	/// For an alias, whether a scope enclosing the alias's scope provides the alias's
+	/// property too. When the alias is not created, a receiver of the property beneath
+	/// it then resolves to that enclosing property, so the alias does not make the
+	/// property unavailable. `false` for every other scope.
+	private let aliasPropertyIsProvidedByEnclosingScope: Bool
 	private let property: Property?
 
 	private struct UnavailablePropertiesCacheKey: Hashable {
@@ -419,9 +449,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Required receives first: they are always honored.
 		var siblingDependencies = propertiesToGenerate.map { scope in
 			Set(siblings.compactMap { sibling in
-				scope.receivedProperties.contains(sibling.property)
-					&& (!scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property)
-						|| scope.requiredAliasFulfillingProperties.contains(sibling.property))
+				(scope.receivedProperties.contains(sibling.property)
+					&& !scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property))
+					// An alias's optional property is provided by a sibling of its non-optional form too.
+					|| scope.requiredAliasFulfillingProperties.contains { $0 == sibling.property || $0.asUnwrappedProperty == sibling.property }
 					? sibling.index
 					: nil
 			})
@@ -516,26 +547,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The children in `orderedPropertiesToGenerate`, each with the properties this
 	/// scope generates before it and the `propertiesGeneratedLater` to generate it
 	/// with (see `generateCode`). An `onlyIfAvailable` alias that is not created is
-	/// unavailable to the children after it, exactly like a property generated later.
+	/// unavailable to the children after it, exactly like a property generated later,
+	/// and does not count as generated before them, unless a scope enclosing this one
+	/// provides the same property: the children then resolve to that property. An
+	/// enclosing provider that is itself unavailable here already arrives in
+	/// `propertiesGeneratedLater`.
 	private func orderedChildren(
 		propertiesGeneratedLater: Set<Property>,
 	) -> [(generator: ScopeGenerator, propertiesAlreadyGeneratedAtThisScope: Set<Property>, propertiesGeneratedLater: Set<Property>)] {
 		var propertiesNotGeneratedBefore = propertiesGeneratedLater
+		var uncreatedAliasProperties = Set<Property>()
 		var orderedChildren = [(generator: ScopeGenerator, propertiesAlreadyGeneratedAtThisScope: Set<Property>, propertiesGeneratedLater: Set<Property>)]()
 		for (index, childGenerator) in orderedPropertiesToGenerate.enumerated() {
 			let propertiesAlreadyGeneratedAtThisScope = Set(orderedPropertiesToGenerate[0..<index].compactMap(\.property))
+				.subtracting(uncreatedAliasProperties)
 			let childPropertiesGeneratedLater = self.propertiesGeneratedLater(
 				thanChildAt: index,
 				receivedOnlyIfAvailableBy: childGenerator,
 				propertiesNotGeneratedBefore: propertiesNotGeneratedBefore,
 			)
 			orderedChildren.append((childGenerator, propertiesAlreadyGeneratedAtThisScope, childPropertiesGeneratedLater))
-			if let uncreatedAliasProperty = childGenerator.uncreatedAliasProperty(
-				unavailableProperties: childGenerator.unavailableProperties(
-					propertiesAlreadyGeneratedAtThisScope: propertiesAlreadyGeneratedAtThisScope,
-					propertiesGeneratedLater: childPropertiesGeneratedLater,
-				),
-			) {
+			if !childGenerator.aliasPropertyIsProvidedByEnclosingScope,
+			   let uncreatedAliasProperty = childGenerator.uncreatedAliasProperty(
+			   	unavailableProperties: childGenerator.unavailableProperties(
+			   		propertiesAlreadyGeneratedAtThisScope: propertiesAlreadyGeneratedAtThisScope,
+			   		propertiesGeneratedLater: childPropertiesGeneratedLater,
+			   	),
+			   )
+			{
+				uncreatedAliasProperties.insert(uncreatedAliasProperty)
 				propertiesNotGeneratedBefore.insert(uncreatedAliasProperty.asUnwrappedProperty)
 			}
 		}

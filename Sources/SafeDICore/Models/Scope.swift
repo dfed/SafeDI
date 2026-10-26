@@ -159,22 +159,24 @@ final class Scope: Hashable {
 		} else {
 			isPropertyCycle = false
 		}
-		/// Whether `property`, or its unwrapped form, is in `properties` and is not still being built.
-		func isProperty(_ property: Property, availableIn properties: Set<Property>) -> Bool {
-			[property, property.asUnwrappedProperty].contains {
-				properties.contains($0) && !propertyStack.contains($0)
-			}
+		/// Whether a scope enclosing this one provides `property` to the scopes this one
+		/// generates: it creates the property, or its unwrapped form, and is not an
+		/// ancestor still being built.
+		func isProvidedByEnclosingScope(_ property: Property) -> Bool {
+			(receivableProperties.contains(property) && !childPropertyStack.contains(property))
+				|| (receivableProperties.contains(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty))
 		}
-		let enclosingProperties = receivableProperties
-		let receivableProperties = receivableProperties.union(providedProperties)
+		let receivableProperties = receivableProperties.union(createdProperties)
 		func isPropertyUnavailable(_ property: Property) -> Bool {
 			if forMockGeneration {
 				// A mock builds, or is handed, every property an ancestor does not
 				// create — onlyIfAvailable dependencies become optional mock parameters.
 				// Only an ancestor that is still being built is unavailable, as in production.
-				propertyStack.contains(property.asUnwrappedProperty)
+				return propertyStack.contains(property.asUnwrappedProperty)
 			} else {
-				!isProperty(property, availableIn: receivableProperties)
+				let propertyIsAvailableInParentStack = receivableProperties.contains(property) && !propertyStack.contains(property)
+				let unwrappedPropertyIsAvailableInParentStack = receivableProperties.contains(property.asUnwrappedProperty) && !propertyStack.contains(property.asUnwrappedProperty)
+				return !(propertyIsAvailableInParentStack || unwrappedPropertyIsAvailableInParentStack)
 			}
 		}
 		let unavailableOptionalProperties = Set<Property>(instantiable.dependencies.flatMap { dependency in
@@ -215,7 +217,7 @@ final class Scope: Hashable {
 						unavailableOptionalProperties: unavailableOptionalProperties,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
-						enclosingScopeProvidesProperty: isProperty(property, availableIn: enclosingProperties),
+						isProvidedByEnclosingScope: isProvidedByEnclosingScope(property),
 						declarationReference: declarationReference,
 					)
 				}
