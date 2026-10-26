@@ -106,16 +106,15 @@ func executeSafeDIToolTest(
 	let fixtureDirectoryRelativePaths = swiftFiles.map { String($0.path.dropFirst(swiftFixtureDirectory.path.count + 1)) }
 	// The fixture directory as the build system reports it to a build tool plugin, and spells it to the compiler.
 	let reportedFixtureDirectoryPath: String? = switch pluginInvocation {
-	case .scanWhilePlanning:
+	case .scanWhilePlanning(reportsFixtureDirectoryThroughSymbolicLink: false):
 		// With its symbolic links resolved, a leading `/private` included.
 		try realPath(of: swiftFixtureDirectory)
-	case let .scanDuringGenerate(reportsFixtureDirectoryThroughSymbolicLink):
-		if reportsFixtureDirectoryThroughSymbolicLink {
-			// The way Xcode reports a project under `/tmp`, which resolves to `/private/tmp`.
-			try symbolicLink(to: swiftFixtureDirectory, filesToDelete: &filesToDelete).path
-		} else {
-			swiftFixtureDirectory.path
-		}
+	case .scanDuringGenerate(reportsFixtureDirectoryThroughSymbolicLink: false):
+		swiftFixtureDirectory.path
+	case .scanWhilePlanning(reportsFixtureDirectoryThroughSymbolicLink: true),
+	     .scanDuringGenerate(reportsFixtureDirectoryThroughSymbolicLink: true):
+		// The way Xcode reports a project under `/tmp`, which resolves to `/private/tmp`.
+		try symbolicLink(to: swiftFixtureDirectory, filesToDelete: &filesToDelete).path
 	case nil:
 		nil
 	}
@@ -307,18 +306,21 @@ func executeSafeDIToolTest(
 			nil
 		}
 
+		let moduleInfo = try JSONDecoder().decode(ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput))
 		if let generatedFiles, !generatedFiles.isEmpty, !skipCompileVerification {
 			try verifyGeneratedCodeCompiles(
 				inputSwiftFiles: swiftFiles,
 				additionalDirectorySwiftFiles: additionalDirectoryFiles,
 				generatedFiles: generatedFiles,
 				activeCompilationConditions: verificationCompilationConditions ?? activeCompilationConditions,
+				// Without a configuration, mocks are wrapped in `#if DEBUG`, which the verifier always defines.
+				mockConditionalCompilation: moduleInfo.configurations.first?.mockConditionalCompilation,
 				filesToDelete: &filesToDelete,
 			)
 		}
 
 		return try TestOutput(
-			moduleInfo: JSONDecoder().decode(ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput)),
+			moduleInfo: moduleInfo,
 			moduleInfoOutputPath: moduleInfoOutput.relativePath,
 			fixtures: fixtures,
 			warnings: warnings,
@@ -443,7 +445,7 @@ struct FixturePaths {
 	}
 
 	/// The path a build system hands the compiler for the named fixture when a build tool plugin runs the tool:
-	/// absolute, with symbolic links resolved.
+	/// absolute, beginning with the fixture directory as the build system reports it.
 	func compilerPath(of fileName: String, sourceLocation: SourceLocation = #_sourceLocation) -> String {
 		path(of: fileName, in: compilerPathsByFileName, sourceLocation: sourceLocation)
 	}
@@ -469,8 +471,9 @@ struct FixturePaths {
 /// to the plugin.
 enum PluginInvocation {
 	/// The plugin runs `scan` while it plans the build, handing it the project root as the build system reports
-	/// it – here with its symbolic links resolved – and `generate` reuses the parse `scan` cached.
-	case scanWhilePlanning
+	/// it – with its symbolic links resolved, or through a symbolic link to the fixture directory – and `generate`
+	/// reuses the parse `scan` cached.
+	case scanWhilePlanning(reportsFixtureDirectoryThroughSymbolicLink: Bool)
 	/// The plugin cannot run `scan` while it plans the build, so `generate --output-directory` scans for itself,
 	/// reading paths relative to its working directory and naming the target's files with `--mock-scoped-files`
 	/// as the build system reports them: directly, or through a symbolic link to the fixture directory.
