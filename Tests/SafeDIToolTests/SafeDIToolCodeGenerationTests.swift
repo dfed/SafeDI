@@ -7001,7 +7001,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_doesNotRemapAlias_whenPluginReportsModuleFileThroughSymbolicLink() async throws {
+	mutating func run_namesAliasDeclarationInComment_whenPluginReportsModuleFileThroughSymbolicLink() async throws {
 		// Xcode reports a package under `/tmp` to its build tool plugin as `/tmp/…` and hands the compiler
 		// `/private/tmp/…`, but reports an Xcode project's files as `/tmp/…` to both. SafeDITool cannot tell
 		// which path the compiler has.
@@ -7049,7 +7049,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public init() {
 		        let service = Service()
 		        func __safeDI_consumer() -> Consumer {
-		            let renamedService: Service = service
+		            let renamedService: Service = service // Declared at \(output.fixtures["Consumer.swift"]):7
 		            return Consumer(renamedService: renamedService)
 		        }
 		        let consumer: Consumer = __safeDI_consumer()
@@ -7163,6 +7163,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			dependentModuleInfoPaths: [dependentModuleOutput.moduleInfoOutputPath],
 			buildCombinedOutput: true,
 			filesToDelete: &filesToDelete,
+			compilerReceivesInputPathsUnchanged: true,
 		)
 
 		#expect(output.combinedOutput == """
@@ -7188,7 +7189,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_doesNotRemapAliasToDeclarationInDependentModule_whenModuleFileSharesItsFileName() async throws {
+	mutating func run_namesAliasDeclarationInComment_whenModuleFileSharesFileNameOfDeclarationInDependentModule() async throws {
 		// The compiler warns at a `#sourceLocation` directive whose path differs from another path in the
 		// module with the same file name, whatever either path is.
 		let dependentModuleOutput = try await executeSafeDIToolTest(
@@ -7238,6 +7239,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			dependentModuleInfoPaths: [dependentModuleOutput.moduleInfoOutputPath],
 			buildCombinedOutput: true,
 			filesToDelete: &filesToDelete,
+			compilerReceivesInputPathsUnchanged: true,
 		)
 
 		#expect(output.combinedOutput == """
@@ -7249,7 +7251,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public init() {
 		        let service = Service()
 		        func __safeDI_consumer() -> Consumer {
-		            let renamedService: Service = service
+		            let renamedService: Service = service // Declared at \(dependentModuleOutput.fixtures["Consumer.swift"]):7
 		            return Consumer(renamedService: renamedService)
 		        }
 		        let consumer: Consumer = __safeDI_consumer()
@@ -7261,7 +7263,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_doesNotRemapAliasesToDeclarationsInDependentModules_whenTheirFilesShareAFileName() async throws {
+	mutating func run_namesAliasDeclarationsInComments_whenDeclarationsInDependentModulesShareAFileName() async throws {
 		let firstDependentModuleOutput = try await executeSafeDIToolTest(
 			swiftFileContent: [],
 			swiftFileContentByFilePath: [
@@ -7324,6 +7326,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildCombinedOutput: true,
 			filesToDelete: &filesToDelete,
+			compilerReceivesInputPathsUnchanged: true,
 		)
 
 		#expect(output.combinedOutput == """
@@ -7335,12 +7338,12 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public init() {
 		        let service = Service()
 		        func __safeDI_firstConsumer() -> FirstConsumer {
-		            let renamedService: Service = service
+		            let renamedService: Service = service // Declared at \(firstDependentModuleOutput.fixtures["Consumers.swift"]):7
 		            return FirstConsumer(renamedService: renamedService)
 		        }
 		        let firstConsumer: FirstConsumer = __safeDI_firstConsumer()
 		        func __safeDI_secondConsumer() -> SecondConsumer {
-		            let renamedService: Service = service
+		            let renamedService: Service = service // Declared at \(secondDependentModuleOutput.fixtures["Consumers.swift"]):7
 		            return SecondConsumer(renamedService: renamedService)
 		        }
 		        let secondConsumer: SecondConsumer = __safeDI_secondConsumer()
@@ -7560,7 +7563,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_remapsAliasToPathAsWritten_whenHandWrittenManifestHasNoProjectRoot() async throws {
+	mutating func run_namesAliasDeclarationInComment_whenHandWrittenManifestHasNoProjectRoot() async throws {
 		let rootDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
 
@@ -7629,9 +7632,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public init() {
 		        let service = Service()
 		        func __safeDI_consumer() -> Consumer {
-		            #sourceLocation(file: "\(consumerInputPath)", line: 7)
-		            let renamedService: Service = service
-		            #sourceLocation()
+		            let renamedService: Service = service // Declared at \(consumerInputPath):7
 		            return Consumer(renamedService: renamedService)
 		        }
 		        let consumer: Consumer = __safeDI_consumer()

@@ -314,7 +314,8 @@ extension SafeDIToolManifest {
 		)
 	}
 
-	/// The path the compiler is handed for the file at `path`, as a build tool plugin reports it.
+	/// The path the compiler is handed for the file at `path`, as a build tool plugin reports it, given the
+	/// manifest's `projectRoot`.
 	///
 	/// A build tool plugin writes each input path relative to a project root: the directory it hands `scan`,
 	/// written as the build system reported it, or, when the plugin could not run `scan`, the working
@@ -323,9 +324,8 @@ extension SafeDIToolManifest {
 	/// differently; `generate` then also holds the plugin’s spelling, from `--mock-scoped-files`, and leaves
 	/// out a directive it cannot spell for certain. Standardizing the joined path would not help: on Apple
 	/// platforms, Foundation’s standardization removes a leading `/private` from paths such as
-	/// `/private/tmp/…`, which the compiler keeps. A manifest without a project root takes paths as written.
-	func compilerFilePath(for path: String) -> String {
-		guard let projectRoot else { return path }
+	/// `/private/tmp/…`, which the compiler keeps.
+	func compilerFilePath(for path: String, underProjectRoot projectRoot: String) -> String {
 		let projectRootRelativePath = resolvedPath(for: path)
 		return if (projectRootRelativePath as NSString).isAbsolutePath {
 			projectRootRelativePath

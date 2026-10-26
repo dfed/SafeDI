@@ -50,8 +50,9 @@ public struct NameEntryView: Instantiable, View {
 
 	@Received private let userService: AnyUserService
 
-	/// The app's `eventLogger`, received under another name. The generated code assigns one to the other
-	/// under a `#sourceLocation` directive naming this file, so the compiler reports a type mismatch here.
+	/// The app's `eventLogger`, received under another name. The generated code assigns one to the other and
+	/// names this declaration in a comment, which keeps the generated code free of absolute paths for Tuist's
+	/// shared cache. The compiler reports a type mismatch in the generated file, with that comment in view.
 	@Received(fulfilledByDependencyNamed: "eventLogger", ofType: EventLogger.self) private let logger: EventLogger
 }
 

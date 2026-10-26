@@ -56,6 +56,8 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project’s root module.") var dotFileOutput: String?
 
+	@Flag(help: "States that the compiler is handed every input Swift file, including the files behind dependent module info, at exactly the path this tool is handed. Generated code then wraps each `@Received(fulfilledByDependencyNamed:ofType:)` assignment in a `#sourceLocation` directive naming that path, so the compiler reports a type mismatch at the declaration. Without this flag, and without a build tool plugin’s manifest, the assignment names the declaration in a comment instead, because the compiler warns at a directive whose path differs from the one it was handed.") var compilerReceivesInputPathsUnchanged = false
+
 	// MARK: Internal
 
 	func run() async throws {
@@ -233,13 +235,12 @@ struct Generate: AsyncParsableCommand {
 			normalized.sourceFilePath = unnormalizedInstantiable.sourceFilePath
 			return normalized
 		}
-		let moduleFiles = moduleFilePaths(manifest: manifest, inputFilePaths: inputFilePaths)
 		let generator = try DependencyTreeGenerator(
 			importStatements: dependentModuleInfo.flatMap(\.imports) + resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) } + module.imports,
 			typeDescriptionToFulfillingInstantiableMap: resolveSafeDIFulfilledTypes(
 				instantiables: normalizedInstantiables,
 			),
-			sourceLocationDirectiveFilePaths: SourceLocationDirectiveFilePaths(
+			aliasDeclarationReferences: AliasDeclarationReferences(
 				declarationFilePaths: Set(normalizedInstantiables.flatMap { instantiable in
 					instantiable.dependencies.compactMap { dependency in
 						switch dependency.source {
@@ -250,9 +251,9 @@ struct Generate: AsyncParsableCommand {
 						}
 					}
 				}),
-				moduleFilePaths: moduleFiles.filePaths,
-				compilerModuleFilePath: moduleFiles.compilerFilePath,
-				compilerFilePath: manifest?.compilerFilePath(for:) ?? { $0 },
+				compilerFilePaths: compilerFilePaths(manifest: manifest, inputFilePaths: inputFilePaths),
+				// A plugin's paths relative to its project root, and any other integration's paths as it wrote them.
+				commentFilePath: { [manifest] filePath in manifest?.resolvedPath(for: filePath) ?? filePath },
 			),
 		)
 		if let moduleInfoOutput {
@@ -788,22 +789,34 @@ struct Generate: AsyncParsableCommand {
 		}
 	}
 
-	/// The module's own files, and how to read the path the compiler is handed for one of them.
+	/// How the compiler spells the paths this tool was handed, or `nil` when this tool does not know.
 	///
-	/// A build tool plugin that has `generate` scan for itself names the target's files with `--mock-scoped-files`
-	/// exactly as the build system reported them, which is how the build system hands them to the compiler. A
-	/// plugin that ran `scan` left them in the manifest, relative to the project root it reported. Without
-	/// either list every input file is taken to be the module's, which can only leave out directives.
-	private func moduleFilePaths(
+	/// A build tool plugin records its project root in the manifest and writes each input path relative to it,
+	/// and the build system hands the compiler the absolute path it reported to the plugin. The plugin names the
+	/// target's own files exactly as the build system reported them with `--mock-scoped-files` when `generate`
+	/// scans for itself, and relative to the project root in the manifest otherwise. An integration that passes
+	/// `--compiler-receives-input-paths-unchanged`, such as the Bazel rule, hands the compiler every input path
+	/// as written. Any other integration may not: the Tuist plugin hands this tool paths relative to `$SRCROOT`,
+	/// and Xcode hands the compiler absolute ones.
+	private func compilerFilePaths(
 		manifest: SafeDIToolManifest?,
 		inputFilePaths: Set<String>,
-	) -> (filePaths: Set<String>, compilerFilePath: (String) -> String) {
-		if swiftManifest == nil, !mockScopedFiles.isEmpty {
-			(Set(mockScopedFiles), { $0 })
-		} else if let manifest, let mockScopedFilePaths = manifest.mockScopedFilePaths {
-			(Set(mockScopedFilePaths), manifest.compilerFilePath(for:))
+	) -> AliasDeclarationReferences.CompilerFilePaths? {
+		if let manifest, let projectRoot = manifest.projectRoot {
+			let compilerFilePath = { manifest.compilerFilePath(for: $0, underProjectRoot: projectRoot) }
+			if swiftManifest == nil, !mockScopedFiles.isEmpty {
+				return .init(filePath: compilerFilePath, moduleFilePaths: Set(mockScopedFiles), moduleFilePath: { $0 })
+			} else {
+				return .init(
+					filePath: compilerFilePath,
+					moduleFilePaths: manifest.mockScopedFilePaths.map(Set.init) ?? inputFilePaths,
+					moduleFilePath: compilerFilePath,
+				)
+			}
+		} else if compilerReceivesInputPathsUnchanged {
+			return .init(filePath: { $0 }, moduleFilePaths: inputFilePaths, moduleFilePath: { $0 })
 		} else {
-			(inputFilePaths, { $0 })
+			return nil
 		}
 	}
 

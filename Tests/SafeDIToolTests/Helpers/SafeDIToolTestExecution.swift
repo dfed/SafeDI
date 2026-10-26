@@ -45,6 +45,7 @@ func executeSafeDIToolTest(
 	includeFolders: [String] = [],
 	skipCompileVerification: Bool = false,
 	inputPathsRelativeToCurrentDirectory: Bool = false,
+	compilerReceivesInputPathsUnchanged: Bool = false,
 	activeCompilationConditions: [String] = [],
 	buildSettingArguments: [String] = [],
 	verificationCompilationConditions: [String]? = nil,
@@ -253,6 +254,9 @@ func executeSafeDIToolTest(
 		}
 		if buildCombinedOutput {
 			generateArguments += ["--combined-output", combinedOutput.relativePath]
+		}
+		if compilerReceivesInputPathsUnchanged {
+			generateArguments += ["--compiler-receives-input-paths-unchanged"]
 		}
 		let tool = try Generate.parse(generateArguments)
 		// Call `generate()` rather than `run()`: `run()` prints located errors in compiler format and
