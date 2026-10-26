@@ -1391,25 +1391,24 @@ public actor DependencyTreeGenerator {
 			root: TypeDescription,
 		) throws {
 			if let property {
-				// Scopes whose received properties have all been walked, transitively, without throwing
-				// and without bailing out on a cycle that isn't ours. Nothing reachable from such a scope
-				// can complete a cycle back to the scopes on the current walk, so walking it again —
-				// whatever received-property stack leads there — would also return without throwing.
-				// Skipping those walks keeps this linear in the received-dependency graph rather than
-				// exponential in the number of paths through it.
-				var fullyWalkedScopes = Set<ObjectIdentifier>()
-				/// - Returns: `true` when every received property reachable from `scope` was walked, or
-				///   `false` when the walk bailed out on a cycle that isn't ours and so may be incomplete.
+				// Received properties whose walk returned without throwing, each with the properties already
+				// on the received-property stack that the walk relied on: those it bailed out on as a cycle
+				// that isn't ours, and those that a skipped walk beneath it relied on. Walking such a
+				// property again along a stack that holds all of them checks a subset of what its first
+				// walk checked, because the stacks differ only in properties received before it, and any
+				// other property there can only make the walk bail out sooner. So that walk would also
+				// return without throwing, and skipping it reports the same error, from the same stack, as
+				// walking every path would. A property can rely only on properties that share a received
+				// cycle with it, so a property on no received cycle is walked once, rather than once for
+				// every path that leads to it.
+				var stackPropertiesReliedOnByWalkedProperty = [Property: Set<Property>]()
+				/// - Returns: The properties in `receivedPropertyStack` that the walk relied on.
 				func validateNoCycleInReceivedProperties(
 					scope: Scope,
 					receivedPropertyStack: [Property],
 					instantiationStack: [Property],
-				) throws -> Bool {
-					let scopeIdentifier = ObjectIdentifier(scope)
-					guard !fullyWalkedScopes.contains(scopeIdentifier) else {
-						return true
-					}
-					var walkedEveryReceivedProperty = true
+				) throws -> Set<Property> {
+					var stackPropertiesReliedOn = Set<Property>()
 					for requiredReceivedProperty in scope.requiredReceivedProperties {
 						let childProperty = requiredReceivedProperty.property
 						guard childProperty != property else {
@@ -1422,9 +1421,11 @@ public actor DependencyTreeGenerator {
 						guard !receivedPropertyStack.contains(childProperty) else {
 							// We've found a cycle, but it's not our cycle. Bail and let a future loop find this.
 							// The remaining received properties on this scope go unwalked, so a later visit
-							// through a different received-property stack must walk this scope again.
-							return false
+							// along a stack without `childProperty` must walk this scope again.
+							stackPropertiesReliedOn.insert(childProperty)
+							return stackPropertiesReliedOn
 						}
+						let memoizedStackPropertiesReliedOn = stackPropertiesReliedOnByWalkedProperty[childProperty]
 						if let cycleIndex = instantiationStack.firstIndex(of: childProperty) {
 							let instantiationProperties = Array(instantiationStack[0...cycleIndex])
 							let typesInCycle = (
@@ -1439,22 +1440,22 @@ public actor DependencyTreeGenerator {
 								directParent: scope.instantiable.concreteInstantiable,
 								isReceived: !childProperty.propertyType.isConstant,
 							)
+						} else if let memoizedStackPropertiesReliedOn, memoizedStackPropertiesReliedOn.isSubset(of: receivedPropertyStack) {
+							stackPropertiesReliedOn.formUnion(memoizedStackPropertiesReliedOn)
 						} else if let receivedPropertyScope = typeDescriptionToScopeMap[childProperty.typeDescription] {
 							var childPropertyStack = receivedPropertyStack
 							childPropertyStack.append(childProperty)
-							let walkedEveryChildReceivedProperty = try validateNoCycleInReceivedProperties(
+							// A cycle back to `childProperty` itself lies within its walk, wherever that walk starts.
+							let childStackPropertiesReliedOn = try validateNoCycleInReceivedProperties(
 								scope: receivedPropertyScope,
 								receivedPropertyStack: childPropertyStack,
 								instantiationStack: instantiationStack,
-							)
-							walkedEveryReceivedProperty = walkedEveryReceivedProperty && walkedEveryChildReceivedProperty
+							).subtracting([childProperty])
+							stackPropertiesReliedOnByWalkedProperty[childProperty] = childStackPropertiesReliedOn
+							stackPropertiesReliedOn.formUnion(childStackPropertiesReliedOn)
 						}
 					}
-					guard walkedEveryReceivedProperty else {
-						return false
-					}
-					fullyWalkedScopes.insert(scopeIdentifier)
-					return true
+					return stackPropertiesReliedOn
 				}
 				let instantiationStack: [Property] = [property] + propertyStack
 				_ = try validateNoCycleInReceivedProperties(
