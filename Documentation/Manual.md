@@ -524,7 +524,7 @@ Declare the configuration in a file named `SafeDIConfiguration.swift` in the mod
 
 **Parameters:**
 
-- `additionalImportedModules`: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types. Default: `[]`.
+- `additionalImportedModules`: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types. When those files import a module whole in more than one way, the generated code imports it once, the way that asks for least: `import MyModule` if any file imports it without attributes (or with only `@preconcurrency`, which the generated code does not need), and otherwise with the attributes that sort first, so `@testable import MyModule` is chosen only when every file that imports the module whole does so with `@testable`. Default: `[]`.
 - `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. Only honored by the SPM build-tool plugin. The Bazel and Tuist integrations enumerate inputs up front and ignore this parameter — list every Swift source via the build target itself instead. Default: `[]`.
 - `additionalMocksToGenerate`: Type names from dependent modules to generate `mock()` methods for in this module. The types must be `@Instantiable` in their home module. See [Cross-module mock generation](#cross-module-mock-generation). Default: `[]`.
 - `mockConditionalCompilation`: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation. Default: `"DEBUG"`.
