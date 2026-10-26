@@ -798,11 +798,17 @@ struct Generate: AsyncParsableCommand {
 	/// `--compiler-receives-input-paths-unchanged`, such as the Bazel rule, hands the compiler every input path
 	/// as written. Any other integration may not: the Tuist plugin hands this tool paths relative to `$SRCROOT`,
 	/// and Xcode hands the compiler absolute ones.
+	///
+	/// A build system that reports the project root through a symbolic link may hand the compiler either
+	/// spelling: Xcode reports a package under `/tmp` to its plugin as `/tmp/…` and hands the compiler
+	/// `/private/tmp/…`, and a plugin that runs `scan` while it plans the build records only the first. This tool
+	/// then does not know how the compiler spells any path.
 	private func compilerFilePaths(
 		manifest: SafeDIToolManifest?,
 		inputFilePaths: Set<String>,
 	) -> AliasDeclarationReferences.CompilerFilePaths? {
 		if let manifest, let projectRoot = manifest.projectRoot {
+			guard projectRoot.isResolvedFilePath else { return nil }
 			let compilerFilePath = { manifest.compilerFilePath(for: $0, underProjectRoot: projectRoot) }
 			if swiftManifest == nil, !mockScopedFiles.isEmpty {
 				return .init(filePath: compilerFilePath, moduleFilePaths: Set(mockScopedFiles), moduleFilePath: { $0 })
