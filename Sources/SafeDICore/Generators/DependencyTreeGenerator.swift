@@ -1620,36 +1620,23 @@ public actor DependencyTreeGenerator {
 				}
 			}
 
+			/// The first required optional receive this scope can resolve only to the property's non-optional form,
+			/// still being built, with that form's index on `instantiationStack`. It is a cycle, thrown after the
+			/// cycles below, which match only exact properties, so it is reported as a non-optional receive would be.
+			var optionalReceiveOfPropertyBeingBuilt: (receive: Scope.RequiredReceivedProperty, beingBuiltIndex: Int)?
 			for requiredReceivedProperty in scope.requiredReceivedProperties {
 				let receivedProperty = requiredReceivedProperty.property
 				let parentContainsProperty = receivableProperties.contains(receivedProperty)
 				let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
-				guard !parentContainsProperty, !propertyIsCreatedAtThisScope else { continue }
-				if let beingBuiltIndex = instantiationStack.firstIndex(of: receivedProperty.asUnwrappedProperty),
-				   !receivableProperties.contains(receivedProperty.asUnwrappedProperty)
-				{
-					// The receive can resolve only to the non-optional form of the property, which is still being
-					// built. That is a cycle, reported as the walks above and below report a non-optional receive
-					// of a property still being built, which they match exactly.
-					let beingBuiltProperty = instantiationStack[beingBuiltIndex]
-					if beingBuiltIndex == 0 {
-						throw DependencyTreeGeneratorError.receivedConstantCycleDetected(
-							instantiated: beingBuiltProperty,
-							receivedPropertyChain: [receivedProperty],
-							declarationLocation: requiredReceivedProperty.declarationLocation,
-						)
-					} else {
-						try throwIfInvalidCycle(
-							typesInCycle: ([receivedProperty] + instantiationStack[0...beingBuiltIndex]).map(\.typeDescription),
-							property: beingBuiltProperty,
-							declarationLocation: requiredReceivedProperty.declarationLocation,
-							directParent: scope.instantiable.concreteInstantiable,
-							isReceived: true,
-						)
-					}
-				} else if !cyclesOnly, property != nil {
-					// A mock binds every property its tree receives from above it, so only a tree under a root
-					// can leave a property unfulfilled.
+				guard !parentContainsProperty, !propertyIsCreatedAtThisScope, property != nil else { continue }
+				let beingBuiltIndex = receivableProperties.contains(receivedProperty.asUnwrappedProperty)
+					? nil
+					: instantiationStack.firstIndex(of: receivedProperty.asUnwrappedProperty)
+				if receivedProperty.typeDescription.isOptional, let beingBuiltIndex {
+					optionalReceiveOfPropertyBeingBuilt = optionalReceiveOfPropertyBeingBuilt ?? (requiredReceivedProperty, beingBuiltIndex)
+				} else if !cyclesOnly || beingBuiltIndex != nil {
+					// A mock binds every property its tree receives from above it, so there only a property still
+					// being built is unfulfillable. A non-optional one is a cycle, reported below.
 					// This property is in a dependency tree and is unfulfillable. Record the problem.
 					unfulfillableProperties.insert(.init(
 						property: receivedProperty,
@@ -1692,6 +1679,24 @@ public actor DependencyTreeGenerator {
 					directParent: scope.instantiable.concreteInstantiable,
 					isReceived: dependency.source.isReceived,
 				)
+			}
+			if case let (receive, beingBuiltIndex)? = optionalReceiveOfPropertyBeingBuilt {
+				let beingBuiltProperty = instantiationStack[beingBuiltIndex]
+				if beingBuiltIndex == 0 {
+					throw DependencyTreeGeneratorError.receivedConstantCycleDetected(
+						instantiated: beingBuiltProperty,
+						receivedPropertyChain: [receive.property],
+						declarationLocation: receive.declarationLocation,
+					)
+				} else {
+					try throwIfInvalidCycle(
+						typesInCycle: ([receive.property] + instantiationStack[0...beingBuiltIndex]).map(\.typeDescription),
+						property: beingBuiltProperty,
+						declarationLocation: receive.declarationLocation,
+						directParent: scope.instantiable.concreteInstantiable,
+						isReceived: true,
+					)
+				}
 			}
 
 			// A property this scope provides shadows an alias of it declared above, unless this scope's alias of it is
