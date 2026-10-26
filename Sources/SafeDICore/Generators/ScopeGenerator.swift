@@ -56,6 +56,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let propertiesToDeclare = Set(propertiesToGenerate.compactMap(\.property))
 		self.propertiesToDeclare = propertiesToDeclare
 		self.unavailableOptionalProperties = unavailableOptionalProperties
+		aliasPropertyIsProvidedByEnclosingScope = false
 		let forwardedProperties = scopeData.forwardedProperties
 		/// The properties a child requires be passed in that this scope must itself receive.
 		func receivedFromAncestors(_ childReceivedProperties: Set<Property>) -> Set<Property> {
@@ -154,6 +155,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		unavailableOptionalProperties: Set<Property>,
 		erasedToConcreteExistential: Bool,
 		onlyIfAvailable: Bool,
+		isProvidedByEnclosingScope: Bool,
 		declarationReference: AliasDeclarationReferences.Reference?,
 	) {
 		scopeData = .alias(
@@ -176,6 +178,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		propertiesToDeclare = []
 		self.unavailableOptionalProperties = unavailableOptionalProperties
 		self.property = property
+		aliasPropertyIsProvidedByEnclosingScope = isProvidedByEnclosingScope
 	}
 
 	// MARK: CustomStringConvertible
@@ -348,6 +351,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private let propertiesToGenerate: [ScopeGenerator]
 	/// Properties that this scope declares as a `let` constant.
 	private let propertiesToDeclare: Set<Property>
+	/// For an alias, whether a scope enclosing the alias's scope provides the alias's
+	/// property too. When the alias is not created, a receiver of the property beneath
+	/// it then resolves to that enclosing property, so the alias does not make the
+	/// property unavailable. `false` for every other scope.
+	private let aliasPropertyIsProvidedByEnclosingScope: Bool
 	private let property: Property?
 
 	private struct UnavailablePropertiesCacheKey: Hashable {
@@ -464,26 +472,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The children in `orderedPropertiesToGenerate`, each with the properties this
 	/// scope generates before it and the `propertiesGeneratedLater` to generate it
 	/// with (see `generateCode`). An `onlyIfAvailable` alias that is not created is
-	/// unavailable to the children after it, exactly like a property generated later.
+	/// unavailable to the children after it, exactly like a property generated later,
+	/// and does not count as generated before them, unless a scope enclosing this one
+	/// provides the same property: the children then resolve to that property. An
+	/// enclosing provider that is itself unavailable here already arrives in
+	/// `propertiesGeneratedLater`.
 	private func orderedChildren(
 		propertiesGeneratedLater: Set<Property>,
 	) -> [(generator: ScopeGenerator, propertiesAlreadyGeneratedAtThisScope: Set<Property>, propertiesGeneratedLater: Set<Property>)] {
 		var propertiesNotGeneratedBefore = propertiesGeneratedLater
+		var uncreatedAliasProperties = Set<Property>()
 		var orderedChildren = [(generator: ScopeGenerator, propertiesAlreadyGeneratedAtThisScope: Set<Property>, propertiesGeneratedLater: Set<Property>)]()
 		for (index, childGenerator) in orderedPropertiesToGenerate.enumerated() {
 			let propertiesAlreadyGeneratedAtThisScope = Set(orderedPropertiesToGenerate[0..<index].compactMap(\.property))
+				.subtracting(uncreatedAliasProperties)
 			let childPropertiesGeneratedLater = self.propertiesGeneratedLater(
 				thanChildAt: index,
 				receivedOnlyIfAvailableBy: childGenerator,
 				propertiesNotGeneratedBefore: propertiesNotGeneratedBefore,
 			)
 			orderedChildren.append((childGenerator, propertiesAlreadyGeneratedAtThisScope, childPropertiesGeneratedLater))
-			if let uncreatedAliasProperty = childGenerator.uncreatedAliasProperty(
-				unavailableProperties: childGenerator.unavailableProperties(
-					propertiesAlreadyGeneratedAtThisScope: propertiesAlreadyGeneratedAtThisScope,
-					propertiesGeneratedLater: childPropertiesGeneratedLater,
-				),
-			) {
+			if !childGenerator.aliasPropertyIsProvidedByEnclosingScope,
+			   let uncreatedAliasProperty = childGenerator.uncreatedAliasProperty(
+			   	unavailableProperties: childGenerator.unavailableProperties(
+			   		propertiesAlreadyGeneratedAtThisScope: propertiesAlreadyGeneratedAtThisScope,
+			   		propertiesGeneratedLater: childPropertiesGeneratedLater,
+			   	),
+			   )
+			{
+				uncreatedAliasProperties.insert(uncreatedAliasProperty)
 				propertiesNotGeneratedBefore.insert(uncreatedAliasProperty.asUnwrappedProperty)
 			}
 		}
