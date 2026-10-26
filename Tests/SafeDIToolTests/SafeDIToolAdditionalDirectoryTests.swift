@@ -59,6 +59,8 @@ struct SafeDIToolAdditionalDirectoryTests: ~Copyable {
 			inputSwiftFiles: project.targetFiles,
 			additionalDirectorySwiftFiles: [project.additionalDirectoryFile],
 			generatedFiles: outputWithoutScanCache,
+			// The configuration keeps the default, `#if DEBUG`, which the verifier always defines.
+			mockConditionalCompilation: nil,
 			filesToDelete: &filesToDelete,
 		)
 	}
