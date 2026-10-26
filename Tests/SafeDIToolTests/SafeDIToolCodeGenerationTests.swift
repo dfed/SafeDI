@@ -9270,6 +9270,203 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		#expect(rootFileNames == ["Root.swift", "ExtraRoot.swift"])
 	}
 
+	// MARK: Generated code the compiler rejects
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_generatedCodeCompiles_whenSiblingSubtreeRequiresThePropertyThatReceivesTheSiblingOnlyIfAvailable() async throws {
+		// `a` receives `b` only if available, and `b`'s subtree requires `a`, so `a` must be constructed first
+		// and handed `nil` for `b`. The generator constructs `b` first, in a nested function that captures `a`
+		// before `a` is declared: an error the compiler reports only while generating SIL.
+		try await withKnownIssue(
+			"Generated code captures a sibling before it is declared when an onlyIfAvailable receive conflicts with a required one",
+		) {
+			_ = try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true, generateMock: true)
+					public final class Root: Instantiable {
+					    public init(a: A, b: B) {
+					        self.a = a
+					        self.b = b
+					    }
+
+					    @Instantiated let a: A
+					    @Instantiated let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable {
+					    public init(b: B?) {
+					        self.b = b
+					    }
+
+					    @Received(onlyIfAvailable: true) let b: B?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(x: X, y: Y) {
+					        self.x = x
+					        self.y = y
+					    }
+
+					    @Instantiated let x: X
+					    @Instantiated let y: Y
+					}
+					""",
+					"""
+					@Instantiable
+					public final class X: Instantiable {
+					    public init(a: A) {
+					        self.a = a
+					    }
+
+					    @Received let a: A
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Y: Instantiable {
+					    public init(a: A?) {
+					        self.a = a
+					    }
+
+					    @Received(onlyIfAvailable: true) let a: A?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		} when: {
+			compileVerificationIsEnabled
+		} matching: { issue in
+			issue.isGeneratedCodeCompilationFailure(reporting: "error: closure captures 'a' before it is declared")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_generatedCodeCompiles_whenReceivedAliasIsErasedToConcreteExistential() async throws {
+		// `erasedToConcreteExistential: true` asks for the aliased dependency to be wrapped in the property type's
+		// initializer, `AnyUserService(service)`. The generator assigns `service` unwrapped, which compiles only
+		// when the property type is a protocol the dependency conforms to.
+		try await withKnownIssue(
+			"Generated code does not wrap a received alias that is erased to a concrete existential",
+		) {
+			_ = try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol UserServiceProtocol {}
+
+					public struct AnyUserService {
+					    public init(_ userService: some UserServiceProtocol) {}
+					}
+					""",
+					"""
+					@Instantiable(isRoot: true, generateMock: true)
+					public final class Root: Instantiable {
+					    public init(service: UserService, child: Child) {
+					        self.service = service
+					        self.child = child
+					    }
+
+					    @Instantiated let service: UserService
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class UserService: Instantiable, UserServiceProtocol {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(erased: AnyUserService) {
+					        self.erased = erased
+					    }
+
+					    @Received(fulfilledByDependencyNamed: "service", ofType: UserService.self, erasedToConcreteExistential: true) let erased: AnyUserService
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		} when: {
+			compileVerificationIsEnabled
+		} matching: { issue in
+			issue.isGeneratedCodeCompilationFailure(reporting: "error: cannot convert value of type 'UserService' to specified type 'AnyUserService'")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_generatedCodeCompiles_whenDescendantReceivesOnlyIfAvailableAliasWhoseDependencyIsUnavailable() async throws {
+		// `Child` does not create `maybe`, because `missing` is unavailable, yet `Grandchild`'s `maybe` is
+		// passed `maybe` rather than `nil`.
+		try await withKnownIssue(
+			"Generated code references an onlyIfAvailable alias that was not created because its dependency is unavailable",
+		) {
+			_ = try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol UserServiceProtocol {}
+					""",
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) {
+					        self.child = child
+					    }
+
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class UserService: Instantiable, UserServiceProtocol {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(maybe: UserServiceProtocol?, grandchild: Grandchild) {
+					        self.maybe = maybe
+					        self.grandchild = grandchild
+					    }
+
+					    @Received(fulfilledByDependencyNamed: "missing", ofType: UserService.self, onlyIfAvailable: true) let maybe: UserServiceProtocol?
+					    @Instantiated let grandchild: Grandchild
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Grandchild: Instantiable {
+					    public init(maybe: UserServiceProtocol?) {
+					        self.maybe = maybe
+					    }
+
+					    @Received(onlyIfAvailable: true) let maybe: UserServiceProtocol?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		} when: {
+			compileVerificationIsEnabled
+		} matching: { issue in
+			issue.isGeneratedCodeCompilationFailure(reporting: "error: cannot find 'maybe' in scope")
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()

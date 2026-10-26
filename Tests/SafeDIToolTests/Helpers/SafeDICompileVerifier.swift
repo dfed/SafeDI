@@ -52,7 +52,7 @@ func verifyGeneratedCodeCompiles(
 	filesToDelete: inout [URL],
 	sourceLocation: SourceLocation = #_sourceLocation,
 ) throws {
-	guard ProcessInfo.processInfo.environment["SAFEDI_SKIP_COMPILE_CHECK"] == nil else { return }
+	guard compileVerificationIsEnabled else { return }
 
 	let inputURLs = inputSwiftFiles + additionalDirectorySwiftFiles
 
@@ -116,11 +116,33 @@ func verifyGeneratedCodeCompiles(
 
 	Issue.record(
 		"""
-		Generated code failed to compile alongside test inputs.
+		\(generatedCodeCompilationFailureMessage)
 		\(combinedResult.stderr)
 		""",
 		sourceLocation: sourceLocation,
 	)
+}
+
+private let generatedCodeCompilationFailureMessage = "Generated code failed to compile alongside test inputs."
+
+extension Issue {
+	/// Whether this is the issue `verifyGeneratedCodeCompiles` records when the fixture compiles on its own but
+	/// fails to compile with the generated code, and the compiler's output includes `diagnostic`. A test that
+	/// documents a known generator bug matches its known issue with this, so that any other failure, such as a
+	/// fixture that does not compile, still fails the test.
+	func isGeneratedCodeCompilationFailure(reporting diagnostic: String) -> Bool {
+		comments.contains { comment in
+			comment.rawValue.hasPrefix(generatedCodeCompilationFailureMessage)
+				&& comment.rawValue.contains(diagnostic)
+		}
+	}
+}
+
+/// Whether `verifyGeneratedCodeCompiles` compiles generated code: `false` when the `SAFEDI_SKIP_COMPILE_CHECK`
+/// environment variable is set. A test that expects a compilation failure as a known issue expects it only when
+/// this is `true`.
+var compileVerificationIsEnabled: Bool {
+	ProcessInfo.processInfo.environment["SAFEDI_SKIP_COMPILE_CHECK"] == nil
 }
 
 struct SafeDIBuildArtifacts {
