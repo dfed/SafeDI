@@ -72,7 +72,10 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: IfConfigDeclSyntax) -> SyntaxVisitorContinueKind {
-		let content = node.safeDIContent(in: .declarations)
+		// The block's declarations in every clause, including those of nested blocks, which this visitor
+		// reaches again only in the clauses it scans.
+		let (content, blockOutputFileDeclarations) = node.safeDIContentAmongDeclarations()
+		outputFileDeclarations.formUnion(blockOutputFileDeclarations)
 		let scannable = conditionalCompilationEvaluator.scannableClauses(in: node, guarding: content)
 		activeIfConfigClauses.formUnion(scannable.clauses.map(\.id))
 		record(scannable.decisions)
@@ -132,6 +135,7 @@ public final class FileVisitor: SyntaxVisitor {
 			var configuration = SafeDIConfigurationVisitor.extractConfiguration(from: node)
 			configuration.declarationLocation = sourceLocationConverter?.declarationLocation(for: node.positionAfterSkippingLeadingTrivia)
 			configurations.append(configuration)
+			outputFileDeclarations.record(configuration)
 		}
 		return .skipChildren
 	}
@@ -160,6 +164,9 @@ public final class FileVisitor: SyntaxVisitor {
 		}
 		record(instantiableVisitor.conditionalCompilationDecisions)
 		consultedCompilationConditions.formUnion(instantiableVisitor.consultedCompilationConditions)
+		// Recorded from the attribute, whether or not an `instantiate()` method the members' `#if` blocks
+		// may skip produced an instantiable. SafeDI never treats an extension as a root.
+		outputFileDeclarations.recordInstantiable(isRoot: false, generatesMock: instantiableVisitor.generateMock)
 
 		// Extensions are always top-level.
 		parentType = node.extendedType.typeDescription
@@ -200,6 +207,9 @@ public final class FileVisitor: SyntaxVisitor {
 	public private(set) var importSegments = [ImportSegment]()
 	/// Every bare condition whose value decided which imports the `#if` blocks in `importSegments` hold.
 	public private(set) var importOnlyConsultedCompilationConditions = Set<String>()
+	/// The declarations that decide which files SafeDI generates, found in every clause of every `#if`
+	/// block. They depend on no condition, so walking the file with any evaluator finds the same.
+	public private(set) var outputFileDeclarations = OutputFileDeclarations()
 
 	/// A run of a file's imports.
 	public enum ImportSegment: Codable, Hashable, Sendable {
@@ -232,6 +242,7 @@ public final class FileVisitor: SyntaxVisitor {
 		}
 		record(instantiableVisitor.conditionalCompilationDecisions)
 		consultedCompilationConditions.formUnion(instantiableVisitor.consultedCompilationConditions)
+		outputFileDeclarations.recordInstantiable(isRoot: instantiableVisitor.isRoot, generatesMock: instantiableVisitor.generateMock)
 
 		// Keep track of how nested we are.
 		enterTypeNamed(node.name.text)
