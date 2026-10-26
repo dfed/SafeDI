@@ -1083,6 +1083,8 @@ safeditool generate App.csv \
   --dependent-module-info-file-path deps.csv
 ```
 
+Given the same input files, `generate` writes the same `.safedi` bytes every time, so a build cache keyed on them stays warm. A `.safedi` file names each file by the path the input CSV gives it, so a CSV of relative paths, like those the Bazel rule and the Tuist plugin write, keeps absolute paths out of it.
+
 For working reference implementations, see the Bazel rule and macro at [`bazel/safedi.bzl`](../bazel/safedi.bzl) and the Tuist plugin at [`TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift`](../TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift). Both invoke `generate --combined-output --module-info-output` per module and pass dependent modules' `.safedi` artifacts via `--dependent-module-info-file-path`.
 
 If you need per-root output files (one generated `.swift` per `@Instantiable(isRoot: true)` type) instead of a single combined file, use `generate --swift-manifest` with a JSON manifest in the [`SafeDIToolManifest`](../Sources/SafeDICore/Models/SafeDIToolManifest.swift) format. `--swift-manifest` and `--combined-output` are mutually exclusive — pick whichever maps better onto your build system’s output model.

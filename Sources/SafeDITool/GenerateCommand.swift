@@ -268,7 +268,10 @@ struct Generate: AsyncParsableCommand {
 			),
 		)
 		if let moduleInfoOutput {
-			try JSONEncoder().encode(module).write(toPath: moduleInfoOutput)
+			// Build systems cache on these bytes, and without sorting, keys are written in an order seeded per process.
+			let encoder = JSONEncoder()
+			encoder.outputFormatting = [.sortedKeys]
+			try encoder.encode(module).write(toPath: moduleInfoOutput)
 		}
 
 		if manifest != nil || combinedOutput != nil {
