@@ -51,15 +51,18 @@ public struct ImportStatement: Codable, Hashable, Sendable {
 		"""
 	}
 
-	// MARK: Private
+	// MARK: Internal
 
-	private var attributeToGenerate: String {
+	/// The attributes `asSource` writes.
+	var attributeToGenerate: String {
 		if Self.attributesToFilterOut.contains(attribute) {
 			""
 		} else {
 			attribute
 		}
 	}
+
+	// MARK: Private
 
 	private var attributeStatement: String {
 		let attributeToGenerate = attributeToGenerate
