@@ -17,6 +17,8 @@ import SafeDITuist
 
 let project = Project(
 	name: "ExampleTuistIntegration",
+	// Treating warnings as errors makes CI fail on a warning in SafeDI's generated code.
+	settings: .settings(base: ["SWIFT_TREAT_WARNINGS_AS_ERRORS": "YES"]),
 	targets: [
 		.target(
 			name: "Subproject",
