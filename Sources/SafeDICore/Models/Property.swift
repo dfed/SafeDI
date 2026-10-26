@@ -158,8 +158,14 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		typeDescription.simpleNameAndGenerics?.generics
 	}
 
+	/// The property with its optional type unwrapped, or this property when its type is not optional. Most
+	/// properties are not optional, and creating a property hashes its whole type description.
 	var asUnwrappedProperty: Property {
-		Property(label: label, typeDescription: typeDescription.unwrapped)
+		if case let .optional(unwrapped) = typeDescription {
+			Property(label: label, typeDescription: unwrapped)
+		} else {
+			self
+		}
 	}
 
 	// MARK: PropertyType
