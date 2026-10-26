@@ -952,11 +952,13 @@ public actor DependencyTreeGenerator {
 		/// The scope of the last child in the cycle, whose tree receives the first child.
 		let lastChildScope: Scope
 
-		/// The error reporting these children, at the receiver found by `requiredReceiver`.
+		/// The error reporting these children, at the receiver found by `requiredReceiver`. When the last
+		/// child's tree receives the first child through an alias or unwrapped, the chain ends with the
+		/// first child's own property, so it reads back to where it started.
 		var error: DependencyTreeGeneratorError {
 			DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(
 				instantiated: instantiated,
-				receivedPropertyChain: receivedPropertyChain,
+				receivedPropertyChain: receivedPropertyChain + (receivedPropertyChain[receivedPropertyChain.count - 1] == instantiated ? [] : [instantiated]),
 				declarationLocation: DependencyTreeGenerator.requiredReceiver(
 					of: receivedPropertyChain[receivedPropertyChain.count - 1],
 					inTreeOf: lastChildScope,
@@ -984,9 +986,9 @@ public actor DependencyTreeGenerator {
 		}
 		// A child's tree that requires an alias the scope declares requires the child the alias is assigned
 		// from, directly or through other aliases the scope declares.
-		var aliases = [(property: Property, fulfillingProperty: Property)]()
+		var aliases = [AliasedDependency]()
 		for case let .aliased(property, fulfillingProperty, _, onlyIfAvailable, _) in scope.propertiesToGenerate where !onlyIfAvailable {
-			aliases.append((property, fulfillingProperty))
+			aliases.append(AliasedDependency(property: property, fulfillingProperty: fulfillingProperty))
 		}
 		var aliasedChildIndexByProperty = [Property: Int]()
 		var resolvedAnAlias = true
@@ -1088,6 +1090,14 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
+	/// An aliased dependency a scope declares: `property`, assigned from `fulfillingProperty`.
+	private struct AliasedDependency {
+		let property: Property
+		let fulfillingProperty: Property
+		/// Where the alias is declared, when it is known.
+		var declarationLocation: Dependency.DeclarationLocation? = nil
+	}
+
 	/// Aliased dependencies of one scope that are each fulfilled by the next one.
 	private struct AliasesFulfillingOneAnother {
 		/// The aliases, starting and ending with the same one.
@@ -1110,15 +1120,19 @@ public actor DependencyTreeGenerator {
 	private static func aliasesFulfillingOneAnother(
 		in scope: Scope,
 	) -> AliasesFulfillingOneAnother? {
-		let aliases = scope.instantiable.dependencies.compactMap { dependency -> (property: Property, fulfillingProperty: Property, declarationLocation: Dependency.DeclarationLocation?)? in
+		let aliases = scope.instantiable.dependencies.compactMap { dependency -> AliasedDependency? in
 			switch dependency.source {
 			case let .aliased(fulfillingProperty, _, _):
-				(dependency.property, fulfillingProperty, dependency.declarationLocation)
+				AliasedDependency(
+					property: dependency.property,
+					fulfillingProperty: fulfillingProperty,
+					declarationLocation: dependency.declarationLocation,
+				)
 			case .instantiated, .received, .forwarded:
 				nil
 			}
 		}
-		var aliasByProperty = [Property: (property: Property, fulfillingProperty: Property, declarationLocation: Dependency.DeclarationLocation?)]()
+		var aliasByProperty = [Property: AliasedDependency]()
 		for alias in aliases {
 			aliasByProperty[alias.property] = alias
 		}

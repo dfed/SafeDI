@@ -1463,7 +1463,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Pong.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated pingBuilder: Instantiator<Ping> -> @Received pongAlias: Instantiator<Pong> -> @Received pingAlias\(aliasChainLength - 1): Instantiator<Ping>
+				\(fixtures["Pong.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated pingBuilder: Instantiator<Ping> -> @Received pongAlias: Instantiator<Pong> -> @Received pingAlias\(aliasChainLength - 1): Instantiator<Ping> -> @Received pingBuilder: Instantiator<Ping>
 				"""
 			},
 		) {
@@ -3088,7 +3088,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["A.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received renamedABuilder: Instantiator<A>
+				\(fixtures["A.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received renamedABuilder: Instantiator<A> -> @Received aBuilder: Instantiator<A>
 				"""
 			},
 		) {
@@ -3126,7 +3126,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated a: A -> @Received renamedA: A
+				\(fixtures["C.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated a: A -> @Received renamedA: A -> @Received a: A
 				"""
 			},
 		) {
