@@ -375,6 +375,8 @@ extension Container {
 
 Property declarations within `@Instantiable` types decorated with [`@Instantiated`](../Sources/SafeDI/Decorators/Instantiated.swift) are instantiated when its enclosing type is instantiated. `@Instantiated`-decorated properties are available to be `@Received` by objects instantiated further down the dependency tree.
 
+To instantiate a dependency later than its enclosing type, declare the property as an [`Instantiator`](#instantiator) or a [`LazilyInstantiated`](#lazilyinstantiated). [Delayed instantiation](#delayed-instantiation) compares the three.
+
 Each `@Instantiated` property is a distinct instance.
 
 `@Instantiated`-decorated properties must be an `@Instantiable` type, or a type listed in an `@Instantiable(fulfillingAdditionalTypes:)` declaration.
