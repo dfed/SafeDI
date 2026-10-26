@@ -29,8 +29,9 @@
 ///
 /// SafeDI rejects a dependency tree in which creating the instance would require the instance. It does not
 /// inspect what initializers do: an initializer that runs while the instance is being created must not
-/// cause `instance` to be read, whether directly or through a callback. Such a read starts creating the
-/// instance again.
+/// cause `instance` to be read, whether directly or through a callback. Such a read creates the instance
+/// itself. Every read still returns the same instance, but the type is initialized more than once, and
+/// without end if each initialization causes another read.
 ///
 /// - SeeAlso: `SendableLazilyInstantiated`
 /// - SeeAlso: `Instantiator`
@@ -48,8 +49,15 @@ public final class LazilyInstantiated<T> {
 			return instance
 		case let .uninstantiated(instantiator):
 			let instance = instantiator()
-			state = .instantiated(instance)
-			return instance
+			switch state {
+			case let .instantiated(instanceReadWhileInstantiating):
+				// The instantiator caused `instance` to be read, and that read created and stored an instance.
+				// Every read returns that one, so the instance just created is discarded.
+				return instanceReadWhileInstantiating
+			case .uninstantiated:
+				state = .instantiated(instance)
+				return instance
+			}
 		}
 	}
 

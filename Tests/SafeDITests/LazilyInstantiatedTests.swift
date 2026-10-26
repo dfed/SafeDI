@@ -59,6 +59,27 @@ struct LazilyInstantiatedTests {
 		#expect(systemUnderTest.instance.dependency === dependency.instance)
 	}
 
+	@Test @MainActor
+	func instance_returnsSameObjectToEveryReader_whenInstantiatorCausesInstanceToBeReadOnce() {
+		var systemUnderTest: LazilyInstantiated<BuiltProduct>?
+		var builtProductReadWhileInstantiating: BuiltProduct?
+		var hasReadWhileInstantiating = false
+		let lazilyInstantiated = LazilyInstantiated {
+			// Stands in for an initializer whose side effect makes other code read the instance.
+			if !hasReadWhileInstantiating {
+				hasReadWhileInstantiating = true
+				builtProductReadWhileInstantiating = systemUnderTest?.instance
+			}
+			return BuiltProduct()
+		}
+		systemUnderTest = lazilyInstantiated
+
+		let firstBuiltProduct = lazilyInstantiated.instance
+		let secondBuiltProduct = lazilyInstantiated.instance
+		#expect(builtProductReadWhileInstantiating === firstBuiltProduct)
+		#expect(firstBuiltProduct === secondBuiltProduct)
+	}
+
 	private final class BuiltProduct {}
 
 	private final class BuiltProductWithDependency {
