@@ -323,6 +323,83 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		}
 	}
 
+	// The time limit only turns a hang into a failure; see
+	// `mock_generatesWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
+	@Test(.timeLimit(.minutes(10)))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsReceivedCycleErrorWithinTimeLimit_whenEveryReceivedPathFromEarlierSiblingsEndsInReceivedCycle() async {
+		// Each layer holds a Left and a Right service that both receive the two services of the
+		// next layer, and the last layer's services receive Ping, which receives Pong, which receives
+		// Ping. Validating Feature's `left0` and `right0`, and every promoted service, walks down to
+		// that cycle along every path, and the number of paths doubles with each layer. The promoted
+		// `ping` sorts after every promoted Left service, so the walk must remember what lies past the
+		// cycle to reach the error Ping reports.
+		let layerCount = 40
+		let layerFiles = (0..<layerCount).flatMap { layer in
+			let receivedProperties = layer == layerCount - 1
+				? ["ping: Ping"]
+				: ["left\(layer + 1): Left\(layer + 1)", "right\(layer + 1): Right\(layer + 1)"]
+			return ["Left\(layer)", "Right\(layer)"].map { type in
+				"""
+				@Instantiable
+				public struct \(type): Instantiable {
+				    public init(\(receivedProperties.joined(separator: ", "))) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				\(receivedProperties.map { "    @Received let \($0)" }.joined(separator: "\n"))
+				}
+				"""
+			}
+		}
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Pong.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated ping: Ping -> @Received pong: Pong -> @Received ping: Ping
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct Feature: Instantiable {
+					    public init(left0: Left0, right0: Right0) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let left0: Left0
+					    @Instantiated let right0: Right0
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Ping: Instantiable {
+					    public init(pong: Pong) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let pong: Pong
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Pong: Instantiable {
+					    public init(ping: Ping) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let ping: Ping
+					}
+					""",
+				] + layerFiles,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				skipCompileVerification: true,
+			)
+		}
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenUnfulfillableInstantiatedPropertyExists() async {
