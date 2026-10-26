@@ -144,10 +144,14 @@ final class Scope: Hashable {
 			}
 		}
 
+	/// - Parameter boundProperties: The received properties a mock root binds, which enclose its whole tree.
+	///   Kept apart from `receivableProperties`, which grows at every scope, so that the scopes of a mock
+	///   tree do not each copy them.
 	func createScopeGenerator(
 		for property: Property?,
 		propertyStack: [Property],
 		receivableProperties: Set<Property>,
+		boundProperties: Set<Property> = [],
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool = false,
 	) throws -> ScopeGenerator {
@@ -163,8 +167,11 @@ final class Scope: Hashable {
 		/// generates: it creates the property, or its unwrapped form, and is not an
 		/// ancestor still being built.
 		func isProvidedByEnclosingScope(_ property: Property) -> Bool {
-			(receivableProperties.contains(property) && !childPropertyStack.contains(property))
-				|| (receivableProperties.contains(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty))
+			func isReceivable(_ property: Property) -> Bool {
+				receivableProperties.contains(property) || boundProperties.contains(property)
+			}
+			return (isReceivable(property) && !childPropertyStack.contains(property))
+				|| (isReceivable(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty))
 		}
 		let receivableProperties = receivableProperties.union(createdProperties)
 		func isPropertyUnavailable(_ property: Property) -> Bool {
@@ -207,6 +214,7 @@ final class Scope: Hashable {
 						for: property,
 						propertyStack: childPropertyStack,
 						receivableProperties: receivableProperties,
+						boundProperties: boundProperties,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						forMockGeneration: forMockGeneration,
 					)

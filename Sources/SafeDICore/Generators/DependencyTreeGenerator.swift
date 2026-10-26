@@ -885,7 +885,8 @@ public actor DependencyTreeGenerator {
 		return try mockRootScope.createScopeGenerator(
 			for: nil,
 			propertyStack: [],
-			receivableProperties: allReceived,
+			receivableProperties: [],
+			boundProperties: allReceived,
 			erasedToConcreteExistential: false,
 			forMockGeneration: true,
 		)
