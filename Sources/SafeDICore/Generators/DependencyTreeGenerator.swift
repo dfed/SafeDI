@@ -1624,15 +1624,32 @@ public actor DependencyTreeGenerator {
 				let receivedProperty = requiredReceivedProperty.property
 				let parentContainsProperty = receivableProperties.contains(receivedProperty)
 				let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
-				// A mock binds every property its tree receives from above it, so there a property is
-				// unfulfillable only when its receive resolves to the property's non-optional form while that
-				// is still being built. A non-optional property still being built is a cycle, reported below.
-				if !parentContainsProperty, !propertyIsCreatedAtThisScope, property != nil,
-				   !cyclesOnly || (
-				   	instantiationStack.contains(receivedProperty.asUnwrappedProperty)
-				   		&& !receivableProperties.contains(receivedProperty.asUnwrappedProperty)
-				   )
+				guard !parentContainsProperty, !propertyIsCreatedAtThisScope else { continue }
+				if let beingBuiltIndex = instantiationStack.firstIndex(of: receivedProperty.asUnwrappedProperty),
+				   !receivableProperties.contains(receivedProperty.asUnwrappedProperty)
 				{
+					// The receive can resolve only to the non-optional form of the property, which is still being
+					// built. That is a cycle, reported as the walks above and below report a non-optional receive
+					// of a property still being built, which they match exactly.
+					let beingBuiltProperty = instantiationStack[beingBuiltIndex]
+					if beingBuiltIndex == 0 {
+						throw DependencyTreeGeneratorError.receivedConstantCycleDetected(
+							instantiated: beingBuiltProperty,
+							receivedPropertyChain: [receivedProperty],
+							declarationLocation: requiredReceivedProperty.declarationLocation,
+						)
+					} else {
+						try throwIfInvalidCycle(
+							typesInCycle: ([receivedProperty] + instantiationStack[0...beingBuiltIndex]).map(\.typeDescription),
+							property: beingBuiltProperty,
+							declarationLocation: requiredReceivedProperty.declarationLocation,
+							directParent: scope.instantiable.concreteInstantiable,
+							isReceived: true,
+						)
+					}
+				} else if !cyclesOnly, property != nil {
+					// A mock binds every property its tree receives from above it, so only a tree under a root
+					// can leave a property unfulfilled.
 					// This property is in a dependency tree and is unfulfillable. Record the problem.
 					unfulfillableProperties.insert(.init(
 						property: receivedProperty,

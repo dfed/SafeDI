@@ -3144,14 +3144,96 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithRequiredOptionalReceiveUnderAncestorThatReceivesItOnlyIfAvailable_throwsError_whenOnlyProviderIsStillBeingBuilt() async {
-		// Parent, built inside `user`, receives `user` only if available and gets `nil`,
-		// because `user` is still being built. Child, which requires `user`, cannot be
-		// handed it either.
+	mutating func run_onCodeWithRequiredOptionalReceiveOfInstantiatorThatBuildsTheReceiver_throwsError() async {
+		// C, built by `cBuilder`, requires `cBuilder: Instantiator<C>?`. The only `cBuilder` is
+		// the one still building C, as for a receive of `cBuilder: Instantiator<C>`.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):4:5: error: @Received property `user: User?` is not @Instantiated or @Forwarded in chain: Root -> User -> Parent -> Child. Declare `@Instantiated let user: User?` on `Root` or on another type in the chain to fix.
+				\(fixtures["C.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated cBuilder: Instantiator<C> -> @Received cBuilder: Instantiator<C>?
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(cBuilder: Instantiator<C>) { self.cBuilder = cBuilder }
+					    @Instantiated let cBuilder: Instantiator<C>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(cBuilder: Instantiator<C>?) { self.cBuilder = cBuilder }
+					    @Received let cBuilder: Instantiator<C>?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredOptionalReceiveOfInstantiatorStillBuildingAnAncestor_throwsError() async {
+		// D, built inside `cBuilder`, requires `cBuilder: Instantiator<C>?`. The only `cBuilder`
+		// is still being built, as for a receive of `cBuilder: Instantiator<C>`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["D.swift"]):4:5: error: Dependency cycle detected! @Instantiated `cBuilder: Instantiator<C>` is @Received in tree created by @Instantiated `cBuilder: Instantiator<C>`. Declare @Received `cBuilder: Instantiator<C>` on `D` as @Instantiated to fix. Full cycle: Instantiator<C> -> D -> Instantiator<C>?
+				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
+				\(fixtures["D.swift"]):1:1: note: `D` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(cBuilder: Instantiator<C>) { self.cBuilder = cBuilder }
+					    @Instantiated let cBuilder: Instantiator<C>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(d: D) { self.d = d }
+					    @Instantiated let d: D
+					}
+					""",
+					"""
+					@Instantiable
+					public final class D: Instantiable {
+					    public init(cBuilder: Instantiator<C>?) { self.cBuilder = cBuilder }
+					    @Received let cBuilder: Instantiator<C>?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredOptionalReceiveUnderAncestorThatReceivesItOnlyIfAvailable_throwsError_whenOnlyProviderIsStillBeingBuilt() async {
+		// Parent, built inside `user`, receives `user` only if available and gets `nil`,
+		// because `user` is still being built. Child, which requires `user`, is built
+		// inside it too, so its receive closes a cycle, as a receive of `user: User` would.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):4:5: error: Dependency cycle detected: User -> Parent -> Child -> User?
+				\(fixtures["User.swift"]):1:1: note: `User` is part of the cycle
+				\(fixtures["Parent.swift"]):1:1: note: `Parent` is part of the cycle
+				\(fixtures["Child.swift"]):1:1: note: `Child` is part of the cycle
 				"""
 			},
 		) {
