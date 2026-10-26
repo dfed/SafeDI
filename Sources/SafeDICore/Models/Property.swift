@@ -44,6 +44,15 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 
 	// MARK: Hashable
 
+	/// Hashes the label alone. Equal properties have equal labels, and properties that share a label
+	/// are rare in one set, so this keeps sets and dictionaries of properties fast without hashing
+	/// the type description's tree.
+	public func hash(into hasher: inout Hasher) {
+		hasher.combine(label)
+	}
+
+	// MARK: Comparable
+
 	public static func < (lhs: Property, rhs: Property) -> Bool {
 		if lhs.label != rhs.label {
 			return lhs.label < rhs.label
