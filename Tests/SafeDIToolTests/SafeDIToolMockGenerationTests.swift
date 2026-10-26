@@ -3845,7 +3845,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 			],
-			pluginInvocation: .scanWhilePlanning,
+			pluginInvocation: .scanWhilePlanning(reportsFixtureDirectoryThroughSymbolicLink: false),
 			filesToDelete: &filesToDelete,
 		)
 
@@ -16372,6 +16372,74 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		}
 		#endif
 		""", "Unexpected output \(output.mockFiles["A+SafeDIMock.swift"] ?? "")")
+	}
+
+	// MARK: - Generated code the compiler rejects
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_generatedCodeCompiles_whenDescendantReceivesTheAncestorUnderConstructionOnlyIfAvailable() async throws {
+		// `D` receives `c` only if available while `c` is being constructed, so it must be handed `nil`, as the
+		// production initializer does. The mocks for `Root` and `E` pass `c` instead, from a nested function that
+		// captures `c` before it is declared: an error the compiler reports only while generating SIL.
+		try await withKnownIssue(
+			"Generated mock captures the property under construction when a descendant receives it onlyIfAvailable",
+		) {
+			_ = try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true, generateMock: true)
+					public final class Root: Instantiable {
+					    public init(c: C, e: E) {
+					        self.c = c
+					        self.e = e
+					    }
+
+					    @Instantiated let c: C
+					    @Instantiated let e: E
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public final class C: Instantiable {
+					    public init(d: D) {
+					        self.d = d
+					    }
+
+					    @Instantiated let d: D
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public final class D: Instantiable {
+					    public init(c: C?, e: E?) {
+					        self.c = c
+					        self.e = e
+					    }
+
+					    @Received(onlyIfAvailable: true) let c: C?
+					    @Received(onlyIfAvailable: true) let e: E?
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public final class E: Instantiable {
+					    public init(c: C) {
+					        self.c = c
+					    }
+
+					    @Received let c: C
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		} when: {
+			compileVerificationIsEnabled
+		} matching: { issue in
+			issue.isGeneratedCodeCompilationFailure(reporting: "error: closure captures 'c' before it is declared")
+		}
 	}
 
 	// MARK: Private

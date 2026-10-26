@@ -54,6 +54,8 @@ public final class FileVisitor: SyntaxVisitor {
 		let importStatement = node.asImportStatement
 		imports.append(importStatement)
 		if importOnlyBlockDepth == 0 {
+			// An import outside every block that guards only imports is selected the same way for mock code.
+			mockImports.append(importStatement)
 			if case let .imports(importStatements) = importSegments.last {
 				importSegments[importSegments.count - 1] = .imports(importStatements + [importStatement])
 			} else {
@@ -72,7 +74,10 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: IfConfigDeclSyntax) -> SyntaxVisitorContinueKind {
-		let content = node.safeDIContent(in: .declarations)
+		// The block's declarations in every clause, including those of nested blocks, which this visitor
+		// reaches again only in the clauses it scans.
+		let (content, blockOutputFileDeclarations) = node.safeDIContentAmongDeclarations()
+		outputFileDeclarations.formUnion(blockOutputFileDeclarations)
 		let scannable = conditionalCompilationEvaluator.scannableClauses(in: node, guarding: content)
 		activeIfConfigClauses.formUnion(scannable.clauses.map(\.id))
 		record(scannable.decisions)
@@ -86,6 +91,17 @@ public final class FileVisitor: SyntaxVisitor {
 			importOnlyBlockDepth = 1
 			importSegments.append(.conditionalImports(source: node.trimmedDescription))
 			importOnlyConsultedCompilationConditions.formUnion(scannable.consultedConditions)
+			// Generated mock code compiles only where the mock condition is active, so its imports are
+			// selected as a block guarding mock-only declarations is. Blocks nested in the selected
+			// clauses are selected the same way.
+			let mockScannable = conditionalCompilationEvaluator.scannableClauses(in: node, guarding: .mockOnly)
+			let mockClauseVisitor = FileVisitor(conditionalCompilationEvaluator: conditionalCompilationEvaluator)
+			for elements in mockScannable.clauses.compactMap(\.elements) {
+				mockClauseVisitor.walk(elements)
+			}
+			mockImports.append(contentsOf: mockClauseVisitor.mockImports)
+			importOnlyConsultedCompilationConditions.formUnion(mockScannable.consultedConditions)
+			importOnlyConsultedCompilationConditions.formUnion(mockClauseVisitor.importOnlyConsultedCompilationConditions)
 		} else if content != .none || node.hasError {
 			// A block guarding nothing SafeDI scans for still decides which syntax errors this visitor finds.
 			consultedCompilationConditions.formUnion(scannable.consultedConditions)
@@ -132,6 +148,7 @@ public final class FileVisitor: SyntaxVisitor {
 			var configuration = SafeDIConfigurationVisitor.extractConfiguration(from: node)
 			configuration.declarationLocation = sourceLocationConverter?.declarationLocation(for: node.positionAfterSkippingLeadingTrivia)
 			configurations.append(configuration)
+			outputFileDeclarations.record(configuration)
 		}
 		return .skipChildren
 	}
@@ -160,6 +177,9 @@ public final class FileVisitor: SyntaxVisitor {
 		}
 		record(instantiableVisitor.conditionalCompilationDecisions)
 		consultedCompilationConditions.formUnion(instantiableVisitor.consultedCompilationConditions)
+		// Recorded from the attribute, whether or not an `instantiate()` method the members' `#if` blocks
+		// may skip produced an instantiable. SafeDI never treats an extension as a root.
+		outputFileDeclarations.recordInstantiable(isRoot: false, generatesMock: instantiableVisitor.generateMock)
 
 		// Extensions are always top-level.
 		parentType = node.extendedType.typeDescription
@@ -184,7 +204,12 @@ public final class FileVisitor: SyntaxVisitor {
 
 	// MARK: Public
 
+	/// The imports generated dependency-tree code needs: those in the clauses the evaluator selects.
 	public private(set) var imports = [ImportStatement]()
+	/// The imports generated mock code needs. Generated mock code compiles only where the evaluator's
+	/// mock condition is active, so each `#if` block that guards only imports is evaluated as if that
+	/// condition were active, as a block that guards mock-only declarations is.
+	public private(set) var mockImports = [ImportStatement]()
 	public private(set) var instantiables = [Instantiable]()
 	public private(set) var configurations = [SafeDIConfiguration]()
 	public private(set) var encounteredUnexpectedNodesSyntax = false
@@ -198,8 +223,12 @@ public final class FileVisitor: SyntaxVisitor {
 	/// The file's imports in source order, with each `#if` block that guards nothing but imports and
 	/// other code SafeDI ignores kept as source, so its imports can be found again with another evaluator.
 	public private(set) var importSegments = [ImportSegment]()
-	/// Every bare condition whose value decided which imports the `#if` blocks in `importSegments` hold.
+	/// Every bare condition whose value decided which imports the `#if` blocks in `importSegments` hold,
+	/// in `imports` or in `mockImports`.
 	public private(set) var importOnlyConsultedCompilationConditions = Set<String>()
+	/// The declarations that decide which files SafeDI generates, found in every clause of every `#if`
+	/// block. They depend on no condition, so walking the file with any evaluator finds the same.
+	public private(set) var outputFileDeclarations = OutputFileDeclarations()
 
 	/// A run of a file's imports.
 	public enum ImportSegment: Codable, Hashable, Sendable {
@@ -232,6 +261,7 @@ public final class FileVisitor: SyntaxVisitor {
 		}
 		record(instantiableVisitor.conditionalCompilationDecisions)
 		consultedCompilationConditions.formUnion(instantiableVisitor.consultedCompilationConditions)
+		outputFileDeclarations.recordInstantiable(isRoot: instantiableVisitor.isRoot, generatesMock: instantiableVisitor.generateMock)
 
 		// Keep track of how nested we are.
 		enterTypeNamed(node.name.text)
