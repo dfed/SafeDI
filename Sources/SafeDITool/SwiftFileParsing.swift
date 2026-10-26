@@ -23,10 +23,42 @@ import SafeDICore
 import SwiftParser
 import SwiftSyntax
 
+/// What a module's files declare. Every list is ordered by what the files declare, never by the order in
+/// which parallel parsing finished the files or by how `generate` assembled the module, so the module info
+/// `generate` writes for the same files is the same bytes every time.
 struct ModuleInfo: Codable {
+	/// A module with `imports`, `mockImports`, `filesWithUnexpectedNodes`, and `conditionalCompilationDecisions`
+	/// sorted, whatever order they are given in, and all but `filesWithUnexpectedNodes` without duplicates.
+	init(
+		imports: [ImportStatement],
+		mockImports: [ImportStatement],
+		instantiables: [Instantiable],
+		configurations: [SafeDIConfiguration],
+		filesWithUnexpectedNodes: [String]?,
+		conditionalCompilationDecisions: [ConditionalCompilationDecision],
+	) {
+		self.imports = imports.sortedWithoutDuplicates()
+		self.mockImports = mockImports.sortedWithoutDuplicates()
+		self.instantiables = instantiables
+		self.configurations = configurations
+		self.filesWithUnexpectedNodes = filesWithUnexpectedNodes?.sorted()
+		self.conditionalCompilationDecisions = Set(conditionalCompilationDecisions).sorted()
+	}
+
+	/// The imports generated dependency-tree code needs, from every file that declares SafeDI content,
+	/// sorted and without duplicates.
 	let imports: [ImportStatement]
+	/// The imports generated mock code needs, found by evaluating each `#if` block that guards only imports
+	/// as if the module's mock condition were active, sorted and without duplicates. A module that depends on
+	/// this one generates mocks that reference this module's mock-only declarations, so it imports these into
+	/// its own mocks.
+	let mockImports: [ImportStatement]
+	/// Ordered by file path and, within each file, by declaration order. Those found in files reached through
+	/// `#SafeDIConfiguration(additionalDirectoriesToInclude:)` follow those of the module's own files.
 	let instantiables: [Instantiable]
+	/// Ordered by file path and, within each file, by declaration order.
 	let configurations: [SafeDIConfiguration]
+	/// The files with syntax errors, sorted.
 	let filesWithUnexpectedNodes: [String]?
 	/// How each `#if` condition guarding SafeDI declarations was evaluated, sorted and without duplicates.
 	/// Generated code asserts these at compile time.
@@ -244,18 +276,19 @@ func parseSwiftFiles(
 struct FileScan: Codable, Sendable {
 	let path: String
 	let imports: [ImportStatement]
+	let mockImports: [ImportStatement]
 	let instantiables: [Instantiable]
 	let configurations: [SafeDIConfiguration]
 	let encounteredUnexpectedNodes: Bool
 	let conditionalCompilationDecisions: [ConditionalCompilationDecision]
-	/// Every bare condition whose value decided what this file contributed, except the imports
-	/// `importSegments` can find again. Walking the file with any evaluator that gives each of these
+	/// Every bare condition whose value decided what this file contributed, except the imports and mock
+	/// imports `importSegments` can find again. Walking the file with any evaluator that gives each of these
 	/// the same value, and has the same mock condition, contributes the same.
 	let consultedCompilationConditions: Set<String>
 	/// The file's imports, kept only when an `#if` block that guards nothing but imports consults a
-	/// condition, so `imports` can be found again without the file when that condition changes.
+	/// condition, so `imports` and `mockImports` can be found again without the file when that condition changes.
 	let importSegments: [FileVisitor.ImportSegment]
-	/// Every bare condition whose value decided which imports `importSegments` hold.
+	/// Every bare condition whose value decided which imports `importSegments` hold, for either list.
 	let importOnlyConsultedCompilationConditions: Set<String>
 	/// The declarations in every clause of the file's `#if` blocks that decide which files SafeDI generates,
 	/// which are the same whatever the conditions.
@@ -273,16 +306,24 @@ struct FileScan: Codable, Sendable {
 		!instantiables.isEmpty || !configurations.isEmpty || encounteredUnexpectedNodes
 	}
 
-	/// This scan, with the imports `evaluator` finds in `importSegments`.
+	/// This scan, with the imports and mock imports `evaluator` finds in `importSegments`.
 	func withImports(evaluatedWith evaluator: ConditionalCompilationEvaluator) -> FileScan {
-		replacingImports(with: declaresSafeDIContent ? importSegments.flatMap { $0.imports(evaluatedWith: evaluator) } : [])
+		guard declaresSafeDIContent else {
+			return replacingImports(with: [], mockImports: [])
+		}
+		let segmentImports = importSegments.map { $0.imports(evaluatedWith: evaluator) }
+		return replacingImports(
+			with: segmentImports.flatMap(\.imports),
+			mockImports: segmentImports.flatMap(\.mockImports),
+		)
 	}
 
-	/// This scan, contributing `imports`.
-	fileprivate func replacingImports(with imports: [ImportStatement]) -> FileScan {
+	/// This scan, contributing `imports` and `mockImports`.
+	fileprivate func replacingImports(with imports: [ImportStatement], mockImports: [ImportStatement]) -> FileScan {
 		FileScan(
 			path: path,
 			imports: imports,
+			mockImports: mockImports,
 			instantiables: instantiables,
 			configurations: configurations,
 			encounteredUnexpectedNodes: encounteredUnexpectedNodes,
@@ -299,6 +340,7 @@ struct FileScan: Codable, Sendable {
 		FileScan(
 			path: path,
 			imports: imports,
+			mockImports: mockImports,
 			instantiables: instantiables.map {
 				var instantiable = $0
 				instantiable.sourceFilePath = path
@@ -320,15 +362,15 @@ struct FileScan: Codable, Sendable {
 }
 
 extension FileVisitor.ImportSegment {
-	/// The imports this segment holds when evaluated with `evaluator`.
-	fileprivate func imports(evaluatedWith evaluator: ConditionalCompilationEvaluator) -> [ImportStatement] {
+	/// The imports and mock imports this segment holds when evaluated with `evaluator`.
+	fileprivate func imports(evaluatedWith evaluator: ConditionalCompilationEvaluator) -> (imports: [ImportStatement], mockImports: [ImportStatement]) {
 		switch self {
 		case let .imports(importStatements):
-			return importStatements
+			return (importStatements, importStatements)
 		case let .conditionalImports(source):
 			let fileVisitor = FileVisitor(conditionalCompilationEvaluator: evaluator)
 			fileVisitor.walk(Parser.parse(source: source))
-			return fileVisitor.imports
+			return (fileVisitor.imports, fileVisitor.mockImports)
 		}
 	}
 }
@@ -339,10 +381,11 @@ extension ModuleInfo {
 	func including(_ additionalModuleInfo: ModuleInfo) -> ModuleInfo {
 		ModuleInfo(
 			imports: imports + additionalModuleInfo.imports,
+			mockImports: mockImports + additionalModuleInfo.mockImports,
 			instantiables: instantiables + additionalModuleInfo.instantiables,
 			configurations: configurations,
 			filesWithUnexpectedNodes: filesWithUnexpectedNodes.map { $0 + (additionalModuleInfo.filesWithUnexpectedNodes ?? []) } ?? additionalModuleInfo.filesWithUnexpectedNodes,
-			conditionalCompilationDecisions: Set(conditionalCompilationDecisions + additionalModuleInfo.conditionalCompilationDecisions).sorted(),
+			conditionalCompilationDecisions: conditionalCompilationDecisions + additionalModuleInfo.conditionalCompilationDecisions,
 		)
 	}
 
@@ -352,28 +395,48 @@ extension ModuleInfo {
 		let addedModuleInfo = ModuleInfo(fileScans)
 		return ModuleInfo(
 			imports: imports + addedModuleInfo.imports,
-			// Each file's instantiables are all in one of the two lists, so sorting keeps each file's declaration order.
+			mockImports: mockImports + addedModuleInfo.mockImports,
+			// Each file's declarations are all in one of the two lists, so sorting keeps each file's declaration order.
 			instantiables: (instantiables + addedModuleInfo.instantiables).sortedByDeclaration(),
-			configurations: configurations + addedModuleInfo.configurations,
+			configurations: (configurations + addedModuleInfo.configurations).sortedByDeclaration(),
 			filesWithUnexpectedNodes: filesWithUnexpectedNodes.map { $0 + (addedModuleInfo.filesWithUnexpectedNodes ?? []) } ?? addedModuleInfo.filesWithUnexpectedNodes,
-			conditionalCompilationDecisions: Set(conditionalCompilationDecisions + addedModuleInfo.conditionalCompilationDecisions).sorted(),
+			conditionalCompilationDecisions: conditionalCompilationDecisions + addedModuleInfo.conditionalCompilationDecisions,
 		)
 	}
 
-	/// The module the files contributed to, with instantiables in declaration order.
+	/// The module the files contributed to, in file path order whatever order `fileScans` is in.
 	init(_ fileScans: [FileScan]) {
-		var conditionalCompilationDecisions = Set<ConditionalCompilationDecision>()
-		for fileScan in fileScans {
-			conditionalCompilationDecisions.formUnion(fileScan.conditionalCompilationDecisions)
-		}
+		// Files are parsed in parallel, so `fileScans` arrive in the order their parses finished.
+		let fileScans = fileScans.sorted { $0.path < $1.path }
 		let filesWithUnexpectedNodes = fileScans.filter(\.encounteredUnexpectedNodes).map(\.path)
 		self.init(
 			imports: fileScans.flatMap(\.imports),
-			instantiables: fileScans.flatMap(\.instantiables).sortedByDeclaration(),
+			mockImports: fileScans.flatMap(\.mockImports),
+			instantiables: fileScans.flatMap(\.instantiables),
 			configurations: fileScans.flatMap(\.configurations),
 			filesWithUnexpectedNodes: filesWithUnexpectedNodes.isEmpty ? nil : filesWithUnexpectedNodes,
-			conditionalCompilationDecisions: conditionalCompilationDecisions.sorted(),
+			conditionalCompilationDecisions: fileScans.flatMap(\.conditionalCompilationDecisions),
 		)
+	}
+}
+
+extension [ImportStatement] {
+	/// These imports, each listed once, in an order that depends only on the imports themselves.
+	fileprivate func sortedWithoutDuplicates() -> [ImportStatement] {
+		Set(self).sorted {
+			($0.moduleName, $0.type, $0.kind, $0.attribute) < ($1.moduleName, $1.type, $1.kind, $1.attribute)
+		}
+	}
+}
+
+extension [SafeDIConfiguration] {
+	/// These configurations ordered by file path, keeping the declaration order of configurations in the same file.
+	fileprivate func sortedByDeclaration() -> [SafeDIConfiguration] {
+		enumerated()
+			.sorted { lhs, rhs in
+				(lhs.element.sourceFilePath ?? "", lhs.offset) < (rhs.element.sourceFilePath ?? "", rhs.offset)
+			}
+			.map(\.element)
 	}
 }
 
@@ -444,6 +507,7 @@ private func walk(
 	let fileScan = FileScan(
 		path: filePath,
 		imports: fileVisitor.imports,
+		mockImports: fileVisitor.mockImports,
 		instantiables: fileVisitor.instantiables,
 		configurations: fileVisitor.configurations,
 		encounteredUnexpectedNodes: fileVisitor.encounteredUnexpectedNodesSyntax,
@@ -454,5 +518,5 @@ private func walk(
 		outputFileDeclarations: fileVisitor.outputFileDeclarations,
 	)
 	.relocated(to: filePath)
-	return fileScan.declaresSafeDIContent ? fileScan : fileScan.replacingImports(with: [])
+	return fileScan.declaresSafeDIContent ? fileScan : fileScan.replacingImports(with: [], mockImports: [])
 }

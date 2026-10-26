@@ -462,6 +462,8 @@ public struct ProfileView: Instantiable {
 }
 ```
 
+To receive the renamed dependency inside a type-erasing wrapper, add `erasedToConcreteExistential: true`, which wraps it as [`@Instantiated` erasure](#making-protocols-instantiable) does: a property `userVendor: AnyUserVendor` is assigned `AnyUserVendor(userManager)`. With `onlyIfAvailable: true` the property is optional, and the type it wraps does the wrapping: a property `userVendor: AnyUserVendor?` is assigned `AnyUserVendor(userManager)` too.
+
 #### Sharing one instance across properties of disparate types
 
 Renaming can be applied more than once to the same `@Instantiated` or `@Forwarded` property, so a single instance can be received as several different types: any type the instance can be assigned to, such as unrelated protocols it conforms to or a superclass. Instantiate it once, then rename it once per type. Types further down the tree receive whichever type they need, and every one of them gets the same instance:
@@ -524,7 +526,7 @@ Declare the configuration in a file named `SafeDIConfiguration.swift` in the mod
 
 **Parameters:**
 
-- `additionalImportedModules`: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types. Default: `[]`.
+- `additionalImportedModules`: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types. When those files import a module whole in more than one way, the generated code imports it once, the way that asks for least: `import MyModule` if any file imports it without attributes (or with only `@preconcurrency`, which the generated code does not need), and otherwise with the attributes that sort first, so `@testable import MyModule` is chosen only when every file that imports the module whole does so with `@testable`. Default: `[]`.
 - `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. Only honored by the SPM build-tool plugin. The Bazel and Tuist integrations enumerate inputs up front and ignore this parameter — list every Swift source via the build target itself instead. Default: `[]`.
 - `additionalMocksToGenerate`: Type names from dependent modules to generate `mock()` methods for in this module. The types must be `@Instantiable` in their home module. See [Cross-module mock generation](#cross-module-mock-generation). Default: `[]`.
 - `mockConditionalCompilation`: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation. Default: `"DEBUG"`.
@@ -793,7 +795,7 @@ LoggedInView.mock(safeDIOverrides: .init(
 
 Closure fields on `SafeDIMockConfiguration` are plain (non-`@Sendable`) by default, so overrides can capture mutable non-`Sendable` test state. When a type is reached through a `SendableInstantiator` (or `SendableErasedInstantiator`) anywhere in the dependency graph, its `SafeDIMockConfiguration` is emitted with `@Sendable` closure fields instead so the overrides remain safe to invoke across isolation boundaries.
 
-A type gets its own `SafeDIOverrides` struct when at least one dependency belongs there: an `@Instantiated` dependency, a `@Received` dependency of a type an `@Instantiable` declaration fulfills, or a `@Received(onlyIfAvailable: true)` dependency. Every other dependency is a flat `mock()` parameter. The table below shows where each kind lands and whether the caller has to supply it.
+A type gets its own `SafeDIOverrides` struct when at least one dependency belongs there: an `@Instantiated` dependency, a `@Received` dependency of a type an `@Instantiable` declaration fulfills or a single concrete type is [erased to](#receiving-a-type-erased-dependency), or a `@Received(onlyIfAvailable: true)` dependency. Every other dependency is a flat `mock()` parameter. The table below shows where each kind lands and whether the caller has to supply it.
 
 #### Dependency kinds in the generated mock
 
@@ -801,8 +803,8 @@ The table below shows where each dependency kind lands in the three buckets abov
 
 | Dependency kind | Shape in the mock | Default |
 | --- | --- | --- |
-| Required `@Received` of a type some `@Instantiable` declaration fulfills (directly or via `fulfillingAdditionalTypes`) | Entry on `SafeDIOverrides` | Built from the real subtree, exactly like `@Instantiated` |
-| Required `@Received` of a type no `@Instantiable` declaration fulfills | Flat `mock()` parameter | Required |
+| Required `@Received` of a type some `@Instantiable` declaration fulfills (directly or via `fulfillingAdditionalTypes`), or of a type exactly one concrete type is [erased to](#receiving-a-type-erased-dependency) | Entry on `SafeDIOverrides` | Built from the real subtree, exactly like `@Instantiated` |
+| Required `@Received` of a type no `@Instantiable` declaration fulfills, including a type [different concrete types are erased to](#receiving-a-type-erased-dependency) | Flat `mock()` parameter | Required |
 | `@Forwarded` | Flat `mock()` parameter | Required, unless the root provides a default or the forwarded type has a [`mockOnly`](#the-mockonly-parameter) provider (which defaults the parameter to `Type.mock()`) |
 | `@Instantiated` | Entry on `SafeDIOverrides` | Built from the real subtree — see [Overriding dependencies](#overriding-dependencies) |
 | `@Received(onlyIfAvailable: true)` | Entry on `SafeDIOverrides`, typed as optional | `nil` |
@@ -813,6 +815,22 @@ A `@Received(onlyIfAvailable: true)` dependency gets no `SafeDIOverrides` entry 
 A `@Received` dependency is resolved from its declared type, not from the renames in any particular parent. Take `ProfileView` from [Sharing one instance across properties of disparate types](#sharing-one-instance-across-properties-of-disparate-types): `ProfileView.mock()` can build `crashReporter` itself only when `Telemetry` lists `CrashReporter` in `fulfillingAdditionalTypes`. A composition entry such as `(EventTracker & CrashReporter).self` alone does not cover its members. Otherwise `crashReporter` is a required parameter of `ProfileView.mock()`. Because each received dependency is resolved on its own, a mock that receives both `EventTracker` and `CrashReporter` builds a separate `Telemetry` for each. Pass one instance through `safeDIOverrides` if a test needs them to coincide.
 
 When two flat `mock()` parameters or two entries in the same `SafeDIOverrides` or `SafeDIMockConfiguration` share a label, each is named by its label followed by its type. Received dependencies named `items` of types `[String]` and `Set<String>` become the parameters `items_Array_String` and `items_Set__String`. The type part is a Swift identifier built from the type’s structure. Optionality, `any`, `some`, `.Type`, and attributes such as `@Sendable` are left out unless two entries differ only in them: `Int?` and `Int.Type` become `Int_Optional` and `Int_Type`. When two entries build the same type, the property type names them apart: a mocked type that instantiates `x: X` while a dependency it receives requires `x: Instantiator<X>` gets the entries `x_X` and `x_Instantiator__X`. A name that is still taken gets trailing underscores until it is unique.
+
+#### Receiving a type-erased dependency
+
+A `@Received` dependency of a type no `@Instantiable` declaration fulfills can still be built by a mock when a parent erases a concrete type to it. `NotesApp` in [Making protocols `@Instantiable`](#making-protocols-instantiable) declares `@Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) private var userService: AnyUserService`, so the mock of a type that receives `userService: AnyUserService` gets a `userService` entry on `SafeDIOverrides` that defaults to building a `DefaultUserService` and wrapping it in `AnyUserService`. SafeDI looks at every `@Instantiated` property with `erasedToConcreteExistential: true` in the current module and the modules it depends on, and matches the received dependency by its type: a received `AnyUserService` matches properties of type `AnyUserService`, not an `ErasedInstantiator<…, AnyUserService>`.
+
+When those properties erase different concrete types to the same type — say `NotesApp` erases `DefaultUserService` to `AnyUserService` and another parent erases `OfflineUserService` to it — nothing tells SafeDI which one a mock should build. The dependency is then a required flat `mock()` parameter:
+
+```swift
+@Instantiable(generateMock: true)
+public struct SettingsView: View, Instantiable {
+    // …
+    @ObservedObject @Received private var userService: AnyUserService
+}
+
+SettingsView.mock(userService: AnyUserService(StubUserService()))
+```
 
 ### Mock visibility
 
@@ -908,6 +926,23 @@ Initializers in an `@Instantiable` extension are never asserted, because the ext
 
 A declaration that participates only in mock generation—an `@Instantiable(mockOnly: true)` type or extension, or a hand-written `mock()` or `customMockName` method—may be guarded by the module’s `mockConditionalCompilation` condition (`DEBUG` by default) without the build reporting it. SafeDITool evaluates such a block as if that condition were active, because the generated mock code that references the declaration is wrapped in the same `#if`, and emits no assertion for it. This keeps `#if DEBUG` around a `mockOnly` declaration working under every integration, including the Xcode project plugin. Setting `mockConditionalCompilation: nil` disables this exemption, since the generated mocks are then unconditional. The exemption never applies to production declarations, nor to other conditions guarding mock-only declarations.
 
+Imports follow the code that needs them. An `#if` block that holds only imports is evaluated twice: with the reported conditions for the generated dependency tree, and as if the mock condition were active for the generated mocks, which compile only where it is. A module that a mock-only declaration needs can therefore be imported under its own `#if DEBUG`:
+
+```swift
+#if DEBUG
+import NetworkingMocks
+#endif
+
+#if DEBUG
+@Instantiable(fulfillingAdditionalTypes: [Network.self], mockOnly: true)
+extension MockNetwork {
+    public static func mock() -> MockNetwork { MockNetwork() }
+}
+#endif
+```
+
+The generated mocks import `NetworkingMocks` whatever conditions the build reports, as do the mocks of a module that depends on this one, while the generated dependency tree imports it only when the build reports `DEBUG`. A file that holds both, such as the output of `generate --combined-output`, imports what either needs.
+
 ### Reporting active conditions
 
 SafeDITool can read the conditions in two ways:
@@ -945,9 +980,9 @@ SafeDITool cannot write a file the plan lacks. When it finds one of these declar
 Found @Instantiable(isRoot: true) in 'Sources/App/DebugRoot.swift', but this file is not listed in the manifest’s dependencyTreeGeneration. SafeDI decides which files to generate before the build runs, listing every file that declares a root, a type that sets `generateMock: true`, or a #SafeDIConfiguration in any clause of its `#if` blocks, so the file most likely changed after that decision; building again lists it. A hand-written manifest must list the file, or the type must not be a root.
 ```
 
-### Upgrading
+### Upgrading to 2.1.0 or later
 
-Earlier releases scanned every clause of every `#if` block. Existing projects keep building unless a production declaration sits behind a bare condition. SafeDITool now scans such a block according to the conditions it reads, and the generated code asserts that choice, so a build whose compiler disagrees fails with a message naming the condition. Where SafeDITool reads the build settings, which includes every Xcode project and every Xcode build of a Swift package, it agrees with the compiler. With `swift build` on SwiftPM’s native backend, which is the default through Swift 6.2 (the toolchain in Xcode 26) and is selected with `--build-system native` after that, report the condition in `swiftSettings` as described above, or move the declaration out of the block. A root, a type that sets `generateMock: true`, or a `#SafeDIConfiguration` behind such a block gets its generated file in every configuration, without code where the block is inactive; see [Declarations that decide which files SafeDI generates](#declarations-that-decide-which-files-safedi-generates). A mock-only declaration under `#if DEBUG` keeps working everywhere.
+Earlier releases scanned every clause of every `#if` block. Existing projects keep building unless a production declaration sits behind a bare condition. SafeDITool now scans such a block according to the conditions it reads, and the generated code asserts that choice, so a build whose compiler disagrees fails with a message naming the condition. Where SafeDITool reads the build settings, which includes every Xcode project and every Xcode build of a Swift package, it agrees with the compiler. With `swift build` on SwiftPM’s native backend, which is the default through Swift 6.2 (the toolchain in Xcode 26) and is selected with `--build-system native` after that, report the condition in `swiftSettings` as described above, or move the declaration out of the block. A root, a type that sets `generateMock: true`, or a `#SafeDIConfiguration` behind such a block gets its generated file in every configuration, without code where the block is inactive; see [Declarations that decide which files SafeDI generates](#declarations-that-decide-which-files-safedi-generates). A mock-only declaration under `#if DEBUG`, and an import it needs under its own `#if DEBUG`, keep working everywhere; see [Declarations that only feed mock generation](#declarations-that-only-feed-mock-generation).
 
 ## Comparing SafeDI and Manual Injection: Key Differences
 
@@ -1049,6 +1084,8 @@ safeditool generate App.csv \
   --module-info-output App.safedi \
   --dependent-module-info-file-path deps.csv
 ```
+
+Given the same input files, `generate` writes the same `.safedi` bytes every time, so a build cache keyed on them stays warm. A `.safedi` file names each file by the path the input CSV gives it, so a CSV of relative paths, like those the Bazel rule and the Tuist plugin write, keeps absolute paths out of it.
 
 For working reference implementations, see the Bazel rule and macro at [`bazel/safedi.bzl`](../bazel/safedi.bzl) and the Tuist plugin at [`TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift`](../TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift). Both invoke `generate --combined-output --module-info-output` per module and pass dependent modules' `.safedi` artifacts via `--dependent-module-info-file-path`.
 

@@ -135,6 +135,7 @@ struct Generate: AsyncParsableCommand {
 			loadSafeDIModuleInfo(),
 			parsedModule(
 				inputFilePaths: inputFilePaths,
+				manifestPath: resolvedSwiftManifest,
 				manifest: manifest,
 				activeCompilationConditions: suppliedCompilationConditions,
 			),
@@ -163,16 +164,20 @@ struct Generate: AsyncParsableCommand {
 		   let sourceConfiguration,
 		   !sourceConfiguration.additionalDirectoriesToInclude.isEmpty
 		{
-			let additionalFiles = try await findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude)
-			// Each file is named as scan names it in the manifest, so the manifest lists the roots it declares.
-			// Without a manifest, files are named as found. The found paths are standardized, so no two
-			// resolve to the same name.
-			module = try await initialModule.including(ModuleInfo(parseSwiftFiles(
-				readingFilePathsByName: Dictionary(uniqueKeysWithValues: additionalFiles.map { filePath in
-					(manifest?.resolvedPath(for: filePath) ?? filePath, filePath)
+			// Input paths are resolved as scan resolved them: relative to the manifest's project root, or else
+			// to the working directory. Each additional file is named as scan names it in the manifest, so the
+			// manifest lists the roots it declares; without a manifest, files are named as found.
+			let projectRootURL = manifest?.projectRoot?.asFileURL
+			let directoryBaseURL = projectRootURL?.appendingPathComponent("", isDirectory: true)
+			let additionalFileScans = try await parseAdditionalDirectoryFiles(
+				findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude),
+				excludingInputFilesAt: Set(inputFilePaths.map { inputFilePath in
+					URL(fileURLWithPath: inputFilePath, relativeTo: directoryBaseURL).standardizedFileURL.path
 				}),
+				namedRelativeTo: projectRootURL.map(RelativePathBase.init),
 				conditionalCompilation: evaluator,
-			)))
+			)
+			module = initialModule.including(ModuleInfo(additionalFileScans.map(\.fileScan)))
 		} else {
 			module = initialModule
 		}
@@ -243,8 +248,11 @@ struct Generate: AsyncParsableCommand {
 			normalized.sourceFilePath = unnormalizedInstantiable.sourceFilePath
 			return normalized
 		}
+		let additionalImportStatements = resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
 		let generator = try DependencyTreeGenerator(
-			importStatements: dependentModuleInfo.flatMap(\.imports) + resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) } + module.imports,
+			importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportStatements + module.imports,
+			// A dependent module's mock-only declarations reach this module's mocks, so its mock imports do too.
+			mockImportStatements: dependentModuleInfo.flatMap(\.mockImports) + additionalImportStatements + module.mockImports,
 			typeDescriptionToFulfillingInstantiableMap: resolveSafeDIFulfilledTypes(
 				instantiables: normalizedInstantiables,
 			),
@@ -265,7 +273,10 @@ struct Generate: AsyncParsableCommand {
 			),
 		)
 		if let moduleInfoOutput {
-			try JSONEncoder().encode(module).write(toPath: moduleInfoOutput)
+			// Build systems cache on these bytes, and without sorting, keys are written in an order seeded per process.
+			let encoder = JSONEncoder()
+			encoder.outputFormatting = [.sortedKeys]
+			try encoder.encode(module).write(toPath: moduleInfoOutput)
 		}
 
 		if manifest != nil || combinedOutput != nil {
@@ -297,8 +308,11 @@ struct Generate: AsyncParsableCommand {
 				let generatedRoots = try await generator.generatePerRootCodeTrees()
 				// Every generated file asserts how `#if` conditions were evaluated, so a build
 				// whose compiler disagrees fails here with a message naming the condition.
-				let fileHeader = await generator.fileHeader
-					+ ConditionalCompilationDecision.compileTimeAssertions(for: module.conditionalCompilationDecisions)
+				let compileTimeAssertions = ConditionalCompilationDecision.compileTimeAssertions(for: module.conditionalCompilationDecisions)
+				let fileHeader = await generator.fileHeader + compileTimeAssertions
+				// Generated mocks compile only where the mock condition is active, so they import
+				// what the module's `#if` blocks select there.
+				let mockFileHeader = await generator.mockFileHeader + compileTimeAssertions
 
 				// Build a map from source file path → extension code(s).
 				var sourceFileToExtensions = [String: [String]]()
@@ -359,13 +373,13 @@ struct Generate: AsyncParsableCommand {
 					}
 				}
 
-				// Accumulate every emission as a `(destination, content)`
-				// pair. `destination == nil` means the write is combined-
+				// Accumulate every emission as a `(destination, header, body)`
+				// triple. `destination == nil` means the write is combined-
 				// only (no standalone file). A manifest-driven run
 				// populates destinations from the manifest; a
 				// combined-output run leaves them all nil and lets the
-				// concat step below do the emission.
-				var writes: [(destination: URL?, content: String)] = []
+				// concat step below do the emission under one header.
+				var writes: [(destination: URL?, header: String, body: String)] = []
 
 				// ---- Dependency tree ----
 				let dependencyTreeDestinationsBySource: [String: URL]
@@ -390,11 +404,10 @@ struct Generate: AsyncParsableCommand {
 					).sorted()
 				}
 				for sourceFile in dependencyTreeSourcesInOrder {
-					let body = sourceFileToExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? ""
-					let content = body.isEmpty ? fileHeader : fileHeader + body
 					writes.append((
 						destination: dependencyTreeDestinationsBySource[sourceFile],
-						content: content,
+						header: fileHeader,
+						body: sourceFileToExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? "",
 					))
 				}
 
@@ -450,10 +463,10 @@ struct Generate: AsyncParsableCommand {
 							} else {
 								sourceFileToMockExtensions[entry.inputFilePath]
 							}
-							let body = extensions?.sorted().joined(separator: "\n\n") ?? ""
 							writes.append((
 								destination: URL(fileURLWithPath: entry.outputFilePath),
-								content: fileHeader + body,
+								header: mockFileHeader,
+								body: extensions?.sorted().joined(separator: "\n\n") ?? "",
 							))
 						}
 						// Shared mock-configuration file. Declared even
@@ -462,7 +475,8 @@ struct Generate: AsyncParsableCommand {
 						if let mockConfigurationOutputFilePath = manifest.mockConfigurationOutputFilePath {
 							writes.append((
 								destination: URL(fileURLWithPath: mockConfigurationOutputFilePath),
-								content: fileHeader + (mockResult.mockConfigurationCode ?? ""),
+								header: mockFileHeader,
+								body: mockResult.mockConfigurationCode ?? "",
 							))
 						}
 					} else {
@@ -475,8 +489,11 @@ struct Generate: AsyncParsableCommand {
 								.map(\.typeDescription.asSource),
 						)
 						for sourceFile in currentModuleMockSourceFiles {
-							let body = sourceFileToMockExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? ""
-							writes.append((destination: nil, content: fileHeader + body))
+							writes.append((
+								destination: nil,
+								header: mockFileHeader,
+								body: sourceFileToMockExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? "",
+							))
 						}
 						// Skip types already emitted via the per-source
 						// loop — a type declared locally with
@@ -486,41 +503,42 @@ struct Generate: AsyncParsableCommand {
 						for typeName in Set(additionalMocksToGenerate).sorted()
 							where !typeNamesEmittedBySource.contains(typeName)
 						{
-							let body = typeNameToMockExtensions[typeName]?.sorted().joined(separator: "\n\n") ?? ""
-							writes.append((destination: nil, content: fileHeader + body))
+							writes.append((
+								destination: nil,
+								header: mockFileHeader,
+								body: typeNameToMockExtensions[typeName]?.sorted().joined(separator: "\n\n") ?? "",
+							))
 						}
 						if let mockConfigurationCode = mockResult.mockConfigurationCode,
 						   !mockConfigurationCode.isEmpty
 						{
-							writes.append((destination: nil, content: fileHeader + mockConfigurationCode))
+							writes.append((destination: nil, header: mockFileHeader, body: mockConfigurationCode))
 						}
 					}
 				}
 
 				// ---- Emission ----
 				if let combinedOutput {
-					// Strip the per-entry fileHeader and concat under a
-					// single header. An empty module (no roots, no
-					// mocks) still writes the header-only file so the
-					// build system's declared output is populated.
-					// Every `writes` entry starts with `fileHeader` — strip
-					// it and drop empties so the concat has one header up
-					// top and one blank line between each body.
-					let bodies: [String] = writes.compactMap { write in
-						let body = String(write.content.dropFirst(fileHeader.count))
-						return body.isEmpty ? nil : body
-					}
-					let code = bodies.isEmpty
-						? fileHeader
-						: fileHeader + bodies.joined(separator: "\n\n")
+					// Concat every non-empty body under a single header,
+					// with one blank line between each body. An empty
+					// module (no roots, no mocks) still writes the
+					// header-only file so the build system's declared
+					// output is populated. A file that holds mocks imports
+					// what both the dependency tree and the mocks need.
+					let combinedFileHeader = hasAnyMockGeneration
+						? await generator.dependencyTreeAndMockFileHeader + compileTimeAssertions
+						: fileHeader
+					let bodies = writes.map(\.body).filter { !$0.isEmpty }
+					let code = combinedFileHeader + bodies.joined(separator: "\n\n")
 					// Always write — this flag is used to support Bazel and Buck2, which content-hash their inputs, so a stat-identical re-write costs them nothing. Moreover, these tools require that genrules write the outputs that are expected.
 					try code.write(toPath: combinedOutput)
 				} else {
 					for write in writes {
 						guard let destination = write.destination else { continue }
+						let content = write.header + write.body
 						let existingContent = try? String(contentsOf: destination, encoding: .utf8)
-						if existingContent != write.content {
-							try write.content.write(to: destination, atomically: true, encoding: .utf8)
+						if existingContent != content {
+							try content.write(to: destination, atomically: true, encoding: .utf8)
 						}
 					}
 				}
@@ -583,9 +601,10 @@ struct Generate: AsyncParsableCommand {
 	}
 
 	/// Loads the parsed `ModuleInfo` for this module. When scan ran earlier
-	/// (plugin-setup subprocess of this same build), it persisted the parsed
-	/// result alongside the manifest; reading that JSON is dramatically
-	/// cheaper than re-parsing every Swift file through SwiftParser.
+	/// (plugin-setup subprocess of this same build, or this command's own
+	/// scan for `--output-directory`), it persisted the parsed result
+	/// alongside the manifest; reading that JSON is dramatically cheaper
+	/// than re-parsing every Swift file through SwiftParser.
 	///
 	/// Returns `(module, isFromCache)`. On a cache hit the returned module
 	/// already includes files discovered through
@@ -610,22 +629,26 @@ struct Generate: AsyncParsableCommand {
 	///
 	/// - Parameters:
 	///   - inputFilePaths: The files `generate` was given, which with `include` empty are exactly the CSV's paths.
+	///   - manifestPath: The path of the manifest `generate` runs with: the one passed with `--swift-manifest`, or,
+	///     with `--output-directory`, the one the inline scan just wrote, whose cache spares parsing every file twice.
 	///   - manifest: The manifest `generate` runs with, whose `configurationFilePaths` name the files that can
 	///     declare this module's configuration. In multi-module builds the CSV includes every module's files, so
 	///     several configurations may be present; without a manifest every input file belongs to this module.
 	///   - activeCompilationConditions: The conditions supplied on the command line and through the manifest.
 	private func parsedModule(
 		inputFilePaths: Set<String>,
+		manifestPath: String?,
 		manifest: SafeDIToolManifest?,
 		activeCompilationConditions: Set<String>,
 	) async throws -> (module: ParsedModule, isFromCache: Bool) {
 		if include.isEmpty,
-		   let swiftManifest,
+		   let manifestPath,
+		   let manifest,
 		   let cached = try await loadCachedModule(
-		   	manifestPath: swiftManifest,
+		   	manifestPath: manifestPath,
 		   	inputFilePaths: inputFilePaths,
 		   	// The cached `ModuleInfo` names files as scan recorded them in the manifest.
-		   	configurationFilePaths: Set(manifest?.configurationFilePaths ?? []),
+		   	configurationFilePaths: Set(manifest.configurationFilePaths),
 		   	activeCompilationConditions: activeCompilationConditions,
 		   )
 		{
@@ -817,40 +840,50 @@ struct Generate: AsyncParsableCommand {
 			.joined(separator: "\n")
 	}
 
-	private var moduleInfoURLs: Set<URL> {
+	/// The dependent modules' info files, each listed once, in path order. Their order is the order in which
+	/// their declarations are combined, which decides which duplicate declaration is reported and the order of
+	/// the files with errors that generated code lists. Path order is the order in which a module's own files
+	/// are combined, and it does not change when a build system lists a target's dependencies in another order.
+	private var moduleInfoURLs: [URL] {
 		get throws {
 			if let dependentModuleInfoFilePath {
-				try .init(
+				try Set(
 					String(contentsOfFile: dependentModuleInfoFilePath, encoding: .utf8)
-						.parsedPathListCSV()
-						.map(\.asFileURL),
+						.parsedPathListCSV(),
 				)
+				.sorted()
+				.map(\.asFileURL)
 			} else {
 				[]
 			}
 		}
 	}
 
+	/// The dependent modules' info, in the order of `moduleInfoURLs` whatever order the parallel reads finish in.
 	private func loadSafeDIModuleInfo() async throws -> [ModuleInfo] {
-		try await withThrowingTaskGroup(
-			of: ModuleInfo.self,
+		let moduleInfoURLs = try moduleInfoURLs
+		return try await withThrowingTaskGroup(
+			of: (index: Int, moduleInfo: ModuleInfo).self,
 			returning: [ModuleInfo].self,
 		) { taskGroup in
-			let moduleInfoURLs = try moduleInfoURLs
-			guard !moduleInfoURLs.isEmpty else { return [] }
-			for moduleInfoURL in moduleInfoURLs {
+			for (index, moduleInfoURL) in moduleInfoURLs.enumerated() {
 				taskGroup.addTask {
-					try JSONDecoder().decode(
-						ModuleInfo.self,
-						from: Data(contentsOf: moduleInfoURL),
+					try (
+						index: index,
+						moduleInfo: JSONDecoder().decode(
+							ModuleInfo.self,
+							from: Data(contentsOf: moduleInfoURL),
+						),
 					)
 				}
 			}
-			var allModuleInfo = [ModuleInfo]()
+			var indexedModuleInfo = [(index: Int, moduleInfo: ModuleInfo)]()
 			for try await moduleInfo in taskGroup {
-				allModuleInfo.append(moduleInfo)
+				indexedModuleInfo.append(moduleInfo)
 			}
-			return allModuleInfo
+			return indexedModuleInfo
+				.sorted { $0.index < $1.index }
+				.map(\.moduleInfo)
 		}
 	}
 
