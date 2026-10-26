@@ -494,11 +494,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			orderedChildren.append((childGenerator, propertiesAlreadyGeneratedAtThisScope, childPropertiesGeneratedLater))
 			if !childGenerator.aliasPropertyIsProvidedByEnclosingScope,
 			   let uncreatedAliasProperty = childGenerator.uncreatedAliasProperty(
-				unavailableProperties: childGenerator.unavailableProperties(
-					propertiesAlreadyGeneratedAtThisScope: propertiesAlreadyGeneratedAtThisScope,
-					propertiesGeneratedLater: childPropertiesGeneratedLater,
-				),
-			) {
+			   	unavailableProperties: childGenerator.unavailableProperties(
+			   		propertiesAlreadyGeneratedAtThisScope: propertiesAlreadyGeneratedAtThisScope,
+			   		propertiesGeneratedLater: childPropertiesGeneratedLater,
+			   	),
+			   )
+			{
 				uncreatedAliasProperties.insert(uncreatedAliasProperty)
 				propertiesNotGeneratedBefore.insert(uncreatedAliasProperty.asUnwrappedProperty)
 			}
