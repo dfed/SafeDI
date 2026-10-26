@@ -202,11 +202,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		leadingWhitespace: String = "",
 	) async throws -> String {
 		let generatedCode: String
-		let unavailableProperties = unavailableOptionalProperties
-			.filter {
-				!(propertiesAlreadyGeneratedAtThisScope.contains($0) || propertiesAlreadyGeneratedAtThisScope.contains($0.asUnwrappedProperty))
-			}
-			.union(onlyIfAvailableDependencies(fulfilledByPropertiesGeneratedLater: propertiesGeneratedLater))
+		let unavailableProperties = unavailableProperties(
+			propertiesAlreadyGeneratedAtThisScope: propertiesAlreadyGeneratedAtThisScope,
+			propertiesGeneratedLater: propertiesGeneratedLater,
+		)
 		// Mock code is not cached — the context varies per call site.
 		// Dependency tree code is cached by the properties that are unavailable.
 		switch codeGeneration {
@@ -457,6 +456,38 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				false
 			}
+		}
+	}
+
+	/// The dependencies this scope's construction is passed `nil` for, and, for an
+	/// alias, the fulfilling property whose absence means the alias is not created:
+	/// the `onlyIfAvailable` dependencies `Scope.createScopeGenerator` found
+	/// unavailable that no sibling generated before this scope provides, and those
+	/// an enclosing scope does not generate before this scope.
+	nonisolated private func unavailableProperties(
+		propertiesAlreadyGeneratedAtThisScope: Set<Property>,
+		propertiesGeneratedLater: Set<Property>,
+	) -> Set<Property> {
+		unavailableOptionalProperties
+			.filter {
+				!(propertiesAlreadyGeneratedAtThisScope.contains($0) || propertiesAlreadyGeneratedAtThisScope.contains($0.asUnwrappedProperty))
+			}
+			.union(onlyIfAvailableDependencies(fulfilledByPropertiesGeneratedLater: propertiesGeneratedLater))
+	}
+
+	/// The alias this scope declares when it is an `onlyIfAvailable` alias that is not
+	/// created because its fulfilling property is among `unavailableProperties`, and
+	/// `nil` otherwise.
+	nonisolated private func uncreatedAliasProperty(unavailableProperties: Set<Property>) -> Property? {
+		switch scopeData {
+		case let .alias(property, fulfillingProperty, _, onlyIfAvailable, _):
+			if onlyIfAvailable, unavailableProperties.contains(fulfillingProperty) {
+				property
+			} else {
+				nil
+			}
+		case .root, .property:
+			nil
 		}
 	}
 
@@ -724,8 +755,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 				return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
 			}
-		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
-			if onlyIfAvailable, unavailableProperties.contains(fulfillingProperty) {
+		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, _, declarationReference):
+			if uncreatedAliasProperty(unavailableProperties: unavailableProperties) != nil {
 				return "// Did not create `\(property.asSource)` because `\(fulfillingProperty.asSource)` is unavailable."
 			} else {
 				let aliasDeclaration = if erasedToConcreteExistential {
@@ -1205,7 +1236,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The type's declared dependencies.
 		let dependencies: [Dependency]
 		/// The `onlyIfAvailable` dependencies that are unavailable where this node is
-		/// built, because an enclosing scope builds them after it. They are passed `nil`.
+		/// built, because an ancestor is still building them or an enclosing scope builds
+		/// them after it. They are passed `nil`.
 		let unavailableProperties: Set<Property>
 		/// Whether a compatible user-defined mock method exists for this type.
 		let useMockInitializer: Bool
@@ -1582,7 +1614,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///
 	/// `propertiesGeneratedLater` has the same meaning as in `generateCode`: an
 	/// `onlyIfAvailable` receive of one of these properties is passed `nil`, and an
-	/// `onlyIfAvailable` alias of one is not bound, as in the production tree.
+	/// `onlyIfAvailable` alias of one is not bound, as in the production tree. The
+	/// same holds for a receive of an ancestor that is still being built (see
+	/// `Scope.createScopeGenerator`).
 	private func collectMockParameterTree(
 		insideSendableScope: Bool = false,
 		propertiesGeneratedLater: Set<Property> = [],
@@ -1597,12 +1631,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				receivedOnlyIfAvailableBy: childGenerator,
 				propertiesGeneratedLater: propertiesGeneratedLater,
 			)
-			let childUnavailableProperties = childGenerator.onlyIfAvailableDependencies(
-				fulfilledByPropertiesGeneratedLater: childPropertiesGeneratedLater,
+			let childUnavailableProperties = childGenerator.unavailableProperties(
+				propertiesAlreadyGeneratedAtThisScope: Set(orderedPropertiesToGenerate[0..<index].compactMap(\.property)),
+				propertiesGeneratedLater: childPropertiesGeneratedLater,
 			)
 			if case let .alias(property, fulfillingProperty, _, _, declarationReference) = childGenerator.scopeData {
 				// The dependency this alias binds is passed `nil` instead.
-				guard childUnavailableProperties.isEmpty else { continue }
+				guard childGenerator.uncreatedAliasProperty(unavailableProperties: childUnavailableProperties) == nil else { continue }
 				items.append(.alias(MockAliasNode(
 					propertyLabel: property.label,
 					typeDescription: property.typeDescription,
