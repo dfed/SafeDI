@@ -41,15 +41,19 @@ public struct SafeDIToolManifest: Codable, Sendable {
 	/// The list of input-to-output file mappings for dependency tree code generation.
 	/// Each entry maps a Swift file containing `@Instantiable(isRoot: true)` to the
 	/// output file where the generated `public init()` extension should be written.
+	/// `scan` lists a file that declares a root in any clause of its `#if` blocks, and `generate`
+	/// writes every listed output, without code when no root is active.
 	public var dependencyTreeGeneration: [InputOutputMap]
 
 	/// The list of input-to-output file mappings for mock code generation.
 	/// Each entry maps a Swift file containing `@Instantiable` to the
 	/// output file where the generated `mock()` extension should be written.
+	/// `scan` lists a file that declares `@Instantiable(generateMock: true)` in any clause of its
+	/// `#if` blocks, and `generate` writes every listed output, without code when no such type is active.
 	public var mockGeneration: [InputOutputMap]
 
-	/// Source file paths of `#SafeDIConfiguration` invocations found in the current module.
-	/// Used to scope configuration selection and validate at most one exists.
+	/// Source file paths of `#SafeDIConfiguration` invocations found in the current module, in any
+	/// clause of their `#if` blocks. Used to scope configuration selection.
 	public var configurationFilePaths: [String]
 
 	/// The output file path for the shared mock configuration extensions.
@@ -58,6 +62,8 @@ public struct SafeDIToolManifest: Codable, Sendable {
 
 	/// Type names from other modules to generate additional mocks for.
 	/// These types must be known to the dependency tree via module info.
+	/// `scan` lists those of every configuration in any clause of its `#if` block, and `generate` then
+	/// generates the mocks the active configuration lists and writes the others without code.
 	public var additionalMocksToGenerate: [String]
 
 	/// Swift file paths discovered from `additionalDirectoriesToInclude` in `#SafeDIConfiguration`.
@@ -72,8 +78,8 @@ public struct SafeDIToolManifest: Codable, Sendable {
 
 	/// The current module's own source files, written like `inputFilePath`s: the files whose
 	/// `@Instantiable(generateMock: true)` types `mockGeneration` must list. `generate` rejects such a
-	/// type in a file `mockGeneration` omits, which happens when `scan` evaluated the `#if` block
-	/// declaring it differently. `nil` in a hand-written manifest, where nothing is checked.
+	/// type in a file `mockGeneration` omits, which happens when the file changed after `scan` ran.
+	/// `nil` in a hand-written manifest, where nothing is checked.
 	public var mockScopedFilePaths: [String]?
 
 	/// The directory `scan` resolved input paths against when writing `configurationFilePaths`

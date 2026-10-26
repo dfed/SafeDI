@@ -63,7 +63,7 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 
 		let leafPath = output.fixtures["Leaf.swift"].replacingOccurrences(of: "/", with: "\\/")
 		#expect(try String(contentsOfFile: output.moduleInfoOutputPath, encoding: .utf8) == """
-		{"conditionalCompilationDecisions":[],"configurations":[],"imports":[{"attribute":"","kind":"","moduleName":"Alpha","type":""}],"instantiables":[{"declarationLocation":{"column":1,"filePath":"\(leafPath)","line":3},"declarationType":{"structType":{}},"dependencies":[],"generateMock":false,"initializer":{"arguments":[],"doesThrow":false,"hasGenericParameter":false,"hasGenericWhereClause":false,"isAsync":false,"isOptional":false,"isPublicOrOpen":true},"instantiableTypes":[{"simple":{"generics":[],"name":"Leaf"}}],"isRoot":false,"mockAttributes":"","mockOnly":false,"sourceFilePath":"\(leafPath)"}]}
+		{"conditionalCompilationDecisions":[],"configurations":[],"imports":[{"attribute":"","kind":"","moduleName":"Alpha","type":""}],"instantiables":[{"declarationLocation":{"column":1,"filePath":"\(leafPath)","line":3},"declarationType":{"structType":{}},"dependencies":[],"generateMock":false,"initializer":{"arguments":[],"doesThrow":false,"hasGenericParameter":false,"hasGenericWhereClause":false,"isAsync":false,"isOptional":false,"isPublicOrOpen":true},"instantiableTypes":[{"simple":{"generics":[],"name":"Leaf"}}],"isRoot":false,"mockAttributes":"","mockOnly":false,"sourceFilePath":"\(leafPath)"}],"mockImports":[{"attribute":"","kind":"","moduleName":"Alpha","type":""}]}
 		""")
 	}
 
@@ -79,8 +79,13 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 			let fileURL = directory.appendingPathComponent("Type\(index).swift")
 			// Every tenth file has a syntax error, so the files with errors are listed too.
 			let body = index.isMultiple(of: 10) ? ":::brokenSyntax" : "public init() {}"
+			// `DEBUG` is not active, but mock imports are found as if the mock condition were, so each file's
+			// imports and mock imports differ.
 			try """
 			import Module\(index)
+			#if DEBUG
+			import MockSupport\(index)
+			#endif
 
 			@Instantiable
 			public struct Type\(index): Instantiable {
@@ -200,6 +205,13 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 			ImportStatement(moduleName: "AlphaSupport"),
 			ImportStatement(moduleName: "BravoSupport"),
 		])
+		// Mock imports are found as if the mock condition, `DEBUG`, were active.
+		#expect(moduleInfo.mockImports == [
+			ImportStatement(moduleName: "AlphaDebugSupport"),
+			ImportStatement(moduleName: "AlphaSupport"),
+			ImportStatement(moduleName: "BravoSupport"),
+			ImportStatement(moduleName: "DependencyDebugSupport"),
+		])
 		#expect(moduleInfo.configurations.map(\.sourceFilePath) == [
 			"\(relativeDirectory)/Dependency/SafeDIConfiguration.swift",
 			"\(relativeDirectory)/Module/SafeDIConfiguration.swift",
@@ -236,6 +248,7 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 		)
 
 		#expect(output.moduleInfo.imports == [ImportStatement(moduleName: "Shared")])
+		#expect(output.moduleInfo.mockImports == [ImportStatement(moduleName: "Shared")])
 	}
 
 	@Test
@@ -271,6 +284,10 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 		)
 
 		#expect(output.moduleInfo.imports == [
+			ImportStatement(moduleName: "Alpha"),
+			ImportStatement(moduleName: "Zulu"),
+		])
+		#expect(output.moduleInfo.mockImports == [
 			ImportStatement(moduleName: "Alpha"),
 			ImportStatement(moduleName: "Zulu"),
 		])
