@@ -694,14 +694,47 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if onlyIfAvailable, unavailableProperties.contains(fulfillingProperty) {
 				return "// Did not create `\(property.asSource)` because `\(fulfillingProperty.asSource)` is unavailable."
 			} else {
-				let aliasDeclaration = if erasedToConcreteExistential {
-					"let \(property.label): \(property.typeDescription.asSource) = \(fulfillingProperty.label)"
-				} else {
-					"let \(property.asSource) = \(fulfillingProperty.label)"
-				}
-				return Self.referencingDeclaration(of: aliasDeclaration, by: declarationReference)
+				// The production tree binds an available fulfilling dependency as a non-optional value.
+				return Self.referencingDeclaration(
+					of: Self.aliasDeclaration(
+						of: property,
+						fulfilledBy: fulfillingProperty.label,
+						ofType: fulfillingProperty.typeDescription,
+						erasedToConcreteExistential: erasedToConcreteExistential,
+						fulfillingValueMayBeOptional: false,
+					),
+					by: declarationReference,
+				)
 			}
 		}
+	}
+
+	/// The `let` that binds an alias's `property` to `fulfillingExpression`, a value of
+	/// `fulfillingTypeDescription`. When `erasedToConcreteExistential` is set, the fulfilling
+	/// value is wrapped in a no-label initializer of the property's type, unwrapped when the
+	/// property is optional, as an `@Received(onlyIfAvailable: true)` alias's property must be.
+	///
+	/// Set `fulfillingValueMayBeOptional` when `fulfillingExpression` may name an optional
+	/// binding: a mock binds an `onlyIfAvailable` alias's fulfilling dependency from an
+	/// optional override where no enclosing scope provides it, and from a non-optional
+	/// value where one does. The wrapper is then mapped over the fulfilling value promoted
+	/// to an optional, which compiles either way and binds `nil` when the fulfilling value is `nil`.
+	private static func aliasDeclaration(
+		of property: Property,
+		fulfilledBy fulfillingExpression: String,
+		ofType fulfillingTypeDescription: TypeDescription,
+		erasedToConcreteExistential: Bool,
+		fulfillingValueMayBeOptional: Bool,
+	) -> String {
+		let existentialTypeSource = property.typeDescription.unwrapped.asSource
+		let initializer = if !erasedToConcreteExistential {
+			fulfillingExpression
+		} else if fulfillingValueMayBeOptional {
+			"(\(fulfillingExpression) as \(TypeDescription.optional(fulfillingTypeDescription).asSource)).map { \(existentialTypeSource)($0) }"
+		} else {
+			"\(existentialTypeSource)(\(fulfillingExpression))"
+		}
+		return "let \(property.asSource) = \(initializer)"
 	}
 
 	/// Points `code`, an alias's assignment, at its `@Received` declaration as `declarationReference` says:
@@ -1455,14 +1488,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Represented directly as a tree item so mock emission can interleave
 	/// aliases with property bindings using production's topological order.
 	struct MockAliasNode: Sendable {
-		/// The alias property label (e.g., "userNetworkService").
-		let propertyLabel: String
-		/// The alias property's declared type.
-		let typeDescription: TypeDescription
+		/// The alias property as declared (e.g., `userNetworkService: NetworkService`).
+		let property: Property
+		/// Whether the fulfilling dependency is wrapped in the alias property's type.
+		let erasedToConcreteExistential: Bool
+		/// Whether the alias is received only if its fulfilling dependency is available.
+		let onlyIfAvailable: Bool
 		/// The label of the dependency that fulfills the alias (e.g., "networkService").
 		let fulfillingLabel: String
 		/// The fulfilling dependency's type — used to look up flat-parameter
-		/// disambiguations when the fulfiller is a renamed mock parameter.
+		/// disambiguations when the fulfiller is a renamed mock parameter, and to
+		/// spell the optional an erased `onlyIfAvailable` alias's wrapper is mapped over.
 		let fulfillingTypeDescription: TypeDescription
 		/// How the emitted binding refers to the alias property's declaration.
 		let declarationReference: AliasDeclarationReferences.Reference?
@@ -1566,12 +1602,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let childUnavailableProperties = childGenerator.onlyIfAvailableDependencies(
 				fulfilledByPropertiesGeneratedLater: childPropertiesGeneratedLater,
 			)
-			if case let .alias(property, fulfillingProperty, _, _, declarationReference) = childGenerator.scopeData {
+			if case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference) = childGenerator.scopeData {
 				// The dependency this alias binds is passed `nil` instead.
 				guard childUnavailableProperties.isEmpty else { continue }
 				items.append(.alias(MockAliasNode(
-					propertyLabel: property.label,
-					typeDescription: property.typeDescription,
+					property: property,
+					erasedToConcreteExistential: erasedToConcreteExistential,
+					onlyIfAvailable: onlyIfAvailable,
 					fulfillingLabel: fulfillingProperty.label,
 					fulfillingTypeDescription: fulfillingProperty.typeDescription,
 					declarationReference: declarationReference,
@@ -2187,7 +2224,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let fulfillingTypeSource = alias.fulfillingTypeDescription.asSource
 		let resolvedFulfilling = flatParameterDisambiguationMap[fulfillingLabel]?[fulfillingTypeSource] ?? fulfillingLabel
 		return referencingDeclaration(
-			of: "let \(alias.propertyLabel): \(alias.typeDescription.asSource) = \(resolvedFulfilling)",
+			of: aliasDeclaration(
+				of: alias.property,
+				fulfilledBy: resolvedFulfilling,
+				ofType: alias.fulfillingTypeDescription,
+				erasedToConcreteExistential: alias.erasedToConcreteExistential,
+				fulfillingValueMayBeOptional: alias.onlyIfAvailable,
+			),
 			by: alias.declarationReference,
 		)
 		.split(separator: "\n")
