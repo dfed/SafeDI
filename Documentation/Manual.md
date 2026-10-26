@@ -951,7 +951,7 @@ Found @Instantiable(isRoot: true) in 'Sources/App/DebugRoot.swift', but this fil
 
 Declare roots, types that set `generateMock: true`, and `#SafeDIConfiguration` outside `#if` blocks guarded by bare conditions, or, in a Swift package, guard them only with conditions declared in `swiftSettings`. Every other declaration may sit behind any condition.
 
-### Upgrading
+### Upgrading to 2.1.0 or later
 
 Earlier releases scanned every clause of every `#if` block. Existing projects keep building unless a production declaration sits behind a bare condition. SafeDITool now scans such a block according to the conditions it reads, and the generated code asserts that choice, so a build whose compiler disagrees fails with a message naming the condition. Where SafeDITool reads the build settings, which includes every Xcode project and every Xcode build of a Swift package, it agrees with the compiler. With `swift build` on SwiftPM’s native backend, which is the default through Swift 6.2 (the toolchain in Xcode 26) and is selected with `--build-system native` after that, report the condition in `swiftSettings` as described above, or move the declaration out of the block. In every integration, roots, types that set `generateMock: true`, and `#SafeDIConfiguration` belong outside such blocks; see [Declarations that decide which files SafeDI generates](#declarations-that-decide-which-files-safedi-generates). A mock-only declaration under `#if DEBUG`, and an import it needs under its own `#if DEBUG`, keep working everywhere; see [Declarations that only feed mock generation](#declarations-that-only-feed-mock-generation).
 
