@@ -2098,6 +2098,49 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithManyRootsInCycles_throwsErrorOfFirstRootInTypeOrder() async {
+		// Every one of the 200 roots builds its own cycle. A set of roots iterates in an order
+		// that depends on the process's hash seed, so validating in that order reports
+		// `Root000`'s cycle about once in 200 runs.
+		let swiftFileContent = (0..<200).map { index in
+			let suffix = String(repeating: "0", count: 3 - String(index).count) + String(index)
+			return """
+			@Instantiable(isRoot: true)
+			public struct Root\(suffix): Instantiable {
+			    public init(partner: Partner\(suffix)) { self.partner = partner }
+			    @Instantiated let partner: Partner\(suffix)
+			}
+			@Instantiable
+			public struct Partner\(suffix): Instantiable {
+			    public init(other: Other\(suffix)) { self.other = other }
+			    @Instantiated let other: Other\(suffix)
+			}
+			@Instantiable
+			public struct Other\(suffix): Instantiable {
+			    public init(partner: Partner\(suffix)) { self.partner = partner }
+			    @Instantiated let partner: Partner\(suffix)
+			}
+			"""
+		}.joined(separator: "\n")
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root000.swift"]):14:5: error: Dependency cycle detected: Partner000 -> Other000 -> Partner000
+				\(fixtures["Root000.swift"]):6:1: note: `Partner000` is part of the cycle
+				\(fixtures["Root000.swift"]):11:1: note: `Other000` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [swiftFileContent],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Argument handling error tests
 
 	@Test

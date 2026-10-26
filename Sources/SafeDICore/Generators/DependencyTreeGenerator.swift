@@ -1340,16 +1340,18 @@ public actor DependencyTreeGenerator {
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
 		cyclesOnly: Bool,
 	) throws {
-		var rootScopes = rootInstantiables.compactMap { typeDescriptionToScopeMap[$0] }
+		// Validate in type order, so that the error reported when several trees have one
+		// does not depend on set iteration order.
+		var rootScopes = rootInstantiables.sorted().compactMap { typeDescriptionToScopeMap[$0] }
 		// When checking cycles only (mock validation), also validate non-root types
 		// that have generateMock enabled — they bypass root entry points.
 		if cyclesOnly {
 			let rootInstantiableSet = Set(rootInstantiables)
-			for scope in Set(typeDescriptionToScopeMap.values)
-				where scope.instantiable.generateMock && !rootInstantiableSet.contains(scope.instantiable.concreteInstantiable)
-			{
-				rootScopes.append(scope)
-			}
+			rootScopes += Set(typeDescriptionToScopeMap.values)
+				.filter { scope in
+					scope.instantiable.generateMock && !rootInstantiableSet.contains(scope.instantiable.concreteInstantiable)
+				}
+				.sorted { $0.instantiable.concreteInstantiable < $1.instantiable.concreteInstantiable }
 		}
 		try validatePropertiesAreFulfillable(
 			onRootScopes: rootScopes,
