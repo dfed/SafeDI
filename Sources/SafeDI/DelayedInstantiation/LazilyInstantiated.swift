@@ -32,30 +32,25 @@
 public final class LazilyInstantiated<T> {
 	/// - Parameter instantiator: A closure that returns an instance of `T`. Called at most once.
 	public init(_ instantiator: @escaping () -> T) {
-		state = .uninstantiated(instantiator)
+		self.instantiator = instantiator
 	}
 
 	/// The lazily instantiated instance of `T`.
 	/// The first read creates the instance. Every later read returns that same instance.
 	public var instance: T {
-		switch state {
-		case let .instantiated(instance):
-			return instance
-		case let .uninstantiated(instantiator):
-			state = .instantiating
+		if let instantiatedInstance {
+			return instantiatedInstance
+		} else {
+			guard let instantiator else { fatalError("`\(T.self)` was requested while it was being instantiated. A type created during the instantiation of `\(T.self)` must not read `LazilyInstantiated<\(T.self)>.instance` before that instantiation completes.") }
+			// Forget the instantiator before calling it. A read of `instance` made while it runs then finds
+			// nothing to call, and everything the instantiator captured is released once it returns.
+			self.instantiator = nil
 			let instance = instantiator()
-			state = .instantiated(instance)
+			instantiatedInstance = instance
 			return instance
-		case .instantiating:
-			fatalError("`\(T.self)` was requested while it was being instantiated. A type created during the instantiation of `\(T.self)` must not read `LazilyInstantiated<\(T.self)>.instance` before that instantiation completes.")
 		}
 	}
 
-	private enum State {
-		case uninstantiated(() -> T)
-		case instantiating
-		case instantiated(T)
-	}
-
-	private var state: State
+	private var instantiator: (() -> T)?
+	private var instantiatedInstance: T?
 }
