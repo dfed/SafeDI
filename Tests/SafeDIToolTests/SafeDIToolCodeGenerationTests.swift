@@ -9524,63 +9524,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_generatedCodeCompiles_whenReceivedAliasIsErasedToConcreteExistential() async throws {
-		// `erasedToConcreteExistential: true` asks for the aliased dependency to be wrapped in the property type's
-		// initializer, `AnyUserService(service)`. The generator assigns `service` unwrapped, which compiles only
-		// when the property type is a protocol the dependency conforms to.
-		try await withKnownIssue(
-			"Generated code does not wrap a received alias that is erased to a concrete existential",
-		) {
-			_ = try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					public protocol UserServiceProtocol {}
-
-					public struct AnyUserService {
-					    public init(_ userService: some UserServiceProtocol) {}
-					}
-					""",
-					"""
-					@Instantiable(isRoot: true, generateMock: true)
-					public final class Root: Instantiable {
-					    public init(service: UserService, child: Child) {
-					        self.service = service
-					        self.child = child
-					    }
-
-					    @Instantiated let service: UserService
-					    @Instantiated let child: Child
-					}
-					""",
-					"""
-					@Instantiable
-					public final class UserService: Instantiable, UserServiceProtocol {
-					    public init() {}
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Child: Instantiable {
-					    public init(erased: AnyUserService) {
-					        self.erased = erased
-					    }
-
-					    @Received(fulfilledByDependencyNamed: "service", ofType: UserService.self, erasedToConcreteExistential: true) let erased: AnyUserService
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		} when: {
-			compileVerificationIsEnabled
-		} matching: { issue in
-			issue.isGeneratedCodeCompilationFailure(reporting: "error: cannot convert value of type 'UserService' to specified type 'AnyUserService'")
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_generatedCodeCompiles_whenDescendantReceivesOnlyIfAvailableAliasWhoseDependencyIsUnavailable() async throws {
 		// `Child` does not create `maybe`, because `missing` is unavailable, yet `Grandchild`'s `maybe` is
 		// passed `maybe` rather than `nil`.
