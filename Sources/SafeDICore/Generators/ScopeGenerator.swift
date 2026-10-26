@@ -53,30 +53,34 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		self.property = property
 		self.propertiesToGenerate = propertiesToGenerate
-		propertiesToDeclare = Set(propertiesToGenerate.compactMap(\.property))
+		let propertiesToDeclare = Set(propertiesToGenerate.compactMap(\.property))
+		self.propertiesToDeclare = propertiesToDeclare
 		self.unavailableOptionalProperties = unavailableOptionalProperties
+		let forwardedProperties = scopeData.forwardedProperties
+		/// The properties a child requires be passed in that this scope must itself receive.
+		func receivedFromAncestors(_ childReceivedProperties: Set<Property>) -> Set<Property> {
+			childReceivedProperties
+				// Minus the properties we declare.
+				.subtracting(propertiesToDeclare)
+				// Minus optional properties whose unwrapped form we declare.
+				// This handles the case where a non-optional version is promoted
+				// to satisfy both required and onlyIfAvailable receivers.
+				.filter { property in
+					!property.typeDescription.isOptional
+						|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
+				}
+				// Minus the properties we forward.
+				.subtracting(forwardedProperties)
+		}
+		// All the properties our children require be passed in, unioned with the
+		// properties we require to fulfill our own dependencies.
 		receivedProperties = Set(
-			propertiesToGenerate.flatMap { [propertiesToDeclare, scopeData] propertyToGenerate in
-				// All the properties this child and its children require be passed in.
-				propertyToGenerate.receivedProperties
-					// Minus the properties we declare.
-					.subtracting(propertiesToDeclare)
-					// Minus optional properties whose unwrapped form we declare.
-					// This handles the case where a non-optional version is promoted
-					// to satisfy both required and onlyIfAvailable receivers.
-					.filter { property in
-						!property.typeDescription.isOptional
-							|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
-					}
-					// Minus the properties we forward.
-					.subtracting(scopeData.forwardedProperties)
-			},
+			propertiesToGenerate.flatMap { receivedFromAncestors($0.receivedProperties) },
 		)
-		// Unioned with the properties we require to fulfill our own dependencies.
 		.union(
 			instantiable
 				.dependencies
-				.compactMap { [propertiesToDeclare] in
+				.compactMap {
 					switch $0.source {
 					case .instantiated, .forwarded:
 						nil
@@ -90,17 +94,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 				},
 		)
+		let requiredReceivedProperties = Set(
+			propertiesToGenerate.flatMap { receivedFromAncestors($0.requiredReceivedProperties) },
+		)
+		.union(
+			instantiable
+				.dependencies
+				.compactMap {
+					switch $0.source {
+					case .instantiated, .forwarded:
+						nil
+					case let .received(onlyIfAvailable):
+						onlyIfAvailable ? nil : $0.property
+					case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+						onlyIfAvailable || propertiesToDeclare.contains(fulfillingProperty) ? nil : fulfillingProperty
+					}
+				},
+		)
+		self.requiredReceivedProperties = requiredReceivedProperties
 		onlyIfAvailableUnwrappedReceivedProperties = Set(
-			propertiesToGenerate.flatMap { [propertiesToDeclare, scopeData] propertyToGenerate in
+			propertiesToGenerate.flatMap { propertyToGenerate in
 				propertyToGenerate.onlyIfAvailableUnwrappedReceivedProperties
 					.subtracting(propertiesToDeclare)
-					.subtracting(scopeData.forwardedProperties)
+					.subtracting(forwardedProperties)
 			},
 		)
 		.union(
 			instantiable
 				.dependencies
-				.compactMap { [propertiesToDeclare] in
+				.compactMap {
 					switch $0.source {
 					case .instantiated, .forwarded:
 						nil
@@ -121,6 +143,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 				},
 		)
+		// A property some receiver requires is required, even where others receive
+		// it only if available.
+		.subtracting(requiredReceivedProperties.map(\.asUnwrappedProperty))
 	}
 
 	init(
@@ -139,10 +164,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			declarationReference: declarationReference,
 		)
 		receivedProperties = [fulfillingProperty]
-		onlyIfAvailableUnwrappedReceivedProperties = if onlyIfAvailable {
-			[fulfillingProperty.asUnwrappedProperty]
+		if onlyIfAvailable {
+			requiredReceivedProperties = []
+			onlyIfAvailableUnwrappedReceivedProperties = [fulfillingProperty.asUnwrappedProperty]
 		} else {
-			[]
+			requiredReceivedProperties = [fulfillingProperty]
+			onlyIfAvailableUnwrappedReceivedProperties = []
 		}
 		description = property.asSource
 		propertiesToGenerate = []
@@ -306,8 +333,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	private let scopeData: ScopeData
-	/// Unwrapped versions of received properties from transitive `@Received(onlyIfAvailable: true)` dependencies.
-	/// Used by mock generation to identify dependencies that should become optional mock parameters (no guaranteed default).
+	/// The received properties that some receiver in this subtree requires — a `@Received`
+	/// dependency, or the fulfilling property of an aliased one, that is not `onlyIfAvailable`.
+	private let requiredReceivedProperties: Set<Property>
+	/// Unwrapped versions of the received properties that every receiver in this subtree receives
+	/// `@Received(onlyIfAvailable: true)`, directly or through an alias. A property some receiver
+	/// requires is excluded: it must be built before this subtree, and a mock must be given it.
+	/// Used to order children and by mock generation to identify dependencies that should become
+	/// optional mock parameters (no guaranteed default).
 	let onlyIfAvailableUnwrappedReceivedProperties: Set<Property>
 	/// Received properties that are optional and not created by a parent.
 	private let unavailableOptionalProperties: Set<Property>
@@ -328,7 +361,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// follows the siblings it depends on.
 	///
 	/// A child depends on a sibling when the child's subtree receives the sibling.
-	/// A required receive must be honored. A `@Received(onlyIfAvailable: true)`
+	/// A required receive must be honored, and the subtree's receive is required when
+	/// any receiver in it requires the sibling. A `@Received(onlyIfAvailable: true)`
 	/// receive is honored only when it does not close a cycle among the siblings —
 	/// e.g. when `b`'s subtree receives `c` only if available but `c` receives `b`,
 	/// `c` cannot be built before `b`. A child whose `onlyIfAvailable` receive is
