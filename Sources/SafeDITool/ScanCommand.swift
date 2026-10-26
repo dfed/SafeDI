@@ -72,6 +72,7 @@ func performScan(
 		.parsedPathListCSV()
 
 	let directoryBaseURL = projectRootURL.appendingPathComponent("", isDirectory: true)
+	let projectRootRelativePath = RelativePathBase(projectRootURL)
 
 	let allSwiftFiles = inputFilePaths.map {
 		URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL
@@ -140,9 +141,11 @@ func performScan(
 		guard let sourceFilePath = instantiable.sourceFilePath else { return nil }
 		return URL(fileURLWithPath: sourceFilePath, relativeTo: directoryBaseURL).standardizedFileURL
 	}
-	let sortedRootFileURLs = rootFileURLs.sorted {
-		relativePath(for: $0, relativeTo: projectRootURL) < relativePath(for: $1, relativeTo: projectRootURL)
-	}
+	// Each URL is already standardized, and its relative path is computed once rather than in every comparison.
+	let sortedRootFileURLs = rootFileURLs
+		.map { (url: $0, relativePath: projectRootRelativePath.relativePath(forStandardizedPath: $0.path)) }
+		.sorted { $0.relativePath < $1.relativePath }
+		.map(\.url)
 	// Deduplicate: multiple roots in the same file should only produce one output entry.
 	let uniqueRootFileURLs = sortedRootFileURLs.reduce(into: [URL]()) { result, url in
 		if result.last != url {
@@ -157,9 +160,11 @@ func performScan(
 		guard let sourceFilePath = instantiable.sourceFilePath else { return nil }
 		return URL(fileURLWithPath: sourceFilePath, relativeTo: directoryBaseURL).standardizedFileURL
 	}
-	let sortedMockFileURLs = mockFileURLs.sorted {
-		relativePath(for: $0, relativeTo: projectRootURL) < relativePath(for: $1, relativeTo: projectRootURL)
-	}
+	// Each URL is already standardized, and its relative path is computed once rather than in every comparison.
+	let sortedMockFileURLs = mockFileURLs
+		.map { (url: $0, relativePath: projectRootRelativePath.relativePath(forStandardizedPath: $0.path)) }
+		.sorted { $0.relativePath < $1.relativePath }
+		.map(\.url)
 	let uniqueMockFileURLs = sortedMockFileURLs.reduce(into: [URL]()) { result, url in
 		if result.last != url {
 			result.append(url)
@@ -182,7 +187,7 @@ func performScan(
 
 	// Compute configuration file paths (relative to project root, matching Generate's expectations).
 	let configurationFilePaths = mockScopedConfigurations.compactMap(\.sourceFilePath).map { path in
-		relativePath(for: URL(fileURLWithPath: path, relativeTo: directoryBaseURL).standardizedFileURL, relativeTo: projectRootURL)
+		projectRootRelativePath.relativePath(forStandardizedPath: URL(fileURLWithPath: path, relativeTo: directoryBaseURL).standardizedFileURL.path)
 	}
 
 	// Determine mock configuration output file path.
@@ -199,7 +204,7 @@ func performScan(
 	let manifest = SafeDIToolManifest(
 		dependencyTreeGeneration: zip(uniqueRootFileURLs, rootOutputNames).map { inputURL, outputFileName in
 			.init(
-				inputFilePath: relativePath(for: inputURL, relativeTo: projectRootURL),
+				inputFilePath: projectRootRelativePath.relativePath(forStandardizedPath: inputURL.path),
 				outputFilePath: outputDirectoryURL
 					.appendingPathComponent(outputFileName)
 					.path,
@@ -207,7 +212,7 @@ func performScan(
 		},
 		mockGeneration: zip(uniqueMockFileURLs, mockOutputNames).map { inputURL, outputFileName in
 			.init(
-				inputFilePath: relativePath(for: inputURL, relativeTo: projectRootURL),
+				inputFilePath: projectRootRelativePath.relativePath(forStandardizedPath: inputURL.path),
 				outputFilePath: outputDirectoryURL
 					.appendingPathComponent(outputFileName)
 					.path,
@@ -219,7 +224,7 @@ func performScan(
 		additionalInputFiles: additionalInputFiles,
 		activeCompilationConditions: activeCompilationConditions.sorted(),
 		mockScopedFilePaths: mockScopedFilePaths.map { filePath in
-			relativePath(for: URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL, relativeTo: projectRootURL)
+			projectRootRelativePath.relativePath(forStandardizedPath: URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL.path)
 		}.sorted(),
 		projectRoot: projectRootURL.path,
 	)
@@ -234,9 +239,8 @@ func performScan(
 	// manifest's `inputFilePath` (also project-relative) and what Generate
 	// would compute when parsing fresh from the same CSV.
 	func normalized(_ fileScan: FileScan) -> FileScan {
-		fileScan.relocated(to: relativePath(
-			for: URL(fileURLWithPath: fileScan.path, relativeTo: directoryBaseURL).standardizedFileURL,
-			relativeTo: projectRootURL,
+		fileScan.relocated(to: projectRootRelativePath.relativePath(
+			forStandardizedPath: URL(fileURLWithPath: fileScan.path, relativeTo: directoryBaseURL).standardizedFileURL.path,
 		))
 	}
 	func cached(_ fileScan: FileScan) -> CachedFileScan {
@@ -252,10 +256,9 @@ func performScan(
 	// regardless of its CWD — `FileManager.attributesOfItem(atPath:)`
 	// resolves relative paths against the process's CWD, which would
 	// silently fail and invalidate the cache if `generate` runs from a
-	// different directory than `scan`.
-	let absoluteCSVPaths = allFilePaths.map { filePath in
-		URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL.path
-	}.sorted()
+	// different directory than `scan`. The input URLs are already standardized, so
+	// their paths are these absolute paths without resolving every input again.
+	let absoluteCSVPaths = allSwiftFiles.map(\.path)
 	let allScannedFilePaths = (Set(absoluteCSVPaths).union(
 		// `additionalInputFiles` is already normalized to `.standardizedFileURL.path`.
 		Set(additionalInputFiles),
