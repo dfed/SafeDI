@@ -340,6 +340,82 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		}
 	}
 
+	// The time limit only turns a hang into a failure; see
+	// `mock_generatesWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
+	@Test(.timeLimit(.minutes(10)))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsReceivedCycleErrorWithinTimeLimit_whenEveryReceivedInstantiatorPathFromEarlierSiblingsEndsInReceivedCycle() async {
+		// Each layer holds a Left and a Right service that both receive Instantiators of the two
+		// services of the next layer, and the last layer's services receive an Instantiator of Ping,
+		// which receives one of Pong, which receives one of Ping. Feature's mock promotes every one of
+		// those Instantiators, so the number of received paths from any layer to that cycle doubles
+		// with each layer.
+		let layerCount = 40
+		let layerFiles = (0..<layerCount).flatMap { layer in
+			let receivedProperties = layer == layerCount - 1
+				? ["pingBuilder: Instantiator<Ping>"]
+				: ["left\(layer + 1)Builder: Instantiator<Left\(layer + 1)>", "right\(layer + 1)Builder: Instantiator<Right\(layer + 1)>"]
+			return ["Left\(layer)", "Right\(layer)"].map { type in
+				"""
+				@Instantiable
+				public struct \(type): Instantiable {
+				    public init(\(receivedProperties.joined(separator: ", "))) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				\(receivedProperties.map { "    @Received let \($0)" }.joined(separator: "\n"))
+				}
+				"""
+			}
+		}
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Pong.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated pingBuilder: Instantiator<Ping> -> @Received pongBuilder: Instantiator<Pong> -> @Received pingBuilder: Instantiator<Ping>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct Feature: Instantiable {
+					    public init(left0Builder: Instantiator<Left0>, right0Builder: Instantiator<Right0>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let left0Builder: Instantiator<Left0>
+					    @Instantiated let right0Builder: Instantiator<Right0>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Ping: Instantiable {
+					    public init(pongBuilder: Instantiator<Pong>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let pongBuilder: Instantiator<Pong>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Pong: Instantiable {
+					    public init(pingBuilder: Instantiator<Ping>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let pingBuilder: Instantiator<Ping>
+					}
+					""",
+				] + layerFiles,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				skipCompileVerification: true,
+			)
+		}
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenUnfulfillableInstantiatedPropertyExists() async {
@@ -554,6 +630,192 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 					public struct B: Instantiable {
 					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
 					    @Received let aBuilder: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsReceivedCycleError_whenSiblingInstantiatorsOfMockRootReceiveEachOther() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct Parent: Instantiable {
+					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
+					        self.aBuilder = aBuilder
+					        self.bBuilder = bBuilder
+					    }
+
+					    @Instantiated let aBuilder: Instantiator<A>
+					    @Instantiated let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct A: Instantiable {
+					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+					    @Received let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct B: Instantiable {
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					    @Received let aBuilder: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsReceivedCycleError_whenPromotedInstantiatorsReceiveEachOther() async {
+		// `A`'s mock promotes the `bBuilder` it receives, and then the `aBuilder` that `B` receives.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct A: Instantiable {
+					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+					    @Received let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct B: Instantiable {
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					    @Received let aBuilder: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsReceivedCycleError_whenSiblingInstantiatorsOfPromotedScopeReceiveEachOther() async {
+		// Only `Top`'s mock reaches `Holder`, by promoting the `holder` that `Top` receives.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct Top: Instantiable {
+					    public init(holder: Holder) { self.holder = holder }
+					    @Received let holder: Holder
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Holder: Instantiable {
+					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
+					        self.aBuilder = aBuilder
+					        self.bBuilder = bBuilder
+					    }
+
+					    @Instantiated let aBuilder: Instantiator<A>
+					    @Instantiated let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct A: Instantiable {
+					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+					    @Received let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct B: Instantiable {
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					    @Received let aBuilder: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsReceivedCycleError_whenConstantSiblingsOfPromotedScopeReceiveEachOther() async {
+		// No validation walks the trees of promoted scopes, so the received cycle in `Holder`, which
+		// only `Top`'s mock reaches, is reported by the check for children that require one another.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated a: A -> @Received b: B -> @Received a: A
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct Top: Instantiable {
+					    public init(holder: Holder) { self.holder = holder }
+					    @Received let holder: Holder
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Holder: Instantiable {
+					    public init(a: A, b: B) {
+					        self.a = a
+					        self.b = b
+					    }
+
+					    @Instantiated let a: A
+					    @Instantiated let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public struct A: Instantiable {
+					    public init(b: B) { self.b = b }
+					    @Received let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public struct B: Instantiable {
+					    public init(a: A) { self.a = a }
+					    @Received let a: A
 					}
 					""",
 				],
