@@ -211,14 +211,13 @@ func executeSafeDIToolTest(
 			filesToDelete.append(scanCSV)
 
 			if let swiftFileContentAfterScan {
-				// Rewrite each fixture and date it before scan's cache, so `generate` reads the new content only
-				// when it parses afresh: the generated code shows whether `generate` reused scan's parse.
+				// Rewrite each fixture but restore the modification time scan recorded, so the freshness check
+				// cannot see the edit and `generate` reads the new content only when it parses afresh for
+				// another reason: the generated code shows whether `generate` reused scan's parse.
 				for (fileURL, content) in zip(contentNamedSwiftFiles, swiftFileContentAfterScan) {
+					let scannedModificationTime = try FileModificationTime(ofItemAtPath: fileURL.path)
 					try resolvingDirectoryPlaceholders(in: content).write(to: fileURL, atomically: true, encoding: .utf8)
-					try FileManager.default.setAttributes(
-						[.modificationDate: Date(timeIntervalSince1970: 0)],
-						ofItemAtPath: fileURL.path,
-					)
+					try scannedModificationTime.apply(toItemAtPath: fileURL.path)
 				}
 				filesToDelete.append(scannedModuleInfoURL(forManifestPath: manifestFile.relativePath))
 			}

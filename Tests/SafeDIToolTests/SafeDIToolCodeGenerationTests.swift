@@ -8785,7 +8785,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	mutating func run_bypassesStaleCachedModuleInfo_whenSourceEditedAfterScan() async throws {
 		// `scan` writes a cached ModuleInfo alongside its manifest.
 		// `generate`'s cache-read path must bypass that cache when any
-		// source file's mtime exceeds the cache mtime — otherwise a
+		// source file's modification time differs from the one scan recorded — otherwise a
 		// manual `generate --swift-manifest` after source edits would
 		// emit output derived from stale parse results.
 		//
@@ -8820,7 +8820,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			"--manifest-file", manifestFile.path,
 		])).run()
 
-		// Touch the source AFTER scan so its mtime postdates the cache.
+		// Touch the source AFTER scan so its modification time differs from the one scan recorded.
 		try FileManager.default.setAttributes(
 			[.modificationDate: Date().addingTimeInterval(60)],
 			ofItemAtPath: rootFile.path,
@@ -8847,7 +8847,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_consumesCachedModuleInfo_whenScanAndGenerateShareManifest() async throws {
 		// Happy path: scan persists a cache sidecar, generate consumes it.
-		// All freshness checks (CSV set, additional-directory set, mtime
+		// All freshness checks (CSV set, additional-directory set, modification-time
 		// loop) pass, so `parsedModule()` takes the cache branch and skips
 		// re-parsing the Swift source files. We verify scan wrote the cache
 		// file at the expected location and that generate produces the
@@ -9011,8 +9011,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_bypassesCachedModuleInfo_whenScannedInputFileMissingFromDisk() async throws {
 		// Scan records every input path it observed; if one of those files
-		// has been deleted before generate runs, `attributesOfItem` fails
-		// and the cache must bypass. The signal: a cache hit would skip
+		// has been deleted before generate runs, it has no modification
+		// times and the cache must bypass. The signal: a cache hit would skip
 		// parsing entirely and return `ManifestError.noRootFound` because
 		// the cached module (absolute paths) wouldn't match the manifest's
 		// relative `inputFilePath` once the file is gone. Instead the
@@ -9046,9 +9046,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		])).run()
 
 		// Delete the source after scan so its path is in the cache's
-		// scannedInputPaths but `attributesOfItem` fails for it. CSV is
-		// unchanged so the set-match check passes; the mtime loop's
-		// missing-file branch is what forces the bypass.
+		// scannedInputs but `lstat` fails for it. CSV is unchanged so the
+		// set-match check passes; a missing file has no modification times,
+		// which differ from the recorded ones, and that forces the bypass.
 		try FileManager.default.removeItem(at: rootFile)
 
 		// Fresh parse hits the missing file and throws a Foundation

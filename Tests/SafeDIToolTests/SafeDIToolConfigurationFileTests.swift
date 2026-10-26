@@ -660,13 +660,12 @@ struct SafeDIToolConfigurationFileTests: ~Copyable {
 			"--manifest-file", manifestFile.path,
 		]).run()
 
-		// Remove the configuration but backdate the file, so only scan's cache still holds the configuration:
-		// a warning proves `generate` reported it from the cached module rather than from a fresh parse.
+		// Remove the configuration but restore the modification time scan recorded, so only scan's cache
+		// still holds the configuration: a warning proves `generate` reported it from the cached module
+		// rather than from a fresh parse.
+		let scannedModificationTime = try FileModificationTime(ofItemAtPath: configurationFile.path)
 		try "".write(to: configurationFile, atomically: true, encoding: .utf8)
-		try FileManager.default.setAttributes(
-			[.modificationDate: Date(timeIntervalSince1970: 0)],
-			ofItemAtPath: configurationFile.path,
-		)
+		try scannedModificationTime.apply(toItemAtPath: configurationFile.path)
 
 		let warnings = try await Generate.parse([
 			swiftFileCSV.path,
