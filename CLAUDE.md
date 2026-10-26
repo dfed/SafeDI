@@ -90,6 +90,7 @@ Key consequence: if `throwIfInvalidCycle` accepts a cycle, every hop in it is no
 - `TypeDescription.simplified` strips wrappers for cleaner suffixes, with fallback on collision
 - Closure-typed defaults use `@escaping T = default` (not `@autoclosure`)
 - `#SafeDIConfiguration` is always read from the current module only, never dependent modules
+- **Received erased types.** `generateMockCode`'s `erasedToConcreteTypeMap` lets a mock root promote a received type no `@Instantiable` fulfills (e.g. `AnyService`) by building the concrete type an `@Instantiated(fulfilledByType:, erasedToConcreteExistential: true)` property of that exact property type names, in any module. It is keyed by the full property type, because a receiver matches by type, so an `ErasedInstantiator<(), AnyService>` erasure never counts toward `AnyService`. A type that erasures give more than one concrete type is left out of the map, and its receivers become required flat `mock()` parameters: picking one would depend on dictionary iteration order. Production never consults the map — production receivers get the value from an ancestor.
 - When a mockOnly and a non-mockOnly coexist for the same type, `resolveSafeDIFulfilledTypes` merges them. The `(false, true)` and `(true, false)` branches handle opposite processing orders. Any cross-cutting concern (tracking sets, stale clearing) must be applied to both branches or order-dependent bugs will surface only on CI.
 
 ### Validation boundaries

@@ -100,18 +100,24 @@ public actor DependencyTreeGenerator {
 	) async throws -> MockGenerationResult {
 		// Build a map of erased wrapper types → concrete fulfilling types.
 		// This lets mocks construct types like AnyUserService(DefaultUserService())
-		// even when the erased type isn't directly @Instantiable.
-		var erasedToConcreteTypeMap = [TypeDescription: TypeDescription]()
-		for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
-			for dependency in instantiable.dependencies {
-				if case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential) = dependency.source,
-				   erasedToConcreteExistential,
-				   let concreteType = fulfillingTypeDescription?.asInstantiatedType
-				{
-					erasedToConcreteTypeMap[dependency.property.typeDescription] = concreteType
+		// even when the erased type isn't directly @Instantiable. An erased type
+		// that declarations erase different concrete types to is left out: nothing
+		// says which one a mock should build, so a received property of that type
+		// stays a required mock parameter.
+		let erasedToConcreteTypeMap = typeDescriptionToFulfillingInstantiableMap.values
+			.reduce(into: [TypeDescription: Set<TypeDescription>]()) { partialResult, instantiable in
+				for dependency in instantiable.dependencies {
+					if case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential) = dependency.source,
+					   erasedToConcreteExistential,
+					   let concreteType = fulfillingTypeDescription?.asInstantiatedType
+					{
+						partialResult[dependency.property.typeDescription, default: []].insert(concreteType)
+					}
 				}
 			}
-		}
+			.compactMapValues { concreteTypes in
+				concreteTypes.count == 1 ? concreteTypes.first : nil
+			}
 
 		// Build mock scope mapping — like production but includes all types and
 		// promotes received dependencies as instantiated children.
