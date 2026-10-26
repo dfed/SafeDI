@@ -751,12 +751,14 @@ public actor DependencyTreeGenerator {
 	) throws -> ScopeGenerator {
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
-		// (via ObjectIdentifier) so each scope is visited at most once — O(total_scopes).
-		var cache = [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)]()
-		let (initialReceived, initialOnlyIfAvailable) = Self.collectReceivedProperties(
+		// (via ObjectIdentifier) so each scope outside a cycle is visited at most once.
+		var cache = ReceivedPropertiesCache()
+		let initialReceivedProperties = Self.collectReceivedProperties(
 			from: scope,
 			cache: &cache,
 		)
+		let initialReceived = initialReceivedProperties.received
+		let initialOnlyIfAvailable = initialReceivedProperties.onlyIfAvailable
 
 		// Worklist: promoted scopes may introduce additional transitive received properties.
 		// Only required properties are walked: a property received only if available becomes
@@ -781,10 +783,12 @@ public actor DependencyTreeGenerator {
 			      visitedTypes.insert(dependencyType).inserted
 			else { continue }
 
-			let (scopeReceived, scopeOnlyIfAvailable) = Self.collectReceivedProperties(
+			let scopeReceivedProperties = Self.collectReceivedProperties(
 				from: promotedScope,
 				cache: &cache,
 			)
+			let scopeReceived = scopeReceivedProperties.received
+			let scopeOnlyIfAvailable = scopeReceivedProperties.onlyIfAvailable
 			allReceived.formUnion(scopeReceived)
 			allOnlyIfAvailable.formUnion(scopeOnlyIfAvailable)
 			for newProperty in scopeReceived.subtracting(scopeOnlyIfAvailable) where allRequired.insert(newProperty).inserted {
@@ -919,7 +923,7 @@ public actor DependencyTreeGenerator {
 	/// ordered so that each is built after the siblings it receives.
 	private static func childrenRequireEachOther(
 		in scope: Scope,
-		cache: inout [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)],
+		cache: inout ReceivedPropertiesCache,
 	) -> Bool {
 		var children = [(property: Property, scope: Scope)]()
 		for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
@@ -930,9 +934,9 @@ public actor DependencyTreeGenerator {
 			childIndexByProperty[child.property] = index
 		}
 		let requiredSiblingIndices = children.map { child in
-			let (received, onlyIfAvailable) = collectReceivedProperties(from: child.scope, cache: &cache)
-			return received.compactMap { property in
-				property != child.property && !onlyIfAvailable.contains(property)
+			let receivedProperties = collectReceivedProperties(from: child.scope, cache: &cache)
+			return receivedProperties.received.compactMap { property in
+				property != child.property && !receivedProperties.onlyIfAvailable.contains(property)
 					? childIndexByProperty[property]
 					: nil
 			}
@@ -1006,22 +1010,68 @@ public actor DependencyTreeGenerator {
 		// Fully-lazy cycle (Instantiator entry, not received) — valid, no error.
 	}
 
+	/// What a scope's subtree receives from its ancestors.
+	private struct ReceivedProperties {
+		/// Every property the subtree needs from an ancestor.
+		let received: Set<Property>
+		/// Those of `received` that every receiver in the subtree receives only if available.
+		/// A property some receiver requires is not in `onlyIfAvailable`.
+		let onlyIfAvailable: Set<Property>
+	}
+
+	/// Memoizes `collectReceivedProperties` for one mock root.
+	///
+	/// A walk that re-enters a scope whose own walk is unfinished – a cycle of `Instantiator`s – takes
+	/// nothing from it, since that scope's walk accounts for what it receives. A result computed that
+	/// way lacks what the unfinished scope receives, so it is reused only until that scope's walk
+	/// finishes. Reusing it later, from a subtree that reaches the cycle another way, would drop what
+	/// the cycle receives from that subtree's view, and which subtree walks the cycle first can follow
+	/// set iteration order.
+	private struct ReceivedPropertiesCache {
+		/// Results that lack nothing, which are the same however the scope is reached.
+		var complete = [ObjectIdentifier: ReceivedProperties]()
+		/// The depth of each scope whose walk is unfinished.
+		var unfinishedWalkDepths = [ObjectIdentifier: Int]()
+		/// Results that lack what a scope whose walk is unfinished receives.
+		var incomplete = [ObjectIdentifier: WalkedReceivedProperties]()
+	}
+
+	/// A scope's received properties as one walk found them.
+	private struct WalkedReceivedProperties {
+		let receivedProperties: ReceivedProperties
+		/// The depth of the shallowest scope whose walk was unfinished and whose received properties
+		/// `receivedProperties` therefore lacks, or `nil` when it lacks none.
+		let shallowestUnfinishedWalkDepth: Int?
+	}
+
 	/// Mirrors ScopeGenerator's `receivedProperties` and `onlyIfAvailableUnwrappedReceivedProperties`
 	/// computation but operates on Scope objects directly, with memoization for O(1) revisits.
-	///
-	/// - Returns: `received`, every property the subtree needs from an ancestor, and
-	///   `onlyIfAvailable`, those of them that every receiver in the subtree receives only if
-	///   available. A property some receiver requires is not in `onlyIfAvailable`.
 	private static func collectReceivedProperties(
 		from scope: Scope,
-		cache: inout [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)],
-	) -> (received: Set<Property>, onlyIfAvailable: Set<Property>) {
+		cache: inout ReceivedPropertiesCache,
+	) -> ReceivedProperties {
+		walkReceivedProperties(from: scope, cache: &cache).receivedProperties
+	}
+
+	private static func walkReceivedProperties(
+		from scope: Scope,
+		cache: inout ReceivedPropertiesCache,
+	) -> WalkedReceivedProperties {
 		let id = ObjectIdentifier(scope)
-		if let cached = cache[id] {
-			return cached
+		if let complete = cache.complete[id] {
+			return WalkedReceivedProperties(receivedProperties: complete, shallowestUnfinishedWalkDepth: nil)
+		} else if let unfinishedWalkDepth = cache.unfinishedWalkDepths[id] {
+			// A cycle re-entered this scope. Its unfinished walk accounts for what it receives.
+			return WalkedReceivedProperties(
+				receivedProperties: ReceivedProperties(received: [], onlyIfAvailable: []),
+				shallowestUnfinishedWalkDepth: unfinishedWalkDepth,
+			)
+		} else if let incomplete = cache.incomplete[id] {
+			return incomplete
 		}
-		// Cycle sentinel — re-entrant calls return empty (cycles contribute no new received).
-		cache[id] = ([], [])
+		let walkDepth = cache.unfinishedWalkDepths.count
+		cache.unfinishedWalkDepths[id] = walkDepth
+		var shallowestUnfinishedWalkDepth: Int?
 
 		// Properties declared at this scope (instantiated/aliased children).
 		let propertiesToDeclare = Set(scope.propertiesToGenerate.compactMap { propertyToGenerate -> Property? in
@@ -1050,10 +1100,13 @@ public actor DependencyTreeGenerator {
 		// = [fulfillingProperty], but the own-dependency union unconditionally adds the same
 		// fulfillingProperty, making the child-path subtraction/filter redundant.
 		for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
-			let (childReceived, childOnlyIfAvailable) = collectReceivedProperties(
+			let walkedChild = walkReceivedProperties(
 				from: childScope,
 				cache: &cache,
 			)
+			shallowestUnfinishedWalkDepth = [shallowestUnfinishedWalkDepth, walkedChild.shallowestUnfinishedWalkDepth].compactMap(\.self).min()
+			let childReceived = walkedChild.receivedProperties.received
+			let childOnlyIfAvailable = walkedChild.receivedProperties.onlyIfAvailable
 			let childReceivedFromAncestors = childReceived
 				.subtracting(propertiesToDeclare)
 				.filter { property in
@@ -1102,9 +1155,27 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
-		let result = (received, onlyIfAvailable.subtracting(required))
-		cache[id] = result
-		return result
+		cache.unfinishedWalkDepths[id] = nil
+		if !cache.incomplete.isEmpty {
+			// Results that lack what this scope receives are stale now that its walk has finished.
+			cache.incomplete = cache.incomplete.filter { $0.value.shallowestUnfinishedWalkDepth != walkDepth }
+		}
+		let receivedProperties = ReceivedProperties(
+			received: received,
+			onlyIfAvailable: onlyIfAvailable.subtracting(required),
+		)
+		if let shallowestUnfinishedWalkDepth, shallowestUnfinishedWalkDepth < walkDepth {
+			let walkedReceivedProperties = WalkedReceivedProperties(
+				receivedProperties: receivedProperties,
+				shallowestUnfinishedWalkDepth: shallowestUnfinishedWalkDepth,
+			)
+			cache.incomplete[id] = walkedReceivedProperties
+			return walkedReceivedProperties
+		} else {
+			// Every walk that re-entered this scope is accounted for in this one.
+			cache.complete[id] = receivedProperties
+			return WalkedReceivedProperties(receivedProperties: receivedProperties, shallowestUnfinishedWalkDepth: nil)
+		}
 	}
 
 	/// Builds a scope mapping for mock generation. Similar to `createTypeDescriptionToScopeMapping`
