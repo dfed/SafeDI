@@ -533,7 +533,15 @@ Declare the configuration in a file named `SafeDIConfiguration.swift` in the mod
 
 When you want to instantiate a dependency after `init(…)`, you need to declare an `Instantiator<Dependency>`-typed property as `@Instantiated` or `@Received`. Deferred instantiation is useful in situations where a dependency is expensive to create or only required under certain conditions (e.g., creating a detailed view for a selected item in a list).
 
-An `Instantiator` creates a new instance each time it is asked for one. When you instead want a single, shared instance that is created only once something needs it, declare a [`LazilyInstantiated<Dependency>`](#lazilyinstantiated)-typed property.
+An `Instantiator` creates a new instance each time it is asked for one. When you instead want a single, shared instance that is created only once something needs it, declare a [`LazilyInstantiated<Dependency>`](#lazilyinstantiated)-typed property. The two differ from each other, and from a plain `@Instantiated` property, as follows:
+
+| | `@Instantiated let dependency: Dependency` | `Instantiator<Dependency>` | `LazilyInstantiated<Dependency>` |
+| --- | --- | --- | --- |
+| An instance is created | When the declaring type is created | Each time `instantiate()` is called | The first time `instance` is read |
+| Instances created | One | One per call | One |
+| Types further down the tree can receive | The instance | The `Instantiator` | The instance, or the `LazilyInstantiated` |
+| `Dependency` can have `@Forwarded` properties | No | Yes | No |
+| Can break a dependency cycle | No | Yes | No |
 
 ### Instantiator
 

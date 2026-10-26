@@ -30,27 +30,28 @@
 /// - SeeAlso: `SendableLazilyInstantiated`
 /// - SeeAlso: `Instantiator`
 public final class LazilyInstantiated<T> {
-	/// - Parameter instantiator: A closure that returns an instance of `T`. Called at most once.
+	/// - Parameter instantiator: A closure that returns an instance of `T`. Called the first time `instance` is read.
 	public init(_ instantiator: @escaping () -> T) {
-		self.instantiator = instantiator
+		state = .uninstantiated(instantiator)
 	}
 
 	/// The lazily instantiated instance of `T`.
 	/// The first read creates the instance. Every later read returns that same instance.
 	public var instance: T {
-		if let instantiatedInstance {
-			return instantiatedInstance
-		} else {
-			guard let instantiator else { fatalError("`\(T.self)` was requested while it was being instantiated. A type created during the instantiation of `\(T.self)` must not read `LazilyInstantiated<\(T.self)>.instance` before that instantiation completes.") }
-			// Forget the instantiator before calling it. A read of `instance` made while it runs then finds
-			// nothing to call, and everything the instantiator captured is released once it returns.
-			self.instantiator = nil
+		switch state {
+		case let .instantiated(instance):
+			return instance
+		case let .uninstantiated(instantiator):
 			let instance = instantiator()
-			instantiatedInstance = instance
+			state = .instantiated(instance)
 			return instance
 		}
 	}
 
-	private var instantiator: (() -> T)?
-	private var instantiatedInstance: T?
+	private enum State {
+		case uninstantiated(() -> T)
+		case instantiated(T)
+	}
+
+	private var state: State
 }

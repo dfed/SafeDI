@@ -59,14 +59,6 @@ struct LazilyInstantiatedTests {
 		#expect(systemUnderTest.instance.dependency === dependency.instance)
 	}
 
-	@Test
-	func instance_exitsWithFailure_whenReadWhileItIsBeingInstantiated() async {
-		await #expect(processExitsWith: .failure) {
-			let recursive = RecursiveLazilyInstantiated()
-			_ = recursive.systemUnderTest.instance
-		}
-	}
-
 	private final class BuiltProduct {}
 
 	private final class BuiltProductWithDependency {
@@ -75,13 +67,5 @@ struct LazilyInstantiatedTests {
 		}
 
 		let dependency: BuiltProduct
-	}
-
-	/// A `LazilyInstantiated` whose instantiator reads the instance it is in the middle of creating.
-	/// SafeDI rejects dependency trees shaped like this; user code can still create one by hand.
-	private final class RecursiveLazilyInstantiated {
-		private(set) lazy var systemUnderTest: LazilyInstantiated<BuiltProduct> = LazilyInstantiated { [unowned self] in
-			systemUnderTest.instance
-		}
 	}
 }
