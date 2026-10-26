@@ -4877,7 +4877,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				public struct Element {}
-				public typealias AnyIterator = IndexingIterator<Array<Element>>
 				""",
 				"""
 				@Instantiable(isRoot: true, generateMock: true)
@@ -4903,11 +4902,11 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				@Instantiable(generateMock: true)
 				public final class Grandchild: Instantiable {
-				    public init(anyIterator: AnyIterator) {
+				    public init(anyIterator: AnyIterator<Element>) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
 
-				    @Received(fulfilledByDependencyNamed: "iterator", ofType: IndexingIterator<Array<Element>>.self, erasedToConcreteExistential: true) let anyIterator: AnyIterator
+				    @Received(fulfilledByDependencyNamed: "iterator", ofType: IndexingIterator<Array<Element>>.self, erasedToConcreteExistential: true) let anyIterator: AnyIterator<Element>
 				}
 				""",
 			],
@@ -4926,12 +4925,12 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            grandchildBuilder: ((AnyIterator) -> Grandchild)? = nil
+		            grandchildBuilder: ((AnyIterator<Element>) -> Grandchild)? = nil
 		        ) {
 		            self.grandchildBuilder = grandchildBuilder
 		        }
 
-		        let grandchildBuilder: ((AnyIterator) -> Grandchild)?
+		        let grandchildBuilder: ((AnyIterator<Element>) -> Grandchild)?
 		    }
 
 		    static func mock(
@@ -4940,7 +4939,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    ) -> Child {
 		        func __safeDI_grandchildBuilder() -> Grandchild {
 		            #sourceLocation(file: "\(output.fixtures["Grandchild.swift"])", line: 7)
-		            let anyIterator: AnyIterator = iterator
+		            let anyIterator: AnyIterator<Element> = AnyIterator<Element>(iterator)
 		            #sourceLocation()
 		            return if let safeDIBuilder = safeDIOverrides.grandchildBuilder { safeDIBuilder(anyIterator) } else { Grandchild(anyIterator: anyIterator) }
 		        }
@@ -4955,14 +4954,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    /// Configuration for how this type is constructed within a mock tree.
 		    struct SafeDIMockConfiguration {
 		        init(
-		            grandchildBuilder: ((AnyIterator) -> Grandchild)? = nil,
+		            grandchildBuilder: ((AnyIterator<Element>) -> Grandchild)? = nil,
 		            _ safeDIBuilder: ((IndexingIterator<Array<Element>>, Instantiator<Grandchild>) -> Child)? = nil
 		        ) {
 		            self.grandchildBuilder = grandchildBuilder
 		            self.safeDIBuilder = safeDIBuilder
 		        }
 
-		        let grandchildBuilder: ((AnyIterator) -> Grandchild)?
+		        let grandchildBuilder: ((AnyIterator<Element>) -> Grandchild)?
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: ((IndexingIterator<Array<Element>>, Instantiator<Grandchild>) -> Child)?
 		    }
@@ -4981,7 +4980,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        iterator: IndexingIterator<Array<Element>>
 		    ) -> Grandchild {
 		        #sourceLocation(file: "\(output.fixtures["Grandchild.swift"])", line: 7)
-		        let anyIterator: AnyIterator = iterator
+		        let anyIterator: AnyIterator<Element> = AnyIterator<Element>(iterator)
 		        #sourceLocation()
 		        return Grandchild(anyIterator: anyIterator)
 		    }
@@ -5013,7 +5012,180 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        func __safeDI_childBuilder(iterator: IndexingIterator<Array<Element>>) -> Child {
 		            func __safeDI_grandchildBuilder() -> Grandchild {
 		                #sourceLocation(file: "\(output.fixtures["Grandchild.swift"])", line: 7)
-		                let anyIterator: AnyIterator = iterator
+		                let anyIterator: AnyIterator<Element> = AnyIterator<Element>(iterator)
+		                #sourceLocation()
+		                return if let safeDIBuilder = safeDIOverrides.childBuilder.grandchildBuilder { safeDIBuilder(anyIterator) } else { Grandchild(anyIterator: anyIterator) }
+		            }
+		            let grandchildBuilder = Instantiator<Grandchild>(__safeDI_grandchildBuilder)
+		            return if let safeDIBuilder = safeDIOverrides.childBuilder.safeDIBuilder { safeDIBuilder(iterator, grandchildBuilder) } else { Child(iterator: iterator, grandchildBuilder: grandchildBuilder) }
+		        }
+		        let childBuilder = Instantiator<Child> {
+		            __safeDI_childBuilder(iterator: $0)
+		        }
+		        return Root(childBuilder: childBuilder)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+
+		#expect(output.mockConfigurationFile == emptyMockConfigurationFileOutput, "Unexpected output \(output.mockConfigurationFile ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_wrapsAliasedPropertyInExistential_whenAliasIsOnlyIfAvailable() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public struct Element {}
+				""",
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public final class Root: Instantiable {
+				    public init(childBuilder: Instantiator<Child>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let childBuilder: Instantiator<Child>
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Child: Instantiable {
+				    public init(iterator: IndexingIterator<Array<Element>>, grandchildBuilder: Instantiator<Grandchild>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Forwarded let iterator: IndexingIterator<Array<Element>>
+				    @Instantiated let grandchildBuilder: Instantiator<Grandchild>
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Grandchild: Instantiable {
+				    public init(anyIterator: AnyIterator<Element>?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "iterator", ofType: IndexingIterator<Array<Element>>.self, erasedToConcreteExistential: true, onlyIfAvailable: true) let anyIterator: AnyIterator<Element>?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles.count == 3)
+		#expect(output.mockFiles["Child+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Child {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            grandchildBuilder: ((AnyIterator<Element>?) -> Grandchild)? = nil
+		        ) {
+		            self.grandchildBuilder = grandchildBuilder
+		        }
+
+		        let grandchildBuilder: ((AnyIterator<Element>?) -> Grandchild)?
+		    }
+
+		    static func mock(
+		        iterator: IndexingIterator<Array<Element>>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Child {
+		        func __safeDI_grandchildBuilder() -> Grandchild {
+		            #sourceLocation(file: "\(output.fixtures["Grandchild.swift"])", line: 7)
+		            let anyIterator: AnyIterator<Element>? = (iterator as IndexingIterator<Array<Element>>?).map { AnyIterator<Element>($0) }
+		            #sourceLocation()
+		            return if let safeDIBuilder = safeDIOverrides.grandchildBuilder { safeDIBuilder(anyIterator) } else { Grandchild(anyIterator: anyIterator) }
+		        }
+		        let grandchildBuilder = Instantiator<Grandchild>(__safeDI_grandchildBuilder)
+		        return Child(iterator: iterator, grandchildBuilder: grandchildBuilder)
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension Child {
+		    /// Configuration for how this type is constructed within a mock tree.
+		    struct SafeDIMockConfiguration {
+		        init(
+		            grandchildBuilder: ((AnyIterator<Element>?) -> Grandchild)? = nil,
+		            _ safeDIBuilder: ((IndexingIterator<Array<Element>>, Instantiator<Grandchild>) -> Child)? = nil
+		        ) {
+		            self.grandchildBuilder = grandchildBuilder
+		            self.safeDIBuilder = safeDIBuilder
+		        }
+
+		        let grandchildBuilder: ((AnyIterator<Element>?) -> Grandchild)?
+		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+		        let safeDIBuilder: ((IndexingIterator<Array<Element>>, Instantiator<Grandchild>) -> Child)?
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Child+SafeDIMock.swift"] ?? "")")
+
+		#expect(output.mockFiles["Grandchild+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Grandchild {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            iterator: IndexingIterator<Array<Element>>? = nil
+		        ) {
+		            self.iterator = iterator
+		        }
+
+		        let iterator: IndexingIterator<Array<Element>>?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Grandchild {
+		        let iterator: IndexingIterator<Array<Element>>? = safeDIOverrides.iterator
+		        #sourceLocation(file: "\(output.fixtures["Grandchild.swift"])", line: 7)
+		        let anyIterator: AnyIterator<Element>? = (iterator as IndexingIterator<Array<Element>>?).map { AnyIterator<Element>($0) }
+		        #sourceLocation()
+		        return Grandchild(anyIterator: anyIterator)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Grandchild+SafeDIMock.swift"] ?? "")")
+
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            childBuilder: Child.SafeDIMockConfiguration = .init()
+		        ) {
+		            self.childBuilder = childBuilder
+		        }
+
+		        let childBuilder: Child.SafeDIMockConfiguration
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_childBuilder(iterator: IndexingIterator<Array<Element>>) -> Child {
+		            func __safeDI_grandchildBuilder() -> Grandchild {
+		                #sourceLocation(file: "\(output.fixtures["Grandchild.swift"])", line: 7)
+		                let anyIterator: AnyIterator<Element>? = (iterator as IndexingIterator<Array<Element>>?).map { AnyIterator<Element>($0) }
 		                #sourceLocation()
 		                return if let safeDIBuilder = safeDIOverrides.childBuilder.grandchildBuilder { safeDIBuilder(anyIterator) } else { Grandchild(anyIterator: anyIterator) }
 		            }
@@ -7125,6 +7297,10 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			swiftFileContent: [
 				"""
 				public protocol ServiceProtocol {}
+
+				public struct AnyService: ServiceProtocol {
+				    public init(_ service: some ServiceProtocol) {}
+				}
 				""",
 				"""
 				@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], generateMock: true)
@@ -7135,10 +7311,10 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				"""
 				@Instantiable(generateMock: true)
 				public final class Consumer: Instantiable {
-				    public init(service: ServiceProtocol) {
+				    public init(service: AnyService) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
-				    @Received(fulfilledByDependencyNamed: "concreteService", ofType: ConcreteService.self, erasedToConcreteExistential: true) let service: ServiceProtocol
+				    @Received(fulfilledByDependencyNamed: "concreteService", ofType: ConcreteService.self, erasedToConcreteExistential: true) let service: AnyService
 				}
 				""",
 				"""
@@ -7157,9 +7333,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		// Consumer receives ServiceProtocol aliased from concreteService.
+		// Consumer receives AnyService aliased from concreteService.
 		// The Instantiator closure should use `concreteService` (in parent scope)
-		// wrapped as ServiceProtocol(concreteService), preserving shared identity.
+		// wrapped as AnyService(concreteService), preserving shared identity.
 		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
 		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
 		// Any modifications made to this file will be overwritten on subsequent builds.
@@ -7171,14 +7347,14 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            concreteService: (() -> ConcreteService)? = nil,
-		            consumerBuilder: ((ServiceProtocol) -> Consumer)? = nil
+		            consumerBuilder: ((AnyService) -> Consumer)? = nil
 		        ) {
 		            self.concreteService = concreteService
 		            self.consumerBuilder = consumerBuilder
 		        }
 
 		        let concreteService: (() -> ConcreteService)?
-		        let consumerBuilder: ((ServiceProtocol) -> Consumer)?
+		        let consumerBuilder: ((AnyService) -> Consumer)?
 		    }
 
 		    static func mock(
@@ -7187,7 +7363,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        let concreteService = if let safeDIBuilder = safeDIOverrides.concreteService { safeDIBuilder() } else { ConcreteService() }
 		        func __safeDI_consumerBuilder() -> Consumer {
 		            #sourceLocation(file: "\(output.fixtures["Consumer.swift"])", line: 6)
-		            let service: ServiceProtocol = concreteService
+		            let service: AnyService = AnyService(concreteService)
 		            #sourceLocation()
 		            return if let safeDIBuilder = safeDIOverrides.consumerBuilder { safeDIBuilder(service) } else { Consumer(service: service) }
 		        }
