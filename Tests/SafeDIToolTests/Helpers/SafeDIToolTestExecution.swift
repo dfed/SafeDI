@@ -38,12 +38,14 @@ func executeSafeDIToolTest(
 	dependentModuleInfoPaths: [String] = [],
 	additionalImportedModules: [String] = [],
 	buildSwiftOutputDirectory: Bool = false,
+	pluginInvocation: PluginInvocation? = nil,
 	buildDOTFileOutput: Bool = false,
 	buildCombinedOutput: Bool = false,
 	filesToDelete: inout [URL],
 	includeFolders: [String] = [],
 	skipCompileVerification: Bool = false,
 	inputPathsRelativeToCurrentDirectory: Bool = false,
+	compilerReceivesInputPathsUnchanged: Bool = false,
 	activeCompilationConditions: [String] = [],
 	buildSettingArguments: [String] = [],
 	verificationCompilationConditions: [String]? = nil,
@@ -63,7 +65,16 @@ func executeSafeDIToolTest(
 	}
 
 	let swiftFileCSV = URL.temporaryFile
-	let swiftFixtureDirectory = URL.temporaryFile
+	let swiftFixtureDirectory = switch pluginInvocation {
+	case .scanDuringGenerate:
+		// The plugin's paths are relative to the project root, which is `generate`'s working directory.
+		URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+			.appendingPathComponent(".build")
+			.appendingPathComponent("SafeDIToolTestFixtures")
+			.appendingPathComponent(UUID().uuidString)
+	case .scanWhilePlanning, nil:
+		URL.temporaryFile
+	}
 	try FileManager.default.createDirectory(at: swiftFixtureDirectory, withIntermediateDirectories: true)
 
 	// Replace directory placeholders in target file content with real paths.
@@ -92,13 +103,42 @@ func executeSafeDIToolTest(
 		alongside: contentNamedSwiftFiles,
 	)
 	let swiftFiles = contentNamedSwiftFiles + pathNamedSwiftFiles
+	let fixtureDirectoryRelativePaths = swiftFiles.map { String($0.path.dropFirst(swiftFixtureDirectory.path.count + 1)) }
+	// The fixture directory as the build system reports it to a build tool plugin, and spells it to the compiler.
+	let reportedFixtureDirectoryPath: String? = switch pluginInvocation {
+	case .scanWhilePlanning:
+		// With its symbolic links resolved, a leading `/private` included.
+		try realPath(of: swiftFixtureDirectory)
+	case let .scanDuringGenerate(reportsFixtureDirectoryThroughSymbolicLink):
+		if reportsFixtureDirectoryThroughSymbolicLink {
+			// The way Xcode reports a project under `/tmp`, which resolves to `/private/tmp`.
+			try symbolicLink(to: swiftFixtureDirectory, filesToDelete: &filesToDelete).path
+		} else {
+			swiftFixtureDirectory.path
+		}
+	case nil:
+		nil
+	}
 	// Build systems like Bazel hand the tool paths relative to its working
 	// directory; mirror that by computing paths relative to the test process's
 	// current directory, which leaves the process-global directory untouched.
-	let inputSwiftFilePaths = if inputPathsRelativeToCurrentDirectory {
+	let inputSwiftFilePaths = switch pluginInvocation {
+	case .scanWhilePlanning:
+		fixtureDirectoryRelativePaths
+	case .scanDuringGenerate:
 		swiftFiles.map(currentDirectoryRelativePath(to:))
+	case nil:
+		if inputPathsRelativeToCurrentDirectory {
+			swiftFiles.map(currentDirectoryRelativePath(to:))
+		} else {
+			swiftFiles.map(\.relativePath)
+		}
+	}
+	// The paths the build system hands the compiler when a plugin runs the tool, and otherwise the absolute paths.
+	let compilerSwiftFilePaths = if let reportedFixtureDirectoryPath {
+		fixtureDirectoryRelativePaths.map { "\(reportedFixtureDirectoryPath)/\($0)" }
 	} else {
-		swiftFiles.map(\.relativePath)
+		swiftFiles.map(\.path)
 	}
 	try inputSwiftFilePaths
 		.joined(separator: ",")
@@ -129,6 +169,24 @@ func executeSafeDIToolTest(
 	return try await SafeDITool.$fileFinder.withValue(fileFinder) {
 		// Build the manifest by scanning for roots using the Scan subcommand.
 		var manifestPath: String?
+		switch pluginInvocation {
+		case .scanWhilePlanning:
+			try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+			try await performScan(
+				inputSourcesFile: swiftFileCSV.relativePath,
+				projectRoot: try #require(reportedFixtureDirectoryPath),
+				outputDirectory: outputDirectory.path,
+				manifestFile: manifestFile.relativePath,
+				mockScopedFiles: compilerSwiftFilePaths,
+				activeCompilationConditions: Set(activeCompilationConditions),
+			)
+			manifestPath = manifestFile.relativePath
+		case .scanDuringGenerate:
+			// `generate --output-directory` scans for itself.
+			try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		case nil:
+			break
+		}
 		if buildSwiftOutputDirectory {
 			try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 			let projectRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -182,6 +240,10 @@ func executeSafeDIToolTest(
 			// SPM plugin's generate invocation receives them.
 			generateArguments += ["--swift-manifest", manifestPath]
 		} else {
+			if case .scanDuringGenerate = pluginInvocation {
+				// A build tool plugin names the target's own files with the absolute paths the build system reported.
+				generateArguments += ["--output-directory", outputDirectory.path, "--mock-scoped-files"] + compilerSwiftFilePaths
+			}
 			for condition in activeCompilationConditions {
 				generateArguments += ["--active-compilation-conditions", condition]
 			}
@@ -193,12 +255,16 @@ func executeSafeDIToolTest(
 		if buildCombinedOutput {
 			generateArguments += ["--combined-output", combinedOutput.relativePath]
 		}
+		if compilerReceivesInputPathsUnchanged {
+			generateArguments += ["--compiler-receives-input-paths-unchanged"]
+		}
 		let tool = try Generate.parse(generateArguments)
 		// Call `generate()` rather than `run()`: `run()` prints located errors in compiler format and
 		// rethrows them as an `ExitCode`, which would hide the error from the assertion helpers.
 		let fixtures = FixturePaths(
 			fileNames: contentNamedSwiftFiles.map(\.lastPathComponent) + swiftFileContentByFilePath.keys.sorted(),
 			paths: inputSwiftFilePaths,
+			compilerPaths: compilerSwiftFilePaths,
 		)
 		let warnings: [SourceDiagnostic]
 		do {
@@ -213,8 +279,10 @@ func executeSafeDIToolTest(
 		if let additionalFixtureDirectory {
 			filesToDelete.append(additionalFixtureDirectory)
 		}
-		if buildSwiftOutputDirectory {
+		if buildSwiftOutputDirectory || pluginInvocation != nil {
 			filesToDelete.append(outputDirectory)
+		}
+		if manifestPath != nil {
 			filesToDelete.append(manifestFile)
 		}
 		if buildDOTFileOutput {
@@ -225,7 +293,7 @@ func executeSafeDIToolTest(
 		}
 
 		// Read generated files from the output directory.
-		let generatedFiles: [String: String]? = if buildSwiftOutputDirectory {
+		let generatedFiles: [String: String]? = if buildSwiftOutputDirectory || pluginInvocation != nil {
 			{
 				guard let fileNames = try? FileManager.default.contentsOfDirectory(atPath: outputDirectory.relativePath) else { return [:] }
 				var result = [String: String]()
@@ -363,13 +431,27 @@ struct StubFileFinder: FileFinder {
 /// the tool read: absolute by default, or relative to the current directory when the test passed
 /// `inputPathsRelativeToCurrentDirectory: true`.
 struct FixturePaths {
-	init(fileNames: [String], paths: [String]) {
+	init(fileNames: [String], paths: [String], compilerPaths: [String]) {
 		pathsByFileName = Dictionary(uniqueKeysWithValues: zip(fileNames, paths))
+		compilerPathsByFileName = Dictionary(uniqueKeysWithValues: zip(fileNames, compilerPaths))
 	}
 
 	/// The path of the named fixture. A name the harness did not write records an issue listing the
 	/// files it did write and returns a sentinel, so the assertion fails readably instead of crashing.
 	subscript(fileName: String, sourceLocation sourceLocation: SourceLocation = #_sourceLocation) -> String {
+		path(of: fileName, in: pathsByFileName, sourceLocation: sourceLocation)
+	}
+
+	/// The path a build system hands the compiler for the named fixture when a build tool plugin runs the tool:
+	/// absolute, with symbolic links resolved.
+	func compilerPath(of fileName: String, sourceLocation: SourceLocation = #_sourceLocation) -> String {
+		path(of: fileName, in: compilerPathsByFileName, sourceLocation: sourceLocation)
+	}
+
+	private let pathsByFileName: [String: String]
+	private let compilerPathsByFileName: [String: String]
+
+	private func path(of fileName: String, in pathsByFileName: [String: String], sourceLocation: SourceLocation) -> String {
 		if let path = pathsByFileName[fileName] {
 			return path
 		} else {
@@ -380,8 +462,37 @@ struct FixturePaths {
 			return "<missing fixture \(fileName)>"
 		}
 	}
+}
 
-	private let pathsByFileName: [String: String]
+/// How a build tool plugin runs the tool, for a test that mirrors one. Either way the plugin hands the tool
+/// paths relative to a project root, and the build system hands the compiler the absolute paths it reported
+/// to the plugin.
+enum PluginInvocation {
+	/// The plugin runs `scan` while it plans the build, handing it the project root as the build system reports
+	/// it – here with its symbolic links resolved – and `generate` reuses the parse `scan` cached.
+	case scanWhilePlanning
+	/// The plugin cannot run `scan` while it plans the build, so `generate --output-directory` scans for itself,
+	/// reading paths relative to its working directory and naming the target's files with `--mock-scoped-files`
+	/// as the build system reports them: directly, or through a symbolic link to the fixture directory.
+	case scanDuringGenerate(reportsFixtureDirectoryThroughSymbolicLink: Bool)
+}
+
+/// A new symbolic link to `destination`, which `filesToDelete` removes.
+private func symbolicLink(to destination: URL, filesToDelete: inout [URL]) throws -> URL {
+	let link = URL.temporaryFile
+	try FileManager.default.createSymbolicLink(at: link, withDestinationURL: destination)
+	filesToDelete.append(link)
+	return link
+}
+
+/// `url`'s path with every symbolic link resolved, as `realpath(3)` resolves it. Foundation's
+/// `resolvingSymlinksInPath()` would remove a leading `/private` instead.
+private func realPath(of url: URL) throws -> String {
+	guard let resolvedPath = realpath(url.path, nil) else {
+		throw CocoaError(.fileNoSuchFile)
+	}
+	defer { free(resolvedPath) }
+	return String(cString: resolvedPath)
 }
 
 /// An error thrown by `executeSafeDIToolTest` when `generate` fails. Carries the fixture file paths exactly as
@@ -470,7 +581,7 @@ private func createSwiftFixtureFiles(
 
 /// Expresses `target` relative to the current directory using `..` components,
 /// e.g. `../../tmp/Fixtures/Root.swift`, the way a build system would.
-private func currentDirectoryRelativePath(to target: URL) -> String {
+func currentDirectoryRelativePath(to target: URL) -> String {
 	let currentDirectoryComponents = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).standardizedFileURL.pathComponents
 	let targetComponents = target.standardizedFileURL.pathComponents
 	let sharedComponentCount = zip(currentDirectoryComponents, targetComponents).prefix { $0 == $1 }.count

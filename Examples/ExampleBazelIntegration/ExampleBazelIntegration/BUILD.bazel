@@ -9,6 +9,10 @@ load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
 safedi_swift_library(
     name = "ExampleBazelIntegration",
     srcs = glob(["**/*.swift"]),
+    # Treating warnings as errors makes CI fail on a warning in SafeDI's
+    # generated code, such as a `#sourceLocation` directive whose path
+    # conflicts with the one the compiler was handed.
+    copts = ["-warnings-as-errors"],
     module_name = "ExampleBazelIntegration",
     safedi_deps = [
         "//Subproject:Subproject_safedi",

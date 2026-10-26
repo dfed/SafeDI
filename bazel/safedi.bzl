@@ -136,6 +136,10 @@ def _safedi_compile_impl(ctx):
         combined.path,
         "--module-info-output",
         module_info.path,
+        # rules_swift hands swiftc the same execution-root-relative paths
+        # this rule writes to the CSV, so the generated `#sourceLocation`
+        # directives can name them and stay free of machine-specific paths.
+        "--compiler-receives-input-paths-unchanged",
     ]
 
     # rules_swift applies `copt` in the target configuration and

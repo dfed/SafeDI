@@ -24,9 +24,11 @@ public actor DependencyTreeGenerator {
 	public init(
 		importStatements: [ImportStatement],
 		typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
+		aliasDeclarationReferences: AliasDeclarationReferences,
 	) {
 		self.importStatements = importStatements
 		self.typeDescriptionToFulfillingInstantiableMap = typeDescriptionToFulfillingInstantiableMap
+		self.aliasDeclarationReferences = aliasDeclarationReferences
 	}
 
 	// MARK: Public
@@ -652,6 +654,7 @@ public actor DependencyTreeGenerator {
 
 	private let importStatements: [ImportStatement]
 	private let typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]
+	private let aliasDeclarationReferences: AliasDeclarationReferences
 	private struct RootScopeInfo {
 		let typeDescription: TypeDescription
 		let sourceFilePath: String?
@@ -1193,7 +1196,7 @@ public actor DependencyTreeGenerator {
 						fulfilledBy: fulfillingProperty,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
-						declarationLocation: dependency.declarationLocation,
+						declarationReference: dependency.declarationLocation.map(aliasDeclarationReferences.reference(to:)),
 					))
 				case .forwarded:
 					continue
@@ -1283,7 +1286,7 @@ public actor DependencyTreeGenerator {
 						fulfilledBy: fulfillingProperty,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
-						declarationLocation: dependency.declarationLocation,
+						declarationReference: dependency.declarationLocation.map(aliasDeclarationReferences.reference(to:)),
 					))
 				case .forwarded, .received:
 					continue
