@@ -243,8 +243,11 @@ struct Generate: AsyncParsableCommand {
 			normalized.sourceFilePath = unnormalizedInstantiable.sourceFilePath
 			return normalized
 		}
+		let additionalImportStatements = resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
 		let generator = try DependencyTreeGenerator(
-			importStatements: dependentModuleInfo.flatMap(\.imports) + resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) } + module.imports,
+			importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportStatements + module.imports,
+			// A dependent module's mock-only declarations reach this module's mocks, so its mock imports do too.
+			mockImportStatements: dependentModuleInfo.flatMap(\.mockImports) + additionalImportStatements + module.mockImports,
 			typeDescriptionToFulfillingInstantiableMap: resolveSafeDIFulfilledTypes(
 				instantiables: normalizedInstantiables,
 			),
@@ -297,8 +300,11 @@ struct Generate: AsyncParsableCommand {
 				let generatedRoots = try await generator.generatePerRootCodeTrees()
 				// Every generated file asserts how `#if` conditions were evaluated, so a build
 				// whose compiler disagrees fails here with a message naming the condition.
-				let fileHeader = await generator.fileHeader
-					+ ConditionalCompilationDecision.compileTimeAssertions(for: module.conditionalCompilationDecisions)
+				let compileTimeAssertions = ConditionalCompilationDecision.compileTimeAssertions(for: module.conditionalCompilationDecisions)
+				let fileHeader = await generator.fileHeader + compileTimeAssertions
+				// Generated mocks compile only where the mock condition is active, so they import
+				// what the module's `#if` blocks select there.
+				let mockFileHeader = await generator.mockFileHeader + compileTimeAssertions
 
 				// Build a map from source file path → extension code(s).
 				var sourceFileToExtensions = [String: [String]]()
@@ -359,13 +365,13 @@ struct Generate: AsyncParsableCommand {
 					}
 				}
 
-				// Accumulate every emission as a `(destination, content)`
-				// pair. `destination == nil` means the write is combined-
+				// Accumulate every emission as a `(destination, header, body)`
+				// triple. `destination == nil` means the write is combined-
 				// only (no standalone file). A manifest-driven run
 				// populates destinations from the manifest; a
 				// combined-output run leaves them all nil and lets the
-				// concat step below do the emission.
-				var writes: [(destination: URL?, content: String)] = []
+				// concat step below do the emission under one header.
+				var writes: [(destination: URL?, header: String, body: String)] = []
 
 				// ---- Dependency tree ----
 				let dependencyTreeDestinationsBySource: [String: URL]
@@ -390,11 +396,10 @@ struct Generate: AsyncParsableCommand {
 					).sorted()
 				}
 				for sourceFile in dependencyTreeSourcesInOrder {
-					let body = sourceFileToExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? ""
-					let content = body.isEmpty ? fileHeader : fileHeader + body
 					writes.append((
 						destination: dependencyTreeDestinationsBySource[sourceFile],
-						content: content,
+						header: fileHeader,
+						body: sourceFileToExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? "",
 					))
 				}
 
@@ -450,10 +455,10 @@ struct Generate: AsyncParsableCommand {
 							} else {
 								sourceFileToMockExtensions[entry.inputFilePath]
 							}
-							let body = extensions?.sorted().joined(separator: "\n\n") ?? ""
 							writes.append((
 								destination: URL(fileURLWithPath: entry.outputFilePath),
-								content: fileHeader + body,
+								header: mockFileHeader,
+								body: extensions?.sorted().joined(separator: "\n\n") ?? "",
 							))
 						}
 						// Shared mock-configuration file. Declared even
@@ -462,7 +467,8 @@ struct Generate: AsyncParsableCommand {
 						if let mockConfigurationOutputFilePath = manifest.mockConfigurationOutputFilePath {
 							writes.append((
 								destination: URL(fileURLWithPath: mockConfigurationOutputFilePath),
-								content: fileHeader + (mockResult.mockConfigurationCode ?? ""),
+								header: mockFileHeader,
+								body: mockResult.mockConfigurationCode ?? "",
 							))
 						}
 					} else {
@@ -475,8 +481,11 @@ struct Generate: AsyncParsableCommand {
 								.map(\.typeDescription.asSource),
 						)
 						for sourceFile in currentModuleMockSourceFiles {
-							let body = sourceFileToMockExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? ""
-							writes.append((destination: nil, content: fileHeader + body))
+							writes.append((
+								destination: nil,
+								header: mockFileHeader,
+								body: sourceFileToMockExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? "",
+							))
 						}
 						// Skip types already emitted via the per-source
 						// loop — a type declared locally with
@@ -486,41 +495,42 @@ struct Generate: AsyncParsableCommand {
 						for typeName in Set(additionalMocksToGenerate).sorted()
 							where !typeNamesEmittedBySource.contains(typeName)
 						{
-							let body = typeNameToMockExtensions[typeName]?.sorted().joined(separator: "\n\n") ?? ""
-							writes.append((destination: nil, content: fileHeader + body))
+							writes.append((
+								destination: nil,
+								header: mockFileHeader,
+								body: typeNameToMockExtensions[typeName]?.sorted().joined(separator: "\n\n") ?? "",
+							))
 						}
 						if let mockConfigurationCode = mockResult.mockConfigurationCode,
 						   !mockConfigurationCode.isEmpty
 						{
-							writes.append((destination: nil, content: fileHeader + mockConfigurationCode))
+							writes.append((destination: nil, header: mockFileHeader, body: mockConfigurationCode))
 						}
 					}
 				}
 
 				// ---- Emission ----
 				if let combinedOutput {
-					// Strip the per-entry fileHeader and concat under a
-					// single header. An empty module (no roots, no
-					// mocks) still writes the header-only file so the
-					// build system's declared output is populated.
-					// Every `writes` entry starts with `fileHeader` — strip
-					// it and drop empties so the concat has one header up
-					// top and one blank line between each body.
-					let bodies: [String] = writes.compactMap { write in
-						let body = String(write.content.dropFirst(fileHeader.count))
-						return body.isEmpty ? nil : body
-					}
-					let code = bodies.isEmpty
-						? fileHeader
-						: fileHeader + bodies.joined(separator: "\n\n")
+					// Concat every non-empty body under a single header,
+					// with one blank line between each body. An empty
+					// module (no roots, no mocks) still writes the
+					// header-only file so the build system's declared
+					// output is populated. A file that holds mocks imports
+					// what both the dependency tree and the mocks need.
+					let combinedFileHeader = hasAnyMockGeneration
+						? await generator.dependencyTreeAndMockFileHeader + compileTimeAssertions
+						: fileHeader
+					let bodies = writes.map(\.body).filter { !$0.isEmpty }
+					let code = combinedFileHeader + bodies.joined(separator: "\n\n")
 					// Always write — this flag is used to support Bazel and Buck2, which content-hash their inputs, so a stat-identical re-write costs them nothing. Moreover, these tools require that genrules write the outputs that are expected.
 					try code.write(toPath: combinedOutput)
 				} else {
 					for write in writes {
 						guard let destination = write.destination else { continue }
+						let content = write.header + write.body
 						let existingContent = try? String(contentsOf: destination, encoding: .utf8)
-						if existingContent != write.content {
-							try write.content.write(to: destination, atomically: true, encoding: .utf8)
+						if existingContent != content {
+							try content.write(to: destination, atomically: true, encoding: .utf8)
 						}
 					}
 				}

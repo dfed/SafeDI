@@ -21,15 +21,18 @@
 import Foundation
 import Testing
 
-/// Invokes `swiftc -typecheck` on the combined test input + generated output
-/// and records an `Issue` if the combination fails to compile. The resulting
-/// module is typechecked against the already-built `SafeDI` module and the
-/// `SafeDIMacros` compiler plugin.
+/// Compiles the combined test input + generated output with `swiftc` and
+/// records an `Issue` if the combination fails to compile. The module is
+/// compiled against the already-built `SafeDI` module and the `SafeDIMacros`
+/// compiler plugin.
 ///
-/// On the green path the verifier issues a single `swiftc -typecheck` for
+/// On the green path the verifier issues a single `swiftc` invocation for
 /// inputs + generated output together. When that pass fails, the verifier
-/// typechecks the inputs alone as a fallback so the diagnostic can attribute
+/// compiles the inputs alone as a fallback so the diagnostic can attribute
 /// the failure to the fixture vs. the generated code.
+///
+/// See `compileSwift` for why the compile emits an object file rather than
+/// stopping after type checking.
 ///
 /// Fixtures must be self-contained Swift that compiles against SafeDI alone —
 /// define stand-in types rather than importing platform frameworks that
@@ -45,10 +48,11 @@ func verifyGeneratedCodeCompiles(
 	additionalDirectorySwiftFiles: [URL],
 	generatedFiles: [String: String],
 	activeCompilationConditions: [String] = [],
+	mockConditionalCompilation: String?,
 	filesToDelete: inout [URL],
 	sourceLocation: SourceLocation = #_sourceLocation,
 ) throws {
-	guard ProcessInfo.processInfo.environment["SAFEDI_SKIP_COMPILE_CHECK"] == nil else { return }
+	guard compileVerificationIsEnabled else { return }
 
 	let inputURLs = inputSwiftFiles + additionalDirectorySwiftFiles
 
@@ -71,20 +75,25 @@ func verifyGeneratedCodeCompiles(
 	)
 	let inputCompileFiles = staged.inputFiles
 	let combinedCompileFiles = staged.inputFiles + staged.generatedFiles
+	// Generated mock code is wrapped in `#if <mockConditionalCompilation>`, so define that condition
+	// to compile the mocks too, as the module's mock-enabled configuration does.
+	let compilationConditions = activeCompilationConditions + [mockConditionalCompilation].compactMap(\.self)
 
-	let combinedResult = try runSwiftTypecheck(
+	let combinedResult = try compileSwift(
 		sources: combinedCompileFiles,
+		outputDirectory: staged.directory,
 		artifacts: artifacts,
-		activeCompilationConditions: activeCompilationConditions,
+		activeCompilationConditions: compilationConditions,
 	)
 	guard combinedResult.exitCode != 0 else { return }
 
 	// Combined pass failed. Re-run inputs alone to attribute the failure.
 	// The extra subprocess is only paid when something is broken.
-	let inputsOnlyResult = try runSwiftTypecheck(
+	let inputsOnlyResult = try compileSwift(
 		sources: inputCompileFiles,
+		outputDirectory: staged.directory,
 		artifacts: artifacts,
-		activeCompilationConditions: activeCompilationConditions,
+		activeCompilationConditions: compilationConditions,
 	)
 	if inputsOnlyResult.exitCode != 0 {
 		Issue.record(
@@ -107,11 +116,33 @@ func verifyGeneratedCodeCompiles(
 
 	Issue.record(
 		"""
-		Generated code failed to compile alongside test inputs.
+		\(generatedCodeCompilationFailureMessage)
 		\(combinedResult.stderr)
 		""",
 		sourceLocation: sourceLocation,
 	)
+}
+
+private let generatedCodeCompilationFailureMessage = "Generated code failed to compile alongside test inputs."
+
+extension Issue {
+	/// Whether this is the issue `verifyGeneratedCodeCompiles` records when the fixture compiles on its own but
+	/// fails to compile with the generated code, and the compiler's output includes `diagnostic`. A test that
+	/// documents a known generator bug matches its known issue with this, so that any other failure, such as a
+	/// fixture that does not compile, still fails the test.
+	func isGeneratedCodeCompilationFailure(reporting diagnostic: String) -> Bool {
+		comments.contains { comment in
+			comment.rawValue.hasPrefix(generatedCodeCompilationFailureMessage)
+				&& comment.rawValue.contains(diagnostic)
+		}
+	}
+}
+
+/// Whether `verifyGeneratedCodeCompiles` compiles generated code: `false` when the `SAFEDI_SKIP_COMPILE_CHECK`
+/// environment variable is set. A test that expects a compilation failure as a known issue expects it only when
+/// this is `true`.
+var compileVerificationIsEnabled: Bool {
+	ProcessInfo.processInfo.environment["SAFEDI_SKIP_COMPILE_CHECK"] == nil
 }
 
 struct SafeDIBuildArtifacts {
@@ -224,14 +255,20 @@ enum SafeDIBuildArtifactLocator {
 	}
 }
 
-struct SwiftTypecheckResult {
+struct SwiftCompileResult {
 	let exitCode: Int32
 	let stdout: String
 	let stderr: String
 }
 
-/// - Parameter activeCompilationConditions: Conditions defined for the compile, mirroring what the
-///   test supplied to SafeDITool. `DEBUG` is always defined, as it is in a debug build.
+/// Fixture and generated files written into a scratch directory the way the compiler will see them.
+struct StagedCompileSources {
+	/// The scratch directory holding the files, where the compiler also writes its output.
+	let directory: URL
+	let inputFiles: [URL]
+	let generatedFiles: [URL]
+}
+
 /// Writes the fixture and generated files into a scratch directory the way the compiler will see them.
 ///
 /// `import SafeDI` is prepended to each file. Fixture files are authored without imports to keep
@@ -244,7 +281,7 @@ func stageCompileSources(
 	inputSwiftFiles: [URL],
 	generatedFiles: [String: String],
 	filesToDelete: inout [URL],
-) throws -> (inputFiles: [URL], generatedFiles: [URL]) {
+) throws -> StagedCompileSources {
 	let scratchDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-verify-\(UUID().uuidString)")
 	try FileManager.default.createDirectory(at: scratchDirectory, withIntermediateDirectories: true)
 	filesToDelete.append(scratchDirectory)
@@ -259,15 +296,33 @@ func stageCompileSources(
 		try ("import SafeDI\n" + contents).write(to: destination, atomically: true, encoding: .utf8)
 		return destination
 	}
-	return (inputFiles: inputCompileFiles, generatedFiles: generatedCompileFiles)
+	return StagedCompileSources(
+		directory: scratchDirectory,
+		inputFiles: inputCompileFiles,
+		generatedFiles: generatedCompileFiles,
+	)
 }
 
+/// Compiles `sources` as one module and writes the object file into `outputDirectory`.
+///
+/// The compile emits an object file rather than stopping after type checking because some errors
+/// in generated code are reported only once the compiler lowers the module to SIL: a nested
+/// function that captures a local declared after it ("closure captures 'x' before it is
+/// declared") is diagnosed while generating SIL, and `self` used before `self.init` or a constant
+/// read before it is initialized is diagnosed by definite initialization, one of the mandatory SIL
+/// passes. `-typecheck` reports none of these. Whole-module mode runs one frontend job for the
+/// module instead of one per file, so the macro plugin and the `SafeDI` module load once; that
+/// saves more than emitting the object file costs, so this is cheaper than per-file `-typecheck`.
+///
+/// - Parameter activeCompilationConditions: Conditions defined for the compile, mirroring what the
+///   test supplied to SafeDITool. `DEBUG` is always defined, as it is in a debug build.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-func runSwiftTypecheck(
+func compileSwift(
 	sources: [URL],
+	outputDirectory: URL,
 	artifacts: SafeDIBuildArtifacts,
 	activeCompilationConditions: [String] = [],
-) throws -> SwiftTypecheckResult {
+) throws -> SwiftCompileResult {
 	let process = Process()
 	#if os(Linux)
 		process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
@@ -277,7 +332,9 @@ func runSwiftTypecheck(
 		var arguments = ["swiftc"]
 	#endif
 	arguments.append(contentsOf: [
-		"-typecheck",
+		"-emit-object",
+		"-whole-module-optimization",
+		"-o", outputDirectory.appendingPathComponent("SafeDICodegenVerification.o").path,
 		"-module-name", "SafeDICodegenVerification",
 		"-I", artifacts.swiftModuleSearchPath.path,
 		"-load-plugin-executable", "\(artifacts.safeDIMacrosToolPath.path)#SafeDIMacros",
@@ -321,14 +378,14 @@ func runSwiftTypecheck(
 		stderrData.append(remaining)
 	}
 
-	return SwiftTypecheckResult(
+	return SwiftCompileResult(
 		exitCode: process.terminationStatus,
 		stdout: String(data: stdoutData.read(), encoding: .utf8) ?? "",
 		stderr: String(data: stderrData.read(), encoding: .utf8) ?? "",
 	)
 }
 
-/// Thread-safe `Data` accumulator used by `runSwiftTypecheck` to collect pipe
+/// Thread-safe `Data` accumulator used by `compileSwift` to collect pipe
 /// output from a background readability handler without tripping Swift 6
 /// strict-Sendable closure-capture diagnostics.
 private final class LockedData: @unchecked Sendable {
