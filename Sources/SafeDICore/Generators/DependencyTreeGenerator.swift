@@ -755,6 +755,7 @@ public actor DependencyTreeGenerator {
 				dependencyType = concreteType
 			}
 			guard let promotedScope = typeDescriptionToScopeMap[dependencyType],
+			      Self.mockCanBuild(property, from: promotedScope),
 			      visitedTypes.insert(dependencyType).inserted
 			else { continue }
 
@@ -805,7 +806,11 @@ public actor DependencyTreeGenerator {
 				dependencyType = concreteType
 				erasedToConcreteExistential = true
 			}
-			guard let receivedScope = typeDescriptionToScopeMap[dependencyType] else {
+			// A received dependency the mock cannot build stays received: the root's
+			// `mock()` takes it as a parameter.
+			guard let receivedScope = typeDescriptionToScopeMap[dependencyType],
+			      Self.mockCanBuild(receivedProperty, from: receivedScope)
+			else {
 				continue
 			}
 			mockRootScope.propertiesToGenerate.append(.instantiated(
@@ -843,6 +848,14 @@ public actor DependencyTreeGenerator {
 			erasedToConcreteExistential: false,
 			forMockGeneration: true,
 		)
+	}
+
+	/// Whether a mock can build the received `property` from `scope` when it promotes the property to a
+	/// child of the mock root. A type with `@Forwarded` properties can be built only by an `Instantiator`
+	/// that is handed the forwarded values, so a mock cannot build a constant of that type: as in
+	/// production, where such a constant is never `@Instantiated`, it must be received.
+	private static func mockCanBuild(_ property: Property, from scope: Scope) -> Bool {
+		!property.propertyType.isConstant || !scope.instantiable.dependencies.contains(where: \.isForwarded)
 	}
 
 	/// Walks a post-promotion mock root scope for dependency cycles.

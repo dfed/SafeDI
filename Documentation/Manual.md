@@ -793,7 +793,7 @@ LoggedInView.mock(safeDIOverrides: .init(
 
 Closure fields on `SafeDIMockConfiguration` are plain (non-`@Sendable`) by default, so overrides can capture mutable non-`Sendable` test state. When a type is reached through a `SendableInstantiator` (or `SendableErasedInstantiator`) anywhere in the dependency graph, its `SafeDIMockConfiguration` is emitted with `@Sendable` closure fields instead so the overrides remain safe to invoke across isolation boundaries.
 
-A type gets its own `SafeDIOverrides` struct when at least one dependency belongs there: an `@Instantiated` dependency, a `@Received` dependency of a type an `@Instantiable` declaration fulfills, or a `@Received(onlyIfAvailable: true)` dependency. Every other dependency is a flat `mock()` parameter. The table below shows where each kind lands and whether the caller has to supply it.
+A type gets its own `SafeDIOverrides` struct when at least one dependency belongs there: an `@Instantiated` dependency, a `@Received` dependency the mock can build because an `@Instantiable` declaration fulfills its type, or a `@Received(onlyIfAvailable: true)` dependency. Every other dependency is a flat `mock()` parameter. The table below shows where each kind lands and whether the caller has to supply it.
 
 #### Dependency kinds in the generated mock
 
@@ -803,10 +803,13 @@ The table below shows where each dependency kind lands in the three buckets abov
 | --- | --- | --- |
 | Required `@Received` of a type some `@Instantiable` declaration fulfills (directly or via `fulfillingAdditionalTypes`) | Entry on `SafeDIOverrides` | Built from the real subtree, exactly like `@Instantiated` |
 | Required `@Received` of a type no `@Instantiable` declaration fulfills | Flat `mock()` parameter | Required |
+| Required `@Received` of a type whose `@Instantiable` declaration has `@Forwarded` properties, unless received as an `Instantiator` | Flat `mock()` parameter | Required |
 | `@Forwarded` | Flat `mock()` parameter | Required, unless the root provides a default or the forwarded type has a [`mockOnly`](#the-mockonly-parameter) provider (which defaults the parameter to `Type.mock()`) |
 | `@Instantiated` | Entry on `SafeDIOverrides` | Built from the real subtree — see [Overriding dependencies](#overriding-dependencies) |
 | `@Received(onlyIfAvailable: true)` | Entry on `SafeDIOverrides`, typed as optional | `nil` |
 | Default-valued non-DI init parameter | Flat `mock()` parameter on a direct mock, or a nested `SafeDIMockConfiguration` field when reached through a parent | The parameter’s original default expression |
+
+A type with `@Forwarded` properties can only be built by an `Instantiator` that is handed the forwarded values, which is why production never `@Instantiated`s it as a constant. A mock has no values to forward either, so when the mocked type, or a type in its tree, receives such a type as a constant, `mock()` takes the instance as a parameter, as it does for a type no `@Instantiable` declaration fulfills. This holds even when the type has a hand-written mock. A received `Instantiator` of the type is built as usual: the forwarded values are the arguments of its `instantiate(_:)`.
 
 A `@Received(onlyIfAvailable: true)` dependency gets no `SafeDIOverrides` entry of its own when the mock already builds that dependency — because the mocked type instantiates it, or because another type in the tree requires it. The receiver is then passed the built instance, unless that instance can only be built after the receiver (see [Conditionally receiving dependencies](#conditionally-receiving-dependencies)). In that case the receiver is passed `nil`, as in production, and a builder closure you set for the receiver in `SafeDIOverrides` is called with `nil`.
 
