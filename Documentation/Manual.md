@@ -505,7 +505,22 @@ public struct FeedView: Instantiable {
 }
 ```
 
-A dependency counts as available only if it can be built before the receiver. A receiver built inside the dependency’s own subtree gets `nil`, because the dependency is still being built. When a parent instantiates both the dependency and a sibling whose subtree contains the receiver, and the dependency itself receives that sibling, the dependency must be built after the sibling, so the receiver gets `nil` — unless something in the sibling’s subtree receives the dependency without `onlyIfAvailable`. Then the dependency is built first, and gets `nil` for the sibling if it receives it `onlyIfAvailable`. When two siblings each receive the other `onlyIfAvailable`, the one declared later is built first and receives `nil`. A `@Received(fulfilledByDependencyNamed:ofType:onlyIfAvailable: true)` property whose fulfilling dependency is unavailable is `nil`, and so is that property for anything that receives it in turn — unless an enclosing type instantiates, forwards, or creates through its own alias a property of the same name and type (or its non-optional form), in which case those receivers get that property.
+A dependency counts as available only if it can be built before the receiver. Receiving still follows the usual rule: a type receives what a type above it instantiates or forwards. Availability depends on the order in which one parent builds the properties it instantiates.
+
+```swift
+@Instantiable
+public struct Parent: Instantiable {
+    @Instantiated let a: A
+    @Instantiated let b: B // A type under `B` receives `a`.
+}
+```
+
+A type under `B` that receives `a` is receiving a property of `Parent`, which is above it, so `Parent` builds `a` before `b`. Nothing reaches into the types under `A`. The receiver gets `nil` in the cases where `a` cannot be built first:
+
+- **The receiver is built inside the dependency.** A type under `A` that receives `a` only if available gets `nil`, because `a` is still being built.
+- **Two of a parent’s properties receive each other.** If a type under `B` receives `a` only if available and `A` receives `b`, then `b` is built first and that receiver gets `nil`. If anything under `B` receives `a` without `onlyIfAvailable`, `a` is built first instead, and `A` gets `nil` for `b` when it receives `b` only if available.
+- **Both receive each other only if available.** The property declared later is built first and receives `nil`.
+- **A renamed dependency is unavailable.** A `@Received(fulfilledByDependencyNamed:ofType:onlyIfAvailable: true)` property whose fulfilling dependency is unavailable is `nil`, and so is that property for anything that receives it in turn. The exception is when an enclosing type instantiates, forwards, or creates through its own alias a property of the same name and type (or its non-optional form): those receivers then get that property.
 
 ### #SafeDIConfiguration
 
