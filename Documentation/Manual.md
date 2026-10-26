@@ -906,6 +906,23 @@ Initializers in an `@Instantiable` extension are never asserted, because the ext
 
 A declaration that participates only in mock generation—an `@Instantiable(mockOnly: true)` type or extension, or a hand-written `mock()` or `customMockName` method—may be guarded by the module’s `mockConditionalCompilation` condition (`DEBUG` by default) without the build reporting it. SafeDITool evaluates such a block as if that condition were active, because the generated mock code that references the declaration is wrapped in the same `#if`, and emits no assertion for it. This keeps `#if DEBUG` around a `mockOnly` declaration working under every integration, including the Xcode project plugin. Setting `mockConditionalCompilation: nil` disables this exemption, since the generated mocks are then unconditional. The exemption never applies to production declarations, nor to other conditions guarding mock-only declarations.
 
+Imports follow the code that needs them. An `#if` block that holds only imports is evaluated twice: with the reported conditions for the generated dependency tree, and as if the mock condition were active for the generated mocks, which compile only where it is. A module that a mock-only declaration needs can therefore be imported under its own `#if DEBUG`:
+
+```swift
+#if DEBUG
+import NetworkingMocks
+#endif
+
+#if DEBUG
+@Instantiable(fulfillingAdditionalTypes: [Network.self], mockOnly: true)
+extension MockNetwork {
+    public static func mock() -> MockNetwork { MockNetwork() }
+}
+#endif
+```
+
+The generated mocks import `NetworkingMocks` whatever conditions the build reports, as do the mocks of a module that depends on this one, while the generated dependency tree imports it only when the build reports `DEBUG`. A file that holds both, such as the output of `generate --combined-output`, imports what either needs.
+
 ### Reporting active conditions
 
 SafeDITool can read the conditions in two ways:
@@ -936,7 +953,7 @@ Declare roots, types that set `generateMock: true`, and `#SafeDIConfiguration` o
 
 ### Upgrading
 
-Earlier releases scanned every clause of every `#if` block. Existing projects keep building unless a production declaration sits behind a bare condition. SafeDITool now scans such a block according to the conditions it reads, and the generated code asserts that choice, so a build whose compiler disagrees fails with a message naming the condition. Where SafeDITool reads the build settings, which includes every Xcode project and every Xcode build of a Swift package, it agrees with the compiler. With `swift build` on SwiftPM’s native backend, which is the default through Swift 6.2 (the toolchain in Xcode 26) and is selected with `--build-system native` after that, report the condition in `swiftSettings` as described above, or move the declaration out of the block. In every integration, roots, types that set `generateMock: true`, and `#SafeDIConfiguration` belong outside such blocks; see [Declarations that decide which files SafeDI generates](#declarations-that-decide-which-files-safedi-generates). A mock-only declaration under `#if DEBUG` keeps working everywhere.
+Earlier releases scanned every clause of every `#if` block. Existing projects keep building unless a production declaration sits behind a bare condition. SafeDITool now scans such a block according to the conditions it reads, and the generated code asserts that choice, so a build whose compiler disagrees fails with a message naming the condition. Where SafeDITool reads the build settings, which includes every Xcode project and every Xcode build of a Swift package, it agrees with the compiler. With `swift build` on SwiftPM’s native backend, which is the default through Swift 6.2 (the toolchain in Xcode 26) and is selected with `--build-system native` after that, report the condition in `swiftSettings` as described above, or move the declaration out of the block. In every integration, roots, types that set `generateMock: true`, and `#SafeDIConfiguration` belong outside such blocks; see [Declarations that decide which files SafeDI generates](#declarations-that-decide-which-files-safedi-generates). A mock-only declaration under `#if DEBUG`, and an import it needs under its own `#if DEBUG`, keep working everywhere; see [Declarations that only feed mock generation](#declarations-that-only-feed-mock-generation).
 
 ## Comparing SafeDI and Manual Injection: Key Differences
 
