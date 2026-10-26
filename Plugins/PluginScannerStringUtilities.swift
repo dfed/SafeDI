@@ -249,3 +249,57 @@ private func blockCommentHasCloser(chars: [Character], start: Int) -> Bool {
 	}
 	return depth == 0
 }
+
+/// The string literals in every array passed to an argument labeled `argumentLabel` in `source`, in
+/// source order and without duplicates.
+///
+/// A module can declare a different `#SafeDIConfiguration` in each clause of an `#if` block, and the
+/// build plans an output for every one of them, so every occurrence counts.
+func stringLiteralsInArrayArguments(labeled argumentLabel: String, in source: String) -> [String] {
+	var results = [String]()
+	var searchStart = source.startIndex
+	while let labelRange = source.range(of: argumentLabel, range: searchStart..<source.endIndex),
+	      let openingBracket = source[labelRange.upperBound...].firstIndex(of: "["),
+	      let closingBracket = closingBracketIndex(in: source, openingBracket: openingBracket)
+	{
+		for stringLiteral in stringLiterals(in: source[source.index(after: openingBracket)..<closingBracket])
+			where !results.contains(stringLiteral)
+		{
+			results.append(stringLiteral)
+		}
+		searchStart = closingBracket
+	}
+	return results
+}
+
+/// The index of the `]` that closes the `[` at `openingBracket`, or `nil` when none does.
+private func closingBracketIndex(in source: String, openingBracket: String.Index) -> String.Index? {
+	var depth = 0
+	var index = openingBracket
+	while index < source.endIndex {
+		switch source[index] {
+		case "[":
+			depth += 1
+		case "]":
+			depth -= 1
+			guard depth > 0 else { return index }
+		default:
+			break
+		}
+		index = source.index(after: index)
+	}
+	return nil
+}
+
+/// The contents of each double-quoted string in `content`.
+private func stringLiterals(in content: Substring) -> [String] {
+	var results = [String]()
+	var searchStart = content.startIndex
+	while let openingQuote = content[searchStart...].firstIndex(of: "\""),
+	      let closingQuote = content[content.index(after: openingQuote)...].firstIndex(of: "\"")
+	{
+		results.append(String(content[content.index(after: openingQuote)..<closingQuote]))
+		searchStart = content.index(after: closingQuote)
+	}
+	return results
+}

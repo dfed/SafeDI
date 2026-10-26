@@ -3175,7 +3175,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 				}
 				""",
 			],
-			pluginInvocation: .scanWhilePlanning,
+			pluginInvocation: .scanWhilePlanning(reportsFixtureDirectoryThroughSymbolicLink: false),
 			filesToDelete: &filesToDelete,
 		)
 
