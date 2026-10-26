@@ -105,6 +105,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		self.receivedProperties = receivedProperties
 		self.requiredReceivedProperties = requiredReceivedProperties
+		var unwrappedOptionalRequiredReceivedProperties = Set<Property>()
+		for property in requiredReceivedProperties where property.typeDescription.isOptional {
+			unwrappedOptionalRequiredReceivedProperties.insert(property.asUnwrappedProperty)
+		}
+		self.unwrappedOptionalRequiredReceivedProperties = unwrappedOptionalRequiredReceivedProperties
 		// An `onlyIfAvailable` alias a receiver in this subtree requires must be created, so its
 		// fulfilling property is built before it, unless an enclosing scope provides the alias's
 		// property in its place.
@@ -192,9 +197,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		receivedProperties = [fulfillingProperty]
 		if onlyIfAvailable {
 			requiredReceivedProperties = []
+			unwrappedOptionalRequiredReceivedProperties = []
 			onlyIfAvailableUnwrappedReceivedProperties = [fulfillingProperty.asUnwrappedProperty]
 		} else {
 			requiredReceivedProperties = [fulfillingProperty]
+			unwrappedOptionalRequiredReceivedProperties = fulfillingProperty.typeDescription.isOptional ? [fulfillingProperty.asUnwrappedProperty] : []
 			onlyIfAvailableUnwrappedReceivedProperties = []
 		}
 		onlyIfAvailableAliasFulfillingProperty = onlyIfAvailable && !isProvidedByEnclosingScope ? fulfillingProperty : nil
@@ -386,6 +393,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The received properties that some receiver in this subtree requires — a `@Received`
 	/// dependency, or the fulfilling property of an aliased one, that is not `onlyIfAvailable`.
 	private let requiredReceivedProperties: Set<Property>
+	/// The unwrapped forms of the optional `requiredReceivedProperties`, which a sibling of the
+	/// non-optional form fulfills. Few receives are both required and optional, so this stays small.
+	private let unwrappedOptionalRequiredReceivedProperties: Set<Property>
 	/// Unwrapped versions of the received properties that every receiver in this subtree receives
 	/// `@Received(onlyIfAvailable: true)`, directly or through an alias. A property some receiver
 	/// requires is excluded: it must be built before this subtree, and a mock must be given it.
@@ -471,16 +481,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				siblings.append((property, index))
 			}
 		}
-		// Required receives first: they are always honored.
+		// Required receives first: they are always honored. A required property whose unwrapped form is
+		// the sibling's is the sibling's own non-optional property, which the first test finds, since
+		// a required property is never received only if available, or an optional one, which
+		// `unwrappedOptionalRequiredReceivedProperties` holds unwrapped.
 		var siblingDependencies = propertiesToGenerate.map { scope in
 			Set(siblings.compactMap { sibling in
 				(scope.receivedProperties.contains(sibling.property)
 					&& !scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property))
 					// A required optional property can resolve to a sibling of its non-optional form:
 					// in a mock, or through an `onlyIfAvailable` receive of it above the receiver.
-					|| scope.requiredReceivedProperties.contains { $0.asUnwrappedProperty == sibling.property }
+					|| (!scope.unwrappedOptionalRequiredReceivedProperties.isEmpty && scope.unwrappedOptionalRequiredReceivedProperties.contains(sibling.property))
 					// An alias's optional property is provided by a sibling of its non-optional form too.
-					|| scope.requiredAliasFulfillingProperties.contains { $0 == sibling.property || $0.asUnwrappedProperty == sibling.property }
+					|| (!scope.requiredAliasFulfillingProperties.isEmpty
+						&& scope.requiredAliasFulfillingProperties.contains { $0 == sibling.property || $0.asUnwrappedProperty == sibling.property })
 					? sibling.index
 					: nil
 			})
