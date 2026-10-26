@@ -1395,6 +1395,7 @@ public actor DependencyTreeGenerator {
 							stackPropertiesReliedOn.insert(childProperty)
 							return stackPropertiesReliedOn
 						}
+						let memoizedStackPropertiesReliedOn = stackPropertiesReliedOnByWalkedProperty[childProperty]
 						if let cycleIndex = instantiationStack.firstIndex(of: childProperty) {
 							let instantiationProperties = Array(instantiationStack[0...cycleIndex])
 							let typesInCycle = (
@@ -1409,10 +1410,8 @@ public actor DependencyTreeGenerator {
 								directParent: scope.instantiable.concreteInstantiable,
 								isReceived: !childProperty.propertyType.isConstant,
 							)
-						} else if let childStackPropertiesReliedOn = stackPropertiesReliedOnByWalkedProperty[childProperty],
-						          childStackPropertiesReliedOn.isSubset(of: receivedPropertyStack)
-						{
-							stackPropertiesReliedOn.formUnion(childStackPropertiesReliedOn)
+						} else if let memoizedStackPropertiesReliedOn, memoizedStackPropertiesReliedOn.isSubset(of: receivedPropertyStack) {
+							stackPropertiesReliedOn.formUnion(memoizedStackPropertiesReliedOn)
 						} else if let receivedPropertyScope = typeDescriptionToScopeMap[childProperty.typeDescription] {
 							var childPropertyStack = receivedPropertyStack
 							childPropertyStack.append(childProperty)
