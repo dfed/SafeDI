@@ -227,3 +227,53 @@ struct PluginScannerStripCommentsAndStringsTests {
 		#expect(!matched)
 	}
 }
+
+struct PluginScannerArrayArgumentTests {
+	@Test
+	func stringLiteralsInArrayArguments_returnsLiteralsOfEveryArgument_whenEachClauseDeclaresConfiguration() {
+		let source = """
+		#if STAGING
+		#SafeDIConfiguration(additionalMocksToGenerate: ["StagingService", "SharedService"])
+		#else
+		#SafeDIConfiguration(additionalMocksToGenerate: ["SharedService", "ProductionService"])
+		#endif
+		"""
+
+		#expect(stringLiteralsInArrayArguments(labeled: "additionalMocksToGenerate", in: source) == ["StagingService", "SharedService", "ProductionService"])
+	}
+
+	@Test
+	func stringLiteralsInArrayArguments_returnsNestedArraysLiterals_whenArrayContainsArray() {
+		let source = #"#SafeDIConfiguration(additionalDirectoriesToInclude: [["Nested"], "Outer"])"#
+
+		#expect(stringLiteralsInArrayArguments(labeled: "additionalDirectoriesToInclude", in: source) == ["Nested", "Outer"])
+	}
+
+	@Test
+	func stringLiteralsInArrayArguments_returnsNothing_whenLabelIsAbsent() {
+		let source = #"#SafeDIConfiguration(additionalImportedModules: ["Module"])"#
+
+		#expect(stringLiteralsInArrayArguments(labeled: "additionalMocksToGenerate", in: source) == [])
+	}
+
+	@Test
+	func stringLiteralsInArrayArguments_returnsNothing_whenNoArrayFollowsLabel() {
+		let source = "#SafeDIConfiguration(additionalMocksToGenerate: mocks)"
+
+		#expect(stringLiteralsInArrayArguments(labeled: "additionalMocksToGenerate", in: source) == [])
+	}
+
+	@Test
+	func stringLiteralsInArrayArguments_returnsNothing_whenArrayIsUnterminated() {
+		let source = #"#SafeDIConfiguration(additionalMocksToGenerate: ["Service""#
+
+		#expect(stringLiteralsInArrayArguments(labeled: "additionalMocksToGenerate", in: source) == [])
+	}
+
+	@Test
+	func stringLiteralsInArrayArguments_ignoresUnterminatedString_whenArrayHoldsOne() {
+		let source = #"#SafeDIConfiguration(additionalMocksToGenerate: ["Service", "Unterminated])"#
+
+		#expect(stringLiteralsInArrayArguments(labeled: "additionalMocksToGenerate", in: source) == ["Service"])
+	}
+}
