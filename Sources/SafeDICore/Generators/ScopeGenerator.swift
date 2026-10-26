@@ -53,30 +53,34 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		self.property = property
 		self.propertiesToGenerate = propertiesToGenerate
-		propertiesToDeclare = Set(propertiesToGenerate.compactMap(\.property))
+		let propertiesToDeclare = Set(propertiesToGenerate.compactMap(\.property))
+		self.propertiesToDeclare = propertiesToDeclare
 		self.unavailableOptionalProperties = unavailableOptionalProperties
+		let forwardedProperties = scopeData.forwardedProperties
+		/// The properties a child requires be passed in that this scope must itself receive.
+		func receivedFromAncestors(_ childReceivedProperties: Set<Property>) -> Set<Property> {
+			childReceivedProperties
+				// Minus the properties we declare.
+				.subtracting(propertiesToDeclare)
+				// Minus optional properties whose unwrapped form we declare.
+				// This handles the case where a non-optional version is promoted
+				// to satisfy both required and onlyIfAvailable receivers.
+				.filter { property in
+					!property.typeDescription.isOptional
+						|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
+				}
+				// Minus the properties we forward.
+				.subtracting(forwardedProperties)
+		}
+		// All the properties our children require be passed in, unioned with the
+		// properties we require to fulfill our own dependencies.
 		receivedProperties = Set(
-			propertiesToGenerate.flatMap { [propertiesToDeclare, scopeData] propertyToGenerate in
-				// All the properties this child and its children require be passed in.
-				propertyToGenerate.receivedProperties
-					// Minus the properties we declare.
-					.subtracting(propertiesToDeclare)
-					// Minus optional properties whose unwrapped form we declare.
-					// This handles the case where a non-optional version is promoted
-					// to satisfy both required and onlyIfAvailable receivers.
-					.filter { property in
-						!property.typeDescription.isOptional
-							|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
-					}
-					// Minus the properties we forward.
-					.subtracting(scopeData.forwardedProperties)
-			},
+			propertiesToGenerate.flatMap { receivedFromAncestors($0.receivedProperties) },
 		)
-		// Unioned with the properties we require to fulfill our own dependencies.
 		.union(
 			instantiable
 				.dependencies
-				.compactMap { [propertiesToDeclare] in
+				.compactMap {
 					switch $0.source {
 					case .instantiated, .forwarded:
 						nil
@@ -87,6 +91,30 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						// (e.g., as an @Instantiated sibling), the alias binds
 						// against that local — it doesn't need to be received.
 						propertiesToDeclare.contains(fulfillingProperty) ? nil : fulfillingProperty
+					}
+				},
+		)
+		requiredReceivedProperties = Set(
+			propertiesToGenerate.flatMap {
+				receivedFromAncestors($0.requiredReceivedProperties)
+					// Minus optional properties whose unwrapped form we forward.
+					.filter { property in
+						!property.typeDescription.isOptional
+							|| !forwardedProperties.contains(property.asUnwrappedProperty)
+					}
+			},
+		)
+		.union(
+			instantiable
+				.dependencies
+				.compactMap {
+					switch $0.source {
+					case .instantiated, .forwarded:
+						nil
+					case let .received(onlyIfAvailable):
+						onlyIfAvailable ? nil : $0.property
+					case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+						onlyIfAvailable || propertiesToDeclare.contains(fulfillingProperty) ? nil : fulfillingProperty
 					}
 				},
 		)
@@ -139,6 +167,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			declarationReference: declarationReference,
 		)
 		receivedProperties = [fulfillingProperty]
+		requiredReceivedProperties = onlyIfAvailable ? [] : [fulfillingProperty]
 		onlyIfAvailableUnwrappedReceivedProperties = if onlyIfAvailable {
 			[fulfillingProperty.asUnwrappedProperty]
 		} else {
@@ -161,6 +190,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Used both to order child generation (dependencies before dependents) and by mock
 	/// generation to surface dependencies the tree does not itself provide.
 	let receivedProperties: Set<Property>
+
+	/// The received properties that some receiver in this subtree requires — a `@Received`
+	/// dependency, or the fulfilling property of an aliased one, that is not `onlyIfAvailable`.
+	private let requiredReceivedProperties: Set<Property>
 
 	/// - Parameter propertiesGeneratedLater: Unwrapped properties that this subtree
 	///   receives `onlyIfAvailable` and that an enclosing scope declares but generates
@@ -348,11 +381,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				siblings.append((property, index))
 			}
 		}
-		// Required receives first: they are always honored.
+		// Required receives first: they are always honored. A required receive of
+		// `x: X?` is fulfilled by a sibling's `x: X`.
 		var siblingDependencies = propertiesToGenerate.map { scope in
 			Set(siblings.compactMap { sibling in
-				scope.receivedProperties.contains(sibling.property)
-					&& !scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property)
+				(
+					scope.receivedProperties.contains(sibling.property)
+						&& !scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property)
+				)
+					|| scope.requiredReceivedProperties.contains(sibling.property.withUpdatedTypeDescription(.optional(sibling.property.typeDescription)))
 					? sibling.index
 					: nil
 			})

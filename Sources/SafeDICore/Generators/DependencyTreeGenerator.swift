@@ -447,6 +447,10 @@ public actor DependencyTreeGenerator {
 		/// inside the tree `instantiated` creates, or inside the tree of a sibling that the chain reaches. The
 		/// properties can be of any type, `Instantiator`s included. No notes; the chain is spelled out in the message.
 		case dependencyReceivedInSameChainItIsInstantiated(instantiated: Property, receivedPropertyChain: [Property], declarationLocation: Dependency.DeclarationLocation?)
+		/// Reported at the aliased dependency that closes the cycle: the one fulfilled by the first property in
+		/// `aliasChain`, in which each aliased dependency of one type is fulfilled by the next and the last is the
+		/// first again. No notes; the chain is spelled out in the message.
+		case aliasedDependenciesFulfillOneAnother(aliasChain: [Property], declarationLocation: Dependency.DeclarationLocation?)
 		/// Reported at the hand-written `mock` method of a type whose `mock()` this module also generates.
 		case handWrittenMockSharesGeneratedMockName(TypeDescription, declaredAt: [Dependency.DeclarationLocation?], isGeneratedForAdditionalMocksToGenerate: Bool)
 
@@ -511,6 +515,15 @@ public actor DependencyTreeGenerator {
 							+ receivedPropertyChain
 							.map { "@\(Dependency.Source.receivedRawValue) \($0.asSource)" }
 							.joined(separator: " -> "),
+					),
+				]
+			case let .aliasedDependenciesFulfillOneAnother(aliasChain, declarationLocation):
+				[
+					SourceDiagnostic(
+						severity: .error,
+						location: declarationLocation,
+						message: "Dependency cycle detected: each @\(Dependency.Source.receivedRawValue)(fulfilledByDependencyNamed:ofType:) dependency is fulfilled by the next: "
+							+ aliasChain.map(\.asSource).joined(separator: " -> "),
 					),
 				]
 			}
@@ -852,9 +865,13 @@ public actor DependencyTreeGenerator {
 		)
 		// That walk does not follow a received `Instantiator` to the scope it builds, and
 		// promoted scopes' trees are walked by no validation, so report what it leaves:
-		// children, here or anywhere in the mock tree, that require one another. The mock
-		// root's own children were checked above, so only their trees are left.
-		if let mockRootChildrenRequiringEachOther {
+		// aliases that fulfill one another and children, here or anywhere in the mock tree,
+		// that require one another, in the order `validateChildrenDoNotRequireEachOther`
+		// checks them. The mock root's own children were checked above, so only their
+		// trees are left.
+		if let aliasesFulfillingOneAnother = Self.aliasesFulfillingOneAnother(in: mockRootScope) {
+			throw aliasesFulfillingOneAnother.error
+		} else if let mockRootChildrenRequiringEachOther {
 			throw mockRootChildrenRequiringEachOther.error
 		} else {
 			var mockRootChildScopes = [Scope]()
@@ -961,25 +978,48 @@ public actor DependencyTreeGenerator {
 		for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
 			children.append((property, childScope))
 		}
-		// A lone child cannot require a sibling.
-		guard children.count > 1 else { return nil }
 		var childIndexByProperty = [Property: Int]()
 		for (index, child) in children.enumerated() {
 			childIndexByProperty[child.property] = index
 		}
-		// A child's tree that requires an alias the scope declares requires the child the alias is assigned from.
-		var aliasedChildIndexByProperty = [Property: Int]()
+		// A child's tree that requires an alias the scope declares requires the child the alias is assigned
+		// from, directly or through other aliases the scope declares.
+		var aliases = [(property: Property, fulfillingProperty: Property)]()
 		for case let .aliased(property, fulfillingProperty, _, onlyIfAvailable, _) in scope.propertiesToGenerate where !onlyIfAvailable {
-			aliasedChildIndexByProperty[property] = childIndexByProperty[fulfillingProperty]
+			aliases.append((property, fulfillingProperty))
+		}
+		var aliasedChildIndexByProperty = [Property: Int]()
+		var resolvedAnAlias = true
+		while resolvedAnAlias {
+			resolvedAnAlias = false
+			for alias in aliases where aliasedChildIndexByProperty[alias.property] == nil {
+				if let index = childIndexByProperty[alias.fulfillingProperty] ?? aliasedChildIndexByProperty[alias.fulfillingProperty] {
+					aliasedChildIndexByProperty[alias.property] = index
+					resolvedAnAlias = true
+				}
+			}
+		}
+		func childIndex(declaring property: Property) -> Int? {
+			childIndexByProperty[property] ?? aliasedChildIndexByProperty[property]
+		}
+		/// The child declaring the unwrapped form of `property`, which fulfills a required receive of `property`.
+		/// A tree can list an optional property it receives only if available as neither, beneath a scope that
+		/// forwards its unwrapped form, so a receiver that requires it is looked for.
+		func childIndex(declaringUnwrapped property: Property, requiredInTreeOf childScope: Scope) -> Int? {
+			guard let index = childIndex(declaring: property.asUnwrappedProperty),
+			      requiredReceiver(of: property, inTreeOf: childScope) != nil
+			else { return nil }
+			return index
 		}
 		// The siblings each child requires, in sibling order, each with the first (sorted) property through which it is received.
-		// Only the received properties that name a sibling are kept, so nothing is sorted on the common path.
+		// A child that receives its own property is reported by the received walk or the ancestor check, but one that
+		// receives it through an alias or unwrapped requires itself here. Only the received properties that name a
+		// sibling are kept, so nothing is sorted on the common path.
 		let requiredSiblings = children.map { child in
 			let (received, onlyIfAvailable) = collectReceivedProperties(from: child.scope, cache: &cache)
 			var firstReceivedPropertyBySiblingIndex = [Int: Property]()
-			for property in received where !onlyIfAvailable.contains(property) {
-				if let index = childIndexByProperty[property] ?? aliasedChildIndexByProperty[property],
-				   children[index].property != child.property,
+			for property in received where property != child.property && !onlyIfAvailable.contains(property) {
+				if let index = childIndex(declaring: property) ?? childIndex(declaringUnwrapped: property, requiredInTreeOf: child.scope),
 				   firstReceivedPropertyBySiblingIndex[index].map({ property < $0 }) ?? true
 				{
 					firstReceivedPropertyBySiblingIndex[index] = property
@@ -1033,7 +1073,9 @@ public actor DependencyTreeGenerator {
 	) throws {
 		func validateChildrenDoNotRequireEachOther(inTreeRootedAt scope: Scope) throws {
 			guard validatedScopes.insert(scope).inserted else { return }
-			if let childrenRequiringEachOther = childrenRequiringEachOther(in: scope, cache: &cache) {
+			if let aliasesFulfillingOneAnother = aliasesFulfillingOneAnother(in: scope) {
+				throw aliasesFulfillingOneAnother.error
+			} else if let childrenRequiringEachOther = childrenRequiringEachOther(in: scope, cache: &cache) {
 				throw childrenRequiringEachOther.error
 			} else {
 				for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
@@ -1044,6 +1086,57 @@ public actor DependencyTreeGenerator {
 		for rootScope in rootScopes {
 			try validateChildrenDoNotRequireEachOther(inTreeRootedAt: rootScope)
 		}
+	}
+
+	/// Aliased dependencies of one scope that are each fulfilled by the next one.
+	private struct AliasesFulfillingOneAnother {
+		/// The aliases, starting and ending with the same one.
+		let aliasChain: [Property]
+		/// The declaration of the alias fulfilled by the first, which closes the cycle.
+		let closingDeclarationLocation: Dependency.DeclarationLocation?
+
+		/// The error reporting these aliases, at the one that closes the cycle.
+		var error: DependencyTreeGeneratorError {
+			DependencyTreeGeneratorError.aliasedDependenciesFulfillOneAnother(
+				aliasChain: aliasChain,
+				declarationLocation: closingDeclarationLocation,
+			)
+		}
+	}
+
+	/// The first cycle, in declaration order, of aliased dependencies of `scope` that are each fulfilled by
+	/// the next one. An alias resolves against a property declared beside it, so such aliases would each be
+	/// assigned from one not yet declared.
+	private static func aliasesFulfillingOneAnother(
+		in scope: Scope,
+	) -> AliasesFulfillingOneAnother? {
+		let aliases = scope.instantiable.dependencies.compactMap { dependency -> (property: Property, fulfillingProperty: Property, declarationLocation: Dependency.DeclarationLocation?)? in
+			switch dependency.source {
+			case let .aliased(fulfillingProperty, _, _):
+				(dependency.property, fulfillingProperty, dependency.declarationLocation)
+			case .instantiated, .received, .forwarded:
+				nil
+			}
+		}
+		var aliasByProperty = [Property: (property: Property, fulfillingProperty: Property, declarationLocation: Dependency.DeclarationLocation?)]()
+		for alias in aliases {
+			aliasByProperty[alias.property] = alias
+		}
+		for start in aliases {
+			// A chain longer than the aliases has entered a cycle that does not return to `start`.
+			var chain = [start]
+			while chain.count <= aliases.count, let next = aliasByProperty[chain[chain.count - 1].fulfillingProperty] {
+				if next.property == start.property {
+					return AliasesFulfillingOneAnother(
+						aliasChain: chain.map(\.property) + [start.property],
+						closingDeclarationLocation: chain[chain.count - 1].declarationLocation,
+					)
+				} else {
+					chain.append(next)
+				}
+			}
+		}
+		return nil
 	}
 
 	/// The first dependency, in declaration order and then child order, in the tree that
@@ -1071,6 +1164,7 @@ public actor DependencyTreeGenerator {
 			} else if propertiesToDeclare.contains(property)
 				|| (property.typeDescription.isOptional && propertiesToDeclare.contains(property.asUnwrappedProperty))
 				|| forwardedProperties(in: scope).contains(property)
+				|| (property.typeDescription.isOptional && forwardedProperties(in: scope).contains(property.asUnwrappedProperty))
 			{
 				// The trees of this scope's children receive this scope's `property`.
 				return nil
@@ -1162,6 +1256,13 @@ public actor DependencyTreeGenerator {
 	/// Mirrors ScopeGenerator's `receivedProperties` and `onlyIfAvailableUnwrappedReceivedProperties`
 	/// computation but operates on Scope objects directly, with memoization for O(1) revisits.
 	///
+	/// Scopes can instantiate one another through `Instantiator`s, so a scope's result can depend on
+	/// its own. Each group of scopes that instantiate one another, directly or through other scopes,
+	/// is resolved together, after the groups its scopes instantiate: a lone scope from its children's
+	/// results, with its own counted as empty where it instantiates itself, and a larger group by
+	/// recomputing its scopes until their results stop changing. A scope's result therefore does not
+	/// depend on which scope of its group was asked for first.
+	///
 	/// - Returns: `received`, every property the subtree needs from an ancestor, and
 	///   `onlyIfAvailable`, those of them that every receiver in the subtree receives only if
 	///   available. A property some receiver requires is not in `onlyIfAvailable`.
@@ -1169,13 +1270,89 @@ public actor DependencyTreeGenerator {
 		from scope: Scope,
 		cache: inout [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)],
 	) -> (received: Set<Property>, onlyIfAvailable: Set<Property>) {
-		let id = ObjectIdentifier(scope)
-		if let cached = cache[id] {
+		if let cached = cache[ObjectIdentifier(scope)] {
 			return cached
 		}
-		// Cycle sentinel — re-entrant calls return empty (cycles contribute no new received).
-		cache[id] = ([], [])
+		// Tarjan's strongly connected components algorithm over the scopes not yet in `cache`.
+		var visitIndexByScope = [ObjectIdentifier: Int]()
+		var visitedScopesNotYetResolved = [Scope]()
+		/// - Returns: The lowest visit index of the scopes not yet resolved that `scope` reaches.
+		func visit(_ scope: Scope) -> Int {
+			let visitIndex = visitIndexByScope.count
+			visitIndexByScope[ObjectIdentifier(scope)] = visitIndex
+			let groupStart = visitedScopesNotYetResolved.count
+			visitedScopesNotYetResolved.append(scope)
+			var lowestReachedVisitIndex = visitIndex
+			for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate where cache[ObjectIdentifier(childScope)] == nil {
+				// A visited child that is not yet resolved belongs to a group still being visited, so it reaches `scope`.
+				let childLowestReachedVisitIndex = visitIndexByScope[ObjectIdentifier(childScope)] ?? visit(childScope)
+				lowestReachedVisitIndex = min(lowestReachedVisitIndex, childLowestReachedVisitIndex)
+			}
+			if lowestReachedVisitIndex == visitIndex {
+				// `scope` and the scopes visited after it that are not yet resolved instantiate one another.
+				let group = Array(visitedScopesNotYetResolved[groupStart...])
+				visitedScopesNotYetResolved.removeSubrange(groupStart...)
+				resolve(group)
+			}
+			return lowestReachedVisitIndex
+		}
+		func resolve(_ group: [Scope]) {
+			for member in group {
+				cache[ObjectIdentifier(member)] = ([], [])
+			}
+			if group.count == 1 {
+				let result = receivedProperties(of: group[0], cache: cache)
+				cache[ObjectIdentifier(group[0])] = result
+			} else {
+				// Received properties only grow as the members' received properties grow, so recomputing them
+				// from none reaches the fixed point that real receivers create. With them fixed, a member's
+				// properties received only if available only grow as the members' do, so recomputing them from
+				// every property they could hold shrinks to the fixed point in which a property is required only
+				// where some receiver requires it, rather than because the cycle passes it around.
+				func recomputeUntilUnchanged(comparingReceivedOnly: Bool) {
+					var changed = true
+					while changed {
+						changed = false
+						for member in group {
+							let memberIdentifier = ObjectIdentifier(member)
+							let result = receivedProperties(of: member, cache: cache)
+							if comparingReceivedOnly {
+								changed = changed || cache[memberIdentifier]?.received != result.received
+							} else {
+								changed = changed || cache[memberIdentifier]?.onlyIfAvailable != result.onlyIfAvailable
+							}
+							cache[memberIdentifier] = result
+						}
+					}
+				}
+				recomputeUntilUnchanged(comparingReceivedOnly: true)
+				// A member's properties received only if available come from its own dependencies and its children's.
+				var everyPropertyReceivableOnlyIfAvailable = Set<Property>()
+				for member in group {
+					for dependency in member.instantiable.dependencies {
+						everyPropertyReceivableOnlyIfAvailable.insert(dependency.source.fulfillingProperty ?? dependency.property)
+					}
+					for case let .instantiated(_, childScope, _) in member.propertiesToGenerate {
+						everyPropertyReceivableOnlyIfAvailable.formUnion(cache[ObjectIdentifier(childScope)]!.onlyIfAvailable)
+					}
+				}
+				for member in group {
+					cache[ObjectIdentifier(member)]?.onlyIfAvailable = everyPropertyReceivableOnlyIfAvailable
+				}
+				recomputeUntilUnchanged(comparingReceivedOnly: false)
+			}
+		}
+		_ = visit(scope)
+		// The first scope visited always closes a group, so `visit` resolved it.
+		return cache[ObjectIdentifier(scope)]!
+	}
 
+	/// The result of `collectReceivedProperties` for `scope`, computed from the results in `cache` for
+	/// its children, which are all there: each child was resolved before `scope`'s group, or is in it.
+	private static func receivedProperties(
+		of scope: Scope,
+		cache: [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)],
+	) -> (received: Set<Property>, onlyIfAvailable: Set<Property>) {
 		let propertiesToDeclare = propertiesToDeclare(in: scope)
 		let forwardedProperties = forwardedProperties(in: scope)
 
@@ -1199,10 +1376,7 @@ public actor DependencyTreeGenerator {
 		// = [fulfillingProperty], but the own-dependency union unconditionally adds the same
 		// fulfillingProperty, making the child-path subtraction/filter redundant.
 		for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
-			let (childReceived, childOnlyIfAvailable) = collectReceivedProperties(
-				from: childScope,
-				cache: &cache,
-			)
+			let (childReceived, childOnlyIfAvailable) = cache[ObjectIdentifier(childScope)]!
 			// One pass, with no intermediate sets: this runs for every property of every scope's tree.
 			for property in childReceived where isReceivedFromAncestors(property) {
 				received.insert(property)
@@ -1249,7 +1423,7 @@ public actor DependencyTreeGenerator {
 		// A property received only if available is required when this scope's own dependencies require
 		// it, or when a child's tree receives it from this scope's ancestors other than only if available.
 		// Few properties are received only if available, so this is checked for them alone.
-		let result = (
+		return (
 			received,
 			onlyIfAvailable.filter { property in
 				!required.contains(property)
@@ -1266,8 +1440,6 @@ public actor DependencyTreeGenerator {
 					}
 			},
 		)
-		cache[id] = result
-		return result
 	}
 
 	/// Builds a scope mapping for mock generation. Similar to `createTypeDescriptionToScopeMapping`
