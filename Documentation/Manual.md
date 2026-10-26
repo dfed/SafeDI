@@ -505,7 +505,7 @@ public struct FeedView: Instantiable {
 }
 ```
 
-A dependency counts as available only if it can be built before the receiver. A receiver built inside the dependency’s own subtree gets `nil`, because the dependency is still being built. When a parent instantiates both the dependency and a sibling whose subtree contains the receiver, and the dependency itself receives that sibling, the dependency must be built after the sibling, so the receiver gets `nil` — unless something in the sibling’s subtree receives the dependency without `onlyIfAvailable`. Then the dependency is built first, and gets `nil` for the sibling if it receives it `onlyIfAvailable`. When two siblings each receive the other `onlyIfAvailable`, the one declared later is built first and receives `nil`.
+A dependency counts as available only if it can be built before the receiver. A receiver built inside the dependency’s own subtree gets `nil`, because the dependency is still being built. When a parent instantiates both the dependency and a sibling whose subtree contains the receiver, and the dependency itself receives that sibling, the dependency must be built after the sibling, so the receiver gets `nil` — unless something in the sibling’s subtree receives the dependency without `onlyIfAvailable`. Then the dependency is built first, and gets `nil` for the sibling if it receives it `onlyIfAvailable`. When two siblings each receive the other `onlyIfAvailable`, the one declared later is built first and receives `nil`. A `@Received(fulfilledByDependencyNamed:ofType:onlyIfAvailable: true)` property whose fulfilling dependency is unavailable is `nil`, and so is that property for anything that receives it in turn.
 
 ### #SafeDIConfiguration
 

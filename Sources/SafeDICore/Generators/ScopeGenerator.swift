@@ -190,11 +190,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	let receivedProperties: Set<Property>
 
 	/// - Parameter propertiesGeneratedLater: Unwrapped properties that this subtree
-	///   receives `onlyIfAvailable` and that an enclosing scope declares but generates
-	///   after this code (see `orderedPropertiesToGenerate`), so they are unavailable
-	///   here. Restricting it to this subtree's `onlyIfAvailable` receives also drops a
-	///   property a scope in this subtree declares itself, since that declaration
-	///   fulfills the receives beneath it.
+	///   receives `onlyIfAvailable` and that an enclosing scope declares but does not
+	///   generate before this code — it generates them after this code (see
+	///   `orderedPropertiesToGenerate`), or they are `onlyIfAvailable` aliases it does
+	///   not create — so they are unavailable here. Restricting it to this subtree's
+	///   `onlyIfAvailable` receives also drops a property a scope in this subtree
+	///   declares itself, since that declaration fulfills the receives beneath it.
 	func generateCode(
 		codeGeneration: CodeGeneration = .dependencyTree,
 		propertiesAlreadyGeneratedAtThisScope: Set<Property> = [],
@@ -441,15 +442,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// The properties `child`, at `index` in `orderedPropertiesToGenerate`, receives
 	/// `onlyIfAvailable` but must treat as unavailable: those this scope's ancestors
-	/// generate later (`propertiesGeneratedLater`) and those of the siblings
-	/// generated after it. All are unwrapped, so they match a receive of `x: X?`.
+	/// do not generate before this scope (`propertiesNotGeneratedBefore`) and those of
+	/// the siblings generated after it. All are unwrapped, so they match a receive of
+	/// `x: X?`.
 	private func propertiesGeneratedLater(
 		thanChildAt index: Int,
 		receivedOnlyIfAvailableBy child: ScopeGenerator,
-		propertiesGeneratedLater: Set<Property>,
+		propertiesNotGeneratedBefore: Set<Property>,
 	) -> Set<Property> {
 		child.onlyIfAvailableUnwrappedReceivedProperties.filter { property in
-			if propertiesGeneratedLater.contains(property) {
+			if propertiesNotGeneratedBefore.contains(property) {
 				true
 			} else if let orderedIndex = orderedIndexByUnwrappedProperty[property] {
 				orderedIndex > index
@@ -457,6 +459,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				false
 			}
 		}
+	}
+
+	/// The children in `orderedPropertiesToGenerate`, each with the properties this
+	/// scope generates before it and the `propertiesGeneratedLater` to generate it
+	/// with (see `generateCode`). An `onlyIfAvailable` alias that is not created is
+	/// unavailable to the children after it, exactly like a property generated later.
+	private func orderedChildren(
+		propertiesGeneratedLater: Set<Property>,
+	) -> [(generator: ScopeGenerator, propertiesAlreadyGeneratedAtThisScope: Set<Property>, propertiesGeneratedLater: Set<Property>)] {
+		var propertiesNotGeneratedBefore = propertiesGeneratedLater
+		var orderedChildren = [(generator: ScopeGenerator, propertiesAlreadyGeneratedAtThisScope: Set<Property>, propertiesGeneratedLater: Set<Property>)]()
+		for (index, childGenerator) in orderedPropertiesToGenerate.enumerated() {
+			let propertiesAlreadyGeneratedAtThisScope = Set(orderedPropertiesToGenerate[0..<index].compactMap(\.property))
+			let childPropertiesGeneratedLater = self.propertiesGeneratedLater(
+				thanChildAt: index,
+				receivedOnlyIfAvailableBy: childGenerator,
+				propertiesNotGeneratedBefore: propertiesNotGeneratedBefore,
+			)
+			orderedChildren.append((childGenerator, propertiesAlreadyGeneratedAtThisScope, childPropertiesGeneratedLater))
+			if let uncreatedAliasProperty = childGenerator.uncreatedAliasProperty(
+				unavailableProperties: childGenerator.unavailableProperties(
+					propertiesAlreadyGeneratedAtThisScope: propertiesAlreadyGeneratedAtThisScope,
+					propertiesGeneratedLater: childPropertiesGeneratedLater,
+				),
+			) {
+				propertiesNotGeneratedBefore.insert(uncreatedAliasProperty.asUnwrappedProperty)
+			}
+		}
+		return orderedChildren
 	}
 
 	/// The dependencies this scope's construction is passed `nil` for, and, for an
@@ -535,16 +566,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		leadingMemberWhitespace: String,
 	) async throws -> [String] {
 		var generatedProperties = [String]()
-		for (index, childGenerator) in orderedPropertiesToGenerate.enumerated() {
+		for child in orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater) {
 			try await generatedProperties.append(
-				childGenerator.generateCode(
+				child.generator.generateCode(
 					codeGeneration: codeGeneration,
-					propertiesAlreadyGeneratedAtThisScope: .init(orderedPropertiesToGenerate[0..<index].compactMap(\.property)),
-					propertiesGeneratedLater: self.propertiesGeneratedLater(
-						thanChildAt: index,
-						receivedOnlyIfAvailableBy: childGenerator,
-						propertiesGeneratedLater: propertiesGeneratedLater,
-					),
+					propertiesAlreadyGeneratedAtThisScope: child.propertiesAlreadyGeneratedAtThisScope,
+					propertiesGeneratedLater: child.propertiesGeneratedLater,
 					leadingWhitespace: leadingMemberWhitespace,
 				),
 			)
@@ -1236,8 +1263,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The type's declared dependencies.
 		let dependencies: [Dependency]
 		/// The `onlyIfAvailable` dependencies that are unavailable where this node is
-		/// built, because an ancestor is still building them or an enclosing scope builds
-		/// them after it. They are passed `nil`.
+		/// built, because an ancestor is still building them or an enclosing scope does
+		/// not build them before it. They are passed `nil`.
 		let unavailableProperties: Set<Property>
 		/// Whether a compatible user-defined mock method exists for this type.
 		let useMockInitializer: Bool
@@ -1625,14 +1652,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Roots only appear at the top level, never as children here — so the
 		// `.root` case is not part of the reachable pattern space and is omitted.
-		for (index, childGenerator) in orderedPropertiesToGenerate.enumerated() {
-			let childPropertiesGeneratedLater = self.propertiesGeneratedLater(
-				thanChildAt: index,
-				receivedOnlyIfAvailableBy: childGenerator,
-				propertiesGeneratedLater: propertiesGeneratedLater,
-			)
+		for child in orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater) {
+			let childGenerator = child.generator
+			let childPropertiesGeneratedLater = child.propertiesGeneratedLater
 			let childUnavailableProperties = childGenerator.unavailableProperties(
-				propertiesAlreadyGeneratedAtThisScope: Set(orderedPropertiesToGenerate[0..<index].compactMap(\.property)),
+				propertiesAlreadyGeneratedAtThisScope: child.propertiesAlreadyGeneratedAtThisScope,
 				propertiesGeneratedLater: childPropertiesGeneratedLater,
 			)
 			if case let .alias(property, fulfillingProperty, _, _, declarationReference) = childGenerator.scopeData {
