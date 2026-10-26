@@ -1042,12 +1042,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 				    private let derivedValue: Bool
 
-				    func login(username: String, password: String) {
-				        Task {
-				            let user = await authService.login(username: username, password: password)
-				            let loggedInViewController = loggedInViewControllerBuilder.instantiate(user)
-				            pushViewController(loggedInViewController)
-				        }
+				    func login(username: String, password: String) async {
+				        let user = await authService.login(username: username, password: password)
+				        let loggedInViewController = loggedInViewControllerBuilder.instantiate(user)
+				        pushViewController(loggedInViewController)
 				    }
 				}
 				""",
@@ -1148,12 +1146,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 				    private let derivedValue: Bool
 
-				    func login(username: String, password: String) {
-				        Task {
-				            let user = await authService.login(username: username, password: password)
-				            let loggedInViewController = loggedInViewControllerBuilder.instantiate(user)
-				            pushViewController(loggedInViewController)
-				        }
+				    func login(username: String, password: String) async {
+				        let user = await authService.login(username: username, password: password)
+				        let loggedInViewController = loggedInViewControllerBuilder.instantiate(user)
+				        pushViewController(loggedInViewController)
 				    }
 				}
 				""",
@@ -1325,12 +1321,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 				    private let derivedValue: Bool
 
-				    func login(username: String, password: String) {
-				        Task {
-				            let user = await authService.login(username: username, password: password)
-				            let loggedInViewController = loggedInViewControllerBuilder.instantiate((userID: user.id, userName: user.name))
-				            pushViewController(loggedInViewController)
-				        }
+				    func login(username: String, password: String) async {
+				        let user = await authService.login(username: username, password: password)
+				        let loggedInViewController = loggedInViewControllerBuilder.instantiate((userID: user.id, userName: user.name))
+				        pushViewController(loggedInViewController)
 				    }
 				}
 				""",
@@ -1451,12 +1445,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 				    private let derivedValue: Bool
 
-				    func login(username: String, password: String) {
-				        Task {
-				            let user = await authService.login(username: username, password: password)
-				            let loggedInViewController = loggedInViewControllerBuilder.instantiate((userID: user.id, userName: user.name))
-				            pushViewController(loggedInViewController)
-				        }
+				    func login(username: String, password: String) async {
+				        let user = await authService.login(username: username, password: password)
+				        let loggedInViewController = loggedInViewControllerBuilder.instantiate((userID: user.id, userName: user.name))
+				        pushViewController(loggedInViewController)
 				    }
 				}
 				""",
@@ -1744,12 +1736,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 				    private let derivedValue: Bool
 
-				    func login(username: String, password: String) {
-				        Task {
-				            let user = await authService.login(username: username, password: password)
-				            let loggedInViewController = loggedInViewControllerBuilder.instantiate(user)
-				            pushViewController(loggedInViewController)
-				        }
+				    func login(username: String, password: String) async {
+				        let user = await authService.login(username: username, password: password)
+				        let loggedInViewController = loggedInViewControllerBuilder.instantiate(user)
+				        pushViewController(loggedInViewController)
 				    }
 				}
 				""",
@@ -1862,12 +1852,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 				    private let derivedValue: Bool
 
-				    func login(username: String, password: String) {
-				        Task {
-				            let user = await authService.login(username: username, password: password)
-				            let loggedInViewController = loggedInViewControllerBuilder.instantiate(user)
-				            pushViewController(loggedInViewController)
-				        }
+				    func login(username: String, password: String) async {
+				        let user = await authService.login(username: username, password: password)
+				        let loggedInViewController = loggedInViewControllerBuilder.instantiate(user)
+				        pushViewController(loggedInViewController)
 				    }
 				}
 				""",
@@ -3166,12 +3154,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 				    private let derivedValue: Bool
 
-				    func login(username: String, password: String) {
-				        Task {
-				            let user = await authService.login(username: username, password: password)
-				            let loggedInViewController = loggedInViewControllerBuilder.instantiate(user)
-				            pushViewController(loggedInViewController)
-				        }
+				    func login(username: String, password: String) async {
+				        let user = await authService.login(username: username, password: password)
+				        let loggedInViewController = loggedInViewControllerBuilder.instantiate(user)
+				        pushViewController(loggedInViewController)
 				    }
 				}
 				""",
@@ -3628,12 +3614,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 				    @Instantiated let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
 
-				    func login(username: String, password: String) {
-				        Task {
-				            let user = await authService.login(username: username, password: password)
-				            let loggedInViewController = loggedInViewControllerBuilder.instantiate(DefaultUserManager(user: user))
-				            pushViewController(loggedInViewController)
-				        }
+				    func login(username: String, password: String) async {
+				        let user = await authService.login(username: username, password: password)
+				        let loggedInViewController = loggedInViewControllerBuilder.instantiate(DefaultUserManager(user: user))
+				        pushViewController(loggedInViewController)
 				    }
 				}
 				""",
@@ -3854,12 +3838,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 				    @Instantiated let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
 
-				    func login(username: String, password: String) {
-				        Task {
-				            let user = await authService.login(username: username, password: password)
-				            let loggedInViewController = loggedInViewControllerBuilder.instantiate(DefaultUserManager(user: user))
-				            pushViewController(loggedInViewController)
-				        }
+				    func login(username: String, password: String) async {
+				        let user = await authService.login(username: username, password: password)
+				        let loggedInViewController = loggedInViewControllerBuilder.instantiate(DefaultUserManager(user: user))
+				        pushViewController(loggedInViewController)
 				    }
 				}
 				""",
@@ -4184,12 +4166,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 				    @Instantiated let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
 
-				    func login(username: String, password: String) {
-				        Task {
-				            let user = await authService.login(username: username, password: password)
-				            let loggedInViewController = loggedInViewControllerBuilder.instantiate(DefaultUserManager(user: user))
-				            pushViewController(loggedInViewController)
-				        }
+				    func login(username: String, password: String) async {
+				        let user = await authService.login(username: username, password: password)
+				        let loggedInViewController = loggedInViewControllerBuilder.instantiate(DefaultUserManager(user: user))
+				        pushViewController(loggedInViewController)
 				    }
 				}
 				""",
@@ -4339,12 +4319,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 				    @Instantiated let loggedInViewControllerBuilder: Instantiator<LoggedInViewController>
 
-				    func login(username: String, password: String) {
-				        Task {
-				            let user = await authService.login(username: username, password: password)
-				            let loggedInViewController = loggedInViewControllerBuilder.instantiate(DefaultUserManager(user: user))
-				            pushViewController(loggedInViewController)
-				        }
+				    func login(username: String, password: String) async {
+				        let user = await authService.login(username: username, password: password)
+				        let loggedInViewController = loggedInViewControllerBuilder.instantiate(DefaultUserManager(user: user))
+				        pushViewController(loggedInViewController)
 				    }
 				}
 				""",
