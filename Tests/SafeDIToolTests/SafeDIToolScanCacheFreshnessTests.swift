@@ -27,7 +27,7 @@ import Testing
 ///
 /// The input CSV lists absolute paths while scan records paths relative to the project root,
 /// so a fresh parse in `generate` names the root differently from the manifest and fails with
-/// `noRootFound`. Success therefore shows `generate` reused scan's cache, and that error shows
+/// `rootNotInManifest`. Success therefore shows `generate` reused scan's cache, and that error shows
 /// it parsed afresh.
 struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 	// MARK: Initialization
@@ -59,7 +59,7 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 		try Self.rootContent.appending("\n// Edited.\n").write(to: project.rootFile, atomically: true, encoding: .utf8)
 		try FileModificationTime(seconds: 4_000_000_000, nanoseconds: 0).apply(toItemAtPath: project.rootFile.path)
 
-		await assertThrowsError(Self.noRootFoundMessage) {
+		await assertThrowsError(project.rootNotInManifestMessage) {
 			try await project.generate()
 		}
 	}
@@ -71,7 +71,7 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 		let project = try await scannedProject()
 		try FileModificationTime(seconds: 0, nanoseconds: 0).apply(toItemAtPath: project.rootFile.path)
 
-		await assertThrowsError(Self.noRootFoundMessage) {
+		await assertThrowsError(project.rootNotInManifestMessage) {
 			try await project.generate()
 		}
 	}
@@ -86,7 +86,7 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 			nanoseconds: scannedTime.nanoseconds == 0 ? 1 : scannedTime.nanoseconds - 1,
 		).apply(toItemAtPath: project.rootFile.path)
 
-		await assertThrowsError(Self.noRootFoundMessage) {
+		await assertThrowsError(project.rootNotInManifestMessage) {
 			try await project.generate()
 		}
 	}
@@ -117,7 +117,7 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 		let project = try await scannedProject(throughSymbolicLink: true)
 		try FileModificationTime(seconds: 0, nanoseconds: 0).apply(toItemAtPath: project.targetFile.path)
 
-		await assertThrowsError(Self.noRootFoundMessage) {
+		await assertThrowsError(project.rootNotInManifestMessage) {
 			try await project.generate()
 		}
 	}
@@ -135,7 +135,7 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 		// Only the link itself changed, and a link's own time is what reveals that.
 		#expect(try FileModificationTime(ofItemAtPath: project.rootFile.path) != linkTime)
 
-		await assertThrowsError(Self.noRootFoundMessage) {
+		await assertThrowsError(project.rootNotInManifestMessage) {
 			try await project.generate()
 		}
 	}
@@ -163,7 +163,7 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 		cache["scannedInputPaths"] = scannedInputs.compactMap { $0["path"] }
 		try JSONSerialization.data(withJSONObject: cache).write(to: cacheURL)
 
-		await assertThrowsError(Self.noRootFoundMessage) {
+		await assertThrowsError(project.rootNotInManifestMessage) {
 			try await project.generate()
 		}
 	}
@@ -179,8 +179,6 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 	}
 	"""
 
-	private static let noRootFoundMessage = "Manifest lists 'Root.swift' as containing a dependency tree root, but no @Instantiable(isRoot: true) was found in that file. If an `#if` block declares the root, SafeDI evaluated it differently when it decided which files to generate, which happens before the build with only the compilation conditions the build tool plugin can see, such as a target’s `swiftSettings` defines but not SwiftPM’s `DEBUG`. Declare the root outside the `#if` block."
-
 	private struct ScannedProject {
 		let directory: URL
 		/// The input the CSV lists.
@@ -189,6 +187,11 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 		let targetFile: URL
 		let swiftFileCSV: URL
 		let manifestFile: URL
+
+		/// The error a fresh parse in `generate` throws, naming the root as the CSV does.
+		var rootNotInManifestMessage: String {
+			"Found @Instantiable(isRoot: true) in '\(rootFile.path)', but this file is not listed in the manifest’s dependencyTreeGeneration. SafeDI decides which files to generate before the build runs, listing every file that declares a root, a type that sets `generateMock: true`, or a #SafeDIConfiguration in any clause of its `#if` blocks, so the file most likely changed after that decision; building again lists it. A hand-written manifest must list the file, or the type must not be a root."
+		}
 
 		func generate() async throws {
 			try await Generate.parse([
