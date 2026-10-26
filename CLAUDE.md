@@ -103,6 +103,16 @@ Validation is split between the macro and the plugin based on available context:
 
 The `Instantiable` struct conforms to `Codable` and is serialized as JSON in `.safedi` module info files. These files are **regenerated every build** — there is no cross-version deserialization. Do not add backward-compatibility decoding logic (e.g., `decodeIfPresent` with defaults). The synthesized `Codable` conformance is sufficient.
 
+## Determinism
+
+Everything SafeDI produces must be identical on every run over the same inputs: generated code, diagnostics (their text, their order, and which one is reported first), fix-its, output file names, and the bytes of manifests, `.safedi` files and caches.
+
+- Swift seeds hashing per process, and `Scope` hashes by object identity, so the order of a `Set` or `Dictionary` changes between runs — for scopes, even under a fixed hash seed. A task group's results arrive in completion order. None of these orders may reach output.
+- When code chooses among candidates or emits a list, use declaration order, source path order, or a sorted order. Never use first-found or last-write-wins over an unordered collection.
+- When a choice is genuinely ambiguous, report an error or apply a stated tie-break. Do not pick silently.
+- Sorting only on the failure path is fine, and keeps the success path cheap: visit everything, and keep the candidate that sorts first only when there is something to report.
+- A test of choice-making code needs enough candidates that a wrong order fails on nearly every run: twenty or more, or a permutation of six. A fixture with one candidate cannot catch this class of bug.
+
 ## Code Style
 
 - **No abbreviations.** Use `dependency` not `dep`, `parameter` not `param`, `declaration` not `decl`. Everywhere: variables, functions, tests, comments, commits.
