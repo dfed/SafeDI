@@ -223,6 +223,21 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// Whether this is a `LazilyInstantiated` or `SendableLazilyInstantiated`, optional or not.
+	/// Checked for every property in generation’s hottest loops, so it compares names only for a generic type.
+	var isLazilyInstantiated: Bool {
+		switch self {
+		case let .simple(name, generics):
+			!generics.isEmpty && (name == Dependency.lazilyInstantiatedType || name == Dependency.sendableLazilyInstantiatedType)
+		case
+			let .optional(type),
+			let .implicitlyUnwrappedOptional(type):
+			type.isLazilyInstantiated
+		case .any, .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .some, .tuple, .unknown, .void:
+			false
+		}
+	}
+
 	public var asFunctionParameter: TypeDescription {
 		switch self {
 		case .any,

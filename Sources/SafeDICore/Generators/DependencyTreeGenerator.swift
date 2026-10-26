@@ -952,15 +952,18 @@ public actor DependencyTreeGenerator {
 		for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
 			children.append((property, childScope))
 		}
+		// A lazily instantiated child is also received by value, as the instance it creates.
 		var childIndexByProperty = [Property: Int]()
 		for (index, child) in children.enumerated() {
-			childIndexByProperty[child.property] = index
+			for receivableProperty in child.property.withLazilyInstantiatedInstanceProperty {
+				childIndexByProperty[receivableProperty] = index
+			}
 		}
-		let requiredSiblingIndices = children.map { child in
+		let requiredSiblingIndices = children.enumerated().map { index, child in
 			let (received, onlyIfAvailable) = collectReceivedProperties(from: child.scope, cache: &cache)
 			return received.compactMap { property in
-				property != child.property && !onlyIfAvailable.contains(property)
-					? childIndexByProperty[property]
+				!onlyIfAvailable.contains(property)
+					? childIndexByProperty[property].flatMap { $0 == index ? nil : $0 }
 					: nil
 			}
 		}
@@ -1696,11 +1699,13 @@ public actor DependencyTreeGenerator {
 						// There is a cycle in our scope tree. Do not re-enter it.
 						continue
 					}
+					// Neither the child nor, when it is lazily instantiated, its instance can be received in the tree it creates.
+					var childReceivableProperties = receivableProperties.union(scope.properties)
+					childReceivableProperties.remove(declaredChildProperty)
+					childReceivableProperties.remove(childProperty)
 					try validatePropertiesAreFulfillable(
 						on: childScope,
-						receivableProperties: receivableProperties
-							.union(scope.properties)
-							.subtracting(declaredChildProperty.withLazilyInstantiatedInstanceProperty),
+						receivableProperties: childReceivableProperties,
 						property: childProperty,
 						propertyStack: childPropertyStack,
 						lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations.recordingLazilyInstantiated(declaredChildProperty),

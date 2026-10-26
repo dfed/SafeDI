@@ -226,7 +226,8 @@ public struct Initializer: Codable, Hashable, Sendable {
 			.map {
 				if let unavailableProperties, unavailableProperties.contains($0.dependency.property) {
 					"\($0.argument.label): nil"
-				} else if $0.dependency.source.isReceived,
+				} else if !lazilyInstantiatedInstanceProperties.isEmpty,
+				          $0.dependency.source.isReceived,
 				          lazilyInstantiatedInstanceProperties.contains($0.dependency.property.asUnwrappedProperty)
 				{
 					"\($0.argument.label): \($0.argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"

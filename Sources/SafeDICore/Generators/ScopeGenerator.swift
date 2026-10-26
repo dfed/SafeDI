@@ -55,7 +55,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.property = property
 		self.propertiesToGenerate = propertiesToGenerate
 		// A lazily instantiated property also declares the property that receives its instance by value.
-		propertiesToDeclare = Set(propertiesToGenerate.compactMap(\.property).flatMap(\.withLazilyInstantiatedInstanceProperty))
+		let childProperties = propertiesToGenerate.compactMap(\.property)
+		propertiesToDeclare = Set(childProperties).union(childProperties.compactMap(\.asLazilyInstantiatedInstanceProperty))
 		self.unavailableOptionalProperties = unavailableOptionalProperties
 		self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
 		fulfillingPropertyIsLazilyInstantiatedInstance = false
@@ -353,21 +354,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A property can be listed more than once — a mock root promotes a received
 		// property that a promoted scope receives even when the root already
 		// instantiates it. Only the first child for each property is generated.
-		var siblings = [(property: Property, index: Int)]()
+		// A lazily instantiated sibling is also received by value, as the instance it creates.
+		var siblings = [(property: Property, instanceProperty: Property?, index: Int)]()
 		var listedProperties = Set<Property>()
 		for (index, scope) in propertiesToGenerate.enumerated() {
 			if let property = scope.property, listedProperties.insert(property).inserted {
-				siblings.append((property, index))
+				siblings.append((property, property.asLazilyInstantiatedInstanceProperty, index))
 			}
 		}
-		// Required receives first: they are always honored. A lazily instantiated sibling
-		// is also received by value, as the instance it creates.
+		// Required receives first: they are always honored.
 		var siblingDependencies = propertiesToGenerate.map { scope in
-			Set(siblings.compactMap { sibling in
-				sibling.property.withLazilyInstantiatedInstanceProperty.contains { receivableProperty in
-					scope.receivedProperties.contains(receivableProperty)
-						&& !scope.onlyIfAvailableUnwrappedReceivedProperties.contains(receivableProperty)
-				}
+			func requires(_ property: Property) -> Bool {
+				scope.receivedProperties.contains(property)
+					&& !scope.onlyIfAvailableUnwrappedReceivedProperties.contains(property)
+			}
+			return Set(siblings.compactMap { sibling in
+				requires(sibling.property) || sibling.instanceProperty.map(requires) == true
 					? sibling.index
 					: nil
 			})
@@ -387,7 +389,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// would wait on already waits on the receiver.
 		for (index, scope) in propertiesToGenerate.enumerated() where !scope.onlyIfAvailableUnwrappedReceivedProperties.isEmpty {
 			for sibling in siblings
-				where !scope.onlyIfAvailableUnwrappedReceivedProperties.isDisjoint(with: sibling.property.withLazilyInstantiatedInstanceProperty)
+				where (
+					scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property)
+						|| sibling.instanceProperty.map(scope.onlyIfAvailableUnwrappedReceivedProperties.contains) == true
+				)
 				&& !dependsOn(index, from: sibling.index)
 			{
 				siblingDependencies[index].insert(sibling.index)
@@ -417,9 +422,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		.enumerated()
 		.reduce(into: [Property: Int]()) { partialResult, indexAndScope in
 			if let property = indexAndScope.element.property {
+				partialResult[property.asUnwrappedProperty] = indexAndScope.offset
 				// A lazily instantiated property is also received by value, as the instance it creates.
-				for receivableProperty in property.withLazilyInstantiatedInstanceProperty {
-					partialResult[receivableProperty.asUnwrappedProperty] = indexAndScope.offset
+				if let instanceProperty = property.asLazilyInstantiatedInstanceProperty {
+					partialResult[instanceProperty] = indexAndScope.offset
 				}
 			}
 		}
@@ -1127,6 +1133,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let dependenciesByLabel = Dictionary(
 			uniqueKeysWithValues: instantiable.dependencies.map { ($0.property.label, $0) },
 		)
+		// A mock root that receives a dependency by value is passed the instance of the
+		// `LazilyInstantiated` property promoted to its children, when the tree also receives that.
+		let lazilyInstantiatedInstanceProperties = Set(
+			propertiesToGenerate
+				.compactMap(\.property)
+				.compactMap(\.asLazilyInstantiatedInstanceProperty),
+		)
 		var parts = [String]()
 		for argument in constructionInitializer.arguments {
 			if let dependency = dependenciesByLabel[argument.innerLabel] {
@@ -1136,7 +1149,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// name. Rewrite the reference so the Root init call finds it.
 				let typeSource = dependency.property.typeDescription.asSource
 				let resolved = disambiguationMap[argument.innerLabel]?[typeSource] ?? argument.innerLabel
-				parts.append("\(argument.label): \(resolved)")
+				if dependency.source.isReceived,
+				   lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty)
+				{
+					parts.append("\(argument.label): \(resolved).\(Dependency.lazilyInstantiatedInstancePropertyName)")
+				} else {
+					parts.append("\(argument.label): \(resolved)")
+				}
 			} else if argument.hasDefaultValue, argument.label != "_" {
 				parts.append("\(argument.label): \(argument.label)")
 			}
@@ -1526,6 +1545,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The fulfilling dependency's type — used to look up flat-parameter
 		/// disambiguations when the fulfiller is a renamed mock parameter.
 		let fulfillingTypeDescription: TypeDescription
+		/// Whether the fulfilling dependency is in scope only as the instance of a `LazilyInstantiated` property.
+		let fulfillingPropertyIsLazilyInstantiatedInstance: Bool
 		/// Where the alias property is declared, so compiler diagnostics for the
 		/// emitted binding can be reported at the user's declaration.
 		let declarationLocation: Dependency.DeclarationLocation?
@@ -1637,6 +1658,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					typeDescription: property.typeDescription,
 					fulfillingLabel: fulfillingProperty.label,
 					fulfillingTypeDescription: fulfillingProperty.typeDescription,
+					fulfillingPropertyIsLazilyInstantiatedInstance: childGenerator.fulfillingPropertyIsLazilyInstantiatedInstance,
 					declarationLocation: declarationLocation,
 				)))
 			} else if case let .property(childInstantiable, childProperty, _, erasedToConcreteExistential, isPropertyCycle) = childGenerator.scopeData {
@@ -2250,8 +2272,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let fulfillingLabel = alias.fulfillingLabel
 		let fulfillingTypeSource = alias.fulfillingTypeDescription.asSource
 		let resolvedFulfilling = flatParameterDisambiguationMap[fulfillingLabel]?[fulfillingTypeSource] ?? fulfillingLabel
+		let fulfillingExpression = if alias.fulfillingPropertyIsLazilyInstantiatedInstance {
+			"\(resolvedFulfilling).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+		} else {
+			resolvedFulfilling
+		}
 		return remappingSourceLocation(
-			of: "let \(alias.propertyLabel): \(alias.typeDescription.asSource) = \(resolvedFulfilling)",
+			of: "let \(alias.propertyLabel): \(alias.typeDescription.asSource) = \(fulfillingExpression)",
 			to: alias.declarationLocation,
 		)
 		.split(separator: "\n")

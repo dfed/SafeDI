@@ -2025,5 +2025,275 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsError_whenInstanceIsReceivedByValueBelowTypeWhoseOnlyIfAvailableLazilyInstantiatedPropertyIsUnavailable() async {
+		// Parent receives the `LazilyInstantiated` only if available, and nothing instantiates it,
+		// so there is no instance for Child to receive.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):7:5: error: @Received property `analytics: Analytics` is not @Instantiated or @Forwarded in chain: Root -> Parent -> Child. Did you mean `analytics: LazilyInstantiated<Analytics>?`?
+				\(fixtures["Child.swift"]):7:30-7:39: fixit: LazilyInstantiated<Analytics>?
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(parent: Parent) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let parent: Parent
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Parent: Instantiable {
+					    public init(analytics: LazilyInstantiated<Analytics>?, child: Child) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(onlyIfAvailable: true) let analytics: LazilyInstantiated<Analytics>?
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(analytics: Analytics) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let analytics: Analytics
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Analytics: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenPromotedLazilyInstantiatedPropertyAndPromotedDependencyRequireEachOther() async {
+		// Screen’s mock promotes `a` and `b` to children of the mock root. Creating `a` requires `b`,
+		// and creating `b` requires the instance of `a`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated a: A -> @Received b: B -> @Received a: A. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(home: Home, settings: Settings) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let home: Home
+					    @Instantiated let settings: Settings
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Home: Instantiable {
+					    public init(a: LazilyInstantiated<A>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let a: LazilyInstantiated<A>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Settings: Instantiable {
+					    public init(b: B) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable {
+					    public init(b: B) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(a: A) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let a: A
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_readsInstanceOfPromotedLazilyInstantiatedProperty_whenMockedTypeItselfReceivesItByValue() async throws {
+		// Home receives the `LazilyInstantiated`, so the mock promotes that once.
+		// Screen, the mocked type, receives its instance.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(analytics: Analytics, home: Home) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received let analytics: Analytics
+				    @Instantiated let home: Home
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Home: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received let analytics: LazilyInstantiated<Analytics>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            home: ((LazilyInstantiated<Analytics>) -> Home)? = nil
+		        ) {
+		            self.analytics = analytics
+		            self.home = home
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let home: ((LazilyInstantiated<Analytics>) -> Home)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(analytics) } else { Home(analytics: analytics) }
+		        return Screen(analytics: analytics.instance, home: home)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_readsInstanceOfLazilyInstantiatedProperty_whenMockedTypeRenamesItByValue() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Feature: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>, eventTracker: EventTracker) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let analytics: LazilyInstantiated<Analytics>
+				    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let eventTracker: EventTracker
+				}
+				""",
+				"""
+				public protocol EventTracker {}
+
+				@Instantiable
+				public final class Analytics: EventTracker, Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Feature+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Feature {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil
+		        ) {
+		            self.analytics = analytics
+		        }
+
+		        let analytics: (() -> Analytics)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Feature {
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        #sourceLocation(file: "\(output.fixtures["Feature.swift"])", line: 8)
+		        let eventTracker: EventTracker = analytics.instance
+		        #sourceLocation()
+		        return Feature(analytics: analytics, eventTracker: eventTracker)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Feature+SafeDIMock.swift"] ?? "")")
+	}
+
 	private var filesToDelete: [URL]
 }

@@ -57,10 +57,18 @@ final class Scope: Hashable {
 		)
 	}
 
-	/// Every property this scope declares. A lazily instantiated property is followed by the property that receives its instance by value.
+	/// Every property this scope declares. A lazily instantiated property this scope creates is followed by the
+	/// property that receives its instance by value. One it only receives is not: whichever scope created it
+	/// already offers that instance, and an `onlyIfAvailable` receive may have nothing behind it.
 	private(set) lazy var properties: [Property] = instantiable
 		.dependencies
-		.flatMap(\.property.withLazilyInstantiatedInstanceProperty)
+		.flatMap { dependency in
+			if dependency.source.isReceived {
+				[dependency.property]
+			} else {
+				dependency.property.withLazilyInstantiatedInstanceProperty
+			}
+		}
 
 	private(set) lazy var createdProperties = Set(
 		instantiable
@@ -143,7 +151,10 @@ final class Scope: Hashable {
 		let isPropertyCycle: Bool
 		if let property {
 			isPropertyCycle = propertyStack.contains(property)
-			childPropertyStack.insert(contentsOf: property.withLazilyInstantiatedInstanceProperty, at: 0)
+			childPropertyStack.insert(property, at: 0)
+			if let instanceProperty = property.asLazilyInstantiatedInstanceProperty {
+				childPropertyStack.insert(instanceProperty, at: 0)
+			}
 		} else {
 			isPropertyCycle = false
 		}
@@ -159,10 +170,15 @@ final class Scope: Hashable {
 				property
 			}
 		} + instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)
-		let declaredPropertyLabels = Set(declaredProperties.map(\.label))
-		let childLazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
-			.filter { !declaredPropertyLabels.contains($0.label) }
-			.union(declaredProperties.compactMap(\.asLazilyInstantiatedInstanceProperty))
+		let declaredLazilyInstantiatedInstanceProperties = declaredProperties.compactMap(\.asLazilyInstantiatedInstanceProperty)
+		let childLazilyInstantiatedInstanceProperties: Set<Property> = if lazilyInstantiatedInstanceProperties.isEmpty {
+			// Nearly every scope: nothing above it is lazily instantiated, so there is nothing to shadow.
+			Set(declaredLazilyInstantiatedInstanceProperties)
+		} else {
+			lazilyInstantiatedInstanceProperties
+				.filter { inheritedProperty in !declaredProperties.contains { $0.label == inheritedProperty.label } }
+				.union(declaredLazilyInstantiatedInstanceProperties)
+		}
 		// In mock mode, unavailableOptionalProperties is empty — onlyIfAvailable
 		// dependencies become optional mock parameters instead of being marked unavailable.
 		let unavailableOptionalProperties: Set<Property>

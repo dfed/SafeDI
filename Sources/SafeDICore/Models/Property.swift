@@ -166,7 +166,7 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 	/// `LazilyInstantiated` wrapper: `service: LazilyInstantiated<Service>` is received by value as `service: Service`.
 	/// `nil` when the property is not lazily instantiated.
 	var asLazilyInstantiatedInstanceProperty: Property? {
-		if propertyType.isLazilyInstantiated {
+		if typeDescription.isLazilyInstantiated {
 			Property(label: label, typeDescription: typeDescription.asInstantiatedType)
 		} else {
 			nil
