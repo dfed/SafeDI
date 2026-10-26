@@ -504,6 +504,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
+	/// A child in `orderedPropertiesToGenerate`, with what it is generated with.
+	private struct OrderedChild {
+		let generator: ScopeGenerator
+		/// The child's `unavailableProperties`, given the properties this scope generates before it.
+		let unavailableProperties: Set<Property>
+		/// The `propertiesGeneratedLater` to generate the child with (see `generateCode`).
+		let propertiesGeneratedLater: Set<Property>
+	}
+
 	/// The children in `orderedPropertiesToGenerate`, each with its `unavailableProperties`
 	/// given the properties this scope generates before it, and the `propertiesGeneratedLater`
 	/// to generate it with (see `generateCode`). An `onlyIfAvailable` alias that is not created is
@@ -514,10 +523,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `propertiesGeneratedLater`.
 	private func orderedChildren(
 		propertiesGeneratedLater: Set<Property>,
-	) -> [(generator: ScopeGenerator, unavailableProperties: Set<Property>, propertiesGeneratedLater: Set<Property>)] {
+	) -> [OrderedChild] {
 		var propertiesNotGeneratedBefore = propertiesGeneratedLater
 		var uncreatedAliasProperties = Set<Property>()
-		var orderedChildren = [(generator: ScopeGenerator, unavailableProperties: Set<Property>, propertiesGeneratedLater: Set<Property>)]()
+		var orderedChildren = [OrderedChild]()
 		for (index, childGenerator) in orderedPropertiesToGenerate.enumerated() {
 			let childPropertiesGeneratedLater = self.propertiesGeneratedLater(
 				thanChildAt: index,
@@ -532,7 +541,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				},
 				propertiesGeneratedLater: childPropertiesGeneratedLater,
 			)
-			orderedChildren.append((childGenerator, childUnavailableProperties, childPropertiesGeneratedLater))
+			orderedChildren.append(OrderedChild(
+				generator: childGenerator,
+				unavailableProperties: childUnavailableProperties,
+				propertiesGeneratedLater: childPropertiesGeneratedLater,
+			))
 			if !childGenerator.aliasPropertyIsProvidedByEnclosingScope,
 			   let uncreatedAliasProperty = childGenerator.uncreatedAliasProperty(unavailableProperties: childUnavailableProperties)
 			{
