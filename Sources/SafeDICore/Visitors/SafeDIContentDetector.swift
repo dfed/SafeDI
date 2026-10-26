@@ -127,6 +127,14 @@ extension IfConfigDeclSyntax {
 		detector.walk(self)
 		return detector.content
 	}
+
+	/// What SafeDI would learn from this block among type declarations, and the declarations in every
+	/// one of its clauses that decide which files SafeDI generates. Both come from one walk of the block.
+	func safeDIContentAmongDeclarations() -> (content: SafeDIContent, outputFileDeclarations: OutputFileDeclarations) {
+		let detector = SafeDIContentDetector(context: .declarations)
+		detector.walk(self)
+		return (detector.content, detector.outputFileDeclarations)
+	}
 }
 
 private final class SafeDIContentDetector: SyntaxVisitor {
@@ -136,21 +144,23 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	}
 
 	private(set) var content = SafeDIContent.none
+	/// The declarations among type declarations, in every clause, that decide which files SafeDI generates.
+	private(set) var outputFileDeclarations = OutputFileDeclarations()
 
 	override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
-		visitTypeDeclaration(node.attributes)
+		visitTypeDeclaration(node.attributes, isTypeDefinition: true)
 	}
 
 	override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
-		visitTypeDeclaration(node.attributes)
+		visitTypeDeclaration(node.attributes, isTypeDefinition: true)
 	}
 
 	override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
-		visitTypeDeclaration(node.attributes)
+		visitTypeDeclaration(node.attributes, isTypeDefinition: true)
 	}
 
 	override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
-		visitTypeDeclaration(node.attributes)
+		visitTypeDeclaration(node.attributes, isTypeDefinition: false)
 	}
 
 	override func visit(_: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -166,6 +176,7 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	override func visit(_ node: MacroExpansionExprSyntax) -> SyntaxVisitorContinueKind {
 		if case .declarations = context, node.macroName.text == SafeDIConfigurationVisitor.macroName {
 			record(.production)
+			outputFileDeclarations.record(SafeDIConfigurationVisitor.extractConfiguration(from: node))
 		}
 		return .skipChildren
 	}
@@ -207,11 +218,17 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 
 	private let context: SafeDIContentContext
 
-	private func visitTypeDeclaration(_ attributes: AttributeListSyntax) -> SyntaxVisitorContinueKind {
+	/// - Parameter isTypeDefinition: Whether the declaration defines a type, which only a type definition
+	///   can make a root: SafeDI never treats an `@Instantiable` extension as one.
+	private func visitTypeDeclaration(_ attributes: AttributeListSyntax, isTypeDefinition: Bool) -> SyntaxVisitorContinueKind {
 		switch context {
 		case .declarations:
 			if let instantiableMacro = attributes.instantiableMacro {
 				record(instantiableMacro.mockOnlyValue ? .mockOnly : .production)
+				outputFileDeclarations.recordInstantiable(
+					isRoot: isTypeDefinition && instantiableMacro.isRootValue,
+					generatesMock: instantiableMacro.generateMockValue,
+				)
 			}
 			// Nested types may be instantiable too.
 			return .visitChildren

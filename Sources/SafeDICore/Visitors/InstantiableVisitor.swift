@@ -583,14 +583,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	private func processAttributes(_: AttributeListSyntax, on macro: AttributeSyntax) {
 		func processIsRoot() {
-			guard let isRootExpression = macro.isRoot,
-			      let boolExpression = BooleanLiteralExprSyntax(isRootExpression)
-			else {
-				// Nothing to do here.
-				return
-			}
-
-			isRoot = boolExpression.literal.tokenKind == .keyword(.true)
+			isRoot = macro.isRootValue
 		}
 		func processFulfillingAdditionalTypesParameter() {
 			guard let fulfillingAdditionalTypesExpression = macro.fulfillingAdditionalTypes,
