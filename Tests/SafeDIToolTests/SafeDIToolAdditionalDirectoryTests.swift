@@ -91,6 +91,22 @@ struct SafeDIToolAdditionalDirectoryTests: ~Copyable {
 		#expect(output == Self.expectedOutput)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesRootInAdditionalDirectory_whenScanningForItselfCannotWriteScanCache() async throws {
+		let project = try makeProject(inputsIncludeAdditionalDirectoryFile: false)
+		// A directory where the scan cache belongs makes writing the cache fail, so `generate` parses afresh.
+		try FileManager.default.createDirectory(
+			at: scannedModuleInfoURL(forManifestPath: project.outputDirectory.appendingPathComponent("SafeDIManifest.json").path),
+			withIntermediateDirectories: true,
+		)
+
+		try await project.generateWithOutputDirectory()
+
+		let output = try project.removingGeneratedFiles()
+		#expect(output == Self.expectedOutput)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

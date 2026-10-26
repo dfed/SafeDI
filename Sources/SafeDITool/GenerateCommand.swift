@@ -135,6 +135,7 @@ struct Generate: AsyncParsableCommand {
 			loadSafeDIModuleInfo(),
 			parsedModule(
 				inputFilePaths: inputFilePaths,
+				manifestPath: resolvedSwiftManifest,
 				manifest: manifest,
 				activeCompilationConditions: suppliedCompilationConditions,
 			),
@@ -611,9 +612,10 @@ struct Generate: AsyncParsableCommand {
 	}
 
 	/// Loads the parsed `ModuleInfo` for this module. When scan ran earlier
-	/// (plugin-setup subprocess of this same build), it persisted the parsed
-	/// result alongside the manifest; reading that JSON is dramatically
-	/// cheaper than re-parsing every Swift file through SwiftParser.
+	/// (plugin-setup subprocess of this same build, or this command's own
+	/// scan for `--output-directory`), it persisted the parsed result
+	/// alongside the manifest; reading that JSON is dramatically cheaper
+	/// than re-parsing every Swift file through SwiftParser.
 	///
 	/// Returns `(module, isFromCache)`. On a cache hit the returned module
 	/// already includes files discovered through
@@ -638,22 +640,26 @@ struct Generate: AsyncParsableCommand {
 	///
 	/// - Parameters:
 	///   - inputFilePaths: The files `generate` was given, which with `include` empty are exactly the CSV's paths.
+	///   - manifestPath: The path of the manifest `generate` runs with: the one passed with `--swift-manifest`, or,
+	///     with `--output-directory`, the one the inline scan just wrote, whose cache spares parsing every file twice.
 	///   - manifest: The manifest `generate` runs with, whose `configurationFilePaths` name the files that can
 	///     declare this module's configuration. In multi-module builds the CSV includes every module's files, so
 	///     several configurations may be present; without a manifest every input file belongs to this module.
 	///   - activeCompilationConditions: The conditions supplied on the command line and through the manifest.
 	private func parsedModule(
 		inputFilePaths: Set<String>,
+		manifestPath: String?,
 		manifest: SafeDIToolManifest?,
 		activeCompilationConditions: Set<String>,
 	) async throws -> (module: ParsedModule, isFromCache: Bool) {
 		if include.isEmpty,
-		   let swiftManifest,
+		   let manifestPath,
+		   let manifest,
 		   let cached = try await loadCachedModule(
-		   	manifestPath: swiftManifest,
+		   	manifestPath: manifestPath,
 		   	inputFilePaths: inputFilePaths,
 		   	// The cached `ModuleInfo` names files as scan recorded them in the manifest.
-		   	configurationFilePaths: Set(manifest?.configurationFilePaths ?? []),
+		   	configurationFilePaths: Set(manifest.configurationFilePaths),
 		   	activeCompilationConditions: activeCompilationConditions,
 		   )
 		{
