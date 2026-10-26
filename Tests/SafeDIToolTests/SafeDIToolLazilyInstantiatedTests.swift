@@ -3520,16 +3520,16 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            analytics_Analytics: (() -> Analytics)? = nil,
-		            analytics_Analytics_: (() -> Analytics)? = nil,
+		            analytics_LazilyInstantiated__Analytics: (() -> Analytics)? = nil,
 		            logger: ((LazilyInstantiated<Analytics>) -> Logger)? = nil
 		        ) {
 		            self.analytics_Analytics = analytics_Analytics
-		            self.analytics_Analytics_ = analytics_Analytics_
+		            self.analytics_LazilyInstantiated__Analytics = analytics_LazilyInstantiated__Analytics
 		            self.logger = logger
 		        }
 
 		        let analytics_Analytics: (() -> Analytics)?
-		        let analytics_Analytics_: (() -> Analytics)?
+		        let analytics_LazilyInstantiated__Analytics: (() -> Analytics)?
 		        let logger: ((LazilyInstantiated<Analytics>) -> Logger)?
 		    }
 
@@ -3537,12 +3537,12 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics_Analytics = if let safeDIBuilder = safeDIOverrides.analytics_Analytics { safeDIBuilder() } else { Analytics() }
-		        func __safeDI_analytics_Analytics_() -> Analytics {
-		            if let safeDIBuilder = safeDIOverrides.analytics_Analytics_ { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_analytics_LazilyInstantiated__Analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics_LazilyInstantiated__Analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics_Analytics_ = LazilyInstantiated<Analytics>(__safeDI_analytics_Analytics_)
+		        let analytics_LazilyInstantiated__Analytics = LazilyInstantiated<Analytics>(__safeDI_analytics_LazilyInstantiated__Analytics)
 		        func __safeDI_logger() -> Logger {
-		            let analytics: LazilyInstantiated<Analytics> = analytics_Analytics_
+		            let analytics: LazilyInstantiated<Analytics> = analytics_LazilyInstantiated__Analytics
 		            return if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder(analytics) } else { Logger(analytics: analytics) }
 		        }
 		        let logger: Logger = __safeDI_logger()

@@ -135,6 +135,7 @@ struct Generate: AsyncParsableCommand {
 			loadSafeDIModuleInfo(),
 			parsedModule(
 				inputFilePaths: inputFilePaths,
+				manifestPath: resolvedSwiftManifest,
 				manifest: manifest,
 				activeCompilationConditions: suppliedCompilationConditions,
 			),
@@ -163,16 +164,20 @@ struct Generate: AsyncParsableCommand {
 		   let sourceConfiguration,
 		   !sourceConfiguration.additionalDirectoriesToInclude.isEmpty
 		{
-			let additionalFiles = try await findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude)
-			// Each file is named as scan names it in the manifest, so the manifest lists the roots it declares.
-			// Without a manifest, files are named as found. The found paths are standardized, so no two
-			// resolve to the same name.
-			module = try await initialModule.including(ModuleInfo(parseSwiftFiles(
-				readingFilePathsByName: Dictionary(uniqueKeysWithValues: additionalFiles.map { filePath in
-					(manifest?.resolvedPath(for: filePath) ?? filePath, filePath)
+			// Input paths are resolved as scan resolved them: relative to the manifest's project root, or else
+			// to the working directory. Each additional file is named as scan names it in the manifest, so the
+			// manifest lists the roots it declares; without a manifest, files are named as found.
+			let projectRootURL = manifest?.projectRoot?.asFileURL
+			let directoryBaseURL = projectRootURL?.appendingPathComponent("", isDirectory: true)
+			let additionalFileScans = try await parseAdditionalDirectoryFiles(
+				findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude),
+				excludingInputFilesAt: Set(inputFilePaths.map { inputFilePath in
+					URL(fileURLWithPath: inputFilePath, relativeTo: directoryBaseURL).standardizedFileURL.path
 				}),
+				namedRelativeTo: projectRootURL.map(RelativePathBase.init),
 				conditionalCompilation: evaluator,
-			)))
+			)
+			module = initialModule.including(ModuleInfo(additionalFileScans.map(\.fileScan)))
 		} else {
 			module = initialModule
 		}
@@ -268,7 +273,10 @@ struct Generate: AsyncParsableCommand {
 			),
 		)
 		if let moduleInfoOutput {
-			try JSONEncoder().encode(module).write(toPath: moduleInfoOutput)
+			// Build systems cache on these bytes, and without sorting, keys are written in an order seeded per process.
+			let encoder = JSONEncoder()
+			encoder.outputFormatting = [.sortedKeys]
+			try encoder.encode(module).write(toPath: moduleInfoOutput)
 		}
 
 		if manifest != nil || combinedOutput != nil {
@@ -594,9 +602,10 @@ struct Generate: AsyncParsableCommand {
 	}
 
 	/// Loads the parsed `ModuleInfo` for this module. When scan ran earlier
-	/// (plugin-setup subprocess of this same build), it persisted the parsed
-	/// result alongside the manifest; reading that JSON is dramatically
-	/// cheaper than re-parsing every Swift file through SwiftParser.
+	/// (plugin-setup subprocess of this same build, or this command's own
+	/// scan for `--output-directory`), it persisted the parsed result
+	/// alongside the manifest; reading that JSON is dramatically cheaper
+	/// than re-parsing every Swift file through SwiftParser.
 	///
 	/// Returns `(module, isFromCache)`. On a cache hit the returned module
 	/// already includes files discovered through
@@ -621,22 +630,26 @@ struct Generate: AsyncParsableCommand {
 	///
 	/// - Parameters:
 	///   - inputFilePaths: The files `generate` was given, which with `include` empty are exactly the CSV's paths.
+	///   - manifestPath: The path of the manifest `generate` runs with: the one passed with `--swift-manifest`, or,
+	///     with `--output-directory`, the one the inline scan just wrote, whose cache spares parsing every file twice.
 	///   - manifest: The manifest `generate` runs with, whose `configurationFilePaths` name the files that can
 	///     declare this module's configuration. In multi-module builds the CSV includes every module's files, so
 	///     several configurations may be present; without a manifest every input file belongs to this module.
 	///   - activeCompilationConditions: The conditions supplied on the command line and through the manifest.
 	private func parsedModule(
 		inputFilePaths: Set<String>,
+		manifestPath: String?,
 		manifest: SafeDIToolManifest?,
 		activeCompilationConditions: Set<String>,
 	) async throws -> (module: ParsedModule, isFromCache: Bool) {
 		if include.isEmpty,
-		   let swiftManifest,
+		   let manifestPath,
+		   let manifest,
 		   let cached = try await loadCachedModule(
-		   	manifestPath: swiftManifest,
+		   	manifestPath: manifestPath,
 		   	inputFilePaths: inputFilePaths,
 		   	// The cached `ModuleInfo` names files as scan recorded them in the manifest.
-		   	configurationFilePaths: Set(manifest?.configurationFilePaths ?? []),
+		   	configurationFilePaths: Set(manifest.configurationFilePaths),
 		   	activeCompilationConditions: activeCompilationConditions,
 		   )
 		{
@@ -828,40 +841,50 @@ struct Generate: AsyncParsableCommand {
 			.joined(separator: "\n")
 	}
 
-	private var moduleInfoURLs: Set<URL> {
+	/// The dependent modules' info files, each listed once, in path order. Their order is the order in which
+	/// their declarations are combined, which decides which duplicate declaration is reported and the order of
+	/// the files with errors that generated code lists. Path order is the order in which a module's own files
+	/// are combined, and it does not change when a build system lists a target's dependencies in another order.
+	private var moduleInfoURLs: [URL] {
 		get throws {
 			if let dependentModuleInfoFilePath {
-				try .init(
+				try Set(
 					String(contentsOfFile: dependentModuleInfoFilePath, encoding: .utf8)
-						.parsedPathListCSV()
-						.map(\.asFileURL),
+						.parsedPathListCSV(),
 				)
+				.sorted()
+				.map(\.asFileURL)
 			} else {
 				[]
 			}
 		}
 	}
 
+	/// The dependent modules' info, in the order of `moduleInfoURLs` whatever order the parallel reads finish in.
 	private func loadSafeDIModuleInfo() async throws -> [ModuleInfo] {
-		try await withThrowingTaskGroup(
-			of: ModuleInfo.self,
+		let moduleInfoURLs = try moduleInfoURLs
+		return try await withThrowingTaskGroup(
+			of: (index: Int, moduleInfo: ModuleInfo).self,
 			returning: [ModuleInfo].self,
 		) { taskGroup in
-			let moduleInfoURLs = try moduleInfoURLs
-			guard !moduleInfoURLs.isEmpty else { return [] }
-			for moduleInfoURL in moduleInfoURLs {
+			for (index, moduleInfoURL) in moduleInfoURLs.enumerated() {
 				taskGroup.addTask {
-					try JSONDecoder().decode(
-						ModuleInfo.self,
-						from: Data(contentsOf: moduleInfoURL),
+					try (
+						index: index,
+						moduleInfo: JSONDecoder().decode(
+							ModuleInfo.self,
+							from: Data(contentsOf: moduleInfoURL),
+						),
 					)
 				}
 			}
-			var allModuleInfo = [ModuleInfo]()
+			var indexedModuleInfo = [(index: Int, moduleInfo: ModuleInfo)]()
 			for try await moduleInfo in taskGroup {
-				allModuleInfo.append(moduleInfo)
+				indexedModuleInfo.append(moduleInfo)
 			}
-			return allModuleInfo
+			return indexedModuleInfo
+				.sorted { $0.index < $1.index }
+				.map(\.moduleInfo)
 		}
 	}
 
