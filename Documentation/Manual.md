@@ -815,6 +815,8 @@ A `@Received(onlyIfAvailable: true)` dependency gets no `SafeDIOverrides` entry 
 
 A `@Received` dependency is resolved from its declared type, not from the renames in any particular parent. Take `ProfileView` from [Sharing one instance across properties of disparate types](#sharing-one-instance-across-properties-of-disparate-types): `ProfileView.mock()` can build `crashReporter` itself only when `Telemetry` lists `CrashReporter` in `fulfillingAdditionalTypes`. A composition entry such as `(EventTracker & CrashReporter).self` alone does not cover its members. Otherwise `crashReporter` is a required parameter of `ProfileView.mock()`. Because each received dependency is resolved on its own, a mock that receives both `EventTracker` and `CrashReporter` builds a separate `Telemetry` for each. Pass one instance through `safeDIOverrides` if a test needs them to coincide.
 
+The renamed property may keep the original label, as in `@Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let analytics: EventTracker`. When the mocked type declares it, the `analytics` entry on `SafeDIOverrides` customizes the original `Analytics`, and the mocked type and the types in its tree that receive `analytics: EventTracker` are passed that instance as an `EventTracker`.
+
 ### Mock visibility
 
 Generated mocks have `internal` visibility. They are accessible within the module where they are generated but not from other modules. This avoids cross-module extension conflicts when multiple modules generate mocks for the same types.
