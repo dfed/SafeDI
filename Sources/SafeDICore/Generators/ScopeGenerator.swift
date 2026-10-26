@@ -58,62 +58,54 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.unavailableOptionalProperties = unavailableOptionalProperties
 		aliasPropertyIsProvidedByEnclosingScope = false
 		let forwardedProperties = scopeData.forwardedProperties
-		/// The properties a child requires be passed in that this scope must itself receive.
-		func receivedFromAncestors(_ childReceivedProperties: Set<Property>) -> Set<Property> {
-			childReceivedProperties
-				// Minus the properties we declare.
-				.subtracting(propertiesToDeclare)
-				// Minus optional properties whose unwrapped form we declare.
-				// This handles the case where a non-optional version is promoted
-				// to satisfy both required and onlyIfAvailable receivers.
-				.filter { property in
-					!property.typeDescription.isOptional
-						|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
-				}
-				// Minus the properties we forward.
-				.subtracting(forwardedProperties)
+		/// Whether a property a child requires be passed in must be received by this scope too: this
+		/// scope does not declare it, does not declare the unwrapped form of an optional one (which
+		/// handles a non-optional version promoted to satisfy both required and onlyIfAvailable
+		/// receivers), and does not forward it.
+		func isReceivedFromAncestors(_ property: Property) -> Bool {
+			!propertiesToDeclare.contains(property)
+				&& (!property.typeDescription.isOptional || !propertiesToDeclare.contains(property.asUnwrappedProperty))
+				&& !forwardedProperties.contains(property)
 		}
-		// All the properties our children require be passed in, unioned with the
-		// properties we require to fulfill our own dependencies.
-		receivedProperties = Set(
-			propertiesToGenerate.flatMap { receivedFromAncestors($0.receivedProperties) },
-		)
-		.union(
-			instantiable
-				.dependencies
-				.compactMap {
-					switch $0.source {
-					case .instantiated, .forwarded:
-						nil
-					case .received:
-						$0.property
-					case let .aliased(fulfillingProperty, _, _):
-						// If the alias's fulfilling property is locally declared
-						// (e.g., as an @Instantiated sibling), the alias binds
-						// against that local — it doesn't need to be received.
-						propertiesToDeclare.contains(fulfillingProperty) ? nil : fulfillingProperty
-					}
-				},
-		)
-		let requiredReceivedProperties = Set(
-			propertiesToGenerate.flatMap { receivedFromAncestors($0.requiredReceivedProperties) },
-		)
-		.union(
-			instantiable
-				.dependencies
-				.compactMap {
-					switch $0.source {
-					case .instantiated, .forwarded:
-						nil
-					case let .received(onlyIfAvailable):
-						onlyIfAvailable ? nil : $0.property
-					case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-						onlyIfAvailable || propertiesToDeclare.contains(fulfillingProperty) ? nil : fulfillingProperty
-					}
-				},
-		)
+		// All the properties our children require be passed in, unioned with the properties we
+		// require to fulfill our own dependencies, and those of them some receiver requires. A
+		// child's required properties are among its received ones, so each child's received
+		// properties are read once, with no intermediate sets: this runs at every scope of every tree.
+		var receivedProperties = Set<Property>()
+		var requiredReceivedProperties = Set<Property>()
+		for child in propertiesToGenerate {
+			for property in child.receivedProperties where isReceivedFromAncestors(property) {
+				receivedProperties.insert(property)
+				if child.requiredReceivedProperties.contains(property) {
+					requiredReceivedProperties.insert(property)
+				}
+			}
+		}
+		for dependency in instantiable.dependencies {
+			let receivedProperty: Property
+			let onlyIfAvailable: Bool
+			switch dependency.source {
+			case .instantiated, .forwarded:
+				continue
+			case let .received(isOnlyIfAvailable):
+				receivedProperty = dependency.property
+				onlyIfAvailable = isOnlyIfAvailable
+			case let .aliased(fulfillingProperty, _, isOnlyIfAvailable):
+				// If the alias's fulfilling property is locally declared
+				// (e.g., as an @Instantiated sibling), the alias binds
+				// against that local — it doesn't need to be received.
+				guard !propertiesToDeclare.contains(fulfillingProperty) else { continue }
+				receivedProperty = fulfillingProperty
+				onlyIfAvailable = isOnlyIfAvailable
+			}
+			receivedProperties.insert(receivedProperty)
+			if !onlyIfAvailable {
+				requiredReceivedProperties.insert(receivedProperty)
+			}
+		}
+		self.receivedProperties = receivedProperties
 		self.requiredReceivedProperties = requiredReceivedProperties
-		onlyIfAvailableUnwrappedReceivedProperties = Set(
+		let onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired = Set(
 			propertiesToGenerate.flatMap { propertyToGenerate in
 				propertyToGenerate.onlyIfAvailableUnwrappedReceivedProperties
 					.subtracting(propertiesToDeclare)
@@ -145,8 +137,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				},
 		)
 		// A property some receiver requires is required, even where others receive
-		// it only if available.
-		.subtracting(requiredReceivedProperties.map(\.asUnwrappedProperty))
+		// it only if available. Few subtrees receive anything only if available, so the
+		// required properties are unwrapped only for those that do.
+		onlyIfAvailableUnwrappedReceivedProperties = onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.isEmpty
+			? onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired
+			: onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.subtracting(requiredReceivedProperties.map(\.asUnwrappedProperty))
 	}
 
 	init(
