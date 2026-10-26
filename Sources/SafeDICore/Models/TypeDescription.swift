@@ -223,18 +223,25 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
-	/// Whether this is a `LazilyInstantiated` or `SendableLazilyInstantiated`, optional or not.
-	/// Checked for every property in generation’s hottest loops, so it compares names only for a generic type.
-	var isLazilyInstantiated: Bool {
+	/// The type of the instance a `LazilyInstantiated` or `SendableLazilyInstantiated` creates, exactly as it is
+	/// spelled: `any Service` for `LazilyInstantiated<any Service>`. An optional wrapper creates an optional
+	/// instance type. `nil` when this is neither.
+	var lazilyInstantiatedInstanceType: TypeDescription? {
 		switch self {
 		case let .simple(name, generics):
-			!generics.isEmpty && (name == Dependency.lazilyInstantiatedType || name == Dependency.sendableLazilyInstantiatedType)
-		case
-			let .optional(type),
-			let .implicitlyUnwrappedOptional(type):
-			type.isLazilyInstantiated
+			// Checked for every property in generation’s hottest loops, so it compares names only for a generic type.
+			if let instanceType = generics.first,
+			   name == Dependency.lazilyInstantiatedType || name == Dependency.sendableLazilyInstantiatedType
+			{
+				instanceType
+			} else {
+				nil
+			}
+		case let .optional(type),
+		     let .implicitlyUnwrappedOptional(type):
+			type.lazilyInstantiatedInstanceType.map { .optional($0) }
 		case .any, .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .some, .tuple, .unknown, .void:
-			false
+			nil
 		}
 	}
 
@@ -487,8 +494,9 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 			          let builtType = generics.first
 			{
 				// This is a type that is instantiated once, the first time it is requested.
-				// The first generic is the built type.
-				builtType
+				// The first generic is the built type. It has no `Instantiable` constraint, so it can be spelled
+				// in every way a constant’s type can, such as `any Service`.
+				builtType.asInstantiatedType
 			} else {
 				self
 			}

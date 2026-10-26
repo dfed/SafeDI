@@ -56,20 +56,43 @@ final class Scope: Hashable {
 			/// How the alias’s assignment refers to its `@Received` declaration.
 			declarationReference: AliasDeclarationReferences.Reference?,
 		)
+
+		/// The property this scope declares.
+		var property: Property {
+			switch self {
+			case let .instantiated(property, _, _),
+			     let .aliased(property, _, _, _, _):
+				property
+			}
+		}
+
+		/// The by-value property with which types further down the tree receive the instance of the lazily
+		/// instantiated property this declares. `nil` when it declares none.
+		var lazilyInstantiatedInstanceProperty: Property? {
+			switch self {
+			case let .instantiated(property, _, _):
+				property.asLazilyInstantiatedInstanceProperty
+			case let .aliased(property, _, _, _, _):
+				property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding
+			}
+		}
+
+		/// The property this scope declares, followed by `lazilyInstantiatedInstanceProperty` when there is one.
+		var receivableProperties: [Property] {
+			if let lazilyInstantiatedInstanceProperty {
+				[property, lazilyInstantiatedInstanceProperty]
+			} else {
+				[property]
+			}
+		}
 	}
 
-	/// Every property this scope declares. A lazily instantiated property this scope creates is followed by the
-	/// property that receives its instance by value. One it only receives is not: whichever scope created it
+	/// Every property this scope declares. A lazily instantiated property this scope puts in scope is followed by
+	/// the property that receives its instance by value. One it only receives is not: whichever scope created it
 	/// already offers that instance, and an `onlyIfAvailable` receive may have nothing behind it.
 	private(set) lazy var properties: [Property] = instantiable
 		.dependencies
-		.flatMap { dependency in
-			if dependency.source.isReceived {
-				[dependency.property]
-			} else {
-				dependency.property.withLazilyInstantiatedInstanceProperty
-			}
-		}
+		.flatMap(\.receivableProperties)
 
 	private(set) lazy var createdProperties = Set(
 		instantiable
@@ -87,8 +110,15 @@ final class Scope: Hashable {
 				}
 			}
 			// A lazily instantiated property can also be received by value, as the instance it creates.
-			.flatMap(\.property.withLazilyInstantiatedInstanceProperty),
+			.flatMap(\.receivableProperties),
 	)
+
+	/// The by-value properties with which types further down the tree receive the instance of a lazily
+	/// instantiated property this scope’s type forwards.
+	private(set) lazy var forwardedLazilyInstantiatedInstanceProperties: [Property] = instantiable
+		.dependencies
+		.filter { $0.source == .forwarded }
+		.compactMap(\.lazilyInstantiatedInstanceProperty)
 
 	/// A received property this scope requires an ancestor to provide, with the location of the declaration that requires it.
 	struct RequiredReceivedProperty {
@@ -163,15 +193,14 @@ final class Scope: Hashable {
 		// The properties this scope’s children receive by reading the instance of a `LazilyInstantiated` property.
 		// A property this scope declares shadows one with the same label that was lazily instantiated further up the
 		// tree. A mock root also declares the received dependencies that were promoted to its children.
-		let declaredProperties = propertiesToGenerate.map { propertyToGenerate in
-			switch propertyToGenerate {
-			case let .instantiated(property, _, _):
-				property
-			case let .aliased(property, _, _, _, _):
-				property
-			}
-		} + instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)
-		let declaredLazilyInstantiatedInstanceProperties = declaredProperties.compactMap(\.asLazilyInstantiatedInstanceProperty)
+		let declaredProperties = propertiesToGenerate.map(\.property)
+			+ instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)
+		// A mock root can declare a property itself and also be given a promoted lazily instantiated property
+		// with the same label. Types that receive the property by value are then built with the root's own.
+		let declaredLazilyInstantiatedInstanceProperties = (
+			propertiesToGenerate.compactMap(\.lazilyInstantiatedInstanceProperty)
+				+ forwardedLazilyInstantiatedInstanceProperties,
+		).filter { !declaredProperties.contains($0) }
 		let childLazilyInstantiatedInstanceProperties: Set<Property> = if lazilyInstantiatedInstanceProperties.isEmpty {
 			// Nearly every scope: nothing above it is lazily instantiated, so there is nothing to shadow.
 			Set(declaredLazilyInstantiatedInstanceProperties)
@@ -228,7 +257,13 @@ final class Scope: Hashable {
 					ScopeGenerator(
 						property: property,
 						fulfillingProperty: fulfillingProperty,
-						fulfillingPropertyIsLazilyInstantiatedInstance: childLazilyInstantiatedInstanceProperties.contains(fulfillingProperty.asUnwrappedProperty),
+						// An alias that keeps the label of the dependency it retypes is not in scope where its
+						// own value is read, so it does not shadow a lazily instantiated property further up the tree.
+						fulfillingPropertyIsLazilyInstantiatedInstance: (
+							fulfillingProperty.label == property.label
+								? lazilyInstantiatedInstanceProperties
+								: childLazilyInstantiatedInstanceProperties,
+						).contains(fulfillingProperty.asUnwrappedProperty),
 						unavailableOptionalProperties: unavailableOptionalProperties,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
@@ -238,6 +273,7 @@ final class Scope: Hashable {
 			},
 			unavailableOptionalProperties: unavailableOptionalProperties,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			forwardedLazilyInstantiatedInstanceProperties: forwardedLazilyInstantiatedInstanceProperties,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			isPropertyCycle: isPropertyCycle,
 		)
@@ -248,6 +284,31 @@ final class Scope: Hashable {
 			}
 		}
 		return scopeGenerator
+	}
+}
+
+extension Dependency {
+	/// The by-value property with which types further down the tree receive the instance of the lazily
+	/// instantiated property this dependency puts in scope. `nil` when it puts none in scope: a received
+	/// dependency declares nothing, whichever type it is.
+	var lazilyInstantiatedInstanceProperty: Property? {
+		switch source {
+		case .instantiated:
+			property.asLazilyInstantiatedInstanceProperty
+		case .aliased, .forwarded:
+			property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding
+		case .received:
+			nil
+		}
+	}
+
+	/// The dependency’s property, followed by `lazilyInstantiatedInstanceProperty` when there is one.
+	var receivableProperties: [Property] {
+		if let lazilyInstantiatedInstanceProperty {
+			[property, lazilyInstantiatedInstanceProperty]
+		} else {
+			[property]
+		}
 	}
 }
 

@@ -162,30 +162,36 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		Property(label: label, typeDescription: typeDescription.unwrapped)
 	}
 
-	/// The property with which a type receives a lazily instantiated dependency’s instance rather than its
-	/// `LazilyInstantiated` wrapper: `service: LazilyInstantiated<Service>` is received by value as `service: Service`.
+	/// The property with which a type receives the instance of an `@Instantiated` lazily instantiated dependency
+	/// rather than its `LazilyInstantiated` wrapper: `service: LazilyInstantiated<Service>` is received by value
+	/// as `service: Service`. The generated wrapper is never optional, so neither is this property.
 	/// `nil` when the property is not lazily instantiated.
 	var asLazilyInstantiatedInstanceProperty: Property? {
-		if typeDescription.isLazilyInstantiated {
-			Property(label: label, typeDescription: typeDescription.asInstantiatedType)
-		} else {
-			nil
+		typeDescription.lazilyInstantiatedInstanceType.map {
+			Property(label: label, typeDescription: $0.unwrapped)
 		}
 	}
 
-	/// The property as dependency cycle validation sees it. A lazily instantiated dependency is created at most
-	/// once, exactly like a constant, so it cannot break a dependency cycle: a tree is valid with a lazily
-	/// instantiated property if and only if it is valid with the constant that property stands for.
-	var asValidatedForDependencyCycles: Property {
-		asLazilyInstantiatedInstanceProperty ?? self
+	/// The by-value property a `@Forwarded` or aliased `LazilyInstantiated` property offers. Such a property is
+	/// bound with exactly the type it declares, and the instance of an optional wrapper cannot be read
+	/// unconditionally, so an optional property offers none.
+	var asLazilyInstantiatedInstancePropertyOfDeclaredBinding: Property? {
+		if typeDescription.isOptional {
+			nil
+		} else {
+			asLazilyInstantiatedInstanceProperty
+		}
 	}
 
-	/// The property itself, followed by the property that receives its instance by value when it is lazily instantiated.
-	var withLazilyInstantiatedInstanceProperty: [Property] {
-		if let asLazilyInstantiatedInstanceProperty {
-			[self, asLazilyInstantiatedInstanceProperty]
+	/// The property as dependency cycle validation sees it: the constant a lazily instantiated property stands
+	/// for, optional when the property is. A lazily instantiated dependency is created at most once, exactly
+	/// like a constant, so it cannot break a dependency cycle: a tree is valid with a lazily instantiated
+	/// property if and only if it is valid with that constant.
+	var asValidatedForDependencyCycles: Property {
+		if let instanceType = typeDescription.lazilyInstantiatedInstanceType {
+			Property(label: label, typeDescription: instanceType)
 		} else {
-			[self]
+			self
 		}
 	}
 
