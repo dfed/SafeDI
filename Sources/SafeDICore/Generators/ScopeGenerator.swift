@@ -1269,7 +1269,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// disambiguate a collision. The alias becomes a real Swift binding so the
 	/// scope's construction arguments can resolve the dep via its bare label.
 	/// A dependency in `unavailableProperties` is passed `nil` and is not rebound,
-	/// since the binding it would name may not be declared yet.
+	/// since the binding it would name is not declared at that point: it is
+	/// declared later, or not at all.
 	///
 	/// `.aliased` dependencies are handled as `MockTreeItem.alias` children — they
 	/// already flow through the mock body bindings in production's topological
