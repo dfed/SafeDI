@@ -444,7 +444,8 @@ public actor DependencyTreeGenerator {
 	// MARK: - DependencyTreeGeneratorError
 
 	private enum DependencyTreeGeneratorError: SourceLocatedError {
-		case noInstantiableFound(TypeDescription, referencedAt: [Dependency.DeclarationLocation?])
+		/// `fulfilledByMockOnlyDeclaration` is set when only a `mockOnly` declaration fulfills the type.
+		case noInstantiableFound(TypeDescription, referencedAt: [Dependency.DeclarationLocation?], fulfilledByMockOnlyDeclaration: Bool)
 		case unfulfillableProperties([UnfulfillableProperty])
 		case instantiableHasForwardedProperty(property: Property, declarationLocation: Dependency.DeclarationLocation?, instantiableWithForwardedProperty: Instantiable, forwardedDeclarations: [LocatedProperty], parent: Instantiable)
 		/// Reported at the dependency declaration that closes the cycle – the `@Instantiated` or `@Received`
@@ -479,13 +480,14 @@ public actor DependencyTreeGenerator {
 						)
 					}
 					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
-			case let .noInstantiableFound(typeDescription, referencedAt):
+			case let .noInstantiableFound(typeDescription, referencedAt, fulfilledByMockOnlyDeclaration):
 				// Sorted by location so the order never depends on map iteration.
 				referencedAt.map {
 					SourceDiagnostic(
 						severity: .error,
 						location: $0,
-						message: "No `@\(InstantiableVisitor.macroName)`-decorated type or extension found to fulfill `@\(Dependency.Source.instantiatedRawValue)`-decorated property with type `\(typeDescription.asSource)`",
+						message: "No `@\(InstantiableVisitor.macroName)`-decorated type or extension found to fulfill `@\(Dependency.Source.instantiatedRawValue)`-decorated property with type `\(typeDescription.asSource)`"
+							+ (fulfilledByMockOnlyDeclaration ? ". A `mockOnly: true` declaration fulfills it, and is used only to generate mocks." : ""),
 					)
 				}
 				.sorted(by: SourceDiagnostic.precedesInSourceOrder)
@@ -1632,23 +1634,28 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
-	/// Validates that every reachable type description has a corresponding `@Instantiable`.
+	/// Validates that every reachable type description has a corresponding `@Instantiable` that production
+	/// code can build, reporting the first missing type in type order. A `mockOnly` declaration exists solely
+	/// for mock generation, so it does not count. Were it counted, a type it fulfills that shares a concrete
+	/// type with a production declaration would be built from whichever declaration a set iteration reached first.
 	private func validateReachableTypeDescriptions() throws {
-		for reachableTypeDescription in reachableTypeDescriptions.sorted() {
-			if typeDescriptionToFulfillingInstantiableMap[reachableTypeDescription] == nil {
-				// The map's values can hold the same instantiable under several keys, so collect into a set.
-				let referencingDeclarationLocations = Set(
-					typeDescriptionToFulfillingInstantiableMap.values.flatMap { instantiable in
-						instantiable.dependencies
-							.filter { $0.isInstantiated && $0.asInstantiatedType == reachableTypeDescription }
-							.map(\.declarationLocation)
-					},
-				)
-				throw DependencyTreeGeneratorError.noInstantiableFound(
-					reachableTypeDescription,
-					referencedAt: Array(referencingDeclarationLocations),
-				)
-			}
+		if let unbuildableTypeDescription = reachableTypeDescriptions
+			.filter({ typeDescriptionToFulfillingInstantiableMap[$0]?.mockOnly != false })
+			.min()
+		{
+			// The map's values can hold the same instantiable under several keys, so collect into a set.
+			let referencingDeclarationLocations = Set(
+				typeDescriptionToFulfillingInstantiableMap.values.flatMap { instantiable in
+					instantiable.dependencies
+						.filter { $0.isInstantiated && $0.asInstantiatedType == unbuildableTypeDescription }
+						.map(\.declarationLocation)
+				},
+			)
+			throw DependencyTreeGeneratorError.noInstantiableFound(
+				unbuildableTypeDescription,
+				referencedAt: Array(referencingDeclarationLocations),
+				fulfilledByMockOnlyDeclaration: typeDescriptionToFulfillingInstantiableMap[unbuildableTypeDescription] != nil,
+			)
 		}
 	}
 }
