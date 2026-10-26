@@ -105,87 +105,83 @@ func performScan(
 		configurationFilePaths: mockScopedFilePaths,
 		activeCompilationConditions: activeCompilationConditions,
 	)
-	let allModuleInfo = parsedModule.moduleInfo
 	let evaluator = parsedModule.conditionalCompilationEvaluator
-
-	// Filter the already-parsed results to the mock-scoped subset.
-	let mockScopedInstantiables = allModuleInfo.instantiables.filter { instantiable in
-		guard let sourceFilePath = instantiable.sourceFilePath else { return false }
-		return mockScopedFilePaths.contains(sourceFilePath)
-	}
-	let mockScopedConfigurations = allModuleInfo.configurations.filter { configuration in
-		guard let sourceFilePath = configuration.sourceFilePath else { return false }
-		return mockScopedFilePaths.contains(sourceFilePath)
-	}
 
 	// The parse rejected more than one configuration among the scoped files.
 	let configuration = parsedModule.configuration
 
-	// Discover additional directories from configuration.
+	// A build system needs the list of output files before the build runs, while `generate` may be
+	// handed other conditions than this scan, so outputs are planned for the declarations in every
+	// clause of every `#if` block: `generate` writes a file without code for one that is inactive.
+	// Only the module's own files decide its mocks and configuration.
+	let mockScopedFileScans = fileScans.filter { mockScopedFilePaths.contains($0.path) }
+	let moduleOutputFileDeclarations = mockScopedFileScans.reduce(into: OutputFileDeclarations()) { moduleOutputFileDeclarations, fileScan in
+		moduleOutputFileDeclarations.formUnion(fileScan.outputFileDeclarations)
+	}
+
+	// Discover additional directories from every configuration the module's files declare.
 	var additionalInputFiles = [String]()
-	var combinedModuleInfo = allModuleInfo
+	var configuredAdditionalInputFiles = [String]()
 	var additionalFileScans = [FileScan]()
-	if let configuration, !configuration.additionalDirectoriesToInclude.isEmpty {
-		let additionalFiles = try await findSwiftFiles(inDirectories: configuration.additionalDirectoriesToInclude)
+	var plannedOnlyAdditionalFileScans = [FileScan]()
+	if !moduleOutputFileDeclarations.additionalDirectoriesToInclude.isEmpty {
+		func absolutePaths(_ filePaths: Set<String>) -> [String] {
+			filePaths.sorted().map { filePath in
+				URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL.path
+			}
+		}
+		// The directories the active configuration lists, which `generate` reads too.
+		let configuredDirectories = configuration?.additionalDirectoriesToInclude ?? []
+		let configuredAdditionalFiles = try await findSwiftFiles(inDirectories: configuredDirectories)
+		// Files only a configuration in an inactive clause reaches, which can declare roots `generate` finds
+		// when other conditions select that configuration.
+		let plannedOnlyAdditionalFiles = try await findSwiftFiles(
+			inDirectories: moduleOutputFileDeclarations.additionalDirectoriesToInclude.filter { !configuredDirectories.contains($0) },
+		).subtracting(configuredAdditionalFiles)
 
 		// Record the additional files for the plugin to use as build inputs.
-		additionalInputFiles = additionalFiles.sorted().map { filePath in
-			URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL.path
-		}
+		additionalInputFiles = absolutePaths(configuredAdditionalFiles.union(plannedOnlyAdditionalFiles))
+		configuredAdditionalInputFiles = absolutePaths(configuredAdditionalFiles)
 		for filePath in additionalInputFiles where scannedInputStamps[filePath] == nil {
 			scannedInputStamps[filePath] = FileModificationStamp(ofFileAtPath: filePath)
 		}
 
 		// Exclude files already parsed via the CSV — re-parsing them would
-		// produce duplicate `Instantiable` entries in `combinedModuleInfo`
-		// and trip "multiple types fulfilling" validation downstream.
-		let unparsedAdditionalFiles = additionalFiles.subtracting(allFilePaths)
-		if !unparsedAdditionalFiles.isEmpty {
-			additionalFileScans = try await parseSwiftFiles(unparsedAdditionalFiles, conditionalCompilation: evaluator)
-			// Merge additional roots/mocks into the combined results.
-			combinedModuleInfo = allModuleInfo.including(ModuleInfo(additionalFileScans))
+		// produce duplicate `Instantiable` entries in the module `generate`
+		// reads from the cache and trip "multiple types fulfilling" validation downstream.
+		additionalFileScans = try await parseSwiftFiles(configuredAdditionalFiles.subtracting(allFilePaths), conditionalCompilation: evaluator)
+		// Parsed only to plan outputs: the module these conditions select does not include them.
+		plannedOnlyAdditionalFileScans = try await parseSwiftFiles(plannedOnlyAdditionalFiles.subtracting(allFilePaths), conditionalCompilation: evaluator)
+	}
+
+	/// The standardized URL of each file `fileScans` names, once each, sorted by path relative to the project root.
+	func sortedUniqueFileURLs(_ fileScans: [FileScan]) -> [URL] {
+		// Each relative path is computed once rather than in every comparison.
+		var fileURLsByRelativePath = [String: URL]()
+		for fileScan in fileScans {
+			let fileURL = URL(fileURLWithPath: fileScan.path, relativeTo: directoryBaseURL).standardizedFileURL
+			fileURLsByRelativePath[projectRootRelativePath.relativePath(forStandardizedPath: fileURL.path)] = fileURL
 		}
+		return fileURLsByRelativePath
+			.sorted { $0.key < $1.key }
+			.map(\.value)
 	}
 
 	// Collect root files and compute output file names.
-	let rootInstantiables = combinedModuleInfo.instantiables.filter(\.isRoot)
-	let rootFileURLs = rootInstantiables.compactMap { instantiable -> URL? in
-		guard let sourceFilePath = instantiable.sourceFilePath else { return nil }
-		return URL(fileURLWithPath: sourceFilePath, relativeTo: directoryBaseURL).standardizedFileURL
-	}
-	// Each URL is already standardized, and its relative path is computed once rather than in every comparison.
-	let sortedRootFileURLs = rootFileURLs
-		.map { (url: $0, relativePath: projectRootRelativePath.relativePath(forStandardizedPath: $0.path)) }
-		.sorted { $0.relativePath < $1.relativePath }
-		.map(\.url)
-	// Deduplicate: multiple roots in the same file should only produce one output entry.
-	let uniqueRootFileURLs = sortedRootFileURLs.reduce(into: [URL]()) { result, url in
-		if result.last != url {
-			result.append(url)
-		}
-	}
+	let uniqueRootFileURLs = sortedUniqueFileURLs(
+		(fileScans + additionalFileScans + plannedOnlyAdditionalFileScans).filter(\.outputFileDeclarations.declaresRoot),
+	)
 	let rootOutputNames = outputFileNames(for: uniqueRootFileURLs, relativeTo: projectRootURL)
 
 	// Collect mock files (only from scoped files) and compute output file names.
-	let mockInstantiables = mockScopedInstantiables.filter(\.generateMock)
-	let mockFileURLs = mockInstantiables.compactMap { instantiable -> URL? in
-		guard let sourceFilePath = instantiable.sourceFilePath else { return nil }
-		return URL(fileURLWithPath: sourceFilePath, relativeTo: directoryBaseURL).standardizedFileURL
-	}
-	// Each URL is already standardized, and its relative path is computed once rather than in every comparison.
-	let sortedMockFileURLs = mockFileURLs
-		.map { (url: $0, relativePath: projectRootRelativePath.relativePath(forStandardizedPath: $0.path)) }
-		.sorted { $0.relativePath < $1.relativePath }
-		.map(\.url)
-	let uniqueMockFileURLs = sortedMockFileURLs.reduce(into: [URL]()) { result, url in
-		if result.last != url {
-			result.append(url)
-		}
-	}
+	let uniqueMockFileURLs = sortedUniqueFileURLs(mockScopedFileScans.filter(\.outputFileDeclarations.declaresMockGeneratingType))
 	let mockOutputNames = mockOutputFileNames(for: uniqueMockFileURLs, relativeTo: projectRootURL)
 
-	// Extract additional mocks to generate from configuration.
-	let additionalMocksToGenerate = configuration?.additionalMocksToGenerate ?? []
+	// Extract additional mocks to generate from every configuration, those the active configuration
+	// lists first and in its order.
+	let configuredAdditionalMocksToGenerate = configuration?.additionalMocksToGenerate ?? []
+	let additionalMocksToGenerate = configuredAdditionalMocksToGenerate
+		+ moduleOutputFileDeclarations.additionalMocksToGenerate.filter { !configuredAdditionalMocksToGenerate.contains($0) }
 
 	// Build additional mock output entries.
 	let additionalMockEntries: [SafeDIToolManifest.InputOutputMap] = additionalMocksToGenerate.map { typeName in
@@ -198,8 +194,8 @@ func performScan(
 	}
 
 	// Compute configuration file paths (relative to project root, matching Generate's expectations).
-	let configurationFilePaths = mockScopedConfigurations.compactMap(\.sourceFilePath).map { path in
-		projectRootRelativePath.relativePath(forStandardizedPath: URL(fileURLWithPath: path, relativeTo: directoryBaseURL).standardizedFileURL.path)
+	let configurationFilePaths = sortedUniqueFileURLs(mockScopedFileScans.filter(\.outputFileDeclarations.declaresConfiguration)).map { url in
+		projectRootRelativePath.relativePath(forStandardizedPath: url.path)
 	}
 
 	// Determine mock configuration output file path.
@@ -273,7 +269,7 @@ func performScan(
 			.map { ScannedInput(path: $0.key, modificationStamp: $0.value) }
 			.sorted { $0.path < $1.path },
 		csvInputPaths: inputFilePaths.sorted(),
-		additionalInputAbsolutePaths: additionalInputFiles.sorted(),
+		additionalInputAbsolutePaths: configuredAdditionalInputFiles,
 		additionalDirectories: additionalDirectories,
 		activeCompilationConditions: activeCompilationConditions.sorted(),
 	)
