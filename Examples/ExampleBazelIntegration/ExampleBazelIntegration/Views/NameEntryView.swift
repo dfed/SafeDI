@@ -24,8 +24,9 @@ import SwiftUI
 
 @Instantiable(generateMock: true)
 public struct NameEntryView: Instantiable, View {
-	public init(userService: AnyUserService) {
+	public init(userService: AnyUserService, logger: EventLogger) {
 		self.userService = userService
+		self.logger = logger
 	}
 
 	public var body: some View {
@@ -37,6 +38,7 @@ public struct NameEntryView: Instantiable, View {
 			)
 			Button(action: {
 				userService.user = User(name: name)
+				logger.record("Logged in")
 			}, label: {
 				Text("Log in")
 			})
@@ -47,6 +49,10 @@ public struct NameEntryView: Instantiable, View {
 	@State private var name: String = ""
 
 	@Received private let userService: AnyUserService
+
+	/// The app's `eventLogger`, received under another name. The generated code assigns one to the other
+	/// under a `#sourceLocation` directive naming this file, so the compiler reports a type mismatch here.
+	@Received(fulfilledByDependencyNamed: "eventLogger", ofType: EventLogger.self) private let logger: EventLogger
 }
 
 #if DEBUG

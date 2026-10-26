@@ -53,7 +53,8 @@ final class Scope: Hashable {
 			fulfilledBy: Property,
 			erasedToConcreteExistential: Bool,
 			onlyIfAvailable: Bool,
-			declarationLocation: Dependency.DeclarationLocation?,
+			/// How the alias’s assignment refers to its `@Received` declaration.
+			declarationReference: AliasDeclarationReferences.Reference?,
 		)
 	}
 
@@ -223,7 +224,7 @@ final class Scope: Hashable {
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						forMockGeneration: forMockGeneration,
 					)
-				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationLocation):
+				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
 					ScopeGenerator(
 						property: property,
 						fulfillingProperty: fulfillingProperty,
@@ -231,7 +232,7 @@ final class Scope: Hashable {
 						unavailableOptionalProperties: unavailableOptionalProperties,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
-						declarationLocation: declarationLocation,
+						declarationReference: declarationReference,
 					)
 				}
 			},

@@ -72,11 +72,21 @@ func performScan(
 		.parsedPathListCSV()
 
 	let directoryBaseURL = projectRootURL.appendingPathComponent("", isDirectory: true)
+	let projectRootRelativePath = RelativePathBase(projectRootURL)
 
 	let allSwiftFiles = inputFilePaths.map {
 		URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL
 	}
 	let allFilePaths = Set(allSwiftFiles.map(\.relativePath))
+
+	// Each input's modification times, recorded before the input is read so that an edit made
+	// while scan runs shows in `generate`'s comparison. Keyed by absolute path, so `generate`'s
+	// freshness check works regardless of its working directory. The input URLs are already
+	// standardized, so their paths are absolute without resolving every input again.
+	var scannedInputStamps = [String: FileModificationStamp]()
+	for filePath in allSwiftFiles.map(\.path) {
+		scannedInputStamps[filePath] = FileModificationStamp(ofFileAtPath: filePath)
+	}
 
 	// Determine which files are scoped for mock scanning.
 	let mockScopedFilePaths: Set<String> = if mockScopedFiles.isEmpty {
@@ -122,6 +132,9 @@ func performScan(
 		additionalInputFiles = additionalFiles.sorted().map { filePath in
 			URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL.path
 		}
+		for filePath in additionalInputFiles where scannedInputStamps[filePath] == nil {
+			scannedInputStamps[filePath] = FileModificationStamp(ofFileAtPath: filePath)
+		}
 
 		// Exclude files already parsed via the CSV — re-parsing them would
 		// produce duplicate `Instantiable` entries in `combinedModuleInfo`
@@ -140,9 +153,11 @@ func performScan(
 		guard let sourceFilePath = instantiable.sourceFilePath else { return nil }
 		return URL(fileURLWithPath: sourceFilePath, relativeTo: directoryBaseURL).standardizedFileURL
 	}
-	let sortedRootFileURLs = rootFileURLs.sorted {
-		relativePath(for: $0, relativeTo: projectRootURL) < relativePath(for: $1, relativeTo: projectRootURL)
-	}
+	// Each URL is already standardized, and its relative path is computed once rather than in every comparison.
+	let sortedRootFileURLs = rootFileURLs
+		.map { (url: $0, relativePath: projectRootRelativePath.relativePath(forStandardizedPath: $0.path)) }
+		.sorted { $0.relativePath < $1.relativePath }
+		.map(\.url)
 	// Deduplicate: multiple roots in the same file should only produce one output entry.
 	let uniqueRootFileURLs = sortedRootFileURLs.reduce(into: [URL]()) { result, url in
 		if result.last != url {
@@ -157,9 +172,11 @@ func performScan(
 		guard let sourceFilePath = instantiable.sourceFilePath else { return nil }
 		return URL(fileURLWithPath: sourceFilePath, relativeTo: directoryBaseURL).standardizedFileURL
 	}
-	let sortedMockFileURLs = mockFileURLs.sorted {
-		relativePath(for: $0, relativeTo: projectRootURL) < relativePath(for: $1, relativeTo: projectRootURL)
-	}
+	// Each URL is already standardized, and its relative path is computed once rather than in every comparison.
+	let sortedMockFileURLs = mockFileURLs
+		.map { (url: $0, relativePath: projectRootRelativePath.relativePath(forStandardizedPath: $0.path)) }
+		.sorted { $0.relativePath < $1.relativePath }
+		.map(\.url)
 	let uniqueMockFileURLs = sortedMockFileURLs.reduce(into: [URL]()) { result, url in
 		if result.last != url {
 			result.append(url)
@@ -182,7 +199,7 @@ func performScan(
 
 	// Compute configuration file paths (relative to project root, matching Generate's expectations).
 	let configurationFilePaths = mockScopedConfigurations.compactMap(\.sourceFilePath).map { path in
-		relativePath(for: URL(fileURLWithPath: path, relativeTo: directoryBaseURL).standardizedFileURL, relativeTo: projectRootURL)
+		projectRootRelativePath.relativePath(forStandardizedPath: URL(fileURLWithPath: path, relativeTo: directoryBaseURL).standardizedFileURL.path)
 	}
 
 	// Determine mock configuration output file path.
@@ -199,7 +216,7 @@ func performScan(
 	let manifest = SafeDIToolManifest(
 		dependencyTreeGeneration: zip(uniqueRootFileURLs, rootOutputNames).map { inputURL, outputFileName in
 			.init(
-				inputFilePath: relativePath(for: inputURL, relativeTo: projectRootURL),
+				inputFilePath: projectRootRelativePath.relativePath(forStandardizedPath: inputURL.path),
 				outputFilePath: outputDirectoryURL
 					.appendingPathComponent(outputFileName)
 					.path,
@@ -207,7 +224,7 @@ func performScan(
 		},
 		mockGeneration: zip(uniqueMockFileURLs, mockOutputNames).map { inputURL, outputFileName in
 			.init(
-				inputFilePath: relativePath(for: inputURL, relativeTo: projectRootURL),
+				inputFilePath: projectRootRelativePath.relativePath(forStandardizedPath: inputURL.path),
 				outputFilePath: outputDirectoryURL
 					.appendingPathComponent(outputFileName)
 					.path,
@@ -219,7 +236,7 @@ func performScan(
 		additionalInputFiles: additionalInputFiles,
 		activeCompilationConditions: activeCompilationConditions.sorted(),
 		mockScopedFilePaths: mockScopedFilePaths.map { filePath in
-			relativePath(for: URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL, relativeTo: projectRootURL)
+			projectRootRelativePath.relativePath(forStandardizedPath: URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL.path)
 		}.sorted(),
 		projectRoot: projectRootURL.path,
 	)
@@ -234,32 +251,13 @@ func performScan(
 	// manifest's `inputFilePath` (also project-relative) and what Generate
 	// would compute when parsing fresh from the same CSV.
 	func normalized(_ fileScan: FileScan) -> FileScan {
-		fileScan.relocated(to: relativePath(
-			for: URL(fileURLWithPath: fileScan.path, relativeTo: directoryBaseURL).standardizedFileURL,
-			relativeTo: projectRootURL,
+		fileScan.relocated(to: projectRootRelativePath.relativePath(
+			forStandardizedPath: URL(fileURLWithPath: fileScan.path, relativeTo: directoryBaseURL).standardizedFileURL.path,
 		))
 	}
 	func cached(_ fileScan: FileScan) -> CachedFileScan {
 		CachedFileScan(scannedPath: fileScan.path, fileScan: normalized(fileScan))
 	}
-	// Every path scan parsed for this module — CSV inputs plus any files
-	// reached through `#SafeDIConfiguration.additionalDirectoriesToInclude`.
-	// `generate` uses this list to validate cache freshness against the
-	// exact file set `scan` observed, so edits to additional-directory
-	// files correctly invalidate the cache too.
-	//
-	// Normalized to absolute paths so `generate`'s freshness check works
-	// regardless of its CWD — `FileManager.attributesOfItem(atPath:)`
-	// resolves relative paths against the process's CWD, which would
-	// silently fail and invalidate the cache if `generate` runs from a
-	// different directory than `scan`.
-	let absoluteCSVPaths = allFilePaths.map { filePath in
-		URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL.path
-	}.sorted()
-	let allScannedFilePaths = (Set(absoluteCSVPaths).union(
-		// `additionalInputFiles` is already normalized to `.standardizedFileURL.path`.
-		Set(additionalInputFiles),
-	)).sorted()
 	let additionalDirectories = configuration?.additionalDirectoriesToInclude.map { directory in
 		URL(fileURLWithPath: directory, relativeTo: directoryBaseURL).standardizedFileURL.path
 	}.sorted() ?? []
@@ -269,7 +267,11 @@ func performScan(
 		additionalModuleInfo: ModuleInfo(additionalFileScans.filter { !$0.consultsCompilationConditions }.map(normalized)),
 		additionalConditionSensitiveFileScans: additionalFileScans.filter(\.consultsCompilationConditions).map(cached),
 		projectRoot: projectRootURL.path,
-		scannedInputPaths: allScannedFilePaths,
+		// Every file scan read for this module — CSV inputs plus any files reached through
+		// `#SafeDIConfiguration.additionalDirectoriesToInclude` — so edits to either invalidate the cache.
+		scannedInputs: scannedInputStamps
+			.map { ScannedInput(path: $0.key, modificationStamp: $0.value) }
+			.sorted { $0.path < $1.path },
 		csvInputPaths: inputFilePaths.sorted(),
 		additionalInputAbsolutePaths: additionalInputFiles.sorted(),
 		additionalDirectories: additionalDirectories,
@@ -311,6 +313,26 @@ extension SafeDIToolManifest {
 			relativeTo: projectRootURL,
 		)
 	}
+
+	/// The path the compiler is handed for the file at `path`, as a build tool plugin reports it, given the
+	/// manifest's `projectRoot`.
+	///
+	/// A build tool plugin writes each input path relative to a project root: the directory it hands `scan`,
+	/// written as the build system reported it, or, when the plugin could not run `scan`, the working
+	/// directory `generate` runs in. The build system hands the compiler the absolute path it reported to
+	/// the plugin, so joining the two restores that path, except when the working directory spells the root
+	/// differently; `generate` then also holds the plugin’s spelling, from `--mock-scoped-files`, and leaves
+	/// out a directive it cannot spell for certain. Standardizing the joined path would not help: on Apple
+	/// platforms, Foundation’s standardization removes a leading `/private` from paths such as
+	/// `/private/tmp/…`, which the compiler keeps.
+	func compilerFilePath(for path: String, underProjectRoot projectRoot: String) -> String {
+		let projectRootRelativePath = resolvedPath(for: path)
+		return if (projectRootRelativePath as NSString).isAbsolutePath {
+			projectRootRelativePath
+		} else {
+			(projectRoot as NSString).appendingPathComponent(projectRootRelativePath)
+		}
+	}
 }
 
 /// Wrapper persisted alongside the manifest so `generate` can both
@@ -330,9 +352,10 @@ struct CachedScannedModuleInfo: Codable {
 	let additionalConditionSensitiveFileScans: [CachedFileScan]
 	/// The directory relative paths in the scans are relative to.
 	let projectRoot: String
-	/// Absolute paths of every file `scan` observed — CSV inputs plus
-	/// additional-directory files. Drives the mtime freshness check.
-	let scannedInputPaths: [String]
+	/// Every file `scan` read — CSV inputs plus additional-directory files — with the modification
+	/// times it recorded before reading them. `generate` reuses this cache only while every one of them
+	/// still reports the same times.
+	let scannedInputs: [ScannedInput]
 	/// Raw CSV file paths as `scan` read them. Drives the "current generate
 	/// CSV matches the CSV that scan observed" check.
 	let csvInputPaths: [String]
@@ -351,6 +374,13 @@ struct CachedScannedModuleInfo: Codable {
 	/// may differ: a build tool plugin hands `scan` only the conditions it can see, while `generate`
 	/// usually reads more from the build settings, such as `DEBUG` and `SWIFT_PACKAGE`.
 	let activeCompilationConditions: [String]
+}
+
+/// A file `scan` read, and its modification times when scan read it.
+struct ScannedInput: Codable {
+	/// The file's absolute path.
+	let path: String
+	let modificationStamp: FileModificationStamp
 }
 
 /// What one file contributed to the module that `scan` cached.

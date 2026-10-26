@@ -24,8 +24,9 @@ import SwiftUI
 
 @Instantiable(generateMock: true)
 public struct NameEntryView: Instantiable, View {
-	public init(userService: AnyUserService) {
+	public init(userService: AnyUserService, logger: EventLogger) {
 		self.userService = userService
+		self.logger = logger
 	}
 
 	public var body: some View {
@@ -37,6 +38,7 @@ public struct NameEntryView: Instantiable, View {
 			)
 			Button(action: {
 				userService.user = User(name: name)
+				logger.record("Logged in")
 			}, label: {
 				Text("Log in")
 			})
@@ -47,6 +49,11 @@ public struct NameEntryView: Instantiable, View {
 	@State private var name: String = ""
 
 	@Received private let userService: AnyUserService
+
+	/// The app's `eventLogger`, received under another name. The generated code assigns one to the other and
+	/// names this declaration in a comment, which keeps the generated code free of absolute paths for Tuist's
+	/// shared cache. The compiler reports a type mismatch in the generated file, with that comment in view.
+	@Received(fulfilledByDependencyNamed: "eventLogger", ofType: EventLogger.self) private let logger: EventLogger
 }
 
 #if DEBUG

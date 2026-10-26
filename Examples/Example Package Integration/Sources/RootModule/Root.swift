@@ -27,13 +27,14 @@ import SharedModule
 
 @Instantiable(isRoot: true) @MainActor
 public final class Root: Instantiable {
-	public init(childA: ChildA, childB: ChildB, childC: ChildC, shared: SharedThing, userDefaults: UserDefaults, eventLogger: EventLogger) {
+	public init(childA: ChildA, childB: ChildB, childC: ChildC, shared: SharedThing, userDefaults: UserDefaults, eventLogger: EventLogger, launchRecorder: LaunchRecorder) {
 		self.childA = childA
 		self.childB = childB
 		self.childC = childC
 		self.shared = shared
 		self.userDefaults = userDefaults
 		self.eventLogger = eventLogger
+		self.launchRecorder = launchRecorder
 		eventLogger.record("Created the root")
 	}
 
@@ -51,4 +52,6 @@ public final class Root: Instantiable {
 
 	/// Which type fulfills `EventLogger` depends on whether `DEBUG` is active; see `EventLogger.swift`.
 	@Instantiated let eventLogger: EventLogger
+
+	@Instantiated let launchRecorder: LaunchRecorder
 }

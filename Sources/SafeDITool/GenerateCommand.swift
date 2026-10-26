@@ -56,6 +56,8 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project’s root module.") var dotFileOutput: String?
 
+	@Flag(help: "States that the compiler is handed every input Swift file, including the files behind dependent module info, at exactly the path this tool is handed. Generated code then wraps each `@Received(fulfilledByDependencyNamed:ofType:)` assignment in a `#sourceLocation` directive naming that path, so the compiler reports a type mismatch at the declaration. Without this flag, and without a build tool plugin’s manifest, the assignment names the declaration in a comment instead, because the compiler warns at a directive whose path differs from the one it was handed.") var compilerReceivesInputPathsUnchanged = false
+
 	// MARK: Internal
 
 	func run() async throws {
@@ -238,6 +240,21 @@ struct Generate: AsyncParsableCommand {
 			typeDescriptionToFulfillingInstantiableMap: resolveSafeDIFulfilledTypes(
 				instantiables: normalizedInstantiables,
 			),
+			aliasDeclarationReferences: AliasDeclarationReferences(
+				declarationFilePaths: Set(normalizedInstantiables.flatMap { instantiable in
+					instantiable.dependencies.compactMap { dependency in
+						switch dependency.source {
+						case .aliased:
+							dependency.declarationLocation?.filePath
+						case .forwarded, .instantiated, .received:
+							nil
+						}
+					}
+				}),
+				compilerFilePaths: compilerFilePaths(manifest: manifest, inputFilePaths: inputFilePaths),
+				// A plugin's paths relative to its project root, and any other integration's paths as it wrote them.
+				commentFilePath: { [manifest] filePath in manifest?.resolvedPath(for: filePath) ?? filePath },
+			),
 		)
 		if let moduleInfoOutput {
 			try JSONEncoder().encode(module).write(toPath: moduleInfoOutput)
@@ -304,18 +321,28 @@ struct Generate: AsyncParsableCommand {
 					}
 					if let mockScopedFilePaths = manifest.mockScopedFilePaths {
 						// Paths are compared as scan wrote them, since this parse may name files as the CSV does.
+						// Resolving a path is far costlier than the comparisons, and this runs over every
+						// mock-generating type in every module the target depends on, so a path is resolved
+						// only when it could matter: resolving never changes a file name, and resolving a
+						// path already written as scan writes it returns it unchanged.
 						let mockScopedFilePathSet = Set(mockScopedFilePaths)
+						let mockScopedFileNames = Set(mockScopedFilePaths.map { ($0 as NSString).lastPathComponent })
+						func mockScopedFilePath(resolving sourceFilePath: String) -> String? {
+							guard mockScopedFileNames.contains((sourceFilePath as NSString).lastPathComponent) else { return nil }
+							let resolvedPath = manifest.resolvedPath(for: sourceFilePath)
+							return mockScopedFilePathSet.contains(resolvedPath) ? resolvedPath : nil
+						}
 						let manifestMockInputPaths = Set(manifest.mockGeneration.map(\.inputFilePath))
 						for instantiable in module.instantiables where instantiable.generateMock {
-							if let sourceFilePath = instantiable.sourceFilePath.map(manifest.resolvedPath(for:)),
-							   mockScopedFilePathSet.contains(sourceFilePath),
-							   !manifestMockInputPaths.contains(sourceFilePath)
+							if let sourceFilePath = instantiable.sourceFilePath,
+							   !manifestMockInputPaths.contains(sourceFilePath),
+							   let mockScopedFilePath = mockScopedFilePath(resolving: sourceFilePath),
+							   !manifestMockInputPaths.contains(mockScopedFilePath)
 							{
-								throw ManifestError.mockNotInManifest(typeName: instantiable.concreteInstantiable.asSource, sourceFilePath: sourceFilePath)
+								throw ManifestError.mockNotInManifest(typeName: instantiable.concreteInstantiable.asSource, sourceFilePath: mockScopedFilePath)
 							}
 						}
-						let configurationFilePaths = Set(module.configurations.compactMap(\.sourceFilePath).map(manifest.resolvedPath(for:)))
-							.intersection(mockScopedFilePathSet)
+						let configurationFilePaths = Set(module.configurations.compactMap(\.sourceFilePath).compactMap(mockScopedFilePath(resolving:)))
 						let manifestConfigurationFilePaths = Set(manifest.configurationFilePaths)
 						if let sourceFilePath = configurationFilePaths.subtracting(manifestConfigurationFilePaths).min() {
 							throw ManifestError.configurationNotInManifest(sourceFilePath: sourceFilePath)
@@ -587,12 +614,12 @@ struct Generate: AsyncParsableCommand {
 	/// pass `--include` expect those directories scanned afresh, and scan
 	/// doesn't see `--include`.
 	///
-	/// The cache is also bypassed when any source file's mtime is newer
-	/// than the cache file — e.g. a manual `generate` invocation after a
-	/// source edit without rerunning `scan` would otherwise consume stale
-	/// parse results and emit stale code. Plugin-driven builds rerun
-	/// `scan` every build, so this check is effectively free on the fast
-	/// path.
+	/// The cache is also bypassed when any file scan read reports
+	/// modification times other than those scan recorded before reading it —
+	/// e.g. a manual `generate` invocation after a source edit without
+	/// rerunning `scan` would otherwise consume stale parse results and emit
+	/// stale code. Plugin-driven builds rerun `scan` every build, so this
+	/// check passes on the fast path, at one or two system calls per input.
 	///
 	/// Decode failures (truncated file from an interrupted write,
 	/// cross-version schema drift, etc.) fall through to a fresh parse
@@ -642,11 +669,11 @@ struct Generate: AsyncParsableCommand {
 		activeCompilationConditions: Set<String>,
 	) async throws -> ParsedModule? {
 		let cacheURL = scannedModuleInfoURL(forManifestPath: manifestPath)
-		guard let cacheModifiedAt = contentModificationDate(ofFileAtPath: cacheURL.path) else { return nil }
 
-		// Treat decode failures as cache misses, not hard errors — the
+		// Treat a missing cache and decode failures as cache misses, not hard errors — the
 		// cache may have been truncated by an interrupted write or carry
-		// an older schema that a newer SafeDITool can no longer read.
+		// an older schema that a newer SafeDITool can no longer read, such
+		// as one that recorded no modification times.
 		guard let data = try? Data(contentsOf: cacheURL),
 		      let cached = try? JSONDecoder().decode(CachedScannedModuleInfo.self, from: data)
 		else { return nil }
@@ -664,9 +691,9 @@ struct Generate: AsyncParsableCommand {
 
 		// Bypass the cache if new Swift files have been added to any of the
 		// `additionalDirectoriesToInclude` directories since scan ran. The
-		// mtime check below only catches files scan already knew about — it
-		// would miss a newly-added file whose path doesn't appear in
-		// `cached.scannedInputPaths`.
+		// modification-time check below only catches files scan already knew
+		// about — it would miss a newly-added file whose path doesn't appear in
+		// `cached.scannedInputs`.
 		if !cached.additionalDirectories.isEmpty {
 			let currentAdditionalFiles = await (try? findSwiftFiles(inDirectories: cached.additionalDirectories)) ?? []
 			let currentAdditionalAbsolute = Set(currentAdditionalFiles.map { filePath in
@@ -677,19 +704,14 @@ struct Generate: AsyncParsableCommand {
 			}
 		}
 
-		// Bypass the cache if any input file scan observed has changed
-		// since the cache was written — newer mtime OR missing-from-disk
-		// both invalidate. We check every path scan parsed (including
-		// files reached through `#SafeDIConfiguration.additionalDirectoriesToInclude`,
+		// Bypass the cache if any file scan read reports different
+		// modification times than scan recorded before reading it: edited,
+		// touched, moved back in time, deleted, or a symbolic link pointed
+		// elsewhere. We check every path scan read (including files reached
+		// through `#SafeDIConfiguration.additionalDirectoriesToInclude`,
 		// which don't appear in `findGenerateSwiftFiles()`'s output).
-		guard !cached.scannedInputPaths.contains(where: { filePath in
-			guard let modifiedAt = contentModificationDate(ofFileAtPath: filePath) else {
-				// File missing or unreadable — the scan-observed input set
-				// doesn't match disk, so a fresh parse is safer than
-				// trusting stale parse results.
-				return true
-			}
-			return modifiedAt > cacheModifiedAt
+		guard cached.scannedInputs.allSatisfy({ scannedInput in
+			FileModificationStamp(ofFileAtPath: scannedInput.path) == scannedInput.modificationStamp
 		}) else {
 			return nil
 		}
@@ -768,6 +790,37 @@ struct Generate: AsyncParsableCommand {
 		}
 	}
 
+	/// How the compiler spells the paths this tool was handed, or `nil` when this tool does not know.
+	///
+	/// A build tool plugin records its project root in the manifest and writes each input path relative to it,
+	/// and the build system hands the compiler the absolute path it reported to the plugin. The plugin names the
+	/// target's own files exactly as the build system reported them with `--mock-scoped-files` when `generate`
+	/// scans for itself, and relative to the project root in the manifest otherwise. An integration that passes
+	/// `--compiler-receives-input-paths-unchanged`, such as the Bazel rule, hands the compiler every input path
+	/// as written. Any other integration may not: the Tuist plugin hands this tool paths relative to `$SRCROOT`,
+	/// and Xcode hands the compiler absolute ones.
+	private func compilerFilePaths(
+		manifest: SafeDIToolManifest?,
+		inputFilePaths: Set<String>,
+	) -> AliasDeclarationReferences.CompilerFilePaths? {
+		if let manifest, let projectRoot = manifest.projectRoot {
+			let compilerFilePath = { manifest.compilerFilePath(for: $0, underProjectRoot: projectRoot) }
+			if swiftManifest == nil, !mockScopedFiles.isEmpty {
+				return .init(filePath: compilerFilePath, moduleFilePaths: Set(mockScopedFiles), moduleFilePath: { $0 })
+			} else {
+				return .init(
+					filePath: compilerFilePath,
+					moduleFilePaths: manifest.mockScopedFilePaths.map(Set.init) ?? inputFilePaths,
+					moduleFilePath: compilerFilePath,
+				)
+			}
+		} else if compilerReceivesInputPathsUnchanged {
+			return .init(filePath: { $0 }, moduleFilePaths: inputFilePaths, moduleFilePath: { $0 })
+		} else {
+			return nil
+		}
+	}
+
 	/// `diagnostics` formatted for the build log. Build systems hand the tool paths relative to its working
 	/// directory; they are resolved so the printed location identifies the file wherever the log is read.
 	private func formattedForBuildLog(_ diagnostics: [SourceDiagnostic]) -> String {
@@ -775,16 +828,6 @@ struct Generate: AsyncParsableCommand {
 		return diagnostics
 			.map { $0.resolvingFilePath(relativeToDirectory: currentDirectoryPath).formatted }
 			.joined(separator: "\n")
-	}
-
-	/// When the file at `path` was last modified, or `nil` when it is missing or unreadable.
-	/// Asks for the one value rather than `FileManager.attributesOfItem`'s whole dictionary:
-	/// this runs for every input file on every build. `isDirectory` is stated so that building
-	/// the URL does not consult the file system.
-	private func contentModificationDate(ofFileAtPath path: String) -> Date? {
-		try? URL(fileURLWithPath: path, isDirectory: false)
-			.resourceValues(forKeys: [.contentModificationDateKey])
-			.contentModificationDate
 	}
 
 	private var moduleInfoURLs: Set<URL> {
