@@ -886,11 +886,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let treePropertyLabels = Set(treePropertyNodes.map(\.propertyLabel))
 		let forwardedPropertySet = Set(forwardedDependencies.map(\.property))
 
-		let unwrappedOptionalCounterparts = Set(
-			receivedProperties
-				.filter(\.typeDescription.isOptional)
-				.map(\.asUnwrappedProperty),
-		)
 		let receivedNonOptionalProperties = Set(
 			receivedProperties
 				.filter { !$0.typeDescription.isOptional },
@@ -902,13 +897,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			      !forwardedPropertySet.contains(receivedProperty), !receivedProperty.typeDescription.isOptional
 			      || !receivedNonOptionalProperties.contains(receivedProperty.asUnwrappedProperty)
 			else { continue }
-			let isOnlyIfAvailable = (receivedProperty.typeDescription.isOptional
-				&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty.asUnwrappedProperty))
-				|| (!receivedProperty.typeDescription.isOptional
-					&& !unwrappedOptionalCounterparts.contains(receivedProperty)
-					&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty))
-				|| unavailableOptionalProperties.contains(receivedProperty)
-			if isOnlyIfAvailable {
+			// Optional, defaulting to `nil`, only when every receiver — directly or
+			// through an alias, whose fulfilling property is non-optional — receives it
+			// `onlyIfAvailable`. A property any receiver requires is a required parameter.
+			if onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty.asUnwrappedProperty) {
 				let typeSource: String = if receivedProperty.typeDescription.isOptional {
 					receivedProperty.typeDescription.asSource
 				} else {
