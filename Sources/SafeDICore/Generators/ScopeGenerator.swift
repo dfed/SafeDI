@@ -1780,8 +1780,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// construction signature — its parameter list wins even when empty.
 				// Init-only default-valued parameters are intentionally hidden behind
 				// the mock.
-				// A lazily instantiated property is built as the constant it stands for.
-				let useMockInitializer = childInstantiable.mockReturnTypeIsCompatible(withPropertyType: childProperty.asValidatedForDependencyCycles.typeDescription)
+				// The mock is compatible when it returns the type the property builds — the
+				// return type of the builder closure — rather than the property's own type, so
+				// an `ErasedInstantiator<_, Protocol>` property, like a `Protocol` property, is
+				// built with a mock that returns `Protocol`.
+				let useMockInitializer = childInstantiable.mockReturnTypeIsCompatible(withPropertyType: childProperty.typeDescription.asInstantiatedType)
 				let constructionInitializer: Initializer? = if useMockInitializer, let mockInitializer = childInstantiable.mockInitializer {
 					mockInitializer
 				} else {
