@@ -122,7 +122,7 @@ func performScan(
 	// Discover additional directories from every configuration the module's files declare.
 	var additionalInputFiles = [String]()
 	var configuredAdditionalInputFiles = [String]()
-	var additionalFileScans = [FileScan]()
+	var additionalFileScans = [CachedFileScan]()
 	var plannedOnlyAdditionalFileScans = [FileScan]()
 	if !moduleOutputFileDeclarations.additionalDirectoriesToInclude.isEmpty {
 		func absolutePaths(_ filePaths: Set<String>) -> [String] {
@@ -146,12 +146,20 @@ func performScan(
 			scannedInputStamps[filePath] = FileModificationStamp(ofFileAtPath: filePath)
 		}
 
-		// Exclude files already parsed via the CSV — re-parsing them would
-		// produce duplicate `Instantiable` entries in the module `generate`
-		// reads from the cache and trip "multiple types fulfilling" validation downstream.
-		additionalFileScans = try await parseSwiftFiles(configuredAdditionalFiles.subtracting(allFilePaths), conditionalCompilation: evaluator)
+		// The input files' paths are already absolute and standardized.
+		additionalFileScans = try await parseAdditionalDirectoryFiles(
+			configuredAdditionalFiles,
+			excludingInputFilesAt: allFilePaths,
+			namedRelativeTo: projectRootRelativePath,
+			conditionalCompilation: evaluator,
+		)
 		// Parsed only to plan outputs: the module these conditions select does not include them.
-		plannedOnlyAdditionalFileScans = try await parseSwiftFiles(plannedOnlyAdditionalFiles.subtracting(allFilePaths), conditionalCompilation: evaluator)
+		plannedOnlyAdditionalFileScans = try await parseAdditionalDirectoryFiles(
+			plannedOnlyAdditionalFiles,
+			excludingInputFilesAt: allFilePaths,
+			namedRelativeTo: projectRootRelativePath,
+			conditionalCompilation: evaluator,
+		).map(\.fileScan)
 	}
 
 	/// The standardized URL of each file `fileScans` names, once each, sorted by path relative to the project root.
@@ -169,7 +177,7 @@ func performScan(
 
 	// Collect root files and compute output file names.
 	let uniqueRootFileURLs = sortedUniqueFileURLs(
-		(fileScans + additionalFileScans + plannedOnlyAdditionalFileScans).filter(\.outputFileDeclarations.declaresRoot),
+		(fileScans + additionalFileScans.map(\.fileScan) + plannedOnlyAdditionalFileScans).filter(\.outputFileDeclarations.declaresRoot),
 	)
 	let rootOutputNames = outputFileNames(for: uniqueRootFileURLs, relativeTo: projectRootURL)
 
@@ -260,8 +268,8 @@ func performScan(
 	let cached = CachedScannedModuleInfo(
 		moduleInfo: ModuleInfo(fileScans.filter { !$0.consultsCompilationConditions }.map(normalized)),
 		conditionSensitiveFileScans: fileScans.filter(\.consultsCompilationConditions).map(cached),
-		additionalModuleInfo: ModuleInfo(additionalFileScans.filter { !$0.consultsCompilationConditions }.map(normalized)),
-		additionalConditionSensitiveFileScans: additionalFileScans.filter(\.consultsCompilationConditions).map(cached),
+		additionalModuleInfo: ModuleInfo(additionalFileScans.map(\.fileScan).filter { !$0.consultsCompilationConditions }),
+		additionalConditionSensitiveFileScans: additionalFileScans.filter(\.fileScan.consultsCompilationConditions),
 		projectRoot: projectRootURL.path,
 		// Every file scan read for this module — CSV inputs plus any files reached through
 		// `#SafeDIConfiguration.additionalDirectoriesToInclude` — so edits to either invalidate the cache.
@@ -281,6 +289,33 @@ func performScan(
 	// machine-read only, so the `.sortedKeys` formatting the manifest
 	// needs for determinism isn't load-bearing here.
 	try? JSONEncoder().encode(cached).write(to: scannedModuleInfoURL)
+}
+
+/// What the Swift files found in a module's `#SafeDIConfiguration(additionalDirectoriesToInclude:)` directories and
+/// absent from its input files contribute. `scan` and a `generate` that parses afresh both parse them here, so
+/// `generate` names them, and cites them in the locations it records, as scan's manifest and cache do.
+///
+/// - Parameters:
+///   - filePaths: The files `findSwiftFiles(inDirectories:)` found, whose paths are absolute and standardized.
+///   - inputFilePaths: The absolute, standardized paths of the module's input files. A found file that is also an
+///     input is parsed only as an input: parsing it again would declare its types twice.
+///   - projectRoot: The directory a manifest names files relative to, or `nil` to name each file by its absolute path.
+///   - evaluator: The evaluator the module's input files were parsed with.
+/// - Returns: What each found file that is not an input contributes, parsed under its absolute path, so the
+///   locations it records name the file wherever the tool runs, and named as the manifest names files.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+func parseAdditionalDirectoryFiles(
+	_ filePaths: Set<String>,
+	excludingInputFilesAt inputFilePaths: Set<String>,
+	namedRelativeTo projectRoot: RelativePathBase?,
+	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+) async throws -> [CachedFileScan] {
+	try await parseSwiftFiles(filePaths.subtracting(inputFilePaths), conditionalCompilation: evaluator).map { fileScan in
+		CachedFileScan(
+			scannedPath: fileScan.path,
+			fileScan: projectRoot.map { fileScan.relocated(to: $0.relativePath(forStandardizedPath: fileScan.path)) } ?? fileScan,
+		)
+	}
 }
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
