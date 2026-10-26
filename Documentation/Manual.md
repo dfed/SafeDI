@@ -462,6 +462,8 @@ public struct ProfileView: Instantiable {
 }
 ```
 
+To receive the renamed dependency inside a type-erasing wrapper, add `erasedToConcreteExistential: true`, which wraps it as [`@Instantiated` erasure](#making-protocols-instantiable) does: a property `userVendor: AnyUserVendor` is assigned `AnyUserVendor(userManager)`. With `onlyIfAvailable: true` the property is optional, and the type it wraps does the wrapping: a property `userVendor: AnyUserVendor?` is assigned `AnyUserVendor(userManager)` too.
+
 #### Sharing one instance across properties of disparate types
 
 Renaming can be applied more than once to the same `@Instantiated` or `@Forwarded` property, so a single instance can be received as several different types: any type the instance can be assigned to, such as unrelated protocols it conforms to or a superclass. Instantiate it once, then rename it once per type. Types further down the tree receive whichever type they need, and every one of them gets the same instance:
@@ -793,7 +795,7 @@ LoggedInView.mock(safeDIOverrides: .init(
 
 Closure fields on `SafeDIMockConfiguration` are plain (non-`@Sendable`) by default, so overrides can capture mutable non-`Sendable` test state. When a type is reached through a `SendableInstantiator` (or `SendableErasedInstantiator`) anywhere in the dependency graph, its `SafeDIMockConfiguration` is emitted with `@Sendable` closure fields instead so the overrides remain safe to invoke across isolation boundaries.
 
-A type gets its own `SafeDIOverrides` struct when at least one dependency belongs there: an `@Instantiated` dependency, a `@Received` dependency of a type an `@Instantiable` declaration fulfills, or a `@Received(onlyIfAvailable: true)` dependency. Every other dependency is a flat `mock()` parameter. The table below shows where each kind lands and whether the caller has to supply it.
+A type gets its own `SafeDIOverrides` struct when at least one dependency belongs there: an `@Instantiated` dependency, a `@Received` dependency of a type an `@Instantiable` declaration fulfills or a single concrete type is [erased to](#receiving-a-type-erased-dependency), or a `@Received(onlyIfAvailable: true)` dependency. Every other dependency is a flat `mock()` parameter. The table below shows where each kind lands and whether the caller has to supply it.
 
 #### Dependency kinds in the generated mock
 
@@ -801,8 +803,8 @@ The table below shows where each dependency kind lands in the three buckets abov
 
 | Dependency kind | Shape in the mock | Default |
 | --- | --- | --- |
-| Required `@Received` of a type some `@Instantiable` declaration fulfills (directly or via `fulfillingAdditionalTypes`) | Entry on `SafeDIOverrides` | Built from the real subtree, exactly like `@Instantiated` |
-| Required `@Received` of a type no `@Instantiable` declaration fulfills | Flat `mock()` parameter | Required |
+| Required `@Received` of a type some `@Instantiable` declaration fulfills (directly or via `fulfillingAdditionalTypes`), or of a type exactly one concrete type is [erased to](#receiving-a-type-erased-dependency) | Entry on `SafeDIOverrides` | Built from the real subtree, exactly like `@Instantiated` |
+| Required `@Received` of a type no `@Instantiable` declaration fulfills, including a type [different concrete types are erased to](#receiving-a-type-erased-dependency) | Flat `mock()` parameter | Required |
 | `@Forwarded` | Flat `mock()` parameter | Required, unless the root provides a default or the forwarded type has a [`mockOnly`](#the-mockonly-parameter) provider (which defaults the parameter to `Type.mock()`) |
 | `@Instantiated` | Entry on `SafeDIOverrides` | Built from the real subtree — see [Overriding dependencies](#overriding-dependencies) |
 | `@Received(onlyIfAvailable: true)` | Entry on `SafeDIOverrides`, typed as optional | `nil` |
@@ -811,6 +813,22 @@ The table below shows where each dependency kind lands in the three buckets abov
 A `@Received(onlyIfAvailable: true)` dependency gets no `SafeDIOverrides` entry of its own when the mock already builds that dependency — because the mocked type instantiates it, or because another type in the tree requires it. The receiver is then passed the built instance, unless that instance can only be built after the receiver (see [Conditionally receiving dependencies](#conditionally-receiving-dependencies)). In that case the receiver is passed `nil`, as in production, and a builder closure you set for the receiver in `SafeDIOverrides` is called with `nil`.
 
 A `@Received` dependency is resolved from its declared type, not from the renames in any particular parent. Take `ProfileView` from [Sharing one instance across properties of disparate types](#sharing-one-instance-across-properties-of-disparate-types): `ProfileView.mock()` can build `crashReporter` itself only when `Telemetry` lists `CrashReporter` in `fulfillingAdditionalTypes`. A composition entry such as `(EventTracker & CrashReporter).self` alone does not cover its members. Otherwise `crashReporter` is a required parameter of `ProfileView.mock()`. Because each received dependency is resolved on its own, a mock that receives both `EventTracker` and `CrashReporter` builds a separate `Telemetry` for each. Pass one instance through `safeDIOverrides` if a test needs them to coincide.
+
+#### Receiving a type-erased dependency
+
+A `@Received` dependency of a type no `@Instantiable` declaration fulfills can still be built by a mock when a parent erases a concrete type to it. `NotesApp` in [Making protocols `@Instantiable`](#making-protocols-instantiable) declares `@Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) private var userService: AnyUserService`, so the mock of a type that receives `userService: AnyUserService` gets a `userService` entry on `SafeDIOverrides` that defaults to building a `DefaultUserService` and wrapping it in `AnyUserService`. SafeDI looks at every `@Instantiated` property with `erasedToConcreteExistential: true` in the current module and the modules it depends on, and matches the received dependency by its type: a received `AnyUserService` matches properties of type `AnyUserService`, not an `ErasedInstantiator<…, AnyUserService>`.
+
+When those properties erase different concrete types to the same type — say `NotesApp` erases `DefaultUserService` to `AnyUserService` and another parent erases `OfflineUserService` to it — nothing tells SafeDI which one a mock should build. The dependency is then a required flat `mock()` parameter:
+
+```swift
+@Instantiable(generateMock: true)
+public struct SettingsView: View, Instantiable {
+    // …
+    @ObservedObject @Received private var userService: AnyUserService
+}
+
+SettingsView.mock(userService: AnyUserService(StubUserService()))
+```
 
 ### Mock visibility
 
