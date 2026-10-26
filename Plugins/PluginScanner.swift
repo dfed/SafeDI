@@ -26,6 +26,9 @@ import Foundation
 /// SPM fallback when `context.tool(named:)` returns an unresolved path). Only
 /// output-file discovery happens here — the real parse and code generation are
 /// performed by SafeDITool at build time via the `--output-directory` flag.
+/// Like `SafeDITool scan`, it ignores `#if` blocks and plans an output for a
+/// declaration in any clause; `generate` writes a file without code for one
+/// that the build's compilation conditions leave inactive.
 enum PluginScanner {
 	struct ScanResult {
 		var outputFiles: [URL]
@@ -40,30 +43,40 @@ enum PluginScanner {
 	) -> ScanResult {
 		// Discover additional directories from configuration first,
 		// so roots in those directories are included in output discovery.
-		var additionalInputFiles = [URL]()
+		// Like `SafeDITool scan`, plan outputs for every configuration,
+		// whichever `#if` clause declares it: the compilation conditions
+		// that select a clause are known only when the build runs.
+		var additionalDirectories = [String]()
 		var additionalMocksToGenerate = [String]()
 		for swiftFile in mockScopedSwiftFiles {
 			guard let content = try? String(contentsOf: swiftFile, encoding: .utf8),
 			      content.contains("#SafeDIConfiguration")
 			else { continue }
-			let directories = extractArrayArgument(named: "additionalDirectoriesToInclude", in: content)
-			additionalMocksToGenerate = extractArrayArgument(named: "additionalMocksToGenerate", in: content)
-			let directoryBaseURL = projectRoot.hasDirectoryPath
-				? projectRoot
-				: projectRoot.appendingPathComponent("", isDirectory: true)
-			for directory in directories {
-				let directoryURL = URL(fileURLWithPath: directory, relativeTo: directoryBaseURL)
-				guard let enumerator = FileManager.default.enumerator(
-					at: directoryURL,
-					includingPropertiesForKeys: nil,
-					options: [.skipsHiddenFiles],
-				) else { continue }
-				for case let fileURL as URL in enumerator where fileURL.pathExtension == "swift" {
-					additionalInputFiles.append(fileURL)
-				}
+			for directory in stringLiteralsInArrayArguments(labeled: "additionalDirectoriesToInclude", in: content)
+				where !additionalDirectories.contains(directory)
+			{
+				additionalDirectories.append(directory)
 			}
-			// Use only the first configuration found.
-			break
+			for typeName in stringLiteralsInArrayArguments(labeled: "additionalMocksToGenerate", in: content)
+				where !additionalMocksToGenerate.contains(typeName)
+			{
+				additionalMocksToGenerate.append(typeName)
+			}
+		}
+		var additionalInputFiles = [URL]()
+		let directoryBaseURL = projectRoot.hasDirectoryPath
+			? projectRoot
+			: projectRoot.appendingPathComponent("", isDirectory: true)
+		for directory in additionalDirectories {
+			let directoryURL = URL(fileURLWithPath: directory, relativeTo: directoryBaseURL)
+			guard let enumerator = FileManager.default.enumerator(
+				at: directoryURL,
+				includingPropertiesForKeys: nil,
+				options: [.skipsHiddenFiles],
+			) else { continue }
+			for case let fileURL as URL in enumerator where fileURL.pathExtension == "swift" {
+				additionalInputFiles.append(fileURL)
+			}
 		}
 
 		// Include additional directory files when scanning for roots.
@@ -183,45 +196,5 @@ enum PluginScanner {
 		}
 
 		return outputFileNames
-	}
-
-	private static func extractArrayArgument(named argumentLabel: String, in source: String) -> [String] {
-		guard let labelRange = source.range(of: argumentLabel) else { return [] }
-		var index = labelRange.upperBound
-		while index < source.endIndex, source[index] != "[" {
-			index = source.index(after: index)
-		}
-		guard index < source.endIndex else { return [] }
-		var depth = 0
-		var closingIndex = index
-		while closingIndex < source.endIndex {
-			switch source[closingIndex] {
-			case "[": depth += 1
-			case "]":
-				depth -= 1
-				if depth == 0 {
-					let content = source[source.index(after: index)..<closingIndex]
-					return extractStringLiterals(from: content)
-				}
-			default: break
-			}
-			closingIndex = source.index(after: closingIndex)
-		}
-		return []
-	}
-
-	private static func extractStringLiterals(from content: some StringProtocol) -> [String] {
-		var results = [String]()
-		var searchIndex = content.startIndex
-		while searchIndex < content.endIndex {
-			guard let openQuote = content[searchIndex...].firstIndex(of: "\"") else { break }
-			let contentStart = content.index(after: openQuote)
-			guard contentStart < content.endIndex,
-			      let closeQuote = content[contentStart...].firstIndex(of: "\"")
-			else { break }
-			results.append(String(content[contentStart..<closeQuote]))
-			searchIndex = content.index(after: closeQuote)
-		}
-		return results
 	}
 }
