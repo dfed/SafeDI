@@ -214,12 +214,14 @@ public actor DependencyTreeGenerator {
 				} else {
 					typeDescriptionToScopeMap[instantiatedType]
 				}
-				if let childScope {
-					try validateNoForwardedProperties(
-						for: dependency,
-						instantiable: childScope.instantiable,
-						parent: scope.instantiable,
-					)
+				if let childScope,
+				   let error = forwardedPropertyError(
+				   	for: dependency,
+				   	instantiable: childScope.instantiable,
+				   	parent: scope.instantiable,
+				   )
+				{
+					throw error
 				}
 			}
 
@@ -1281,7 +1283,10 @@ public actor DependencyTreeGenerator {
 				}
 			}
 
-		// Populate the propertiesToGenerate on each scope.
+		// Populate the propertiesToGenerate on each scope. Scopes hash by identity, so they are
+		// visited in an order that changes from run to run, and of the dependencies that cannot
+		// be instantiated, the one reported is the first on the type whose name sorts first.
+		var firstForwardedPropertyError: ForwardedPropertyError?
 		for scope in Set(typeDescriptionToScopeMap.values) {
 			for dependency in scope.instantiable.dependencies {
 				switch dependency.source {
@@ -1290,11 +1295,18 @@ public actor DependencyTreeGenerator {
 					if let instantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType],
 					   let instantiatedScope = typeDescriptionToScopeMap[instantiatedType]
 					{
-						try validateNoForwardedProperties(
+						if let error = forwardedPropertyError(
 							for: dependency,
 							instantiable: instantiable,
 							parent: scope.instantiable,
-						)
+						),
+							firstForwardedPropertyError.map({ scope.instantiable.concreteInstantiable < $0.parent }) ?? true
+						{
+							firstForwardedPropertyError = ForwardedPropertyError(
+								parent: scope.instantiable.concreteInstantiable,
+								error: error,
+							)
+						}
 						scope.propertiesToGenerate.append(.instantiated(
 							dependency.property,
 							instantiatedScope,
@@ -1314,30 +1326,37 @@ public actor DependencyTreeGenerator {
 				}
 			}
 		}
+		if let firstForwardedPropertyError {
+			throw firstForwardedPropertyError.error
+		}
 		return typeDescriptionToScopeMap
 	}
 
-	/// Validates that a constant `@Instantiated` dependency has no `@Forwarded` properties.
-	private func validateNoForwardedProperties(
+	/// A constant `@Instantiated` dependency whose type has `@Forwarded` properties, and the type that declares it.
+	private struct ForwardedPropertyError {
+		let parent: TypeDescription
+		let error: DependencyTreeGeneratorError
+	}
+
+	/// The error for a constant `@Instantiated` dependency on `parent` whose `instantiable` has `@Forwarded`
+	/// properties, or `nil` when the dependency is valid.
+	private func forwardedPropertyError(
 		for dependency: Dependency,
 		instantiable: Instantiable,
 		parent: Instantiable,
-	) throws {
-		if dependency.property.propertyType.isConstant {
-			let forwardedDependencies = instantiable.dependencies.filter(\.isForwarded)
-			guard forwardedDependencies.isEmpty else {
-				throw DependencyTreeGeneratorError
-					.instantiableHasForwardedProperty(
-						property: dependency.property,
-						declarationLocation: dependency.declarationLocation,
-						instantiableWithForwardedProperty: instantiable,
-						forwardedDeclarations: forwardedDependencies.map {
-							DependencyTreeGeneratorError.LocatedProperty(property: $0.property, declarationLocation: $0.declarationLocation)
-						},
-						parent: parent,
-					)
-			}
-		}
+	) -> DependencyTreeGeneratorError? {
+		guard dependency.property.propertyType.isConstant else { return nil }
+		let forwardedDependencies = instantiable.dependencies.filter(\.isForwarded)
+		guard !forwardedDependencies.isEmpty else { return nil }
+		return .instantiableHasForwardedProperty(
+			property: dependency.property,
+			declarationLocation: dependency.declarationLocation,
+			instantiableWithForwardedProperty: instantiable,
+			forwardedDeclarations: forwardedDependencies.map {
+				DependencyTreeGeneratorError.LocatedProperty(property: $0.property, declarationLocation: $0.declarationLocation)
+			},
+			parent: parent,
+		)
 	}
 
 	/// Validates scopes for cycles and optionally for unfulfillable properties.

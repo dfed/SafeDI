@@ -705,6 +705,68 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithInstantiatedPropertyWithForwardedArgumentOnSeveralTypes_throwsErrorForFirstTypeName() async {
+		// Scopes were validated in the order of a set hashed by object identity, so which type's
+		// property was reported changed from run to run. With fifty such types, reporting the
+		// first type name by chance is unlikely.
+		let parentNames = (0..<50).map { "Parent" + ($0 < 10 ? "0" : "") + "\($0)" }
+		let parentFiles = parentNames.map { parentName in
+			"""
+			@Instantiable
+			public struct \(parentName): Instantiable {
+			    public init(child: Child) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let child: Child
+			}
+			"""
+		}
+		let rootInitializerParameters = parentNames
+			.map { "\($0.lowercased()): \($0)" }
+			.joined(separator: ", ")
+		let rootProperties = parentNames
+			.map { "    @Instantiated let \($0.lowercased()): \($0)" }
+			.joined(separator: "\n")
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Parent00.swift"]):7:5: error: Property `child: Child` on Parent00 has at least one @Forwarded property. Property should instead be of type `Instantiator<Child>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(\(rootInitializerParameters)) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					\(rootProperties)
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Child: Instantiable {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+					""",
+				] + parentFiles,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDiamondDependencyWhereAReceivedPropertyIsUnfulfillableOnOneBranch_throwsError() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
