@@ -724,10 +724,13 @@ public actor DependencyTreeGenerator {
 				partialResult[importStatement.moduleName] = importsForModuleName
 			}
 			.flatMap {
-				if let wholeModuleImport = $0.value.first(where: {
-					$0.kind.isEmpty
-						&& $0.type.isEmpty
-				}) {
+				// A module imported whole in several ways is imported the way that asks for least: without
+				// attributes if any file imports it so, and otherwise with the attributes that sort first,
+				// which puts `@testable`, an error where the module is not built for testing, after the others.
+				if let wholeModuleImport = $0.value
+					.filter({ $0.kind.isEmpty && $0.type.isEmpty })
+					.min(by: { $0.attributeToGenerate < $1.attributeToGenerate })
+				{
 					[wholeModuleImport]
 				} else {
 					Array($0.value)

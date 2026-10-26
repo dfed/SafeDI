@@ -830,40 +830,50 @@ struct Generate: AsyncParsableCommand {
 			.joined(separator: "\n")
 	}
 
-	private var moduleInfoURLs: Set<URL> {
+	/// The dependent modules' info files, each listed once, in path order. Their order is the order in which
+	/// their declarations are combined, which decides which duplicate declaration is reported and the order of
+	/// the files with errors that generated code lists. Path order is the order in which a module's own files
+	/// are combined, and it does not change when a build system lists a target's dependencies in another order.
+	private var moduleInfoURLs: [URL] {
 		get throws {
 			if let dependentModuleInfoFilePath {
-				try .init(
+				try Set(
 					String(contentsOfFile: dependentModuleInfoFilePath, encoding: .utf8)
-						.parsedPathListCSV()
-						.map(\.asFileURL),
+						.parsedPathListCSV(),
 				)
+				.sorted()
+				.map(\.asFileURL)
 			} else {
 				[]
 			}
 		}
 	}
 
+	/// The dependent modules' info, in the order of `moduleInfoURLs` whatever order the parallel reads finish in.
 	private func loadSafeDIModuleInfo() async throws -> [ModuleInfo] {
-		try await withThrowingTaskGroup(
-			of: ModuleInfo.self,
+		let moduleInfoURLs = try moduleInfoURLs
+		return try await withThrowingTaskGroup(
+			of: (index: Int, moduleInfo: ModuleInfo).self,
 			returning: [ModuleInfo].self,
 		) { taskGroup in
-			let moduleInfoURLs = try moduleInfoURLs
-			guard !moduleInfoURLs.isEmpty else { return [] }
-			for moduleInfoURL in moduleInfoURLs {
+			for (index, moduleInfoURL) in moduleInfoURLs.enumerated() {
 				taskGroup.addTask {
-					try JSONDecoder().decode(
-						ModuleInfo.self,
-						from: Data(contentsOf: moduleInfoURL),
+					try (
+						index: index,
+						moduleInfo: JSONDecoder().decode(
+							ModuleInfo.self,
+							from: Data(contentsOf: moduleInfoURL),
+						),
 					)
 				}
 			}
-			var allModuleInfo = [ModuleInfo]()
+			var indexedModuleInfo = [(index: Int, moduleInfo: ModuleInfo)]()
 			for try await moduleInfo in taskGroup {
-				allModuleInfo.append(moduleInfo)
+				indexedModuleInfo.append(moduleInfo)
 			}
-			return allModuleInfo
+			return indexedModuleInfo
+				.sorted { $0.index < $1.index }
+				.map(\.moduleInfo)
 		}
 	}
 
