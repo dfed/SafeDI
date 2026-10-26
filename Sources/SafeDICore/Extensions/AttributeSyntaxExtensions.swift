@@ -33,6 +33,15 @@ extension AttributeSyntax {
 		return firstLabeledExpression.expression
 	}
 
+	public var isRootValue: Bool {
+		guard let isRoot,
+		      let boolLiteral = BooleanLiteralExprSyntax(isRoot)
+		else {
+			return false
+		}
+		return boolLiteral.literal.tokenKind == .keyword(.true)
+	}
+
 	public var fulfillingAdditionalTypes: ExprSyntax? {
 		guard let arguments,
 		      let labeledExpressionList = LabeledExprListSyntax(arguments),

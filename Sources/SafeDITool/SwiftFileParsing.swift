@@ -263,6 +263,9 @@ struct FileScan: Codable, Sendable {
 	let importSegments: [FileVisitor.ImportSegment]
 	/// Every bare condition whose value decided which imports `importSegments` hold, for either list.
 	let importOnlyConsultedCompilationConditions: Set<String>
+	/// The declarations in every clause of the file's `#if` blocks that decide which files SafeDI generates,
+	/// which are the same whatever the conditions.
+	let outputFileDeclarations: OutputFileDeclarations
 
 	/// Whether any compilation condition decided what the file contributed. A file whose scan consults
 	/// none contributes the same whatever conditions are supplied.
@@ -301,6 +304,7 @@ struct FileScan: Codable, Sendable {
 			consultedCompilationConditions: consultedCompilationConditions,
 			importSegments: importSegments,
 			importOnlyConsultedCompilationConditions: importOnlyConsultedCompilationConditions,
+			outputFileDeclarations: outputFileDeclarations,
 		)
 	}
 
@@ -325,6 +329,7 @@ struct FileScan: Codable, Sendable {
 			consultedCompilationConditions: consultedCompilationConditions,
 			importSegments: importSegments,
 			importOnlyConsultedCompilationConditions: importOnlyConsultedCompilationConditions,
+			outputFileDeclarations: outputFileDeclarations,
 		)
 	}
 }
@@ -465,6 +470,7 @@ private func walk(
 		consultedCompilationConditions: fileVisitor.consultedCompilationConditions,
 		importSegments: fileVisitor.importOnlyConsultedCompilationConditions.isEmpty ? [] : fileVisitor.importSegments,
 		importOnlyConsultedCompilationConditions: fileVisitor.importOnlyConsultedCompilationConditions,
+		outputFileDeclarations: fileVisitor.outputFileDeclarations,
 	)
 	.relocated(to: filePath)
 	return fileScan.declaresSafeDIContent ? fileScan : fileScan.replacingImports(with: [], mockImports: [])
