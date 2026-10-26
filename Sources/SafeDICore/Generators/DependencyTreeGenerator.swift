@@ -1095,7 +1095,7 @@ public actor DependencyTreeGenerator {
 		let property: Property
 		let fulfillingProperty: Property
 		/// Where the alias is declared, when it is known.
-		var declarationLocation: Dependency.DeclarationLocation? = nil
+		var declarationLocation: Dependency.DeclarationLocation?
 	}
 
 	/// Aliased dependencies of one scope that are each fulfilled by the next one.
