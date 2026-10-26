@@ -379,6 +379,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	private var unavailablePropertiesToGenerateCodeTask = [UnavailablePropertiesCacheKey: Task<String, Error>]()
+	/// The task that builds a mock root's parameter tree. Collecting configuration types, collecting
+	/// sendable configuration type names, and generating the mock each read the same tree.
+	private var rootMockParameterTreeTask: Task<[MockTreeItem], Never>?
+
+	/// The mock parameter tree of this scope as a mock root, built once.
+	private var rootMockParameterTree: [MockTreeItem] {
+		get async {
+			if let rootMockParameterTreeTask {
+				return await rootMockParameterTreeTask.value
+			} else {
+				let rootMockParameterTreeTask = Task { await collectMockParameterTree() }
+				self.rootMockParameterTreeTask = rootMockParameterTreeTask
+				return await rootMockParameterTreeTask.value
+			}
+		}
+	}
 
 	/// The children of this scope in the order their code is emitted: every child
 	/// follows the siblings it depends on.
@@ -894,7 +910,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}()
 
 		// 1. Build the parameter tree.
-		let parameterTree = await collectMockParameterTree()
+		let parameterTree = await rootMockParameterTree
 
 		// 2. Identify flat parameters.
 
@@ -1639,7 +1655,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleEdges: Set<CycleEdge>,
 		sendableConfigurationTypeNames: Set<String>,
 	) async -> [(typeName: String, structCode: String)] {
-		let parameterTree = await collectMockParameterTree()
+		let parameterTree = await rootMockParameterTree
 		let uniqueTypes = Self.collectUniqueConfigurationTypes(from: parameterTree.propertyNodes)
 		let indent = Self.standardIndent
 		return uniqueTypes.map { node in
@@ -1660,7 +1676,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// so every root emits consistent `@Sendable`-ness for a given type's
 	/// `SafeDIMockConfiguration` struct.
 	func collectSendableConfigurationTypeNames() async -> Set<String> {
-		let parameterTree = await collectMockParameterTree()
+		let parameterTree = await rootMockParameterTree
 		var result = Set<String>()
 
 		func walk(_ node: MockParameterNode) {
