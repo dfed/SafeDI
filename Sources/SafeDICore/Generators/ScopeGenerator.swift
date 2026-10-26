@@ -112,6 +112,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				},
 		)
 		self.requiredReceivedProperties = requiredReceivedProperties
+		// An `onlyIfAvailable` alias a receiver in this subtree requires must be created, so its
+		// fulfilling property is built before it, unless an enclosing scope provides the alias's
+		// property in its place.
+		var requiredOnlyIfAvailableAliasProperties = Set<Property>()
+		var requiredOnlyIfAvailableAliasFulfillingProperties = Set<Property>()
+		for case let (aliasProperty?, fulfillingProperty?) in propertiesToGenerate.lazy.map({ ($0.property, $0.onlyIfAvailableAliasFulfillingProperty) })
+			where propertiesToGenerate.contains(where: { $0.requiredReceivedProperties.contains(aliasProperty) })
+		{
+			requiredOnlyIfAvailableAliasProperties.insert(aliasProperty)
+			requiredOnlyIfAvailableAliasFulfillingProperties.insert(fulfillingProperty)
+		}
+		self.requiredOnlyIfAvailableAliasProperties = requiredOnlyIfAvailableAliasProperties
+		self.requiredAliasFulfillingProperties = receivedFromAncestors(
+			Set(propertiesToGenerate.flatMap(\.requiredAliasFulfillingProperties))
+				.union(requiredOnlyIfAvailableAliasFulfillingProperties),
+		)
+		onlyIfAvailableAliasFulfillingProperty = nil
 		onlyIfAvailableUnwrappedReceivedProperties = Set(
 			propertiesToGenerate.flatMap { propertyToGenerate in
 				propertyToGenerate.onlyIfAvailableUnwrappedReceivedProperties
@@ -154,6 +171,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		unavailableOptionalProperties: Set<Property>,
 		erasedToConcreteExistential: Bool,
 		onlyIfAvailable: Bool,
+		enclosingScopeProvidesProperty: Bool,
 		declarationReference: AliasDeclarationReferences.Reference?,
 	) {
 		scopeData = .alias(
@@ -171,6 +189,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			requiredReceivedProperties = [fulfillingProperty]
 			onlyIfAvailableUnwrappedReceivedProperties = []
 		}
+		onlyIfAvailableAliasFulfillingProperty = onlyIfAvailable && !enclosingScopeProvidesProperty ? fulfillingProperty : nil
+		requiredOnlyIfAvailableAliasProperties = []
+		requiredAliasFulfillingProperties = []
 		description = property.asSource
 		propertiesToGenerate = []
 		propertiesToDeclare = []
@@ -342,6 +363,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Used to order children and by mock generation to identify dependencies that should become
 	/// optional mock parameters (no guaranteed default).
 	let onlyIfAvailableUnwrappedReceivedProperties: Set<Property>
+	/// For an `@Received(onlyIfAvailable: true)` alias whose property no enclosing scope provides,
+	/// the alias's fulfilling property; `nil` for every other scope. A receiver that requires such
+	/// an alias can be handed it only if the alias is created.
+	private let onlyIfAvailableAliasFulfillingProperty: Property?
+	/// The `onlyIfAvailable` aliases among this scope's children that a receiver in this scope's
+	/// subtree requires. Each is built after its fulfilling property, as a required alias would be.
+	private let requiredOnlyIfAvailableAliasProperties: Set<Property>
+	/// The fulfilling properties of the `onlyIfAvailable` aliases in this subtree that a receiver
+	/// requires, which this subtree receives from an ancestor. This subtree is built after them,
+	/// although it receives them only if available. Unlike `requiredReceivedProperties`, these do
+	/// not make a mock parameter required: a mock binds such an alias to the optional parameter.
+	private let requiredAliasFulfillingProperties: Set<Property>
 	/// Received properties that are optional and not created by a parent.
 	private let unavailableOptionalProperties: Set<Property>
 	/// Properties that will be generated as `let` constants.
@@ -362,7 +395,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///
 	/// A child depends on a sibling when the child's subtree receives the sibling.
 	/// A required receive must be honored, and the subtree's receive is required when
-	/// any receiver in it requires the sibling. A `@Received(onlyIfAvailable: true)`
+	/// any receiver in it requires the sibling, or requires an `onlyIfAvailable` alias
+	/// the sibling fulfills (see `requiredAliasFulfillingProperties`). A `@Received(onlyIfAvailable: true)`
 	/// receive is honored only when it does not close a cycle among the siblings —
 	/// e.g. when `b`'s subtree receives `c` only if available but `c` receives `b`,
 	/// `c` cannot be built before `b`. A child whose `onlyIfAvailable` receive is
@@ -386,7 +420,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var siblingDependencies = propertiesToGenerate.map { scope in
 			Set(siblings.compactMap { sibling in
 				scope.receivedProperties.contains(sibling.property)
-					&& !scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property)
+					&& (!scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property)
+						|| scope.requiredAliasFulfillingProperties.contains(sibling.property))
 					? sibling.index
 					: nil
 			})
@@ -401,6 +436,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			}
 			return false
+		}
+		// An `onlyIfAvailable` alias a receiver requires is built after its fulfilling
+		// sibling, as a required alias is. A sibling that receives the alias only if
+		// available then waits on it only when that does not close a cycle.
+		for case let (index, aliasProperty?) in propertiesToGenerate.map(\.property).enumerated()
+			where requiredOnlyIfAvailableAliasProperties.contains(aliasProperty)
+		{
+			for sibling in siblings where propertiesToGenerate[index].receivedProperties.contains(sibling.property) {
+				if dependsOn(index, from: sibling.index) {
+					for (receiverIndex, receiver) in propertiesToGenerate.enumerated()
+						where receiver.onlyIfAvailableUnwrappedReceivedProperties.contains(aliasProperty.asUnwrappedProperty)
+					{
+						siblingDependencies[receiverIndex].remove(index)
+					}
+				}
+				siblingDependencies[index].insert(sibling.index)
+			}
 		}
 		// Then each `onlyIfAvailable` receive, in sibling order, unless the sibling it
 		// would wait on already waits on the receiver.

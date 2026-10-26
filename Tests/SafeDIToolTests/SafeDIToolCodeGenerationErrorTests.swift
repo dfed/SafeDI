@@ -2986,6 +2986,354 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasWhoseFulfillingPropertyIsUnavailable_throwsError() async {
+		// Nothing provides `missing`, so Child does not create `maybe`, which Grand requires.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Grand.swift"]):4:5: error: @Received property `maybe: Greeter?` is not @Instantiated or @Forwarded in chain: Root -> Child -> Grand. `maybe: Greeter?` is created by `Child` only if `missing: DefaultGreeter` is available, and `missing: DefaultGreeter` is not @Instantiated or @Forwarded in chain. Did you mean to receive this property with `onlyIfAvailable: true`?
+				\(fixtures["Grand.swift"]):4:5-4:14: fixit: @Received(onlyIfAvailable: true)
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					public protocol Greeter {}
+
+					@Instantiable
+					public final class DefaultGreeter: Instantiable, Greeter {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(maybe: Greeter?, grand: Grand) { self.maybe = maybe; self.grand = grand }
+					    @Received(fulfilledByDependencyNamed: "missing", ofType: DefaultGreeter.self, onlyIfAvailable: true) let maybe: Greeter?
+					    @Instantiated let grand: Grand
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Grand: Instantiable {
+					    public init(maybe: Greeter?) { self.maybe = maybe }
+					    @Received let maybe: Greeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasWhoseFulfillingPropertyIsUnavailable_throwsError_whenAliasIsErasedToConcreteExistential() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Grand.swift"]):4:5: error: @Received property `maybe: AnyGreeter?` is not @Instantiated or @Forwarded in chain: Root -> Child -> Grand. `maybe: AnyGreeter?` is created by `Child` only if `missing: DefaultGreeter` is available, and `missing: DefaultGreeter` is not @Instantiated or @Forwarded in chain. Did you mean to receive this property with `onlyIfAvailable: true`?
+				\(fixtures["Grand.swift"]):4:5-4:14: fixit: @Received(onlyIfAvailable: true)
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					public protocol Greeter {}
+
+					public struct AnyGreeter: Greeter {
+					    public init(_ greeter: Greeter) { self.greeter = greeter }
+					    private let greeter: Greeter
+					}
+
+					@Instantiable
+					public final class DefaultGreeter: Instantiable, Greeter {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(maybe: AnyGreeter?, grand: Grand) { self.maybe = maybe; self.grand = grand }
+					    @Received(fulfilledByDependencyNamed: "missing", ofType: DefaultGreeter.self, erasedToConcreteExistential: true, onlyIfAvailable: true) let maybe: AnyGreeter?
+					    @Instantiated let grand: Grand
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Grand: Instantiable {
+					    public init(maybe: AnyGreeter?) { self.maybe = maybe }
+					    @Received let maybe: AnyGreeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasWhoseFulfillingPropertyIsUnavailable_throwsErrorWithoutFixIt_whenRequiringPropertyIsAlias() async {
+		// Grand renames `maybe` without `onlyIfAvailable`, so it requires `maybe`, which Child does not create.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Grand.swift"]):4:5: error: @Received property `maybe: Greeter?` is not @Instantiated or @Forwarded in chain: Root -> Child -> Grand. `maybe: Greeter?` is created by `Child` only if `missing: DefaultGreeter` is available, and `missing: DefaultGreeter` is not @Instantiated or @Forwarded in chain. Did you mean to receive this property with `onlyIfAvailable: true`?
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					public protocol Greeter {}
+
+					@Instantiable
+					public final class DefaultGreeter: Instantiable, Greeter {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(maybe: Greeter?, grand: Grand) { self.maybe = maybe; self.grand = grand }
+					    @Received(fulfilledByDependencyNamed: "missing", ofType: DefaultGreeter.self, onlyIfAvailable: true) let maybe: Greeter?
+					    @Instantiated let grand: Grand
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Grand: Instantiable {
+					    public init(greeter: Greeter?) { self.greeter = greeter }
+					    @Received(fulfilledByDependencyNamed: "maybe", ofType: Greeter?.self) let greeter: Greeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasWhoseFulfillingPropertyReceivesTheReceiversAncestor_throwsError() async {
+		// Grand requires `maybe`, so Child must create it, which needs `x` built before `child`.
+		// But X requires `child`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["X.swift"]):6:5: error: Dependency received in same chain it is instantiated: @Instantiated child: Child -> @Received maybe: Greeter? -> @Received x: X -> @Received child: Child
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child, x: X) { self.child = child; self.x = x }
+					    @Instantiated let child: Child
+					    @Instantiated let x: X
+					}
+					""",
+					"""
+					public protocol Greeter {}
+
+					@Instantiable
+					public final class X: Instantiable, Greeter {
+					    public init(child: Child) { self.child = child }
+					    @Received let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(maybe: Greeter?, grand: Grand) { self.maybe = maybe; self.grand = grand }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let maybe: Greeter?
+					    @Instantiated let grand: Grand
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Grand: Instantiable {
+					    public init(maybe: Greeter?) { self.maybe = maybe }
+					    @Received let maybe: Greeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasInsideItsFulfillingProperty_throwsError() async {
+		// DefaultGreeter requires `maybe`, which Child can create only once `missing`,
+		// the DefaultGreeter being built, exists.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["DefaultGreeter.swift"]):6:5: error: Dependency received in same chain it is instantiated: @Instantiated missing: DefaultGreeter -> @Received maybe: Greeter? -> @Received missing: DefaultGreeter
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					public protocol Greeter {}
+
+					@Instantiable
+					public final class DefaultGreeter: Instantiable, Greeter {
+					    public init(maybe: Greeter?) { self.maybe = maybe }
+					    @Received let maybe: Greeter?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(missing: DefaultGreeter, maybe: Greeter?) { self.missing = missing; self.maybe = maybe }
+					    @Instantiated let missing: DefaultGreeter
+					    @Received(fulfilledByDependencyNamed: "missing", ofType: DefaultGreeter.self, onlyIfAvailable: true) let maybe: Greeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasInsideItsInstantiatorFulfillingProperty_throwsError() async {
+		// Grand requires `maybeBuilder`, which Child can create only once `greeterBuilder`,
+		// the Instantiator Child is being built by, exists.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Grand.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated greeterBuilder: Instantiator<DefaultGreeter> -> @Received maybeBuilder: Instantiator<DefaultGreeter>? -> @Received greeterBuilder: Instantiator<DefaultGreeter>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(greeterBuilder: Instantiator<DefaultGreeter>) { self.greeterBuilder = greeterBuilder }
+					    @Instantiated let greeterBuilder: Instantiator<DefaultGreeter>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class DefaultGreeter: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(maybeBuilder: Instantiator<DefaultGreeter>?, grand: Grand) { self.maybeBuilder = maybeBuilder; self.grand = grand }
+					    @Received(fulfilledByDependencyNamed: "greeterBuilder", ofType: Instantiator<DefaultGreeter>.self, onlyIfAvailable: true) let maybeBuilder: Instantiator<DefaultGreeter>?
+					    @Instantiated let grand: Grand
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Grand: Instantiable {
+					    public init(maybeBuilder: Instantiator<DefaultGreeter>?) { self.maybeBuilder = maybeBuilder }
+					    @Received let maybeBuilder: Instantiator<DefaultGreeter>?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithReceiveOfAliasInsideItsFulfillingProperty_throwsError() async {
+		// DefaultGreeter requires `maybe`, which Child creates from `missing`, the DefaultGreeter being built.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["DefaultGreeter.swift"]):6:5: error: Dependency received in same chain it is instantiated: @Instantiated missing: DefaultGreeter -> @Received maybe: Greeter -> @Received missing: DefaultGreeter
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					public protocol Greeter {}
+
+					@Instantiable
+					public final class DefaultGreeter: Instantiable, Greeter {
+					    public init(maybe: Greeter) { self.maybe = maybe }
+					    @Received let maybe: Greeter
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(missing: DefaultGreeter, maybe: Greeter) { self.missing = missing; self.maybe = maybe }
+					    @Instantiated let missing: DefaultGreeter
+					    @Received(fulfilledByDependencyNamed: "missing", ofType: DefaultGreeter.self) let maybe: Greeter
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()

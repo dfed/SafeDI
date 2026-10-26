@@ -183,6 +183,66 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenPromotedDependencyFulfillsOnlyIfAvailableAliasRequiredByReceiverAndReceivesTheReceiversAncestor() async {
+		// Parent.mock() promotes `x` (Other receives it). Grand requires Child's
+		// `onlyIfAvailable` alias of `x`, so `x` must be built before `child`, but X requires `child`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["X.swift"]):6:5: error: Dependency received in same chain it is instantiated: @Instantiated child: Child -> @Received maybe: Greeter? -> @Received x: X -> @Received child: Child
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Parent: Instantiable {
+					    public init(child: Child, other: Other) { self.child = child; self.other = other }
+					    @Instantiated let child: Child
+					    @Instantiated let other: Other
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Other: Instantiable {
+					    public init(x: X) { self.x = x }
+					    @Received let x: X
+					}
+					""",
+					"""
+					public protocol Greeter {}
+
+					@Instantiable
+					public final class X: Instantiable, Greeter {
+					    public init(child: Child) { self.child = child }
+					    @Received let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(maybe: Greeter?, grand: Grand) { self.maybe = maybe; self.grand = grand }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let maybe: Greeter?
+					    @Instantiated let grand: Grand
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Grand: Instantiable {
+					    public init(maybe: Greeter?) { self.maybe = maybe }
+					    @Received let maybe: Greeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// The time limit only turns a hang into a failure; see
 	// `mock_generatesWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
 	@Test(.timeLimit(.minutes(10)))
