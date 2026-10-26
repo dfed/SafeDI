@@ -705,6 +705,8 @@ When you provide a `mockOnly` declaration, SafeDI’s mock generator will utiliz
 
 A `mockOnly` declaration requires a hand-written `mock()` method (or a method named by `customMockName`). No `init` (type declarations), `instantiate()` (extensions), or `Instantiable` conformance is required. `mockOnly` is mutually exclusive with `generateMock` and `isRoot`. `conformsElsewhere` has no effect when `mockOnly` is true.
 
+Because a `mockOnly` declaration contributes no production instantiation path, a dependency tree that instantiates a type only a `mockOnly` declaration fulfills fails generation with an error at the `@Instantiated` property, even when a production declaration of the same concrete type exists but does not fulfill that type.
+
 #### Splitting production and mock declarations
 
 A type may have `@Instantiable` on both its declaration and an extension, with one being `mockOnly: true`. This lets you keep production behavior in one declaration and a hand-written mock in the other:
