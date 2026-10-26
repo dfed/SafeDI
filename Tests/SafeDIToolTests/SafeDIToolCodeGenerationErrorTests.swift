@@ -1076,6 +1076,330 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleErrorFoundThroughSecondLabel_whenFirstLabelOfSameTypeStoppedAtAnUnrelatedReceivedCycle() async {
+		// Walking Parent's received properties reaches Loop through `loop` and then through
+		// `otherLoop`. The first visit stops at Gate's `loop` (a received cycle that does not
+		// involve `parent`) before checking `parent`. The second visit enters the same Loop type
+		// under another label, so Gate's `loop` is no longer on the stack and Gate goes on to find `parent`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Gate.swift"]):9:5: error: Dependency received in same chain it is instantiated: @Instantiated parent: Parent -> @Received otherLoop: Loop -> @Received gate: Gate -> @Received parent: Parent
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(parent: Parent, loop: Loop, otherLoop: Loop, gate: Gate) {
+					        self.parent = parent
+					        self.loop = loop
+					        self.otherLoop = otherLoop
+					        self.gate = gate
+					    }
+
+					    @Instantiated let parent: Parent
+					    @Instantiated let loop: Loop
+					    @Instantiated let otherLoop: Loop
+					    @Instantiated let gate: Gate
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Parent: Instantiable {
+					    public init(loop: Loop, otherLoop: Loop) {
+					        self.loop = loop
+					        self.otherLoop = otherLoop
+					    }
+
+					    @Received let loop: Loop
+					    @Received let otherLoop: Loop
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Loop: Instantiable {
+					    public init(gate: Gate) {
+					        self.gate = gate
+					    }
+
+					    @Received let gate: Gate
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Gate: Instantiable {
+					    public init(loop: Loop, parent: Parent) {
+					        self.loop = loop
+					        self.parent = parent
+					    }
+
+					    @Received let loop: Loop
+					    @Received let parent: Parent
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleErrorFoundOnSecondVisit_whenFirstVisitReachedSharedOnlyAfterAnUnrelatedReceivedCycle() async {
+		// Walking Parent's received properties reaches Relay twice. The first visit arrives through
+		// `alpha`, where Shared has already stopped at its own `alpha` (a received cycle that does not
+		// involve `parent`), so Relay's `shared` stops there too. The second visit arrives through
+		// `extra`, with `alpha` no longer on the stack, so Shared goes on to find `parent`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Shared.swift"]):9:5: error: Dependency received in same chain it is instantiated: @Instantiated parent: Parent -> @Received extra: Extra -> @Received relay: Relay -> @Received shared: Shared -> @Received parent: Parent
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(parent: Parent, alpha: Alpha, extra: Extra, shared: Shared, relay: Relay) {
+					        self.parent = parent
+					        self.alpha = alpha
+					        self.extra = extra
+					        self.shared = shared
+					        self.relay = relay
+					    }
+
+					    @Instantiated let parent: Parent
+					    @Instantiated let alpha: Alpha
+					    @Instantiated let extra: Extra
+					    @Instantiated let shared: Shared
+					    @Instantiated let relay: Relay
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Parent: Instantiable {
+					    public init(alpha: Alpha, extra: Extra) {
+					        self.alpha = alpha
+					        self.extra = extra
+					    }
+
+					    @Received let alpha: Alpha
+					    @Received let extra: Extra
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Alpha: Instantiable {
+					    public init(shared: Shared, relay: Relay) {
+					        self.shared = shared
+					        self.relay = relay
+					    }
+
+					    @Received let shared: Shared
+					    @Received let relay: Relay
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Extra: Instantiable {
+					    public init(relay: Relay) {
+					        self.relay = relay
+					    }
+
+					    @Received let relay: Relay
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Relay: Instantiable {
+					    public init(shared: Shared) {
+					        self.shared = shared
+					    }
+
+					    @Received let shared: Shared
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Shared: Instantiable {
+					    public init(alpha: Alpha, parent: Parent) {
+					        self.alpha = alpha
+					        self.parent = parent
+					    }
+
+					    @Received let alpha: Alpha
+					    @Received let parent: Parent
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	// The time limit only turns a hang into a failure; see
+	// `run_generatesCodeWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
+	@Test(.timeLimit(.minutes(10)))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleErrorWithinTimeLimit_whenEveryReceivedPathFromEarlierSiblingsEndsInReceivedCycle() async {
+		// Each layer holds a Left and a Right service that both receive the two services of the
+		// next layer, and the last layer's services receive Ping, which receives Pong, which receives
+		// Ping. Validating any layer's service walks down to that cycle along every path, and the
+		// number of paths doubles with each layer. Root instantiates Ping after every layer, so the
+		// walk must remember what lies past the cycle to reach the error Ping reports.
+		let layerCount = 40
+		let layerFiles = (0..<layerCount).flatMap { layer in
+			let receivedProperties = layer == layerCount - 1
+				? ["ping: Ping"]
+				: ["left\(layer + 1): Left\(layer + 1)", "right\(layer + 1): Right\(layer + 1)"]
+			return ["Left\(layer)", "Right\(layer)"].map { type in
+				"""
+				@Instantiable
+				public struct \(type): Instantiable {
+				    public init(\(receivedProperties.joined(separator: ", "))) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				\(receivedProperties.map { "    @Received let \($0)" }.joined(separator: "\n"))
+				}
+				"""
+			}
+		}
+		let rootProperties = (0..<layerCount).flatMap { ["left\($0): Left\($0)", "right\($0): Right\($0)"] } + ["ping: Ping", "pong: Pong"]
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Pong.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated ping: Ping -> @Received pong: Pong -> @Received ping: Ping
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(\(rootProperties.joined(separator: ", "))) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					\(rootProperties.map { "    @Instantiated let \($0)" }.joined(separator: "\n"))
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Ping: Instantiable {
+					    public init(pong: Pong) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let pong: Pong
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Pong: Instantiable {
+					    public init(ping: Ping) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let ping: Ping
+					}
+					""",
+				] + layerFiles,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				skipCompileVerification: true,
+			)
+		}
+	}
+
+	// The time limit only turns a hang into a failure; see
+	// `run_generatesCodeWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
+	@Test(.timeLimit(.minutes(10)))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleErrorWithinTimeLimit_whenEveryReceivedPathFromEarlierSiblingReturnsToItsFirstReceivedProperty() async {
+		// Each layer holds a Left and a Right service that both receive the two services of the
+		// next layer, and the last layer's services receive Ping, which receives `left0`. Validating
+		// Entry, which receives `left0` and which Root instantiates first, walks every path through
+		// the layers back to `left0`, and the number of paths doubles with each layer. Every service
+		// past `left0` stops at `left0`, so the walk must remember that stop to reach the error
+		// `left0` reports.
+		let layerCount = 40
+		let layerFiles = (0..<layerCount).flatMap { layer in
+			let receivedProperties = layer == layerCount - 1
+				? ["ping: Ping"]
+				: ["left\(layer + 1): Left\(layer + 1)", "right\(layer + 1): Right\(layer + 1)"]
+			return ["Left\(layer)", "Right\(layer)"].map { type in
+				"""
+				@Instantiable
+				public struct \(type): Instantiable {
+				    public init(\(receivedProperties.joined(separator: ", "))) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				\(receivedProperties.map { "    @Received let \($0)" }.joined(separator: "\n"))
+				}
+				"""
+			}
+		}
+		let rootProperties = ["entry: Entry"] + (0..<layerCount).flatMap { ["left\($0): Left\($0)", "right\($0): Right\($0)"] } + ["ping: Ping"]
+		let receivedChain = (1..<layerCount).map { " -> @Received left\($0): Left\($0)" }.joined()
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Ping.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated left0: Left0\(receivedChain) -> @Received ping: Ping -> @Received left0: Left0
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(\(rootProperties.joined(separator: ", "))) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					\(rootProperties.map { "    @Instantiated let \($0)" }.joined(separator: "\n"))
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Entry: Instantiable {
+					    public init(left0: Left0) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let left0: Left0
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Ping: Instantiable {
+					    public init(left0: Left0) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let left0: Left0
+					}
+					""",
+				] + layerFiles,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				skipCompileVerification: true,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithUnfulfillableAliasedReceivedPropertyName_throwsError() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in

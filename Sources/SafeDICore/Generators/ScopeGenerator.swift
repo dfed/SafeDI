@@ -694,14 +694,47 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if onlyIfAvailable, unavailableProperties.contains(fulfillingProperty) {
 				return "// Did not create `\(property.asSource)` because `\(fulfillingProperty.asSource)` is unavailable."
 			} else {
-				let aliasDeclaration = if erasedToConcreteExistential {
-					"let \(property.label): \(property.typeDescription.asSource) = \(fulfillingProperty.label)"
-				} else {
-					"let \(property.asSource) = \(fulfillingProperty.label)"
-				}
-				return Self.referencingDeclaration(of: aliasDeclaration, by: declarationReference)
+				// The production tree binds an available fulfilling dependency as a non-optional value.
+				return Self.referencingDeclaration(
+					of: Self.aliasDeclaration(
+						of: property,
+						fulfilledBy: fulfillingProperty.label,
+						ofType: fulfillingProperty.typeDescription,
+						erasedToConcreteExistential: erasedToConcreteExistential,
+						fulfillingValueMayBeOptional: false,
+					),
+					by: declarationReference,
+				)
 			}
 		}
+	}
+
+	/// The `let` that binds an alias's `property` to `fulfillingExpression`, a value of
+	/// `fulfillingTypeDescription`. When `erasedToConcreteExistential` is set, the fulfilling
+	/// value is wrapped in a no-label initializer of the property's type, unwrapped when the
+	/// property is optional, as an `@Received(onlyIfAvailable: true)` alias's property must be.
+	///
+	/// Set `fulfillingValueMayBeOptional` when `fulfillingExpression` may name an optional
+	/// binding: a mock binds an `onlyIfAvailable` alias's fulfilling dependency from an
+	/// optional override where no enclosing scope provides it, and from a non-optional
+	/// value where one does. The wrapper is then mapped over the fulfilling value promoted
+	/// to an optional, which compiles either way and binds `nil` when the fulfilling value is `nil`.
+	private static func aliasDeclaration(
+		of property: Property,
+		fulfilledBy fulfillingExpression: String,
+		ofType fulfillingTypeDescription: TypeDescription,
+		erasedToConcreteExistential: Bool,
+		fulfillingValueMayBeOptional: Bool,
+	) -> String {
+		let existentialTypeSource = property.typeDescription.unwrapped.asSource
+		let initializer = if !erasedToConcreteExistential {
+			fulfillingExpression
+		} else if fulfillingValueMayBeOptional {
+			"(\(fulfillingExpression) as \(TypeDescription.optional(fulfillingTypeDescription).asSource)).map { \(existentialTypeSource)($0) }"
+		} else {
+			"\(existentialTypeSource)(\(fulfillingExpression))"
+		}
+		return "let \(property.asSource) = \(initializer)"
 	}
 
 	/// Points `code`, an alias's assignment, at its `@Received` declaration as `declarationReference` says:
@@ -803,7 +836,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			receivedProperties
 				.filter { !$0.typeDescription.isOptional },
 		)
-		var flatReceivedParameters = [(label: String, typeSource: String)]()
+		var flatReceivedProperties = [Property]()
 		var onlyIfAvailableSafeDIParameterEntries = [(label: String, typeSource: String)]()
 		for receivedProperty in receivedProperties.sorted() {
 			guard !treePropertyLabels.contains(receivedProperty.label),
@@ -827,10 +860,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					typeSource: typeSource,
 				))
 			} else {
-				flatReceivedParameters.append((
-					label: receivedProperty.label,
-					typeSource: receivedProperty.typeDescription.asFunctionParameter.asSource,
-				))
+				flatReceivedProperties.append(receivedProperty)
 			}
 		}
 
@@ -864,25 +894,30 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Forwarded parameters keep their original labels (must match init signature).
 		let allFlatLabels = forwardedDependencies.map(\.property.label)
 			+ rootDefaultParameters.map(\.label)
-			+ flatReceivedParameters.map(\.label)
+			+ flatReceivedProperties.map(\.label)
 			+ flatUncoveredParameters.map(\.label)
 			+ onlyIfAvailableSafeDIParameterEntries.map(\.label)
-		var flatLabelCounts = [String: Int]()
-		for label in allFlatLabels {
-			flatLabelCounts[label, default: 0] += 1
-		}
-		// Map of (label → (typeSource → disambiguatedLabel)) for flat received
+		let collidingFlatLabels = Self.collidingLabels(in: allFlatLabels)
+		// Map of (label → (type → disambiguatedLabel)) for flat received
 		// parameters whose label collided with another flat parameter. Builder calls
 		// for child nodes that would reference the original label must substitute
 		// the disambiguated name so the generated code references a real binding.
-		var flatParameterDisambiguationMap = [String: [String: String]]()
-		flatReceivedParameters = flatReceivedParameters.map { parameter in
-			guard let count = flatLabelCounts[parameter.label], count > 1 else {
-				return parameter
-			}
-			let disambiguatedLabel = "\(parameter.label)_\(parameter.typeSource.replacingOccurrences(of: "?", with: ""))"
-			flatParameterDisambiguationMap[parameter.label, default: [:]][parameter.typeSource] = disambiguatedLabel
-			return (label: disambiguatedLabel, typeSource: parameter.typeSource)
+		let collidingFlatReceivedProperties = flatReceivedProperties.filter { collidingFlatLabels.contains($0.label) }
+		let collidingFlatReceivedNames = Self.identifierSafeNames(
+			for: collidingFlatReceivedProperties.map {
+				(label: $0.label, suffixTypes: [$0.typeDescription.simplified, $0.typeDescription])
+			},
+			reservedNames: Set(allFlatLabels),
+		)
+		var flatParameterDisambiguationMap = [String: [TypeDescription: String]]()
+		for (property, disambiguatedLabel) in zip(collidingFlatReceivedProperties, collidingFlatReceivedNames) {
+			flatParameterDisambiguationMap[property.label, default: [:]][property.typeDescription] = disambiguatedLabel
+		}
+		let flatReceivedParameters = flatReceivedProperties.map { property in
+			(
+				label: flatParameterDisambiguationMap[property.label]?[property.typeDescription] ?? property.label,
+				typeSource: property.typeDescription.asFunctionParameter.asSource,
+			)
 		}
 		// 3. Simple mock case — no tree, no flat parameters.
 		let hasTree = !parameterTree.isEmpty || !onlyIfAvailableSafeDIParameterEntries.isEmpty
@@ -977,7 +1012,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Sibling-disambig map renames local `let` bindings when the root's own
 		// `.instantiated` dep label collides with a promoted sibling — the return
 		// call must reference the renamed local.
-		var siblingDisambiguationMap = [String: [String: String]]()
+		var siblingDisambiguationMap = [String: [TypeDescription: String]]()
 		Self.mergeSiblingDisambiguations(into: &siblingDisambiguationMap, for: treePropertyNodes)
 		// `emitReceiverBindings` also needs the flat-received renames so it can
 		// rebind disambiguated flat params back to their natural labels at child
@@ -986,8 +1021,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// dep must reference its own parameter — not the renamed flat-received.
 		var rootDisambiguationMap = flatParameterDisambiguationMap
 		for (label, typeMap) in siblingDisambiguationMap {
-			for (typeSource, name) in typeMap {
-				rootDisambiguationMap[label, default: [:]][typeSource] = name
+			for (typeDescription, name) in typeMap {
+				rootDisambiguationMap[label, default: [:]][typeDescription] = name
 			}
 		}
 
@@ -1055,7 +1090,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// parameter, and the root's own dep must reference its own parameter.
 	private func generateReturnArgumentList(
 		instantiable: Instantiable,
-		disambiguationMap: [String: [String: String]] = [:],
+		disambiguationMap: [String: [TypeDescription: String]] = [:],
 	) throws -> String {
 		let constructionInitializer: Initializer? = if let mockInitializer = instantiable.mockInitializer {
 			mockInitializer
@@ -1075,8 +1110,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// (e.g. root's `service: TypeA` when a promoted sibling is also
 				// labeled `service`), the bound `let` uses the disambiguated
 				// name. Rewrite the reference so the Root init call finds it.
-				let typeSource = dependency.property.typeDescription.asSource
-				let resolved = disambiguationMap[argument.innerLabel]?[typeSource] ?? argument.innerLabel
+				let resolved = disambiguationMap[argument.innerLabel]?[dependency.property.typeDescription] ?? argument.innerLabel
 				parts.append("\(argument.label): \(resolved)")
 			} else if argument.hasDefaultValue, argument.label != "_" {
 				parts.append("\(argument.label): \(argument.label)")
@@ -1099,7 +1133,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// parameter on the wrapping builder.
 	fileprivate static func emitReceiverBindings(
 		for dependencies: [Dependency],
-		flatParameterDisambiguationMap: [String: [String: String]],
+		flatParameterDisambiguationMap: [String: [TypeDescription: String]],
 		indent: String,
 	) -> [String] {
 		var lines = [String]()
@@ -1107,9 +1141,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			switch dependency.source {
 			case .received:
 				let label = dependency.property.label
-				let typeSource = dependency.property.typeDescription.asSource
-				if let disambiguatedLabel = flatParameterDisambiguationMap[label]?[typeSource] {
-					lines.append("\(indent)let \(label): \(typeSource) = \(disambiguatedLabel)")
+				let typeDescription = dependency.property.typeDescription
+				if let disambiguatedLabel = flatParameterDisambiguationMap[label]?[typeDescription] {
+					lines.append("\(indent)let \(label): \(typeDescription.asSource) = \(disambiguatedLabel)")
 				}
 			case .aliased, .instantiated, .forwarded:
 				break
@@ -1124,14 +1158,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// that `resolveBuilderArguments` can reference the bare label.
 	private static func hasDisambiguatedReceiver(
 		_ node: MockParameterNode,
-		flatParameterDisambiguationMap: [String: [String: String]],
+		flatParameterDisambiguationMap: [String: [TypeDescription: String]],
 	) -> Bool {
 		guard !flatParameterDisambiguationMap.isEmpty else { return false }
 		return node.dependencies.contains { dependency in
 			guard case .received = dependency.source else { return false }
-			let label = dependency.property.label
-			let typeSource = dependency.property.typeDescription.asSource
-			return flatParameterDisambiguationMap[label]?[typeSource] != nil
+			return flatParameterDisambiguationMap[dependency.property.label]?[dependency.property.typeDescription] != nil
 		}
 	}
 
@@ -1455,14 +1487,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Represented directly as a tree item so mock emission can interleave
 	/// aliases with property bindings using production's topological order.
 	struct MockAliasNode: Sendable {
-		/// The alias property label (e.g., "userNetworkService").
-		let propertyLabel: String
-		/// The alias property's declared type.
-		let typeDescription: TypeDescription
+		/// The alias property as declared (e.g., `userNetworkService: NetworkService`).
+		let property: Property
+		/// Whether the fulfilling dependency is wrapped in the alias property's type.
+		let erasedToConcreteExistential: Bool
+		/// Whether the alias is received only if its fulfilling dependency is available.
+		let onlyIfAvailable: Bool
 		/// The label of the dependency that fulfills the alias (e.g., "networkService").
 		let fulfillingLabel: String
 		/// The fulfilling dependency's type — used to look up flat-parameter
-		/// disambiguations when the fulfiller is a renamed mock parameter.
+		/// disambiguations when the fulfiller is a renamed mock parameter, and to
+		/// spell the optional an erased `onlyIfAvailable` alias's wrapper is mapped over.
 		let fulfillingTypeDescription: TypeDescription
 		/// How the emitted binding refers to the alias property's declaration.
 		let declarationReference: AliasDeclarationReferences.Reference?
@@ -1566,12 +1601,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let childUnavailableProperties = childGenerator.onlyIfAvailableDependencies(
 				fulfilledByPropertiesGeneratedLater: childPropertiesGeneratedLater,
 			)
-			if case let .alias(property, fulfillingProperty, _, _, declarationReference) = childGenerator.scopeData {
+			if case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference) = childGenerator.scopeData {
 				// The dependency this alias binds is passed `nil` instead.
 				guard childUnavailableProperties.isEmpty else { continue }
 				items.append(.alias(MockAliasNode(
-					propertyLabel: property.label,
-					typeDescription: property.typeDescription,
+					property: property,
+					erasedToConcreteExistential: erasedToConcreteExistential,
+					onlyIfAvailable: onlyIfAvailable,
 					fulfillingLabel: fulfillingProperty.label,
 					fulfillingTypeDescription: fulfillingProperty.typeDescription,
 					declarationReference: declarationReference,
@@ -1701,59 +1737,97 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// disambiguated bindings when the root's own `.instantiated` dep label
 	/// collides with a promoted sibling.
 	private static func mergeSiblingDisambiguations(
-		into map: inout [String: [String: String]],
+		into map: inout [String: [TypeDescription: String]],
 		for nodes: [MockParameterNode],
 	) {
 		let labelMap = disambiguatePropertyLabels(for: nodes)
 		for node in nodes {
 			let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
 			if disambiguated != node.propertyLabel {
-				map[node.propertyLabel, default: [:]][node.typeDescription.asSource] = disambiguated
+				map[node.propertyLabel, default: [:]][node.typeDescription] = disambiguated
 			}
 		}
 	}
 
 	/// Computes disambiguated property labels for a list of nodes at the same scope level.
-	/// When two nodes share a `propertyLabel`, appends `_TypeName` to make them unique.
-	/// If the disambiguated name collides with another node's original label, appends
-	/// additional underscores until unique.
-	/// Returns a dictionary mapping each node's key to its disambiguated label.
+	/// Nodes that share a `propertyLabel` are named by `identifierSafeNames`, preferring the
+	/// type each node builds and falling back to its property type: a mock root that declares
+	/// `x: X` itself can also be given a promoted `x: Instantiator<X>`, and each needs its own name.
+	/// Returns a dictionary mapping each node's label and property type to its disambiguated label.
 	private static func disambiguatePropertyLabels(
 		for nodes: [MockParameterNode],
-	) -> [String: String] {
-		var labelCounts = [String: Int]()
-		for node in nodes {
-			labelCounts[node.propertyLabel, default: 0] += 1
+	) -> [String: [TypeDescription: String]] {
+		let labels = nodes.map(\.propertyLabel)
+		let collidingLabels = collidingLabels(in: labels)
+		let collidingNodes = nodes.filter { collidingLabels.contains($0.propertyLabel) }
+		let collidingNames = identifierSafeNames(
+			for: collidingNodes.map {
+				(
+					label: $0.propertyLabel,
+					suffixTypes: [$0.instantiatedTypeDescription.simplified, $0.instantiatedTypeDescription, $0.typeDescription],
+				)
+			},
+			// Labels that don't need disambiguation stay as they are.
+			reservedNames: Set(labels).subtracting(collidingLabels),
+		)
+		var result = [String: [TypeDescription: String]]()
+		for node in nodes where !collidingLabels.contains(node.propertyLabel) {
+			result[node.propertyLabel, default: [:]][node.typeDescription] = node.propertyLabel
 		}
-		// Collect labels that don't need disambiguation (unique labels) as reserved.
-		var reservedLabels = Set<String>()
-		for node in nodes where labelCounts[node.propertyLabel]! == 1 {
-			reservedLabels.insert(node.propertyLabel)
-		}
-		var result = [String: String]()
-		for node in nodes {
-			let key = "\(node.propertyLabel):\(node.instantiatedTypeDescription.asSource)"
-			let count = labelCounts[node.propertyLabel]!
-			if count > 1 {
-				var disambiguated = "\(node.propertyLabel)_\(node.instantiatedTypeDescription.asSource)"
-				while reservedLabels.contains(disambiguated) {
-					disambiguated += "_"
-				}
-				reservedLabels.insert(disambiguated)
-				result[key] = disambiguated
-			} else {
-				result[key] = node.propertyLabel
-			}
+		for (node, name) in zip(collidingNodes, collidingNames) {
+			result[node.propertyLabel, default: [:]][node.typeDescription] = name
 		}
 		return result
+	}
+
+	/// The labels that appear more than once in `labels`.
+	private static func collidingLabels(in labels: [String]) -> Set<String> {
+		var seenLabels = Set<String>()
+		var collidingLabels = Set<String>()
+		for label in labels where !seenLabels.insert(label).inserted {
+			collidingLabels.insert(label)
+		}
+		return collidingLabels
 	}
 
 	/// Returns the disambiguated property label for a node, given a disambiguation map.
 	private static func disambiguatedLabel(
 		for node: MockParameterNode,
-		labelMap: [String: String],
+		labelMap: [String: [TypeDescription: String]],
 	) -> String {
-		labelMap["\(node.propertyLabel):\(node.instantiatedTypeDescription.asSource)"]!
+		labelMap[node.propertyLabel]![node.typeDescription]!
+	}
+
+	/// Names apart entries that share a label, deriving every name from type structure so that
+	/// each is a valid Swift identifier no matter how its types are spelled.
+	///
+	/// Each entry lists suffix types in order of preference. An entry is named
+	/// `<label>_<suffix type’s asIdentifier>` with the first suffix type whose `asIdentifier`
+	/// no other entry with its label shares at the same position, or with its last suffix type
+	/// when every position is shared. Then, in entry order, underscores are appended until the
+	/// name is neither reserved nor already given to an earlier entry.
+	private static func identifierSafeNames(
+		for entries: [(label: String, suffixTypes: [TypeDescription])],
+		reservedNames: Set<String>,
+	) -> [String] {
+		let suffixesPerEntry = entries.map { $0.suffixTypes.map(\.asIdentifier) }
+		var takenNames = reservedNames
+		return entries.indices.map { index in
+			let suffixes = suffixesPerEntry[index]
+			let suffix = suffixes.indices.first { position in
+				!entries.indices.contains { otherIndex in
+					otherIndex != index
+						&& entries[otherIndex].label == entries[index].label
+						&& suffixesPerEntry[otherIndex][position] == suffixes[position]
+				}
+			}.map { suffixes[$0] } ?? suffixes[suffixes.count - 1]
+			var name = "\(entries[index].label)_\(suffix)"
+			while takenNames.contains(name) {
+				name += "_"
+			}
+			takenNames.insert(name)
+			return name
+		}
 	}
 
 	/// Collects all unique types from the `MockParameterNode` tree, deduplicated
@@ -2022,7 +2096,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		indent: String,
 		ancestorTypes: Set<String> = [],
 		sendableOverrideExtractor: SendableOverrideExtractor? = nil,
-		flatParameterDisambiguationMap: [String: [String: String]] = [:],
+		flatParameterDisambiguationMap: [String: [TypeDescription: String]] = [:],
 		parentConcreteType: String?,
 		cycleEdges: Set<CycleEdge>,
 		overridePathReachable: Bool,
@@ -2184,14 +2258,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// dependency-tree output does.
 	private static func emitAliasBinding(
 		_ alias: MockAliasNode,
-		flatParameterDisambiguationMap: [String: [String: String]],
+		flatParameterDisambiguationMap: [String: [TypeDescription: String]],
 		indent: String,
 	) -> String {
 		let fulfillingLabel = alias.fulfillingLabel
-		let fulfillingTypeSource = alias.fulfillingTypeDescription.asSource
-		let resolvedFulfilling = flatParameterDisambiguationMap[fulfillingLabel]?[fulfillingTypeSource] ?? fulfillingLabel
+		let resolvedFulfilling = flatParameterDisambiguationMap[fulfillingLabel]?[alias.fulfillingTypeDescription] ?? fulfillingLabel
 		return referencingDeclaration(
-			of: "let \(alias.propertyLabel): \(alias.typeDescription.asSource) = \(resolvedFulfilling)",
+			of: aliasDeclaration(
+				of: alias.property,
+				fulfilledBy: resolvedFulfilling,
+				ofType: alias.fulfillingTypeDescription,
+				erasedToConcreteExistential: alias.erasedToConcreteExistential,
+				fulfillingValueMayBeOptional: alias.onlyIfAvailable,
+			),
 			by: alias.declarationReference,
 		)
 		.split(separator: "\n")
@@ -2262,7 +2341,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		indent: String,
 		ancestorTypes: Set<String>,
 		sendableOverrideExtractor: SendableOverrideExtractor?,
-		flatParameterDisambiguationMap: [String: [String: String]],
+		flatParameterDisambiguationMap: [String: [TypeDescription: String]],
 		cycleEdges: Set<CycleEdge>,
 		overridePathReachable: Bool,
 	) -> [String] {
