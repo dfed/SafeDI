@@ -95,7 +95,8 @@ jobs:
             echo
             echo "Started $graph_count graphs ($ITERATIONS requested) from seed $STARTING_SEED on $(git -c safe.directory="$PWD" rev-parse HEAD)."
             echo
-            grep '^problem ' "$REPORT" | sed 's/^problem /- **Problem:** /'
+            # Under `bash -e -o pipefail`, a grep that finds nothing must not end the script.
+            { grep '^problem ' "$REPORT" || true; } | sed 's/^problem /- **Problem:** /'
             if [ "$graph_count" -eq 0 ] && [ "$has_problems" = false ]; then
               echo "**It ran zero graphs.** If the build succeeded, check that \`longRun_findsNoUnknownFailures_whenEnabledByEnvironment\` still exists and reads \`SAFEDI_GRAPH_FUZZER_ITERATIONS\`."
             elif ! grep -q '^completed ' "$REPORT" && [ "$has_problems" = false ]; then
@@ -105,7 +106,7 @@ jobs:
               echo "Completed $(grep '^completed ' "$REPORT" | sed 's/^completed //')."
             fi
             echo
-            grep -E '^(failure|stale) ' "$REPORT" | while read -r kind seed reason; do
+            { grep -E '^(failure|stale) ' "$REPORT" || true; } | while read -r kind seed reason; do
               if [ "$kind" = failure ]; then
                 echo "- **Seed $seed**: $reason. Reproduce with \`$(reproduce "$seed")\`"
               else
