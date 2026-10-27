@@ -142,5 +142,4 @@ enum PluginScanner {
 		let stripped = stripSwiftCommentsAndStrings(from: content)
 		return stripped.range(of: #"@Instantiable\s*\((.|\n)*?generateMock\s*:\s*true"#, options: .regularExpression) != nil
 	}
-
 }
