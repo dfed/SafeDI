@@ -1171,7 +1171,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 					leadingMemberWhitespace: Self.standardIndent,
 				)
-				let functionName = Self.functionName(toBuild: property)
+				let functionName = builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
 				let functionDecorator = if propertyType.isSendable {
 					"@Sendable "
 				} else {
