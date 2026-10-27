@@ -304,10 +304,7 @@ struct Generate: AsyncParsableCommand {
 			),
 		)
 		if let moduleInfoOutput {
-			// Build systems cache on these bytes, and without sorting, keys are written in an order seeded per process.
-			let encoder = JSONEncoder()
-			encoder.outputFormatting = [.sortedKeys]
-			try encoder.encode(module).write(toPath: moduleInfoOutput)
+			try module.moduleInfoData.write(toPath: moduleInfoOutput)
 		}
 
 		if manifest != nil || combinedOutput != nil {
@@ -668,10 +665,11 @@ struct Generate: AsyncParsableCommand {
 	/// stale code. Plugin-driven builds rerun `scan` every build, so this
 	/// check passes on the fast path, at one or two system calls per input.
 	///
-	/// Decode failures (truncated file from an interrupted write,
-	/// cross-version schema drift, etc.) fall through to a fresh parse
-	/// rather than aborting the build — the cache is an optimization
-	/// sidecar, not a correctness requirement.
+	/// A cache that cannot be read (cut short, corrupted, or written by a
+	/// SafeDITool whose cached types are laid out differently; see
+	/// `BinaryFile`) falls through to a fresh parse rather than aborting
+	/// the build — the cache is an optimization sidecar, not a correctness
+	/// requirement.
 	///
 	/// - Parameters:
 	///   - inputFilePaths: The files `generate` was given, which with `include` empty are exactly the CSV's paths.
@@ -727,12 +725,11 @@ struct Generate: AsyncParsableCommand {
 	) async throws -> ParsedModule? {
 		let cacheURL = scannedModuleInfoURL(forManifestPath: manifestPath)
 
-		// Treat a missing cache and decode failures as cache misses, not hard errors — the
-		// cache may have been truncated by an interrupted write or carry
-		// an older schema that a newer SafeDITool can no longer read, such
-		// as one that recorded no modification times.
+		// Treat a missing cache and one that cannot be read as cache misses, not hard errors — the
+		// cache may be corrupted or have been written by a SafeDITool whose cached types are laid
+		// out differently, such as one that recorded no modification times.
 		guard let data = try? Data(contentsOf: cacheURL),
-		      let cached = try? JSONDecoder().decode(CachedScannedModuleInfo.self, from: data)
+		      let cached = try? CachedScannedModuleInfo(scanCacheData: data)
 		else { return nil }
 
 		// Bypass the cache if the current CSV's file set differs from what
@@ -907,13 +904,11 @@ struct Generate: AsyncParsableCommand {
 		) { taskGroup in
 			for (index, moduleInfoURL) in moduleInfoURLs.enumerated() {
 				taskGroup.addTask {
-					try (
-						index: index,
-						moduleInfo: JSONDecoder().decode(
-							ModuleInfo.self,
-							from: Data(contentsOf: moduleInfoURL),
-						),
-					)
+					do {
+						return try (index: index, moduleInfo: ModuleInfo(moduleInfoData: Data(contentsOf: moduleInfoURL)))
+					} catch let error as BinaryFileReadError {
+						throw UnreadableModuleInfoError(path: moduleInfoURL.path, reason: error)
+					}
 				}
 			}
 			var indexedModuleInfo = [(index: Int, moduleInfo: ModuleInfo)]()
@@ -1052,5 +1047,15 @@ struct Generate: AsyncParsableCommand {
 				}
 				.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 		}
+	}
+}
+
+/// A `.safedi` file named by `--dependent-module-info-file-path` that this SafeDITool cannot read.
+struct UnreadableModuleInfoError: Error, CustomStringConvertible {
+	let path: String
+	let reason: BinaryFileReadError
+
+	var description: String {
+		"Could not read the SafeDI module info file at \(path): \(reason) A different version of SafeDI most likely wrote this file, or its write was interrupted. To fix this, clean your build (in Xcode: Product > Clean Build Folder) and build again, so that the module that wrote the file regenerates it."
 	}
 }
