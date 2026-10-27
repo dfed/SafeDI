@@ -88,7 +88,7 @@ struct SafeDIToolGraphFuzzerTests {
 	func knownIssueListProblems_reportEachProblem_whenListIsMalformed() {
 		let knownIssues = [
 			GraphFuzzerKnownIssue(reason: "Unordered", signatures: [.compilerCrashInGeneratedMock], seeds: [20, 10]),
-			GraphFuzzerKnownIssue(reason: "Repeated and out of range", signatures: [.compilerCrashInGeneratedMock], seeds: [10, 5000]),
+			GraphFuzzerKnownIssue(reason: "Repeated and out of range", signatures: [.compilerCrashInGeneratedMock], seeds: [10, 5_000]),
 			GraphFuzzerKnownIssue(reason: "Unsigned", signatures: [], seeds: [30]),
 		]
 
@@ -387,7 +387,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `swiftc` invocation when nothing fails.
 	static let smokeSeeds: [UInt64] = [5, 6, 330, 426]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x2BA5_81C9_6E9D_318E
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x2BA581C96E9D318E
 
 	/// The seeds `graph-fuzzer.yml` runs before every release and weekly, `0..<scheduledSeedCount`, which
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=scheduled` selects. `knownIssues` lists every one that fails.
