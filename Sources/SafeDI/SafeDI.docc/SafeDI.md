@@ -82,3 +82,5 @@ Working sample projects live in the [Examples folder](https://github.com/dfed/Sa
 - ``SendableInstantiator``
 - ``ErasedInstantiator``
 - ``SendableErasedInstantiator``
+- ``LazilyInstantiated``
+- ``SendableLazilyInstantiated``

@@ -211,6 +211,41 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// The property with which a type receives the instance of an `@Instantiated` lazily instantiated dependency
+	/// rather than its `LazilyInstantiated` wrapper: `service: LazilyInstantiated<Service>` is received by value
+	/// as `service: Service`. The generated wrapper is never optional, so neither is this property.
+	/// `nil` when the property is not lazily instantiated, and when the instance it creates is itself
+	/// optional (`LazilyInstantiated<Service?>`): an instance that may be `nil` cannot be received by value.
+	var asLazilyInstantiatedInstanceProperty: Property? {
+		guard let instanceType = typeDescription.unwrapped.lazilyInstantiatedInstanceType,
+		      !instanceType.isOptional
+		else { return nil }
+		return Property(label: label, typeDescription: instanceType)
+	}
+
+	/// The by-value property a `@Forwarded` or aliased `LazilyInstantiated` property offers. Such a property is
+	/// bound with exactly the type it declares, and the instance of an optional wrapper cannot be read
+	/// unconditionally, so an optional property offers none.
+	var asLazilyInstantiatedInstancePropertyOfDeclaredBinding: Property? {
+		if typeDescription.isOptional {
+			nil
+		} else {
+			asLazilyInstantiatedInstanceProperty
+		}
+	}
+
+	/// The property as dependency cycle validation sees it: the constant a lazily instantiated property stands
+	/// for, optional when the property is. A lazily instantiated dependency is created at most once, exactly
+	/// like a constant, so it cannot break a dependency cycle: a tree is valid with a lazily instantiated
+	/// property if and only if it is valid with that constant.
+	var asValidatedForDependencyCycles: Property {
+		if let instanceType = typeDescription.lazilyInstantiatedInstanceType {
+			Property(label: label, typeDescription: instanceType)
+		} else {
+			self
+		}
+	}
+
 	// MARK: PropertyType
 
 	public enum PropertyType {
@@ -228,12 +263,18 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		/// A `SendableErasedInstantiator` property.
 		/// The instantiated product is not forwarded down the dependency tree. This is done intentionally to avoid unexpected retains.
 		case sendableErasedInstantiator
+		/// A `LazilyInstantiated` property.
+		/// The instance is created once, the first time it is requested. Types further down the dependency tree can receive the instance itself.
+		case lazilyInstantiated
+		/// A `SendableLazilyInstantiated` property.
+		/// The instance is created once, the first time it is requested. Types further down the dependency tree can receive the instance itself.
+		case sendableLazilyInstantiated
 
 		public var isConstant: Bool {
 			switch self {
 			case .constant:
 				true
-			case .instantiator, .erasedInstantiator, .sendableInstantiator, .sendableErasedInstantiator:
+			case .instantiator, .erasedInstantiator, .sendableInstantiator, .sendableErasedInstantiator, .lazilyInstantiated, .sendableLazilyInstantiated:
 				false
 			}
 		}
@@ -242,7 +283,7 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 			switch self {
 			case .instantiator, .sendableInstantiator:
 				true
-			case .constant, .erasedInstantiator, .sendableErasedInstantiator:
+			case .constant, .erasedInstantiator, .sendableErasedInstantiator, .lazilyInstantiated, .sendableLazilyInstantiated:
 				false
 			}
 		}
@@ -251,16 +292,25 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 			switch self {
 			case .erasedInstantiator, .sendableErasedInstantiator:
 				true
-			case .constant, .instantiator, .sendableInstantiator:
+			case .constant, .instantiator, .sendableInstantiator, .lazilyInstantiated, .sendableLazilyInstantiated:
+				false
+			}
+		}
+
+		public var isLazilyInstantiated: Bool {
+			switch self {
+			case .lazilyInstantiated, .sendableLazilyInstantiated:
+				true
+			case .constant, .instantiator, .erasedInstantiator, .sendableInstantiator, .sendableErasedInstantiator:
 				false
 			}
 		}
 
 		public var isSendable: Bool {
 			switch self {
-			case .instantiator, .erasedInstantiator, .constant:
+			case .instantiator, .erasedInstantiator, .constant, .lazilyInstantiated:
 				false
-			case .sendableInstantiator, .sendableErasedInstantiator:
+			case .sendableInstantiator, .sendableErasedInstantiator, .sendableLazilyInstantiated:
 				true
 			}
 		}
