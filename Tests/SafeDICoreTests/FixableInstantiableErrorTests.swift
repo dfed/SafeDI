@@ -205,4 +205,11 @@ struct FixableInstantiableErrorTests {
 		let error = FixableInstantiableError.calleeScopeReferenceInDefaultExpression(parameterLabel: "name")
 		#expect(error.fixIt.message == "Remove the default from `name` or move the referenced value to a file-scoped or module-scoped symbol")
 	}
+
+	@Test
+	func reservedName_fixIt_namesOnlyTheReservedName_whenNameIsReservedExactly() {
+		// The macro offers no fix-it for an exactly reserved name, which has no evident replacement.
+		let error = FixableInstantiableError.reservedName(name: "safeDIOverrides", reservation: .mockOverridesParameter)
+		#expect(error.fixIt.message == "Rename `safeDIOverrides`")
+	}
 }

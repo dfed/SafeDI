@@ -170,23 +170,6 @@ public struct Dependency: Codable, Hashable, Sendable {
 		public static let forwardedRawValue = "Forwarded"
 	}
 
-	/// The prefix of the names SafeDI generates beside the names it is given: each builder function in a
-	/// generated `init()` or `mock()` is `__safeDI_<label>`, declared next to the `let <label>` it builds.
-	/// A name SafeDI is given that began with the prefix could share its name with such a function, so the
-	/// `@Instantiable` macro rejects it (`isReservedName(_:)`).
-	public static let reservedNamePrefix = "__safeDI_"
-
-	/// Whether `name` begins with `reservedNamePrefix`. The comparison is byte for byte, as generated code
-	/// spells the name it prefixes.
-	public static func isReservedName(_ name: String) -> Bool {
-		name.utf8.starts(with: reservedNamePrefix.utf8)
-	}
-
-	/// `name` without its leading `reservedNamePrefix`. `name` must begin with the prefix.
-	public static func removingReservedNamePrefix(from name: String) -> String {
-		String(String.UnicodeScalarView(name.unicodeScalars.dropFirst(reservedNamePrefix.unicodeScalars.count)))
-	}
-
 	// MARK: Internal
 
 	static let instantiatorType = "Instantiator"
