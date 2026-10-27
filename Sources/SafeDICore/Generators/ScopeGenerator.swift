@@ -1346,7 +1346,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				namesInMockScope: Set(forwardedDependencies.map(\.property.label))
 					.union(rootDefaultParameters.map(\.label))
 					.union(flatUncoveredParameters.map(\.label))
-					.union(Self.bindingNames(of: treePropertyNodes)),
+					.union(Self.bindingNames(of: treePropertyNodes, labels: treePropertyLabels)),
 				reservedNames: Set(flatReceivedParameters.map(\.label)),
 			)
 		}
@@ -2376,9 +2376,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return result
 	}
 
-	/// The names `nodes`, the property children of one scope, are bound to: each node's label,
-	/// disambiguated when siblings share it.
-	private static func bindingNames(of nodes: [MockParameterNode]) -> Set<String> {
+	/// The names `nodes`, the property children of one scope whose labels are `labels`, are bound to:
+	/// each node's label, disambiguated when siblings share it.
+	private static func bindingNames(of nodes: [MockParameterNode], labels: Set<String>) -> Set<String> {
+		// Most scopes have no two children with one label, which leaves every label as it is.
+		guard labels.count < nodes.count else { return labels }
 		let labelMap = disambiguatePropertyLabels(for: nodes)
 		return Set(nodes.map { disambiguatedLabel(for: $0, labelMap: labelMap) })
 	}
@@ -2403,8 +2405,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			property.typeDescription.isOptional ? property.typeDescription : .optional(property.typeDescription)
 		}
 		let collidingLabels = collidingLabels(in: labels).union(namesInMockScope.intersection(labels))
-		let collidingIndices = receivedProperties.indices.filter { collidingLabels.contains(labels[$0]) }
-		let collidingNames = identifierSafeNames(
+		let collidingIndices = collidingLabels.isEmpty ? [] : receivedProperties.indices.filter { collidingLabels.contains(labels[$0]) }
+		let collidingNames = collidingIndices.isEmpty ? [] : identifierSafeNames(
 			for: collidingIndices.map { index in
 				(label: labels[index], suffixTypes: [typeDescriptions[index].simplified, typeDescriptions[index]])
 			},
@@ -2990,9 +2992,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) -> [String: [TypeDescription: String]] {
 		guard !disambiguationMap.isEmpty else { return disambiguationMap }
 		var disambiguationMap = disambiguationMap
+		// Writing through a subscript copies the map even when nothing is removed, so look first.
 		func removeRenames(of property: Property) {
+			guard let renames = disambiguationMap[property.label] else { return }
+			let optionalTypeDescription = TypeDescription.optional(property.typeDescription)
+			guard renames[property.typeDescription] != nil || renames[optionalTypeDescription] != nil else { return }
 			disambiguationMap[property.label]?[property.typeDescription] = nil
-			disambiguationMap[property.label]?[.optional(property.typeDescription)] = nil
+			disambiguationMap[property.label]?[optionalTypeDescription] = nil
 		}
 		for parameter in parameters {
 			removeRenames(of: parameter)
