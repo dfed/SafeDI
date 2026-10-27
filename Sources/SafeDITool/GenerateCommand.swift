@@ -373,23 +373,29 @@ struct Generate: AsyncParsableCommand {
 						// mock-generating type in every module the target depends on, so a path is normalized
 						// only when it could matter: normalizing never changes a file name, and naming a path
 						// already written as scan writes it returns it unchanged.
-						let mockScopedFileNames = Set(mockScopedFilePaths.map { ($0 as NSString).lastPathComponent })
+						let manifestMockInputPaths = Set(manifest.mockGeneration.map(\.inputFilePath))
+						// Only a module file sharing its name with a configuration's file, or with a mock-generating
+						// declaration's file the manifest does not list by this parse's name, needs matching.
+						let matchedSourceFilePaths = module.instantiables.filter(\.generateMock).compactMap(\.sourceFilePath).filter { !manifestMockInputPaths.contains($0) }
+							+ module.configurations.compactMap(\.sourceFilePath)
+						let matchedFileNames = Set(matchedSourceFilePaths.map { ($0 as NSString).lastPathComponent })
+						let candidateMockScopedFilePaths = mockScopedFilePaths.filter { matchedFileNames.contains(($0 as NSString).lastPathComponent) }
+						let candidateFileNames = Set(candidateMockScopedFilePaths.map { ($0 as NSString).lastPathComponent })
 						// The manifest's name for a module file, matched by its comparable path, or for a manifest
 						// without a project root, as written.
 						let mockScopedManifestPath: (String) -> String? = if let projectFilePaths {
-							{ [mockScopedManifestPathsByFilePath = Dictionary(uniqueKeysWithValues: mockScopedFilePaths.map { (projectFilePaths.projectFilePath(of: $0), $0) })] sourceFilePath in
+							{ [mockScopedManifestPathsByFilePath = Dictionary(uniqueKeysWithValues: candidateMockScopedFilePaths.map { (projectFilePaths.projectFilePath(of: $0), $0) })] sourceFilePath in
 								mockScopedManifestPathsByFilePath[projectFilePaths.projectFilePath(of: sourceFilePath)]
 							}
 						} else {
-							{ [mockScopedFilePathSet = Set(mockScopedFilePaths)] sourceFilePath in
+							{ [mockScopedFilePathSet = Set(candidateMockScopedFilePaths)] sourceFilePath in
 								mockScopedFilePathSet.contains(sourceFilePath) ? sourceFilePath : nil
 							}
 						}
 						func mockScopedFilePath(resolving sourceFilePath: String) -> String? {
-							guard mockScopedFileNames.contains((sourceFilePath as NSString).lastPathComponent) else { return nil }
+							guard candidateFileNames.contains((sourceFilePath as NSString).lastPathComponent) else { return nil }
 							return mockScopedManifestPath(sourceFilePath)
 						}
-						let manifestMockInputPaths = Set(manifest.mockGeneration.map(\.inputFilePath))
 						for instantiable in module.instantiables where instantiable.generateMock {
 							if let sourceFilePath = instantiable.sourceFilePath,
 							   !manifestMockInputPaths.contains(sourceFilePath),
