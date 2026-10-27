@@ -59,13 +59,19 @@ struct SafeDIToolGraphFuzzerTests {
 
 	// MARK: Known issues
 
-	@Test(.enabled(if: compileVerificationIsEnabled, "Known issues are generated code that does not compile"))
+	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func knownIssueSeeds_stillFail_whenRunThroughToolAndCompiler() async throws {
-		// One seed of each shape keeps the cost to two compiler invocations; the long run checks the rest.
-		let results = try await GraphFuzzerOracle.results(forSeeds: Self.knownIssues.map(\.seeds[0]))
-		for (knownIssue, result) in zip(Self.knownIssues, results) {
-			Self.record(GraphFuzzerFinding(failure: result.failure, knownIssue: knownIssue), fixture: result.fixture)
+	func knownIssueSeeds_remainAcceptedByTool_whenRunThroughTool() async throws {
+		// Compiling known-issue graphs, and running the tool twice to compare, costs more than the ordinary suite can
+		// afford, so the long run, which every publish and the weekly run execute, checks that they still fail to
+		// compile. This catches the other way a fix ends a known issue at once: the tool rejecting the shape.
+		for knownIssue in Self.knownIssues {
+			let outcome = try await GraphFuzzerOracle.toolOutcome(of: GraphFuzzerGenerator.fixture(forSeed: knownIssue.seeds[0]))
+			let isAccepted = if case .accepted = outcome { true } else { false }
+			#expect(
+				isAccepted,
+				"The tool now rejects known-issue seed \(knownIssue.seeds[0]). If that is the fix for \"\(knownIssue.reason)\", remove its seeds from knownIssues after checking them with the long run.",
+			)
 		}
 	}
 
@@ -184,48 +190,49 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles generated code only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func compilationFailures_reportEachBrokenGraph_whenGeneratedCodeFailsToTypeCheckOrToLower() async throws {
-		// The smoke batch already shows that intact graphs compile, so only broken ones are needed here.
-		let seeds = try await acceptedSmokeSeeds(count: 2)
-		var toolRuns = [GraphFuzzerToolRuns]()
-		for seed in seeds {
-			try await toolRuns.append(GraphFuzzerOracle.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed)))
+	func compilationFailures_reportEachBrokenGraph_whenGeneratedCodeFailsToTypeCheckOrToLower() throws {
+		// Each graph is one small type, so the three compiler invocations this takes stay cheap; the smoke batch
+		// already compiles real graphs.
+		func graph(seed: UInt64, brokenGeneratedCode: String) -> GraphFuzzerToolRuns {
+			let prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
+			let fixture = GraphFuzzerFixture(seed: seed, swiftFileContent: [
+				"@Instantiable\npublic final class \(prefix)Probe: Instantiable {\n\tpublic init() {}\n}\n",
+			])
+			let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["\(prefix)Broken.swift": brokenGeneratedCode], warnings: [])
+			return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome)
 		}
-		let prefix = { (seed: UInt64) in GraphFuzzerFixture.typeNamePrefix(forSeed: seed) }
-		// A type error, which the type checker reports.
-		toolRuns[0] = toolRuns[0].addingGeneratedFile(
-			named: "\(prefix(seeds[0]))Broken.swift",
-			contents: "func \(prefix(seeds[0]))broken() -> Int { \"not an integer\" }\n",
-		)
-		// A closure that captures a local declared after it, which only lowering to SIL reports, and which a type
-		// error elsewhere in the same compilation would hide.
-		toolRuns[1] = toolRuns[1].addingGeneratedFile(
-			named: "\(prefix(seeds[1]))Broken.swift",
-			contents: """
-			func \(prefix(seeds[1]))broken() -> Int {
+		let typeErrorSeed: UInt64 = 1_000_000_001
+		let loweringErrorSeed: UInt64 = 1_000_000_002
+		let toolRuns = [
+			// A type error, which the type checker reports.
+			graph(seed: typeErrorSeed, brokenGeneratedCode: "func broken() -> Int { \"not an integer\" }\n"),
+			// A closure that captures a local declared after it, which only lowering to SIL reports, and which a
+			// type error elsewhere in the same compilation would hide.
+			graph(seed: loweringErrorSeed, brokenGeneratedCode: """
+			func brokenWhenLowered() -> Int {
 				func read() -> Int { value }
 				let value = read()
 				return value
 			}
 
-			""",
-		)
+			"""),
+		]
 
 		let failures = try GraphFuzzerOracle.compilationFailures(of: toolRuns)
 
-		#expect(failures.keys.sorted() == seeds)
-		#expect(failures[seeds[0]]?.kind == .generatedCodeDoesNotCompile)
-		#expect(failures[seeds[1]]?.kind == .generatedCodeDoesNotCompile)
+		#expect(failures.keys.sorted() == [typeErrorSeed, loweringErrorSeed])
+		#expect(failures[typeErrorSeed]?.kind == .generatedCodeDoesNotCompile)
+		#expect(failures[loweringErrorSeed]?.kind == .generatedCodeDoesNotCompile)
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func results_reportRunsDiffer_whenTwoRunsProduceDifferentOutput() async throws {
-		let seed = try await acceptedSmokeSeeds(count: 1)[0]
-		let runs = try await GraphFuzzerOracle.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed))
+		let accepted = try #require(try await smokeResults.value.first { $0.isAccepted && $0.failure == nil })
+		let runs = GraphFuzzerToolRuns(fixture: accepted.fixture, firstOutcome: accepted.outcome, secondOutcome: accepted.outcome)
 		let differingRuns = GraphFuzzerToolRuns(
-			fixture: runs.fixture,
-			firstOutcome: runs.firstOutcome,
+			fixture: accepted.fixture,
+			firstOutcome: accepted.outcome,
 			secondOutcome: runs.addingGeneratedFile(named: "Extra.swift", contents: "\n").firstOutcome,
 		)
 
@@ -342,12 +349,13 @@ struct SafeDIToolGraphFuzzerTests {
 
 	// MARK: Seeds
 
-	/// The ordinary suite's batch: seeds 0, 1, 29, and 450, whose graphs the tool accepts and which between them
-	/// exercise every feature, and seeds 5, 6, 7, and 10, whose graphs it rejects. Compiling the batch is one
+	/// The ordinary suite's batch: seeds 330 and 426, whose graphs the tool accepts and which between them exercise
+	/// every feature, and seeds 5 and 6, whose graphs it rejects. It is small because compiling generated code is
+	/// what the fuzzer costs; the long run pins the accepted set over the whole corpus. Compiling the batch is one
 	/// `swiftc` invocation when nothing fails.
-	static let smokeSeeds: [UInt64] = [0, 1, 5, 6, 7, 10, 29, 450]
+	static let smokeSeeds: [UInt64] = [5, 6, 330, 426]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x67BEAD0DD1630695
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xA19C_5536_163B_6FBA
 
 	/// The seeds `graph-fuzzer.yml` runs before every release and weekly, `0..<scheduledSeedCount`, which
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=scheduled` selects. `knownIssues` lists every one that fails.
@@ -446,20 +454,6 @@ struct SafeDIToolGraphFuzzerTests {
 		case let .failure(failure):
 			Issue.record(failure.issueComment(fixture: fixture))
 		}
-	}
-
-	/// The first `count` smoke seeds whose graphs the tool accepts.
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private func acceptedSmokeSeeds(count: Int) async throws -> [UInt64] {
-		var seeds = [UInt64]()
-		for seed in Self.smokeSeeds where seeds.count < count {
-			let runs = try await GraphFuzzerOracle.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed))
-			if !runs.generatedFiles.isEmpty {
-				seeds.append(seed)
-			}
-		}
-		try #require(seeds.count == count)
-		return seeds
 	}
 }
 

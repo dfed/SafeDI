@@ -1020,7 +1020,7 @@ enum GraphFuzzerOracle {
 	}
 
 	/// Runs SafeDITool once over `fixture`, as `executeSafeDIToolTest` runs it for every other generator test.
-	private static func toolOutcome(of fixture: GraphFuzzerFixture) async throws -> GraphFuzzerToolOutcome {
+	static func toolOutcome(of fixture: GraphFuzzerFixture) async throws -> GraphFuzzerToolOutcome {
 		var filesToDelete = [URL]()
 		defer {
 			for fileToDelete in filesToDelete {
