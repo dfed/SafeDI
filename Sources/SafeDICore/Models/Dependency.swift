@@ -176,4 +176,8 @@ public struct Dependency: Codable, Hashable, Sendable {
 	static let erasedInstantiatorType = "ErasedInstantiator"
 	static let sendableInstantiatorType = "SendableInstantiator"
 	static let sendableErasedInstantiatorType = "SendableErasedInstantiator"
+	static let lazilyInstantiatedType = "LazilyInstantiated"
+	static let sendableLazilyInstantiatedType = "SendableLazilyInstantiated"
+	/// The property of `LazilyInstantiated` and `SendableLazilyInstantiated` that vends the lazily instantiated instance.
+	static let lazilyInstantiatedInstancePropertyName = "instance"
 }

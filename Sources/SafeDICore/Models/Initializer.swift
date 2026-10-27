@@ -52,7 +52,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 			.map(Argument.init)
 	}
 
-	init(
+	public init(
 		isPublicOrOpen: Bool = true,
 		isOptional: Bool = false,
 		isAsync: Bool = false,
@@ -215,14 +215,22 @@ public struct Initializer: Codable, Hashable, Sendable {
 		return bindings
 	}
 
+	/// - Parameter lazilyInstantiatedInstanceProperties: The received properties that are in scope only as the
+	///   instance of a `LazilyInstantiated` property. Their arguments read that instance.
 	func createInitializerArgumentList(
 		given dependencies: [Dependency],
 		unavailableProperties: Set<Property>? = nil,
+		lazilyInstantiatedInstanceProperties: Set<Property> = [],
 	) throws(GenerationError) -> String {
 		try createDependencyAndArgumentBinding(given: dependencies)
 			.map {
 				if let unavailableProperties, unavailableProperties.contains($0.dependency.property) {
 					"\($0.argument.label): nil"
+				} else if !lazilyInstantiatedInstanceProperties.isEmpty,
+				          $0.dependency.source.isReceived,
+				          lazilyInstantiatedInstanceProperties.contains($0.dependency.property.asUnwrappedProperty)
+				{
+					"\($0.argument.label): \($0.argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 				} else {
 					"\($0.argument.label): \($0.argument.innerLabel)"
 				}
@@ -325,7 +333,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 			defaultValueExpression = node.defaultValue?.value.trimmedDescription
 		}
 
-		init(outerLabel: String? = nil, innerLabel: String, typeDescription: TypeDescription, defaultValueExpression: String? = nil) {
+		public init(outerLabel: String? = nil, innerLabel: String, typeDescription: TypeDescription, defaultValueExpression: String? = nil) {
 			self.outerLabel = outerLabel
 			self.innerLabel = innerLabel
 			self.typeDescription = typeDescription

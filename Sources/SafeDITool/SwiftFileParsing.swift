@@ -124,11 +124,12 @@ func conditionalCompilationEvaluator(
 	)
 }
 
+/// The normalized paths of the Swift files in `directories`, each absolute or relative to the working directory.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<String> {
+func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<NormalizedFilePath> {
 	try await withThrowingTaskGroup(
-		of: [String].self,
-		returning: Set<String>.self,
+		of: [NormalizedFilePath].self,
+		returning: Set<NormalizedFilePath>.self,
 	) { taskGroup in
 		for included in directories {
 			taskGroup.addTask {
@@ -152,7 +153,7 @@ func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<Str
 				}
 				return (files + [includedURL]).compactMap {
 					if $0.pathExtension == "swift" {
-						$0.standardizedFileURL.relativePath
+						NormalizedFilePath($0.path)
 					} else {
 						nil
 					}
@@ -160,7 +161,7 @@ func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<Str
 			}
 		}
 
-		var swiftFiles = Set<String>()
+		var swiftFiles = Set<NormalizedFilePath>()
 		for try await includedFiles in taskGroup {
 			swiftFiles.formUnion(includedFiles)
 		}

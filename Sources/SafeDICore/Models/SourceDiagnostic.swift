@@ -114,12 +114,11 @@ public struct SourceDiagnostic: Hashable, Sendable {
 	/// Build tools attribute a diagnostic to a file by its path, and the tool is often run from a
 	/// directory other than the one the user is looking at, so printed paths must not stay relative.
 	public func resolvingFilePath(relativeToDirectory directoryPath: String) -> SourceDiagnostic {
-		let directory = URL(fileURLWithPath: directoryPath, isDirectory: true)
-		return SourceDiagnostic(
+		SourceDiagnostic(
 			severity: severity,
 			location: location.map { location in
 				Dependency.DeclarationLocation(
-					filePath: URL(fileURLWithPath: location.filePath, relativeTo: directory).standardizedFileURL.path,
+					filePath: NormalizedFilePath(location.filePath, relativeTo: directoryPath).path,
 					line: location.line,
 					column: location.column,
 				)
