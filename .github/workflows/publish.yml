@@ -136,9 +136,19 @@ jobs:
           name: SafeDITool-linux-arm64
           path: .build/release/SafeDITool
 
+  # The graph fuzzer's fixed seeds must pass on the commit being published
+  # before anything is committed, tagged, or released, in a dry run too.
+  graph-fuzzer:
+    name: Graph Fuzzer
+    uses: ./.github/workflows/graph-fuzzer.yml
+    permissions:
+      contents: read
+    with:
+      ref: ${{ github.ref_name }}
+
   assemble-and-publish:
     name: Assemble Artifact Bundle and Publish
-    needs: [build-macos, build-linux-x86_64, build-linux-arm64]
+    needs: [build-macos, build-linux-x86_64, build-linux-arm64, graph-fuzzer]
     runs-on: macos-26
     permissions:
       contents: write

@@ -207,7 +207,8 @@ struct SafeDIToolGraphFuzzerTests {
 
 	static let smokeFixtureHash: UInt64 = 0xF80DF42C1884CC80
 
-	/// The seeds the scheduled workflow runs, `0..<scheduledSeedCount`. `knownIssues` lists every one that fails.
+	/// The seeds `graph-fuzzer.yml` runs before every release and weekly, `0..<scheduledSeedCount`. `knownIssues`
+	/// lists every one that fails.
 	static let scheduledSeedCount = 5_000
 
 	/// Seeds in `0..<scheduledSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
@@ -284,7 +285,7 @@ extension GraphFuzzerToolRuns {
 struct GraphFuzzerLongRunConfiguration {
 	let iterations: Int
 	let startingSeed: UInt64
-	/// A file the run appends its progress to, which the scheduled workflow reads: `seed <n>` before the tool
+	/// A file the run appends its progress to, which `graph-fuzzer.yml` reads: `seed <n>` before the tool
 	/// first runs each graph, `failure`, `known`, or `stale` lines for each finding, and `completed …` at the end.
 	let reportPath: String?
 

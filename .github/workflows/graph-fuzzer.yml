@@ -1,18 +1,25 @@
 name: Graph Fuzzer
 
 # Runs SafeDI's random dependency-graph fuzzer over far more seeds than the
-# ordinary test suite does. It never runs on pull requests or pushes. On a
-# schedule it runs seeds 0..<5000 (`scheduledSeedCount` in
-# SafeDIToolGraphFuzzerTests.swift), every failing one of which `knownIssues`
-# lists, so a new failure is a regression and a known issue that stops failing
-# is stale. Dispatch it with another starting seed to explore new graphs. A
-# failure, a stale known issue, a crash, or a run that checks no graphs fails
-# the job and opens (or comments on) an issue naming the seed and the command
-# that reproduces it.
+# ordinary test suite does. By default it runs seeds 0..<5000
+# (`scheduledSeedCount` in SafeDIToolGraphFuzzerTests.swift), every failing
+# one of which `knownIssues` lists, so a new failure is a regression and a
+# known issue that stops failing is stale. A failure, a stale known issue, a
+# crash, or a run that checks no graphs fails the job and names the seeds in
+# the job summary.
+#
+# It never runs on pull requests or pushes. Publish calls it as a
+# precondition of every release, and graph-fuzzer-schedule.yml calls it
+# weekly and opens an issue when it fails. Dispatch it by hand with another
+# starting seed to explore new graphs.
 on:
-  schedule:
-    # Daily at 07:23 UTC.
-    - cron: '23 7 * * *'
+  workflow_call:
+    inputs:
+      ref:
+        description: The branch, tag, or commit to fuzz. Defaults to the commit that triggered the calling workflow.
+        type: string
+        required: false
+        default: ''
   workflow_dispatch:
     inputs:
       starting_seed:
@@ -26,10 +33,6 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: ${{ github.workflow }}
-  cancel-in-progress: false
-
 jobs:
   fuzz:
     name: Fuzz Dependency Graphs on Xcode 26
@@ -37,14 +40,16 @@ jobs:
     timeout-minutes: 90
     permissions:
       contents: read
-      issues: write
     env:
-      ISSUE_TITLE: Graph fuzzer found a failure
+      # A call from another workflow has no `starting_seed` or `iterations`
+      # input, so it runs the default seeds.
       ITERATIONS: ${{ inputs.iterations || '5000' }}
       STARTING_SEED: ${{ inputs.starting_seed || '0' }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
       - name: Cache Build Directory
@@ -58,69 +63,63 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: xcrun swift package resolve
-      - name: Name Report File
-        run: echo "REPORT=$RUNNER_TEMP/graph-fuzzer-report.txt" >> "$GITHUB_ENV"
+      - name: Name Report Files
+        run: |
+          mkdir -p "$RUNNER_TEMP/graph-fuzzer"
+          echo "REPORT=$RUNNER_TEMP/graph-fuzzer/report.txt" >> "$GITHUB_ENV"
+          echo "SUMMARY=$RUNNER_TEMP/graph-fuzzer/summary.md" >> "$GITHUB_ENV"
       - name: Build
         run: xcrun swift build --traits sourceBuild --build-tests
       - name: Run Graph Fuzzer
         run: |
-          rm -f "$REPORT"
           SAFEDI_GRAPH_FUZZER_ITERATIONS="$ITERATIONS" \
           SAFEDI_GRAPH_FUZZER_STARTING_SEED="$STARTING_SEED" \
           SAFEDI_GRAPH_FUZZER_REPORT="$REPORT" \
             xcrun swift test --traits sourceBuild --skip-build --filter 'SafeDIToolGraphFuzzerTests/longRun'
-      - name: Check That Graphs Ran
+      - name: Summarize
         if: ${{ !cancelled() }}
-        # Fails when the long run was skipped, renamed, or crashed, so the fuzzer
-        # cannot go quiet without the job turning red.
+        # Fails when a graph failed, a known issue went stale, the long run
+        # checked no graphs (it was skipped, renamed, or never built), or the
+        # process crashed, so the fuzzer cannot go quiet without the job
+        # turning red.
         run: |
-          graph_count=$(grep -c '^seed ' "$REPORT" 2>/dev/null || true)
-          echo "Started ${graph_count:-0} graphs."
-          if [ "${graph_count:-0}" -eq 0 ]; then
-            echo "::error::The graph fuzzer ran zero graphs."
-            exit 1
-          fi
-          if ! grep -q '^completed ' "$REPORT"; then
-            echo "::error::The graph fuzzer stopped before finishing; the last seed it started was $(grep '^seed ' "$REPORT" | tail -n 1 | cut -d ' ' -f 2)."
-            exit 1
-          fi
-          grep '^completed ' "$REPORT"
-      - name: Open or Update Issue
-        if: ${{ failure() }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          body="$RUNNER_TEMP/graph-fuzzer-issue.md"
           reproduce() {
             echo "SAFEDI_GRAPH_FUZZER_STARTING_SEED=$1 SAFEDI_GRAPH_FUZZER_ITERATIONS=1 swift test --traits sourceBuild --filter SafeDIToolGraphFuzzerTests/longRun"
           }
+          graph_count=$(grep -c '^seed ' "$REPORT" 2>/dev/null || true)
+          graph_count=${graph_count:-0}
           {
-            echo "The [scheduled graph fuzzer run]($RUN_URL) failed on commit $GITHUB_SHA, running $ITERATIONS graphs from seed $STARTING_SEED."
+            echo "### Graph fuzzer"
             echo
-            if [ ! -s "$REPORT" ] || ! grep -q '^seed ' "$REPORT"; then
-              echo "It ran zero graphs. Check that \`longRun_findsNoUnknownFailures_whenEnabledByEnvironment\` still exists and reads \`SAFEDI_GRAPH_FUZZER_ITERATIONS\`."
+            echo "Started $graph_count of $ITERATIONS graphs from seed $STARTING_SEED on $(git rev-parse HEAD)."
+            echo
+            if [ "$graph_count" -eq 0 ]; then
+              echo "**It ran zero graphs.** If the build succeeded, check that \`longRun_findsNoUnknownFailures_whenEnabledByEnvironment\` still exists and reads \`SAFEDI_GRAPH_FUZZER_ITERATIONS\`."
             elif ! grep -q '^completed ' "$REPORT"; then
               crashed_seed=$(grep '^seed ' "$REPORT" | tail -n 1 | cut -d ' ' -f 2)
-              echo "The test process stopped while SafeDITool ran seed $crashed_seed, which suggests the tool crashed. Reproduce with:"
-              echo
-              echo '```'
-              reproduce "$crashed_seed"
-              echo '```'
+              echo "**The test process stopped while SafeDITool ran seed $crashed_seed**, which suggests the tool crashed. Reproduce with \`$(reproduce "$crashed_seed")\`"
+            else
+              echo "Completed $(grep '^completed ' "$REPORT" | sed 's/^completed //')."
             fi
+            echo
             grep -E '^(failure|stale) ' "$REPORT" 2>/dev/null | while read -r kind seed reason; do
               if [ "$kind" = failure ]; then
-                echo "- Seed $seed: $reason. Reproduce with \`$(reproduce "$seed")\`"
+                echo "- **Seed $seed**: $reason. Reproduce with \`$(reproduce "$seed")\`"
               else
-                echo "- Seed $seed is listed as a known issue ($reason) but no longer fails. Remove it from \`knownIssues\`, and reproduce with \`$(reproduce "$seed")\`"
+                echo "- **Seed $seed** is a known issue ($reason) that no longer fails. Remove it from \`knownIssues\`. Reproduce with \`$(reproduce "$seed")\`"
               fi
             done
             echo
-            echo "The run's log holds each failing graph's fixture and compiler output. Every failure becomes a hand-written regression test before its fix; see \"Graph fuzzer\" in CLAUDE.md."
-          } > "$body"
-          issue_number=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$ISSUE_TITLE\" in:title" --json number,title --jq "map(select(.title == \"$ISSUE_TITLE\")) | .[0].number // empty")
-          if [ -n "$issue_number" ]; then
-            gh issue comment "$issue_number" --repo "$GITHUB_REPOSITORY" --body-file "$body"
-          else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "$ISSUE_TITLE" --body-file "$body"
+            echo "The test log holds each failing graph's fixture and compiler output. Every failure becomes a hand-written regression test before its fix; see \"Graph fuzzer\" in CLAUDE.md."
+          } > "$SUMMARY"
+          cat "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$graph_count" -eq 0 ] || ! grep -q '^completed ' "$REPORT" || grep -qE '^(failure|stale) ' "$REPORT"; then
+            exit 1
           fi
+      - name: Upload Report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: graph-fuzzer-report
+          path: ${{ runner.temp }}/graph-fuzzer/
+          if-no-files-found: ignore
