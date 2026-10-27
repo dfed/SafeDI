@@ -1271,6 +1271,34 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
+		// The root's own aliases are bound in the same scope as the dependencies promoted
+		// to the root and the `onlyIfAvailable` override bindings. Bind an alias whose label
+		// one of those already binds under a name of its own, and pass that name to the root
+		// and to the alias's receivers in the tree.
+		let rootBindingNames = Set(treePropertyNodes.map { node in
+			siblingDisambiguationMap[node.propertyLabel]?[node.typeDescription] ?? node.propertyLabel
+		}).union(onlyIfAvailableSafeDIParameterEntries.map(\.label))
+		let (rootItems, aliasBindingNames) = Self.renamingAliases(
+			in: parameterTree,
+			thatRedeclare: rootBindingNames,
+			reservedNames: rootBindingNames
+				.union(forwardedDependencies.map(\.property.label))
+				.union(rootDefaultParameters.map(\.label))
+				.union(flatReceivedParameters.map(\.label))
+				.union(flatUncoveredParameters.map(\.label))
+				.union(parameterTree.compactMap { item in
+					guard case let .alias(alias) = item else { return nil }
+					return alias.property.label
+				}),
+		)
+		var treeDisambiguationMap = flatParameterDisambiguationMap
+		for (label, typeMap) in aliasBindingNames {
+			for (typeDescription, name) in typeMap {
+				treeDisambiguationMap[label, default: [:]][typeDescription] = name
+				siblingDisambiguationMap[label, default: [:]][typeDescription] = name
+			}
+		}
+
 		// Emit the root's own `.received` disambiguation rebinds before the tree
 		// so any nested builder functions emitted within the tree can capture
 		// them without forward-referencing. Root-level aliases flow through the
@@ -1290,10 +1318,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			lines.append(contentsOf: rootReceiverBindings)
 			let bodyBindings = Self.generateMockBodyBindings(
-				items: parameterTree,
+				items: rootItems,
 				parentPath: "safeDIOverrides",
 				indent: bodyIndent,
-				flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+				flatParameterDisambiguationMap: treeDisambiguationMap,
 				parentConcreteType: nil,
 				cycleEdges: context.cycleEdges,
 				overridePathReachable: true,
@@ -2541,6 +2569,41 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		.split(separator: "\n")
 		.map { "\(indent)\($0)" }
 		.joined(separator: "\n")
+	}
+
+	/// Renames the aliases among `items` whose label is in `redeclaredNames`, so that their
+	/// bindings do not redeclare a binding in the same scope.
+	///
+	/// Each renamed alias is bound as `<label>_<simplified type’s asIdentifier>`, with underscores
+	/// appended until the name is neither in `reservedNames` nor given to an earlier alias.
+	/// - Returns: `items` with those aliases renamed, and each new name keyed by the alias's
+	///   label and type, the keys the disambiguation maps use.
+	private static func renamingAliases(
+		in items: [MockTreeItem],
+		thatRedeclare redeclaredNames: Set<String>,
+		reservedNames: Set<String>,
+	) -> (items: [MockTreeItem], bindingNames: [String: [TypeDescription: String]]) {
+		var takenNames = reservedNames
+		var bindingNames = [String: [TypeDescription: String]]()
+		let renamedItems = items.map { item -> MockTreeItem in
+			guard case let .alias(alias) = item,
+			      redeclaredNames.contains(alias.property.label)
+			else { return item }
+			var bindingName = "\(alias.property.label)_\(alias.property.typeDescription.simplified.asIdentifier)"
+			while !takenNames.insert(bindingName).inserted {
+				bindingName += "_"
+			}
+			bindingNames[alias.property.label, default: [:]][alias.property.typeDescription] = bindingName
+			return .alias(MockAliasNode(
+				property: Property(label: bindingName, typeDescription: alias.property.typeDescription),
+				erasedToConcreteExistential: alias.erasedToConcreteExistential,
+				onlyIfAvailable: alias.onlyIfAvailable,
+				fulfillingLabel: alias.fulfillingLabel,
+				fulfillingTypeDescription: alias.fulfillingTypeDescription,
+				declarationReference: alias.declarationReference,
+			))
+		}
+		return (renamedItems, bindingNames)
 	}
 
 	/// Resolves the positional arguments for a builder call.
