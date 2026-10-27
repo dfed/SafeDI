@@ -154,14 +154,96 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_parsesAfresh_whenCacheWasWrittenInAnEarlierFormat() async throws {
-		// A cache from a release that recorded no modification times must not read as fresh.
+	mutating func generate_parsesAfresh_whenCacheIsJSONFromAnEarlierRelease() async throws {
+		// Earlier releases wrote the cache as JSON, under another name.
 		let project = try await scannedProject()
-		let cacheURL = scannedModuleInfoURL(forManifestPath: project.manifestFile.path)
-		var cache = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: cacheURL)) as? [String: Any])
-		let scannedInputs = try #require(cache.removeValue(forKey: "scannedInputs") as? [[String: Any]])
-		cache["scannedInputPaths"] = scannedInputs.compactMap { $0["path"] }
-		try JSONSerialization.data(withJSONObject: cache).write(to: cacheURL)
+		try project.rewriteCache { cache in
+			try JSONEncoder().encode(CachedScannedModuleInfo(scanCacheData: cache))
+		}
+
+		await assertThrowsError(project.rootNotInManifestMessage) {
+			try await project.generate()
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_parsesAfresh_whenCacheIsEmpty() async throws {
+		let project = try await scannedProject()
+		try project.rewriteCache { _ in Data() }
+
+		await assertThrowsError(project.rootNotInManifestMessage) {
+			try await project.generate()
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_parsesAfresh_whenCacheIsCutShort() async throws {
+		// A write interrupted before it finished, for a build system that does not write atomically.
+		let project = try await scannedProject()
+		try project.rewriteCache { cache in cache.dropLast() }
+
+		await assertThrowsError(project.rootNotInManifestMessage) {
+			try await project.generate()
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_parsesAfresh_whenCacheIsCorrupted() async throws {
+		let project = try await scannedProject()
+		try project.rewriteCache { cache in
+			var cache = cache
+			cache[cache.endIndex - 1] ^= 0x01
+			return cache
+		}
+
+		await assertThrowsError(project.rootNotInManifestMessage) {
+			try await project.generate()
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_parsesAfresh_whenCacheDoesNotBeginWithMagic() async throws {
+		let project = try await scannedProject()
+		try project.rewriteCache { cache in
+			var cache = cache
+			cache[cache.startIndex] = UInt8(ascii: "X")
+			return cache
+		}
+
+		await assertThrowsError(project.rootNotInManifestMessage) {
+			try await project.generate()
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_parsesAfresh_whenCacheHasAnotherFormatVersion() async throws {
+		let project = try await scannedProject()
+		try project.rewriteCache { cache in
+			var cache = cache
+			cache[cache.startIndex + 4] &+= 1
+			return cache
+		}
+
+		await assertThrowsError(project.rootNotInManifestMessage) {
+			try await project.generate()
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_parsesAfresh_whenCacheHasAnotherSchemaFingerprint() async throws {
+		// A SafeDITool whose cached types are laid out differently, such as another development build.
+		let project = try await scannedProject()
+		try project.rewriteCache { cache in
+			var cache = cache
+			cache[cache.startIndex + 6] ^= 0x01
+			return cache
+		}
 
 		await assertThrowsError(project.rootNotInManifestMessage) {
 			try await project.generate()
@@ -187,6 +269,13 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 		let targetFile: URL
 		let swiftFileCSV: URL
 		let manifestFile: URL
+
+		/// Replaces the cache scan wrote with what `rewrite` makes of it.
+		@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+		func rewriteCache(_ rewrite: (Data) throws -> Data) throws {
+			let cacheURL = scannedModuleInfoURL(forManifestPath: manifestFile.path)
+			try rewrite(Data(contentsOf: cacheURL)).write(to: cacheURL)
+		}
 
 		/// The error a fresh parse in `generate` throws, naming the root as the CSV does.
 		var rootNotInManifestMessage: String {

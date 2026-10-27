@@ -43,9 +43,8 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_writesModuleInfoWithSortedKeysAndRelativePaths_whenInputPathsAreRelative() async throws {
-		// An encoder that does not sort keys writes them in an order seeded per process, so a comparison of the
-		// full output fails in practically every process unless the keys are sorted.
+	mutating func generate_writesModuleInfoWithRelativePaths_whenInputPathsAreRelative() async throws {
+		// The file is binary, so its contents are compared as `dump` prints them, with sorted keys.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -62,7 +61,10 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 		)
 
 		let leafPath = output.fixtures["Leaf.swift"].replacingOccurrences(of: "/", with: "\\/")
-		#expect(try String(contentsOfFile: output.moduleInfoOutputPath, encoding: .utf8) == """
+		let encoder = JSONEncoder()
+		encoder.outputFormatting = [.sortedKeys]
+		let moduleInfo = try ModuleInfo(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.moduleInfoOutputPath)))
+		#expect(try String(decoding: encoder.encode(moduleInfo), as: UTF8.self) == """
 		{"conditionalCompilationDecisions":[],"configurations":[],"imports":[{"attribute":"","kind":"","moduleName":"Alpha","type":""}],"instantiables":[{"declarationLocation":{"column":1,"filePath":"\(leafPath)","line":3},"declarationType":{"structType":{}},"dependencies":[],"generateMock":false,"initializer":{"arguments":[],"doesThrow":false,"hasGenericParameter":false,"hasGenericWhereClause":false,"isAsync":false,"isOptional":false,"isPublicOrOpen":true},"instantiableTypes":[{"simple":{"generics":[],"name":"Leaf"}}],"isRoot":false,"mockAttributes":"","mockOnly":false,"sourceFilePath":"\(leafPath)"}],"mockImports":[{"attribute":"","kind":"","moduleName":"Alpha","type":""}]}
 		""")
 	}
@@ -199,7 +201,7 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 			"--swift-manifest", manifestFile.path,
 			"--module-info-output", moduleInfoOutput.path,
 		]).generate()
-		let moduleInfo = try JSONDecoder().decode(ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput))
+		let moduleInfo = try ModuleInfo(moduleInfoData: Data(contentsOf: moduleInfoOutput))
 
 		#expect(moduleInfo.imports == [
 			ImportStatement(moduleName: "AlphaSupport"),
