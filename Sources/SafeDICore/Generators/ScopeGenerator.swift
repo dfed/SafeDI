@@ -56,6 +56,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let propertiesToDeclare = Set(propertiesToGenerate.compactMap(\.property))
 		self.propertiesToDeclare = propertiesToDeclare
 		self.unavailableOptionalProperties = unavailableOptionalProperties
+		onlyIfAvailableDependencies = instantiable.dependencies.compactMap { dependency in
+			switch dependency.source {
+			case let .received(onlyIfAvailable):
+				onlyIfAvailable
+					? OnlyIfAvailableDependency(unwrappedFulfillingProperty: dependency.property.asUnwrappedProperty, unavailableProperties: [dependency.property])
+					: nil
+			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+				onlyIfAvailable
+					? OnlyIfAvailableDependency(unwrappedFulfillingProperty: fulfillingProperty.asUnwrappedProperty, unavailableProperties: [dependency.property, fulfillingProperty])
+					: nil
+			case .instantiated, .forwarded:
+				nil
+			}
+		}
 		aliasPropertyIsProvidedByEnclosingScope = false
 		let forwardedProperties = scopeData.forwardedProperties
 		/// Whether a property a child requires be passed in must be received by this scope too: this
@@ -202,10 +216,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			requiredReceivedProperties = []
 			unwrappedOptionalRequiredReceivedProperties = []
 			onlyIfAvailableUnwrappedReceivedProperties = [fulfillingProperty.asUnwrappedProperty]
+			onlyIfAvailableDependencies = [OnlyIfAvailableDependency(unwrappedFulfillingProperty: fulfillingProperty.asUnwrappedProperty, unavailableProperties: [fulfillingProperty])]
 		} else {
 			requiredReceivedProperties = [fulfillingProperty]
 			unwrappedOptionalRequiredReceivedProperties = fulfillingProperty.typeDescription.isOptional ? [fulfillingProperty.asUnwrappedProperty] : []
 			onlyIfAvailableUnwrappedReceivedProperties = []
+			onlyIfAvailableDependencies = []
 		}
 		onlyIfAvailableAliasFulfillingProperty = onlyIfAvailable && !isProvidedByEnclosingScope ? fulfillingProperty : nil
 		uncreatedAliasPropertyProvidedByEnclosingScope = onlyIfAvailable
@@ -424,6 +440,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private let requiredAliasFulfillingProperties: Set<Property>
 	/// Received properties that are optional and not created by a parent.
 	private let unavailableOptionalProperties: Set<Property>
+	/// The `onlyIfAvailable` dependencies of this scope: for a type, those its declaration receives,
+	/// directly or through an alias; for an `onlyIfAvailable` alias, the alias itself.
+	private let onlyIfAvailableDependencies: [OnlyIfAvailableDependency]
+
+	/// A dependency received only if available, which is passed `nil` when an enclosing scope generates
+	/// the property that fulfills it after this scope.
+	private struct OnlyIfAvailableDependency {
+		/// The unwrapped form of the property that fulfills the dependency.
+		let unwrappedFulfillingProperty: Property
+		/// The properties that are unavailable when the fulfilling property is: the fulfilling property
+		/// and, for an aliased dependency of a type, the alias, matching how `Scope.createScopeGenerator`
+		/// marks a dependency no ancestor provides.
+		let unavailableProperties: [Property]
+	}
+
 	/// Properties that will be generated as `let` constants.
 	private let propertiesToGenerate: [ScopeGenerator]
 	/// Properties that this scope declares as a `let` constant.
@@ -686,42 +717,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// The properties this scope's type receives `onlyIfAvailable` that are
-	/// unavailable because an ancestor generates them after this scope — the
-	/// fulfilling property and, for an aliased dependency, the alias, matching how
-	/// `Scope.createScopeGenerator` marks a dependency no ancestor provides.
+	/// The properties of this scope's `onlyIfAvailableDependencies` that are unavailable because an
+	/// ancestor generates the properties fulfilling them after this scope.
 	nonisolated private func onlyIfAvailableDependencies(
 		fulfilledByPropertiesGeneratedLater propertiesGeneratedLater: Set<Property>,
 	) -> Set<Property> {
-		switch scopeData {
-		case .root:
-			[]
-		case let .property(instantiable, _, _, _, _):
-			Set(instantiable.dependencies.flatMap { dependency -> [Property] in
-				switch dependency.source {
-				case let .received(onlyIfAvailable):
-					if onlyIfAvailable, propertiesGeneratedLater.contains(dependency.property.asUnwrappedProperty) {
-						[dependency.property]
-					} else {
-						[]
-					}
-				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-					if onlyIfAvailable, propertiesGeneratedLater.contains(fulfillingProperty.asUnwrappedProperty) {
-						[dependency.property, fulfillingProperty]
-					} else {
-						[]
-					}
-				case .instantiated, .forwarded:
-					[]
-				}
-			})
-		case let .alias(_, fulfillingProperty, _, onlyIfAvailable, _):
-			if onlyIfAvailable, propertiesGeneratedLater.contains(fulfillingProperty.asUnwrappedProperty) {
-				[fulfillingProperty]
-			} else {
-				[]
-			}
+		var unavailableProperties = Set<Property>()
+		for onlyIfAvailableDependency in onlyIfAvailableDependencies
+			where propertiesGeneratedLater.contains(onlyIfAvailableDependency.unwrappedFulfillingProperty)
+		{
+			unavailableProperties.formUnion(onlyIfAvailableDependency.unavailableProperties)
 		}
+		return unavailableProperties
 	}
 
 	private func generateProperties(
