@@ -207,6 +207,10 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 				.sendableInstantiator
 			} else if name == Dependency.sendableErasedInstantiatorType {
 				.sendableErasedInstantiator
+			} else if name == Dependency.lazilyInstantiatedType {
+				.lazilyInstantiated
+			} else if name == Dependency.sendableLazilyInstantiatedType {
+				.sendableLazilyInstantiated
 			} else {
 				.constant
 			}
@@ -216,6 +220,28 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 			type.propertyType
 		case .any, .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .some, .tuple, .unknown, .void:
 			.constant
+		}
+	}
+
+	/// The type of the instance a `LazilyInstantiated` or `SendableLazilyInstantiated` creates, exactly as it is
+	/// spelled: `any Service` for `LazilyInstantiated<any Service>`. An optional wrapper creates an optional
+	/// instance type. `nil` when this is neither.
+	var lazilyInstantiatedInstanceType: TypeDescription? {
+		switch self {
+		case let .simple(name, generics):
+			// Checked for every property in generation’s hottest loops, so it compares names only for a generic type.
+			if let instanceType = generics.first,
+			   name == Dependency.lazilyInstantiatedType || name == Dependency.sendableLazilyInstantiatedType
+			{
+				instanceType
+			} else {
+				nil
+			}
+		case let .optional(type),
+		     let .implicitlyUnwrappedOptional(type):
+			type.lazilyInstantiatedInstanceType.map { .optional($0) }
+		case .any, .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .some, .tuple, .unknown, .void:
+			nil
 		}
 	}
 
@@ -464,6 +490,13 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 				// This is a type that is lazily instantiated with explicitly declared forwarded arguments due to type erasure.
 				// The second generic is the built type.
 				builtType
+			} else if name == Dependency.lazilyInstantiatedType || name == Dependency.sendableLazilyInstantiatedType,
+			          let builtType = generics.first
+			{
+				// This is a type that is instantiated once, the first time it is requested.
+				// The first generic is the built type. It has no `Instantiable` constraint, so it can be spelled
+				// in every way a constant’s type can, such as `any Service`.
+				builtType.asInstantiatedType
 			} else {
 				self
 			}
