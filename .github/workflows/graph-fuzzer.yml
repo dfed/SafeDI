@@ -13,13 +13,10 @@ name: Graph Fuzzer
 # weekly and opens an issue when it fails. Dispatch it by hand with another
 # starting seed to explore new graphs.
 on:
+  # A called run checks out the commit that triggered its caller: the commit
+  # being published, or main's head for the weekly run. It restores no cache,
+  # so nothing another run left behind is built or executed.
   workflow_call:
-    inputs:
-      ref:
-        description: The branch, tag, or commit to fuzz. Defaults to the commit that triggered the calling workflow.
-        type: string
-        required: false
-        default: ''
   workflow_dispatch:
     inputs:
       starting_seed:
@@ -48,17 +45,8 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
-        with:
-          ref: ${{ inputs.ref }}
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
-      - name: Cache Build Directory
-        uses: actions/cache@v6
-        with:
-          path: .build
-          key: graph-fuzzer-${{ runner.os }}-xcode-26.0-${{ hashFiles('Package.resolved') }}
-          restore-keys: |
-            graph-fuzzer-${{ runner.os }}-xcode-26.0-
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:

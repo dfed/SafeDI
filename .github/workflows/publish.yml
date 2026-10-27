@@ -143,8 +143,6 @@ jobs:
     uses: ./.github/workflows/graph-fuzzer.yml
     permissions:
       contents: read
-    with:
-      ref: ${{ github.ref_name }}
 
   assemble-and-publish:
     name: Assemble Artifact Bundle and Publish
