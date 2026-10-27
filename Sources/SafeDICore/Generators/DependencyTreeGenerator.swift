@@ -948,8 +948,10 @@ public actor DependencyTreeGenerator {
 		// wins and the optional version is skipped.
 		var promotedLabelAndTypes = Set<String>()
 		for receivedProperty in allReceived.sorted() {
+			// A forwarded `x: X` fulfills an `x: X?` too.
 			guard !allOnlyIfAvailable.contains(receivedProperty),
-			      !forwardedProperties.contains(receivedProperty)
+			      !forwardedProperties.contains(receivedProperty),
+			      !forwardedProperties.contains(receivedProperty.asUnwrappedProperty)
 			else { continue }
 
 			let labelAndType = "\(receivedProperty.label):\(receivedProperty.typeDescription.asInstantiatedType.asSource)"
@@ -1525,13 +1527,14 @@ public actor DependencyTreeGenerator {
 			let childOnlyIfAvailable = walkedChild.receivedProperties.onlyIfAvailable
 			childRequiredReceived.formUnion(childReceived.subtracting(childOnlyIfAvailable))
 			requiredAliasFulfilling.formUnion(walkedChild.receivedProperties.requiredAliasFulfilling)
+			// A forwarded `x: X` fulfills an `x: X?` beneath it, as a declared one does.
 			let childReceivedFromAncestors = childReceived
 				.subtracting(propertiesToDeclare)
+				.subtracting(forwardedProperties)
 				.filter { property in
 					!property.typeDescription.isOptional
-						|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
+						|| (!propertiesToDeclare.contains(property.asUnwrappedProperty) && !forwardedProperties.contains(property.asUnwrappedProperty))
 				}
-				.subtracting(forwardedProperties)
 			received.formUnion(childReceivedFromAncestors)
 			required.formUnion(childReceivedFromAncestors.subtracting(childOnlyIfAvailable))
 			// Subtract by unwrapped form — a declared `x: X` satisfies onlyIfAvailable `x: X?`.
@@ -1559,9 +1562,11 @@ public actor DependencyTreeGenerator {
 				}
 			case let .aliased(fulfillingProperty, _, isOnlyIfAvailable):
 				// If the fulfilling property is also locally declared here (e.g., as an
-				// @Instantiated sibling), the alias resolves against that local binding —
-				// it's not a received dependency that needs promoting.
-				guard !propertiesToDeclare.contains(fulfillingProperty) else { break }
+				// @Instantiated sibling) or forwarded, the alias resolves against that local
+				// binding — it's not a received dependency that needs promoting.
+				guard !propertiesToDeclare.contains(fulfillingProperty),
+				      !forwardedProperties.contains(fulfillingProperty)
+				else { break }
 				received.insert(fulfillingProperty)
 				if isOnlyIfAvailable {
 					onlyIfAvailable.insert(fulfillingProperty)
