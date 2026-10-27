@@ -7713,7 +7713,7 @@ import Testing
 			)
 		}
 
-		// MARK: Reserved Name Prefix Tests
+		// MARK: Reserved Name Tests
 
 		@Test
 		func declaration_producesReservedNameDiagnostic_whenInstantiatedPropertyLabelBeginsWithReservedPrefix() {
@@ -8362,6 +8362,332 @@ import Testing
 				],
 				macros: instantiableTestMacros,
 			)
+		}
+
+		@Test(arguments: ReservedExactName.all)
+		func declaration_producesReservedNameDiagnostic_whenInstantiatedPropertyLabelIsReservedExactly(_ reserved: ReservedExactName) {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(\(reserved.name): Editor) {
+				        self.\(reserved.name) = \(reserved.name)
+				    }
+
+				    @Instantiated let \(reserved.name): Editor
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(\(reserved.name): Editor) {
+				        self.\(reserved.name) = \(reserved.name)
+				    }
+
+				    let \(reserved.name): Editor
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: reserved.message,
+						line: 7,
+						column: 23,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test(arguments: ReservedExactName.all)
+		func declaration_producesReservedNameDiagnostic_whenReceivedPropertyLabelIsReservedExactly(_ reserved: ReservedExactName) {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(\(reserved.name): Editor) {
+				        self.\(reserved.name) = \(reserved.name)
+				    }
+
+				    @Received let \(reserved.name): Editor
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(\(reserved.name): Editor) {
+				        self.\(reserved.name) = \(reserved.name)
+				    }
+
+				    let \(reserved.name): Editor
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: reserved.message,
+						line: 7,
+						column: 19,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test(arguments: ReservedExactName.all)
+		func declaration_producesReservedNameDiagnostic_whenForwardedPropertyLabelIsReservedExactly(_ reserved: ReservedExactName) {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(\(reserved.name): User) {
+				        self.\(reserved.name) = \(reserved.name)
+				    }
+
+				    @Forwarded let \(reserved.name): User
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(\(reserved.name): User) {
+				        self.\(reserved.name) = \(reserved.name)
+				    }
+
+				    let \(reserved.name): User
+
+				    public typealias ForwardedProperties = User
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: reserved.message,
+						line: 7,
+						column: 20,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test(arguments: ReservedExactName.all)
+		func declaration_producesReservedNameDiagnostic_whenAliasFulfillingDependencyNameIsReservedExactly(_ reserved: ReservedExactName) {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(editorVendor: EditorVendor) {
+				        self.editorVendor = editorVendor
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "\(reserved.name)", ofType: Editor.self) let editorVendor: EditorVendor
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(editorVendor: EditorVendor) {
+				        self.editorVendor = editorVendor
+				    }
+
+				    let editorVendor: EditorVendor
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: reserved.message,
+						line: 7,
+						column: 43,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test(arguments: ReservedExactName.all)
+		func extension_producesReservedNameDiagnostic_whenInstantiateParameterNameIsReservedExactly(_ reserved: ReservedExactName) {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    public static func instantiate(\(reserved.name): Editor) -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate(\(reserved.name): Editor) -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: reserved.message,
+						line: 3,
+						column: 36,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test(arguments: ReservedExactName.all)
+		func declaration_producesReservedNameDiagnosticWithoutFixit_whenInitializerDefaultParameterLabelIsReservedExactly(_ reserved: ReservedExactName) {
+			// An exactly reserved label has no evident replacement, so no rename is offered.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(\(reserved.name): Int = 3) {}
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(\(reserved.name): Int = 3) {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: reserved.message,
+						line: 3,
+						column: 17,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test(arguments: ReservedExactName.all)
+		func declaration_producesReservedNameDiagnosticWithoutFixit_whenCustomMockDefaultParameterLabelIsReservedExactly(_ reserved: ReservedExactName) {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct ExampleService: Instantiable {
+				    public init() {}
+				    public static func customMock(\(reserved.name): Double = 0) -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init() {}
+				    public static func customMock(\(reserved.name): Double = 0) -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: reserved.message,
+						line: 4,
+						column: 35,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutIssue_whenLabelOnlyContainsReservedExactName() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(safeDIOverridesProvider: Editor, mySafeDIBuilder: Editor, SafeDIOverrides: Editor, instantiator: Editor, Instantiators: Editor, safeDIBuilderCount: Int = 3) {
+				        self.safeDIOverridesProvider = safeDIOverridesProvider
+				        self.mySafeDIBuilder = mySafeDIBuilder
+				        self.SafeDIOverrides = SafeDIOverrides
+				        self.instantiator = instantiator
+				        self.Instantiators = Instantiators
+				    }
+
+				    @Instantiated let safeDIOverridesProvider: Editor
+				    @Instantiated let mySafeDIBuilder: Editor
+				    @Instantiated let SafeDIOverrides: Editor
+				    @Instantiated let instantiator: Editor
+				    @Instantiated let Instantiators: Editor
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(safeDIOverridesProvider: Editor, mySafeDIBuilder: Editor, SafeDIOverrides: Editor, instantiator: Editor, Instantiators: Editor, safeDIBuilderCount: Int = 3) {
+				        self.safeDIOverridesProvider = safeDIOverridesProvider
+				        self.mySafeDIBuilder = mySafeDIBuilder
+				        self.SafeDIOverrides = SafeDIOverrides
+				        self.instantiator = instantiator
+				        self.Instantiators = Instantiators
+				    }
+
+				    let safeDIOverridesProvider: Editor
+				    let mySafeDIBuilder: Editor
+				    let SafeDIOverrides: Editor
+				    let instantiator: Editor
+				    let Instantiators: Editor
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedNameDiagnosticWithoutFixit_whenLabelWithoutReservedPrefixIsReservedExactly() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_safeDIOverrides: Int = 3) {}
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_safeDIOverrides: Int = 3) {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI_safeDIOverrides` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 3,
+						column: 17,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		// MARK: ReservedExactName
+
+		/// A name SafeDI reserves exactly, with the diagnostic a name spelled the same gets.
+		struct ReservedExactName: CustomTestStringConvertible, Sendable {
+			let name: String
+			let message: String
+
+			var testDescription: String {
+				name
+			}
+
+			static let all = [
+				ReservedExactName(
+					name: "safeDIOverrides",
+					message: "`safeDIOverrides` is reserved: it is the name of the parameter through which a generated `mock()` takes its overrides, and a name spelled the same would collide with it in generated code. Rename it.",
+				),
+				ReservedExactName(
+					name: "safeDIBuilder",
+					message: "`safeDIBuilder` is reserved: it is the name of the property of a generated `SafeDIMockConfiguration` that overrides how its type is built, and a name spelled the same would collide with it in generated code. Rename it.",
+				),
+			] + [
+				"Instantiator",
+				"SendableInstantiator",
+				"ErasedInstantiator",
+				"SendableErasedInstantiator",
+				"LazilyInstantiated",
+				"SendableLazilyInstantiated",
+			].map {
+				ReservedExactName(
+					name: $0,
+					message: "`\($0)` is reserved: generated code constructs the `\($0)` type by that name, and a name spelled the same would hide the type from it. Rename it.",
+				)
+			}
 		}
 	}
 #endif

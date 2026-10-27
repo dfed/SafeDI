@@ -1312,18 +1312,11 @@ public struct InstantiableMacro: MemberMacro {
 		}
 	}
 
-	/// Diagnoses each parameter that SafeDI binds by an argument label beginning with
-	/// `Dependency.reservedNamePrefix`: a default-valued parameter with an argument label that
-	/// fulfills no dependency. A generated `mock()` of the type takes such a parameter under that
-	/// label and passes it on by name, beside the builder functions it declares with the prefix.
-	/// The parameters `validateDefaultExpressions` checks are exactly these.
-	///
-	/// The fix-it renames the argument label alone. The parameter keeps its name inside the
-	/// function, so the function body still compiles and the parameter still fulfills no
-	/// dependency; only a call that spells the old label must change, and the compiler reports it.
-	/// It is not offered when the new label is not a valid variable name, still begins with the
-	/// prefix, or is the label of a dependency or of another parameter, which a generated `mock()`
-	/// would then declare twice.
+	/// Diagnoses each parameter that SafeDI binds by a reserved argument label (`ReservedName`):
+	/// a default-valued parameter with an argument label that fulfills no dependency. A generated
+	/// `mock()` of the type takes such a parameter under that label and passes it on by name,
+	/// beside the names generated code introduces. The parameters `validateDefaultExpressions`
+	/// checks are exactly these.
 	private static func validateReservedParameterLabels(
 		functionSyntax: FunctionSignatureSyntax,
 		dependencies: [Dependency],
@@ -1332,51 +1325,81 @@ public struct InstantiableMacro: MemberMacro {
 		let dependencyLabels = Set(dependencies.map(\.property.label))
 		let parameters = functionSyntax.parameterClause.parameters
 		for parameter in parameters where parameter.defaultValue != nil
-			&& Dependency.isReservedName(parameter.firstName.text)
 			&& !dependencyLabels.contains((parameter.secondName ?? parameter.firstName).text)
 		{
 			let label = parameter.firstName
-			let error = FixableInstantiableError.reservedNamePrefix(name: label.text)
-			let newLabel = Dependency.removingReservedNamePrefix(from: label.text)
-			let labelsInUse = dependencyLabels.union(
-				parameters.lazy
-					.filter { $0.id != parameter.id }
-					.map(\.firstName.text),
-			)
-			if newLabel.isValidSwiftIdentifier(for: .variableName),
-			   !Dependency.isReservedName(newLabel),
-			   !labelsInUse.contains(newLabel)
-			{
-				var fixedParameter = parameter
-				if let name = parameter.secondName {
-					if name.text == newLabel {
-						// `__safeDI_count count` becomes `count`, not the redundant `count count`.
-						fixedParameter.firstName = .identifier(newLabel, leadingTrivia: label.leadingTrivia, trailingTrivia: name.trailingTrivia)
-						fixedParameter.secondName = nil
-					} else {
-						fixedParameter.firstName = label.with(\.tokenKind, .identifier(newLabel))
-					}
+			if let reservation = ReservedName(reserving: label.text) {
+				let error = FixableInstantiableError.reservedName(name: label.text, reservation: reservation)
+				let labelsInUse = dependencyLabels.union(
+					parameters.lazy
+						.filter { $0.id != parameter.id }
+						.map(\.firstName.text),
+				)
+				if let fixedParameter = renamingReservedLabel(of: parameter, reservedAs: reservation, labelsInUse: labelsInUse) {
+					context.diagnose(Diagnostic(
+						node: label,
+						error: error,
+						changes: [
+							.replace(
+								oldNode: Syntax(parameter),
+								newNode: Syntax(fixedParameter),
+							),
+						],
+					))
 				} else {
-					// `__safeDI_count` becomes `count __safeDI_count`, so the body's uses still resolve.
-					fixedParameter.firstName = .identifier(newLabel, leadingTrivia: label.leadingTrivia, trailingTrivia: .space)
-					fixedParameter.secondName = .identifier(label.text, trailingTrivia: label.trailingTrivia)
+					context.diagnose(Diagnostic(
+						node: label,
+						message: error.diagnostic,
+					))
 				}
-				context.diagnose(Diagnostic(
-					node: label,
-					error: error,
-					changes: [
-						.replace(
-							oldNode: Syntax(parameter),
-							newNode: Syntax(fixedParameter),
-						),
-					],
-				))
-			} else {
-				context.diagnose(Diagnostic(
-					node: label,
-					message: error.diagnostic,
-				))
 			}
+		}
+	}
+
+	/// `parameter` with its reserved argument label renamed, or `nil` when no rename is sound.
+	///
+	/// Only a label that begins with `ReservedName.builderFunctionNamePrefix` has an evident new
+	/// label: the label without the prefix. An exactly reserved label has none, and any label the
+	/// macro chose for it would be arbitrary.
+	///
+	/// The rename changes the argument label alone. The parameter keeps its name inside the
+	/// function, so the function body still compiles and the parameter still fulfills no
+	/// dependency; only a call that spells the old label must change, and the compiler reports it.
+	/// It is not offered when the new label is not a valid variable name, is itself reserved, or is
+	/// in `labelsInUse`, the labels of the dependencies and of the function's other parameters,
+	/// which a generated `mock()` would then declare twice.
+	private static func renamingReservedLabel(
+		of parameter: FunctionParameterSyntax,
+		reservedAs reservation: ReservedName,
+		labelsInUse: Set<String>,
+	) -> FunctionParameterSyntax? {
+		switch reservation {
+		case .mockOverridesParameter, .configurationBuilderProperty, .constructedType:
+			return nil
+		case .builderFunctionName:
+			let label = parameter.firstName
+			let newLabel = ReservedName.removingBuilderFunctionNamePrefix(from: label.text)
+			guard newLabel.isValidSwiftIdentifier(for: .variableName),
+			      ReservedName(reserving: newLabel) == nil,
+			      !labelsInUse.contains(newLabel)
+			else {
+				return nil
+			}
+			var fixedParameter = parameter
+			if let name = parameter.secondName {
+				if name.text == newLabel {
+					// `__safeDI_count count` becomes `count`, not the redundant `count count`.
+					fixedParameter.firstName = .identifier(newLabel, leadingTrivia: label.leadingTrivia, trailingTrivia: name.trailingTrivia)
+					fixedParameter.secondName = nil
+				} else {
+					fixedParameter.firstName = label.with(\.tokenKind, .identifier(newLabel))
+				}
+			} else {
+				// `__safeDI_count` becomes `count __safeDI_count`, so the body's uses still resolve.
+				fixedParameter.firstName = .identifier(newLabel, leadingTrivia: label.leadingTrivia, trailingTrivia: .space)
+				fixedParameter.secondName = .identifier(label.text, trailingTrivia: label.trailingTrivia)
+			}
+			return fixedParameter
 		}
 	}
 

@@ -86,9 +86,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		// An alias's fulfilling property is named in generated code, where it is assigned to the alias.
 		if let fulfilledByDependencyNamed = dependencyAttribute.fulfilledByDependencyNamed,
 		   let fulfillingPropertyName = dependencyAttribute.fulfillingPropertyName,
-		   Dependency.isReservedName(fulfillingPropertyName)
+		   let reservation = ReservedName(reserving: fulfillingPropertyName)
 		{
-			diagnoseReservedName(fulfillingPropertyName, at: fulfilledByDependencyNamed)
+			diagnose(fulfillingPropertyName, reservedAs: reservation, at: fulfilledByDependencyNamed)
 		}
 
 		// A fix-it rewrites the whole attribute, so its range is recorded only when there are no arguments to discard.
@@ -119,8 +119,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			if let identifier = IdentifierPatternSyntax(binding.pattern)?.identifier,
 			   let type = binding.typeAnnotation?.type
 			{
-				if Dependency.isReservedName(identifier.text) {
-					diagnoseReservedName(identifier.text, at: identifier)
+				if let reservation = ReservedName(reserving: identifier.text) {
+					diagnose(identifier.text, reservedAs: reservation, at: identifier)
 				}
 				dependencies.append(
 					Dependency(
@@ -276,8 +276,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		let initializer = Initializer(node)
 		if let instantiableType = node.signature.returnClause?.type.typeDescription {
 			// Each parameter is a dependency named by its inner name. Its argument label binds nothing.
-			for name in node.signature.parameterClause.parameters.lazy.map({ $0.secondName ?? $0.firstName }) where Dependency.isReservedName(name.text) {
-				diagnoseReservedName(name.text, at: name)
+			for name in node.signature.parameterClause.parameters.lazy.map({ $0.secondName ?? $0.firstName }) {
+				if let reservation = ReservedName(reserving: name.text) {
+					diagnose(name.text, reservedAs: reservation, at: name)
+				}
 			}
 			extensionInstantiables.append(.init(
 				instantiableType: instantiableType,
@@ -545,13 +547,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// The location of the decorated declaration, recorded when the declaration is visited with a converter.
 	private var instantiableDeclarationLocation: Dependency.DeclarationLocation?
 
-	/// Reports that `name`, which generated code binds or refers to, begins with `Dependency.reservedNamePrefix`.
+	/// Reports that `name`, which generated code binds or refers to, collides with `reservation`.
 	/// No fix-it is offered: SafeDI matches dependencies by label, so a new name could fulfill, or be fulfilled
 	/// by, a different dependency without any error, and nothing this visitor sees can rule that out.
-	private func diagnoseReservedName(_ name: String, at node: some SyntaxProtocol) {
+	private func diagnose(_ name: String, reservedAs reservation: ReservedName, at node: some SyntaxProtocol) {
 		diagnostics.append(Diagnostic(
 			node: node,
-			message: FixableInstantiableError.reservedNamePrefix(name: name).diagnostic,
+			message: FixableInstantiableError.reservedName(name: name, reservation: reservation).diagnostic,
 		))
 	}
 

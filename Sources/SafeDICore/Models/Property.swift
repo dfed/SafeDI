@@ -248,7 +248,7 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 
 	// MARK: PropertyType
 
-	public enum PropertyType {
+	public enum PropertyType: CaseIterable {
 		/// A `let` property.
 		case constant
 		/// An `Instantiator` property.
@@ -269,6 +269,27 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		/// A `SendableLazilyInstantiated` property.
 		/// The instance is created once, the first time it is requested. Types further down the dependency tree can receive the instance itself.
 		case sendableLazilyInstantiated
+
+		/// The name of the SafeDI type that wraps a property of this kind, which generated code constructs by that
+		/// name, or `nil` for a constant. `TypeDescription.propertyType` recognizes a property's kind by this name.
+		public var wrapperTypeName: String? {
+			switch self {
+			case .constant:
+				nil
+			case .instantiator:
+				Dependency.instantiatorType
+			case .erasedInstantiator:
+				Dependency.erasedInstantiatorType
+			case .sendableInstantiator:
+				Dependency.sendableInstantiatorType
+			case .sendableErasedInstantiator:
+				Dependency.sendableErasedInstantiatorType
+			case .lazilyInstantiated:
+				Dependency.lazilyInstantiatedType
+			case .sendableLazilyInstantiated:
+				Dependency.sendableLazilyInstantiatedType
+			}
+		}
 
 		public var isConstant: Bool {
 			switch self {
