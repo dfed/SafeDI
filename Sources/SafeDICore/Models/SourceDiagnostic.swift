@@ -110,15 +110,14 @@ public struct SourceDiagnostic: Hashable, Sendable {
 		}
 	}
 
-	/// Returns a copy whose file paths are absolute, resolving relative paths against the directory at `directoryPath`.
-	/// Build tools attribute a diagnostic to a file by its path, and the tool is often run from a
-	/// directory other than the one the user is looking at, so printed paths must not stay relative.
-	public func resolvingFilePath(relativeToDirectory directoryPath: String) -> SourceDiagnostic {
+	/// Returns a copy whose file path, and so its fix-its' too, is `spelling` applied to this one's. Build tools
+	/// attribute a diagnostic to a file by its path, so `generate` prints an absolute one.
+	public func respellingFilePath(_ spelling: (String) -> String) -> SourceDiagnostic {
 		SourceDiagnostic(
 			severity: severity,
 			location: location.map { location in
 				Dependency.DeclarationLocation(
-					filePath: NormalizedFilePath(location.filePath, relativeTo: directoryPath).path,
+					filePath: spelling(location.filePath),
 					line: location.line,
 					column: location.column,
 				)
