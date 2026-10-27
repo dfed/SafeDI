@@ -260,6 +260,17 @@ func parseSwiftFiles(
 	try await walkFiles(named: filePaths, conditionalCompilation: evaluator)
 }
 
+/// Parses files again under the names an earlier parse gave them, so every location recorded in the
+/// result reads as it did then.
+/// - Parameter filePathsByName: The path each file is read from, keyed by the name it is parsed under.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+func parseSwiftFiles(
+	readingFilePathsByName filePathsByName: [String: String],
+	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+) async throws -> [FileScan] {
+	try await walkFiles(readingFilePathsByName: filePathsByName, conditionalCompilation: evaluator)
+}
+
 // MARK: - Private
 
 /// What one file contributed to the module.
@@ -430,21 +441,32 @@ extension [SafeDIConfiguration] {
 	}
 }
 
-/// Reads, parses, and walks every file in parallel under its path, keeping what each file that mentions SafeDI
-/// contributes.
+/// Reads, parses, and walks every file in parallel, keeping what each file that mentions SafeDI contributes.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 private func walkFiles(
 	named filePaths: Set<String>,
+	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+) async throws -> [FileScan] {
+	try await walkFiles(
+		readingFilePathsByName: Dictionary(uniqueKeysWithValues: filePaths.map { ($0, $0) }),
+		conditionalCompilation: evaluator,
+	)
+}
+
+/// Reads each file from its value, and parses and walks it in parallel under its key.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+private func walkFiles(
+	readingFilePathsByName filePathsByName: [String: String],
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
 ) async throws -> [FileScan] {
 	try await withThrowingTaskGroup(
 		of: FileScan?.self,
 		returning: [FileScan].self,
 	) { taskGroup in
-		for filePath in filePaths where !filePath.isEmpty {
+		for (name, filePath) in filePathsByName where !name.isEmpty {
 			taskGroup.addTask {
 				try parseFileDeclaringSafeDIContent(atPath: filePath).map { syntaxTree in
-					walk(syntaxTree, at: filePath, conditionalCompilation: evaluator)
+					walk(syntaxTree, at: name, conditionalCompilation: evaluator)
 				}
 			}
 		}

@@ -583,12 +583,10 @@ private func createSwiftFixtureFiles(
 }
 
 /// Expresses `target` relative to the current directory using `..` components,
-/// e.g. `../../tmp/Fixtures/Root.swift`, the way a build system would. The components are counted from the working
-/// directory as `getcwd(3)` spells it, which is how a relative path is resolved, so the result names `target` wherever
-/// the checkout lives, including under `/private/tmp`, whose normalized spelling drops a component.
+/// e.g. `../../tmp/Fixtures/Root.swift`, the way a build system would.
 func currentDirectoryRelativePath(to target: URL) -> String {
-	let currentDirectoryComponents = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).pathComponents
-	let targetComponents = target.pathComponents
+	let currentDirectoryComponents = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).standardizedFileURL.pathComponents
+	let targetComponents = target.standardizedFileURL.pathComponents
 	let sharedComponentCount = zip(currentDirectoryComponents, targetComponents).prefix { $0 == $1 }.count
 	let ascents = Array(repeating: "..", count: currentDirectoryComponents.count - sharedComponentCount)
 	return (ascents + targetComponents[sharedComponentCount...]).joined(separator: "/")

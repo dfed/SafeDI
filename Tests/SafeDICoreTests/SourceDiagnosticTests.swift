@@ -75,18 +75,18 @@ struct SourceDiagnosticTests {
 	}
 
 	@Test
-	func respellingFilePath_respellsLocation() {
+	func resolvingFilePath_makesPathAbsolute_whenFilePathIsRelative() {
 		let diagnostic = SourceDiagnostic(
 			severity: .note,
 			location: Dependency.DeclarationLocation(filePath: "Sources/App/Child.swift", line: 12, column: 5),
 			message: "`Child` is part of the cycle",
 		)
-		let respelled = diagnostic.respellingFilePath { "/Users/developer/Project/\($0)" }
-		#expect(respelled.formatted == "/Users/developer/Project/Sources/App/Child.swift:12:5: note: `Child` is part of the cycle")
+		let resolved = diagnostic.resolvingFilePath(relativeToDirectory: "/Users/developer/Project")
+		#expect(resolved.formatted == "/Users/developer/Project/Sources/App/Child.swift:12:5: note: `Child` is part of the cycle")
 	}
 
 	@Test
-	func respellingFilePath_respellsFixItLocations() {
+	func resolvingFilePath_makesFixItPathsAbsolute_whenFilePathIsRelative() {
 		let diagnostic = SourceDiagnostic(
 			severity: .error,
 			location: Dependency.DeclarationLocation(filePath: "Sources/App/Child.swift", line: 7, column: 5),
@@ -98,11 +98,22 @@ struct SourceDiagnosticTests {
 				),
 			],
 		)
-		let respelled = diagnostic.respellingFilePath { "/Users/developer/Project/\($0)" }
-		#expect(respelled.formatted == """
+		let resolved = diagnostic.resolvingFilePath(relativeToDirectory: "/Users/developer/Project")
+		#expect(resolved.formatted == """
 		/Users/developer/Project/Sources/App/Child.swift:7:5: error: @Received property `shared2: SharedThing` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `shared: SharedThing`?
 		/Users/developer/Project/Sources/App/Child.swift:7:19-7:26: fixit: shared
 		""")
+	}
+
+	@Test
+	func resolvingFilePath_keepsPath_whenFilePathIsAbsolute() {
+		let diagnostic = SourceDiagnostic(
+			severity: .error,
+			location: Dependency.DeclarationLocation(filePath: "/Users/developer/Other/Root.swift", line: 3, column: 1),
+			message: "Dependency cycle detected: Root -> Root",
+		)
+		let resolved = diagnostic.resolvingFilePath(relativeToDirectory: "/Users/developer/Project")
+		#expect(resolved.formatted == "/Users/developer/Other/Root.swift:3:1: error: Dependency cycle detected: Root -> Root")
 	}
 
 	@Test

@@ -20,10 +20,11 @@
 
 import Foundation
 
-/// Compute output file names for the given input files, each named relative to the project root (or absolute for a
-/// file outside it), deduplicating basenames by prepending the components of their directories when collisions occur.
+/// Compute output file names for the given input files, deduplicating basenames
+/// by prepending the components of their directories relative to `directory` when collisions occur.
 public func outputFileNames(
-	forFilesAt inputFilePaths: [String],
+	for inputFilePaths: [NormalizedFilePath],
+	relativeTo directory: NormalizedFilePath,
 	suffix: String = "+SafeDI.swift",
 ) -> [String] {
 	struct FileInfo {
@@ -32,7 +33,7 @@ public func outputFileNames(
 	}
 
 	let fileInfo = inputFilePaths.map { inputFilePath in
-		let relativeDirectory = (inputFilePath as NSString).deletingLastPathComponent
+		let relativeDirectory = (inputFilePath.path(relativeTo: directory) as NSString).deletingLastPathComponent
 		let parentComponents: [String] = if relativeDirectory.isEmpty || relativeDirectory == "." {
 			[]
 		} else {
@@ -41,7 +42,7 @@ public func outputFileNames(
 				.map(String.init)
 		}
 		return FileInfo(
-			baseName: ((inputFilePath as NSString).lastPathComponent as NSString).deletingPathExtension,
+			baseName: ((inputFilePath.path as NSString).lastPathComponent as NSString).deletingPathExtension,
 			parentComponents: parentComponents,
 		)
 	}
@@ -85,6 +86,9 @@ public func outputFileNames(
 }
 
 /// Compute output file names for mock generation output files.
-public func mockOutputFileNames(forFilesAt inputFilePaths: [String]) -> [String] {
-	outputFileNames(forFilesAt: inputFilePaths, suffix: "+SafeDIMock.swift")
+public func mockOutputFileNames(
+	for inputFilePaths: [NormalizedFilePath],
+	relativeTo directory: NormalizedFilePath,
+) -> [String] {
+	outputFileNames(for: inputFilePaths, relativeTo: directory, suffix: "+SafeDIMock.swift")
 }

@@ -18,9 +18,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// This file is SafeDI's only place that normalizes or resolves a file path, or makes one relative to a directory.
-// The SafeDIGenerator plugin compiles it too, through a symbolic link, so the plugin and SafeDITool spell paths by
-// the same rules. See "File path spelling" in CLAUDE.md for which spelling each consumer of a path receives.
+// This file is SafeDI's only place that normalizes, resolves, or relativizes a file path. The SafeDIGenerator
+// plugin compiles it too, through a symbolic link, so the plugin and SafeDITool spell paths by the same rules.
+// See "File path spelling" in CLAUDE.md for which spelling each consumer of a path receives.
 
 #if canImport(Darwin)
 	import Darwin
@@ -31,12 +31,13 @@
 #endif
 import Foundation
 
-/// A file path made absolute and normalized: without `.` or `..` components or repeated `/`, and, on Apple
-/// platforms, without the leading `/private` Foundation removes from a path that names an existing file under
-/// `/private/tmp`, `/private/var`, or `/private/etc`. A path that names no file keeps its `/private`. It resolves no
-/// other symbolic link, so two spellings of one file through any other link stay distinct; `ProjectFilePath` makes
-/// the project root's spellings agree.
-public struct NormalizedFilePath: Hashable, Comparable, Sendable {
+/// A file path in the one spelling SafeDI compares paths in: absolute, without `.` or `..` components or repeated
+/// `/`, and, on Apple platforms, without the leading `/private` Foundation removes from paths such as
+/// `/private/tmp/…` and `/private/var/…`. It resolves no symbolic link, so two spellings of one file through a
+/// link other than `/tmp`, `/var`, or `/etc` stay distinct; `ProjectFilePaths` makes the project root's spellings
+/// agree. Comparing paths as `NormalizedFilePath`s makes a comparison type-check only when both sides were
+/// spelled by this rule.
+public struct NormalizedFilePath: Hashable, Comparable, Sendable, CustomStringConvertible {
 	/// - Parameters:
 	///   - path: An absolute path, or one relative to `directory`.
 	///   - directory: The directory a relative `path` is relative to, itself absolute or relative to the working
@@ -45,17 +46,16 @@ public struct NormalizedFilePath: Hashable, Comparable, Sendable {
 		self.init(path, relativeTo: directory.map(Self.directoryURL(_:)))
 	}
 
-	fileprivate init(_ path: String, relativeTo directoryURL: URL?) {
+	init(_ path: String, relativeTo directoryURL: URL?) {
 		self.path = URL(fileURLWithPath: path, relativeTo: directoryURL).standardizedFileURL.path
-	}
-
-	/// - Parameter normalizedPath: A path already spelled by this rule.
-	fileprivate init(normalizedPath: String) {
-		path = normalizedPath
 	}
 
 	/// The normalized path.
 	public let path: String
+
+	public var description: String {
+		path
+	}
 
 	/// This path relative to `directory`, or the whole path when the file does not lie inside `directory`.
 	public func path(relativeTo directory: NormalizedFilePath) -> String {
@@ -67,7 +67,7 @@ public struct NormalizedFilePath: Hashable, Comparable, Sendable {
 	}
 
 	/// The URL of the directory at `path`, against which relative paths are made absolute.
-	fileprivate static func directoryURL(_ path: String) -> URL {
+	static func directoryURL(_ path: String) -> URL {
 		URL(fileURLWithPath: path, isDirectory: true)
 	}
 
@@ -83,26 +83,21 @@ public struct NormalizedFilePath: Hashable, Comparable, Sendable {
 			path
 		}
 	}
-}
 
-/// A file path as one project's `ProjectFilePaths` spells it for comparison: normalized, with the project root's
-/// reported spelling replaced by its resolved one. Only `ProjectFilePaths` creates one, so a comparison between two
-/// `ProjectFilePath`s type-checks only when both went through the same rule.
-public struct ProjectFilePath: Hashable, Comparable, Sendable {
-	fileprivate init(_ normalizedPath: NormalizedFilePath) {
-		self.normalizedPath = normalizedPath
+	/// This path with the directory prefix `prefix` replaced by `replacement`, when it starts with `prefix`. Both are
+	/// normalized, so the result is too.
+	fileprivate func replacingDirectoryPrefix(_ prefix: String, with replacement: String) -> NormalizedFilePath {
+		if prefix != replacement, path.hasPrefix(prefix) {
+			NormalizedFilePath(normalizedPath: replacement + path.dropFirst(prefix.count))
+		} else {
+			self
+		}
 	}
 
-	/// The path, absolute and normalized, which the tool parses the file under and reads it from.
-	public var path: String {
-		normalizedPath.path
+	/// - Parameter normalizedPath: A path already spelled by this rule.
+	private init(normalizedPath: String) {
+		path = normalizedPath
 	}
-
-	public static func < (lhs: ProjectFilePath, rhs: ProjectFilePath) -> Bool {
-		lhs.normalizedPath < rhs.normalizedPath
-	}
-
-	fileprivate let normalizedPath: NormalizedFilePath
 }
 
 /// How SafeDI spells the paths of one project's files for each consumer, given the project root as a build system
@@ -116,23 +111,19 @@ public struct ProjectFilePaths: Sendable {
 	/// - Parameter projectRoot: The project root as the build system reported it: absolute, or relative to the
 	///   working directory.
 	public init(projectRoot: String) {
-		let reportedProjectRootURL = URL(fileURLWithPath: projectRoot, isDirectory: true)
-		reportedProjectRoot = URL(fileURLWithPath: projectRoot).path
+		reportedProjectRoot = projectRoot
 		let reportedRoot = NormalizedFilePath(projectRoot)
-		let resolvedFilePath = realpath(reportedProjectRoot, nil)
+		let resolvedFilePath = realpath(projectRoot, nil)
 		defer { free(resolvedFilePath) }
 		let resolvedProjectRoot = resolvedFilePath.map { String(cString: $0) }
-		reportsResolvedProjectRoot = resolvedProjectRoot == reportedProjectRoot
+		reportsResolvedProjectRoot = resolvedProjectRoot == projectRoot
 		normalizedProjectRoot = resolvedProjectRoot.map { NormalizedFilePath($0) } ?? reportedRoot
-		self.reportedRoot = reportedRoot
 		reportedRootPrefix = reportedRoot.directoryPrefix
 		rootPrefix = normalizedProjectRoot.directoryPrefix
-		self.reportedProjectRootURL = reportedProjectRootURL
+		reportedRootURL = NormalizedFilePath.directoryURL(projectRoot)
 	}
 
-	/// The project root as the build system reported it, made absolute against the working directory and without a
-	/// trailing `/`, but not normalized: the build system spells the files inside the root by joining this with their
-	/// paths inside it, and the manifest records it as its `projectRoot`.
+	/// The project root as the build system reported it, which is how the build system spells the paths inside it.
 	public let reportedProjectRoot: String
 
 	/// Whether the reported root is spelled exactly as `realpath(3)` resolves it: absolute, through no symbolic
@@ -146,35 +137,28 @@ public struct ProjectFilePaths: Sendable {
 
 	/// The comparable spelling of `path`, an absolute path or one relative to the reported project root. A file
 	/// inside the project has one comparable spelling whichever spelling of the root reaches it.
-	public func projectFilePath(of path: String) -> ProjectFilePath {
-		projectFilePath(of: NormalizedFilePath(path, relativeTo: reportedProjectRootURL))
+	public func normalizedPath(of path: String) -> NormalizedFilePath {
+		normalizedPath(of: NormalizedFilePath(path, relativeTo: reportedRootURL))
 	}
 
 	/// The comparable spelling of `path`, such as a file found relative to the working directory.
-	public func projectFilePath(of path: NormalizedFilePath) -> ProjectFilePath {
-		if path == reportedRoot {
-			ProjectFilePath(normalizedProjectRoot)
-		} else if reportedRootPrefix != rootPrefix, path.path.hasPrefix(reportedRootPrefix) {
-			ProjectFilePath(NormalizedFilePath(normalizedPath: rootPrefix + path.path.dropFirst(reportedRootPrefix.count)))
-		} else {
-			ProjectFilePath(path)
-		}
+	public func normalizedPath(of path: NormalizedFilePath) -> NormalizedFilePath {
+		path.replacingDirectoryPrefix(reportedRootPrefix, with: rootPrefix)
 	}
 
 	/// How a manifest and scan's cache name the file at `path`: relative to the project root when the file lies
 	/// inside the project, and otherwise absolute and normalized.
-	public func manifestPath(of path: ProjectFilePath) -> String {
-		path.normalizedPath.path(relativeToDirectoryPrefix: rootPrefix)
+	public func manifestPath(of path: NormalizedFilePath) -> String {
+		normalizedPath(of: path).path(relativeToDirectoryPrefix: rootPrefix)
 	}
 
-	/// How the build system spells the file at `path`, for the plugin to declare it as an input, for a
-	/// `#sourceLocation` directive the compiler compares with its own paths, and for a diagnostic an IDE maps to the
-	/// file it has open: the reported project root joined with the file's path inside the project, or, for a file
-	/// outside the project, its absolute normalized path. The build system hands the compiler the paths it reported
-	/// to the plugin, which are inside the reported root. Normalizing the joined path would not keep that spelling:
-	/// on Apple platforms, Foundation removes a leading `/private` from paths such as `/private/tmp/…`, which the
-	/// compiler keeps.
-	public func buildSystemPath(of path: ProjectFilePath) -> String {
+	/// How the build system spells the file at `path`, for the plugin to declare it as an input and for a
+	/// `#sourceLocation` directive the compiler compares with its own paths: the reported project root joined with
+	/// the file's path inside the project, or, for a file outside the project, its absolute normalized path. The
+	/// build system hands the compiler the paths it reported to the plugin, which are inside the reported root.
+	/// Normalizing the joined path would not keep that spelling: on Apple platforms, Foundation removes a leading
+	/// `/private` from paths such as `/private/tmp/…`, which the compiler keeps.
+	public func buildSystemPath(of path: NormalizedFilePath) -> String {
 		let manifestPath = manifestPath(of: path)
 		return if (manifestPath as NSString).isAbsolutePath {
 			manifestPath
@@ -183,8 +167,7 @@ public struct ProjectFilePaths: Sendable {
 		}
 	}
 
-	private let reportedRoot: NormalizedFilePath
 	private let reportedRootPrefix: String
 	private let rootPrefix: String
-	private let reportedProjectRootURL: URL
+	private let reportedRootURL: URL
 }

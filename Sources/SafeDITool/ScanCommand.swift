@@ -70,35 +70,33 @@ func performScan(
 	let inputFilePaths = try String(contentsOfFile: inputSourcesFile, encoding: .utf8)
 		.parsedPathListCSV()
 
-	// Each input's comparable path, which names it in the parse and in every comparison.
-	let allFilePaths = Set(inputFilePaths.map(projectFilePaths.projectFilePath(of:)))
-	let allFilePathsByName = Dictionary(uniqueKeysWithValues: allFilePaths.map { ($0.path, $0) })
+	// Each input's normalized path, which names it in the parse and in every comparison.
+	let allFilePaths = Set(inputFilePaths.map(projectFilePaths.normalizedPath(of:)))
 
 	// Each input's modification times, recorded before the input is read so that an edit made
 	// while scan runs shows in `generate`'s comparison. Keyed by absolute path, so `generate`'s
 	// freshness check works regardless of its working directory.
-	var scannedInputStamps = [ProjectFilePath: FileModificationStamp]()
+	var scannedInputStamps = [String: FileModificationStamp]()
 	for filePath in allFilePaths {
-		scannedInputStamps[filePath] = FileModificationStamp(ofFileAtPath: filePath.path)
+		scannedInputStamps[filePath.path] = FileModificationStamp(ofFileAtPath: filePath.path)
 	}
 
 	// Determine which files are scoped for mock scanning.
-	let mockScopedFilePaths: Set<ProjectFilePath> = if mockScopedFiles.isEmpty {
+	let mockScopedFilePaths: Set<NormalizedFilePath> = if mockScopedFiles.isEmpty {
 		allFilePaths
 	} else {
-		Set(mockScopedFiles.map(projectFilePaths.projectFilePath(of:)))
+		Set(mockScopedFiles.map(projectFilePaths.normalizedPath(of:)))
 	}
-	/// Whether the input parsed under `name` is one of the module's own files.
-	func isMockScoped(_ name: String) -> Bool {
-		allFilePathsByName[name].map(mockScopedFilePaths.contains) == true
-	}
+
+	// Each file is parsed under its normalized path.
+	let mockScopedFileNames = Set(mockScopedFilePaths.map(\.path))
 
 	// Parse all files once to find roots, mocks, and configurations. Only the
 	// mock-scoped files can declare this module's configuration, which decides
 	// how every file's `#if` blocks are evaluated, so they are searched for it first.
 	let (parsedModule, fileScans) = try await parseModule(
-		filePaths: Set(allFilePathsByName.keys),
-		configurationFilePaths: Set(allFilePathsByName.keys.filter(isMockScoped)),
+		filePaths: Set(allFilePaths.map(\.path)),
+		configurationFilePaths: mockScopedFileNames,
 		activeCompilationConditions: activeCompilationConditions,
 	)
 	let evaluator = parsedModule.conditionalCompilationEvaluator
@@ -110,7 +108,7 @@ func performScan(
 	// handed other conditions than this scan, so outputs are planned for the declarations in every
 	// clause of every `#if` block: `generate` writes a file without code for one that is inactive.
 	// Only the module's own files decide its mocks and configuration.
-	let mockScopedFileScans = fileScans.filter { isMockScoped($0.path) }
+	let mockScopedFileScans = fileScans.filter { mockScopedFileNames.contains($0.path) }
 	let moduleOutputFileDeclarations = mockScopedFileScans.reduce(into: OutputFileDeclarations()) { moduleOutputFileDeclarations, fileScan in
 		moduleOutputFileDeclarations.formUnion(fileScan.outputFileDeclarations)
 	}
@@ -124,19 +122,19 @@ func performScan(
 		// The directories the active configuration lists, which `generate` reads too. Files found relative to
 		// the working directory compare with the inputs only once spelled as the project spells them.
 		let configuredDirectories = configuration?.additionalDirectoriesToInclude ?? []
-		let configuredAdditionalFiles = try await Set(findSwiftFiles(inDirectories: configuredDirectories).map(projectFilePaths.projectFilePath(of:)))
+		let configuredAdditionalFiles = try await Set(findSwiftFiles(inDirectories: configuredDirectories).map(projectFilePaths.normalizedPath(of:)))
 		// Files only a configuration in an inactive clause reaches, which can declare roots `generate` finds
 		// when other conditions select that configuration.
 		let plannedOnlyAdditionalFiles = try await Set(findSwiftFiles(
 			inDirectories: moduleOutputFileDeclarations.additionalDirectoriesToInclude.filter { !configuredDirectories.contains($0) },
-		).map(projectFilePaths.projectFilePath(of:))).subtracting(configuredAdditionalFiles)
+		).map(projectFilePaths.normalizedPath(of:))).subtracting(configuredAdditionalFiles)
 
 		// Record the additional files for the plugin to declare as build inputs, spelled as the build system
 		// spells the project's other files.
 		additionalInputFiles = configuredAdditionalFiles.union(plannedOnlyAdditionalFiles).sorted().map(projectFilePaths.buildSystemPath(of:))
 		configuredAdditionalInputFiles = configuredAdditionalFiles.sorted().map(\.path)
-		for filePath in configuredAdditionalFiles.union(plannedOnlyAdditionalFiles) where scannedInputStamps[filePath] == nil {
-			scannedInputStamps[filePath] = FileModificationStamp(ofFileAtPath: filePath.path)
+		for filePath in configuredAdditionalFiles.union(plannedOnlyAdditionalFiles) where scannedInputStamps[filePath.path] == nil {
+			scannedInputStamps[filePath.path] = FileModificationStamp(ofFileAtPath: filePath.path)
 		}
 
 		additionalFileScans = try await parseAdditionalDirectoryFiles(
@@ -154,20 +152,28 @@ func performScan(
 		).map(\.fileScan)
 	}
 
-	/// The manifest name of each file `fileScans` names, once each, sorted.
-	func sortedUniqueManifestPaths(_ fileScans: [FileScan]) -> [String] {
-		Set(fileScans.map { projectFilePaths.manifestPath(of: projectFilePaths.projectFilePath(of: $0.path)) }).sorted()
+	/// The normalized path of each file `fileScans` names, once each, sorted by its name in the manifest.
+	func sortedUniqueFilePaths(_ fileScans: [FileScan]) -> [NormalizedFilePath] {
+		// Each manifest name is computed once rather than in every comparison.
+		var filePathsByManifestPath = [String: NormalizedFilePath]()
+		for fileScan in fileScans {
+			let filePath = projectFilePaths.normalizedPath(of: fileScan.path)
+			filePathsByManifestPath[projectFilePaths.manifestPath(of: filePath)] = filePath
+		}
+		return filePathsByManifestPath
+			.sorted { $0.key < $1.key }
+			.map(\.value)
 	}
 
 	// Collect root files and compute output file names.
-	let uniqueRootFilePaths = sortedUniqueManifestPaths(
+	let uniqueRootFilePaths = sortedUniqueFilePaths(
 		(fileScans + additionalFileScans.map(\.fileScan) + plannedOnlyAdditionalFileScans).filter(\.outputFileDeclarations.declaresRoot),
 	)
-	let rootOutputNames = outputFileNames(forFilesAt: uniqueRootFilePaths)
+	let rootOutputNames = outputFileNames(for: uniqueRootFilePaths, relativeTo: projectFilePaths.normalizedProjectRoot)
 
 	// Collect mock files (only from scoped files) and compute output file names.
-	let uniqueMockFilePaths = sortedUniqueManifestPaths(mockScopedFileScans.filter(\.outputFileDeclarations.declaresMockGeneratingType))
-	let mockOutputNames = mockOutputFileNames(forFilesAt: uniqueMockFilePaths)
+	let uniqueMockFilePaths = sortedUniqueFilePaths(mockScopedFileScans.filter(\.outputFileDeclarations.declaresMockGeneratingType))
+	let mockOutputNames = mockOutputFileNames(for: uniqueMockFilePaths, relativeTo: projectFilePaths.normalizedProjectRoot)
 
 	// Extract additional mocks to generate from every configuration, those the active configuration
 	// lists first and in its order.
@@ -186,7 +192,9 @@ func performScan(
 	}
 
 	// Compute configuration file paths (relative to project root, matching Generate's expectations).
-	let configurationFilePaths = sortedUniqueManifestPaths(mockScopedFileScans.filter(\.outputFileDeclarations.declaresConfiguration))
+	let configurationFilePaths = sortedUniqueFilePaths(mockScopedFileScans.filter(\.outputFileDeclarations.declaresConfiguration)).map { filePath in
+		projectFilePaths.manifestPath(of: filePath)
+	}
 
 	// Determine mock configuration output file path.
 	let hasMockEntries = !uniqueMockFilePaths.isEmpty || !additionalMockEntries.isEmpty
@@ -202,7 +210,7 @@ func performScan(
 	let manifest = SafeDIToolManifest(
 		dependencyTreeGeneration: zip(uniqueRootFilePaths, rootOutputNames).map { inputFilePath, outputFileName in
 			.init(
-				inputFilePath: inputFilePath,
+				inputFilePath: projectFilePaths.manifestPath(of: inputFilePath),
 				outputFilePath: outputDirectoryURL
 					.appendingPathComponent(outputFileName)
 					.path,
@@ -210,7 +218,7 @@ func performScan(
 		},
 		mockGeneration: zip(uniqueMockFilePaths, mockOutputNames).map { inputFilePath, outputFileName in
 			.init(
-				inputFilePath: inputFilePath,
+				inputFilePath: projectFilePaths.manifestPath(of: inputFilePath),
 				outputFilePath: outputDirectoryURL
 					.appendingPathComponent(outputFileName)
 					.path,
@@ -222,7 +230,7 @@ func performScan(
 		additionalInputFiles: additionalInputFiles,
 		activeCompilationConditions: activeCompilationConditions.sorted(),
 		mockScopedFilePaths: mockScopedFilePaths.map(projectFilePaths.manifestPath(of:)).sorted(),
-		projectRoot: projectFilePaths.reportedProjectRoot,
+		projectRoot: projectFilePaths.reportedProjectRoot.asFileURL.path,
 	)
 
 	let encoder = JSONEncoder()
@@ -235,25 +243,24 @@ func performScan(
 	// manifest's `inputFilePath` (also project-relative) and what Generate
 	// would compute when parsing fresh from the same CSV.
 	func normalized(_ fileScan: FileScan) -> FileScan {
-		fileScan.relocated(to: projectFilePaths.manifestPath(of: projectFilePaths.projectFilePath(of: fileScan.path)))
+		fileScan.relocated(to: projectFilePaths.manifestPath(of: projectFilePaths.normalizedPath(of: fileScan.path)))
 	}
 	func cached(_ fileScan: FileScan) -> CachedFileScan {
 		CachedFileScan(scannedPath: fileScan.path, fileScan: normalized(fileScan))
 	}
-	// The directories as this scan found them, relative to the working directory, so `generate` finds the same files.
 	let additionalDirectories = configuration?.additionalDirectoriesToInclude.map { directory in
-		NormalizedFilePath(directory).path
+		projectFilePaths.normalizedPath(of: directory).path
 	}.sorted() ?? []
 	let cached = CachedScannedModuleInfo(
 		moduleInfo: ModuleInfo(fileScans.filter { !$0.consultsCompilationConditions }.map(normalized)),
 		conditionSensitiveFileScans: fileScans.filter(\.consultsCompilationConditions).map(cached),
 		additionalModuleInfo: ModuleInfo(additionalFileScans.map(\.fileScan).filter { !$0.consultsCompilationConditions }),
 		additionalConditionSensitiveFileScans: additionalFileScans.filter(\.fileScan.consultsCompilationConditions),
-		projectRoot: projectFilePaths.reportedProjectRoot,
+		projectRoot: projectFilePaths.reportedProjectRoot.asFileURL.path,
 		// Every file scan read for this module — CSV inputs plus any files reached through
 		// `#SafeDIConfiguration.additionalDirectoriesToInclude` — so edits to either invalidate the cache.
 		scannedInputs: scannedInputStamps
-			.map { ScannedInput(path: $0.key.path, modificationStamp: $0.value) }
+			.map { ScannedInput(path: $0.key, modificationStamp: $0.value) }
 			.sorted { $0.path < $1.path },
 		csvInputPaths: inputFilePaths.sorted(),
 		additionalInputAbsolutePaths: configuredAdditionalInputFiles,
@@ -279,14 +286,14 @@ func performScan(
 ///   - inputFilePaths: The module's input files. A found file that is also an input is parsed only as an input:
 ///     parsing it again would declare its types twice.
 ///   - projectFilePaths: The paths of the project a manifest names files in, or `nil` to name each file by its
-///     absolute path.
+///     normalized path.
 ///   - evaluator: The evaluator the module's input files were parsed with.
-/// - Returns: What each found file that is not an input contributes, parsed under its absolute path, so the
+/// - Returns: What each found file that is not an input contributes, parsed under its normalized path, so the
 ///   locations it records name the file wherever the tool runs, and named as the manifest names files.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func parseAdditionalDirectoryFiles(
-	_ filePaths: Set<ProjectFilePath>,
-	excludingInputFilesAt inputFilePaths: Set<ProjectFilePath>,
+	_ filePaths: Set<NormalizedFilePath>,
+	excludingInputFilesAt inputFilePaths: Set<NormalizedFilePath>,
 	namedBy projectFilePaths: ProjectFilePaths?,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
 ) async throws -> [CachedFileScan] {
@@ -314,15 +321,9 @@ extension SafeDIToolManifest {
 	/// a path never changes its file name.
 	func configurationFilePaths(among inputFilePaths: Set<String>, in projectFilePaths: ProjectFilePaths?) -> Set<String> {
 		let configurationFileNames = configurationFilePaths.map { ($0 as NSString).lastPathComponent }
-		let isConfigurationFile: (String) -> Bool = if let projectFilePaths {
-			{ [configurationFilePaths = Set(configurationFilePaths.map(projectFilePaths.projectFilePath(of:)))] inputFilePath in
-				configurationFilePaths.contains(projectFilePaths.projectFilePath(of: inputFilePath))
-			}
-		} else {
-			{ [configurationFilePaths = Set(configurationFilePaths)] inputFilePath in configurationFilePaths.contains(inputFilePath) }
-		}
 		return inputFilePaths.filter { inputFilePath in
-			configurationFileNames.contains(where: inputFilePath.hasSuffix) && isConfigurationFile(inputFilePath)
+			configurationFileNames.contains(where: inputFilePath.hasSuffix)
+				&& configurationFilePaths.contains(projectFilePaths.map { $0.manifestPath(of: $0.normalizedPath(of: inputFilePath)) } ?? inputFilePath)
 		}
 	}
 }
