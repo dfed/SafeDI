@@ -35,10 +35,10 @@ enum PluginScanner {
 		var additionalInputFiles: [URL]
 	}
 
-	/// A Swift file this scan reads, with its normalized path.
+	/// A Swift file this scan reads, with its path relative to the project root, or absolute when outside it.
 	struct ScannedFile {
 		let url: URL
-		let path: NormalizedFilePath
+		let relativePath: String
 	}
 
 	static func scan(
@@ -90,14 +90,14 @@ enum PluginScanner {
 		/// `fileURLs`, sorted by their paths relative to the project root, as `SafeDITool scan` sorts them.
 		func sortedByRelativePath(_ fileURLs: [URL]) -> [ScannedFile] {
 			fileURLs
-				.map { ScannedFile(url: $0, path: NormalizedFilePath($0.path(percentEncoded: false))) }
-				.sorted { $0.path.path(relativeTo: normalizedProjectRoot) < $1.path.path(relativeTo: normalizedProjectRoot) }
+				.map { ScannedFile(url: $0, relativePath: NormalizedFilePath($0.path(percentEncoded: false)).path(relativeTo: normalizedProjectRoot)) }
+				.sorted { $0.relativePath < $1.relativePath }
 		}
 		let rootFiles = sortedByRelativePath(swiftFiles + additionalInputFiles).filter { fileContainsRoot(at: $0.url) }
-		let rootOutputFileNames = outputFileNames(for: rootFiles.map(\.path), relativeTo: normalizedProjectRoot)
+		let rootOutputFileNames = outputFileNames(forFilesAt: rootFiles.map(\.relativePath))
 
 		let mockFiles = sortedByRelativePath(mockScopedSwiftFiles).filter { fileContainsGenerateMockTrue(at: $0.url) }
-		let mockFileOutputFileNames = mockOutputFileNames(for: mockFiles.map(\.path), relativeTo: normalizedProjectRoot)
+		let mockFileOutputFileNames = mockOutputFileNames(forFilesAt: mockFiles.map(\.relativePath))
 
 		let additionalMockOutputFiles = additionalMocksToGenerate.map {
 			outputDirectory.appendingPathComponent("\($0)+SafeDIMock.swift")
