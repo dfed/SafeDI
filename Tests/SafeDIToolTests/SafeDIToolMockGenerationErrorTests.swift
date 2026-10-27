@@ -247,6 +247,61 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenRequiredOptionalReceivedPropertyIsHiddenByPropertyOfAnotherTypeWithSameLabel() async {
+		// A required `analytics: Analytics?` resolves to a closer `analytics: Analytics`, but not to `Mid`'s
+		// `analytics: OtherAnalytics`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):4:5: error: @Received property `analytics: Analytics?` is hidden in chain: Root -> Mid -> Child. `Mid` declares `analytics: OtherAnalytics` with the same label, so the types below `Mid` receive `analytics: OtherAnalytics` instead. Give `analytics: OtherAnalytics` on `Mid` a different label to fix.
+				\(fixtures["Mid.swift"]):4:5: note: `analytics: OtherAnalytics` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct Root: Instantiable {
+					    public init(analytics: Analytics, mid: Mid) { self.analytics = analytics; self.mid = mid }
+					    @Instantiated let analytics: Analytics
+					    @Instantiated let mid: Mid
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Analytics: Instantiable {
+					    public init() {}
+					}
+					@Instantiable
+					public final class OtherAnalytics: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Mid: Instantiable {
+					    public init(analytics: OtherAnalytics, child: Child) { self.analytics = analytics; self.child = child }
+					    @Instantiated let analytics: OtherAnalytics
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Child: Instantiable {
+					    public init(analytics: Analytics?) { self.analytics = analytics }
+					    @Received let analytics: Analytics?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenOnlyIfAvailableReceivedPropertyNoAncestorProvidesIsHiddenByPropertyWithSameLabel() async {
 		// Production passes `nil`, because no ancestor provides `analytics: Analytics`, but the mock
 		// declares `analytics: Analytics?` at its root, where `Mid`’s `analytics` hides it from `Child`.

@@ -1881,17 +1881,17 @@ public actor DependencyTreeGenerator {
 				// ancestor's declaration of that label. A different property there is passed in its place.
 				for dependency in scope.instantiable.dependencies {
 					let receivedProperty: Property
-					let acceptedProperties: Set<Property>
 					switch dependency.source {
-					case let .received(onlyIfAvailable):
+					case .received:
 						receivedProperty = dependency.property
-						acceptedProperties = onlyIfAvailable ? [receivedProperty, receivedProperty.asUnwrappedProperty] : [receivedProperty]
-					case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+					case let .aliased(fulfillingProperty, _, _):
 						receivedProperty = fulfillingProperty
-						acceptedProperties = onlyIfAvailable ? [receivedProperty, receivedProperty.asUnwrappedProperty] : [receivedProperty]
 					case .instantiated, .forwarded:
 						continue
 					}
+					// A receive of an optional property, required or `onlyIfAvailable`, resolves to its non-optional
+					// form too.
+					let acceptedProperties: Set<Property> = [receivedProperty, receivedProperty.asUnwrappedProperty]
 					guard let closestDeclaration = closestDeclarationByLabel[receivedProperty.label],
 					      !acceptedProperties.contains(closestDeclaration.property),
 					      // An alias of a property this scope declares refers to that declaration.
