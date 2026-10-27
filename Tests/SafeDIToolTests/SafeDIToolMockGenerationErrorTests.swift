@@ -693,6 +693,44 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		""", "Unexpected output \(rootMock)")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsErrorOfFirstTypeInTypeOrder_whenManyTypesWithGeneratedMocksHaveCycles() async {
+		// Every one of the 200 types whose mock is generated is in its own cycle. Their scopes
+		// hash by object identity, so a set of them iterates in an order that changes from run
+		// to run, and validating in that order reports `Mock000`'s cycle about once in 200 runs.
+		let swiftFileContent = (0..<200).map { index in
+			let suffix = String(repeating: "0", count: 3 - String(index).count) + String(index)
+			return """
+			@Instantiable(generateMock: true)
+			public struct Mock\(suffix): Instantiable {
+			    public init(partner: Partner\(suffix)) { self.partner = partner }
+			    @Instantiated let partner: Partner\(suffix)
+			}
+			@Instantiable
+			public struct Partner\(suffix): Instantiable {
+			    public init(mock: Mock\(suffix)) { self.mock = mock }
+			    @Instantiated let mock: Mock\(suffix)
+			}
+			"""
+		}.joined(separator: "\n")
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Mock000.swift"]):4:5: error: Dependency cycle detected: Partner000 -> Mock000 -> Partner000
+				\(fixtures["Mock000.swift"]):6:1: note: `Partner000` is part of the cycle
+				\(fixtures["Mock000.swift"]):1:1: note: `Mock000` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [swiftFileContent],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()
