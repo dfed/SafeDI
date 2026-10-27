@@ -316,8 +316,8 @@ public actor DependencyTreeGenerator {
 
 		// Generate mock code and collect configuration types in parallel.
 		let generatedRoots = try await withThrowingTaskGroup(
-			of: (root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String)]).self,
-			returning: [(root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String)])].self,
+			of: GeneratedMockRoot.self,
+			returning: [GeneratedMockRoot].self,
 		) { taskGroup in
 			for (instantiable, mockRoot) in mockRoots {
 				taskGroup.addTask {
@@ -328,11 +328,8 @@ public actor DependencyTreeGenerator {
 							cycleEdges: cycleEdges,
 						)),
 					)
-					async let configurationTypes = mockRoot.collectConfigurationTypes(
-						cycleEdges: cycleEdges,
-						sendableConfigurationTypeNames: sendableConfigurationTypeNames,
-					)
-					return try await (
+					async let configurationTypes = mockRoot.collectConfigurationTypes()
+					return try await GeneratedMockRoot(
 						root: GeneratedRoot(
 							typeDescription: instantiable.concreteInstantiable,
 							sourceFilePath: instantiable.sourceFilePath,
@@ -342,7 +339,7 @@ public actor DependencyTreeGenerator {
 					)
 				}
 			}
-			var results = [(root: GeneratedRoot, configurationTypes: [(typeName: String, structCode: String)])]()
+			var results = [GeneratedMockRoot]()
 			for try await result in taskGroup {
 				results.append(result)
 			}
@@ -353,16 +350,25 @@ public actor DependencyTreeGenerator {
 		// Deduplicate configuration types by type name across all roots.
 		// With cycleEdges applied uniformly, every root produces the same struct
 		// for a given type, so first-wins by alphabetical root order is stable.
+		// Each type's struct is generated once, from the first root that reaches it:
+		// the struct first-wins keeps, so the structs other roots would generate are
+		// never generated.
 		var seenTypeNames = Set<String>()
 		var rootedConfigurationExtensions = [String: String]()
-		var sharedConfigurationExtensions = [(typeName: String, structCode: String)]()
+		var sharedConfigurationExtensions = [ConfigurationExtension]()
 		for result in generatedRoots.sorted(by: { $0.root.typeDescription < $1.root.typeDescription }) {
-			for configType in result.configurationTypes {
-				if seenTypeNames.insert(configType.typeName).inserted {
-					if rootedTypeNames.contains(configType.typeName) {
-						rootedConfigurationExtensions[configType.typeName] = configType.structCode
+			for configurationType in result.configurationTypes {
+				let typeName = configurationType.concreteType.asSource
+				if seenTypeNames.insert(typeName).inserted {
+					let structCode = ScopeGenerator.generateConfigurationStruct(
+						for: configurationType,
+						cycleEdges: cycleEdges,
+						sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+					)
+					if rootedTypeNames.contains(typeName) {
+						rootedConfigurationExtensions[typeName] = structCode
 					} else {
-						sharedConfigurationExtensions.append(configType)
+						sharedConfigurationExtensions.append(ConfigurationExtension(typeName: typeName, structCode: structCode))
 					}
 				}
 			}
@@ -371,7 +377,7 @@ public actor DependencyTreeGenerator {
 		let mergedGeneratedRoots = generatedRoots.map { result in
 			let configurationCode = rootedConfigurationExtensions[result.root.typeDescription.asSource].map { structCode in
 				generateMockConfigurationCode(
-					configurationExtensions: [(typeName: result.root.typeDescription.asSource, structCode: structCode)],
+					configurationExtensions: [ConfigurationExtension(typeName: result.root.typeDescription.asSource, structCode: structCode)],
 					mockConditionalCompilation: mockConditionalCompilation,
 				)
 			}
@@ -402,8 +408,21 @@ public actor DependencyTreeGenerator {
 		)
 	}
 
+	/// A mock root's generated code, with the nodes of the types whose `SafeDIMockConfiguration`
+	/// struct its tree needs, in the order the root reaches them.
+	private struct GeneratedMockRoot {
+		let root: GeneratedRoot
+		let configurationTypes: [ScopeGenerator.MockParameterNode]
+	}
+
+	/// A type's `SafeDIMockConfiguration` struct, emitted in an extension of the type.
+	private struct ConfigurationExtension {
+		let typeName: String
+		let structCode: String
+	}
+
 	private func generateMockConfigurationCode(
-		configurationExtensions: [(typeName: String, structCode: String)],
+		configurationExtensions: [ConfigurationExtension],
 		mockConditionalCompilation: String?,
 	) -> String {
 		let extensions = configurationExtensions.map { configurationExtension in
@@ -1476,6 +1495,27 @@ public actor DependencyTreeGenerator {
 		isReceived: Bool,
 		lazilyInstantiatedProperties: [Property],
 	) throws {
+		if property.propertyType.isConstant || isReceived {
+			throw invalidCycleError(
+				typesInCycle: typesInCycle,
+				property: property,
+				declarationLocation: declarationLocation,
+				directParent: directParent,
+				lazilyInstantiatedProperties: lazilyInstantiatedProperties,
+			)
+		}
+		// Fully-lazy cycle (Instantiator entry, not received) — valid, no error.
+	}
+
+	/// The error `throwIfInvalidCycle` throws for a cycle through `property` that is constant or received:
+	/// a constant or partially lazy cycle when `property` is constant, and a received-`Instantiator` cycle otherwise.
+	private func invalidCycleError(
+		typesInCycle: [TypeDescription],
+		property: Property,
+		declarationLocation: Dependency.DeclarationLocation?,
+		directParent: TypeDescription,
+		lazilyInstantiatedProperties: [Property],
+	) -> DependencyTreeGeneratorError {
 		let cycle = DependencyTreeGeneratorError.DependencyCycle(
 			declarationLocation: declarationLocation,
 			members: typesInCycle.map { typeDescription in
@@ -1489,18 +1529,17 @@ public actor DependencyTreeGenerator {
 		if property.propertyType.isConstant {
 			let hasLazyHop = typesInCycle.contains(where: { !$0.propertyType.isConstant })
 			if hasLazyHop {
-				throw DependencyTreeGeneratorError.partiallyLazyDependencyCycleDetected(cycle)
+				return .partiallyLazyDependencyCycleDetected(cycle)
 			} else {
-				throw DependencyTreeGeneratorError.constantDependencyCycleDetected(cycle)
+				return .constantDependencyCycleDetected(cycle)
 			}
-		} else if isReceived {
-			throw DependencyTreeGeneratorError.receivedInstantiatorDependencyCycleDetected(
+		} else {
+			return .receivedInstantiatorDependencyCycleDetected(
 				property: property,
 				directParent: directParent,
 				cycle: cycle,
 			)
 		}
-		// Fully-lazy cycle (Instantiator entry, not received) — valid, no error.
 	}
 
 	/// What a scope's subtree receives from its ancestors.
@@ -2542,12 +2581,12 @@ public actor DependencyTreeGenerator {
 						lazilyInstantiatedProperties: lazilyInstantiatedProperties,
 					)
 				} else {
-					try throwIfInvalidCycle(
+					// A received cycle is never valid.
+					throw invalidCycleError(
 						typesInCycle: ([validatedReceivedProperty] + instantiationStack[0...beingBuiltIndex]).map(\.typeDescription),
 						property: beingBuiltProperty,
 						declarationLocation: receive.declarationLocation,
 						directParent: scope.instantiable.concreteInstantiable,
-						isReceived: true,
 						lazilyInstantiatedProperties: lazilyInstantiatedProperties,
 					)
 				}

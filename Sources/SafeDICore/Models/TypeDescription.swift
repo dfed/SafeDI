@@ -187,7 +187,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	}
 
 	public struct TupleElement: Codable, Hashable, Sendable {
-		init(label: String? = nil, _ typeDescription: TypeDescription) {
+		public init(label: String? = nil, _ typeDescription: TypeDescription) {
 			self.label = label
 			self.typeDescription = typeDescription
 		}

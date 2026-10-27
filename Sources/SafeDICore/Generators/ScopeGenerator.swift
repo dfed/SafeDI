@@ -552,22 +552,58 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// the sibling's is the sibling's own non-optional property, which the first test finds, since
 		// a required property is never received only if available, or an optional one, which
 		// `unwrappedOptionalRequiredReceivedProperties` holds unwrapped.
+		// Each child's properties are looked up among the siblings rather than every sibling tested
+		// against each child, so a mock root with many children does not pay for every pair.
+		var siblingIndexByProperty = [Property: Int]()
+		for sibling in siblings {
+			siblingIndexByProperty[sibling.property] = sibling.index
+		}
+		// A lazily instantiated sibling is also received by value, as the instance it creates, unless
+		// another sibling declares that property itself.
+		for case let (instanceProperty?, index) in siblings.lazy.map({ ($0.instanceProperty, $0.index) })
+			where siblingIndexByProperty[instanceProperty] == nil
+		{
+			siblingIndexByProperty[instanceProperty] = index
+		}
 		var siblingDependencies = propertiesToGenerate.map { scope in
-			func requires(_ property: Property) -> Bool {
-				(scope.receivedProperties.contains(property)
-					&& !scope.onlyIfAvailableUnwrappedReceivedProperties.contains(property.asUnwrappedProperty))
-					// A required optional property can resolve to a sibling of its non-optional form:
-					// in a mock, or through an `onlyIfAvailable` receive of it above the receiver.
-					|| (!scope.unwrappedOptionalRequiredReceivedProperties.isEmpty && scope.unwrappedOptionalRequiredReceivedProperties.contains(property))
-					// An alias's optional property is provided by a sibling of its non-optional form too.
-					|| (!scope.requiredAliasFulfillingProperties.isEmpty
-						&& scope.requiredAliasFulfillingProperties.contains { $0 == property || $0.asUnwrappedProperty == property })
+			var dependencies = Set<Int>()
+			func isRequiredReceive(_ property: Property) -> Bool {
+				!scope.onlyIfAvailableUnwrappedReceivedProperties.contains(property.asUnwrappedProperty)
 			}
-			return Set(siblings.compactMap { sibling in
-				requires(sibling.property) || sibling.instanceProperty.map(requires) == true
-					? sibling.index
-					: nil
-			})
+			// A subtree can receive far more properties than this scope has children, or far fewer.
+			if scope.receivedProperties.count < siblings.count {
+				for property in scope.receivedProperties where isRequiredReceive(property) {
+					if let siblingIndex = siblingIndexByProperty[property] {
+						dependencies.insert(siblingIndex)
+					}
+				}
+			} else {
+				func isReceivedAndRequired(_ property: Property) -> Bool {
+					scope.receivedProperties.contains(property) && isRequiredReceive(property)
+				}
+				for sibling in siblings
+					where isReceivedAndRequired(sibling.property)
+					|| sibling.instanceProperty.map({ siblingIndexByProperty[$0] == sibling.index && isReceivedAndRequired($0) }) == true
+				{
+					dependencies.insert(sibling.index)
+				}
+			}
+			// A required optional property can resolve to a sibling of its non-optional form:
+			// in a mock, or through an `onlyIfAvailable` receive of it above the receiver.
+			for property in scope.unwrappedOptionalRequiredReceivedProperties {
+				if let siblingIndex = siblingIndexByProperty[property] {
+					dependencies.insert(siblingIndex)
+				}
+			}
+			// An alias's optional property is provided by a sibling of its non-optional form too.
+			for property in scope.requiredAliasFulfillingProperties {
+				for fulfillingProperty in [property, property.asUnwrappedProperty] {
+					if let siblingIndex = siblingIndexByProperty[fulfillingProperty] {
+						dependencies.insert(siblingIndex)
+					}
+				}
+			}
+			return dependencies
 		}
 		func dependsOn(_ dependencyIndex: Int, from dependentIndex: Int) -> Bool {
 			var visitedIndices = Set<Int>()
@@ -2039,7 +2075,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let child: String
 	}
 
-	/// Collects all unique configuration types from this scope's mock parameter tree.
+	/// Collects the nodes of all unique configuration types in this scope's mock parameter tree,
+	/// in the order this root reaches them. `generateMockCode` keeps the first root's node for each
+	/// type, in alphabetical root order, and generates its struct once with `generateConfigurationStruct`.
+	func collectConfigurationTypes() async -> [MockParameterNode] {
+		let parameterTree = await rootMockParameterTree
+		return Self.collectUniqueConfigurationTypes(from: parameterTree.propertyNodes)
+	}
+
+	/// The `SafeDIMockConfiguration` struct of a node `collectConfigurationTypes` returned.
 	/// Children edges are filtered against `cycleEdges` so the same back-edges are
 	/// removed across every root's view of a given type — required for type-level
 	/// consistency, since per-tree cycle detection (`isPropertyCycle`) breaks at
@@ -2048,24 +2092,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// struct must be `@Sendable`-typed because some root references them from a
 	/// `SendableInstantiator` scope. The set is computed once across all roots so
 	/// struct-per-type dedup remains consistent.
-	func collectConfigurationTypes(
+	static func generateConfigurationStruct(
+		for node: MockParameterNode,
 		cycleEdges: Set<CycleEdge>,
 		sendableConfigurationTypeNames: Set<String>,
-	) async -> [(typeName: String, structCode: String)] {
-		let parameterTree = await rootMockParameterTree
-		let uniqueTypes = Self.collectUniqueConfigurationTypes(from: parameterTree.propertyNodes)
-		let indent = Self.standardIndent
-		return uniqueTypes.map { node in
-			(
-				typeName: node.concreteType.asSource,
-				structCode: Self.generateConfigurationStruct(
-					for: node,
-					indent: indent,
-					cycleEdges: cycleEdges,
-					requiresSendable: sendableConfigurationTypeNames.contains(node.concreteType.asSource),
-				),
-			)
-		}
+	) -> String {
+		generateConfigurationStruct(
+			for: node,
+			indent: standardIndent,
+			cycleEdges: cycleEdges,
+			requiresSendable: sendableConfigurationTypeNames.contains(node.concreteType.asSource),
+		)
 	}
 
 	/// Concrete type names referenced by this scope's mock parameter tree from a
