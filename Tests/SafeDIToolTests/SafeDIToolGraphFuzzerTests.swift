@@ -125,28 +125,84 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(finding.reportLine(seed: knownIssue.seeds[0]) == "stale \(knownIssue.seeds[0]) \(knownIssue.reason)")
 	}
 
+	@Test
+	func finding_isKnownIssue_whenKnownIssueSeedCrashesCompilerInGeneratedMock() {
+		let knownIssue = Self.knownIssues[4]
+		let failure = GraphFuzzerFailure(
+			seed: knownIssue.seeds[0],
+			kind: .compilerCrashedOnGeneratedCode,
+			details: "The Swift compiler crashed.\nIn mock(t4:t1:safeDIOverrides:) at S705_T1+SafeDIMock.swift:19:5.",
+		)
+
+		#expect(GraphFuzzerFinding(failure: failure, knownIssue: knownIssue) == .knownIssue(knownIssue, failure))
+	}
+
+	@Test
+	func finding_isFailure_whenKnownIssueSeedCrashesCompilerInShapeThatDoesNotCrash() {
+		let knownIssue = Self.knownIssues[0]
+		let failure = GraphFuzzerFailure(
+			seed: knownIssue.seeds[0],
+			kind: .compilerCrashedOnGeneratedCode,
+			details: "The Swift compiler crashed.\nIn mock() at S9_Root0+SafeDIMock.swift:5:5.",
+		)
+
+		let finding = GraphFuzzerFinding(failure: failure, knownIssue: knownIssue)
+
+		#expect(finding == .failure(failure))
+		#expect(finding.reportLine(seed: knownIssue.seeds[0]) == "failure \(knownIssue.seeds[0]) the Swift compiler crashed on generated code")
+	}
+
+	@Test
+	func compilerCrash_namesCrashingDeclarationWithoutStackFrames_whenStandardErrorHoldsStackDump() throws {
+		let standardError = """
+		terminate called after throwing an instance of 'std::out_of_range'
+		  what():  map::at
+		Please submit a bug report (https://swift.org/contributing/#reporting-bugs) and include the crash backtrace.
+		Stack dump:
+		0.\tProgram arguments: /usr/bin/swift-frontend -frontend -c /tmp/safedi-verify-1/input_0_S705_Root0.swift
+		1.\tSwift version 6.2.4 (swift-6.2.4-RELEASE)
+		2.\tCompiling with the current language version
+		3.\tWhile running pass #1021 SILFunctionTransform "SendNonSendable" on SILFunction "@$s4mock".
+		 for 'mock(t4:t1:safeDIOverrides:)' (at /tmp/safedi-verify-1/S705_T1+SafeDIMock.swift:19:5)
+		 #0 0x00005630b6cd92d8 llvm::sys::PrintStackTrace(llvm::raw_ostream&, int) (/usr/bin/swift-frontend+0x731f2d8)
+		 #1 0x00005630b6cd70ae llvm::sys::RunSignalHandlers() (/usr/bin/swift-frontend+0x731d0ae)
+		"""
+
+		let crash = try #require(GraphFuzzerCompilerCrash(standardError: standardError))
+
+		#expect(crash.fileName == "S705_T1+SafeDIMock.swift")
+		#expect(crash.summary == """
+		The Swift compiler crashed.
+		1.\tSwift version 6.2.4 (swift-6.2.4-RELEASE)
+		2.\tCompiling with the current language version
+		3.\tWhile running pass #1021 SILFunctionTransform "SendNonSendable" on SILFunction "@$s4mock".
+		In mock(t4:t1:safeDIOverrides:) at S705_T1+SafeDIMock.swift:19:5.
+		""")
+	}
+
 	// MARK: Oracle sensitivity
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles generated code only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func compilationFailures_reportEachBrokenGraph_whenGeneratedCodeFailsToTypeCheckOrToLower() async throws {
-		let seeds = try await acceptedSmokeSeeds(count: 3)
+		// The smoke batch already shows that intact graphs compile, so only broken ones are needed here.
+		let seeds = try await acceptedSmokeSeeds(count: 2)
 		var toolRuns = [GraphFuzzerToolRuns]()
 		for seed in seeds {
 			try await toolRuns.append(GraphFuzzerOracle.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed)))
 		}
 		let prefix = { (seed: UInt64) in GraphFuzzerFixture.typeNamePrefix(forSeed: seed) }
 		// A type error, which the type checker reports.
-		toolRuns[1] = toolRuns[1].addingGeneratedFile(
-			named: "\(prefix(seeds[1]))Broken.swift",
-			contents: "func \(prefix(seeds[1]))broken() -> Int { \"not an integer\" }\n",
+		toolRuns[0] = toolRuns[0].addingGeneratedFile(
+			named: "\(prefix(seeds[0]))Broken.swift",
+			contents: "func \(prefix(seeds[0]))broken() -> Int { \"not an integer\" }\n",
 		)
 		// A closure that captures a local declared after it, which only lowering to SIL reports, and which a type
 		// error elsewhere in the same compilation would hide.
-		toolRuns[2] = toolRuns[2].addingGeneratedFile(
-			named: "\(prefix(seeds[2]))Broken.swift",
+		toolRuns[1] = toolRuns[1].addingGeneratedFile(
+			named: "\(prefix(seeds[1]))Broken.swift",
 			contents: """
-			func \(prefix(seeds[2]))broken() -> Int {
+			func \(prefix(seeds[1]))broken() -> Int {
 				func read() -> Int { value }
 				let value = read()
 				return value
@@ -157,9 +213,9 @@ struct SafeDIToolGraphFuzzerTests {
 
 		let failures = try GraphFuzzerOracle.compilationFailures(of: toolRuns)
 
-		#expect(failures.keys.sorted() == [seeds[1], seeds[2]])
+		#expect(failures.keys.sorted() == seeds)
+		#expect(failures[seeds[0]]?.kind == .generatedCodeDoesNotCompile)
 		#expect(failures[seeds[1]]?.kind == .generatedCodeDoesNotCompile)
-		#expect(failures[seeds[2]]?.kind == .generatedCodeDoesNotCompile)
 	}
 
 	@Test
@@ -308,27 +364,28 @@ struct SafeDIToolGraphFuzzerTests {
 	static let knownIssues: [GraphFuzzerKnownIssue] = [
 		GraphFuzzerKnownIssue(
 			reason: "Two types instantiate instantiators of different types under one label in a lazy cycle, and the generated builder closure for one is passed where the other is expected",
-			diagnostics: ["cannot convert value", "argument passed to call that takes no arguments"],
+			signatures: [.compilerError(containing: "cannot convert value"), .compilerError(containing: "argument passed to call that takes no arguments")],
 			seeds: [9, 321, 1_075, 1_334, 1_567, 1_599, 1_627, 1_681, 2_026, 2_101, 2_147, 2_903, 3_309, 3_741, 4_571, 4_652, 4_795],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "A mock passes an onlyIfAvailable receive the value of a property in the mock's tree that has the same label and a different type",
-			diagnostics: ["cannot convert value"],
+			signatures: [.compilerError(containing: "cannot convert value")],
 			seeds: [1_225, 1_877, 2_016, 2_810, 2_896, 3_128, 3_254, 3_403, 3_514, 3_638, 3_692, 4_330],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "A mock declares one label twice for onlyIfAvailable receives of that label with different types",
-			diagnostics: ["invalid redeclaration"],
+			signatures: [.compilerError(containing: "invalid redeclaration")],
 			seeds: [84, 96, 768, 3_952, 4_696],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "A mock reads a label before declaring it when an onlyIfAvailable receive of that label has a different type than a required receive of it",
-			diagnostics: ["before its declaration"],
+			signatures: [.compilerError(containing: "before its declaration")],
 			seeds: [2_306, 2_626],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "A mock root requires an instantiator of its own type through an alias, or a promoted dependency's subtree requires the mock root's alias of that dependency, and the mock captures the closure before declaring it",
-			diagnostics: ["before it is declared"],
+			// Swift 6.2 crashes on this generated mock, in its SendNonSendable SIL pass, instead of diagnosing it.
+			signatures: [.compilerError(containing: "before it is declared"), .compilerCrashInGeneratedMock],
 			seeds: [705, 1_062, 3_004],
 		),
 	]
@@ -344,8 +401,8 @@ struct SafeDIToolGraphFuzzerTests {
 		var problems = [String]()
 		var seenSeeds = Set<UInt64>()
 		for knownIssue in knownIssues {
-			if knownIssue.seeds.isEmpty || knownIssue.diagnostics.isEmpty {
-				problems.append("The known issue \"\(knownIssue.reason)\" lists no seeds or no diagnostics.")
+			if knownIssue.seeds.isEmpty || knownIssue.signatures.isEmpty {
+				problems.append("The known issue \"\(knownIssue.reason)\" lists no seeds or no signatures.")
 			}
 			if knownIssue.seeds != knownIssue.seeds.sorted() {
 				problems.append("The seeds of \"\(knownIssue.reason)\" are not in increasing order.")

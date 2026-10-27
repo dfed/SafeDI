@@ -799,6 +799,7 @@ struct GraphFuzzerFailure: Equatable {
 		case fixtureDoesNotCompile = "fixture does not compile on its own"
 		case runsDiffer = "two runs of the tool differ"
 		case runsDifferAcrossProcesses = "the tool's output differs between two processes"
+		case compilerCrashedOnGeneratedCode = "the Swift compiler crashed on generated code"
 	}
 
 	let seed: UInt64
@@ -838,16 +839,64 @@ struct GraphFuzzerResult {
 
 /// A known open defect: the seeds whose graphs fail today with one shape, and a one-line reason naming it.
 struct GraphFuzzerKnownIssue: Equatable {
+	/// How a failure of a known shape shows itself. Toolchains word the same defect differently, or crash on it,
+	/// so a shape lists each way it is known to fail; a known seed that fails any other way is a new failure.
+	enum Signature: Equatable {
+		/// The generated code fails to compile with an error whose message contains this text.
+		case compilerError(containing: String)
+		/// The Swift compiler crashes while compiling a generated mock.
+		case compilerCrashInGeneratedMock
+	}
+
 	let reason: String
-	/// Compiler diagnostics, any one of which a failure of this shape reports. A known seed whose generated code
-	/// fails to compile without reporting one of them fails a new way, and is reported as a new failure.
-	let diagnostics: [String]
+	let signatures: [Signature]
 	/// In increasing order. The ordinary suite checks the first; the long run checks every one it reaches.
 	let seeds: [UInt64]
 
 	/// Whether `failure` is the failure this issue documents.
 	func matches(_ failure: GraphFuzzerFailure) -> Bool {
-		failure.kind == .generatedCodeDoesNotCompile && diagnostics.contains { failure.details.contains($0) }
+		signatures.contains { signature in
+			switch signature {
+			case let .compilerError(text):
+				failure.kind == .generatedCodeDoesNotCompile && failure.details.contains(text)
+			case .compilerCrashInGeneratedMock:
+				failure.kind == .compilerCrashedOnGeneratedCode && failure.details.contains("+SafeDIMock.swift")
+			}
+		}
+	}
+}
+
+/// A crash of the Swift compiler, read from its standard error.
+struct GraphFuzzerCompilerCrash: Equatable {
+	/// The file holding the declaration the compiler was compiling when it crashed, from the stack dump's
+	/// `for '<declaration>' (at <path>:<line>:<column>)` line, if the dump names one.
+	let fileName: String?
+	/// What the compiler was doing when it crashed, without the stack frames.
+	let summary: String
+
+	/// `nil` unless `standardError` holds a compiler stack dump.
+	init?(standardError: String) {
+		guard standardError.contains("Stack dump:") else { return nil }
+		let lines = standardError.split(separator: "\n", omittingEmptySubsequences: false)
+		var summaryLines = ["The Swift compiler crashed."]
+		var fileName: String?
+		for line in lines {
+			let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+			if trimmedLine.hasPrefix("for '"), let locationStart = trimmedLine.range(of: "' (at ") {
+				let location = trimmedLine[locationStart.upperBound...].prefix { $0 != ")" }
+				let path = location.prefix { $0 != ":" }
+				fileName = path.split(separator: "/").last.map(String.init)
+				summaryLines.append("In \(trimmedLine[..<locationStart.lowerBound].dropFirst("for '".count)) at \(fileName ?? String(path))\(location.dropFirst(path.count)).")
+			} else if let first = trimmedLine.first, first.isNumber, trimmedLine.contains(".\t") || trimmedLine.contains(". "),
+			          !trimmedLine.hasPrefix("0.")
+			{
+				// The numbered lines after `Stack dump:`, other than the program arguments: the compiler version and
+				// what it was doing.
+				summaryLines.append(String(trimmedLine))
+			}
+		}
+		self.fileName = fileName
+		summary = summaryLines.joined(separator: "\n")
 	}
 }
 
@@ -1128,11 +1177,14 @@ enum GraphFuzzerOracle {
 		for (seed, diagnostics) in combinedFailures {
 			// A graph the tool rejected is compiled without generated code, so its failure is the fixture's own.
 			let fixtureFails = inputOnlyUnitsBySeed[seed] == nil || inputOnlyFailures[seed] != nil
-			failures[seed] = GraphFuzzerFailure(
-				seed: seed,
-				kind: fixtureFails ? .fixtureDoesNotCompile : .generatedCodeDoesNotCompile,
-				details: inputOnlyFailures[seed] ?? diagnostics,
-			)
+			let kind: GraphFuzzerFailure.Kind = if fixtureFails {
+				.fixtureDoesNotCompile
+			} else if diagnostics.isCompilerCrash {
+				.compilerCrashedOnGeneratedCode
+			} else {
+				.generatedCodeDoesNotCompile
+			}
+			failures[seed] = GraphFuzzerFailure(seed: seed, kind: kind, details: (inputOnlyFailures[seed] ?? diagnostics).text)
 		}
 		return failures
 	}
@@ -1150,13 +1202,34 @@ enum GraphFuzzerOracle {
 	}
 
 	/// The compiler errors of each unit that fails to compile, keyed by seed.
+	/// Why a unit failed to compile: its compiler errors, or a summary of the compiler's crash.
+	private struct UnitDiagnostics {
+		let text: String
+		let isCompilerCrash: Bool
+
+		init(standardError: String) {
+			if let crash = GraphFuzzerCompilerCrash(standardError: standardError) {
+				text = crash.summary
+				isCompilerCrash = true
+			} else {
+				text = standardError
+				isCompilerCrash = false
+			}
+		}
+
+		init(errorLines: [Substring]) {
+			text = errorLines.joined(separator: "\n")
+			isCompilerCrash = false
+		}
+	}
+
 	private static func diagnosticsOfFailingUnits(
 		_ units: [CompilationUnit],
 		outputDirectory: URL,
 		artifacts: SafeDIBuildArtifacts,
-	) throws -> [UInt64: String] {
+	) throws -> [UInt64: UnitDiagnostics] {
 		var remainingUnits = units
-		var diagnosticsBySeed = [UInt64: String]()
+		var diagnosticsBySeed = [UInt64: UnitDiagnostics]()
 		while !remainingUnits.isEmpty {
 			let result = try compileSwift(
 				sources: remainingUnits.flatMap(\.sources),
@@ -1165,6 +1238,7 @@ enum GraphFuzzerOracle {
 			)
 			guard result.exitCode != 0 else { break }
 			let errorLines = result.stderr.split(separator: "\n").filter { $0.contains(": error: ") }
+			let crash = GraphFuzzerCompilerCrash(standardError: result.stderr)
 			var attributedSeeds = Set<UInt64>()
 			for unit in remainingUnits {
 				let unitErrorLines = errorLines.filter { line in
@@ -1172,16 +1246,23 @@ enum GraphFuzzerOracle {
 					let fileName = line.prefix { $0 != ":" }.split(separator: "/").last ?? ""
 					return unit.contains(fileName: fileName)
 				}
-				guard !unitErrorLines.isEmpty else { continue }
-				attributedSeeds.insert(unit.seed)
-				diagnosticsBySeed[unit.seed] = unitErrorLines.joined(separator: "\n")
+				if let crash, let fileName = crash.fileName, unit.contains(fileName: Substring(fileName)) {
+					attributedSeeds.insert(unit.seed)
+					diagnosticsBySeed[unit.seed] = UnitDiagnostics(standardError: result.stderr)
+				} else if !unitErrorLines.isEmpty {
+					attributedSeeds.insert(unit.seed)
+					diagnosticsBySeed[unit.seed] = UnitDiagnostics(errorLines: unitErrorLines)
+				}
 			}
-			if attributedSeeds.isEmpty {
-				// No error names a graph, so compile each graph on its own to find the failing ones.
+			if attributedSeeds.isEmpty, remainingUnits.count == 1 {
+				diagnosticsBySeed[remainingUnits[0].seed] = UnitDiagnostics(standardError: result.stderr)
+				break
+			} else if attributedSeeds.isEmpty {
+				// Nothing names a graph, so compile each graph on its own to find the failing ones.
 				for unit in remainingUnits {
 					let unitResult = try compileSwift(sources: unit.sources, outputDirectory: outputDirectory, artifacts: artifacts)
 					if unitResult.exitCode != 0 {
-						diagnosticsBySeed[unit.seed] = unitResult.stderr
+						diagnosticsBySeed[unit.seed] = UnitDiagnostics(standardError: unitResult.stderr)
 					}
 				}
 				break
