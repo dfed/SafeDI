@@ -529,8 +529,9 @@ public actor DependencyTreeGenerator {
 		/// `@Instantiable` declaration. See `DependencyCycle`.
 		case partiallyLazyDependencyCycleDetected(DependencyCycle)
 		/// Reported at the `@Received` declaration on `directParent` that closes the cycle, with a note at each
-		/// member type’s `@Instantiable` declaration. See `DependencyCycle`.
-		case receivedInstantiatorDependencyCycleDetected(property: Property, directParent: TypeDescription, cycle: DependencyCycle)
+		/// member type’s `@Instantiable` declaration. See `DependencyCycle`. `aliasProperty` is the declared property
+		/// when that declaration is a `@Received(fulfilledByDependencyNamed:ofType:)` alias that `property` fulfills.
+		case receivedInstantiatorDependencyCycleDetected(property: Property, aliasProperty: Property?, directParent: TypeDescription, cycle: DependencyCycle)
 		/// Reported at the `@Received` declaration that closes the chain: the one that receives `instantiated` back
 		/// inside the tree `instantiated` creates, or inside the tree of a sibling that the chain reaches. The
 		/// properties can be of any type, `Instantiator`s included. No notes; the chain is spelled out in the message.
@@ -597,8 +598,13 @@ public actor DependencyTreeGenerator {
 				cycle.sourceDiagnostics(summary: "Dependency cycle detected: \(cycle.asSource)\(Self.lazilyInstantiatedHint(for: cycle.lazilyInstantiatedProperties))")
 			case let .partiallyLazyDependencyCycleDetected(cycle):
 				cycle.sourceDiagnostics(summary: "Dependency cycle detected. Cycles with a mix of constant and lazy (Instantiator) dependencies cannot be resolved. Make all dependencies in the cycle lazy by using Instantiator: \(cycle.asSource)\(Self.lazilyInstantiatedHint(for: cycle.lazilyInstantiatedProperties))")
-			case let .receivedInstantiatorDependencyCycleDetected(property, directParent, cycle):
-				cycle.sourceDiagnostics(summary: "Dependency cycle detected! @\(Dependency.Source.instantiatedRawValue) `\(property.asSource)` is @\(Dependency.Source.receivedRawValue) in tree created by @\(Dependency.Source.instantiatedRawValue) `\(property.asSource)`. Declare @\(Dependency.Source.receivedRawValue) `\(property.asSource)` on `\(directParent.asSource)` as @\(Dependency.Source.instantiatedRawValue) to fix. Full cycle: \(cycle.asSource)")
+			case let .receivedInstantiatorDependencyCycleDetected(property, aliasProperty, directParent, cycle):
+				if let aliasProperty {
+					// The alias, not a declaration of `property`, is what `directParent` would declare as instantiated.
+					cycle.sourceDiagnostics(summary: "Dependency cycle detected! @\(Dependency.Source.instantiatedRawValue) `\(property.asSource)` is @\(Dependency.Source.receivedRawValue) as `\(aliasProperty.asSource)` in tree created by @\(Dependency.Source.instantiatedRawValue) `\(property.asSource)`. Declare @\(Dependency.Source.receivedRawValue)(fulfilledByDependencyNamed:ofType:) `\(aliasProperty.asSource)` on `\(directParent.asSource)` as @\(Dependency.Source.instantiatedRawValue) to fix. Full cycle: \(cycle.asSource)")
+				} else {
+					cycle.sourceDiagnostics(summary: "Dependency cycle detected! @\(Dependency.Source.instantiatedRawValue) `\(property.asSource)` is @\(Dependency.Source.receivedRawValue) in tree created by @\(Dependency.Source.instantiatedRawValue) `\(property.asSource)`. Declare @\(Dependency.Source.receivedRawValue) `\(property.asSource)` on `\(directParent.asSource)` as @\(Dependency.Source.instantiatedRawValue) to fix. Full cycle: \(cycle.asSource)")
+				}
 			case let .dependencyReceivedInSameChainItIsInstantiated(instantiated, receivedPropertyChain, declarationLocation, lazilyInstantiatedProperties):
 				[
 					SourceDiagnostic(
@@ -1166,7 +1172,7 @@ public actor DependencyTreeGenerator {
 				property: propertyForDependency,
 				declarationLocation: dependency.declarationLocation,
 				directParent: scope.instantiable.concreteInstantiable,
-				isReceived: dependency.source.isReceived,
+				closingReceive: Self.closingReceive(of: dependency, in: scope),
 				lazilyInstantiatedProperties: Self.lazilyInstantiatedProperties(
 					closingCycleWith: declaredPropertyForDependency,
 					validatedPropertiesInCycle: propertiesInCycle,
@@ -1474,7 +1480,7 @@ public actor DependencyTreeGenerator {
 	/// Rejected:
 	/// - Constant entry point in a fully-constant cycle → `.constantDependencyCycleDetected`.
 	/// - Constant entry point with any lazy hop → `.partiallyLazyDependencyCycleDetected`.
-	/// - Non-constant entry point that originated from an `@Received` → `.receivedInstantiatorDependencyCycleDetected`.
+	/// - Non-constant entry point that originated from a receive (`closingReceive` is not `nil`) → `.receivedInstantiatorDependencyCycleDetected`.
 	///
 	/// Accepted (returns without throwing):
 	/// - Fully-lazy cycles entered via an `Instantiator` that is NOT received.
@@ -1492,15 +1498,16 @@ public actor DependencyTreeGenerator {
 		property: Property,
 		declarationLocation: Dependency.DeclarationLocation?,
 		directParent: TypeDescription,
-		isReceived: Bool,
+		closingReceive: CycleClosingReceive?,
 		lazilyInstantiatedProperties: [Property],
 	) throws {
-		if property.propertyType.isConstant || isReceived {
+		if property.propertyType.isConstant || closingReceive != nil {
 			throw invalidCycleError(
 				typesInCycle: typesInCycle,
 				property: property,
 				declarationLocation: declarationLocation,
 				directParent: directParent,
+				aliasProperty: closingReceive?.aliasProperty,
 				lazilyInstantiatedProperties: lazilyInstantiatedProperties,
 			)
 		}
@@ -1509,11 +1516,13 @@ public actor DependencyTreeGenerator {
 
 	/// The error `throwIfInvalidCycle` throws for a cycle through `property` that is constant or received:
 	/// a constant or partially lazy cycle when `property` is constant, and a received-`Instantiator` cycle otherwise.
+	/// - Parameter aliasProperty: The `CycleClosingReceive.aliasProperty` of the receive that closes a received cycle.
 	private func invalidCycleError(
 		typesInCycle: [TypeDescription],
 		property: Property,
 		declarationLocation: Dependency.DeclarationLocation?,
 		directParent: TypeDescription,
+		aliasProperty: Property?,
 		lazilyInstantiatedProperties: [Property],
 	) -> DependencyTreeGeneratorError {
 		let cycle = DependencyTreeGeneratorError.DependencyCycle(
@@ -1536,9 +1545,39 @@ public actor DependencyTreeGenerator {
 		} else {
 			return .receivedInstantiatorDependencyCycleDetected(
 				property: property,
+				aliasProperty: aliasProperty,
 				directParent: directParent,
 				cycle: cycle,
 			)
+		}
+	}
+
+	/// The receive that closes a cycle: a dependency that receives a property in the cycle that is still being built.
+	private struct CycleClosingReceive {
+		/// The declared property when the dependency is a `@Received(fulfilledByDependencyNamed:ofType:)` alias that the
+		/// property in the cycle fulfills, and `nil` when the dependency receives that property as declared.
+		let aliasProperty: Property?
+	}
+
+	/// The receive by which `dependency` of `scope` closes a cycle through the property it is fulfilled by
+	/// (`dependency.source.fulfillingProperty ?? dependency.property`), which is still being built, or `nil` when
+	/// `dependency` does not receive that property. Production's walk of received properties counts a required
+	/// alias the same way, since `Scope.requiredReceivedProperties` lists its fulfilling property.
+	private static func closingReceive(of dependency: Dependency, in scope: Scope) -> CycleClosingReceive? {
+		switch dependency.source {
+		case .received:
+			CycleClosingReceive(aliasProperty: nil)
+		case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+			// An alias receives its fulfilling property, unless it is `onlyIfAvailable` – generation does not create it
+			// while that property is still being built, and passes `nil` in its place – or `scope` creates the property,
+			// which the alias then refers to, so the dependency that creates it is what closes the cycle.
+			if onlyIfAvailable || scope.createdProperties.contains(fulfillingProperty) {
+				nil
+			} else {
+				CycleClosingReceive(aliasProperty: dependency.property)
+			}
+		case .instantiated, .forwarded:
+			nil
 		}
 	}
 
@@ -2284,7 +2323,7 @@ public actor DependencyTreeGenerator {
 						property: childProperty,
 						declarationLocation: requiredReceivedProperty.declarationLocation,
 						directParent: directParent,
-						isReceived: !childProperty.propertyType.isConstant,
+						closingReceive: CycleClosingReceive(aliasProperty: requiredReceivedProperty.aliasProperty),
 						lazilyInstantiatedProperties: Self.lazilyInstantiatedProperties(
 							closingCycleWith: requiredReceivedProperty.property,
 							validatedPropertiesInCycle: propertiesInCycle,
@@ -2446,6 +2485,7 @@ public actor DependencyTreeGenerator {
 					_ = try validateNoCycleInReceivedProperties(
 						[Scope.RequiredReceivedProperty(
 							property: fulfillingProperty,
+							aliasProperty: receivedProperty,
 							declarationLocation: requiredReceivedProperty.declarationLocation,
 							identifierRange: nil,
 							typeAnnotationRange: nil,
@@ -2557,7 +2597,7 @@ public actor DependencyTreeGenerator {
 					property: propertyForDependency,
 					declarationLocation: dependency.declarationLocation,
 					directParent: scope.instantiable.concreteInstantiable,
-					isReceived: dependency.source.isReceived,
+					closingReceive: Self.closingReceive(of: dependency, in: scope),
 					lazilyInstantiatedProperties: Self.lazilyInstantiatedProperties(
 						closingCycleWith: declaredPropertyForDependency,
 						validatedPropertiesInCycle: propertiesInCycle,
@@ -2587,6 +2627,7 @@ public actor DependencyTreeGenerator {
 						property: beingBuiltProperty,
 						declarationLocation: receive.declarationLocation,
 						directParent: scope.instantiable.concreteInstantiable,
+						aliasProperty: receive.aliasProperty,
 						lazilyInstantiatedProperties: lazilyInstantiatedProperties,
 					)
 				}

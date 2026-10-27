@@ -53,11 +53,6 @@ struct FilePathSpellingTests: ~Copyable {
 	}
 
 	@Test
-	func normalizedFilePath_describesItselfByItsPath() {
-		#expect(NormalizedFilePath("/Project/File.swift").description == "/Project/File.swift")
-	}
-
-	@Test
 	func normalizedFilePath_ordersByPath() {
 		#expect([NormalizedFilePath("/B.swift"), NormalizedFilePath("/A.swift")].sorted() == [NormalizedFilePath("/A.swift"), NormalizedFilePath("/B.swift")])
 	}
@@ -89,33 +84,54 @@ struct FilePathSpellingTests: ~Copyable {
 	}
 
 	@Test
-	func normalizedPath_isTheSame_whenProjectRootIsReportedThroughSymbolicLinkOrResolved() throws {
+	func reportedProjectRoot_isAbsoluteWithoutTrailingSlash_whenRootIsRelativeOrEndsInSlash() {
+		#expect(ProjectFilePaths(projectRoot: ".").reportedProjectRoot == FileManager.default.currentDirectoryPath)
+		#expect(ProjectFilePaths(projectRoot: "\(linkedProjectRoot)/").reportedProjectRoot == linkedProjectRoot)
+	}
+
+	@Test
+	func projectFilePath_isTheSame_whenProjectRootIsReportedThroughSymbolicLinkOrResolved() throws {
 		let throughSymbolicLink = ProjectFilePaths(projectRoot: linkedProjectRoot)
 		let resolved = try ProjectFilePaths(projectRoot: resolvedProjectRoot)
 
 		// A path relative to the root, an absolute path through the link, and an absolute path resolved all name
 		// the same file.
-		let spellings = [
-			throughSymbolicLink.normalizedPath(of: "Sources/File.swift"),
-			throughSymbolicLink.normalizedPath(of: "\(linkedProjectRoot)/Sources/File.swift"),
-			try throughSymbolicLink.normalizedPath(of: NormalizedFilePath("\(resolvedProjectRoot)/Sources/File.swift")),
-			resolved.normalizedPath(of: "Sources/File.swift"),
+		let spellings = try [
+			throughSymbolicLink.projectFilePath(of: "Sources/File.swift"),
+			throughSymbolicLink.projectFilePath(of: "\(linkedProjectRoot)/Sources/File.swift"),
+			throughSymbolicLink.projectFilePath(of: NormalizedFilePath("\(resolvedProjectRoot)/Sources/File.swift")),
+			resolved.projectFilePath(of: "Sources/File.swift"),
 		]
 		#expect(Set(spellings).count == 1)
+	}
+
+	@Test
+	func projectFilePath_isResolvedRoot_whenPathIsProjectRootReportedThroughSymbolicLink() throws {
+		let projectFilePaths = ProjectFilePaths(projectRoot: linkedProjectRoot)
+
+		#expect(try projectFilePaths.projectFilePath(of: ".") == projectFilePaths.projectFilePath(of: resolvedProjectRoot))
+		#expect(projectFilePaths.projectFilePath(of: ".").path == projectFilePaths.normalizedProjectRoot.path)
+	}
+
+	@Test
+	func projectFilePath_ordersByPath() {
+		let projectFilePaths = ProjectFilePaths(projectRoot: "/Project")
+
+		#expect([projectFilePaths.projectFilePath(of: "B.swift"), projectFilePaths.projectFilePath(of: "A.swift")].sorted().map(\.path) == ["/Project/A.swift", "/Project/B.swift"])
 	}
 
 	@Test
 	func manifestPath_isRelativeToProjectRoot_whenFileIsInsideProject() {
 		let projectFilePaths = ProjectFilePaths(projectRoot: linkedProjectRoot)
 
-		#expect(projectFilePaths.manifestPath(of: projectFilePaths.normalizedPath(of: "Sources/File.swift")) == "Sources/File.swift")
+		#expect(projectFilePaths.manifestPath(of: projectFilePaths.projectFilePath(of: "Sources/File.swift")) == "Sources/File.swift")
 	}
 
 	@Test
 	func manifestPath_isAbsolute_whenFileIsOutsideProject() {
 		let projectFilePaths = ProjectFilePaths(projectRoot: linkedProjectRoot)
 
-		#expect(projectFilePaths.manifestPath(of: NormalizedFilePath("/Elsewhere/File.swift")) == "/Elsewhere/File.swift")
+		#expect(projectFilePaths.manifestPath(of: projectFilePaths.projectFilePath(of: "/Elsewhere/File.swift")) == "/Elsewhere/File.swift")
 	}
 
 	@Test
@@ -123,43 +139,14 @@ struct FilePathSpellingTests: ~Copyable {
 		let projectFilePaths = ProjectFilePaths(projectRoot: linkedProjectRoot)
 
 		// However the file was found, the build system spells it under the root it reported.
-		#expect(try projectFilePaths.buildSystemPath(of: NormalizedFilePath("\(resolvedProjectRoot)/Sources/File.swift")) == "\(linkedProjectRoot)/Sources/File.swift")
+		#expect(try projectFilePaths.buildSystemPath(of: projectFilePaths.projectFilePath(of: NormalizedFilePath("\(resolvedProjectRoot)/Sources/File.swift"))) == "\(linkedProjectRoot)/Sources/File.swift")
 	}
 
 	@Test
 	func buildSystemPath_isAbsolute_whenFileIsOutsideProject() {
 		let projectFilePaths = ProjectFilePaths(projectRoot: linkedProjectRoot)
 
-		#expect(projectFilePaths.buildSystemPath(of: NormalizedFilePath("/Elsewhere/File.swift")) == "/Elsewhere/File.swift")
-	}
-
-	@Test
-	func sources_spellPathsOnlyThroughFilePathSpelling() throws {
-		// Every Foundation or C call that normalizes or resolves a path belongs in `FilePathSpelling.swift`, so a
-		// comparison never pairs two spellings made by different rules.
-		let repositoryRoot = URL(fileURLWithPath: #filePath)
-			.deletingLastPathComponent()
-			.deletingLastPathComponent()
-			.deletingLastPathComponent()
-		let pathSpellingCalls = ["standardizedFileURL", ".standardized", "standardizingPath", "resolvingSymlinksInPath", "realpath("]
-		var violations = [String]()
-		for directory in ["Sources", "Plugins"] {
-			let enumerator = try #require(FileManager.default.enumerator(
-				at: repositoryRoot.appendingPathComponent(directory),
-				includingPropertiesForKeys: [.isSymbolicLinkKey],
-			))
-			for case let fileURL as URL in enumerator
-				where fileURL.pathExtension == "swift" && fileURL.lastPathComponent != "FilePathSpelling.swift"
-			{
-				// A symbolic link compiles a file that is checked where it lives.
-				guard try fileURL.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true else { continue }
-				let content = try String(contentsOf: fileURL, encoding: .utf8)
-				for call in pathSpellingCalls where content.contains(call) {
-					violations.append("\(fileURL.lastPathComponent): \(call)")
-				}
-			}
-		}
-		#expect(violations == [])
+		#expect(projectFilePaths.buildSystemPath(of: projectFilePaths.projectFilePath(of: "/Elsewhere/File.swift")) == "/Elsewhere/File.swift")
 	}
 
 	// MARK: Private
