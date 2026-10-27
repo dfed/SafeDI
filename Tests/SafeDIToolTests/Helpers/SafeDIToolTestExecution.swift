@@ -198,7 +198,7 @@ func executeSafeDIToolTest(
 				.joined(separator: ",")
 				.write(to: scanCSV, atomically: true, encoding: .utf8)
 
-			try await performScan(
+			let scannedModuleInfo = try await performScan(
 				inputSourcesFile: scanCSV.relativePath,
 				projectRoot: projectRoot.path,
 				outputDirectory: outputDirectory.path,
@@ -207,6 +207,12 @@ func executeSafeDIToolTest(
 				activeCompilationConditions: Set(activeCompilationConditions),
 			)
 			manifestPath = manifestFile.relativePath
+			// Every fixture that runs scan checks that its cache reads back exactly what scan wrote, so a
+			// field the binary coder drops fails whichever tests give that field a value.
+			let scanCacheURL = scannedModuleInfoURL(forManifestPath: manifestFile.relativePath)
+			filesToDelete.append(scanCacheURL)
+			let scanCache = try Data(contentsOf: scanCacheURL)
+			#expect(try reflectedDescription(of: CachedScannedModuleInfo(scanCacheData: scanCache)) == reflectedDescription(of: scannedModuleInfo))
 
 			filesToDelete.append(scanCSV)
 
@@ -219,7 +225,6 @@ func executeSafeDIToolTest(
 					try resolvingDirectoryPlaceholders(in: content).write(to: fileURL, atomically: true, encoding: .utf8)
 					try scannedModificationTime.apply(toItemAtPath: fileURL.path)
 				}
-				filesToDelete.append(scannedModuleInfoURL(forManifestPath: manifestFile.relativePath))
 			}
 		}
 
@@ -306,7 +311,7 @@ func executeSafeDIToolTest(
 			nil
 		}
 
-		let moduleInfo = try JSONDecoder().decode(ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput))
+		let moduleInfo = try ModuleInfo(moduleInfoData: Data(contentsOf: moduleInfoOutput))
 		if let generatedFiles, !generatedFiles.isEmpty, !skipCompileVerification {
 			try verifyGeneratedCodeCompiles(
 				inputSwiftFiles: swiftFiles,
