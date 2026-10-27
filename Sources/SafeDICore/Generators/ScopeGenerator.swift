@@ -519,19 +519,45 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// the sibling's is the sibling's own non-optional property, which the first test finds, since
 		// a required property is never received only if available, or an optional one, which
 		// `unwrappedOptionalRequiredReceivedProperties` holds unwrapped.
+		// Each child's properties are looked up among the siblings rather than every sibling tested
+		// against each child, so a mock root with many children does not pay for every pair.
+		var siblingIndexByProperty = [Property: Int]()
+		for sibling in siblings {
+			siblingIndexByProperty[sibling.property] = sibling.index
+		}
 		var siblingDependencies = propertiesToGenerate.map { scope in
-			Set(siblings.compactMap { sibling in
-				(scope.receivedProperties.contains(sibling.property)
-					&& !scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property.asUnwrappedProperty))
-					// A required optional property can resolve to a sibling of its non-optional form:
-					// in a mock, or through an `onlyIfAvailable` receive of it above the receiver.
-					|| (!scope.unwrappedOptionalRequiredReceivedProperties.isEmpty && scope.unwrappedOptionalRequiredReceivedProperties.contains(sibling.property))
-					// An alias's optional property is provided by a sibling of its non-optional form too.
-					|| (!scope.requiredAliasFulfillingProperties.isEmpty
-						&& scope.requiredAliasFulfillingProperties.contains { $0 == sibling.property || $0.asUnwrappedProperty == sibling.property })
-					? sibling.index
-					: nil
-			})
+			var dependencies = Set<Int>()
+			func isRequiredReceive(_ property: Property) -> Bool {
+				!scope.onlyIfAvailableUnwrappedReceivedProperties.contains(property.asUnwrappedProperty)
+			}
+			// A subtree can receive far more properties than this scope has children, or far fewer.
+			if scope.receivedProperties.count < siblings.count {
+				for property in scope.receivedProperties where isRequiredReceive(property) {
+					if let siblingIndex = siblingIndexByProperty[property] {
+						dependencies.insert(siblingIndex)
+					}
+				}
+			} else {
+				for sibling in siblings where scope.receivedProperties.contains(sibling.property) && isRequiredReceive(sibling.property) {
+					dependencies.insert(sibling.index)
+				}
+			}
+			// A required optional property can resolve to a sibling of its non-optional form:
+			// in a mock, or through an `onlyIfAvailable` receive of it above the receiver.
+			for property in scope.unwrappedOptionalRequiredReceivedProperties {
+				if let siblingIndex = siblingIndexByProperty[property] {
+					dependencies.insert(siblingIndex)
+				}
+			}
+			// An alias's optional property is provided by a sibling of its non-optional form too.
+			for property in scope.requiredAliasFulfillingProperties {
+				for fulfillingProperty in [property, property.asUnwrappedProperty] {
+					if let siblingIndex = siblingIndexByProperty[fulfillingProperty] {
+						dependencies.insert(siblingIndex)
+					}
+				}
+			}
+			return dependencies
 		}
 		func dependsOn(_ dependencyIndex: Int, from dependentIndex: Int) -> Bool {
 			var visitedIndices = Set<Int>()
