@@ -546,18 +546,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		// An `onlyIfAvailable` alias a receiver requires is built after its fulfilling
 		// sibling, as a required alias is. A sibling that receives the alias only if
-		// available then waits on it only when that does not close a cycle.
+		// available then waits on it only when that does not close a cycle (below).
 		for case let (index, aliasProperty?) in propertiesToGenerate.map(\.property).enumerated()
 			where requiredOnlyIfAvailableAliasProperties.contains(aliasProperty)
 		{
 			for sibling in siblings where propertiesToGenerate[index].receivedProperties.contains(sibling.property) {
-				if dependsOn(index, from: sibling.index) {
-					for (receiverIndex, receiver) in propertiesToGenerate.enumerated()
-						where receiver.onlyIfAvailableUnwrappedReceivedProperties.contains(aliasProperty.asUnwrappedProperty)
-					{
-						siblingDependencies[receiverIndex].remove(index)
-					}
-				}
 				siblingDependencies[index].insert(sibling.index)
 			}
 		}
