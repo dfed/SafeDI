@@ -14,6 +14,8 @@ name: Graph Fuzzer
 # weekly and opens an issue when it fails. Dispatch it by hand with another
 # starting seed and a number of graphs to explore new graphs.
 on:
+  # DO NOT MERGE: a trigger only for timing the long run on Linux.
+  pull_request:
   # A called run checks out the commit that triggered its caller: the commit
   # being published, or main's head for the weekly run. It restores no cache,
   # so nothing another run left behind is built or executed.
