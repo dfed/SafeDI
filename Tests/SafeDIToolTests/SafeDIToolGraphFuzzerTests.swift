@@ -371,7 +371,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `swiftc` invocation when nothing fails.
 	static let smokeSeeds: [UInt64] = [5, 6, 330, 426]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x9194_EE53_C9F6_1C98
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x9194EE53C9F61C98
 
 	/// The seeds `graph-fuzzer.yml` runs before every release and weekly, `0..<scheduledSeedCount`, which
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=scheduled` selects. `knownIssues` lists every one that fails.
@@ -380,8 +380,8 @@ struct SafeDIToolGraphFuzzerTests {
 	static let scheduledCorpusFixtureHash: UInt64 = 0x812957047246024D
 
 	/// How many of the scheduled seeds' graphs the tool accepts, and a hash of which ones.
-	static let scheduledAcceptedSeedCount = 2814
-	static let scheduledAcceptedSeedsHash: UInt64 = 0x2893_1406_4BAB_E7C2
+	static let scheduledAcceptedSeedCount = 2_814
+	static let scheduledAcceptedSeedsHash: UInt64 = 0x289314064BABE7C2
 
 	/// Seeds in `0..<scheduledSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
@@ -389,7 +389,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "A mock root's own onlyIfAvailable receive and a dependency the mock root promotes and builds share a label with different types, and the mock binds both under that label",
 			signatures: [.compilerError(containing: "invalid redeclaration")],
-			seeds: [2810],
+			seeds: [2_810],
 		),
 	]
 
