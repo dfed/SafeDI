@@ -55,12 +55,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		self.property = property
 		self.propertiesToGenerate = propertiesToGenerate
+		// This runs at every scope of every tree, and nearly every child is outside every cycle.
 		var childCycleClosingProperties = Set<Property>()
-		for child in propertiesToGenerate where !child.cycleClosingProperties.isEmpty {
+		var childrenTakePartInCycle = false
+		for child in propertiesToGenerate where child.isReferencedByCycleClosingScope || !child.cycleClosingProperties.isEmpty {
 			childCycleClosingProperties.formUnion(child.cycleClosingProperties)
+			childrenTakePartInCycle = true
 		}
-		childrenTakePartInCycle = !childCycleClosingProperties.isEmpty
-			|| propertiesToGenerate.contains(where: \.isReferencedByCycleClosingScope)
+		self.childrenTakePartInCycle = childrenTakePartInCycle
 		declaresBuilderFunction = property != nil && !isPropertyCycle
 		if let property, isPropertyCycle {
 			cycleClosingProperties = [property]
