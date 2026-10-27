@@ -23,15 +23,42 @@ import SafeDICore
 import SwiftParser
 import SwiftSyntax
 
+/// What a module's files declare. Every list is ordered by what the files declare, never by the order in
+/// which parallel parsing finished the files or by how `generate` assembled the module, so the module info
+/// `generate` writes for the same files is the same bytes every time.
 struct ModuleInfo: Codable {
-	/// The imports generated dependency-tree code needs.
+	/// A module with `imports`, `mockImports`, `filesWithUnexpectedNodes`, and `conditionalCompilationDecisions`
+	/// sorted, whatever order they are given in, and all but `filesWithUnexpectedNodes` without duplicates.
+	init(
+		imports: [ImportStatement],
+		mockImports: [ImportStatement],
+		instantiables: [Instantiable],
+		configurations: [SafeDIConfiguration],
+		filesWithUnexpectedNodes: [String]?,
+		conditionalCompilationDecisions: [ConditionalCompilationDecision],
+	) {
+		self.imports = imports.sortedWithoutDuplicates()
+		self.mockImports = mockImports.sortedWithoutDuplicates()
+		self.instantiables = instantiables
+		self.configurations = configurations
+		self.filesWithUnexpectedNodes = filesWithUnexpectedNodes?.sorted()
+		self.conditionalCompilationDecisions = Set(conditionalCompilationDecisions).sorted()
+	}
+
+	/// The imports generated dependency-tree code needs, from every file that declares SafeDI content,
+	/// sorted and without duplicates.
 	let imports: [ImportStatement]
 	/// The imports generated mock code needs, found by evaluating each `#if` block that guards only imports
-	/// as if the module's mock condition were active. A module that depends on this one generates mocks
-	/// that reference this module's mock-only declarations, so it imports these into its own mocks.
+	/// as if the module's mock condition were active, sorted and without duplicates. A module that depends on
+	/// this one generates mocks that reference this module's mock-only declarations, so it imports these into
+	/// its own mocks.
 	let mockImports: [ImportStatement]
+	/// Ordered by file path and, within each file, by declaration order. Those found in files reached through
+	/// `#SafeDIConfiguration(additionalDirectoriesToInclude:)` follow those of the module's own files.
 	let instantiables: [Instantiable]
+	/// Ordered by file path and, within each file, by declaration order.
 	let configurations: [SafeDIConfiguration]
+	/// The files with syntax errors, sorted.
 	let filesWithUnexpectedNodes: [String]?
 	/// How each `#if` condition guarding SafeDI declarations was evaluated, sorted and without duplicates.
 	/// Generated code asserts these at compile time.
@@ -358,7 +385,7 @@ extension ModuleInfo {
 			instantiables: instantiables + additionalModuleInfo.instantiables,
 			configurations: configurations,
 			filesWithUnexpectedNodes: filesWithUnexpectedNodes.map { $0 + (additionalModuleInfo.filesWithUnexpectedNodes ?? []) } ?? additionalModuleInfo.filesWithUnexpectedNodes,
-			conditionalCompilationDecisions: Set(conditionalCompilationDecisions + additionalModuleInfo.conditionalCompilationDecisions).sorted(),
+			conditionalCompilationDecisions: conditionalCompilationDecisions + additionalModuleInfo.conditionalCompilationDecisions,
 		)
 	}
 
@@ -369,29 +396,47 @@ extension ModuleInfo {
 		return ModuleInfo(
 			imports: imports + addedModuleInfo.imports,
 			mockImports: mockImports + addedModuleInfo.mockImports,
-			// Each file's instantiables are all in one of the two lists, so sorting keeps each file's declaration order.
+			// Each file's declarations are all in one of the two lists, so sorting keeps each file's declaration order.
 			instantiables: (instantiables + addedModuleInfo.instantiables).sortedByDeclaration(),
-			configurations: configurations + addedModuleInfo.configurations,
+			configurations: (configurations + addedModuleInfo.configurations).sortedByDeclaration(),
 			filesWithUnexpectedNodes: filesWithUnexpectedNodes.map { $0 + (addedModuleInfo.filesWithUnexpectedNodes ?? []) } ?? addedModuleInfo.filesWithUnexpectedNodes,
-			conditionalCompilationDecisions: Set(conditionalCompilationDecisions + addedModuleInfo.conditionalCompilationDecisions).sorted(),
+			conditionalCompilationDecisions: conditionalCompilationDecisions + addedModuleInfo.conditionalCompilationDecisions,
 		)
 	}
 
-	/// The module the files contributed to, with instantiables in declaration order.
+	/// The module the files contributed to, in file path order whatever order `fileScans` is in.
 	init(_ fileScans: [FileScan]) {
-		var conditionalCompilationDecisions = Set<ConditionalCompilationDecision>()
-		for fileScan in fileScans {
-			conditionalCompilationDecisions.formUnion(fileScan.conditionalCompilationDecisions)
-		}
+		// Files are parsed in parallel, so `fileScans` arrive in the order their parses finished.
+		let fileScans = fileScans.sorted { $0.path < $1.path }
 		let filesWithUnexpectedNodes = fileScans.filter(\.encounteredUnexpectedNodes).map(\.path)
 		self.init(
 			imports: fileScans.flatMap(\.imports),
 			mockImports: fileScans.flatMap(\.mockImports),
-			instantiables: fileScans.flatMap(\.instantiables).sortedByDeclaration(),
+			instantiables: fileScans.flatMap(\.instantiables),
 			configurations: fileScans.flatMap(\.configurations),
 			filesWithUnexpectedNodes: filesWithUnexpectedNodes.isEmpty ? nil : filesWithUnexpectedNodes,
-			conditionalCompilationDecisions: conditionalCompilationDecisions.sorted(),
+			conditionalCompilationDecisions: fileScans.flatMap(\.conditionalCompilationDecisions),
 		)
+	}
+}
+
+extension [ImportStatement] {
+	/// These imports, each listed once, in an order that depends only on the imports themselves.
+	fileprivate func sortedWithoutDuplicates() -> [ImportStatement] {
+		Set(self).sorted {
+			($0.moduleName, $0.type, $0.kind, $0.attribute) < ($1.moduleName, $1.type, $1.kind, $1.attribute)
+		}
+	}
+}
+
+extension [SafeDIConfiguration] {
+	/// These configurations ordered by file path, keeping the declaration order of configurations in the same file.
+	fileprivate func sortedByDeclaration() -> [SafeDIConfiguration] {
+		enumerated()
+			.sorted { lhs, rhs in
+				(lhs.element.sourceFilePath ?? "", lhs.offset) < (rhs.element.sourceFilePath ?? "", rhs.offset)
+			}
+			.map(\.element)
 	}
 }
 
