@@ -187,31 +187,54 @@ struct Generate: AsyncParsableCommand {
 		let unnormalizedInstantiables = dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
 		let instantiableTypes = Set(unnormalizedInstantiables.flatMap(\.instantiableTypes))
 		let normalizedInstantiables = unnormalizedInstantiables.map { unnormalizedInstantiable in
+			func normalized(_ typeDescription: TypeDescription) -> TypeDescription? {
+				typeDescription.qualifyingInstantiatedType(
+					within: unnormalizedInstantiable.concreteInstantiable,
+					amongInstantiableTypes: instantiableTypes,
+				)
+			}
 			let unnormalizedToNormalizedTypeMap = unnormalizedInstantiable.dependencies.reduce(
 				into: [TypeDescription: TypeDescription](),
 			) { partialResult, nextDependency in
-				if let bestTypeDescription = TypeDescription.nestedOptions(
-					referencedType: nextDependency.property.typeDescription,
-					within: unnormalizedInstantiable.concreteInstantiable,
-				).first(where: { instantiableTypes.contains($0) }) {
+				if let bestTypeDescription = normalized(nextDependency.property.typeDescription) {
 					partialResult[nextDependency.property.typeDescription] = bestTypeDescription
 				}
 			}
 
-			let normalizedDependencies = unnormalizedInstantiable.dependencies.map {
-				if let bestTypeDescription = unnormalizedToNormalizedTypeMap[$0.property.typeDescription] {
-					Dependency(
-						property: $0.property.withUpdatedTypeDescription(bestTypeDescription),
-						source: $0.source,
-						declarationLocation: $0.declarationLocation,
-						identifierRange: $0.identifierRange,
-						typeAnnotationRange: $0.typeAnnotationRange,
-						bareAttributeRange: $0.bareAttributeRange,
-					)
-				} else {
-					// Default to what was in the code – we'll probably error later
-					$0
+			let normalizedDependencies = unnormalizedInstantiable.dependencies.map { dependency in
+				// The type that fulfills an instantiated or aliased dependency is written where the property is.
+				let normalizedSource: Dependency.Source? = switch dependency.source {
+				case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential):
+					fulfillingTypeDescription.flatMap(normalized).map {
+						.instantiated(
+							fulfillingTypeDescription: $0,
+							erasedToConcreteExistential: erasedToConcreteExistential,
+						)
+					}
+				case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
+					normalized(fulfillingProperty.typeDescription).map {
+						.aliased(
+							fulfillingProperty: fulfillingProperty.withUpdatedTypeDescription($0),
+							erasedToConcreteExistential: erasedToConcreteExistential,
+							onlyIfAvailable: onlyIfAvailable,
+						)
+					}
+				case .forwarded, .received:
+					nil
 				}
+				let normalizedTypeDescription = unnormalizedToNormalizedTypeMap[dependency.property.typeDescription]
+				guard normalizedSource != nil || normalizedTypeDescription != nil else {
+					// Default to what was in the code – we'll probably error later
+					return dependency
+				}
+				return Dependency(
+					property: normalizedTypeDescription.map(dependency.property.withUpdatedTypeDescription) ?? dependency.property,
+					source: normalizedSource ?? dependency.source,
+					declarationLocation: dependency.declarationLocation,
+					identifierRange: dependency.identifierRange,
+					typeAnnotationRange: dependency.typeAnnotationRange,
+					bareAttributeRange: dependency.bareAttributeRange,
+				)
 			}
 			let normalizedInitializer = unnormalizedInstantiable.initializer?.mapArguments {
 				$0.withUpdatedTypeDescription(unnormalizedToNormalizedTypeMap[$0.typeDescription, default: $0.typeDescription])

@@ -98,6 +98,26 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		return nestedOptions
 	}
 
+	/// The receiver with the type it instantiates qualified as the compiler resolves that type’s name where the
+	/// receiver is written: `Instantiator<Service>` written within `Feature.Root` becomes
+	/// `Instantiator<Feature.Service>` when `Feature.Service` is an instantiable type. The most qualified of the
+	/// `nestedOptions` that is an instantiable type wins, so a nested type is chosen over a top-level type of the same name.
+	/// - Parameters:
+	///   - parentType: The type within which the receiver is written.
+	///   - instantiableTypes: The types that `@Instantiable` declarations fulfill.
+	/// - Returns: The qualified type, or `nil` when no option of the instantiated type is an instantiable type.
+	public func qualifyingInstantiatedType(
+		within parentType: TypeDescription,
+		amongInstantiableTypes instantiableTypes: Set<TypeDescription>,
+	) -> TypeDescription? {
+		replacingInstantiatedType { instantiatedType in
+			Self.nestedOptions(
+				referencedType: instantiatedType,
+				within: parentType,
+			).first(where: instantiableTypes.contains)
+		}
+	}
+
 	/// A canonical representation of this type that can be used in source code.
 	public var asSource: String {
 		switch self {
@@ -452,18 +472,8 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	var asInstantiatedType: TypeDescription {
 		switch self {
 		case let .simple(name, generics):
-			if name == Dependency.instantiatorType || name == Dependency.sendableInstantiatorType,
-			   let builtType = generics.first
-			{
-				// This is a type that is lazily instantiated.
-				// The first generic is the built type.
-				builtType
-			} else if name == Dependency.erasedInstantiatorType || name == Dependency.sendableErasedInstantiatorType,
-			          let builtType = generics.dropFirst().first
-			{
-				// This is a type that is lazily instantiated with explicitly declared forwarded arguments due to type erasure.
-				// The second generic is the built type.
-				builtType
+			if let builtTypeIndex = Self.builtTypeIndex(inGenerics: generics, ofTypeNamed: name) {
+				generics[builtTypeIndex]
 			} else {
 				self
 			}
@@ -474,6 +484,58 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 			typeDescription.asInstantiatedType
 		case .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .tuple, .unknown, .void:
 			self
+		}
+	}
+
+	/// The receiver with the type that `asInstantiatedType` returns replaced, wherever in the receiver that type sits:
+	/// `Instantiator<Service>?` becomes `Instantiator<Feature.Service>?` when `replacement` maps `Service` to
+	/// `Feature.Service`. Every other part of the receiver, such as the forwarded properties of an
+	/// `ErasedInstantiator`, is unchanged. This walks the same path through the receiver as `asInstantiatedType`,
+	/// so the two must change together.
+	/// - Parameter replacement: Returns the type with which to replace the instantiated type, or `nil` to keep it.
+	/// - Returns: The receiver with its instantiated type replaced, or `nil` when `replacement` keeps it.
+	public func replacingInstantiatedType(_ replacement: (TypeDescription) -> TypeDescription?) -> TypeDescription? {
+		switch self {
+		case let .simple(name, generics):
+			guard let builtTypeIndex = Self.builtTypeIndex(inGenerics: generics, ofTypeNamed: name) else {
+				return replacement(self)
+			}
+			guard let builtType = replacement(generics[builtTypeIndex]) else {
+				return nil
+			}
+			var replacedGenerics = generics
+			replacedGenerics[builtTypeIndex] = builtType
+			return .simple(name: name, generics: replacedGenerics)
+		case let .any(typeDescription):
+			return typeDescription.replacingInstantiatedType(replacement).map { .any($0) }
+		case let .implicitlyUnwrappedOptional(typeDescription):
+			return typeDescription.replacingInstantiatedType(replacement).map { .implicitlyUnwrappedOptional($0) }
+		case let .optional(typeDescription):
+			return typeDescription.replacingInstantiatedType(replacement).map { .optional($0) }
+		case let .some(typeDescription):
+			return typeDescription.replacingInstantiatedType(replacement).map { .some($0) }
+		case .array, .attributed, .closure, .composition, .dictionary, .metatype, .nested, .tuple, .unknown, .void:
+			return replacement(self)
+		}
+	}
+
+	/// The index of the generic argument that a type which instantiates another on demand builds, or `nil` when the
+	/// type named `name` with `generics` is not such a type.
+	private static func builtTypeIndex(inGenerics generics: [TypeDescription], ofTypeNamed name: String) -> Int? {
+		if name == Dependency.instantiatorType || name == Dependency.sendableInstantiatorType,
+		   !generics.isEmpty
+		{
+			// This is a type that is lazily instantiated.
+			// The first generic is the built type.
+			0
+		} else if name == Dependency.erasedInstantiatorType || name == Dependency.sendableErasedInstantiatorType,
+		          generics.count > 1
+		{
+			// This is a type that is lazily instantiated with explicitly declared forwarded arguments due to type erasure.
+			// The second generic is the built type.
+			1
+		} else {
+			nil
 		}
 	}
 
