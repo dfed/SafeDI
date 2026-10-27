@@ -129,8 +129,9 @@ func performScan(
 			inDirectories: moduleOutputFileDeclarations.additionalDirectoriesToInclude.filter { !configuredDirectories.contains($0) },
 		).map(projectFilePaths.normalizedPath(of:))).subtracting(configuredAdditionalFiles)
 
-		// Record the additional files for the plugin to declare as build inputs.
-		additionalInputFiles = configuredAdditionalFiles.union(plannedOnlyAdditionalFiles).sorted().map(\.path)
+		// Record the additional files for the plugin to declare as build inputs, spelled as the build system
+		// spells the project's other files.
+		additionalInputFiles = configuredAdditionalFiles.union(plannedOnlyAdditionalFiles).sorted().map(projectFilePaths.buildSystemPath(of:))
 		configuredAdditionalInputFiles = configuredAdditionalFiles.sorted().map(\.path)
 		for filePath in configuredAdditionalFiles.union(plannedOnlyAdditionalFiles) where scannedInputStamps[filePath.path] == nil {
 			scannedInputStamps[filePath.path] = FileModificationStamp(ofFileAtPath: filePath.path)

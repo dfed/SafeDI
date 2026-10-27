@@ -83,6 +83,21 @@ public struct NormalizedFilePath: Hashable, Comparable, Sendable, CustomStringCo
 			path
 		}
 	}
+
+	/// This path with the directory prefix `prefix` replaced by `replacement`, when it starts with `prefix`. Both are
+	/// normalized, so the result is too.
+	fileprivate func replacingDirectoryPrefix(_ prefix: String, with replacement: String) -> NormalizedFilePath {
+		if prefix != replacement, path.hasPrefix(prefix) {
+			NormalizedFilePath(normalizedPath: replacement + path.dropFirst(prefix.count))
+		} else {
+			self
+		}
+	}
+
+	/// - Parameter normalizedPath: A path already spelled by this rule.
+	private init(normalizedPath: String) {
+		path = normalizedPath
+	}
 }
 
 /// How SafeDI spells the paths of one project's files for each consumer, given the project root as a build system
@@ -102,7 +117,8 @@ public struct ProjectFilePaths: Sendable {
 		defer { free(resolvedFilePath) }
 		let resolvedProjectRoot = resolvedFilePath.map { String(cString: $0) }
 		reportsResolvedProjectRoot = resolvedProjectRoot == projectRoot
-		normalizedProjectRoot = reportedRoot
+		normalizedProjectRoot = resolvedProjectRoot.map { NormalizedFilePath($0) } ?? reportedRoot
+		reportedRootPrefix = reportedRoot.directoryPrefix
 		rootPrefix = normalizedProjectRoot.directoryPrefix
 		reportedRootURL = NormalizedFilePath.directoryURL(projectRoot)
 	}
@@ -127,7 +143,7 @@ public struct ProjectFilePaths: Sendable {
 
 	/// The comparable spelling of `path`, such as a file found relative to the working directory.
 	public func normalizedPath(of path: NormalizedFilePath) -> NormalizedFilePath {
-		path
+		path.replacingDirectoryPrefix(reportedRootPrefix, with: rootPrefix)
 	}
 
 	/// How a manifest and scan's cache name the file at `path`: relative to the project root when the file lies
@@ -151,6 +167,7 @@ public struct ProjectFilePaths: Sendable {
 		}
 	}
 
+	private let reportedRootPrefix: String
 	private let rootPrefix: String
 	private let reportedRootURL: URL
 }

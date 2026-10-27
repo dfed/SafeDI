@@ -490,7 +490,7 @@ private func symbolicLink(to destination: URL, filesToDelete: inout [URL]) throw
 
 /// `url`'s path with every symbolic link resolved, as `realpath(3)` resolves it. Foundation's
 /// `resolvingSymlinksInPath()` would remove a leading `/private` instead.
-private func realPath(of url: URL) throws -> String {
+func realPath(of url: URL) throws -> String {
 	guard let resolvedPath = realpath(url.path, nil) else {
 		throw CocoaError(.fileNoSuchFile)
 	}
