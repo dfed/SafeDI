@@ -522,7 +522,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var siblingDependencies = propertiesToGenerate.map { scope in
 			Set(siblings.compactMap { sibling in
 				(scope.receivedProperties.contains(sibling.property)
-					&& !scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property))
+					&& !scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property.asUnwrappedProperty))
 					// A required optional property can resolve to a sibling of its non-optional form:
 					// in a mock, or through an `onlyIfAvailable` receive of it above the receiver.
 					|| (!scope.unwrappedOptionalRequiredReceivedProperties.isEmpty && scope.unwrappedOptionalRequiredReceivedProperties.contains(sibling.property))
@@ -562,13 +562,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 		// Then each `onlyIfAvailable` receive, in sibling order, unless the sibling it
-		// would wait on already waits on the receiver.
-		for (index, scope) in propertiesToGenerate.enumerated() where !scope.onlyIfAvailableUnwrappedReceivedProperties.isEmpty {
-			for sibling in siblings
-				where scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property.asUnwrappedProperty)
-				&& !dependsOn(index, from: sibling.index)
+		// would wait on already waits on the receiver. The `onlyIfAvailable` aliases go
+		// first: each waits on the sibling that fulfills it, so it is created once that
+		// sibling is built, and a sibling whose tree receives the alias only if available
+		// is then generated with the alias unavailable, as it is still being built.
+		for considersAliases in [true, false] {
+			for (index, scope) in propertiesToGenerate.enumerated()
+				where (scope.onlyIfAvailableAliasFulfillingProperty != nil) == considersAliases
+				&& !scope.onlyIfAvailableUnwrappedReceivedProperties.isEmpty
 			{
-				siblingDependencies[index].insert(sibling.index)
+				for sibling in siblings
+					where scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property.asUnwrappedProperty)
+					&& !dependsOn(index, from: sibling.index)
+				{
+					siblingDependencies[index].insert(sibling.index)
+				}
 			}
 		}
 
