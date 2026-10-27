@@ -375,6 +375,8 @@ extension Container {
 
 Property declarations within `@Instantiable` types decorated with [`@Instantiated`](../Sources/SafeDI/Decorators/Instantiated.swift) are instantiated when its enclosing type is instantiated. `@Instantiated`-decorated properties are available to be `@Received` by objects instantiated further down the dependency tree.
 
+To instantiate a dependency later than its enclosing type, declare the property as an [`Instantiator`](#instantiator) or a [`LazilyInstantiated`](#lazilyinstantiated). [Delayed instantiation](#delayed-instantiation) compares the three.
+
 Each `@Instantiated` property is a distinct instance.
 
 `@Instantiated`-decorated properties must be an `@Instantiable` type, or a type listed in an `@Instantiable(fulfillingAdditionalTypes:)` declaration.
@@ -556,6 +558,16 @@ Declare the configuration in a file named `SafeDIConfiguration.swift` in the mod
 
 When you want to instantiate a dependency after `init(…)`, you need to declare an `Instantiator<Dependency>`-typed property as `@Instantiated` or `@Received`. Deferred instantiation is useful in situations where a dependency is expensive to create or only required under certain conditions (e.g., creating a detailed view for a selected item in a list).
 
+An `Instantiator` creates a new instance each time it is asked for one. When you instead want a single, shared instance that is created only once something needs it, declare a [`LazilyInstantiated<Dependency>`](#lazilyinstantiated)-typed property. The two differ from each other, and from a plain `@Instantiated` property, as follows:
+
+| | `@Instantiated let dependency: Dependency` | `Instantiator<Dependency>` | `LazilyInstantiated<Dependency>` |
+| --- | --- | --- | --- |
+| An instance is created | When the declaring type is created | Each time `instantiate()` is called | The first time `instance` is read |
+| Instances created | One | One per call | One |
+| Types further down the tree can receive | The instance | The `Instantiator` | The instance, or the `LazilyInstantiated` |
+| `Dependency` can have `@Forwarded` properties | No | Yes | No |
+| Can break a dependency cycle | No | Yes | No |
+
 ### Instantiator
 
 The [`Instantiator`](../Sources/SafeDI/DelayedInstantiation/Instantiator.swift) type is how SafeDI enables deferred instantiation of an `@Instantiable` type. `Instantiator` has a single generic that matches the type of the to-be-instantiated instance. Creating an `Instantiator` property is as simple as creating any other property in the SafeDI ecosystem:
@@ -604,6 +616,65 @@ public struct ParentView: View, Instantiable {
     @Instantiated(fulfilledByType: "ChildView", erasedToConcreteExistential: true) private let childViewBuilder: ErasedInstantiator<(), AnyView>
 }
 ```
+
+### LazilyInstantiated
+
+An [`Instantiator`](#instantiator) creates a new instance every time you call `instantiate()`. A [`LazilyInstantiated`](../Sources/SafeDI/DelayedInstantiation/LazilyInstantiated.swift) dependency is created once, the first time its `instance` is read, and every later read returns that same instance. Use it for a dependency that is expensive to create, or that some sessions never need, but that the rest of the dependency tree should still share.
+
+```swift
+@Instantiable(isRoot: true) @main
+public struct NotesApp: App, Instantiable {
+    // …
+
+    // No `ExportService` is created when the app launches.
+    @Instantiated private let exportService: LazilyInstantiated<ExportService>
+    @Instantiated private let exportViewBuilder: Instantiator<ExportView>
+    @Instantiated private let diagnosticsViewBuilder: Instantiator<DiagnosticsView>
+}
+
+@Instantiable
+public struct ExportView: View, Instantiable {
+    // …
+
+    // Receives the instance. The first `ExportView` to be created instantiates the `ExportService`.
+    @Received private let exportService: ExportService
+}
+
+@Instantiable
+public struct DiagnosticsView: View, Instantiable {
+    // …
+
+    // Receives the `LazilyInstantiated` itself, so creating a `DiagnosticsView` instantiates nothing.
+    // The `ExportService` is created if and when this view reads `exportService.instance`.
+    @Received private let exportService: LazilyInstantiated<ExportService>
+}
+```
+
+A type further down the dependency tree receives a lazily instantiated dependency in one of two ways, and both yield the same instance:
+
+- **As the instance:** `@Received private let exportService: ExportService`. The receiving type is written exactly as it would be if the dependency were not lazy. The dependency is instantiated when the first type that receives it this way is created.
+- **As the `LazilyInstantiated`:** `@Received private let exportService: LazilyInstantiated<ExportService>`. The dependency stays uninstantiated until something reads `instance`.
+
+Both ways also work beneath a type that declares a `@Forwarded` `LazilyInstantiated` property, or that renames one with `@Received(fulfilledByDependencyNamed:ofType:)`. An optional `LazilyInstantiated` property may be `nil`, so it cannot be received as the instance. Neither can a `LazilyInstantiated<Dependency?>`, whose instance may be `nil`: receive the `LazilyInstantiated` instead.
+
+One case differs from a dependency that is not lazy. When a [renamed dependency is unavailable](#conditionally-receiving-dependencies), the types below it that receive that name with `onlyIfAvailable: true` normally get an enclosing type’s property of the same name and type. The instance of an enclosing type’s `LazilyInstantiated` property does not count: it would be read from that property, which the renamed property’s name hides. Those types receive `nil`, and a type that receives the name without `onlyIfAvailable` fails the build at its declaration.
+
+Since receiving the instance instantiates the dependency, a `LazilyInstantiated` property is only lazy when every type that receives its instance is created later than the type that declares the property – typically because that type is built by an [`Instantiator`](#instantiator). If a type that is created along with the declaring type receives the instance, the dependency is instantiated as soon as the declaring type is. SafeDI reports a build warning at the `LazilyInstantiated` declaration when that happens, naming the type that receives the instance. A `@Received(onlyIfAvailable: true)` property is not considered when deciding whether to warn.
+
+A lazily instantiated dependency is created at most once, just like any other `@Instantiated` property that is not an `Instantiator`. SafeDI therefore validates `exportService: LazilyInstantiated<ExportService>` exactly as it validates `exportService: ExportService`: it does not break a dependency cycle, and its type cannot have `@Forwarded` properties. To let types create one another, or to create a type with forwarded properties on demand, use an [`Instantiator`](#instantiator).
+
+A `LazilyInstantiated` property accepts the same `fulfilledByType` and `erasedToConcreteExistential` parameters as any other `@Instantiated` property:
+
+```swift
+@Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true)
+private let userService: LazilyInstantiated<AnyUserService>
+```
+
+A `LazilyInstantiated` is not `Sendable`, and reads of `instance` are not synchronized. To share a lazily instantiated dependency across concurrency domains, use a [`SendableLazilyInstantiated`](../Sources/SafeDI/DelayedInstantiation/SendableLazilyInstantiated.swift), which creates its instance exactly once while holding a lock, and requires the instance to be `Sendable`. `SendableLazilyInstantiated` is available on macOS 15, iOS 18, tvOS 18, watchOS 11, and visionOS 2 and later. The code SafeDI generates is not marked with `@available`, so only use it in a module whose deployment targets are at least those versions.
+
+SafeDI validates the dependency tree, not what an initializer does. Creating a lazily instantiated dependency runs its initializer, along with the initializer of everything created with it. None of those initializers may cause that same dependency to be requested – for example, by posting an event that an existing observer answers by reading `instance`. A request made while the dependency is still being created cannot be answered with the instance being created. A `LazilyInstantiated` creates the instance again to answer it: every request still receives the same instance, but the type is initialized more than once, and without end if each initialization causes another request. A `SendableLazilyInstantiated` requests the lock it already holds. Keep the initializers of lazily instantiated types free of side effects that other code reacts to.
+
+In a [generated mock](#mock-generation), a lazily instantiated dependency is overridden like any other `@Instantiated` dependency: its `SafeDIOverrides` entry is a closure that returns the instance, and the mock calls that closure the first time the instance is read. When the mock cannot build the dependency, `mock()` takes the instance itself, as it does for a dependency received as the instance, and wraps it for the types that receive the `LazilyInstantiated`. A type’s generated mock therefore has the same parameters whether the dependencies it receives are lazily instantiated or not.
 
 ## Mock generation
 
@@ -816,7 +887,7 @@ LoggedInView.mock(safeDIOverrides: .init(
 
 `SafeDIMockConfiguration` exposes an optional override for each of the child’s own `@Instantiated` dependencies and each default-valued init parameter, plus a trailing builder closure. The builder’s parameters match the type’s hand-written `mock` method signature if one is defined, or its `init` parameters otherwise. When no builder is provided, the generated mock calls the type’s hand-written `mock` method or `init` directly.
 
-Closure fields on `SafeDIMockConfiguration` are plain (non-`@Sendable`) by default, so overrides can capture mutable non-`Sendable` test state. When a type is reached through a `SendableInstantiator` (or `SendableErasedInstantiator`) anywhere in the dependency graph, its `SafeDIMockConfiguration` is emitted with `@Sendable` closure fields instead so the overrides remain safe to invoke across isolation boundaries.
+Closure fields on `SafeDIMockConfiguration` are plain (non-`@Sendable`) by default, so overrides can capture mutable non-`Sendable` test state. When a type is reached through a `SendableInstantiator`, `SendableErasedInstantiator`, or `SendableLazilyInstantiated` anywhere in the dependency graph, its `SafeDIMockConfiguration` is emitted with `@Sendable` closure fields instead so the overrides remain safe to invoke across isolation boundaries.
 
 A type gets its own `SafeDIOverrides` struct when at least one dependency belongs there: an `@Instantiated` dependency, a `@Received` dependency the mock can build because an `@Instantiable` declaration fulfills its type or a single concrete type is [erased to](#receiving-a-type-erased-dependency), or a `@Received(onlyIfAvailable: true)` dependency. Every other dependency is a flat `mock()` parameter. The table below shows where each kind lands and whether the caller has to supply it.
 
@@ -1022,7 +1093,7 @@ SafeDI is designed to be simple to adopt and minimize architectural changes requ
 
 In a manual DI system it is common to directly call your dependencies’ `init(…)` functions. When utilizing SafeDI, you must rely on `@Instantiated`-decorated properties to instantiate your dependencies for you. Calling a dependency’s `init(…)` function directly effectively exits the SafeDI-built dependency tree, which removes property lifecycle guarantees. Similarly, you must call the generated `init()` function on your dependency tree’s root and not its memberwise `init(…)` function in order to create the SafeDI dependency tree.
 
-To instantiate a dependency after a property’s enclosing type is initialized, you must utilize an instantiated or received [`Instantiator`](#delayed-instantiation).
+To instantiate a dependency after a property’s enclosing type is initialized, you must utilize an instantiated or received [`Instantiator`](#delayed-instantiation) or [`LazilyInstantiated`](#lazilyinstantiated).
 
 ### SwiftUI
 
