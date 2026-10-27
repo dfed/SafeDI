@@ -119,6 +119,29 @@ import Testing
 			)
 		}
 
+		@Test
+		func propertyLabelBeginsWithReservedPrefix_expandsWithoutIssue() {
+			// `@Instantiable` reports a label that begins with the reserved prefix, so the property
+			// macros do not report it a second time.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService {
+					@Instantiated let __safeDI_editor: Editor
+					@Received(fulfilledByDependencyNamed: "__safeDI_user", ofType: User.self) let userVendor: UserVendor
+				}
+				""",
+				expandedSource: """
+				@Instantiable
+				public struct ExampleService {
+					let __safeDI_editor: Editor
+					let userVendor: UserVendor
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
 		// MARK: Fixit Tests
 
 		@Test

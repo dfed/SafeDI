@@ -910,7 +910,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The name of the builder function for a property bound as `name`, which in a mock is the
 	/// property's sibling-disambiguated label.
 	private static func functionName(toBuildPropertyNamed name: String) -> String {
-		"__safeDI_\(name)"
+		"\(ReservedName.builderFunctionNamePrefix)\(name)"
 	}
 
 	/// The names generated code refers to builder functions by, where they differ from `functionName(toBuild:)`.
@@ -1650,7 +1650,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			mockParameters.append("\(bodyIndent)\(flatUncovered.label): \(flatUncovered.typeSource)")
 		}
 		if hasOverridableTree {
-			mockParameters.append("\(bodyIndent)safeDIOverrides: SafeDIOverrides = .init()")
+			mockParameters.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): SafeDIOverrides = .init()")
 		}
 
 		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
@@ -1754,13 +1754,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		if hasTree {
 			// Bind onlyIfAvailable overrides first — tree bindings may reference them.
 			for onlyIfAvailableOverride in onlyIfAvailableOverrides {
-				lines.append("\(bodyIndent)let \(onlyIfAvailableOverride.name): \(onlyIfAvailableOverride.typeDescription.asSource) = safeDIOverrides.\(onlyIfAvailableOverride.name)")
+				lines.append("\(bodyIndent)let \(onlyIfAvailableOverride.name): \(onlyIfAvailableOverride.typeDescription.asSource) = \(ReservedName.mockOverridesParameterName).\(onlyIfAvailableOverride.name)")
 			}
 			lines.append(contentsOf: lazilyInstantiatedBindings)
 			lines.append(contentsOf: rootReceiverBindings)
 			let bodyBindings = Self.generateMockBodyBindings(
 				items: rootItems,
-				parentPath: "safeDIOverrides",
+				parentPath: ReservedName.mockOverridesParameterName,
 				indent: bodyIndent,
 				flatParameterDisambiguationMap: treeDisambiguationMap,
 				lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNameMap,
@@ -2146,7 +2146,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		///   it and falls back to the node's default construction when it is `nil`.
 		func overridePath(nodePath: String) -> String {
 			if needsConfigurationStruct {
-				"\(nodePath).safeDIBuilder"
+				"\(nodePath).\(ReservedName.configurationBuilderPropertyName)"
 			} else {
 				nodePath
 			}
@@ -2207,9 +2207,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// default in the eraser, and wrap the override when it comes from a
 		/// configuration struct (whose builder returns the concrete type).
 		///
-		/// The unwrapped override is bound to `safeDIBuilder` unless an argument
-		/// is a dependency with that label, in which case underscores are
-		/// appended so the binding does not shadow the argument.
+		/// The unwrapped override is bound to `safeDIBuilder`, which shadows no
+		/// argument: each argument is `nil`, an override path, an extracted local
+		/// beginning with `__safeDI_`, a dependency's label, or a name derived from
+		/// one with a suffix, and the `@Instantiable` macro rejects a dependency
+		/// labeled `safeDIBuilder` (`ReservedName.configurationBuilderProperty`).
 		func constructionExpression(
 			overrideExpression: String?,
 			arguments: [String],
@@ -2224,10 +2226,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			guard let overrideExpression else {
 				return defaultConstruction
 			}
-			var overrideName = "safeDIBuilder"
-			while arguments.contains(overrideName) {
-				overrideName += "_"
-			}
+			let overrideName = ReservedName.configurationBuilderPropertyName
 			let overrideCall = "\(overrideName)(\(arguments.joined(separator: ", ")))"
 			let overrideConstruction = if erasedToConcreteExistential, needsConfigurationStruct {
 				"\(concreteExistentialType.asSource)(\(overrideCall))"
@@ -2891,10 +2890,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// the default construction (which may be @MainActor) is called in mock()
 		// rather than referenced in this nonisolated init.
 		let closureType = node.concreteBuilderClosureType
-		initParameters.append("\(innerIndent)\(standardIndent)_ safeDIBuilder: (\(sendableAnnotation)\(closureType))? = nil")
-		assignments.append("\(innerIndent)\(standardIndent)self.safeDIBuilder = safeDIBuilder")
+		initParameters.append("\(innerIndent)\(standardIndent)_ \(ReservedName.configurationBuilderPropertyName): (\(sendableAnnotation)\(closureType))? = nil")
+		assignments.append("\(innerIndent)\(standardIndent)self.\(ReservedName.configurationBuilderPropertyName) = \(ReservedName.configurationBuilderPropertyName)")
 		storedProperties.append("\(innerIndent)/// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.")
-		storedProperties.append("\(innerIndent)let safeDIBuilder: (\(sendableAnnotation)\(closureType))?")
+		storedProperties.append("\(innerIndent)let \(ReservedName.configurationBuilderPropertyName): (\(sendableAnnotation)\(closureType))?")
 
 		// Emit init.
 		lines.append("\(innerIndent)init(")
@@ -3049,7 +3048,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 
 				let relativePath = nodePath
-					.replacingOccurrences(of: "safeDIOverrides.", with: "")
+					.replacingOccurrences(of: "\(ReservedName.mockOverridesParameterName).", with: "")
 					.replacingOccurrences(of: ".", with: "_")
 
 				// The optional override closure to consult, or `nil` when there is
@@ -3063,7 +3062,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				} else if let sendableOverrideExtractor {
 					sendableOverrideExtractor.extract(
 						node.overridePath(nodePath: nodePath),
-						localNameSuffix: "\(relativePath)_safeDIBuilder",
+						localNameSuffix: "\(relativePath)_\(ReservedName.configurationBuilderPropertyName)",
 					)
 				} else {
 					node.overridePath(nodePath: nodePath)
@@ -3291,7 +3290,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			uniqueKeysWithValues: node.dependencies.map { ($0.property.label, $0) },
 		)
 		let relativePath = nodePath
-			.replacingOccurrences(of: "safeDIOverrides.", with: "")
+			.replacingOccurrences(of: "\(ReservedName.mockOverridesParameterName).", with: "")
 			.replacingOccurrences(of: ".", with: "_")
 		let argumentsToSurface = overrideReachable
 			? node.callSiteArguments
@@ -3452,7 +3451,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					overrideReachable: overridePathReachable,
 				)
 				functionOverrideExpression = overrideExpression.map {
-					startedSendableOverrideExtractor.extract($0, localNameSuffix: "safeDIBuilder")
+					startedSendableOverrideExtractor.extract($0, localNameSuffix: ReservedName.configurationBuilderPropertyName)
 				}
 				for extraction in startedSendableOverrideExtractor.extractions {
 					lines.append("\(indent)let \(extraction.localName) = \(extraction.expression)")

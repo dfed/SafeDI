@@ -196,6 +196,8 @@ public struct LoggedInView: Instantiable, View {
 
 The exact semantics of each dependency kind — including `@Instantiated`’s configuration parameters for dependency inversion, and `@Received`’s `onlyIfAvailable` option — are covered in [@Instantiated](#instantiated), [@Received](#received), and [@Forwarded](#forwarded).
 
+SafeDI reserves the names its generated code introduces, so the `@Instantiable` macro reports an error for a name SafeDI uses in that code – a decorated property’s name, the name of an `instantiate(…)` parameter, a `fulfilledByDependencyNamed:` name, or the argument label of a default-valued initializer or mock parameter that a generated `mock()` takes and passes on – that begins with `__safeDI_`, or that is exactly `safeDIOverrides`, `safeDIBuilder`, or the name of a type generated code constructs (`Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, `SendableErasedInstantiator`, `LazilyInstantiated`, or `SendableLazilyInstantiated`).
+
 #### Creating the root of your dependency tree
 
 Any type decorated with `@Instantiable(isRoot: true)` is a root of a SafeDI dependency tree. SafeDI creates a no-parameter `public init()` initializer that instantiates the dependency tree in an extension on each root type.
@@ -723,6 +725,8 @@ public struct NetworkClient: Instantiable {
 The `customMockName` parameter requires `generateMock: true` or `mockOnly: true`.
 
 When the hand-written method returns an additional type the `@Instantiable` declaration fulfills (for example, a protocol declared in `fulfillingAdditionalTypes`), the generated `mock()` method also returns that type. This keeps the signatures type-compatible on extension-based declarations where a concrete `Self` return wouldn’t line up with a protocol-returning `customMock`. Concrete-type declarations are required to return `Self` or the concrete type from their `customMock`.
+
+A type declared inside another type returns `Self` or its own name unqualified, such as `-> Consumer` inside `enum Feature`, because the macro sees only the declaration it decorates and rejects `-> Feature.Consumer`. SafeDI resolves that name and the hand-written method's parameter types the way it resolves the dependency types written in the same declaration, so the generated code calls the hand-written method. An extension of a nested type spells the extended type as the extension does, such as `-> Feature.Consumer` in `extension Feature.Consumer`.
 
 #### A hand-written mock in a separate declaration
 
