@@ -226,6 +226,54 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsError_whenRootInstantiatesTypeThatOnlyMockOnlyDeclarationFulfills() async {
+		// `ServiceProtocol` and `DefaultService` share a concrete type, so the dependency tree
+		// was built from whichever declaration a set iteration reached first: the production
+		// declaration, leaving `service` unbuilt, or the mockOnly one, which cannot be built.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `ServiceProtocol`. A `mockOnly: true` declaration fulfills it, and is used only to generate mocks.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(service: ServiceProtocol, defaultService: DefaultService) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let service: ServiceProtocol
+					    @Instantiated let defaultService: DefaultService
+					}
+					""",
+					"""
+					public protocol ServiceProtocol {}
+
+					@Instantiable
+					public struct DefaultService: Instantiable, ServiceProtocol {
+					    public init() {}
+					}
+
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
+					extension DefaultService {
+					    public static func mock() -> DefaultService {
+					        DefaultService()
+					    }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenSecondMockOnlyArrivesAfterFirstMockOnlyMergedIntoProduction() async {
 		// Instantiables are processed in source file path order, keeping each file's
 		// declaration order. `MyService.swift` sorts before `ZzzFakeService.swift`, so the
