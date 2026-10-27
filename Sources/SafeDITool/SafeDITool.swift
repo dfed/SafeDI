@@ -27,7 +27,7 @@ struct SafeDITool: AsyncParsableCommand {
 	static let configuration = CommandConfiguration(
 		commandName: "safeditool",
 		version: currentVersion,
-		subcommands: [Generate.self, Scan.self],
+		subcommands: [Generate.self, Scan.self, Dump.self],
 		defaultSubcommand: Generate.self,
 	)
 
