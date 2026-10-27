@@ -492,7 +492,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		func scan() async throws -> CachedScannedModuleInfo {
 			try await performScan(
 				inputSourcesFile: swiftFileCSV.path,
-				projectRoot: projectRoot.path,
+				projectFilePaths: ProjectFilePaths(projectRoot: projectRoot.path),
 				outputDirectory: outputDirectory.path,
 				manifestFile: manifestFile.path,
 			)
@@ -717,7 +717,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 
 		let scannedModuleInfo = try await performScan(
 			inputSourcesFile: swiftFileCSV.path,
-			projectRoot: projectRoot.path,
+			projectFilePaths: ProjectFilePaths(projectRoot: projectRoot.path),
 			outputDirectory: outputDirectory.path,
 			manifestFile: manifestFile.path,
 		)

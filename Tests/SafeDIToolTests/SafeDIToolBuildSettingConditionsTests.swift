@@ -1205,12 +1205,22 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func scan_listsRootAndInputsInAdditionalDirectory_whenConfigurationThatIncludesItIsInInactiveClause() async throws {
+	mutating func scan_listsRootInAdditionalDirectory_whenConfigurationThatIncludesItIsInInactiveClause() async throws {
 		let project = try await scannedAdditionalDirectoryProject()
 
 		let manifest = try JSONDecoder().decode(SafeDIToolManifest.self, from: Data(contentsOf: project.manifestFile))
 		#expect(manifest.dependencyTreeGeneration.map(\.inputFilePath) == ["\(project.relativeDirectoryPath)/Additional/StagingRoot.swift"])
-		#expect(manifest.additionalInputFiles == [project.directory.appendingPathComponent("Additional/StagingRoot.swift").path])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func scan_listsAdditionalDirectoryFileAsBuildInputUnderReportedProjectRoot_whenConfigurationThatIncludesItIsInInactiveClause() async throws {
+		let project = try await scannedAdditionalDirectoryProject()
+
+		// The plugin hands the build system each input as listed, and the build system spells the files inside the
+		// project root as it reported the root to `scan`.
+		let manifest = try JSONDecoder().decode(SafeDIToolManifest.self, from: Data(contentsOf: project.manifestFile))
+		#expect(manifest.additionalInputFiles == ["\(project.reportedProjectRoot)/\(project.relativeDirectoryPath)/Additional/StagingRoot.swift"])
 	}
 
 	@Test
@@ -1312,6 +1322,8 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 		let directory: URL
 		/// `directory` relative to the working directory, which is how the plugin and the configuration name it.
 		let relativeDirectoryPath: String
+		/// The project root exactly as `scan` was handed it.
+		let reportedProjectRoot: String
 		let swiftFileCSV: URL
 		let outputDirectory: URL
 		let manifestFile: URL
@@ -1370,6 +1382,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 		return AdditionalDirectoryProject(
 			directory: directory,
 			relativeDirectoryPath: relativeDirectoryPath,
+			reportedProjectRoot: currentDirectory.path,
 			swiftFileCSV: swiftFileCSV,
 			outputDirectory: outputDirectory,
 			manifestFile: manifestFile,

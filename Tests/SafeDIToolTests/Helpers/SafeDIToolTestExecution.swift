@@ -173,7 +173,7 @@ func executeSafeDIToolTest(
 			try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 			try await performScan(
 				inputSourcesFile: swiftFileCSV.relativePath,
-				projectRoot: try #require(reportedFixtureDirectoryPath),
+				projectFilePaths: try ProjectFilePaths(projectRoot: #require(reportedFixtureDirectoryPath)),
 				outputDirectory: outputDirectory.path,
 				manifestFile: manifestFile.relativePath,
 				mockScopedFiles: compilerSwiftFilePaths,
@@ -200,7 +200,7 @@ func executeSafeDIToolTest(
 
 			let scannedModuleInfo = try await performScan(
 				inputSourcesFile: scanCSV.relativePath,
-				projectRoot: projectRoot.path,
+				projectFilePaths: ProjectFilePaths(projectRoot: projectRoot.path),
 				outputDirectory: outputDirectory.path,
 				manifestFile: manifestFile.relativePath,
 				mockScopedFiles: swiftFiles.map(\.relativePath),
@@ -495,7 +495,7 @@ private func symbolicLink(to destination: URL, filesToDelete: inout [URL]) throw
 
 /// `url`'s path with every symbolic link resolved, as `realpath(3)` resolves it. Foundation's
 /// `resolvingSymlinksInPath()` would remove a leading `/private` instead.
-private func realPath(of url: URL) throws -> String {
+func realPath(of url: URL) throws -> String {
 	guard let resolvedPath = realpath(url.path, nil) else {
 		throw CocoaError(.fileNoSuchFile)
 	}
