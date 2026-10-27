@@ -10,7 +10,7 @@ let package = Package(
 	],
 	products: [],
 	dependencies: [
-		.package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.64.2"),
+		.package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.64.3"),
 	],
 	targets: [],
 )
