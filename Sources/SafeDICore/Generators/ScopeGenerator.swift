@@ -996,11 +996,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let treePropertyLabels = Set(treePropertyNodes.map(\.propertyLabel))
 		let forwardedPropertySet = Set(forwardedDependencies.map(\.property))
 
-		let unwrappedOptionalCounterparts = Set(
-			receivedProperties
-				.filter(\.typeDescription.isOptional)
-				.map(\.asUnwrappedProperty),
-		)
 		let receivedNonOptionalProperties = Set(
 			receivedProperties
 				.filter { !$0.typeDescription.isOptional },
@@ -1012,13 +1007,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			      !forwardedPropertySet.contains(receivedProperty), !receivedProperty.typeDescription.isOptional
 			      || !receivedNonOptionalProperties.contains(receivedProperty.asUnwrappedProperty)
 			else { continue }
-			let isOnlyIfAvailable = (receivedProperty.typeDescription.isOptional
-				&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty.asUnwrappedProperty))
-				|| (!receivedProperty.typeDescription.isOptional
-					&& !unwrappedOptionalCounterparts.contains(receivedProperty)
-					&& onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty))
-				|| unavailableOptionalProperties.contains(receivedProperty)
-			if isOnlyIfAvailable {
+			// Optional, defaulting to `nil`, only when every receiver — directly or
+			// through an alias, whose fulfilling property is non-optional — receives it
+			// `onlyIfAvailable`. A property any receiver requires is a required parameter.
+			if onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty.asUnwrappedProperty) {
 				let typeSource: String = if receivedProperty.typeDescription.isOptional {
 					receivedProperty.typeDescription.asSource
 				} else {
@@ -1230,6 +1222,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// production's topological order.
 		let rootReceiverBindings = Self.emitReceiverBindings(
 			for: instantiable.dependencies,
+			unavailableProperties: [],
 			flatParameterDisambiguationMap: rootDisambiguationMap,
 			indent: bodyIndent,
 		)
@@ -1322,6 +1315,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// for `.received` dependencies whose flat mock parameter was renamed to
 	/// disambiguate a collision. The alias becomes a real Swift binding so the
 	/// scope's construction arguments can resolve the dep via its bare label.
+	/// A dependency in `unavailableProperties` is passed `nil` and is not rebound,
+	/// since the binding it would name is not declared at that point: it is
+	/// declared later, or not at all.
 	///
 	/// `.aliased` dependencies are handled as `MockTreeItem.alias` children — they
 	/// already flow through the mock body bindings in production's topological
@@ -1330,23 +1326,37 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// parameter on the wrapping builder.
 	fileprivate static func emitReceiverBindings(
 		for dependencies: [Dependency],
+		unavailableProperties: Set<Property>,
 		flatParameterDisambiguationMap: [String: [TypeDescription: String]],
 		indent: String,
 	) -> [String] {
-		var lines = [String]()
-		for dependency in dependencies {
-			switch dependency.source {
-			case .received:
-				let label = dependency.property.label
-				let typeDescription = dependency.property.typeDescription
-				if let disambiguatedLabel = flatParameterDisambiguationMap[label]?[typeDescription] {
-					lines.append("\(indent)let \(label): \(typeDescription.asSource) = \(disambiguatedLabel)")
-				}
-			case .aliased, .instantiated, .forwarded:
-				break
+		dependencies.compactMap { dependency in
+			disambiguatedName(
+				ofReceived: dependency,
+				unavailableProperties: unavailableProperties,
+				flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+			).map {
+				"\(indent)let \(dependency.property.label): \(dependency.property.typeDescription.asSource) = \($0)"
 			}
 		}
-		return lines
+	}
+
+	/// The disambiguated name of the binding a `.received` dependency resolves to, or
+	/// `nil` when the dependency is not received, is passed `nil` because it is in
+	/// `unavailableProperties`, or its label was not disambiguated. The binding is
+	/// looked up by the dependency's type and then by its unwrapped type, so an
+	/// `onlyIfAvailable` receive of `x: X?` resolves to a disambiguated `x: X`.
+	private static func disambiguatedName(
+		ofReceived dependency: Dependency,
+		unavailableProperties: Set<Property>,
+		flatParameterDisambiguationMap: [String: [TypeDescription: String]],
+	) -> String? {
+		guard dependency.source.isReceived,
+		      !unavailableProperties.contains(dependency.property),
+		      let disambiguatedNames = flatParameterDisambiguationMap[dependency.property.label]
+		else { return nil }
+		return disambiguatedNames[dependency.property.typeDescription]
+			?? disambiguatedNames[dependency.property.asUnwrappedProperty.typeDescription]
 	}
 
 	/// Whether a node's construction references any `.received` dependency whose
@@ -1359,8 +1369,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) -> Bool {
 		guard !flatParameterDisambiguationMap.isEmpty else { return false }
 		return node.dependencies.contains { dependency in
-			guard case .received = dependency.source else { return false }
-			return flatParameterDisambiguationMap[dependency.property.label]?[dependency.property.typeDescription] != nil
+			disambiguatedName(
+				ofReceived: dependency,
+				unavailableProperties: node.unavailableProperties,
+				flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+			) != nil
 		}
 	}
 
@@ -2409,6 +2422,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 					let receiverBindings = emitReceiverBindings(
 						for: node.dependencies,
+						unavailableProperties: node.unavailableProperties,
 						flatParameterDisambiguationMap: combinedDisambiguationMap,
 						indent: innerIndent,
 					)
@@ -2587,6 +2601,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// `generateMockBodyBindings` below.
 		let receiverBindings = emitReceiverBindings(
 			for: node.dependencies,
+			unavailableProperties: node.unavailableProperties,
 			flatParameterDisambiguationMap: flatParameterDisambiguationMap,
 			indent: innerIndent,
 		)

@@ -87,6 +87,7 @@ Key consequence: if `throwIfInvalidCycle` accepts a cycle, every hop in it is no
 - `MockParameterIdentifier` (propertyLabel + sourceType) is the key type for tracking parameters throughout mock gen
 - `resolvedParameters` tracks which deps are already bound — prevents duplicate bindings across scopes
 - `parameterLabelMap` maps identifiers to disambiguated parameter names
+- A receiver whose label was disambiguated is rebound to the disambiguated name (`emitReceiverBindings`), found by its declared type and then its unwrapped type, since an `onlyIfAvailable` receive of `x: X?` is fulfilled by a disambiguated `x: X`. A receive the node passes `nil` (`MockParameterNode.unavailableProperties`) is not rebound: the name may not be declared yet.
 - `TypeDescription.asIdentifier` produces identifier-safe disambiguation suffixes
 - `TypeDescription.simplified` strips wrappers for cleaner suffixes, with fallback on collision
 - Closure-typed defaults use `@escaping T = default` (not `@autoclosure`)
