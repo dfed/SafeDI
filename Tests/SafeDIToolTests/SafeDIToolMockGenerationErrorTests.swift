@@ -356,6 +356,48 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenOnlyIfAvailableReceivedPropertyIsHiddenByForwardedPropertyOfMockedTypeWithSameLabel() async {
+		// The mocked type's own tree hides `user: Draft?`: production builds `Editor` under `ProfileView`, beside
+		// the forwarded `user: User`. A mock names its `onlyIfAvailable` overrides apart only from what its
+		// promotion of received dependencies binds beside them.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Editor.swift"]):4:5: error: @Received property `user: Draft?` is hidden in chain: ProfileView -> Editor. `ProfileView` declares `user: User` with the same label, so the types below `ProfileView` receive `user: User` instead. Give `user: User` on `ProfileView` a different label to fix.
+				\(fixtures["ProfileView.swift"]):4:5: note: `user: User` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public final class User {}
+					public final class Draft {}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public final class ProfileView: Instantiable {
+					    public init(user: User, editorBuilder: Instantiator<Editor>) { self.user = user; self.editorBuilder = editorBuilder }
+					    @Forwarded let user: User
+					    @Instantiated let editorBuilder: Instantiator<Editor>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Editor: Instantiable {
+					    public init(user: Draft?) { self.user = user }
+					    @Received(onlyIfAvailable: true) let user: Draft?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenPromotedDependenciesReceiveEachOther() async {
 		// Child.mock() promotes `c` (Child receives it) and `b` (C receives it).
 		// Worker, built inside `b`, requires `c`, so each promoted dependency must be
