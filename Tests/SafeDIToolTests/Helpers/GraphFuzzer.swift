@@ -590,16 +590,19 @@ enum GraphFuzzerGenerator {
 /// from the generator's own bookkeeping, so a generator that stops emitting a kind cannot hide it.
 enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case constantProperty
+	case erasedConstantProperty
 	case instantiatorProperty
 	case sendableInstantiatorProperty
 	case erasedInstantiatorProperty
+	case sendableErasedInstantiatorProperty
 	case forwardedProperty
+	case optionalForwardedProperty
 	case requiredReceive
 	case requiredOptionalReceive
 	case onlyIfAvailableReceive
 	case requiredAlias
 	case onlyIfAvailableAlias
-	case erasedToConcreteExistential
+	case erasedAlias
 	case multipleRoots
 	case generateMock
 	case lazyCycle
@@ -657,26 +660,29 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 
 	private static func features(ofPropertyWithAttribute attribute: String, type: String) -> Set<GraphFuzzerFeature> {
 		var features = Set<GraphFuzzerFeature>()
-		if attribute.contains("erasedToConcreteExistential: true") {
-			features.insert(.erasedToConcreteExistential)
-		}
+		let isErased = attribute.contains("erasedToConcreteExistential: true")
 		if type.hasPrefix("Instantiator<") {
 			features.insert(.instantiatorProperty)
 		} else if type.hasPrefix("SendableInstantiator<") {
 			features.insert(.sendableInstantiatorProperty)
 		} else if type.hasPrefix("ErasedInstantiator<") {
 			features.insert(.erasedInstantiatorProperty)
+		} else if type.hasPrefix("SendableErasedInstantiator<") {
+			features.insert(.sendableErasedInstantiatorProperty)
 		}
-		if attribute == "@Instantiated", !type.contains("<") {
-			features.insert(.constantProperty)
+		if attribute.hasPrefix("@Instantiated"), !type.contains("<") {
+			features.insert(isErased ? .erasedConstantProperty : .constantProperty)
 		} else if attribute == "@Forwarded" {
-			features.insert(.forwardedProperty)
+			features.insert(type.hasSuffix("?") ? .optionalForwardedProperty : .forwardedProperty)
 		} else if attribute == "@Received" {
 			features.insert(type.hasSuffix("?") ? .requiredOptionalReceive : .requiredReceive)
 		} else if attribute == "@Received(onlyIfAvailable: true)" {
 			features.insert(.onlyIfAvailableReceive)
 		} else if attribute.hasPrefix("@Received(fulfilledByDependencyNamed:") {
 			features.insert(attribute.contains("onlyIfAvailable: true") ? .onlyIfAvailableAlias : .requiredAlias)
+			if isErased {
+				features.insert(.erasedAlias)
+			}
 		}
 		return features
 	}
@@ -792,6 +798,7 @@ struct GraphFuzzerFailure: Equatable {
 		case generatedCodeDoesNotCompile = "generated code does not compile"
 		case fixtureDoesNotCompile = "fixture does not compile on its own"
 		case runsDiffer = "two runs of the tool differ"
+		case runsDifferAcrossProcesses = "the tool's output differs between two processes"
 	}
 
 	let seed: UInt64
@@ -830,10 +837,70 @@ struct GraphFuzzerResult {
 }
 
 /// A known open defect: the seeds whose graphs fail today with one shape, and a one-line reason naming it.
-struct GraphFuzzerKnownIssue {
+struct GraphFuzzerKnownIssue: Equatable {
 	let reason: String
+	/// Compiler diagnostics, any one of which a failure of this shape reports. A known seed whose generated code
+	/// fails to compile without reporting one of them fails a new way, and is reported as a new failure.
+	let diagnostics: [String]
 	/// In increasing order. The ordinary suite checks the first; the long run checks every one it reaches.
 	let seeds: [UInt64]
+
+	/// Whether `failure` is the failure this issue documents.
+	func matches(_ failure: GraphFuzzerFailure) -> Bool {
+		failure.kind == .generatedCodeDoesNotCompile && diagnostics.contains { failure.details.contains($0) }
+	}
+}
+
+/// What the fuzzer concludes about one graph, given the known issue listing its seed, if any.
+enum GraphFuzzerFinding: Equatable {
+	case passed
+	/// The graph fails the way its known issue documents.
+	case knownIssue(GraphFuzzerKnownIssue, GraphFuzzerFailure)
+	/// The graph's seed is a known issue, but the graph no longer fails.
+	case staleKnownIssue(GraphFuzzerKnownIssue)
+	/// The graph fails, and no known issue documents that failure: either its seed is not a known issue, or
+	/// it fails another way than its known issue documents.
+	case failure(GraphFuzzerFailure)
+
+	init(failure: GraphFuzzerFailure?, knownIssue: GraphFuzzerKnownIssue?) {
+		switch (failure, knownIssue) {
+		case (nil, nil):
+			self = .passed
+		case let (nil, knownIssue?):
+			self = .staleKnownIssue(knownIssue)
+		case let (failure?, knownIssue?) where knownIssue.matches(failure):
+			self = .knownIssue(knownIssue, failure)
+		case let (failure?, _):
+			self = .failure(failure)
+		}
+	}
+
+	/// The line the long run appends to its report, which `graph-fuzzer.yml` reads.
+	func reportLine(seed: UInt64) -> String? {
+		switch self {
+		case .passed:
+			nil
+		case let .knownIssue(knownIssue, _):
+			"known \(seed) \(knownIssue.reason)"
+		case let .staleKnownIssue(knownIssue):
+			"stale \(seed) \(knownIssue.reason)"
+		case let .failure(failure):
+			"failure \(seed) \(failure.kind.rawValue)"
+		}
+	}
+}
+
+/// FNV-1a over strings, so a pinned value names the same content on every platform.
+struct GraphFuzzerHash {
+	private(set) var value: UInt64 = 0xCBF2_9CE4_8422_2325
+
+	mutating func combine(_ string: String) {
+		for byte in string.utf8 {
+			value = (value ^ UInt64(byte)) &* 0x0000_0100_0000_01B3
+		}
+		// Separate consecutive strings, so that "ab" then "c" differs from "a" then "bc".
+		value = (value ^ 0xFF) &* 0x0000_0100_0000_01B3
+	}
 }
 
 /// A graph with what two runs of the tool produced for it.
@@ -928,7 +995,69 @@ enum GraphFuzzerOracle {
 			// `executeSafeDIToolTest` schedules the fixture directory for deletion only when `generate` succeeds.
 			filesToDelete.append(URL(fileURLWithPath: directory))
 			return .rejected(diagnostics: normalizer(fixtureDirectory: directory)("\(error.underlyingError)"))
+		} catch {
+			// `executeSafeDIToolTest` wraps every error `generate` throws, so this is the harness failing, such as a
+			// fixture it could not write: not the tool rejecting the graph.
+			throw GraphFuzzerInfrastructureError(description: "The test harness failed for seed \(fixture.seed) before or after SafeDITool ran: \(error)")
 		}
+	}
+
+	/// The failure of a graph whose `SafeDITool generate` output differs between two processes, which seed their
+	/// hashing differently, or `nil` when both processes give the same output.
+	///
+	/// `toolRuns(of:)` runs the tool twice in this process, which shares one hash seed, so it cannot see output
+	/// that depends on the iteration order of a `Set` or `Dictionary` of hashed values. This runs the
+	/// `SafeDITool` executable twice over the same fixture files and compares its exit status, diagnostics, and
+	/// combined output.
+	static func crossProcessFailure(of fixture: GraphFuzzerFixture) throws -> GraphFuzzerFailure? {
+		guard let artifacts = SafeDIBuildArtifactLocator.locate() else {
+			throw GraphFuzzerInfrastructureError(description: "Could not locate SafeDI build artifacts to find the SafeDITool executable.")
+		}
+		let toolURL = artifacts.safeDIMacrosToolPath.deletingLastPathComponent().appendingPathComponent("SafeDITool")
+		guard FileManager.default.isExecutableFile(atPath: toolURL.path) else {
+			throw GraphFuzzerInfrastructureError(description: "No SafeDITool executable at \(toolURL.path). Build the package with `swift build --build-tests`.")
+		}
+		let directory = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-graph-fuzzer-processes-\(UUID().uuidString)")
+		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+		defer { try? FileManager.default.removeItem(at: directory) }
+		let fixtureFiles = try zip(fixture.fileNames, fixture.swiftFileContent).map { fileName, content in
+			let fileURL = directory.appendingPathComponent(fileName)
+			try content.write(to: fileURL, atomically: true, encoding: .utf8)
+			return fileURL
+		}
+		let inputsFile = directory.appendingPathComponent("inputs.csv")
+		try fixtureFiles.map(\.path).joined(separator: ",").write(to: inputsFile, atomically: true, encoding: .utf8)
+		let outputs = try (0..<2).map { run in
+			let outputFile = directory.appendingPathComponent("Generated\(run).swift")
+			let result = try runProcess(toolURL, arguments: ["generate", inputsFile.path, "--combined-output", outputFile.path])
+			let output = (try? String(contentsOf: outputFile, encoding: .utf8)) ?? ""
+			return "exit \(result.exitCode)\n\(result.stderr)\n\(output)"
+		}
+		guard outputs[0] != outputs[1] else { return nil }
+		return GraphFuzzerFailure(seed: fixture.seed, kind: .runsDifferAcrossProcesses, details: "First process:\n\(outputs[0])\nSecond process:\n\(outputs[1])")
+	}
+
+	private static func runProcess(_ executable: URL, arguments: [String]) throws -> SwiftCompileResult {
+		let process = Process()
+		process.executableURL = executable
+		process.arguments = arguments
+		let standardOutput = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-graph-fuzzer-output-\(UUID().uuidString)")
+		let standardError = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-graph-fuzzer-error-\(UUID().uuidString)")
+		FileManager.default.createFile(atPath: standardOutput.path, contents: nil)
+		FileManager.default.createFile(atPath: standardError.path, contents: nil)
+		defer {
+			try? FileManager.default.removeItem(at: standardOutput)
+			try? FileManager.default.removeItem(at: standardError)
+		}
+		process.standardOutput = try FileHandle(forWritingTo: standardOutput)
+		process.standardError = try FileHandle(forWritingTo: standardError)
+		try process.run()
+		process.waitUntilExit()
+		return SwiftCompileResult(
+			exitCode: process.terminationStatus,
+			stdout: (try? String(contentsOf: standardOutput, encoding: .utf8)) ?? "",
+			stderr: (try? String(contentsOf: standardError, encoding: .utf8)) ?? "",
+		)
 	}
 
 	private static func fixtureDirectory(of fixture: GraphFuzzerFixture, in fixtures: FixturePaths) -> String {
