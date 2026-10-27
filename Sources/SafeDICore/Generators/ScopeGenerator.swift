@@ -1188,7 +1188,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.filter {
 				$0.typeDescription.lazilyInstantiatedInstanceType != nil
 					&& !treePropertyLabels.contains($0.label)
-					&& !forwardedPropertySet.contains($0)
+					// A forwarded `x: LazilyInstantiated<X>` fulfills an `x: LazilyInstantiated<X>?` too.
+					&& !forwardedPropertySet.contains($0.asUnwrappedProperty)
 			}
 			.sorted()
 		// Received properties as the caller of `mock()` provides them: by value.
