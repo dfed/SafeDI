@@ -1,23 +1,13 @@
 name: Graph Fuzzer
 
-# Runs SafeDI's random dependency-graph fuzzer over far more seeds than the
-# ordinary test suite does. By default it runs seeds 0..<scheduledSeedCount
-# (`SAFEDI_GRAPH_FUZZER_ITERATIONS=scheduled`; see
-# SafeDIToolGraphFuzzerTests.swift), every failing one of which `knownIssues`
-# lists, so a new failure is a regression and a known issue that stops failing
-# is stale. A failure, a stale known issue, a problem with the run itself (such
-# as a changed corpus), a crash, or a run that checks no graphs fails the job
-# and names the seeds in the job summary.
-#
-# It never runs on pull requests or pushes. Publish calls it as a
-# precondition of every release, and graph-fuzzer-schedule.yml calls it
-# weekly and opens an issue when it fails. Dispatch it by hand with another
-# starting seed and a number of graphs to explore new graphs.
+# Runs SafeDI's random dependency-graph fuzzer by hand, from any starting
+# seed and for any number of graphs, to explore graphs beyond the fixed
+# corpus that ci.yml fuzzes on every pull request and push to main. Its
+# default, `iterations: scheduled`, is that corpus: seeds
+# 0..<scheduledSeedCount (see SafeDIToolGraphFuzzerTests.swift). A failure,
+# a stale known issue, a problem with the run itself, a crash, or a run that
+# checks no graphs fails the job and names the seeds in the job summary.
 on:
-  # A called run checks out the commit that triggered its caller: the commit
-  # being published, or main's head for the weekly run. It restores no cache,
-  # so nothing another run left behind is built or executed.
-  workflow_call:
   workflow_dispatch:
     inputs:
       starting_seed:
@@ -33,11 +23,8 @@ permissions: {}
 
 jobs:
   fuzz:
-    # Nothing here needs macOS: the long run runs the tool and compiles its
-    # output with `swiftc -emit-object`, as the test suite does on Linux in
-    # every pull request. So it uses the "Build and Test on Linux" job's
-    # container in ci.yml and leaves the scarce macOS runners to the release
-    # builds it runs beside in a publish.
+    # Nothing here needs macOS: it runs the tool and compiles its output with
+    # `swiftc -emit-object`, so it uses the Linux test job's container.
     name: Fuzz Dependency Graphs on Linux
     runs-on: ubuntu-latest
     container: swift:6.2
@@ -48,8 +35,6 @@ jobs:
       run:
         shell: bash
     env:
-      # A call from another workflow has no `starting_seed` or `iterations`
-      # input, so it runs the scheduled seeds.
       ITERATIONS: ${{ inputs.iterations || 'scheduled' }}
       STARTING_SEED: ${{ inputs.starting_seed || '0' }}
     steps:
@@ -127,30 +112,3 @@ jobs:
           name: graph-fuzzer-report
           path: ${{ runner.temp }}/graph-fuzzer/
           if-no-files-found: ignore
-
-  schedule-state:
-    name: Check the Weekly Schedule Is Enabled
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-    steps:
-      # GitHub disables scheduled workflows in a public repository after 60
-      # days without activity and never re-enables them. Warn, rather than
-      # fail, so a release is not blocked for a reason unrelated to the commit
-      # this workflow just fuzzed.
-      - name: Read graph-fuzzer-schedule.yml's state
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          state=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/graph-fuzzer-schedule.yml" --jq '.state' 2>/dev/null || echo "unreadable")
-          if [ "$state" = active ]; then
-            echo "The weekly graph fuzzer schedule is active."
-          else
-            message="The weekly graph fuzzer schedule (graph-fuzzer-schedule.yml) is $state, so it has stopped running. Re-enable it under Actions, Graph Fuzzer Schedule, Enable workflow, or with: gh workflow enable graph-fuzzer-schedule.yml --repo $GITHUB_REPOSITORY"
-            echo "::warning::$message"
-            {
-              echo "### Weekly graph fuzzer schedule"
-              echo
-              echo "**Warning:** $message"
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
