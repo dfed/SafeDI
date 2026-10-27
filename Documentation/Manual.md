@@ -720,6 +720,8 @@ When you provide a `mockOnly` declaration, SafeDI’s mock generator will utiliz
 
 A `mockOnly` declaration requires a hand-written `mock()` method (or a method named by `customMockName`). No `init` (type declarations), `instantiate()` (extensions), or `Instantiable` conformance is required. `mockOnly` is mutually exclusive with `generateMock` and `isRoot`. `conformsElsewhere` has no effect when `mockOnly` is true.
 
+Because a `mockOnly` declaration contributes no production instantiation path, a dependency tree that instantiates a type only a `mockOnly` declaration fulfills fails generation with an error at the `@Instantiated` property, even when a production declaration of the same concrete type exists but does not fulfill that type.
+
 #### Splitting production and mock declarations
 
 A type may have `@Instantiable` on both its declaration and an extension, with one being `mockOnly: true`. This lets you keep production behavior in one declaration and a hand-written mock in the other:
@@ -810,7 +812,7 @@ LoggedInView.mock(safeDIOverrides: .init(
 
 Closure fields on `SafeDIMockConfiguration` are plain (non-`@Sendable`) by default, so overrides can capture mutable non-`Sendable` test state. When a type is reached through a `SendableInstantiator` (or `SendableErasedInstantiator`) anywhere in the dependency graph, its `SafeDIMockConfiguration` is emitted with `@Sendable` closure fields instead so the overrides remain safe to invoke across isolation boundaries.
 
-A type gets its own `SafeDIOverrides` struct when at least one dependency belongs there: an `@Instantiated` dependency, a `@Received` dependency of a type an `@Instantiable` declaration fulfills or a single concrete type is [erased to](#receiving-a-type-erased-dependency), or a `@Received(onlyIfAvailable: true)` dependency. Every other dependency is a flat `mock()` parameter. The table below shows where each kind lands and whether the caller has to supply it.
+A type gets its own `SafeDIOverrides` struct when at least one dependency belongs there: an `@Instantiated` dependency, a `@Received` dependency the mock can build because an `@Instantiable` declaration fulfills its type or a single concrete type is [erased to](#receiving-a-type-erased-dependency), or a `@Received(onlyIfAvailable: true)` dependency. Every other dependency is a flat `mock()` parameter. The table below shows where each kind lands and whether the caller has to supply it.
 
 #### Dependency kinds in the generated mock
 
@@ -820,14 +822,19 @@ The table below shows where each dependency kind lands in the three buckets abov
 | --- | --- | --- |
 | Required `@Received` of a type some `@Instantiable` declaration fulfills (directly or via `fulfillingAdditionalTypes`), or of a type exactly one concrete type is [erased to](#receiving-a-type-erased-dependency) | Entry on `SafeDIOverrides` | Built from the real subtree, exactly like `@Instantiated` |
 | Required `@Received` of a type no `@Instantiable` declaration fulfills, including a type [different concrete types are erased to](#receiving-a-type-erased-dependency) | Flat `mock()` parameter | Required |
+| Required `@Received` of a type whose `@Instantiable` declaration has `@Forwarded` properties, unless received as an `Instantiator` | Flat `mock()` parameter | Required |
 | `@Forwarded` | Flat `mock()` parameter | Required, unless the root provides a default or the forwarded type has a [`mockOnly`](#the-mockonly-parameter) provider (which defaults the parameter to `Type.mock()`) |
 | `@Instantiated` | Entry on `SafeDIOverrides` | Built from the real subtree — see [Overriding dependencies](#overriding-dependencies) |
 | `@Received(onlyIfAvailable: true)` | Entry on `SafeDIOverrides`, typed as optional | `nil` |
 | Default-valued non-DI init parameter | Flat `mock()` parameter on a direct mock, or a nested `SafeDIMockConfiguration` field when reached through a parent | The parameter’s original default expression |
 
+A type with `@Forwarded` properties can only be built by an `Instantiator` that is handed the forwarded values, which is why production never `@Instantiated`s it as a constant. A mock has no values to forward either, so when the mocked type, or a type in its tree, receives such a type as a constant, `mock()` takes the instance as a parameter, as it does for a type no `@Instantiable` declaration fulfills. This holds even when the type has a hand-written mock. A received `Instantiator` of the type is built as usual: the forwarded values are the arguments of its `instantiate(_:)`.
+
 A `@Received(onlyIfAvailable: true)` dependency gets no `SafeDIOverrides` entry of its own when the mock already builds that dependency — because the mocked type instantiates it, or because another type in the tree requires it. The receiver is then passed the built instance, unless that instance can only be built after the receiver, as when the receiver is built inside it (see [Conditionally receiving dependencies](#conditionally-receiving-dependencies)). In that case the receiver is passed `nil`, as in production, and a builder closure you set for the receiver in `SafeDIOverrides` is called with `nil`.
 
 A `@Received` dependency is resolved from its declared type, not from the renames in any particular parent. Take `ProfileView` from [Sharing one instance across properties of disparate types](#sharing-one-instance-across-properties-of-disparate-types): `ProfileView.mock()` can build `crashReporter` itself only when `Telemetry` lists `CrashReporter` in `fulfillingAdditionalTypes`. A composition entry such as `(EventTracker & CrashReporter).self` alone does not cover its members. Otherwise `crashReporter` is a required parameter of `ProfileView.mock()`. Because each received dependency is resolved on its own, a mock that receives both `EventTracker` and `CrashReporter` builds a separate `Telemetry` for each. Pass one instance through `safeDIOverrides` if a test needs them to coincide.
+
+The renamed property may keep the original label, as in `@Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let analytics: EventTracker`. When the mocked type declares it, the `analytics` entry on `SafeDIOverrides` customizes the original `Analytics`, and the mocked type and the types in its tree that receive `analytics: EventTracker` are passed that instance as an `EventTracker`.
 
 When two flat `mock()` parameters or two entries in the same `SafeDIOverrides` or `SafeDIMockConfiguration` share a label, each is named by its label followed by its type. Received dependencies named `items` of types `[String]` and `Set<String>` become the parameters `items_Array_String` and `items_Set__String`. The type part is a Swift identifier built from the type’s structure. Optionality, `any`, `some`, `.Type`, and attributes such as `@Sendable` are left out unless two entries differ only in them: `Int?` and `Int.Type` become `Int_Optional` and `Int_Type`. When two entries build the same type, the property type names them apart: a mocked type that instantiates `x: X` while a dependency it receives requires `x: Instantiator<X>` gets the entries `x_X` and `x_Instantiator__X`. A name that is still taken gets trailing underscores until it is unique.
 

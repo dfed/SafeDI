@@ -331,8 +331,10 @@ public struct InstantiableMacro: MemberMacro {
 							existingParameters[functionParameterProperty] = nil
 						}
 
-						for existingParameter in existingParameters.map(\.value) {
-							if let priorIndex = syntaxToFix.signature.parameterClause.parameters.firstIndex(of: existingParameter) {
+						// Inserted in source order, each parameter lands among those inserted before it.
+						for priorIndex in syntaxToFix.signature.parameterClause.parameters.indices {
+							let existingParameter = syntaxToFix.signature.parameterClause.parameters[priorIndex]
+							if existingParameters[Initializer.Argument(existingParameter).asProperty] == existingParameter {
 								fixedSyntax.signature.parameterClause.parameters.insert(
 									existingParameter,
 									at: fixedSyntax.signature.parameterClause.parameters.index(
@@ -1390,8 +1392,8 @@ public struct InstantiableMacro: MemberMacro {
 				result.parameters.append(property.asFunctionParamterSyntax)
 			}
 		}
-		// Append remaining non-required parameters (e.g., extra parameters with defaults).
-		for (_, parameter) in existingParameters {
+		// Append remaining non-required parameters (e.g., extra parameters with defaults), in source order.
+		for parameter in original.parameters where existingParameters[Initializer.Argument(parameter).asProperty] == parameter {
 			result.parameters.append(parameter)
 		}
 		// Fix up trailing commas.
