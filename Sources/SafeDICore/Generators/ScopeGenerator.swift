@@ -53,54 +53,83 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		self.property = property
 		self.propertiesToGenerate = propertiesToGenerate
-		propertiesToDeclare = Set(propertiesToGenerate.compactMap(\.property))
+		let propertiesToDeclare = Set(propertiesToGenerate.compactMap(\.property))
+		self.propertiesToDeclare = propertiesToDeclare
 		self.unavailableOptionalProperties = unavailableOptionalProperties
-		receivedProperties = Set(
-			propertiesToGenerate.flatMap { [propertiesToDeclare, scopeData] propertyToGenerate in
-				// All the properties this child and its children require be passed in.
-				propertyToGenerate.receivedProperties
-					// Minus the properties we declare.
-					.subtracting(propertiesToDeclare)
-					// Minus optional properties whose unwrapped form we declare.
-					// This handles the case where a non-optional version is promoted
-					// to satisfy both required and onlyIfAvailable receivers.
-					.filter { property in
-						!property.typeDescription.isOptional
-							|| !propertiesToDeclare.contains(property.asUnwrappedProperty)
-					}
-					// Minus the properties we forward.
-					.subtracting(scopeData.forwardedProperties)
-			},
-		)
-		// Unioned with the properties we require to fulfill our own dependencies.
-		.union(
-			instantiable
-				.dependencies
-				.compactMap { [propertiesToDeclare] in
-					switch $0.source {
-					case .instantiated, .forwarded:
-						nil
-					case .received:
-						$0.property
-					case let .aliased(fulfillingProperty, _, _):
-						// If the alias's fulfilling property is locally declared
-						// (e.g., as an @Instantiated sibling), the alias binds
-						// against that local — it doesn't need to be received.
-						propertiesToDeclare.contains(fulfillingProperty) ? nil : fulfillingProperty
-					}
-				},
-		)
-		onlyIfAvailableUnwrappedReceivedProperties = Set(
-			propertiesToGenerate.flatMap { [propertiesToDeclare, scopeData] propertyToGenerate in
+		onlyIfAvailableDependencies = instantiable.dependencies.compactMap { dependency in
+			switch dependency.source {
+			case let .received(onlyIfAvailable):
+				onlyIfAvailable
+					? OnlyIfAvailableDependency(unwrappedFulfillingProperty: dependency.property.asUnwrappedProperty, unavailableProperties: [dependency.property])
+					: nil
+			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+				onlyIfAvailable
+					? OnlyIfAvailableDependency(unwrappedFulfillingProperty: fulfillingProperty.asUnwrappedProperty, unavailableProperties: [dependency.property, fulfillingProperty])
+					: nil
+			case .instantiated, .forwarded:
+				nil
+			}
+		}
+		aliasPropertyIsProvidedByEnclosingScope = false
+		let forwardedProperties = scopeData.forwardedProperties
+		/// Whether a property a child requires be passed in must be received by this scope too: this
+		/// scope does not declare it, does not declare the unwrapped form of an optional one (which
+		/// handles a non-optional version promoted to satisfy both required and onlyIfAvailable
+		/// receivers), and does not forward it.
+		func isReceivedFromAncestors(_ property: Property) -> Bool {
+			!propertiesToDeclare.contains(property)
+				&& (!property.typeDescription.isOptional || !propertiesToDeclare.contains(property.asUnwrappedProperty))
+				&& !forwardedProperties.contains(property)
+		}
+		// All the properties our children require be passed in, unioned with the properties we
+		// require to fulfill our own dependencies, and those of them some receiver requires. A
+		// child's required properties are among its received ones, so each child's received
+		// properties are read once, with no intermediate sets: this runs at every scope of every tree.
+		var receivedProperties = Set<Property>()
+		var requiredReceivedProperties = Set<Property>()
+		for child in propertiesToGenerate {
+			for property in child.receivedProperties where isReceivedFromAncestors(property) {
+				receivedProperties.insert(property)
+				if child.requiredReceivedProperties.contains(property) {
+					requiredReceivedProperties.insert(property)
+				}
+			}
+		}
+		for dependency in instantiable.dependencies {
+			let receivedProperty: Property
+			let onlyIfAvailable: Bool
+			switch dependency.source {
+			case .instantiated, .forwarded:
+				continue
+			case let .received(isOnlyIfAvailable):
+				receivedProperty = dependency.property
+				onlyIfAvailable = isOnlyIfAvailable
+			case let .aliased(fulfillingProperty, _, isOnlyIfAvailable):
+				// If the alias's fulfilling property is locally declared
+				// (e.g., as an @Instantiated sibling), the alias binds
+				// against that local — it doesn't need to be received.
+				guard !propertiesToDeclare.contains(fulfillingProperty) else { continue }
+				receivedProperty = fulfillingProperty
+				onlyIfAvailable = isOnlyIfAvailable
+			}
+			receivedProperties.insert(receivedProperty)
+			if !onlyIfAvailable {
+				requiredReceivedProperties.insert(receivedProperty)
+			}
+		}
+		self.receivedProperties = receivedProperties
+		self.requiredReceivedProperties = requiredReceivedProperties
+		let onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired = Set(
+			propertiesToGenerate.flatMap { propertyToGenerate in
 				propertyToGenerate.onlyIfAvailableUnwrappedReceivedProperties
 					.subtracting(propertiesToDeclare)
-					.subtracting(scopeData.forwardedProperties)
+					.subtracting(forwardedProperties)
 			},
 		)
 		.union(
 			instantiable
 				.dependencies
-				.compactMap { [propertiesToDeclare] in
+				.compactMap {
 					switch $0.source {
 					case .instantiated, .forwarded:
 						nil
@@ -121,6 +150,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 				},
 		)
+		// A property some receiver requires is required, even where others receive
+		// it only if available. Few subtrees receive anything only if available, so the
+		// required properties are unwrapped only for those that do.
+		onlyIfAvailableUnwrappedReceivedProperties = onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.isEmpty
+			? onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired
+			: onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.subtracting(requiredReceivedProperties.map(\.asUnwrappedProperty))
 	}
 
 	init(
@@ -129,6 +164,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		unavailableOptionalProperties: Set<Property>,
 		erasedToConcreteExistential: Bool,
 		onlyIfAvailable: Bool,
+		isProvidedByEnclosingScope: Bool,
 		declarationReference: AliasDeclarationReferences.Reference?,
 	) {
 		scopeData = .alias(
@@ -139,16 +175,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			declarationReference: declarationReference,
 		)
 		receivedProperties = [fulfillingProperty]
-		onlyIfAvailableUnwrappedReceivedProperties = if onlyIfAvailable {
-			[fulfillingProperty.asUnwrappedProperty]
+		if onlyIfAvailable {
+			requiredReceivedProperties = []
+			onlyIfAvailableUnwrappedReceivedProperties = [fulfillingProperty.asUnwrappedProperty]
+			onlyIfAvailableDependencies = [OnlyIfAvailableDependency(unwrappedFulfillingProperty: fulfillingProperty.asUnwrappedProperty, unavailableProperties: [fulfillingProperty])]
 		} else {
-			[]
+			requiredReceivedProperties = [fulfillingProperty]
+			onlyIfAvailableUnwrappedReceivedProperties = []
+			onlyIfAvailableDependencies = []
 		}
 		description = property.asSource
 		propertiesToGenerate = []
 		propertiesToDeclare = []
 		self.unavailableOptionalProperties = unavailableOptionalProperties
 		self.property = property
+		aliasPropertyIsProvidedByEnclosingScope = isProvidedByEnclosingScope
 	}
 
 	// MARK: CustomStringConvertible
@@ -162,24 +203,39 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// generation to surface dependencies the tree does not itself provide.
 	let receivedProperties: Set<Property>
 
-	/// - Parameter propertiesGeneratedLater: Unwrapped properties that this subtree
-	///   receives `onlyIfAvailable` and that an enclosing scope declares but generates
-	///   after this code (see `orderedPropertiesToGenerate`), so they are unavailable
-	///   here. Restricting it to this subtree's `onlyIfAvailable` receives also drops a
-	///   property a scope in this subtree declares itself, since that declaration
-	///   fulfills the receives beneath it.
+	/// Generates the code of this scope as the root of what is generated, with nothing
+	/// generated before it.
 	func generateCode(
 		codeGeneration: CodeGeneration = .dependencyTree,
-		propertiesAlreadyGeneratedAtThisScope: Set<Property> = [],
-		propertiesGeneratedLater: Set<Property> = [],
-		leadingWhitespace: String = "",
+	) async throws -> String {
+		try await generateCode(
+			codeGeneration: codeGeneration,
+			unavailableProperties: unavailableProperties(
+				isGeneratedBefore: { _ in false },
+				propertiesGeneratedLater: [],
+			),
+			propertiesGeneratedLater: [],
+			leadingWhitespace: "",
+		)
+	}
+
+	/// - Parameters:
+	///   - unavailableProperties: This scope's `unavailableProperties`, given what an
+	///     enclosing scope generates before it.
+	///   - propertiesGeneratedLater: Unwrapped properties that this subtree
+	///     receives `onlyIfAvailable` and that an enclosing scope declares but does not
+	///     generate before this code — it generates them after this code (see
+	///     `orderedPropertiesToGenerate`), or they are `onlyIfAvailable` aliases it does
+	///     not create — so they are unavailable here. Restricting it to this subtree's
+	///     `onlyIfAvailable` receives also drops a property a scope in this subtree
+	///     declares itself, since that declaration fulfills the receives beneath it.
+	private func generateCode(
+		codeGeneration: CodeGeneration,
+		unavailableProperties: Set<Property>,
+		propertiesGeneratedLater: Set<Property>,
+		leadingWhitespace: String,
 	) async throws -> String {
 		let generatedCode: String
-		let unavailableProperties = unavailableOptionalProperties
-			.filter {
-				!(propertiesAlreadyGeneratedAtThisScope.contains($0) || propertiesAlreadyGeneratedAtThisScope.contains($0.asUnwrappedProperty))
-			}
-			.union(onlyIfAvailableDependencies(fulfilledByPropertiesGeneratedLater: propertiesGeneratedLater))
 		// Mock code is not cached — the context varies per call site.
 		// Dependency tree code is cached by the properties that are unavailable.
 		switch codeGeneration {
@@ -306,15 +362,41 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	private let scopeData: ScopeData
-	/// Unwrapped versions of received properties from transitive `@Received(onlyIfAvailable: true)` dependencies.
-	/// Used by mock generation to identify dependencies that should become optional mock parameters (no guaranteed default).
+	/// The received properties that some receiver in this subtree requires — a `@Received`
+	/// dependency, or the fulfilling property of an aliased one, that is not `onlyIfAvailable`.
+	private let requiredReceivedProperties: Set<Property>
+	/// Unwrapped versions of the received properties that every receiver in this subtree receives
+	/// `@Received(onlyIfAvailable: true)`, directly or through an alias. A property some receiver
+	/// requires is excluded: it must be built before this subtree, and a mock must be given it.
+	/// Used to order children and by mock generation to identify dependencies that should become
+	/// optional mock parameters (no guaranteed default).
 	let onlyIfAvailableUnwrappedReceivedProperties: Set<Property>
 	/// Received properties that are optional and not created by a parent.
 	private let unavailableOptionalProperties: Set<Property>
+	/// The `onlyIfAvailable` dependencies of this scope: for a type, those its declaration receives,
+	/// directly or through an alias; for an `onlyIfAvailable` alias, the alias itself.
+	private let onlyIfAvailableDependencies: [OnlyIfAvailableDependency]
+
+	/// A dependency received only if available, which is passed `nil` when an enclosing scope generates
+	/// the property that fulfills it after this scope.
+	private struct OnlyIfAvailableDependency {
+		/// The unwrapped form of the property that fulfills the dependency.
+		let unwrappedFulfillingProperty: Property
+		/// The properties that are unavailable when the fulfilling property is: the fulfilling property
+		/// and, for an aliased dependency of a type, the alias, matching how `Scope.createScopeGenerator`
+		/// marks a dependency no ancestor provides.
+		let unavailableProperties: [Property]
+	}
+
 	/// Properties that will be generated as `let` constants.
 	private let propertiesToGenerate: [ScopeGenerator]
 	/// Properties that this scope declares as a `let` constant.
 	private let propertiesToDeclare: Set<Property>
+	/// For an alias, whether a scope enclosing the alias's scope provides the alias's
+	/// property too. When the alias is not created, a receiver of the property beneath
+	/// it then resolves to that enclosing property, so the alias does not make the
+	/// property unavailable. `false` for every other scope.
+	private let aliasPropertyIsProvidedByEnclosingScope: Bool
 	private let property: Property?
 
 	private struct UnavailablePropertiesCacheKey: Hashable {
@@ -323,12 +405,29 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	private var unavailablePropertiesToGenerateCodeTask = [UnavailablePropertiesCacheKey: Task<String, Error>]()
+	/// The task that builds a mock root's parameter tree. Collecting configuration types, collecting
+	/// sendable configuration type names, and generating the mock each read the same tree.
+	private var rootMockParameterTreeTask: Task<[MockTreeItem], Never>?
+
+	/// The mock parameter tree of this scope as a mock root, built once.
+	private var rootMockParameterTree: [MockTreeItem] {
+		get async {
+			if let rootMockParameterTreeTask {
+				return await rootMockParameterTreeTask.value
+			} else {
+				let rootMockParameterTreeTask = Task { await collectMockParameterTree() }
+				self.rootMockParameterTreeTask = rootMockParameterTreeTask
+				return await rootMockParameterTreeTask.value
+			}
+		}
+	}
 
 	/// The children of this scope in the order their code is emitted: every child
 	/// follows the siblings it depends on.
 	///
 	/// A child depends on a sibling when the child's subtree receives the sibling.
-	/// A required receive must be honored. A `@Received(onlyIfAvailable: true)`
+	/// A required receive must be honored, and the subtree's receive is required when
+	/// any receiver in it requires the sibling. A `@Received(onlyIfAvailable: true)`
 	/// receive is honored only when it does not close a cycle among the siblings —
 	/// e.g. when `b`'s subtree receives `c` only if available but `c` receives `b`,
 	/// `c` cannot be built before `b`. A child whose `onlyIfAvailable` receive is
@@ -408,15 +507,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// The properties `child`, at `index` in `orderedPropertiesToGenerate`, receives
 	/// `onlyIfAvailable` but must treat as unavailable: those this scope's ancestors
-	/// generate later (`propertiesGeneratedLater`) and those of the siblings
-	/// generated after it. All are unwrapped, so they match a receive of `x: X?`.
+	/// do not generate before this scope (`propertiesNotGeneratedBefore`) and those of
+	/// the siblings generated after it. All are unwrapped, so they match a receive of
+	/// `x: X?`.
 	private func propertiesGeneratedLater(
 		thanChildAt index: Int,
 		receivedOnlyIfAvailableBy child: ScopeGenerator,
-		propertiesGeneratedLater: Set<Property>,
+		propertiesNotGeneratedBefore: Set<Property>,
 	) -> Set<Property> {
 		child.onlyIfAvailableUnwrappedReceivedProperties.filter { property in
-			if propertiesGeneratedLater.contains(property) {
+			if propertiesNotGeneratedBefore.contains(property) {
 				true
 			} else if let orderedIndex = orderedIndexByUnwrappedProperty[property] {
 				orderedIndex > index
@@ -426,42 +526,115 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// The properties this scope's type receives `onlyIfAvailable` that are
-	/// unavailable because an ancestor generates them after this scope — the
-	/// fulfilling property and, for an aliased dependency, the alias, matching how
-	/// `Scope.createScopeGenerator` marks a dependency no ancestor provides.
+	/// The index in `orderedPropertiesToGenerate` of the first child declaring each property.
+	private lazy var firstOrderedIndexByProperty: [Property: Int] = orderedPropertiesToGenerate
+		.enumerated()
+		.reduce(into: [Property: Int]()) { partialResult, indexAndScope in
+			if let property = indexAndScope.element.property, partialResult[property] == nil {
+				partialResult[property] = indexAndScope.offset
+			}
+		}
+
+	/// A child in `orderedPropertiesToGenerate`, with what it is generated with.
+	private struct OrderedChild {
+		let generator: ScopeGenerator
+		/// The child's `unavailableProperties`, given the properties this scope generates before it.
+		let unavailableProperties: Set<Property>
+		/// The `propertiesGeneratedLater` to generate the child with (see `generateCode`).
+		let propertiesGeneratedLater: Set<Property>
+	}
+
+	/// The children in `orderedPropertiesToGenerate`, each with its `unavailableProperties`
+	/// given the properties this scope generates before it, and the `propertiesGeneratedLater`
+	/// to generate it with (see `generateCode`). An `onlyIfAvailable` alias that is not created is
+	/// unavailable to the children after it, exactly like a property generated later,
+	/// and does not count as generated before them, unless a scope enclosing this one
+	/// provides the same property: the children then resolve to that property. An
+	/// enclosing provider that is itself unavailable here already arrives in
+	/// `propertiesGeneratedLater`.
+	private func orderedChildren(
+		propertiesGeneratedLater: Set<Property>,
+	) -> [OrderedChild] {
+		var propertiesNotGeneratedBefore = propertiesGeneratedLater
+		var uncreatedAliasProperties = Set<Property>()
+		var orderedChildren = [OrderedChild]()
+		for (index, childGenerator) in orderedPropertiesToGenerate.enumerated() {
+			let childPropertiesGeneratedLater = self.propertiesGeneratedLater(
+				thanChildAt: index,
+				receivedOnlyIfAvailableBy: childGenerator,
+				propertiesNotGeneratedBefore: propertiesNotGeneratedBefore,
+			)
+			// A property is generated before the child when a child ordered before it declares the property,
+			// unless that child is an alias that is not created.
+			let childUnavailableProperties = childGenerator.unavailableProperties(
+				isGeneratedBefore: { property in
+					firstOrderedIndexByProperty[property].map { $0 < index } == true && !uncreatedAliasProperties.contains(property)
+				},
+				propertiesGeneratedLater: childPropertiesGeneratedLater,
+			)
+			orderedChildren.append(OrderedChild(
+				generator: childGenerator,
+				unavailableProperties: childUnavailableProperties,
+				propertiesGeneratedLater: childPropertiesGeneratedLater,
+			))
+			if !childGenerator.aliasPropertyIsProvidedByEnclosingScope,
+			   let uncreatedAliasProperty = childGenerator.uncreatedAliasProperty(unavailableProperties: childUnavailableProperties)
+			{
+				uncreatedAliasProperties.insert(uncreatedAliasProperty)
+				propertiesNotGeneratedBefore.insert(uncreatedAliasProperty.asUnwrappedProperty)
+			}
+		}
+		return orderedChildren
+	}
+
+	/// The dependencies this scope's construction is passed `nil` for, and, for an
+	/// alias, the fulfilling property whose absence means the alias is not created:
+	/// the `onlyIfAvailable` dependencies `Scope.createScopeGenerator` found
+	/// unavailable that no sibling generated before this scope provides, and those
+	/// an enclosing scope does not generate before this scope.
+	/// - Parameter isGeneratedBefore: Whether a sibling generated before this scope declares a property.
+	nonisolated private func unavailableProperties(
+		isGeneratedBefore: (Property) -> Bool,
+		propertiesGeneratedLater: Set<Property>,
+	) -> Set<Property> {
+		let unavailableOptionalPropertiesNotGeneratedBefore = unavailableOptionalProperties
+			.filter {
+				!(isGeneratedBefore($0) || isGeneratedBefore($0.asUnwrappedProperty))
+			}
+		// Nearly every scope is generated with no properties generated later.
+		return propertiesGeneratedLater.isEmpty
+			? unavailableOptionalPropertiesNotGeneratedBefore
+			: unavailableOptionalPropertiesNotGeneratedBefore.union(onlyIfAvailableDependencies(fulfilledByPropertiesGeneratedLater: propertiesGeneratedLater))
+	}
+
+	/// The alias this scope declares when it is an `onlyIfAvailable` alias that is not
+	/// created because its fulfilling property is among `unavailableProperties`, and
+	/// `nil` otherwise.
+	nonisolated private func uncreatedAliasProperty(unavailableProperties: Set<Property>) -> Property? {
+		switch scopeData {
+		case let .alias(property, fulfillingProperty, _, onlyIfAvailable, _):
+			if onlyIfAvailable, unavailableProperties.contains(fulfillingProperty) {
+				property
+			} else {
+				nil
+			}
+		case .root, .property:
+			nil
+		}
+	}
+
+	/// The properties of this scope's `onlyIfAvailableDependencies` that are unavailable because an
+	/// ancestor generates the properties fulfilling them after this scope.
 	nonisolated private func onlyIfAvailableDependencies(
 		fulfilledByPropertiesGeneratedLater propertiesGeneratedLater: Set<Property>,
 	) -> Set<Property> {
-		switch scopeData {
-		case .root:
-			[]
-		case let .property(instantiable, _, _, _, _):
-			Set(instantiable.dependencies.flatMap { dependency -> [Property] in
-				switch dependency.source {
-				case let .received(onlyIfAvailable):
-					if onlyIfAvailable, propertiesGeneratedLater.contains(dependency.property.asUnwrappedProperty) {
-						[dependency.property]
-					} else {
-						[]
-					}
-				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-					if onlyIfAvailable, propertiesGeneratedLater.contains(fulfillingProperty.asUnwrappedProperty) {
-						[dependency.property, fulfillingProperty]
-					} else {
-						[]
-					}
-				case .instantiated, .forwarded:
-					[]
-				}
-			})
-		case let .alias(_, fulfillingProperty, _, onlyIfAvailable, _):
-			if onlyIfAvailable, propertiesGeneratedLater.contains(fulfillingProperty.asUnwrappedProperty) {
-				[fulfillingProperty]
-			} else {
-				[]
-			}
+		var unavailableProperties = Set<Property>()
+		for onlyIfAvailableDependency in onlyIfAvailableDependencies
+			where propertiesGeneratedLater.contains(onlyIfAvailableDependency.unwrappedFulfillingProperty)
+		{
+			unavailableProperties.formUnion(onlyIfAvailableDependency.unavailableProperties)
 		}
+		return unavailableProperties
 	}
 
 	private func generateProperties(
@@ -470,16 +643,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		leadingMemberWhitespace: String,
 	) async throws -> [String] {
 		var generatedProperties = [String]()
-		for (index, childGenerator) in orderedPropertiesToGenerate.enumerated() {
+		for child in orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater) {
 			try await generatedProperties.append(
-				childGenerator.generateCode(
+				child.generator.generateCode(
 					codeGeneration: codeGeneration,
-					propertiesAlreadyGeneratedAtThisScope: .init(orderedPropertiesToGenerate[0..<index].compactMap(\.property)),
-					propertiesGeneratedLater: self.propertiesGeneratedLater(
-						thanChildAt: index,
-						receivedOnlyIfAvailableBy: childGenerator,
-						propertiesGeneratedLater: propertiesGeneratedLater,
-					),
+					unavailableProperties: child.unavailableProperties,
+					propertiesGeneratedLater: child.propertiesGeneratedLater,
 					leadingWhitespace: leadingMemberWhitespace,
 				),
 			)
@@ -690,8 +859,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 				return "\(functionDeclaration)\(propertyDeclaration) = \(initializer)\n"
 			}
-		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
-			if onlyIfAvailable, unavailableProperties.contains(fulfillingProperty) {
+		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, _, declarationReference):
+			if uncreatedAliasProperty(unavailableProperties: unavailableProperties) != nil {
 				return "// Did not create `\(property.asSource)` because `\(fulfillingProperty.asSource)` is unavailable."
 			} else {
 				// The production tree binds an available fulfilling dependency as a non-optional value.
@@ -789,7 +958,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}()
 
 		// 1. Build the parameter tree.
-		let parameterTree = await collectMockParameterTree()
+		let parameterTree = await rootMockParameterTree
 
 		// 2. Identify flat parameters.
 
@@ -1231,7 +1400,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The type's declared dependencies.
 		let dependencies: [Dependency]
 		/// The `onlyIfAvailable` dependencies that are unavailable where this node is
-		/// built, because an enclosing scope builds them after it. They are passed `nil`.
+		/// built, because an ancestor is still building them or an enclosing scope does
+		/// not build them before it. They are passed `nil`.
 		let unavailableProperties: Set<Property>
 		/// Whether a compatible user-defined mock method exists for this type.
 		let useMockInitializer: Bool
@@ -1563,7 +1733,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleEdges: Set<CycleEdge>,
 		sendableConfigurationTypeNames: Set<String>,
 	) async -> [(typeName: String, structCode: String)] {
-		let parameterTree = await collectMockParameterTree()
+		let parameterTree = await rootMockParameterTree
 		let uniqueTypes = Self.collectUniqueConfigurationTypes(from: parameterTree.propertyNodes)
 		let indent = Self.standardIndent
 		return uniqueTypes.map { node in
@@ -1584,7 +1754,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// so every root emits consistent `@Sendable`-ness for a given type's
 	/// `SafeDIMockConfiguration` struct.
 	func collectSendableConfigurationTypeNames() async -> Set<String> {
-		let parameterTree = await collectMockParameterTree()
+		let parameterTree = await rootMockParameterTree
 		var result = Set<String>()
 
 		func walk(_ node: MockParameterNode) {
@@ -1611,7 +1781,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///
 	/// `propertiesGeneratedLater` has the same meaning as in `generateCode`: an
 	/// `onlyIfAvailable` receive of one of these properties is passed `nil`, and an
-	/// `onlyIfAvailable` alias of one is not bound, as in the production tree.
+	/// `onlyIfAvailable` alias of one is not bound, as in the production tree. The
+	/// same holds for a receive of an ancestor that is still being built (see
+	/// `Scope.createScopeGenerator`).
 	private func collectMockParameterTree(
 		insideSendableScope: Bool = false,
 		propertiesGeneratedLater: Set<Property> = [],
@@ -1620,18 +1792,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Roots only appear at the top level, never as children here — so the
 		// `.root` case is not part of the reachable pattern space and is omitted.
-		for (index, childGenerator) in orderedPropertiesToGenerate.enumerated() {
-			let childPropertiesGeneratedLater = self.propertiesGeneratedLater(
-				thanChildAt: index,
-				receivedOnlyIfAvailableBy: childGenerator,
-				propertiesGeneratedLater: propertiesGeneratedLater,
-			)
-			let childUnavailableProperties = childGenerator.onlyIfAvailableDependencies(
-				fulfilledByPropertiesGeneratedLater: childPropertiesGeneratedLater,
-			)
+		for child in orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater) {
+			let childGenerator = child.generator
+			let childPropertiesGeneratedLater = child.propertiesGeneratedLater
+			let childUnavailableProperties = child.unavailableProperties
 			if case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference) = childGenerator.scopeData {
 				// The dependency this alias binds is passed `nil` instead.
-				guard childUnavailableProperties.isEmpty else { continue }
+				guard childGenerator.uncreatedAliasProperty(unavailableProperties: childUnavailableProperties) == nil else { continue }
 				items.append(.alias(MockAliasNode(
 					property: property,
 					erasedToConcreteExistential: erasedToConcreteExistential,

@@ -507,7 +507,22 @@ public struct FeedView: Instantiable {
 }
 ```
 
-A dependency counts as available only if it can be built before the receiver. When a parent instantiates both the dependency and a sibling whose subtree contains the receiver, and the dependency itself receives that sibling, the dependency must be built after the sibling, so the receiver gets `nil`. When two siblings each receive the other `onlyIfAvailable`, the one declared later is built first and receives `nil`.
+A dependency counts as available only if it can be built before the receiver. Receiving still follows the usual rule: a type receives what a type above it instantiates or forwards. Availability depends on the order in which one parent builds the properties it instantiates.
+
+```swift
+@Instantiable
+public struct Parent: Instantiable {
+    @Instantiated let a: A
+    @Instantiated let b: B // A type under `B` receives `a`.
+}
+```
+
+A type under `B` that receives `a` is receiving a property of `Parent`, which is above it, so `Parent` builds `a` before `b`. Nothing reaches into the types under `A`. The receiver gets `nil` in the cases where `a` cannot be built first:
+
+- **The receiver is built inside the dependency.** A type under `A` that receives `a` only if available gets `nil`, because `a` is still being built.
+- **Two of a parent’s properties receive each other.** If a type under `B` receives `a` only if available and `A` receives `b`, then `b` is built first and that receiver gets `nil`. If anything under `B` receives `a` without `onlyIfAvailable`, `a` is built first instead, and `A` gets `nil` for `b` when it receives `b` only if available.
+- **Both receive each other only if available.** The property declared later is built first and receives `nil`.
+- **A renamed dependency is unavailable.** A `@Received(fulfilledByDependencyNamed:ofType:onlyIfAvailable: true)` property whose fulfilling dependency is unavailable is `nil`, and so is that property for anything that receives it in turn. The exception is when an enclosing type instantiates, forwards, or creates through its own alias a property of the same name and type (or its non-optional form): those receivers then get that property.
 
 ### #SafeDIConfiguration
 
@@ -815,7 +830,7 @@ The table below shows where each dependency kind lands in the three buckets abov
 
 A type with `@Forwarded` properties can only be built by an `Instantiator` that is handed the forwarded values, which is why production never `@Instantiated`s it as a constant. A mock has no values to forward either, so when the mocked type, or a type in its tree, receives such a type as a constant, `mock()` takes the instance as a parameter, as it does for a type no `@Instantiable` declaration fulfills. This holds even when the type has a hand-written mock. A received `Instantiator` of the type is built as usual: the forwarded values are the arguments of its `instantiate(_:)`.
 
-A `@Received(onlyIfAvailable: true)` dependency gets no `SafeDIOverrides` entry of its own when the mock already builds that dependency — because the mocked type instantiates it, or because another type in the tree requires it. The receiver is then passed the built instance, unless that instance can only be built after the receiver (see [Conditionally receiving dependencies](#conditionally-receiving-dependencies)). In that case the receiver is passed `nil`, as in production, and a builder closure you set for the receiver in `SafeDIOverrides` is called with `nil`.
+A `@Received(onlyIfAvailable: true)` dependency gets no `SafeDIOverrides` entry of its own when the mock already builds that dependency — because the mocked type instantiates it, or because another type in the tree requires it. The receiver is then passed the built instance, unless that instance can only be built after the receiver, as when the receiver is built inside it (see [Conditionally receiving dependencies](#conditionally-receiving-dependencies)). In that case the receiver is passed `nil`, as in production, and a builder closure you set for the receiver in `SafeDIOverrides` is called with `nil`.
 
 A `@Received` dependency is resolved from its declared type, not from the renames in any particular parent. Take `ProfileView` from [Sharing one instance across properties of disparate types](#sharing-one-instance-across-properties-of-disparate-types): `ProfileView.mock()` can build `crashReporter` itself only when `Telemetry` lists `CrashReporter` in `fulfillingAdditionalTypes`. A composition entry such as `(EventTracker & CrashReporter).self` alone does not cover its members. Otherwise `crashReporter` is a required parameter of `ProfileView.mock()`. Because each received dependency is resolved on its own, a mock that receives both `EventTracker` and `CrashReporter` builds a separate `Telemetry` for each. Pass one instance through `safeDIOverrides` if a test needs them to coincide.
 
