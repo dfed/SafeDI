@@ -144,6 +144,7 @@ Everything SafeDI produces must be identical on every run over the same inputs: 
 ## Common Pitfalls
 
 - The input CSV written by plugins includes ALL swift files (target + dependencies). Mock scoping requires passing `mockScopedSwiftFiles` separately — only the target's own files.
+- **Nested-type qualification.** `generate` qualifies each dependency's property type, `fulfilledByType:` type, and alias `ofType:` type with `TypeDescription.qualifyingInstantiatedType(within:amongInstantiableTypes:)`, and maps the initializer's arguments by the qualified property types. It qualifies only the type `asInstantiatedType` returns (`Instantiator<Service>?` → `Instantiator<Feature.Service>?`), choosing the most qualified of `nestedOptions` that an `@Instantiable` fulfills, so a nested type wins over a top-level type of the same name, as the compiler resolves it. Other generic arguments (an `ErasedInstantiator`'s forwarded properties), non-instantiable types, and a hand-written mock's types are not qualified. `replacingInstantiatedType` walks the same path through a type as `asInstantiatedType` (both use `builtTypeIndex`), so a new wrapper type must be taught to both.
 - `Property.<` sort uses type as tiebreaker (not just label) for stable ordering.
 - Extension-based `@Instantiable` types use `static func instantiate(...)` instead of `init(...)`. Their `@Instantiated` dependencies are constructed by the parent scope.
 - When a received dependency is promoted to root scope, the producer branch must capture the root-bound value — not reconstruct the type.
