@@ -243,6 +243,105 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenRequiredOptionalReceiveIsBuiltInsideItsOnlyProvider() async {
+		// Child, built inside `user`, requires `user: User?`. Root.mock() builds `user`
+		// itself, so it binds no `user` parameter, and `user` is still being built: the
+		// receive closes a cycle, as a receive of `user: User` would.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):4:5: error: Dependency cycle detected: User -> Child -> User?
+				\(fixtures["User.swift"]):1:1: note: `User` is part of the cycle
+				\(fixtures["Child.swift"]):1:1: note: `Child` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Root: Instantiable {
+					    public init(user: User) { self.user = user }
+					    @Instantiated let user: User
+					}
+					""",
+					"""
+					@Instantiable
+					public final class User: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(user: User?) { self.user = user }
+					    @Received let user: User?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenRequiredOptionalReceiveUnderAncestorThatReceivesItOnlyIfAvailableIsBuiltInsideItsOnlyProvider() async {
+		// Parent, built inside `user`, receives `user` only if available and gets `nil`,
+		// because `user` is still being built. Child, which requires `user`, is built
+		// inside it too, so its receive closes a cycle, as a receive of `user: User` would.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):4:5: error: Dependency cycle detected: User -> Parent -> Child -> User?
+				\(fixtures["User.swift"]):1:1: note: `User` is part of the cycle
+				\(fixtures["Parent.swift"]):1:1: note: `Parent` is part of the cycle
+				\(fixtures["Child.swift"]):1:1: note: `Child` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Root: Instantiable {
+					    public init(user: User) { self.user = user }
+					    @Instantiated let user: User
+					}
+					""",
+					"""
+					@Instantiable
+					public final class User: Instantiable {
+					    public init(parent: Parent) { self.parent = parent }
+					    @Instantiated let parent: Parent
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Parent: Instantiable {
+					    public init(user: User?, child: Child) { self.user = user; self.child = child }
+					    @Received(onlyIfAvailable: true) let user: User?
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(user: User?) { self.user = user }
+					    @Received let user: User?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// The time limit only turns a hang into a failure; see
 	// `mock_generatesWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
 	@Test(.timeLimit(.minutes(10)))

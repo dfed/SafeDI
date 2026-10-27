@@ -1760,29 +1760,39 @@ public actor DependencyTreeGenerator {
 				}
 			}
 
-			if !cyclesOnly {
-				for requiredReceivedProperty in scope.requiredReceivedProperties {
-					let receivedProperty = requiredReceivedProperty.property
-					let parentContainsProperty = receivableProperties.contains(receivedProperty)
-					let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
-					if !parentContainsProperty, !propertyIsCreatedAtThisScope, property != nil {
-						// This property is in a dependency tree and is unfulfillable. Record the problem.
-						unfulfillableProperties.insert(.init(
-							property: receivedProperty,
-							declarationLocation: requiredReceivedProperty.declarationLocation,
-							identifierRange: requiredReceivedProperty.identifierRange,
-							typeAnnotationRange: requiredReceivedProperty.typeAnnotationRange,
-							bareAttributeRange: requiredReceivedProperty.bareAttributeRange,
-							instantiable: scope.instantiable,
-							parentStack: propertyStack.map(\.typeDescription),
-							root: root,
-							suggestedAlternatives: receivableProperties.filter {
-								receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
-									|| receivedProperty.label == $0.label
-							}.sorted(),
-							uncreatedAlias: nil,
-						))
-					}
+			/// The first required optional receive this scope can resolve only to the property's non-optional form,
+			/// still being built, with that form's index on `instantiationStack`. It is a cycle, thrown after the
+			/// cycles below, which match only exact properties, so it is reported as a non-optional receive would be.
+			var optionalReceiveOfPropertyBeingBuilt: (receive: Scope.RequiredReceivedProperty, beingBuiltIndex: Int)?
+			for requiredReceivedProperty in scope.requiredReceivedProperties {
+				let receivedProperty = requiredReceivedProperty.property
+				let parentContainsProperty = receivableProperties.contains(receivedProperty)
+				let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
+				guard !parentContainsProperty, !propertyIsCreatedAtThisScope, property != nil else { continue }
+				let beingBuiltIndex = receivableProperties.contains(receivedProperty.asUnwrappedProperty)
+					? nil
+					: instantiationStack.firstIndex(of: receivedProperty.asUnwrappedProperty)
+				if receivedProperty.typeDescription.isOptional, let beingBuiltIndex {
+					optionalReceiveOfPropertyBeingBuilt = optionalReceiveOfPropertyBeingBuilt ?? (requiredReceivedProperty, beingBuiltIndex)
+				} else if !cyclesOnly || beingBuiltIndex != nil {
+					// A mock binds every property its tree receives from above it, so there only a property still
+					// being built is unfulfillable. A non-optional one is a cycle, reported below.
+					// This property is in a dependency tree and is unfulfillable. Record the problem.
+					unfulfillableProperties.insert(.init(
+						property: receivedProperty,
+						declarationLocation: requiredReceivedProperty.declarationLocation,
+						identifierRange: requiredReceivedProperty.identifierRange,
+						typeAnnotationRange: requiredReceivedProperty.typeAnnotationRange,
+						bareAttributeRange: requiredReceivedProperty.bareAttributeRange,
+						instantiable: scope.instantiable,
+						parentStack: propertyStack.map(\.typeDescription),
+						root: root,
+						suggestedAlternatives: receivableProperties.filter {
+							receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
+								|| receivedProperty.label == $0.label
+						}.sorted(),
+						uncreatedAlias: nil,
+					))
 				}
 			}
 
@@ -1810,6 +1820,24 @@ public actor DependencyTreeGenerator {
 					isReceived: dependency.source.isReceived,
 				)
 			}
+			if case let (receive, beingBuiltIndex)? = optionalReceiveOfPropertyBeingBuilt {
+				let beingBuiltProperty = instantiationStack[beingBuiltIndex]
+				if beingBuiltIndex == 0 {
+					throw DependencyTreeGeneratorError.receivedConstantCycleDetected(
+						instantiated: beingBuiltProperty,
+						receivedPropertyChain: [receive.property],
+						declarationLocation: receive.declarationLocation,
+					)
+				} else {
+					try throwIfInvalidCycle(
+						typesInCycle: ([receive.property] + instantiationStack[0...beingBuiltIndex]).map(\.typeDescription),
+						property: beingBuiltProperty,
+						declarationLocation: receive.declarationLocation,
+						directParent: scope.instantiable.concreteInstantiable,
+						isReceived: true,
+					)
+				}
+			}
 
 			// A property this scope provides shadows an alias of it declared above, unless this scope's alias of it is
 			// never created.
@@ -1821,7 +1849,26 @@ public actor DependencyTreeGenerator {
 				childReceivableAliases[aliasProperty] = alias
 			}
 			lazy var childReceivableProperties: Set<Property> = {
-				var childReceivableProperties = receivableProperties.union(scope.properties)
+				// An `onlyIfAvailable` receive that is unavailable here is passed `nil`, so it provides nothing to the
+				// scopes below. Availability mirrors `Scope.createScopeGenerator`'s: in a mock, only a property that is
+				// still being built is unavailable.
+				func isAvailable(_ onlyIfAvailableProperty: Property) -> Bool {
+					if cyclesOnly {
+						!instantiationStack.contains(onlyIfAvailableProperty.asUnwrappedProperty)
+					} else {
+						[onlyIfAvailableProperty, onlyIfAvailableProperty.asUnwrappedProperty].contains {
+							receivableProperties.contains($0) && !instantiationStack.contains($0)
+						}
+					}
+				}
+				var childReceivableProperties = receivableProperties.union(scope.instantiable.dependencies.compactMap {
+					switch $0.source {
+					case let .received(onlyIfAvailable):
+						!onlyIfAvailable || isAvailable($0.property) ? $0.property : nil
+					case .instantiated, .forwarded, .aliased:
+						$0.property
+					}
+				})
 				// A mock root also provides the received dependencies it promotes.
 				childReceivableProperties.formUnion(scope.providedProperties)
 				return childReceivableProperties
