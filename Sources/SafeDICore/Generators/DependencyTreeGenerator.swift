@@ -2311,9 +2311,13 @@ public actor DependencyTreeGenerator {
 				let aliasProperty = aliasDependency.property
 				let isFulfillingPropertyProvided = receivableProperties.containsPropertyOrItsUnwrappedForm(fulfillingProperty)
 					|| scope.providedProperties.containsPropertyOrItsUnwrappedForm(fulfillingProperty)
-				if !onlyIfAvailable
-					|| !(receivableProperties.containsPropertyOrItsUnwrappedForm(aliasProperty) || boundProperties.containsPropertyOrItsUnwrappedForm(aliasProperty))
-				{
+				// The instance of a lazily instantiated property does not stand in for an alias that is not created:
+				// it is read from that property, which the alias's label hides.
+				let isAliasPropertyProvidedByEnclosingScope = (
+					receivableProperties.containsPropertyOrItsUnwrappedForm(aliasProperty)
+						|| boundProperties.containsPropertyOrItsUnwrappedForm(aliasProperty),
+				) && closestDeclarationByLabel[aliasProperty.label]?.lazilyInstantiatedInstanceProperty != aliasProperty.asUnwrappedProperty
+				if !onlyIfAvailable || !isAliasPropertyProvidedByEnclosingScope {
 					// The instantiation stack holds a lazily instantiated property as the constant it stands for.
 					let validatedFulfillingProperty = fulfillingProperty.asValidatedForDependencyCycles
 					let alias = ReceivableAlias(

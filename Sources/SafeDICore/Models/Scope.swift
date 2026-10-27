@@ -228,10 +228,12 @@ final class Scope: Hashable {
 		}
 		/// Whether a scope enclosing this one provides `property` to the scopes this one
 		/// generates: it creates the property, or its unwrapped form, and is not an
-		/// ancestor still being built.
+		/// ancestor still being built. The instance of a lazily instantiated property does
+		/// not count: it is read from that property, which a declaration with its label hides.
 		func isProvidedByEnclosingScope(_ property: Property) -> Bool {
 			func isReceivable(_ property: Property) -> Bool {
-				receivableProperties.contains(property) || boundProperties.contains(property)
+				(receivableProperties.contains(property) || boundProperties.contains(property))
+					&& !lazilyInstantiatedInstanceProperties.contains(property)
 			}
 			return (isReceivable(property) && !childPropertyStack.contains(property))
 				|| (isReceivable(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty))
