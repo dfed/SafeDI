@@ -220,12 +220,14 @@ public actor DependencyTreeGenerator {
 				} else {
 					typeDescriptionToScopeMap[instantiatedType]
 				}
-				if let childScope {
-					try validateNoForwardedProperties(
-						for: dependency,
-						instantiable: childScope.instantiable,
-						parent: scope.instantiable,
-					)
+				if let childScope,
+				   let error = forwardedPropertyError(
+				   	for: dependency,
+				   	instantiable: childScope.instantiable,
+				   	parent: scope.instantiable,
+				   )
+				{
+					throw error
 				}
 			}
 
@@ -448,7 +450,8 @@ public actor DependencyTreeGenerator {
 	// MARK: - DependencyTreeGeneratorError
 
 	private enum DependencyTreeGeneratorError: SourceLocatedError {
-		case noInstantiableFound(TypeDescription, referencedAt: [Dependency.DeclarationLocation?])
+		/// `fulfilledByMockOnlyDeclaration` is set when only a `mockOnly` declaration fulfills the type.
+		case noInstantiableFound(TypeDescription, referencedAt: [Dependency.DeclarationLocation?], fulfilledByMockOnlyDeclaration: Bool)
 		case unfulfillableProperties([UnfulfillableProperty])
 		case instantiableHasForwardedProperty(property: Property, declarationLocation: Dependency.DeclarationLocation?, instantiableWithForwardedProperty: Instantiable, forwardedDeclarations: [LocatedProperty], parent: Instantiable)
 		/// Reported at the dependency declaration that closes the cycle – the `@Instantiated` or `@Received`
@@ -483,13 +486,14 @@ public actor DependencyTreeGenerator {
 						)
 					}
 					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
-			case let .noInstantiableFound(typeDescription, referencedAt):
+			case let .noInstantiableFound(typeDescription, referencedAt, fulfilledByMockOnlyDeclaration):
 				// Sorted by location so the order never depends on map iteration.
 				referencedAt.map {
 					SourceDiagnostic(
 						severity: .error,
 						location: $0,
-						message: "No `@\(InstantiableVisitor.macroName)`-decorated type or extension found to fulfill `@\(Dependency.Source.instantiatedRawValue)`-decorated property with type `\(typeDescription.asSource)`",
+						message: "No `@\(InstantiableVisitor.macroName)`-decorated type or extension found to fulfill `@\(Dependency.Source.instantiatedRawValue)`-decorated property with type `\(typeDescription.asSource)`"
+							+ (fulfilledByMockOnlyDeclaration ? ". A `mockOnly: true` declaration fulfills it, and is used only to generate mocks." : ""),
 					)
 				}
 				.sorted(by: SourceDiagnostic.precedesInSourceOrder)
@@ -758,12 +762,14 @@ public actor DependencyTreeGenerator {
 	) throws -> ScopeGenerator {
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
-		// (via ObjectIdentifier) so each scope is visited at most once — O(total_scopes).
-		var cache = [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)]()
-		let (initialReceived, initialOnlyIfAvailable) = Self.collectReceivedProperties(
+		// (via ObjectIdentifier) so each scope outside a cycle is visited at most once.
+		var cache = ReceivedPropertiesCache()
+		let initialReceivedProperties = Self.collectReceivedProperties(
 			from: scope,
 			cache: &cache,
 		)
+		let initialReceived = initialReceivedProperties.received
+		let initialOnlyIfAvailable = initialReceivedProperties.onlyIfAvailable
 
 		// Worklist: promoted scopes may introduce additional transitive received properties.
 		// Only required properties are walked: a property received only if available becomes
@@ -788,10 +794,12 @@ public actor DependencyTreeGenerator {
 			      visitedTypes.insert(dependencyType).inserted
 			else { continue }
 
-			let (scopeReceived, scopeOnlyIfAvailable) = Self.collectReceivedProperties(
+			let scopeReceivedProperties = Self.collectReceivedProperties(
 				from: promotedScope,
 				cache: &cache,
 			)
+			let scopeReceived = scopeReceivedProperties.received
+			let scopeOnlyIfAvailable = scopeReceivedProperties.onlyIfAvailable
 			allReceived.formUnion(scopeReceived)
 			allOnlyIfAvailable.formUnion(scopeOnlyIfAvailable)
 			for newProperty in scopeReceived.subtracting(scopeOnlyIfAvailable) where allRequired.insert(newProperty).inserted {
@@ -926,7 +934,7 @@ public actor DependencyTreeGenerator {
 	/// ordered so that each is built after the siblings it receives.
 	private static func childrenRequireEachOther(
 		in scope: Scope,
-		cache: inout [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)],
+		cache: inout ReceivedPropertiesCache,
 	) -> Bool {
 		var children = [(property: Property, scope: Scope)]()
 		for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
@@ -937,9 +945,9 @@ public actor DependencyTreeGenerator {
 			childIndexByProperty[child.property] = index
 		}
 		let requiredSiblingIndices = children.map { child in
-			let (received, onlyIfAvailable) = collectReceivedProperties(from: child.scope, cache: &cache)
-			return received.compactMap { property in
-				property != child.property && !onlyIfAvailable.contains(property)
+			let receivedProperties = collectReceivedProperties(from: child.scope, cache: &cache)
+			return receivedProperties.received.compactMap { property in
+				property != child.property && !receivedProperties.onlyIfAvailable.contains(property)
 					? childIndexByProperty[property]
 					: nil
 			}
@@ -1013,22 +1021,68 @@ public actor DependencyTreeGenerator {
 		// Fully-lazy cycle (Instantiator entry, not received) — valid, no error.
 	}
 
+	/// What a scope's subtree receives from its ancestors.
+	private struct ReceivedProperties {
+		/// Every property the subtree needs from an ancestor.
+		let received: Set<Property>
+		/// Those of `received` that every receiver in the subtree receives only if available.
+		/// A property some receiver requires is not in `onlyIfAvailable`.
+		let onlyIfAvailable: Set<Property>
+	}
+
+	/// Memoizes `collectReceivedProperties` for one mock root.
+	///
+	/// A walk that re-enters a scope whose own walk is unfinished – a cycle of `Instantiator`s – takes
+	/// nothing from it, since that scope's walk accounts for what it receives. A result computed that
+	/// way lacks what the unfinished scope receives, so it is reused only until that scope's walk
+	/// finishes. Reusing it later, from a subtree that reaches the cycle another way, would drop what
+	/// the cycle receives from that subtree's view, and which subtree walks the cycle first can follow
+	/// set iteration order.
+	private struct ReceivedPropertiesCache {
+		/// Results that lack nothing, which are the same however the scope is reached.
+		var complete = [ObjectIdentifier: ReceivedProperties]()
+		/// The depth of each scope whose walk is unfinished.
+		var unfinishedWalkDepths = [ObjectIdentifier: Int]()
+		/// Results that lack what a scope whose walk is unfinished receives.
+		var incomplete = [ObjectIdentifier: WalkedReceivedProperties]()
+	}
+
+	/// A scope's received properties as one walk found them.
+	private struct WalkedReceivedProperties {
+		let receivedProperties: ReceivedProperties
+		/// The depth of the shallowest scope whose walk was unfinished and whose received properties
+		/// `receivedProperties` therefore lacks, or `nil` when it lacks none.
+		let shallowestUnfinishedWalkDepth: Int?
+	}
+
 	/// Mirrors ScopeGenerator's `receivedProperties` and `onlyIfAvailableUnwrappedReceivedProperties`
 	/// computation but operates on Scope objects directly, with memoization for O(1) revisits.
-	///
-	/// - Returns: `received`, every property the subtree needs from an ancestor, and
-	///   `onlyIfAvailable`, those of them that every receiver in the subtree receives only if
-	///   available. A property some receiver requires is not in `onlyIfAvailable`.
 	private static func collectReceivedProperties(
 		from scope: Scope,
-		cache: inout [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)],
-	) -> (received: Set<Property>, onlyIfAvailable: Set<Property>) {
+		cache: inout ReceivedPropertiesCache,
+	) -> ReceivedProperties {
+		walkReceivedProperties(from: scope, cache: &cache).receivedProperties
+	}
+
+	private static func walkReceivedProperties(
+		from scope: Scope,
+		cache: inout ReceivedPropertiesCache,
+	) -> WalkedReceivedProperties {
 		let id = ObjectIdentifier(scope)
-		if let cached = cache[id] {
-			return cached
+		if let complete = cache.complete[id] {
+			return WalkedReceivedProperties(receivedProperties: complete, shallowestUnfinishedWalkDepth: nil)
+		} else if let unfinishedWalkDepth = cache.unfinishedWalkDepths[id] {
+			// A cycle re-entered this scope. Its unfinished walk accounts for what it receives.
+			return WalkedReceivedProperties(
+				receivedProperties: ReceivedProperties(received: [], onlyIfAvailable: []),
+				shallowestUnfinishedWalkDepth: unfinishedWalkDepth,
+			)
+		} else if let incomplete = cache.incomplete[id] {
+			return incomplete
 		}
-		// Cycle sentinel — re-entrant calls return empty (cycles contribute no new received).
-		cache[id] = ([], [])
+		let walkDepth = cache.unfinishedWalkDepths.count
+		cache.unfinishedWalkDepths[id] = walkDepth
+		var shallowestUnfinishedWalkDepth: Int?
 
 		// Properties declared at this scope (instantiated/aliased children).
 		let propertiesToDeclare = Set(scope.propertiesToGenerate.compactMap { propertyToGenerate -> Property? in
@@ -1057,10 +1111,13 @@ public actor DependencyTreeGenerator {
 		// = [fulfillingProperty], but the own-dependency union unconditionally adds the same
 		// fulfillingProperty, making the child-path subtraction/filter redundant.
 		for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
-			let (childReceived, childOnlyIfAvailable) = collectReceivedProperties(
+			let walkedChild = walkReceivedProperties(
 				from: childScope,
 				cache: &cache,
 			)
+			shallowestUnfinishedWalkDepth = [shallowestUnfinishedWalkDepth, walkedChild.shallowestUnfinishedWalkDepth].compactMap(\.self).min()
+			let childReceived = walkedChild.receivedProperties.received
+			let childOnlyIfAvailable = walkedChild.receivedProperties.onlyIfAvailable
 			let childReceivedFromAncestors = childReceived
 				.subtracting(propertiesToDeclare)
 				.filter { property in
@@ -1109,9 +1166,27 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
-		let result = (received, onlyIfAvailable.subtracting(required))
-		cache[id] = result
-		return result
+		cache.unfinishedWalkDepths[id] = nil
+		if !cache.incomplete.isEmpty {
+			// Results that lack what this scope receives are stale now that its walk has finished.
+			cache.incomplete = cache.incomplete.filter { $0.value.shallowestUnfinishedWalkDepth != walkDepth }
+		}
+		let receivedProperties = ReceivedProperties(
+			received: received,
+			onlyIfAvailable: onlyIfAvailable.subtracting(required),
+		)
+		if let shallowestUnfinishedWalkDepth, shallowestUnfinishedWalkDepth < walkDepth {
+			let walkedReceivedProperties = WalkedReceivedProperties(
+				receivedProperties: receivedProperties,
+				shallowestUnfinishedWalkDepth: shallowestUnfinishedWalkDepth,
+			)
+			cache.incomplete[id] = walkedReceivedProperties
+			return walkedReceivedProperties
+		} else {
+			// Every walk that re-entered this scope is accounted for in this one.
+			cache.complete[id] = receivedProperties
+			return WalkedReceivedProperties(receivedProperties: receivedProperties, shallowestUnfinishedWalkDepth: nil)
+		}
 	}
 
 	/// Builds a scope mapping for mock generation. Similar to `createTypeDescriptionToScopeMapping`
@@ -1290,7 +1365,10 @@ public actor DependencyTreeGenerator {
 				}
 			}
 
-		// Populate the propertiesToGenerate on each scope.
+		// Populate the propertiesToGenerate on each scope. Scopes hash by identity, so they are
+		// visited in an order that changes from run to run, and of the dependencies that cannot
+		// be instantiated, the one reported is the first on the type whose name sorts first.
+		var firstForwardedPropertyError: ForwardedPropertyError?
 		for scope in Set(typeDescriptionToScopeMap.values) {
 			for dependency in scope.instantiable.dependencies {
 				switch dependency.source {
@@ -1299,11 +1377,18 @@ public actor DependencyTreeGenerator {
 					if let instantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType],
 					   let instantiatedScope = typeDescriptionToScopeMap[instantiatedType]
 					{
-						try validateNoForwardedProperties(
-							for: dependency,
-							instantiable: instantiable,
-							parent: scope.instantiable,
-						)
+						if let error = forwardedPropertyError(
+						   	for: dependency,
+						   	instantiable: instantiable,
+						   	parent: scope.instantiable,
+						   ),
+						   firstForwardedPropertyError.map({ scope.instantiable.concreteInstantiable < $0.parent }) ?? true
+						{
+							firstForwardedPropertyError = ForwardedPropertyError(
+								parent: scope.instantiable.concreteInstantiable,
+								error: error,
+							)
+						}
 						scope.propertiesToGenerate.append(.instantiated(
 							dependency.property,
 							instantiatedScope,
@@ -1323,30 +1408,37 @@ public actor DependencyTreeGenerator {
 				}
 			}
 		}
+		if let firstForwardedPropertyError {
+			throw firstForwardedPropertyError.error
+		}
 		return typeDescriptionToScopeMap
 	}
 
-	/// Validates that a constant `@Instantiated` dependency has no `@Forwarded` properties.
-	private func validateNoForwardedProperties(
+	/// A constant `@Instantiated` dependency whose type has `@Forwarded` properties, and the type that declares it.
+	private struct ForwardedPropertyError {
+		let parent: TypeDescription
+		let error: DependencyTreeGeneratorError
+	}
+
+	/// The error for a constant `@Instantiated` dependency on `parent` whose `instantiable` has `@Forwarded`
+	/// properties, or `nil` when the dependency is valid.
+	private func forwardedPropertyError(
 		for dependency: Dependency,
 		instantiable: Instantiable,
 		parent: Instantiable,
-	) throws {
-		if dependency.property.propertyType.isConstant {
-			let forwardedDependencies = instantiable.dependencies.filter(\.isForwarded)
-			guard forwardedDependencies.isEmpty else {
-				throw DependencyTreeGeneratorError
-					.instantiableHasForwardedProperty(
-						property: dependency.property,
-						declarationLocation: dependency.declarationLocation,
-						instantiableWithForwardedProperty: instantiable,
-						forwardedDeclarations: forwardedDependencies.map {
-							DependencyTreeGeneratorError.LocatedProperty(property: $0.property, declarationLocation: $0.declarationLocation)
-						},
-						parent: parent,
-					)
-			}
-		}
+	) -> DependencyTreeGeneratorError? {
+		guard dependency.property.propertyType.isConstant else { return nil }
+		let forwardedDependencies = instantiable.dependencies.filter(\.isForwarded)
+		guard !forwardedDependencies.isEmpty else { return nil }
+		return .instantiableHasForwardedProperty(
+			property: dependency.property,
+			declarationLocation: dependency.declarationLocation,
+			instantiableWithForwardedProperty: instantiable,
+			forwardedDeclarations: forwardedDependencies.map {
+				DependencyTreeGeneratorError.LocatedProperty(property: $0.property, declarationLocation: $0.declarationLocation)
+			},
+			parent: parent,
+		)
 	}
 
 	/// Validates scopes for cycles and optionally for unfulfillable properties.
@@ -1552,23 +1644,28 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
-	/// Validates that every reachable type description has a corresponding `@Instantiable`.
+	/// Validates that every reachable type description has a corresponding `@Instantiable` that production
+	/// code can build, reporting the first missing type in type order. A `mockOnly` declaration exists solely
+	/// for mock generation, so it does not count. Were it counted, a type it fulfills that shares a concrete
+	/// type with a production declaration would be built from whichever declaration a set iteration reached first.
 	private func validateReachableTypeDescriptions() throws {
-		for reachableTypeDescription in reachableTypeDescriptions.sorted() {
-			if typeDescriptionToFulfillingInstantiableMap[reachableTypeDescription] == nil {
-				// The map's values can hold the same instantiable under several keys, so collect into a set.
-				let referencingDeclarationLocations = Set(
-					typeDescriptionToFulfillingInstantiableMap.values.flatMap { instantiable in
-						instantiable.dependencies
-							.filter { $0.isInstantiated && $0.asInstantiatedType == reachableTypeDescription }
-							.map(\.declarationLocation)
-					},
-				)
-				throw DependencyTreeGeneratorError.noInstantiableFound(
-					reachableTypeDescription,
-					referencedAt: Array(referencingDeclarationLocations),
-				)
-			}
+		if let unbuildableTypeDescription = reachableTypeDescriptions
+			.filter({ typeDescriptionToFulfillingInstantiableMap[$0]?.mockOnly != false })
+			.min()
+		{
+			// The map's values can hold the same instantiable under several keys, so collect into a set.
+			let referencingDeclarationLocations = Set(
+				typeDescriptionToFulfillingInstantiableMap.values.flatMap { instantiable in
+					instantiable.dependencies
+						.filter { $0.isInstantiated && $0.asInstantiatedType == unbuildableTypeDescription }
+						.map(\.declarationLocation)
+				},
+			)
+			throw DependencyTreeGeneratorError.noInstantiableFound(
+				unbuildableTypeDescription,
+				referencedAt: Array(referencingDeclarationLocations),
+				fulfilledByMockOnlyDeclaration: typeDescriptionToFulfillingInstantiableMap[unbuildableTypeDescription] != nil,
+			)
 		}
 	}
 }
