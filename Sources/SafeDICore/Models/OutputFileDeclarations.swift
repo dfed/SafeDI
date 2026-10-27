@@ -31,6 +31,20 @@ public struct OutputFileDeclarations: Codable, Sendable {
 
 	public init() {}
 
+	public init(
+		declaresRoot: Bool,
+		declaresMockGeneratingType: Bool,
+		declaresConfiguration: Bool,
+		additionalMocksToGenerate: [String],
+		additionalDirectoriesToInclude: [String],
+	) {
+		self.declaresRoot = declaresRoot
+		self.declaresMockGeneratingType = declaresMockGeneratingType
+		self.declaresConfiguration = declaresConfiguration
+		self.additionalMocksToGenerate = additionalMocksToGenerate
+		self.additionalDirectoriesToInclude = additionalDirectoriesToInclude
+	}
+
 	// MARK: Public
 
 	/// Whether the file declares an `@Instantiable(isRoot: true)` type, whose dependency tree gets its own file.

@@ -173,7 +173,7 @@ func executeSafeDIToolTest(
 			try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 			try await performScan(
 				inputSourcesFile: swiftFileCSV.relativePath,
-				projectRoot: try #require(reportedFixtureDirectoryPath),
+				projectFilePaths: try ProjectFilePaths(projectRoot: #require(reportedFixtureDirectoryPath)),
 				outputDirectory: outputDirectory.path,
 				manifestFile: manifestFile.relativePath,
 				mockScopedFiles: compilerSwiftFilePaths,
@@ -198,15 +198,21 @@ func executeSafeDIToolTest(
 				.joined(separator: ",")
 				.write(to: scanCSV, atomically: true, encoding: .utf8)
 
-			try await performScan(
+			let scannedModuleInfo = try await performScan(
 				inputSourcesFile: scanCSV.relativePath,
-				projectRoot: projectRoot.path,
+				projectFilePaths: ProjectFilePaths(projectRoot: projectRoot.path),
 				outputDirectory: outputDirectory.path,
 				manifestFile: manifestFile.relativePath,
 				mockScopedFiles: swiftFiles.map(\.relativePath),
 				activeCompilationConditions: Set(activeCompilationConditions),
 			)
 			manifestPath = manifestFile.relativePath
+			// Every fixture that runs scan checks that its cache reads back exactly what scan wrote, so a
+			// field the binary coder drops fails whichever tests give that field a value.
+			let scanCacheURL = scannedModuleInfoURL(forManifestPath: manifestFile.relativePath)
+			filesToDelete.append(scanCacheURL)
+			let scanCache = try Data(contentsOf: scanCacheURL)
+			#expect(try reflectedDescription(of: CachedScannedModuleInfo(scanCacheData: scanCache)) == reflectedDescription(of: scannedModuleInfo))
 
 			filesToDelete.append(scanCSV)
 
@@ -219,7 +225,6 @@ func executeSafeDIToolTest(
 					try resolvingDirectoryPlaceholders(in: content).write(to: fileURL, atomically: true, encoding: .utf8)
 					try scannedModificationTime.apply(toItemAtPath: fileURL.path)
 				}
-				filesToDelete.append(scannedModuleInfoURL(forManifestPath: manifestFile.relativePath))
 			}
 		}
 
@@ -306,7 +311,7 @@ func executeSafeDIToolTest(
 			nil
 		}
 
-		let moduleInfo = try JSONDecoder().decode(ModuleInfo.self, from: Data(contentsOf: moduleInfoOutput))
+		let moduleInfo = try ModuleInfo(moduleInfoData: Data(contentsOf: moduleInfoOutput))
 		if let generatedFiles, !generatedFiles.isEmpty, !skipCompileVerification {
 			try verifyGeneratedCodeCompiles(
 				inputSwiftFiles: swiftFiles,
@@ -490,7 +495,7 @@ private func symbolicLink(to destination: URL, filesToDelete: inout [URL]) throw
 
 /// `url`'s path with every symbolic link resolved, as `realpath(3)` resolves it. Foundation's
 /// `resolvingSymlinksInPath()` would remove a leading `/private` instead.
-private func realPath(of url: URL) throws -> String {
+func realPath(of url: URL) throws -> String {
 	guard let resolvedPath = realpath(url.path, nil) else {
 		throw CocoaError(.fileNoSuchFile)
 	}
