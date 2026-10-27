@@ -1748,6 +1748,11 @@ struct TypeDescriptionTests {
 			"Instantiator<Service>?",
 			"SendableInstantiator<Service>",
 			"SendableErasedInstantiator<(), Service>",
+			"ErasedInstantiator<(), any Service>",
+			"LazilyInstantiated<Service>",
+			"LazilyInstantiated<any Service>?",
+			"SendableLazilyInstantiated<Service>",
+			"SendableLazilyInstantiated<any Service>",
 		] {
 			let typeDescription = TypeSyntax(stringLiteral: source).typeDescription
 			let replacementType = TypeDescription.nested(name: "Service", parentType: .simple(name: "Feature"))
@@ -1759,6 +1764,17 @@ struct TypeDescriptionTests {
 
 			#expect(replaced.asInstantiatedType == replacementType)
 		}
+	}
+
+	@Test
+	func replacingInstantiatedType_keepsExistentialSpelling_whenLazilyInstantiatedBuildsExistential() {
+		let typeDescription = TypeSyntax(stringLiteral: "LazilyInstantiated<any Service>").typeDescription
+
+		let replaced = typeDescription.replacingInstantiatedType { _ in
+			.nested(name: "Service", parentType: .simple(name: "Feature"))
+		}
+
+		#expect(replaced?.asSource == "LazilyInstantiated<any Feature.Service>")
 	}
 
 	@Test
