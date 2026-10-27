@@ -1089,6 +1089,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Non-instantiable received dependencies and uncovered @Instantiated dependencies → flat parameters.
 		let treePropertyNodes = parameterTree.propertyNodes
 		let treePropertyLabels = Set(treePropertyNodes.map(\.propertyLabel))
+		// A tree node binds a non-optional value, even when it is promoted for a required `x: X?`.
+		let unwrappedTreeProperties: Set<Property> = if onlyIfAvailableUnwrappedReceivedProperties.isEmpty {
+			[]
+		} else {
+			Set(treePropertyNodes.map { Property(label: $0.propertyLabel, typeDescription: $0.typeDescription.unwrapped) })
+		}
 		let forwardedPropertySet = Set(forwardedDependencies.map(\.property))
 
 		let receivedNonOptionalProperties = Set(
@@ -1105,11 +1111,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// Optional, defaulting to `nil`, only when every receiver — directly or
 			// through an alias, whose fulfilling property is non-optional — receives it
 			// `onlyIfAvailable`. A property any receiver requires is a required parameter.
-			// A received property is never one the tree declares, or the optional form of one,
-			// so a tree node with its label has another type: the receivers of an `onlyIfAvailable`
-			// property are handed an override of their own type, named apart from that node below.
+			// A receive of a property the tree builds for another receiver, in either its optional
+			// or its non-optional form, is handed that node: the mock root's own receive, or an
+			// `onlyIfAvailable` alias's fulfilling property. A tree node with the label and
+			// another type is not: the receivers are handed an override of their own type,
+			// named apart from that node below.
 			if onlyIfAvailableUnwrappedReceivedProperties.contains(receivedProperty.asUnwrappedProperty) {
-				onlyIfAvailableReceivedProperties.append(receivedProperty)
+				if !unwrappedTreeProperties.contains(receivedProperty.asUnwrappedProperty) {
+					onlyIfAvailableReceivedProperties.append(receivedProperty)
+				}
 			} else if !treePropertyLabels.contains(receivedProperty.label) {
 				flatReceivedProperties.append(receivedProperty)
 			}
@@ -2593,7 +2603,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					let propertyTypeName = node.instantiatedTypeDescription.asSource
 					let innerIndent = "\(indent)\(standardIndent)"
 					let functionDisambiguationMap = removingRenames(
-						hiddenBy: declaredProperties(of: node.children),
+						hiddenByDeclarationsOf: node.children,
 						from: combinedDisambiguationMap,
 					)
 
@@ -2699,32 +2709,34 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return (renamedItems, bindingNames)
 	}
 
-	/// The properties `items` declare in their scope: each property node's property and each alias's property.
-	private static func declaredProperties(of items: [MockTreeItem]) -> [Property] {
-		items.map { item in
-			switch item {
-			case let .property(node):
-				Property(label: node.propertyLabel, typeDescription: node.typeDescription)
-			case let .alias(alias):
-				alias.property
-			}
-		}
-	}
-
-	/// `disambiguationMap` without the renames that declarations of `declaredProperties` in a nested scope hide.
+	/// `disambiguationMap` without the renames that a nested scope's declarations hide: those of the
+	/// properties `children` declare – each property node's property and each alias's property – and of
+	/// `parameters`, the forwarded properties a builder function is handed.
 	///
 	/// A receiver of `x: X` or `x: X?` in a scope that declares, or is handed as a parameter, `x: X` resolves
 	/// to that declaration by its label, as in production, not to a renamed flat parameter or override of
 	/// the same property that an enclosing scope binds.
 	private static func removingRenames(
-		hiddenBy declaredProperties: [Property],
+		hiddenByDeclarationsOf children: [MockTreeItem],
+		parameters: [Property] = [],
 		from disambiguationMap: [String: [TypeDescription: String]],
 	) -> [String: [TypeDescription: String]] {
 		guard !disambiguationMap.isEmpty else { return disambiguationMap }
 		var disambiguationMap = disambiguationMap
-		for property in declaredProperties where disambiguationMap[property.label] != nil {
+		func removeRenames(of property: Property) {
 			disambiguationMap[property.label]?[property.typeDescription] = nil
 			disambiguationMap[property.label]?[.optional(property.typeDescription)] = nil
+		}
+		for parameter in parameters {
+			removeRenames(of: parameter)
+		}
+		for child in children {
+			switch child {
+			case let .property(node):
+				removeRenames(of: Property(label: node.propertyLabel, typeDescription: node.typeDescription))
+			case let .alias(alias):
+				removeRenames(of: alias.property)
+			}
 		}
 		return disambiguationMap
 	}
@@ -2802,7 +2814,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let innerIndent = "\(indent)\(standardIndent)"
 		// The builder function's parameters and bindings hide the renames of their properties.
 		let builderDisambiguationMap = removingRenames(
-			hiddenBy: forwardedProperties + declaredProperties(of: node.children),
+			hiddenByDeclarationsOf: node.children,
+			parameters: forwardedProperties,
 			from: flatParameterDisambiguationMap,
 		)
 
