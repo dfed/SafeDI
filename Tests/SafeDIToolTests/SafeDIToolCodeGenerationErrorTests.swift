@@ -667,6 +667,297 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithReceivedPropertyHiddenByAliasReusingItsLabel_throwsError() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):5:5: error: @Received property `analytics: Analytics` is hidden in chain: Root -> Mid -> Child. `Mid` declares `analytics: EventTracker` with the same label, so the types below `Mid` receive `analytics: EventTracker` instead. Give `analytics: EventTracker` on `Mid` a different label to fix.
+				\(fixtures["Mid.swift"]):5:5: note: `analytics: EventTracker` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					import SafeDI
+
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    @Instantiated let analytics: Analytics
+					    @Instantiated let mid: Mid
+					}
+					""",
+					"""
+					import SafeDI
+
+					public protocol EventTracker {}
+
+					@Instantiable
+					public final class Analytics: Instantiable, EventTracker {}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Mid: Instantiable {
+					    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let analytics: EventTracker
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Child: Instantiable {
+					    @Received let analytics: Analytics
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithReceivedPropertiesHiddenByAliasReusingTheirLabel_throwsErrorForEachInSourceOrder() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):5:5: error: @Received property `analytics: Analytics` is hidden in chain: Root -> Mid -> Child. `Mid` declares `analytics: EventTracker` with the same label, so the types below `Mid` receive `analytics: EventTracker` instead. Give `analytics: EventTracker` on `Mid` a different label to fix.
+				\(fixtures["Mid.swift"]):5:5: note: `analytics: EventTracker` is declared here
+				\(fixtures["Sibling.swift"]):5:5: error: @Received property `analytics: Analytics` is hidden in chain: Root -> Mid -> Sibling. `Mid` declares `analytics: EventTracker` with the same label, so the types below `Mid` receive `analytics: EventTracker` instead. Give `analytics: EventTracker` on `Mid` a different label to fix.
+				\(fixtures["Mid.swift"]):5:5: note: `analytics: EventTracker` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					import SafeDI
+
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    @Instantiated let analytics: Analytics
+					    @Instantiated let mid: Mid
+					}
+					""",
+					"""
+					import SafeDI
+
+					public protocol EventTracker {}
+
+					@Instantiable
+					public final class Analytics: Instantiable, EventTracker {}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Mid: Instantiable {
+					    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let analytics: EventTracker
+					    @Instantiated let sibling: Sibling
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Sibling: Instantiable {
+					    @Received let analytics: Analytics
+					}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Child: Instantiable {
+					    @Received let analytics: Analytics
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithOnlyIfAvailableReceivedPropertyHiddenByAliasReusingItsLabel_throwsError() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):5:5: error: @Received property `analytics: Analytics?` is hidden in chain: Root -> Mid -> Child. `Mid` declares `analytics: EventTracker` with the same label, so the types below `Mid` receive `analytics: EventTracker` instead. Give `analytics: EventTracker` on `Mid` a different label to fix.
+				\(fixtures["Mid.swift"]):5:5: note: `analytics: EventTracker` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					import SafeDI
+
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    @Instantiated let analytics: Analytics
+					    @Instantiated let mid: Mid
+					}
+					""",
+					"""
+					import SafeDI
+
+					public protocol EventTracker {}
+
+					@Instantiable
+					public final class Analytics: Instantiable, EventTracker {}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Mid: Instantiable {
+					    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let analytics: EventTracker
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Child: Instantiable {
+					    @Received(onlyIfAvailable: true) let analytics: Analytics?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithAliasedReceivedPropertyHiddenByAliasReusingItsLabel_throwsError() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):5:5: error: @Received property `analytics: Analytics` is hidden in chain: Root -> Instantiator<Mid> -> Child. `Mid` declares `analytics: EventTracker` with the same label, so the types below `Mid` receive `analytics: EventTracker` instead. Give `analytics: EventTracker` on `Mid` a different label to fix.
+				\(fixtures["Mid.swift"]):5:5: note: `analytics: EventTracker` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					import SafeDI
+
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    @Instantiated let analytics: Analytics
+					    @Instantiated let midBuilder: Instantiator<Mid>
+					}
+					""",
+					"""
+					import SafeDI
+
+					public protocol EventTracker {}
+					public protocol CrashReporter {}
+
+					@Instantiable
+					public final class Analytics: Instantiable, EventTracker, CrashReporter {}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Mid: Instantiable {
+					    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let analytics: EventTracker
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Child: Instantiable {
+					    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let crashReporter: CrashReporter
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithReceivedPropertyHiddenByInstantiatedPropertyWithSameLabel_throwsError() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):5:5: error: @Received property `analytics: Analytics` is hidden in chain: Root -> Mid -> Inner -> Child. `Mid` declares `analytics: OtherAnalytics` with the same label, so the types below `Mid` receive `analytics: OtherAnalytics` instead. Give `analytics: OtherAnalytics` on `Mid` a different label to fix.
+				\(fixtures["Mid.swift"]):5:5: note: `analytics: OtherAnalytics` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					import SafeDI
+
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    @Instantiated let analytics: Analytics
+					    @Instantiated let mid: Mid
+					}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Analytics: Instantiable {}
+
+					@Instantiable
+					public final class OtherAnalytics: Instantiable {}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Mid: Instantiable {
+					    @Instantiated let analytics: OtherAnalytics
+					    @Instantiated let inner: Inner
+					}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Inner: Instantiable {
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Child: Instantiable {
+					    @Received let analytics: Analytics
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithInstantiatedPropertyWithForwardedArgument_throwsError() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
@@ -697,6 +988,68 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithInstantiatedPropertyWithForwardedArgumentOnSeveralTypes_throwsErrorForFirstTypeName() async {
+		// Scopes were validated in the order of a set hashed by object identity, so which type's
+		// property was reported changed from run to run. With fifty such types, reporting the
+		// first type name by chance is unlikely.
+		let parentNames = (0..<50).map { "Parent" + ($0 < 10 ? "0" : "") + "\($0)" }
+		let parentFiles = parentNames.map { parentName in
+			"""
+			@Instantiable
+			public struct \(parentName): Instantiable {
+			    public init(child: Child) {
+			        fatalError("SafeDI doesn't inspect the initializer body")
+			    }
+
+			    @Instantiated let child: Child
+			}
+			"""
+		}
+		let rootInitializerParameters = parentNames
+			.map { "\($0.lowercased()): \($0)" }
+			.joined(separator: ", ")
+		let rootProperties = parentNames
+			.map { "    @Instantiated let \($0.lowercased()): \($0)" }
+			.joined(separator: "\n")
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Parent00.swift"]):7:5: error: Property `child: Child` on Parent00 has at least one @Forwarded property. Property should instead be of type `Instantiator<Child>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(\(rootInitializerParameters)) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					\(rootProperties)
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Child: Instantiable {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+					""",
+				] + parentFiles,
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
@@ -1326,6 +1679,178 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					    }
 
 					    @Received let left0: Left0
+					}
+					""",
+				] + layerFiles,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				skipCompileVerification: true,
+			)
+		}
+	}
+
+	// The time limit only turns a hang into a failure; see
+	// `run_generatesCodeWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
+	@Test(.timeLimit(.minutes(10)))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleErrorWithinTimeLimit_whenEveryReceivedInstantiatorPathFromEarlierSiblingsEndsInReceivedCycle() async {
+		// Each layer holds a Left and a Right service that both receive Instantiators of the two
+		// services of the next layer, and the last layer's services receive an Instantiator of Ping,
+		// which receives one of Pong, which receives one of Ping. Root instantiates every Instantiator,
+		// so the number of received paths from any layer to that cycle doubles with each layer.
+		let layerCount = 40
+		let layerFiles = (0..<layerCount).flatMap { layer in
+			let receivedProperties = layer == layerCount - 1
+				? ["pingBuilder: Instantiator<Ping>"]
+				: ["left\(layer + 1)Builder: Instantiator<Left\(layer + 1)>", "right\(layer + 1)Builder: Instantiator<Right\(layer + 1)>"]
+			return ["Left\(layer)", "Right\(layer)"].map { type in
+				"""
+				@Instantiable
+				public struct \(type): Instantiable {
+				    public init(\(receivedProperties.joined(separator: ", "))) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				\(receivedProperties.map { "    @Received let \($0)" }.joined(separator: "\n"))
+				}
+				"""
+			}
+		}
+		let rootProperties = (0..<layerCount).flatMap { ["left\($0)Builder: Instantiator<Left\($0)>", "right\($0)Builder: Instantiator<Right\($0)>"] } + ["pingBuilder: Instantiator<Ping>", "pongBuilder: Instantiator<Pong>"]
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Pong.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated pingBuilder: Instantiator<Ping> -> @Received pongBuilder: Instantiator<Pong> -> @Received pingBuilder: Instantiator<Ping>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(\(rootProperties.joined(separator: ", "))) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					\(rootProperties.map { "    @Instantiated let \($0)" }.joined(separator: "\n"))
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Ping: Instantiable {
+					    public init(pongBuilder: Instantiator<Pong>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let pongBuilder: Instantiator<Pong>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Pong: Instantiable {
+					    public init(pingBuilder: Instantiator<Ping>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let pingBuilder: Instantiator<Ping>
+					}
+					""",
+				] + layerFiles,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				skipCompileVerification: true,
+			)
+		}
+	}
+
+	// The time limit only turns a hang into a failure; see
+	// `run_generatesCodeWithinTimeLimit_whenReceivedDependenciesFormDeepChainOfDiamonds`.
+	@Test(.timeLimit(.minutes(10)))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleErrorWithinTimeLimit_whenEveryReceivedAliasPathFromEarlierSiblingsEndsInReceivedCycleOfLazyCycles() async {
+		// Each layer holds a Left and a Right service that instantiate Instantiators of each other and
+		// receive aliases, assigned through two other aliases, of the Instantiators of the two services of
+		// the next layer. The last layer's services receive the last of a long chain of aliases of Ping's
+		// Instantiator, and Ping and Pong receive aliases of each other's. Root declares every alias in
+		// reverse order of assignment.
+		let layerCount = 40
+		let aliasChainLength = 40
+		let layerFiles = (0..<layerCount).flatMap { layer in
+			let receivedProperties = layer == layerCount - 1
+				? ["pingAlias\(aliasChainLength - 1): Instantiator<Ping>"]
+				: ["left\(layer + 1)Alias: Instantiator<Left\(layer + 1)>", "right\(layer + 1)Alias: Instantiator<Right\(layer + 1)>"]
+			return [("Left\(layer)", "Right\(layer)"), ("Right\(layer)", "Left\(layer)")].map { type, otherType in
+				let instantiatedProperty = "inner\(otherType)Builder: Instantiator<\(otherType)>"
+				return """
+				@Instantiable
+				public struct \(type): Instantiable {
+				    public init(\(([instantiatedProperty] + receivedProperties).joined(separator: ", "))) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let \(instantiatedProperty)
+				\(receivedProperties.map { "    @Received let \($0)" }.joined(separator: "\n"))
+				}
+				"""
+			}
+		}
+		func alias(_ label: String, of fulfillingLabel: String, type: String) -> (property: String, declaration: String) {
+			("\(label): \(type)", "@Received(fulfilledByDependencyNamed: \"\(fulfillingLabel)\", ofType: \(type).self) let \(label): \(type)")
+		}
+		let rootBuilders = (0..<layerCount).flatMap { ["left\($0)Builder: Instantiator<Left\($0)>", "right\($0)Builder: Instantiator<Right\($0)>"] } + ["pingBuilder: Instantiator<Ping>", "pongBuilder: Instantiator<Pong>"]
+		let rootAliases = (0..<layerCount).reversed().flatMap { layer in
+			["Left\(layer)", "Right\(layer)"].flatMap { type in
+				let label = type.prefix(1).lowercased() + type.dropFirst()
+				return [
+					alias("\(label)Alias", of: "\(label)Renamed", type: "Instantiator<\(type)>"),
+					alias("\(label)Renamed", of: "\(label)Builder", type: "Instantiator<\(type)>"),
+				]
+			}
+		}
+			+ (1..<aliasChainLength).reversed().map { alias("pingAlias\($0)", of: "pingAlias\($0 - 1)", type: "Instantiator<Ping>") }
+			+ [
+				alias("pingAlias0", of: "pingBuilder", type: "Instantiator<Ping>"),
+				alias("pongAlias", of: "pongBuilder", type: "Instantiator<Pong>"),
+			]
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Pong.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated pingBuilder: Instantiator<Ping> -> @Received pongAlias: Instantiator<Pong> -> @Received pingAlias\(aliasChainLength - 1): Instantiator<Ping> -> @Received pingBuilder: Instantiator<Ping>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(\((rootBuilders + rootAliases.map(\.property)).joined(separator: ", "))) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					\(rootBuilders.map { "    @Instantiated let \($0)" }.joined(separator: "\n"))
+					\(rootAliases.map { "    \($0.declaration)" }.joined(separator: "\n"))
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Ping: Instantiable {
+					    public init(pongAlias: Instantiator<Pong>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let pongAlias: Instantiator<Pong>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Pong: Instantiable {
+					    public init(pingAlias\(aliasChainLength - 1): Instantiator<Ping>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let pingAlias\(aliasChainLength - 1): Instantiator<Ping>
 					}
 					""",
 				] + layerFiles,
@@ -2197,6 +2722,868 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleError_whenSiblingInstantiatorsReceiveEachOther() async {
+		// Each Instantiator captures the other when it is created, so neither can be created first.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
+					        self.aBuilder = aBuilder
+					        self.bBuilder = bBuilder
+					    }
+
+					    @Instantiated private let aBuilder: Instantiator<A>
+					    @Instantiated private let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct A: Instantiable {
+					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+					    @Received private let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct B: Instantiable {
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					    @Received private let aBuilder: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleError_whenSiblingSendableInstantiatorsReceiveEachOther() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: SendableInstantiator<A> -> @Received bBuilder: SendableInstantiator<B> -> @Received aBuilder: SendableInstantiator<A>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(aBuilder: SendableInstantiator<A>, bBuilder: SendableInstantiator<B>) {
+					        self.aBuilder = aBuilder
+					        self.bBuilder = bBuilder
+					    }
+
+					    @Instantiated private let aBuilder: SendableInstantiator<A>
+					    @Instantiated private let bBuilder: SendableInstantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct A: Instantiable {
+					    public init(bBuilder: SendableInstantiator<B>) { self.bBuilder = bBuilder }
+					    @Received private let bBuilder: SendableInstantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct B: Instantiable {
+					    public init(aBuilder: SendableInstantiator<A>) { self.aBuilder = aBuilder }
+					    @Received private let aBuilder: SendableInstantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleError_whenThreeSiblingInstantiatorsReceiveEachOtherInRing() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["C.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received cBuilder: Instantiator<C> -> @Received aBuilder: Instantiator<A>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>, cBuilder: Instantiator<C>) {
+					        self.aBuilder = aBuilder
+					        self.bBuilder = bBuilder
+					        self.cBuilder = cBuilder
+					    }
+
+					    @Instantiated private let aBuilder: Instantiator<A>
+					    @Instantiated private let bBuilder: Instantiator<B>
+					    @Instantiated private let cBuilder: Instantiator<C>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct A: Instantiable {
+					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+					    @Received private let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct B: Instantiable {
+					    public init(cBuilder: Instantiator<C>) { self.cBuilder = cBuilder }
+					    @Received private let cBuilder: Instantiator<C>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct C: Instantiable {
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					    @Received private let aBuilder: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleError_whenSiblingInstantiatorsOfLazilyBuiltParentReceiveEachOther() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(parentBuilder: Instantiator<Parent>) { self.parentBuilder = parentBuilder }
+					    @Instantiated private let parentBuilder: Instantiator<Parent>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Parent: Instantiable {
+					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
+					        self.aBuilder = aBuilder
+					        self.bBuilder = bBuilder
+					    }
+
+					    @Instantiated private let aBuilder: Instantiator<A>
+					    @Instantiated private let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct A: Instantiable {
+					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+					    @Received private let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct B: Instantiable {
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					    @Received private let aBuilder: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleErrorAtDeepestReceiver_whenSiblingInstantiatorIsReceivedBelowOtherSiblingsChildren() async {
+		// Only `D`, below `B`, receives `aBuilder`; `B` and `C` receive nothing.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["D.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
+					        self.aBuilder = aBuilder
+					        self.bBuilder = bBuilder
+					    }
+
+					    @Instantiated private let aBuilder: Instantiator<A>
+					    @Instantiated private let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct A: Instantiable {
+					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+					    @Received private let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct B: Instantiable {
+					    public init(c: C, d: D) {
+					        self.c = c
+					        self.d = d
+					    }
+
+					    @Instantiated private let c: C
+					    @Instantiated private let d: D
+					}
+					""",
+					"""
+					@Instantiable
+					public struct C: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public struct D: Instantiable {
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					    @Received private let aBuilder: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleErrorAtAlias_whenSiblingInstantiatorIsReceivedUnderAnotherName() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
+					        self.aBuilder = aBuilder
+					        self.bBuilder = bBuilder
+					    }
+
+					    @Instantiated private let aBuilder: Instantiator<A>
+					    @Instantiated private let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct A: Instantiable {
+					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+					    @Received private let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct B: Instantiable {
+					    public init(renamedABuilder: Instantiator<A>) { self.renamedABuilder = renamedABuilder }
+					    @Received(fulfilledByDependencyNamed: "aBuilder", ofType: Instantiator<A>.self) private let renamedABuilder: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleErrorAtDeepestReceiver_whenOptionalSiblingInstantiatorIsReceivedBelowOtherSiblingsChildren() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["C.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A>? -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>?
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(aBuilder: Instantiator<A>?, bBuilder: Instantiator<B>) {
+					        self.aBuilder = aBuilder
+					        self.bBuilder = bBuilder
+					    }
+
+					    @Instantiated private let aBuilder: Instantiator<A>?
+					    @Instantiated private let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct A: Instantiable {
+					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+					    @Received private let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct B: Instantiable {
+					    public init(c: C) { self.c = c }
+					    @Instantiated private let c: C
+					}
+					""",
+					"""
+					@Instantiable
+					public struct C: Instantiable {
+					    public init(aBuilder: Instantiator<A>?) { self.aBuilder = aBuilder }
+					    @Received private let aBuilder: Instantiator<A>?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleErrorAtDeepestReceiver_whenLazyCycleWithoutReceiverPrecedesIt() async {
+		// `C` instantiates an Instantiator of itself, so the search for the receiver of `aBuilder`
+		// below `B` must leave that cycle to reach `D`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["D.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
+					        self.aBuilder = aBuilder
+					        self.bBuilder = bBuilder
+					    }
+
+					    @Instantiated private let aBuilder: Instantiator<A>
+					    @Instantiated private let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct A: Instantiable {
+					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+					    @Received private let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct B: Instantiable {
+					    public init(cBuilder: Instantiator<C>, d: D) {
+					        self.cBuilder = cBuilder
+					        self.d = d
+					    }
+
+					    @Instantiated private let cBuilder: Instantiator<C>
+					    @Instantiated private let d: D
+					}
+					""",
+					"""
+					@Instantiable
+					public struct C: Instantiable {
+					    public init(cBuilder: Instantiator<C>) { self.cBuilder = cBuilder }
+					    @Instantiated private let cBuilder: Instantiator<C>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct D: Instantiable {
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					    @Received private let aBuilder: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleErrorAtUnshadowedReceiver_whenEarlierReceiverOfSiblingInstantiatorIsFulfilledByForwardedProperty() async {
+		// `E` receives the `aBuilder` that `C` forwards, so only `D` receives Root's `aBuilder`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["D.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
+					        self.aBuilder = aBuilder
+					        self.bBuilder = bBuilder
+					    }
+
+					    @Instantiated private let aBuilder: Instantiator<A>
+					    @Instantiated private let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct A: Instantiable {
+					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+					    @Received private let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct B: Instantiable {
+					    public init(cBuilder: Instantiator<C>, d: D) {
+					        self.cBuilder = cBuilder
+					        self.d = d
+					    }
+
+					    @Instantiated private let cBuilder: Instantiator<C>
+					    @Instantiated private let d: D
+					}
+					""",
+					"""
+					@Instantiable
+					public struct C: Instantiable {
+					    public init(aBuilder: Instantiator<A>, e: E) {
+					        self.aBuilder = aBuilder
+					        self.e = e
+					    }
+
+					    @Forwarded private let aBuilder: Instantiator<A>
+					    @Instantiated private let e: E
+					}
+					""",
+					"""
+					@Instantiable
+					public struct D: Instantiable {
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					    @Received private let aBuilder: Instantiator<A>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct E: Instantiable {
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					    @Received private let aBuilder: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleError_whenSiblingInstantiatorReceivesAliasOfSiblingThatReceivesIt() async {
+		// `aBuilder` captures `renamedBBuilder`, which is assigned from `bBuilder`, which captures `aBuilder`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received renamedBBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(renamedBBuilder: Instantiator<B>, aBuilder: Instantiator<A>, bBuilder: Instantiator<B>) {
+					        self.renamedBBuilder = renamedBBuilder
+					        self.aBuilder = aBuilder
+					        self.bBuilder = bBuilder
+					    }
+
+					    @Received(fulfilledByDependencyNamed: "bBuilder", ofType: Instantiator<B>.self) private let renamedBBuilder: Instantiator<B>
+					    @Instantiated private let aBuilder: Instantiator<A>
+					    @Instantiated private let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct A: Instantiable {
+					    public init(renamedBBuilder: Instantiator<B>) { self.renamedBBuilder = renamedBBuilder }
+					    @Received private let renamedBBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct B: Instantiable {
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					    @Received private let aBuilder: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleError_whenSiblingInstantiatorReceivesAliasOfAliasOfSiblingThatReceivesIt() async {
+		// `aBuilder` captures `renamedAgainBBuilder`, which is assigned from `renamedBBuilder`,
+		// which is assigned from `bBuilder`, which captures `aBuilder`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received renamedAgainBBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>, renamedBBuilder: Instantiator<B>, renamedAgainBBuilder: Instantiator<B>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated private let aBuilder: Instantiator<A>
+					    @Instantiated private let bBuilder: Instantiator<B>
+					    @Received(fulfilledByDependencyNamed: "bBuilder", ofType: Instantiator<B>.self) private let renamedBBuilder: Instantiator<B>
+					    @Received(fulfilledByDependencyNamed: "renamedBBuilder", ofType: Instantiator<B>.self) private let renamedAgainBBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct A: Instantiable {
+					    public init(renamedAgainBBuilder: Instantiator<B>) { self.renamedAgainBBuilder = renamedAgainBBuilder }
+					    @Received private let renamedAgainBBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct B: Instantiable {
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					    @Received private let aBuilder: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsAliasCycleError_whenAliasesOnRootFulfillEachOther() async {
+		// `y` is assigned from `x`, which is assigned from `y`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):8:5: error: Dependency cycle detected: each @Received(fulfilledByDependencyNamed:ofType:) dependency is fulfilled by the next: y: X -> x: X -> y: X
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(y: X, x: X, user: User) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self) private let y: X
+					    @Received(fulfilledByDependencyNamed: "y", ofType: X.self) private let x: X
+					    @Instantiated private let user: User
+					}
+					""",
+					"""
+					public final class X {}
+
+					@Instantiable
+					public struct User: Instantiable {
+					    public init(x: X) { self.x = x }
+					    @Received private let x: X
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsAliasCycleErrorForCycleAliasLeadsInto_whenAliasesBelowRootFulfillEachOther() async {
+		// `w` is assigned from `y`, which is assigned from `x`, which is assigned from `y`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Middle.swift"]):9:5: error: Dependency cycle detected: each @Received(fulfilledByDependencyNamed:ofType:) dependency is fulfilled by the next: y: X -> x: X -> y: X
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(middle: Middle) { self.middle = middle }
+					    @Instantiated private let middle: Middle
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Middle: Instantiable {
+					    public init(w: X, y: X, x: X) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(fulfilledByDependencyNamed: "y", ofType: X.self) private let w: X
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self) private let y: X
+					    @Received(fulfilledByDependencyNamed: "y", ofType: X.self) private let x: X
+					}
+
+					public final class X {}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsAliasCycleError_whenAliasIsFulfilledByItself() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Middle.swift"]):4:5: error: Dependency cycle detected: each @Received(fulfilledByDependencyNamed:ofType:) dependency is fulfilled by the next: x: X -> x: X
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(middle: Middle) { self.middle = middle }
+					    @Instantiated private let middle: Middle
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Middle: Instantiable {
+					    public init(x: X) { self.x = x }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self) private let x: X
+					}
+
+					public final class X {}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleError_whenInstantiatorReceivesAliasOfItselfDeclaredOnRoot() async {
+		// `aBuilder` captures `renamedABuilder`, which is assigned from `aBuilder`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["A.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received renamedABuilder: Instantiator<A> -> @Received aBuilder: Instantiator<A>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(aBuilder: Instantiator<A>, renamedABuilder: Instantiator<A>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated private let aBuilder: Instantiator<A>
+					    @Received(fulfilledByDependencyNamed: "aBuilder", ofType: Instantiator<A>.self) private let renamedABuilder: Instantiator<A>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable {
+					    public init(renamedABuilder: Instantiator<A>) { self.renamedABuilder = renamedABuilder }
+					    @Received private let renamedABuilder: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleErrorAtDeepestReceiver_whenConstantIsReceivedBelowItThroughAliasOfItself() async {
+		// `a` is built with `c`, which is built with `renamedA`, which is assigned from `a`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["C.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated a: A -> @Received renamedA: A -> @Received a: A
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(middle: Middle) { self.middle = middle }
+					    @Instantiated private let middle: Middle
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Middle: Instantiable {
+					    public init(a: A, renamedA: A) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated private let a: A
+					    @Received(fulfilledByDependencyNamed: "a", ofType: A.self) private let renamedA: A
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable {
+					    public init(c: C) { self.c = c }
+					    @Instantiated private let c: C
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(renamedA: A) { self.renamedA = renamedA }
+					    @Received private let renamedA: A
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsReceivedCycleError_whenSiblingInstantiatorIsReceivedInsideLazyCycleOfEarlierSibling() async {
+		// `bBuilder` captures `qBuilder`, which `A` receives below `B`'s `innerABuilder`, and `qBuilder`
+		// captures `bBuilder`. `A` and `B` instantiate one another lazily, and `aBuilder` precedes them.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["A.swift"]):8:5: error: Dependency received in same chain it is instantiated: @Instantiated qBuilder: Instantiator<Q> -> @Received bBuilder: Instantiator<B> -> @Received qBuilder: Instantiator<Q>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(aBuilder: Instantiator<A>, bBuilder: Instantiator<B>, qBuilder: Instantiator<Q>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated private let aBuilder: Instantiator<A>
+					    @Instantiated private let bBuilder: Instantiator<B>
+					    @Instantiated private let qBuilder: Instantiator<Q>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct A: Instantiable {
+					    public init(innerBBuilder: Instantiator<B>, qBuilder: Instantiator<Q>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated private let innerBBuilder: Instantiator<B>
+					    @Received private let qBuilder: Instantiator<Q>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct B: Instantiable {
+					    public init(innerABuilder: Instantiator<A>) { self.innerABuilder = innerABuilder }
+					    @Instantiated private let innerABuilder: Instantiator<A>
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Q: Instantiable {
+					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+					    @Received private let bBuilder: Instantiator<B>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithOptionalPropertyAliasAndMarkedOnlyIfAvailableAndItIsOnlyAvailableViaCircularDependency_throwsError() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
@@ -2416,6 +3803,49 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithManyRootsInCycles_throwsErrorOfFirstRootInTypeOrder() async {
+		// Every one of the 200 roots builds its own cycle. A set of roots iterates in an order
+		// that depends on the process's hash seed, so validating in that order reports
+		// `Root000`'s cycle about once in 200 runs.
+		let swiftFileContent = (0..<200).map { index in
+			let suffix = String(repeating: "0", count: 3 - String(index).count) + String(index)
+			return """
+			@Instantiable(isRoot: true)
+			public struct Root\(suffix): Instantiable {
+			    public init(partner: Partner\(suffix)) { self.partner = partner }
+			    @Instantiated let partner: Partner\(suffix)
+			}
+			@Instantiable
+			public struct Partner\(suffix): Instantiable {
+			    public init(other: Other\(suffix)) { self.other = other }
+			    @Instantiated let other: Other\(suffix)
+			}
+			@Instantiable
+			public struct Other\(suffix): Instantiable {
+			    public init(partner: Partner\(suffix)) { self.partner = partner }
+			    @Instantiated let partner: Partner\(suffix)
+			}
+			"""
+		}.joined(separator: "\n")
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root000.swift"]):14:5: error: Dependency cycle detected: Partner000 -> Other000 -> Partner000
+				\(fixtures["Root000.swift"]):6:1: note: `Partner000` is part of the cycle
+				\(fixtures["Root000.swift"]):11:1: note: `Other000` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [swiftFileContent],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
@@ -3361,6 +4791,592 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					@Instantiable
 					public struct Thing: Instantiable {
 					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasWhoseFulfillingPropertyIsUnavailable_throwsError() async {
+		// Nothing provides `missing`, so Child does not create `maybe`, which Grand requires.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Grand.swift"]):4:5: error: @Received property `maybe: Greeter?` is not @Instantiated or @Forwarded in chain: Root -> Child -> Grand. `maybe: Greeter?` is created by `Child` only if `missing: DefaultGreeter` is available, and `missing: DefaultGreeter` is not @Instantiated or @Forwarded in chain. Did you mean to receive this property with `onlyIfAvailable: true`?
+				\(fixtures["Grand.swift"]):4:5-4:14: fixit: @Received(onlyIfAvailable: true)
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					public protocol Greeter {}
+
+					@Instantiable
+					public final class DefaultGreeter: Instantiable, Greeter {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(maybe: Greeter?, grand: Grand) { self.maybe = maybe; self.grand = grand }
+					    @Received(fulfilledByDependencyNamed: "missing", ofType: DefaultGreeter.self, onlyIfAvailable: true) let maybe: Greeter?
+					    @Instantiated let grand: Grand
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Grand: Instantiable {
+					    public init(maybe: Greeter?) { self.maybe = maybe }
+					    @Received let maybe: Greeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredOptionalReceiveUnderAncestorThatReceivesItOnlyIfAvailable_throwsError_whenNothingProvidesIt() async {
+		// Parent receives `user` only if available and nothing provides it, so Parent gets
+		// `nil` and there is no `user` to hand to Child, which requires it.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):4:5: error: @Received property `user: User?` is not @Instantiated or @Forwarded in chain: Root -> Parent -> Child. Declare `@Instantiated let user: User?` on `Root` or on another type in the chain to fix.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(parent: Parent) { self.parent = parent }
+					    @Instantiated let parent: Parent
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Parent: Instantiable {
+					    public init(user: User?, child: Child) { self.user = user; self.child = child }
+					    @Received(onlyIfAvailable: true) let user: User?
+					    @Instantiated let child: Child
+					}
+
+					public final class User {}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(user: User?) { self.user = user }
+					    @Received let user: User?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredOptionalReceiveOfInstantiatorThatBuildsTheReceiver_throwsError() async {
+		// C, built by `cBuilder`, requires `cBuilder: Instantiator<C>?`. The only `cBuilder` is
+		// the one still building C, as for a receive of `cBuilder: Instantiator<C>`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["C.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated cBuilder: Instantiator<C> -> @Received cBuilder: Instantiator<C>?
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(cBuilder: Instantiator<C>) { self.cBuilder = cBuilder }
+					    @Instantiated let cBuilder: Instantiator<C>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(cBuilder: Instantiator<C>?) { self.cBuilder = cBuilder }
+					    @Received let cBuilder: Instantiator<C>?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredOptionalReceiveOfInstantiatorStillBuildingAnAncestor_throwsError() async {
+		// D, built inside `cBuilder`, requires `cBuilder: Instantiator<C>?`. The only `cBuilder`
+		// is still being built, as for a receive of `cBuilder: Instantiator<C>`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["D.swift"]):4:5: error: Dependency cycle detected! @Instantiated `cBuilder: Instantiator<C>` is @Received in tree created by @Instantiated `cBuilder: Instantiator<C>`. Declare @Received `cBuilder: Instantiator<C>` on `D` as @Instantiated to fix. Full cycle: Instantiator<C> -> D -> Instantiator<C>?
+				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
+				\(fixtures["D.swift"]):1:1: note: `D` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(cBuilder: Instantiator<C>) { self.cBuilder = cBuilder }
+					    @Instantiated let cBuilder: Instantiator<C>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(d: D) { self.d = d }
+					    @Instantiated let d: D
+					}
+					""",
+					"""
+					@Instantiable
+					public final class D: Instantiable {
+					    public init(cBuilder: Instantiator<C>?) { self.cBuilder = cBuilder }
+					    @Received let cBuilder: Instantiator<C>?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredOptionalReceiveUnderAncestorThatReceivesItOnlyIfAvailable_throwsError_whenOnlyProviderIsStillBeingBuilt() async {
+		// Parent, built inside `user`, receives `user` only if available and gets `nil`,
+		// because `user` is still being built. Child, which requires `user`, is built
+		// inside it too, so its receive closes a cycle, as a receive of `user: User` would.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):4:5: error: Dependency cycle detected: User -> Parent -> Child -> User?
+				\(fixtures["User.swift"]):1:1: note: `User` is part of the cycle
+				\(fixtures["Parent.swift"]):1:1: note: `Parent` is part of the cycle
+				\(fixtures["Child.swift"]):1:1: note: `Child` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(user: User) { self.user = user }
+					    @Instantiated let user: User
+					}
+					""",
+					"""
+					@Instantiable
+					public final class User: Instantiable {
+					    public init(parent: Parent) { self.parent = parent }
+					    @Instantiated let parent: Parent
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Parent: Instantiable {
+					    public init(user: User?, child: Child) { self.user = user; self.child = child }
+					    @Received(onlyIfAvailable: true) let user: User?
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(user: User?) { self.user = user }
+					    @Received let user: User?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasWhoseFulfillingPropertyIsUnavailable_throwsError_whenReceiveResolvesToEnclosingAliasThroughAliasThatIsNotCreated() async {
+		// Child's alias of `missing` is never created, so Grand's receive of `maybe` resolves to
+		// Parent's alias of `absent`, which is not created either.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Grand.swift"]):4:5: error: @Received property `maybe: Greeter?` is not @Instantiated or @Forwarded in chain: Root -> Parent -> Child -> Grand. `maybe: Greeter?` is created by `Parent` only if `absent: DefaultGreeter` is available, and `absent: DefaultGreeter` is not @Instantiated or @Forwarded in chain. Did you mean to receive this property with `onlyIfAvailable: true`?
+				\(fixtures["Grand.swift"]):4:5-4:14: fixit: @Received(onlyIfAvailable: true)
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(parent: Parent) { self.parent = parent }
+					    @Instantiated let parent: Parent
+					}
+					""",
+					"""
+					public protocol Greeter {}
+
+					@Instantiable
+					public final class DefaultGreeter: Instantiable, Greeter {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Parent: Instantiable {
+					    public init(maybe: Greeter?, child: Child) { self.maybe = maybe; self.child = child }
+					    @Received(fulfilledByDependencyNamed: "absent", ofType: DefaultGreeter.self, onlyIfAvailable: true) let maybe: Greeter?
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(maybe: Greeter?, grand: Grand) { self.maybe = maybe; self.grand = grand }
+					    @Received(fulfilledByDependencyNamed: "missing", ofType: DefaultGreeter.self, onlyIfAvailable: true) let maybe: Greeter?
+					    @Instantiated let grand: Grand
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Grand: Instantiable {
+					    public init(maybe: Greeter?) { self.maybe = maybe }
+					    @Received let maybe: Greeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasWhoseFulfillingPropertyIsUnavailable_throwsError_whenAliasIsErasedToConcreteExistential() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Grand.swift"]):4:5: error: @Received property `maybe: AnyGreeter?` is not @Instantiated or @Forwarded in chain: Root -> Child -> Grand. `maybe: AnyGreeter?` is created by `Child` only if `missing: DefaultGreeter` is available, and `missing: DefaultGreeter` is not @Instantiated or @Forwarded in chain. Did you mean to receive this property with `onlyIfAvailable: true`?
+				\(fixtures["Grand.swift"]):4:5-4:14: fixit: @Received(onlyIfAvailable: true)
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					public protocol Greeter {}
+
+					public struct AnyGreeter: Greeter {
+					    public init(_ greeter: Greeter) { self.greeter = greeter }
+					    private let greeter: Greeter
+					}
+
+					@Instantiable
+					public final class DefaultGreeter: Instantiable, Greeter {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(maybe: AnyGreeter?, grand: Grand) { self.maybe = maybe; self.grand = grand }
+					    @Received(fulfilledByDependencyNamed: "missing", ofType: DefaultGreeter.self, erasedToConcreteExistential: true, onlyIfAvailable: true) let maybe: AnyGreeter?
+					    @Instantiated let grand: Grand
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Grand: Instantiable {
+					    public init(maybe: AnyGreeter?) { self.maybe = maybe }
+					    @Received let maybe: AnyGreeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasWhoseFulfillingPropertyIsUnavailable_throwsErrorWithoutFixIt_whenRequiringPropertyIsAlias() async {
+		// Grand renames `maybe` without `onlyIfAvailable`, so it requires `maybe`, which Child does not create.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Grand.swift"]):4:5: error: @Received property `maybe: Greeter?` is not @Instantiated or @Forwarded in chain: Root -> Child -> Grand. `maybe: Greeter?` is created by `Child` only if `missing: DefaultGreeter` is available, and `missing: DefaultGreeter` is not @Instantiated or @Forwarded in chain. Did you mean to receive this property with `onlyIfAvailable: true`?
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					public protocol Greeter {}
+
+					@Instantiable
+					public final class DefaultGreeter: Instantiable, Greeter {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(maybe: Greeter?, grand: Grand) { self.maybe = maybe; self.grand = grand }
+					    @Received(fulfilledByDependencyNamed: "missing", ofType: DefaultGreeter.self, onlyIfAvailable: true) let maybe: Greeter?
+					    @Instantiated let grand: Grand
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Grand: Instantiable {
+					    public init(greeter: Greeter?) { self.greeter = greeter }
+					    @Received(fulfilledByDependencyNamed: "maybe", ofType: Greeter?.self) let greeter: Greeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasWhoseFulfillingPropertyReceivesTheReceiversAncestor_throwsError() async {
+		// Grand requires `maybe`, so Child must create it, which needs `x` built before `child`.
+		// But X requires `child`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["X.swift"]):6:5: error: Dependency received in same chain it is instantiated: @Instantiated child: Child -> @Received maybe: Greeter? -> @Received x: X -> @Received child: Child
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child, x: X) { self.child = child; self.x = x }
+					    @Instantiated let child: Child
+					    @Instantiated let x: X
+					}
+					""",
+					"""
+					public protocol Greeter {}
+
+					@Instantiable
+					public final class X: Instantiable, Greeter {
+					    public init(child: Child) { self.child = child }
+					    @Received let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(maybe: Greeter?, grand: Grand) { self.maybe = maybe; self.grand = grand }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let maybe: Greeter?
+					    @Instantiated let grand: Grand
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Grand: Instantiable {
+					    public init(maybe: Greeter?) { self.maybe = maybe }
+					    @Received let maybe: Greeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasInsideItsFulfillingProperty_throwsError() async {
+		// DefaultGreeter requires `maybe`, which Child can create only once `missing`,
+		// the DefaultGreeter being built, exists.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["DefaultGreeter.swift"]):6:5: error: Dependency received in same chain it is instantiated: @Instantiated missing: DefaultGreeter -> @Received maybe: Greeter? -> @Received missing: DefaultGreeter
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					public protocol Greeter {}
+
+					@Instantiable
+					public final class DefaultGreeter: Instantiable, Greeter {
+					    public init(maybe: Greeter?) { self.maybe = maybe }
+					    @Received let maybe: Greeter?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(missing: DefaultGreeter, maybe: Greeter?) { self.missing = missing; self.maybe = maybe }
+					    @Instantiated let missing: DefaultGreeter
+					    @Received(fulfilledByDependencyNamed: "missing", ofType: DefaultGreeter.self, onlyIfAvailable: true) let maybe: Greeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasInsideItsInstantiatorFulfillingProperty_throwsError() async {
+		// Grand requires `maybeBuilder`, which Child can create only once `greeterBuilder`,
+		// the Instantiator Child is being built by, exists.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Grand.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated greeterBuilder: Instantiator<DefaultGreeter> -> @Received maybeBuilder: Instantiator<DefaultGreeter>? -> @Received greeterBuilder: Instantiator<DefaultGreeter>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(greeterBuilder: Instantiator<DefaultGreeter>) { self.greeterBuilder = greeterBuilder }
+					    @Instantiated let greeterBuilder: Instantiator<DefaultGreeter>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class DefaultGreeter: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(maybeBuilder: Instantiator<DefaultGreeter>?, grand: Grand) { self.maybeBuilder = maybeBuilder; self.grand = grand }
+					    @Received(fulfilledByDependencyNamed: "greeterBuilder", ofType: Instantiator<DefaultGreeter>.self, onlyIfAvailable: true) let maybeBuilder: Instantiator<DefaultGreeter>?
+					    @Instantiated let grand: Grand
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Grand: Instantiable {
+					    public init(maybeBuilder: Instantiator<DefaultGreeter>?) { self.maybeBuilder = maybeBuilder }
+					    @Received let maybeBuilder: Instantiator<DefaultGreeter>?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithReceiveOfAliasInsideItsFulfillingProperty_throwsError() async {
+		// DefaultGreeter requires `maybe`, which Child creates from `missing`, the DefaultGreeter being built.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["DefaultGreeter.swift"]):6:5: error: Dependency received in same chain it is instantiated: @Instantiated missing: DefaultGreeter -> @Received maybe: Greeter -> @Received missing: DefaultGreeter
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					public protocol Greeter {}
+
+					@Instantiable
+					public final class DefaultGreeter: Instantiable, Greeter {
+					    public init(maybe: Greeter) { self.maybe = maybe }
+					    @Received let maybe: Greeter
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(missing: DefaultGreeter, maybe: Greeter) { self.missing = missing; self.maybe = maybe }
+					    @Instantiated let missing: DefaultGreeter
+					    @Received(fulfilledByDependencyNamed: "missing", ofType: DefaultGreeter.self) let maybe: Greeter
 					}
 					""",
 				],

@@ -445,6 +445,8 @@ Use `@Received(fulfilledByDependencyNamed:ofType:)` to give a dependency that wa
 
 SafeDI does not check that the retyped property can be fulfilled by the original type. The Swift compiler checks the generated assignment. When SafeDI knows exactly how the compiler spells your source files’ paths – in builds through the `SafeDIGenerator` plugin and the vended Bazel rule – it wraps the assignment in a `#sourceLocation` directive, and a failure is reported at the `@Received` declaration. Otherwise the failure is reported in the generated file, and the assignment ends in a comment such as `// Declared at Sources/App/Consumer.swift:12` that names the declaration; the compiler shows it in the source excerpt of its error. The compiler warns at a `#sourceLocation` directive whose path a module spells more than one way, so SafeDI also falls back to the comment when another file of the module, or another such declaration’s file, has the same file name (see [Custom build system integration](#custom-build-system-integration)).
 
+A rename can also be fulfilled by another rename declared on the same type. A rename is assigned from what it renames when the type builds its dependencies, so SafeDI reports an error for renames on one type that are fulfilled by one another in a cycle, and for an `@Instantiated` dependency whose own tree receives it under any of its names, since that tree needs it before it exists.
+
 Here, a parent instantiates a read-write `UserManager` and also renames the object to make it available a `UserVendor`. A child receives the same instance as the read-only `UserVendor`:
 
 ```swift
@@ -465,6 +467,8 @@ public struct ProfileView: Instantiable {
 ```
 
 To receive the renamed dependency inside a type-erasing wrapper, add `erasedToConcreteExistential: true`, which wraps it as [`@Instantiated` erasure](#making-protocols-instantiable) does: a property `userVendor: AnyUserVendor` is assigned `AnyUserVendor(userManager)`. With `onlyIfAvailable: true` the property is optional, and the type it wraps does the wrapping: a property `userVendor: AnyUserVendor?` is assigned `AnyUserVendor(userManager)` too.
+
+The renamed property may keep the original label, as in `@Received(fulfilledByDependencyNamed: "userManager", ofType: UserManager.self) private let userManager: UserVendor`. The generated code passes each dependency by its label, though, so below `LoggedInView` the label `userManager` then names the `UserVendor`, and a type further down that receives `userManager: UserManager` cannot be given the original. SafeDI reports an error at that `@Received` property, naming the declaration that hides the original. Give the renamed property a label of its own when anything further down receives the original. The same applies to an `@Instantiated` or `@Forwarded` property that reuses a label declared higher in the tree with a different type. Reusing a label is reported only when the closer declaration has a different type than the one a type below it receives (for a receive of an optional property, a type other than that property’s type or its non-optional form); declaring or renaming to the same label and type again simply provides the closer instance.
 
 #### Sharing one instance across properties of disparate types
 
@@ -509,7 +513,24 @@ public struct FeedView: Instantiable {
 }
 ```
 
-A dependency counts as available only if it can be built before the receiver. When a parent instantiates both the dependency and a sibling whose subtree contains the receiver, and the dependency itself receives that sibling, the dependency must be built after the sibling, so the receiver gets `nil`. When two siblings each receive the other `onlyIfAvailable`, the one declared later is built first and receives `nil`.
+A dependency counts as available only if it can be built before the receiver. Receiving still follows the usual rule: a type receives what a type above it instantiates or forwards. Availability depends on the order in which one parent builds the properties it instantiates.
+
+```swift
+@Instantiable
+public struct Parent: Instantiable {
+    @Instantiated let a: A
+    @Instantiated let b: B // A type under `B` receives `a`.
+}
+```
+
+A type under `B` that receives `a` is receiving a property of `Parent`, which is above it, so `Parent` builds `a` before `b`. Nothing reaches into the types under `A`. The receiver gets `nil` in the cases where `a` cannot be built first:
+
+- **The receiver is built inside the dependency, or is the dependency.** A type under `A` that receives `a` only if available gets `nil`, because `a` is still being built. So does a type built as the dependency itself: a `FeedView` built by `feedViewBuilder: Instantiator<FeedView>` that receives `feedViewBuilder` only if available. The exception is a receiver whose type instantiates its own property of that name, which is then the one it gets.
+- **Two of a parent’s properties receive each other.** If a type under `B` receives `a` only if available and `A` receives `b`, then `b` is built first and that receiver gets `nil`. If anything under `B` receives `a` without `onlyIfAvailable`, `a` is built first instead, and `A` gets `nil` for `b` when it receives `b` only if available.
+- **Both receive each other only if available.** The property declared later is built first and receives `nil`.
+- **Nothing is provided below a `nil`.** A property received only if available that is `nil` provides nothing to the types below the receiver. A type further down that receives the same property without `onlyIfAvailable` needs a type above it to provide the property, and the build fails at that declaration when none does. When the only such property is one the type is built inside — `user: User?` required by a type under `user: User` — the build reports a dependency cycle there, as it does for a receive of `user: User`. When the receiver of `user: User?` is handed a parent’s non-optional `user: User`, a type further down that requires `user: User?` is handed the same instance, and `user` is built before it.
+- **A renamed dependency is unavailable.** A `@Received(fulfilledByDependencyNamed:ofType:onlyIfAvailable: true)` property whose fulfilling dependency is unavailable is `nil`, and so is that property for anything that receives it in turn with `onlyIfAvailable: true`. The exception is when an enclosing type instantiates, forwards, or creates through its own alias a property of the same name and type (or its non-optional form): those receivers then get that property.
+- **A type requires a renamed dependency that is only available sometimes.** A type further down the tree that receives the renamed property without `onlyIfAvailable` gets an enclosing type’s property of that name when there is one, and that property is built before it. Otherwise it needs the renamed property to exist, as it would for a renaming without `onlyIfAvailable`: the fulfilling dependency is built before the property, and anything that receives the property only if available and must itself be built first gets `nil`. The build fails at the receiving declaration when the fulfilling dependency is not `@Instantiated` or `@Forwarded` by the renaming type or above it, or can only be built after the receiver.
 
 ### #SafeDIConfiguration
 
@@ -774,6 +795,8 @@ When you provide a `mockOnly` declaration, SafeDI’s mock generator will utiliz
 
 A `mockOnly` declaration requires a hand-written `mock()` method (or a method named by `customMockName`). No `init` (type declarations), `instantiate()` (extensions), or `Instantiable` conformance is required. `mockOnly` is mutually exclusive with `generateMock` and `isRoot`. `conformsElsewhere` has no effect when `mockOnly` is true.
 
+Because a `mockOnly` declaration contributes no production instantiation path, a dependency tree that instantiates a type only a `mockOnly` declaration fulfills fails generation with an error at the `@Instantiated` property, even when a production declaration of the same concrete type exists but does not fulfill that type.
+
 #### Splitting production and mock declarations
 
 A type may have `@Instantiable` on both its declaration and an extension, with one being `mockOnly: true`. This lets you keep production behavior in one declaration and a hand-written mock in the other:
@@ -864,7 +887,7 @@ LoggedInView.mock(safeDIOverrides: .init(
 
 Closure fields on `SafeDIMockConfiguration` are plain (non-`@Sendable`) by default, so overrides can capture mutable non-`Sendable` test state. When a type is reached through a `SendableInstantiator` (or `SendableErasedInstantiator`) anywhere in the dependency graph, its `SafeDIMockConfiguration` is emitted with `@Sendable` closure fields instead so the overrides remain safe to invoke across isolation boundaries.
 
-A type gets its own `SafeDIOverrides` struct when at least one dependency belongs there: an `@Instantiated` dependency, a `@Received` dependency of a type an `@Instantiable` declaration fulfills or a single concrete type is [erased to](#receiving-a-type-erased-dependency), or a `@Received(onlyIfAvailable: true)` dependency. Every other dependency is a flat `mock()` parameter. The table below shows where each kind lands and whether the caller has to supply it.
+A type gets its own `SafeDIOverrides` struct when at least one dependency belongs there: an `@Instantiated` dependency, a `@Received` dependency the mock can build because an `@Instantiable` declaration fulfills its type or a single concrete type is [erased to](#receiving-a-type-erased-dependency), or a `@Received(onlyIfAvailable: true)` dependency. Every other dependency is a flat `mock()` parameter. The table below shows where each kind lands and whether the caller has to supply it.
 
 #### Dependency kinds in the generated mock
 
@@ -874,14 +897,21 @@ The table below shows where each dependency kind lands in the three buckets abov
 | --- | --- | --- |
 | Required `@Received` of a type some `@Instantiable` declaration fulfills (directly or via `fulfillingAdditionalTypes`), or of a type exactly one concrete type is [erased to](#receiving-a-type-erased-dependency) | Entry on `SafeDIOverrides` | Built from the real subtree, exactly like `@Instantiated` |
 | Required `@Received` of a type no `@Instantiable` declaration fulfills, including a type [different concrete types are erased to](#receiving-a-type-erased-dependency) | Flat `mock()` parameter | Required |
+| Required `@Received` of a type whose `@Instantiable` declaration has `@Forwarded` properties, unless received as an `Instantiator` | Flat `mock()` parameter | Required |
 | `@Forwarded` | Flat `mock()` parameter | Required, unless the root provides a default or the forwarded type has a [`mockOnly`](#the-mockonly-parameter) provider (which defaults the parameter to `Type.mock()`) |
 | `@Instantiated` | Entry on `SafeDIOverrides` | Built from the real subtree — see [Overriding dependencies](#overriding-dependencies) |
 | `@Received(onlyIfAvailable: true)` | Entry on `SafeDIOverrides`, typed as optional | `nil` |
 | Default-valued non-DI init parameter | Flat `mock()` parameter on a direct mock, or a nested `SafeDIMockConfiguration` field when reached through a parent | The parameter’s original default expression |
 
-A `@Received(onlyIfAvailable: true)` dependency gets no `SafeDIOverrides` entry of its own when the mock already builds that dependency — because the mocked type instantiates it, or because another type in the tree requires it. The receiver is then passed the built instance, unless that instance can only be built after the receiver (see [Conditionally receiving dependencies](#conditionally-receiving-dependencies)). In that case the receiver is passed `nil`, as in production, and a builder closure you set for the receiver in `SafeDIOverrides` is called with `nil`.
+A type with `@Forwarded` properties can only be built by an `Instantiator` that is handed the forwarded values, which is why production never `@Instantiated`s it as a constant. A mock has no values to forward either, so when the mocked type, or a type in its tree, receives such a type as a constant, `mock()` takes the instance as a parameter, as it does for a type no `@Instantiable` declaration fulfills. This holds even when the type has a hand-written mock. A received `Instantiator` of the type is built as usual: the forwarded values are the arguments of its `instantiate(_:)`.
+
+A `@Received(onlyIfAvailable: true)` dependency gets no `SafeDIOverrides` entry of its own when the mock already builds that dependency — because the mocked type instantiates it, or because another type in the tree requires it — or when another type in the tree requires it and no `@Instantiable` declaration fulfills it, which makes it a required flat `mock()` parameter. It is an optional entry only when every receiver in the tree, including one that renames it with `fulfilledByDependencyNamed:`, receives it `onlyIfAvailable`. The receiver is then passed the built instance, unless that instance can only be built after the receiver, as when the receiver is built inside it (see [Conditionally receiving dependencies](#conditionally-receiving-dependencies)). In that case the receiver is passed `nil`, as in production, and a builder closure you set for the receiver in `SafeDIOverrides` is called with `nil`. A type that receives `user: User?` without `onlyIfAvailable` while it is built inside the `user: User` the mock builds cannot be handed it, so the build reports a dependency cycle at that declaration, as it does under a root.
+
+A type that receives a `@Received(fulfilledByDependencyNamed:ofType:onlyIfAvailable: true)` property without `onlyIfAvailable` is passed whatever the mock binds to that property. When nothing in the mock’s tree builds the fulfilling dependency, the dependency is an optional `SafeDIOverrides` entry like any other dependency received only if available, so the property, and the type that receives it, is `nil` unless you set the entry. A dependency tree of the same shape under a root is rejected, because nothing in it provides the fulfilling dependency.
 
 A `@Received` dependency is resolved from its declared type, not from the renames in any particular parent. Take `ProfileView` from [Sharing one instance across properties of disparate types](#sharing-one-instance-across-properties-of-disparate-types): `ProfileView.mock()` can build `crashReporter` itself only when `Telemetry` lists `CrashReporter` in `fulfillingAdditionalTypes`. A composition entry such as `(EventTracker & CrashReporter).self` alone does not cover its members. Otherwise `crashReporter` is a required parameter of `ProfileView.mock()`. Because each received dependency is resolved on its own, a mock that receives both `EventTracker` and `CrashReporter` builds a separate `Telemetry` for each. Pass one instance through `safeDIOverrides` if a test needs them to coincide.
+
+The renamed property may keep the original label, as in `@Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let analytics: EventTracker`. When the mocked type declares it, the `analytics` entry on `SafeDIOverrides` customizes the original `Analytics`, and the mocked type and the types in its tree that receive `analytics: EventTracker` are passed that instance as an `EventTracker`.
 
 When two flat `mock()` parameters or two entries in the same `SafeDIOverrides` or `SafeDIMockConfiguration` share a label, each is named by its label followed by its type. Received dependencies named `items` of types `[String]` and `Set<String>` become the parameters `items_Array_String` and `items_Set__String`. The type part is a Swift identifier built from the type’s structure. Optionality, `any`, `some`, `.Type`, and attributes such as `@Sendable` are left out unless two entries differ only in them: `Int?` and `Int.Type` become `Int_Optional` and `Int_Type`. When two entries build the same type, the property type names them apart: a mocked type that instantiates `x: X` while a dependency it receives requires `x: Instantiator<X>` gets the entries `x_X` and `x_Instantiator__X`. A name that is still taken gets trailing underscores until it is unique.
 

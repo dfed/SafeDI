@@ -2533,8 +2533,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):7:5: error: @Received property `analytics: Analytics` is not @Instantiated or @Forwarded in chain: Root -> Parent -> Child. Did you mean `analytics: LazilyInstantiated<Analytics>?`?
-				\(fixtures["Child.swift"]):7:30-7:39: fixit: LazilyInstantiated<Analytics>?
+				\(fixtures["Child.swift"]):7:5: error: @Received property `analytics: Analytics` is not @Instantiated or @Forwarded in chain: Root -> Parent -> Child. Declare `@Instantiated let analytics: Analytics` on `Root` or on another type in the chain to fix.
 				"""
 			},
 		) {
@@ -3563,11 +3562,11 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 				"""
 				@Instantiable(generateMock: true)
 				public final class Screen: Instantiable {
-				    public init(analytics: LazilyInstantiated<Analytics>, settingsBuilder: Instantiator<Settings>, other: Other) {
+				    public init(home: Home, settingsBuilder: Instantiator<Settings>, other: Other) {
 				        fatalError("SafeDI doesn't inspect the initializer body")
 				    }
 
-				    @Instantiated let analytics: LazilyInstantiated<Analytics>
+				    @Instantiated let home: Home
 				    @Instantiated let settingsBuilder: Instantiator<Settings>
 				    @Instantiated let other: Other
 				}
@@ -3582,6 +3581,16 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 				@Instantiable
 				public final class Legacy: Instantiable {
 				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Home: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received let analytics: LazilyInstantiated<Analytics>
 				}
 				""",
 				"""
@@ -3620,17 +3629,20 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            analytics_Analytics: (() -> Analytics)? = nil,
+		            home: ((LazilyInstantiated<Analytics>) -> Home)? = nil,
 		            settingsBuilder: ((Analytics) -> Settings)? = nil,
 		            analytics_Legacy: (() -> Legacy)? = nil,
 		            other: ((Legacy) -> Other)? = nil
 		        ) {
 		            self.analytics_Analytics = analytics_Analytics
+		            self.home = home
 		            self.settingsBuilder = settingsBuilder
 		            self.analytics_Legacy = analytics_Legacy
 		            self.other = other
 		        }
 
 		        let analytics_Analytics: (() -> Analytics)?
+		        let home: ((LazilyInstantiated<Analytics>) -> Home)?
 		        let settingsBuilder: ((Analytics) -> Settings)?
 		        let analytics_Legacy: (() -> Legacy)?
 		        let other: ((Legacy) -> Other)?
@@ -3643,6 +3655,11 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            if let safeDIBuilder = safeDIOverrides.analytics_Analytics { safeDIBuilder() } else { Analytics() }
 		        }
 		        let analytics_Analytics = LazilyInstantiated<Analytics>(__safeDI_analytics_Analytics)
+		        func __safeDI_home() -> Home {
+		            let analytics: LazilyInstantiated<Analytics> = analytics_Analytics
+		            return if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(analytics) } else { Home(analytics: analytics) }
+		        }
+		        let home: Home = __safeDI_home()
 		        func __safeDI_settingsBuilder() -> Settings {
 		            let analytics: LazilyInstantiated<Analytics> = analytics_Analytics
 		            return if let safeDIBuilder = safeDIOverrides.settingsBuilder { safeDIBuilder(analytics.instance) } else { Settings(analytics: analytics.instance) }
@@ -3654,7 +3671,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		            return if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder(analytics) } else { Other(analytics: analytics) }
 		        }
 		        let other: Other = __safeDI_other()
-		        return Screen(analytics: analytics_Analytics, settingsBuilder: settingsBuilder, other: other)
+		        return Screen(home: home, settingsBuilder: settingsBuilder, other: other)
 		    }
 		}
 		#endif

@@ -1936,6 +1936,69 @@ import Testing
 		}
 
 		@Test
+		func declaration_fixit_updatesRequiredInitializerKeepingNonDependencyParametersInSourceOrder_whenSeveralNonDependencyParametersExist() {
+			// The non-dependency parameters were inserted in dictionary order, which changes from run
+			// to run, and an insertion past the end of the parameter list crashed the macro. Six
+			// parameters make inserting them in source order by chance unlikely.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, alpha: Int = 1, bravo: Int = 2, charlie: Int = 3, delta: Int = 4, echo: Int = 5, foxtrot: Int = 6) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, alpha: Int = 1, bravo: Int = 2, charlie: Int = 3, delta: Int = 4, echo: Int = 5, foxtrot: Int = 6) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+					}
+
+					let forwardedA: ForwardedA
+					let receivedA: ReceivedA
+					let receivedB: ReceivedB
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add arguments for receivedB: ReceivedB"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add arguments for receivedB: ReceivedB",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, alpha: Int = 1, bravo: Int = 2, charlie: Int = 3, delta: Int = 4, echo: Int = 5, foxtrot: Int = 6) {
+						self.forwardedA = forwardedA
+						self.receivedA = receivedA
+						self.receivedB = receivedB
+					}
+
+					@Forwarded let forwardedA: ForwardedA
+					@Received let receivedA: ReceivedA
+					@Received let receivedB: ReceivedB
+				}
+				""",
+			)
+		}
+
+		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenLastDependencyMissingFromInitializerAndEscapingDependencyParameterExists() {
 			assertMacroExpansion(
 				"""
@@ -6094,6 +6157,66 @@ import Testing
 					),
 				],
 				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func mockMethodMissingDependencyProducesFixItKeepingExtraParametersInSourceOrder() {
+			// The extra parameters were appended in dictionary order, which changes from run to run.
+			// Six parameters make keeping their order by chance unlikely.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    @Received let dependency: Dependency
+
+				    public static func mock(alpha: Int = 1, bravo: Int = 2, charlie: Int = 3, delta: Int = 4, echo: Int = 5, foxtrot: Int = 6) -> MyService {
+				        MyService(dependency: Dependency())
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    let dependency: Dependency
+
+				    public static func mock(alpha: Int = 1, bravo: Int = 2, charlie: Int = 3, delta: Int = 4, echo: Int = 5, foxtrot: Int = 6) -> MyService {
+				        MyService(dependency: Dependency())
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type’s `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						line: 8,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add mock() arguments for dependency: Dependency"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add mock() arguments for dependency: Dependency",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init(dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    @Received let dependency: Dependency
+
+				    public static func mock(dependency: Dependency, alpha: Int = 1, bravo: Int = 2, charlie: Int = 3, delta: Int = 4, echo: Int = 5, foxtrot: Int = 6) -> MyService {
+				        MyService(dependency: Dependency())
+				    }
+				}
+				""",
 			)
 		}
 

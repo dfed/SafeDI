@@ -23,12 +23,48 @@ import SwiftSyntax
 /// A representation of a property.
 /// e.g. `let myProperty: MyProperty`
 public struct Property: Codable, Hashable, Comparable, Sendable {
+	// MARK: Initialization
+
+	public init(label: String, typeDescription: TypeDescription) {
+		self.label = label
+		self.typeDescription = typeDescription
+		var hasher = Hasher()
+		hasher.combine(label)
+		hasher.combine(typeDescription)
+		hashOfLabelAndTypeDescription = hasher.finalize()
+	}
+
+	// MARK: Decodable
+
+	public init(from decoder: Decoder) throws {
+		let container = try decoder.container(keyedBy: CodingKeys.self)
+		try self.init(
+			label: container.decode(String.self, forKey: .label),
+			typeDescription: container.decode(TypeDescription.self, forKey: .typeDescription),
+		)
+	}
+
 	// MARK: Public
 
 	/// The label by which the property is referenced.
 	public let label: String
 	/// The type to which the property conforms.
 	public let typeDescription: TypeDescription
+
+	// MARK: Equatable
+
+	public static func == (lhs: Property, rhs: Property) -> Bool {
+		lhs.label == rhs.label && lhs.typeDescription == rhs.typeDescription
+	}
+
+	// MARK: Hashable
+
+	/// Feeds the hash of the label and type description, computed once when the property is created:
+	/// sets and dictionaries of properties hash each property many times, and hashing a type
+	/// description walks its whole tree.
+	public func hash(into hasher: inout Hasher) {
+		hasher.combine(hashOfLabelAndTypeDescription)
+	}
 
 	public func withUpdatedTypeDescription(_ typeDescription: TypeDescription) -> Self {
 		.init(
@@ -42,7 +78,7 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		"\(label): \(typeDescription.asSource)"
 	}
 
-	// MARK: Hashable
+	// MARK: Comparable
 
 	public static func < (lhs: Property, rhs: Property) -> Bool {
 		if lhs.label != rhs.label {
@@ -142,6 +178,13 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 
 	// MARK: Internal
 
+	/// The coding keys of the stored properties a `Property` encodes: not its hash, which Swift seeds
+	/// differently in every process, so a hash written by one run would be wrong in the next.
+	enum CodingKeys: String, CodingKey {
+		case label
+		case typeDescription
+	}
+
 	var asTupleElement: TupleTypeElementSyntax {
 		TupleTypeElementSyntax(
 			firstName: .identifier(label),
@@ -158,8 +201,14 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		typeDescription.simpleNameAndGenerics?.generics
 	}
 
+	/// The property with its optional type unwrapped, or this property when its type is not optional. Most
+	/// properties are not optional, and creating a property hashes its whole type description.
 	var asUnwrappedProperty: Property {
-		Property(label: label, typeDescription: typeDescription.unwrapped)
+		if case let .optional(unwrapped) = typeDescription {
+			Property(label: label, typeDescription: unwrapped)
+		} else {
+			self
+		}
 	}
 
 	/// The property with which a type receives the instance of an `@Instantiated` lazily instantiated dependency
@@ -264,4 +313,10 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 			}
 		}
 	}
+
+	// MARK: Private
+
+	/// The hash of `label` and `typeDescription`, computed once by the initializer every
+	/// property is created through. Not encoded, and not compared by `==`.
+	private let hashOfLabelAndTypeDescription: Int
 }

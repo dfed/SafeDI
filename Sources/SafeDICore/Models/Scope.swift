@@ -120,6 +120,39 @@ final class Scope: Hashable {
 		.filter { $0.source == .forwarded }
 		.compactMap(\.lazilyInstantiatedInstanceProperty)
 
+	/// The properties this scope declares for the scopes it builds: those it generates, which for a mock root
+	/// include the received dependencies promoted to its children, and those its type forwards. A property
+	/// declared here shadows one with the same label that was lazily instantiated further up the tree.
+	/// Read only once `propertiesToGenerate` is complete.
+	private lazy var declaredProperties: [Property] = propertiesToGenerate.map(\.property)
+		+ instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)
+
+	/// The by-value properties with which the scopes this scope builds receive the instance of a lazily
+	/// instantiated property this scope declares. A mock root can declare a property itself and also be given
+	/// a promoted lazily instantiated property with the same label. Types that receive the property by value
+	/// are then built with the root's own. Read only once `propertiesToGenerate` is complete.
+	private lazy var declaredLazilyInstantiatedInstanceProperties = Set(
+		(
+			propertiesToGenerate.compactMap(\.lazilyInstantiatedInstanceProperty)
+				+ forwardedLazilyInstantiatedInstanceProperties,
+		).filter { !declaredProperties.contains($0) },
+	)
+
+	/// The properties this scope makes available to the scopes it builds: those it creates, and those a mock
+	/// root builds because a type in its tree receives them. Read only once `propertiesToGenerate` is complete.
+	private(set) lazy var providedProperties = createdProperties.union(
+		propertiesToGenerate.flatMap { propertyToGenerate in
+			switch propertyToGenerate {
+			case .instantiated:
+				// A lazily instantiated property is also provided by value, as the instance it creates.
+				propertyToGenerate.receivableProperties
+			case .aliased:
+				// An alias is created, so it is already in `createdProperties`.
+				[Property]()
+			}
+		},
+	)
+
 	/// A received property this scope requires an ancestor to provide, with the location of the declaration that requires it.
 	struct RequiredReceivedProperty {
 		/// The property an ancestor must provide: the fulfilling property for an aliased dependency, the declared property otherwise.
@@ -170,11 +203,15 @@ final class Scope: Hashable {
 			}
 		}
 
+	/// - Parameter boundProperties: The received properties a mock root binds, which enclose its whole tree.
+	///   Kept apart from `receivableProperties`, which grows at every scope, so that the scopes of a mock
+	///   tree do not each copy them.
 	func createScopeGenerator(
 		for property: Property?,
 		propertyStack: [Property],
 		receivableProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
+		boundProperties: Set<Property> = [],
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool = false,
 	) throws -> ScopeGenerator {
@@ -189,56 +226,61 @@ final class Scope: Hashable {
 		} else {
 			isPropertyCycle = false
 		}
+		/// Whether a scope enclosing this one provides `property` to the scopes this one
+		/// generates: it creates the property, or its unwrapped form, and is not an
+		/// ancestor still being built.
+		func isProvidedByEnclosingScope(_ property: Property) -> Bool {
+			func isReceivable(_ property: Property) -> Bool {
+				receivableProperties.contains(property) || boundProperties.contains(property)
+			}
+			return (isReceivable(property) && !childPropertyStack.contains(property))
+				|| (isReceivable(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty))
+		}
 		let receivableProperties = receivableProperties.union(createdProperties)
 		// The properties this scope’s children receive by reading the instance of a `LazilyInstantiated` property.
-		// A property this scope declares shadows one with the same label that was lazily instantiated further up the
-		// tree. A mock root also declares the received dependencies that were promoted to its children.
-		let declaredProperties = propertiesToGenerate.map(\.property)
-			+ instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)
-		// A mock root can declare a property itself and also be given a promoted lazily instantiated property
-		// with the same label. Types that receive the property by value are then built with the root's own.
-		let declaredLazilyInstantiatedInstanceProperties = (
-			propertiesToGenerate.compactMap(\.lazilyInstantiatedInstanceProperty)
-				+ forwardedLazilyInstantiatedInstanceProperties,
-		).filter { !declaredProperties.contains($0) }
 		let childLazilyInstantiatedInstanceProperties: Set<Property> = if lazilyInstantiatedInstanceProperties.isEmpty {
 			// Nearly every scope: nothing above it is lazily instantiated, so there is nothing to shadow.
-			Set(declaredLazilyInstantiatedInstanceProperties)
+			declaredLazilyInstantiatedInstanceProperties
 		} else {
 			lazilyInstantiatedInstanceProperties
 				.filter { inheritedProperty in !declaredProperties.contains { $0.label == inheritedProperty.label } }
 				.union(declaredLazilyInstantiatedInstanceProperties)
 		}
-		// In mock mode, unavailableOptionalProperties is empty — onlyIfAvailable
-		// dependencies become optional mock parameters instead of being marked unavailable.
-		let unavailableOptionalProperties: Set<Property>
-		if forMockGeneration {
-			unavailableOptionalProperties = []
-		} else {
-			func isPropertyUnavailable(_ property: Property) -> Bool {
-				let propertyIsAvailableInParentStack = receivableProperties.contains(property) && !propertyStack.contains(property)
-				let unwrappedPropertyIsAvailableInParentStack = receivableProperties.contains(property.asUnwrappedProperty) && !propertyStack.contains(property.asUnwrappedProperty)
+		/// Whether an `onlyIfAvailable` dependency of `property` is unavailable. A property this scope
+		/// creates is available. Otherwise, the property this scope is built for and its ancestors are
+		/// still being built, so they are unavailable.
+		func isPropertyUnavailable(_ property: Property) -> Bool {
+			if createdProperties.contains(property) {
+				return false
+			} else if forMockGeneration {
+				// A mock builds, or is handed, every property an ancestor does not
+				// create — onlyIfAvailable dependencies become optional mock parameters.
+				// Only a property that is still being built is unavailable, as in production.
+				return childPropertyStack.contains(property.asUnwrappedProperty)
+			} else {
+				let propertyIsAvailableInParentStack = receivableProperties.contains(property) && !childPropertyStack.contains(property)
+				let unwrappedPropertyIsAvailableInParentStack = receivableProperties.contains(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty)
 				return !(propertyIsAvailableInParentStack || unwrappedPropertyIsAvailableInParentStack)
 			}
-			unavailableOptionalProperties = Set<Property>(instantiable.dependencies.flatMap { dependency in
-				switch dependency.source {
-				case .instantiated, .forwarded:
-					[Property]()
-				case let .received(onlyIfAvailable):
-					if onlyIfAvailable, isPropertyUnavailable(dependency.property) {
-						[dependency.property]
-					} else {
-						[Property]()
-					}
-				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-					if onlyIfAvailable, isPropertyUnavailable(fulfillingProperty) {
-						[dependency.property, fulfillingProperty]
-					} else {
-						[Property]()
-					}
-				}
-			})
 		}
+		let unavailableOptionalProperties = Set<Property>(instantiable.dependencies.flatMap { dependency in
+			switch dependency.source {
+			case .instantiated, .forwarded:
+				[Property]()
+			case let .received(onlyIfAvailable):
+				if onlyIfAvailable, isPropertyUnavailable(dependency.property) {
+					[dependency.property]
+				} else {
+					[Property]()
+				}
+			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+				if onlyIfAvailable, isPropertyUnavailable(fulfillingProperty) {
+					[dependency.property, fulfillingProperty]
+				} else {
+					[Property]()
+				}
+			}
+		})
 		let scopeGenerator = try ScopeGenerator(
 			instantiable: instantiable,
 			property: property,
@@ -250,6 +292,7 @@ final class Scope: Hashable {
 						propertyStack: childPropertyStack,
 						receivableProperties: receivableProperties,
 						lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
+						boundProperties: boundProperties,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						forMockGeneration: forMockGeneration,
 					)
@@ -267,6 +310,7 @@ final class Scope: Hashable {
 						unavailableOptionalProperties: unavailableOptionalProperties,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						onlyIfAvailable: onlyIfAvailable,
+						isProvidedByEnclosingScope: isProvidedByEnclosingScope(property),
 						declarationReference: declarationReference,
 					)
 				}

@@ -155,8 +155,22 @@ public actor DependencyTreeGenerator {
 		// isRoot) bypass root validation but can still have partially-lazy cycles.
 		// Uses cyclesOnly to skip unfulfillable property checks — mock-only types
 		// have unfulfillable received properties by design (they become mock parameters).
+		// `collectReceivedProperties` gives a scope the same complete result however it is
+		// reached, every scope it caches is in `typeDescriptionToScopeMap`, which lives through
+		// this method, and only complete results outlive a walk, so one cache serves this
+		// validation and every mock root.
+		var receivedPropertiesCache = ReceivedPropertiesCache()
 		try validatePropertiesAreFulfillable(
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			// The scopes of the types the mock-root loop below generates a mock for because they are listed.
+			additionalMockRootScopes: additionalMocksToGenerate.isEmpty ? [] : Set(
+				typeDescriptionToFulfillingInstantiableMap.values.compactMap { instantiable in
+					additionalMocksToGenerate.contains(instantiable.concreteInstantiable.asSource)
+						? typeDescriptionToScopeMap[instantiable.concreteInstantiable]
+						: nil
+				},
+			),
+			receivedPropertiesCache: &receivedPropertiesCache,
 			cyclesOnly: true,
 		)
 
@@ -189,6 +203,7 @@ public actor DependencyTreeGenerator {
 
 		// Create mock-root ScopeGenerators using the production Scope tree.
 		var seen = Set<TypeDescription>()
+		var validatedScopes = Set<Scope>()
 		var mockRoots = [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]()
 		for instantiable in typeDescriptionToFulfillingInstantiableMap.values
 			.sorted(by: { $0.concreteInstantiable < $1.concreteInstantiable })
@@ -248,12 +263,14 @@ public actor DependencyTreeGenerator {
 				} else {
 					typeDescriptionToScopeMap[instantiatedType]
 				}
-				if let childScope {
-					try validateNoForwardedProperties(
-						for: dependency,
-						instantiable: childScope.instantiable,
-						parent: scope.instantiable,
-					)
+				if let childScope,
+				   let error = forwardedPropertyError(
+				   	for: dependency,
+				   	instantiable: childScope.instantiable,
+				   	parent: scope.instantiable,
+				   )
+				{
+					throw error
 				}
 			}
 
@@ -262,6 +279,8 @@ public actor DependencyTreeGenerator {
 				scope: scope,
 				typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 				erasedToConcreteTypeMap: erasedToConcreteTypeMap,
+				receivedPropertiesCache: &receivedPropertiesCache,
+				validatedScopes: &validatedScopes,
 			)
 			mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
 		}
@@ -476,8 +495,12 @@ public actor DependencyTreeGenerator {
 	// MARK: - DependencyTreeGeneratorError
 
 	private enum DependencyTreeGeneratorError: SourceLocatedError {
-		case noInstantiableFound(TypeDescription, referencedAt: [Dependency.DeclarationLocation?])
+		/// `fulfilledByMockOnlyDeclaration` is set when only a `mockOnly` declaration fulfills the type.
+		case noInstantiableFound(TypeDescription, referencedAt: [Dependency.DeclarationLocation?], fulfilledByMockOnlyDeclaration: Bool)
 		case unfulfillableProperties([UnfulfillableProperty])
+		/// Reported at each `@Received` declaration whose dependency a closer ancestor hides, with a note at the
+		/// hiding declaration. See `HiddenReceivedProperty`.
+		case hiddenReceivedProperties([HiddenReceivedProperty])
 		case instantiableHasForwardedProperty(property: Property, declarationLocation: Dependency.DeclarationLocation?, instantiableWithForwardedProperty: Instantiable, forwardedDeclarations: [LocatedProperty], parent: Instantiable)
 		/// Reported at the dependency declaration that closes the cycle – the `@Instantiated` or `@Received`
 		/// property whose type is already on the instantiation stack – with a note at each member type’s
@@ -490,8 +513,13 @@ public actor DependencyTreeGenerator {
 		/// member type’s `@Instantiable` declaration. See `DependencyCycle`.
 		case receivedInstantiatorDependencyCycleDetected(property: Property, directParent: TypeDescription, cycle: DependencyCycle)
 		/// Reported at the `@Received` declaration that closes the chain: the one that receives `instantiated` back
-		/// inside the tree `instantiated` creates. No notes; the chain is spelled out in the message.
-		case receivedConstantCycleDetected(instantiated: Property, receivedPropertyChain: [Property], declarationLocation: Dependency.DeclarationLocation?, lazilyInstantiatedProperties: [Property])
+		/// inside the tree `instantiated` creates, or inside the tree of a sibling that the chain reaches. The
+		/// properties can be of any type, `Instantiator`s included. No notes; the chain is spelled out in the message.
+		case dependencyReceivedInSameChainItIsInstantiated(instantiated: Property, receivedPropertyChain: [Property], declarationLocation: Dependency.DeclarationLocation?, lazilyInstantiatedProperties: [Property])
+		/// Reported at the aliased dependency that closes the cycle: the one fulfilled by the first property in
+		/// `aliasChain`, in which each aliased dependency of one type is fulfilled by the next and the last is the
+		/// first again. No notes; the chain is spelled out in the message.
+		case aliasedDependenciesFulfillOneAnother(aliasChain: [Property], declarationLocation: Dependency.DeclarationLocation?)
 		/// Reported at the hand-written `mock` method of a type whose `mock()` this module also generates.
 		case handWrittenMockSharesGeneratedMockName(TypeDescription, declaredAt: [Dependency.DeclarationLocation?], isGeneratedForAdditionalMocksToGenerate: Bool)
 
@@ -511,18 +539,24 @@ public actor DependencyTreeGenerator {
 						)
 					}
 					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
-			case let .noInstantiableFound(typeDescription, referencedAt):
+			case let .noInstantiableFound(typeDescription, referencedAt, fulfilledByMockOnlyDeclaration):
 				// Sorted by location so the order never depends on map iteration.
 				referencedAt.map {
 					SourceDiagnostic(
 						severity: .error,
 						location: $0,
-						message: "No `@\(InstantiableVisitor.macroName)`-decorated type or extension found to fulfill `@\(Dependency.Source.instantiatedRawValue)`-decorated property with type `\(typeDescription.asSource)`",
+						message: "No `@\(InstantiableVisitor.macroName)`-decorated type or extension found to fulfill `@\(Dependency.Source.instantiatedRawValue)`-decorated property with type `\(typeDescription.asSource)`"
+							+ (fulfilledByMockOnlyDeclaration ? ". A `mockOnly: true` declaration fulfills it, and is used only to generate mocks." : ""),
 					)
 				}
 				.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 			case let .unfulfillableProperties(unfulfillableProperties):
 				unfulfillableProperties
+					.map(\.sourceDiagnostics)
+					.sorted { SourceDiagnostic.precedesInSourceOrder($0[0], $1[0]) }
+					.flatMap(\.self)
+			case let .hiddenReceivedProperties(hiddenReceivedProperties):
+				hiddenReceivedProperties
 					.map(\.sourceDiagnostics)
 					.sorted { SourceDiagnostic.precedesInSourceOrder($0[0], $1[0]) }
 					.flatMap(\.self)
@@ -546,7 +580,7 @@ public actor DependencyTreeGenerator {
 				cycle.sourceDiagnostics(summary: "Dependency cycle detected. Cycles with a mix of constant and lazy (Instantiator) dependencies cannot be resolved. Make all dependencies in the cycle lazy by using Instantiator: \(cycle.asSource)\(Self.lazilyInstantiatedHint(for: cycle.lazilyInstantiatedProperties))")
 			case let .receivedInstantiatorDependencyCycleDetected(property, directParent, cycle):
 				cycle.sourceDiagnostics(summary: "Dependency cycle detected! @\(Dependency.Source.instantiatedRawValue) `\(property.asSource)` is @\(Dependency.Source.receivedRawValue) in tree created by @\(Dependency.Source.instantiatedRawValue) `\(property.asSource)`. Declare @\(Dependency.Source.receivedRawValue) `\(property.asSource)` on `\(directParent.asSource)` as @\(Dependency.Source.instantiatedRawValue) to fix. Full cycle: \(cycle.asSource)")
-			case let .receivedConstantCycleDetected(instantiated, receivedPropertyChain, declarationLocation, lazilyInstantiatedProperties):
+			case let .dependencyReceivedInSameChainItIsInstantiated(instantiated, receivedPropertyChain, declarationLocation, lazilyInstantiatedProperties):
 				[
 					SourceDiagnostic(
 						severity: .error,
@@ -557,6 +591,15 @@ public actor DependencyTreeGenerator {
 							.map { "@\(Dependency.Source.receivedRawValue) \($0.asSource)" }
 							.joined(separator: " -> ")
 							+ Self.lazilyInstantiatedHint(for: lazilyInstantiatedProperties),
+					),
+				]
+			case let .aliasedDependenciesFulfillOneAnother(aliasChain, declarationLocation):
+				[
+					SourceDiagnostic(
+						severity: .error,
+						location: declarationLocation,
+						message: "Dependency cycle detected: each @\(Dependency.Source.receivedRawValue)(fulfilledByDependencyNamed:ofType:) dependency is fulfilled by the next: "
+							+ aliasChain.map(\.asSource).joined(separator: " -> "),
 					),
 				]
 			}
@@ -605,6 +648,16 @@ public actor DependencyTreeGenerator {
 			let parentStack: [TypeDescription]
 			let root: TypeDescription
 			let suggestedAlternatives: [Property]
+			/// The `@Received(onlyIfAvailable: true)` alias that declares `property` where `instantiable` receives it,
+			/// when that alias is not created because its fulfilling property is unavailable. `nil` otherwise.
+			let uncreatedAlias: UncreatedAlias?
+
+			/// An `@Received(onlyIfAvailable: true)` alias that is not created because its fulfilling property is unavailable.
+			struct UncreatedAlias: Hashable {
+				/// The type that declares the alias.
+				let declaringType: TypeDescription
+				let fulfillingProperty: Property
+			}
 
 			/// A single `error:` line. The suggestion or fix hint is folded into it rather than emitted as a
 			/// `note:` because it belongs at the same location, and Xcode drops notes from build-tool output.
@@ -615,11 +668,20 @@ public actor DependencyTreeGenerator {
 				// and a fix-it is offered only when it is exactly the repair the hint names.
 				let hint: String
 				let fixIts: [SourceDiagnostic.FixIt]
-				if property.typeDescription.isOptional,
-				   let nonOptionalAlternative = suggestedAlternatives.first(where: { alternative in
-				   	alternative.label == property.label
-				   		&& alternative.typeDescription == property.typeDescription.unwrapped
-				   })
+				if let uncreatedAlias {
+					// The alias's property is optional, as `onlyIfAvailable` requires, so a receive of it can be `onlyIfAvailable` too.
+					hint = "`\(property.asSource)` is created by `\(uncreatedAlias.declaringType.asSource)` only if `\(uncreatedAlias.fulfillingProperty.asSource)` is available, and `\(uncreatedAlias.fulfillingProperty.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain. Did you mean to receive this property with `onlyIfAvailable: true`?"
+					// The range is recorded only for a bare attribute, so rewriting it never discards arguments the user wrote.
+					fixIts = if let bareAttributeRange {
+						[SourceDiagnostic.FixIt(range: bareAttributeRange, replacement: "@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)")]
+					} else {
+						[]
+					}
+				} else if property.typeDescription.isOptional,
+				          let nonOptionalAlternative = suggestedAlternatives.first(where: { alternative in
+				          	alternative.label == property.label
+				          		&& alternative.typeDescription == property.typeDescription.unwrapped
+				          })
 				{
 					let onlyIfAvailableAttribute = "@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)"
 					hint = "The non-optional `\(nonOptionalAlternative.asSource)` is available in chain. Did you mean to decorate this property with `\(onlyIfAvailableAttribute)`?"
@@ -664,6 +726,51 @@ public actor DependencyTreeGenerator {
 						location: declarationLocation,
 						message: "\(summary). \(hint)",
 						fixIts: fixIts,
+					),
+				]
+			}
+		}
+
+		/// A property an ancestor declares, which the generated code names by its label everywhere below that ancestor.
+		struct LabelDeclaration: Hashable {
+			let property: Property
+			/// The by-value property with which types further down the tree receive the instance of `property`,
+			/// when `property` is lazily instantiated and offers one.
+			let lazilyInstantiatedInstanceProperty: Property?
+			let declarationLocation: Dependency.DeclarationLocation?
+			let declaringType: TypeDescription
+		}
+
+		/// A received dependency the generated code cannot pass, because a closer ancestor declares another property
+		/// with the same label – for example, an alias that retypes the dependency and keeps its label – and the generated
+		/// code names a dependency by its label.
+		struct HiddenReceivedProperty: Hashable {
+			/// The property received: the fulfilling property for an aliased dependency, the declared property otherwise.
+			let property: Property
+			let declarationLocation: Dependency.DeclarationLocation?
+			/// The closest declaration of the label, whose property differs from `property`.
+			let hidingDeclaration: LabelDeclaration
+			let receiver: TypeDescription
+			/// The types that instantiate `receiver`, innermost first, excluding `root`.
+			let parentStack: [TypeDescription]
+			let root: TypeDescription
+
+			/// An `error:` line that names the hiding declaration, since Xcode drops notes from build-tool output, and
+			/// a `note:` at the hiding declaration so command-line builds can navigate to it.
+			var sourceDiagnostics: [SourceDiagnostic] {
+				let chain = ([receiver] + parentStack + [root]).reversed()
+				let hidingProperty = hidingDeclaration.property.asSource
+				let declaringType = hidingDeclaration.declaringType.asSource
+				return [
+					SourceDiagnostic(
+						severity: .error,
+						location: declarationLocation,
+						message: "@\(Dependency.Source.receivedRawValue) property `\(property.asSource)` is hidden in chain: \(chain.map(\.asSource).joined(separator: " -> ")). `\(declaringType)` declares `\(hidingProperty)` with the same label, so the types below `\(declaringType)` receive `\(hidingProperty)` instead. Give `\(hidingProperty)` on `\(declaringType)` a different label to fix.",
+					),
+					SourceDiagnostic(
+						severity: .note,
+						location: hidingDeclaration.declarationLocation,
+						message: "`\(hidingProperty)` is declared here",
 					),
 				]
 			}
@@ -731,7 +838,20 @@ public actor DependencyTreeGenerator {
 				try validateReachableTypeDescriptions()
 
 				let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
-				try validatePropertiesAreFulfillable(typeDescriptionToScopeMap: typeDescriptionToScopeMap, cyclesOnly: false)
+				var receivedPropertiesCache = ReceivedPropertiesCache()
+				try validatePropertiesAreFulfillable(
+					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+					receivedPropertiesCache: &receivedPropertiesCache,
+					cyclesOnly: false,
+				)
+				// The walk above does not follow a received `Instantiator` to the scope it builds,
+				// so it misses siblings that capture one another; report them now that it has passed.
+				var validatedScopes = Set<Scope>()
+				try Self.validateChildrenDoNotRequireEachOther(
+					inTreesRootedAt: rootInstantiables.sorted().compactMap { typeDescriptionToScopeMap[$0] },
+					cache: &receivedPropertiesCache,
+					validatedScopes: &validatedScopes,
+				)
 				return try rootInstantiables
 					.sorted()
 					.compactMap { typeDescription in
@@ -794,20 +914,28 @@ public actor DependencyTreeGenerator {
 	/// Creates a mock-root ScopeGenerator using the production Scope tree.
 	/// Unsatisfied received dependencies are promoted as root-level children
 	/// on a NEW Scope (the shared Scope is never mutated).
+	/// - Parameter cache: The results of `collectReceivedProperties` for scopes of `typeDescriptionToScopeMap`,
+	///   shared across mock roots. The mock root's own scope never enters it: nothing instantiates the mock
+	///   root, so only its children's results are collected.
+	/// - Parameter validatedScopes: The scopes whose children are already known not to
+	///   require one another; see `validateChildrenDoNotRequireEachOther`.
 	private func createMockRootScopeGenerator(
 		for instantiable: Instantiable,
 		scope: Scope,
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
 		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
+		receivedPropertiesCache cache: inout ReceivedPropertiesCache,
+		validatedScopes: inout Set<Scope>,
 	) throws -> ScopeGenerator {
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
-		// (via ObjectIdentifier) so each scope is visited at most once — O(total_scopes).
-		var cache = [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)]()
-		let (initialReceived, initialOnlyIfAvailable) = Self.collectReceivedProperties(
+		// (via ObjectIdentifier) so each scope outside a cycle is visited at most once.
+		let initialReceivedProperties = Self.collectReceivedProperties(
 			from: scope,
 			cache: &cache,
 		)
+		let initialReceived = initialReceivedProperties.received
+		let initialOnlyIfAvailable = initialReceivedProperties.onlyIfAvailable
 
 		// Worklist: promoted scopes may introduce additional transitive received properties.
 		// Only required properties are walked: a property received only if available becomes
@@ -829,13 +957,16 @@ public actor DependencyTreeGenerator {
 				dependencyType = concreteType
 			}
 			guard let promotedScope = typeDescriptionToScopeMap[dependencyType],
+			      Self.mockCanBuild(property, from: promotedScope),
 			      visitedTypes.insert(dependencyType).inserted
 			else { continue }
 
-			let (scopeReceived, scopeOnlyIfAvailable) = Self.collectReceivedProperties(
+			let scopeReceivedProperties = Self.collectReceivedProperties(
 				from: promotedScope,
 				cache: &cache,
 			)
+			let scopeReceived = scopeReceivedProperties.received
+			let scopeOnlyIfAvailable = scopeReceivedProperties.onlyIfAvailable
 			allReceived.formUnion(scopeReceived)
 			allOnlyIfAvailable.formUnion(scopeOnlyIfAvailable)
 			for newProperty in scopeReceived.subtracting(scopeOnlyIfAvailable) where allRequired.insert(newProperty).inserted {
@@ -860,9 +991,10 @@ public actor DependencyTreeGenerator {
 		mockRootScope.propertiesToGenerate = scope.propertiesToGenerate
 
 		/// The scope that builds a received property promoted to the mock root, when the mock can build one.
+		/// A received dependency the mock cannot build stays received: the root's `mock()` takes it as a parameter.
 		func scopeToPromote(for receivedProperty: Property) -> (scope: Scope, erasedToConcreteExistential: Bool)? {
 			let dependencyType = receivedProperty.typeDescription.asInstantiatedType
-			return if let receivedScope = typeDescriptionToScopeMap[dependencyType] {
+			let scopeOfReceivedProperty: (scope: Scope, erasedToConcreteExistential: Bool)? = if let receivedScope = typeDescriptionToScopeMap[dependencyType] {
 				(receivedScope, false)
 			} else if let concreteType = erasedToConcreteTypeMap[receivedProperty.typeDescription],
 			          let receivedScope = typeDescriptionToScopeMap[concreteType]
@@ -871,6 +1003,10 @@ public actor DependencyTreeGenerator {
 			} else {
 				nil
 			}
+			guard let scopeOfReceivedProperty, Self.mockCanBuild(receivedProperty, from: scopeOfReceivedProperty.scope) else {
+				return nil
+			}
+			return scopeOfReceivedProperty
 		}
 
 		// A dependency the tree receives both as `LazilyInstantiated` and by value is one dependency. It is
@@ -927,21 +1063,55 @@ public actor DependencyTreeGenerator {
 		// walk, which follows received dependencies between scopes, then reports the
 		// cycle. Running that walk on every mock root instead would add a
 		// received-dependency walk for every node of every mock tree.
+		let mockRootChildrenRequiringEachOther = Self.childrenRequiringEachOther(in: mockRootScope, cache: &cache)
 		try validatePropertiesAreFulfillable(
-			onRootScopes: Self.childrenRequireEachOther(in: mockRootScope, cache: &cache) ? [mockRootScope] : [],
+			onRootScopes: mockRootChildrenRequiringEachOther != nil ? [ValidatedRootScope(scope: mockRootScope, boundProperties: allReceived)] : [],
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 			cyclesOnly: true,
 		)
+		// That walk does not follow a received `Instantiator` to the scope it builds, and
+		// promoted scopes' trees are walked by no validation, so report what it leaves:
+		// aliases that fulfill one another and children, here or anywhere in the mock tree,
+		// that require one another, in the order `validateChildrenDoNotRequireEachOther`
+		// checks them. The mock root's own children were checked above, so only their
+		// trees are left.
+		if let aliasesFulfillingOneAnother = Self.aliasesFulfillingOneAnother(in: mockRootScope) {
+			throw aliasesFulfillingOneAnother.error
+		} else if let mockRootChildrenRequiringEachOther {
+			throw mockRootChildrenRequiringEachOther.error
+		} else {
+			var mockRootChildScopes = [Scope]()
+			for case let .instantiated(_, childScope, _) in mockRootScope.propertiesToGenerate {
+				mockRootChildScopes.append(childScope)
+			}
+			try Self.validateChildrenDoNotRequireEachOther(
+				inTreesRootedAt: mockRootChildScopes,
+				cache: &cache,
+				validatedScopes: &validatedScopes,
+			)
+		}
 
-		// Build the final ScopeGenerator once.
+		// Build the final ScopeGenerator once. The mock root binds every received
+		// property it does not promote — as a `mock()` parameter or a `SafeDIOverrides`
+		// entry — so each is receivable throughout the tree.
 		return try mockRootScope.createScopeGenerator(
 			for: nil,
 			propertyStack: [],
 			receivableProperties: [],
 			lazilyInstantiatedInstanceProperties: [],
+			boundProperties: allReceived,
 			erasedToConcreteExistential: false,
 			forMockGeneration: true,
 		)
+	}
+
+	/// Whether a mock can build the received `property` from `scope` when it promotes the property to a
+	/// child of the mock root. A type with `@Forwarded` properties can be built only by an `Instantiator`
+	/// that is handed the forwarded values, so a mock cannot build a constant of that type, or lazily
+	/// instantiate one: as in production, where such a property is never `@Instantiated`, it must be received.
+	private static func mockCanBuild(_ property: Property, from scope: Scope) -> Bool {
+		!(property.propertyType.isConstant || property.propertyType.isLazilyInstantiated)
+			|| !scope.instantiable.dependencies.contains(where: \.isForwarded)
 	}
 
 	/// Walks a post-promotion mock root scope for dependency cycles.
@@ -995,14 +1165,44 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
-	/// Whether the instantiated children of `scope` require one another in a cycle:
-	/// each child's subtree requires (not `onlyIfAvailable`) a sibling that,
-	/// directly or through other siblings, requires it. Such children cannot be
-	/// ordered so that each is built after the siblings it receives.
-	private static func childrenRequireEachOther(
+	/// Instantiated children of one scope that require one another in a cycle: each child's tree requires
+	/// (not `onlyIfAvailable`) the next child, and the last child's tree requires the first.
+	private struct ChildrenRequiringEachOther {
+		/// The first child in the cycle.
+		let instantiated: Property
+		/// The property through which each child's tree receives the next child, ending with the one through
+		/// which the last child's tree receives the first: the next child's property, or an alias of it that
+		/// the scope declares.
+		let receivedPropertyChain: [Property]
+		/// The scope of the last child in the cycle, whose tree receives the first child.
+		let lastChildScope: Scope
+
+		/// The error reporting these children, at the receiver found by `requiredReceiver`. When the last
+		/// child's tree receives the first child through an alias or unwrapped, the chain ends with the
+		/// first child's own property, so it reads back to where it started.
+		var error: DependencyTreeGeneratorError {
+			DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(
+				instantiated: instantiated,
+				receivedPropertyChain: receivedPropertyChain + (receivedPropertyChain[receivedPropertyChain.count - 1] == instantiated ? [] : [instantiated]),
+				declarationLocation: DependencyTreeGenerator.requiredReceiver(
+					of: receivedPropertyChain[receivedPropertyChain.count - 1],
+					inTreeOf: lastChildScope,
+				)?.declarationLocation,
+				// The chain names every property as it is declared, so there is nothing to explain.
+				lazilyInstantiatedProperties: [],
+			)
+		}
+	}
+
+	/// The instantiated children of `scope` that require one another in a cycle, if any:
+	/// each child's tree requires (not `onlyIfAvailable`) a sibling that, directly or
+	/// through other siblings, requires it. Such children cannot be ordered so that each
+	/// is built after the siblings it receives — whatever their property types, since an
+	/// `Instantiator` captures what its tree receives when it is created.
+	private static func childrenRequiringEachOther(
 		in scope: Scope,
-		cache: inout [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)],
-	) -> Bool {
+		cache: inout ReceivedPropertiesCache,
+	) -> ChildrenRequiringEachOther? {
 		var children = [(property: Property, scope: Scope)]()
 		for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
 			children.append((property, childScope))
@@ -1015,26 +1215,233 @@ public actor DependencyTreeGenerator {
 				childIndexByProperty[instanceProperty] = index
 			}
 		}
-		let requiredSiblingIndices = children.enumerated().map { index, child in
-			let (received, onlyIfAvailable) = collectReceivedProperties(from: child.scope, cache: &cache)
-			return received.compactMap { property in
-				!onlyIfAvailable.contains(property)
-					? childIndexByProperty[property].flatMap { $0 == index ? nil : $0 }
-					: nil
+		// A child's tree that requires an alias the scope declares requires the child the alias is assigned
+		// from, directly or through other aliases the scope declares.
+		var aliases = [AliasedDependency]()
+		for case let .aliased(property, fulfillingProperty, _, onlyIfAvailable, _) in scope.propertiesToGenerate where !onlyIfAvailable {
+			aliases.append(AliasedDependency(property: property, fulfillingProperty: fulfillingProperty))
+		}
+		var aliasedChildIndexByProperty = [Property: Int]()
+		var resolvedAnAlias = true
+		while resolvedAnAlias {
+			resolvedAnAlias = false
+			for alias in aliases where aliasedChildIndexByProperty[alias.property] == nil {
+				if let index = childIndexByProperty[alias.fulfillingProperty] ?? aliasedChildIndexByProperty[alias.fulfillingProperty] {
+					aliasedChildIndexByProperty[alias.property] = index
+					resolvedAnAlias = true
+				}
 			}
 		}
-		// Depth-first search for a back edge.
-		var visitingIndices = Set<Int>()
+		func childIndex(declaring property: Property) -> Int? {
+			childIndexByProperty[property] ?? aliasedChildIndexByProperty[property]
+		}
+		/// The child declaring the unwrapped form of `property`, which fulfills a required receive of `property`.
+		/// A tree can list an optional property it receives only if available as neither, beneath a scope that
+		/// forwards its unwrapped form, so a receiver that requires it is looked for.
+		func childIndex(declaringUnwrapped property: Property, requiredInTreeOf childScope: Scope) -> Int? {
+			guard let index = childIndex(declaring: property.asUnwrappedProperty),
+			      requiredReceiver(of: property, inTreeOf: childScope) != nil
+			else { return nil }
+			return index
+		}
+		// The siblings each child requires, in sibling order, each with the first (sorted) property through which it is received.
+		// A child that receives its own property is reported by the received walk or the ancestor check, but one that
+		// receives it through an alias or unwrapped requires itself here. Only the received properties that name a
+		// sibling are kept, so nothing is sorted on the common path.
+		let requiredSiblings = children.map { child in
+			let receivedProperties = collectReceivedProperties(from: child.scope, cache: &cache)
+			var firstReceivedPropertyBySiblingIndex = [Int: Property]()
+			// A property received only if available is still required when it fulfills an `onlyIfAvailable` alias that a receiver requires.
+			for property in receivedProperties.received
+				where property != child.property
+				&& property != child.property.asLazilyInstantiatedInstanceProperty
+				&& (!receivedProperties.onlyIfAvailable.contains(property) || receivedProperties.requiredAliasFulfilling.contains(property))
+			{
+				if let index = childIndex(declaring: property) ?? childIndex(declaringUnwrapped: property, requiredInTreeOf: child.scope),
+				   firstReceivedPropertyBySiblingIndex[index].map({ property < $0 }) ?? true
+				{
+					firstReceivedPropertyBySiblingIndex[index] = property
+				}
+			}
+			return firstReceivedPropertyBySiblingIndex
+				.map { (index: $0.key, receivedProperty: $0.value) }
+				.sorted { $0.index < $1.index }
+		}
+		// Depth-first search, in sibling order, for a back edge.
 		var visitedIndices = Set<Int>()
-		func reachesVisitingIndex(from index: Int) -> Bool {
-			guard visitedIndices.insert(index).inserted else {
-				return visitingIndices.contains(index)
+		var pathIndices = [Int]()
+		// The property through which each child on the path receives the next one.
+		var pathReceivedProperties = [Property]()
+		func cycleOfChildren(reachedFrom index: Int) -> ChildrenRequiringEachOther? {
+			visitedIndices.insert(index)
+			pathIndices.append(index)
+			defer { pathIndices.removeLast() }
+			var foundCycle: ChildrenRequiringEachOther?
+			for requiredSibling in requiredSiblings[index] where foundCycle == nil {
+				if let pathPosition = pathIndices.firstIndex(of: requiredSibling.index) {
+					foundCycle = ChildrenRequiringEachOther(
+						instantiated: children[requiredSibling.index].property,
+						receivedPropertyChain: pathReceivedProperties[pathPosition...] + [requiredSibling.receivedProperty],
+						lastChildScope: children[index].scope,
+					)
+				} else if !visitedIndices.contains(requiredSibling.index) {
+					pathReceivedProperties.append(requiredSibling.receivedProperty)
+					foundCycle = cycleOfChildren(reachedFrom: requiredSibling.index)
+					pathReceivedProperties.removeLast()
+				}
 			}
-			visitingIndices.insert(index)
-			defer { visitingIndices.remove(index) }
-			return requiredSiblingIndices[index].contains(where: reachesVisitingIndex(from:))
+			return foundCycle
 		}
-		return children.indices.contains(where: reachesVisitingIndex(from:))
+		var foundCycle: ChildrenRequiringEachOther?
+		for index in children.indices where foundCycle == nil && !visitedIndices.contains(index) {
+			foundCycle = cycleOfChildren(reachedFrom: index)
+		}
+		return foundCycle
+	}
+
+	/// Validates that no scope in the trees rooted at `rootScopes` has instantiated
+	/// children that require one another (see `childrenRequiringEachOther`). Such
+	/// children would be generated with one of them referring to a sibling declared
+	/// after it, which no compiler stage before SIL rejects. Scopes in `validatedScopes`
+	/// are skipped along with their trees, and every scope validated is added to it.
+	private static func validateChildrenDoNotRequireEachOther(
+		inTreesRootedAt rootScopes: [Scope],
+		cache: inout ReceivedPropertiesCache,
+		validatedScopes: inout Set<Scope>,
+	) throws {
+		func validateChildrenDoNotRequireEachOther(inTreeRootedAt scope: Scope) throws {
+			guard validatedScopes.insert(scope).inserted else { return }
+			if let aliasesFulfillingOneAnother = aliasesFulfillingOneAnother(in: scope) {
+				throw aliasesFulfillingOneAnother.error
+			} else if let childrenRequiringEachOther = childrenRequiringEachOther(in: scope, cache: &cache) {
+				throw childrenRequiringEachOther.error
+			} else {
+				for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
+					try validateChildrenDoNotRequireEachOther(inTreeRootedAt: childScope)
+				}
+			}
+		}
+		for rootScope in rootScopes {
+			try validateChildrenDoNotRequireEachOther(inTreeRootedAt: rootScope)
+		}
+	}
+
+	/// An aliased dependency a scope declares: `property`, assigned from `fulfillingProperty`.
+	private struct AliasedDependency {
+		let property: Property
+		let fulfillingProperty: Property
+		/// Where the alias is declared, when it is known.
+		var declarationLocation: Dependency.DeclarationLocation?
+	}
+
+	/// Aliased dependencies of one scope that are each fulfilled by the next one.
+	private struct AliasesFulfillingOneAnother {
+		/// The aliases, starting and ending with the same one.
+		let aliasChain: [Property]
+		/// The declaration of the alias fulfilled by the first, which closes the cycle.
+		let closingDeclarationLocation: Dependency.DeclarationLocation?
+
+		/// The error reporting these aliases, at the one that closes the cycle.
+		var error: DependencyTreeGeneratorError {
+			DependencyTreeGeneratorError.aliasedDependenciesFulfillOneAnother(
+				aliasChain: aliasChain,
+				declarationLocation: closingDeclarationLocation,
+			)
+		}
+	}
+
+	/// The first cycle, in declaration order, of aliased dependencies of `scope` that are each fulfilled by
+	/// the next one. An alias resolves against a property declared beside it, so such aliases would each be
+	/// assigned from one not yet declared.
+	private static func aliasesFulfillingOneAnother(
+		in scope: Scope,
+	) -> AliasesFulfillingOneAnother? {
+		let aliases = scope.instantiable.dependencies.compactMap { dependency -> AliasedDependency? in
+			switch dependency.source {
+			case let .aliased(fulfillingProperty, _, _):
+				AliasedDependency(
+					property: dependency.property,
+					fulfillingProperty: fulfillingProperty,
+					declarationLocation: dependency.declarationLocation,
+				)
+			case .instantiated, .received, .forwarded:
+				nil
+			}
+		}
+		var aliasByProperty = [Property: AliasedDependency]()
+		for alias in aliases {
+			aliasByProperty[alias.property] = alias
+		}
+		for start in aliases {
+			// A chain longer than the aliases has entered a cycle that does not return to `start`.
+			var chain = [start]
+			while chain.count <= aliases.count, let next = aliasByProperty[chain[chain.count - 1].fulfillingProperty] {
+				if next.property == start.property {
+					return AliasesFulfillingOneAnother(
+						aliasChain: chain.map(\.property) + [start.property],
+						closingDeclarationLocation: chain[chain.count - 1].declarationLocation,
+					)
+				} else {
+					chain.append(next)
+				}
+			}
+		}
+		return nil
+	}
+
+	/// The first dependency, in declaration order and then child order, in the tree that
+	/// `scope` creates that requires `property` from outside the tree — a dependency
+	/// through which `collectReceivedProperties` finds the tree requires `property`.
+	private static func requiredReceiver(
+		of property: Property,
+		inTreeOf scope: Scope,
+	) -> Dependency? {
+		var visitedScopes = Set<ObjectIdentifier>()
+		func requiredReceiver(inTreeOf scope: Scope) -> Dependency? {
+			guard visitedScopes.insert(ObjectIdentifier(scope)).inserted else { return nil }
+			let propertiesToDeclare = propertiesToDeclare(in: scope)
+			if let receiver = scope.instantiable.dependencies.first(where: { dependency in
+				switch dependency.source {
+				case let .received(onlyIfAvailable):
+					!onlyIfAvailable && dependency.property == property
+				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+					!onlyIfAvailable && fulfillingProperty == property && !propertiesToDeclare.contains(fulfillingProperty)
+				case .instantiated, .forwarded:
+					false
+				}
+			}) {
+				return receiver
+			} else if propertiesToDeclare.contains(property)
+				|| (property.typeDescription.isOptional && propertiesToDeclare.contains(property.asUnwrappedProperty))
+				|| forwardedProperties(in: scope).contains(property)
+				|| (property.typeDescription.isOptional && forwardedProperties(in: scope).contains(property.asUnwrappedProperty))
+			{
+				// The trees of this scope's children receive this scope's `property`.
+				return nil
+			} else {
+				var receiver: Dependency?
+				for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate where receiver == nil {
+					receiver = requiredReceiver(inTreeOf: childScope)
+				}
+				return receiver
+			}
+		}
+		return requiredReceiver(inTreeOf: scope)
+	}
+
+	/// The properties `scope` declares for its children: those it instantiates and the aliases it assigns.
+	/// A lazily instantiated property also declares the property that receives its instance by value.
+	private static func propertiesToDeclare(in scope: Scope) -> Set<Property> {
+		Set(scope.propertiesToGenerate.flatMap(\.receivableProperties))
+	}
+
+	/// The properties `scope` is forwarded. A lazily instantiated one is also received by value.
+	private static func forwardedProperties(in scope: Scope) -> Set<Property> {
+		Set(
+			scope.instantiable.dependencies
+				.filter { $0.source == .forwarded }
+				.flatMap(\.receivableProperties),
+		)
 	}
 
 	/// Classifies a detected cycle and throws the appropriate error, or
@@ -1094,22 +1501,75 @@ public actor DependencyTreeGenerator {
 		// Fully-lazy cycle (Instantiator entry, not received) — valid, no error.
 	}
 
+	/// What a scope's subtree receives from its ancestors.
+	private struct ReceivedProperties {
+		/// Every property the subtree needs from an ancestor.
+		let received: Set<Property>
+		/// Those of `received` that every receiver in the subtree receives only if available.
+		/// A property some receiver requires is not in `onlyIfAvailable`.
+		let onlyIfAvailable: Set<Property>
+		/// The properties the subtree receives only if available to fulfill an `onlyIfAvailable` alias
+		/// that a receiver in the subtree requires.
+		let requiredAliasFulfilling: Set<Property>
+	}
+
+	/// Memoizes `collectReceivedProperties` across the mock roots of one mock scope map.
+	///
+	/// A walk that re-enters a scope whose own walk is unfinished – a cycle of `Instantiator`s – takes
+	/// nothing from it, since that scope's walk accounts for what it receives. A result computed that
+	/// way lacks what the unfinished scope receives, so it is reused only until that scope's walk
+	/// finishes. Reusing it later, from a subtree that reaches the cycle another way, would drop what
+	/// the cycle receives from that subtree's view, and which subtree walks the cycle first can follow
+	/// set iteration order.
+	private struct ReceivedPropertiesCache {
+		/// Results that lack nothing, which are the same however the scope is reached.
+		var complete = [ObjectIdentifier: ReceivedProperties]()
+		/// The depth of each scope whose walk is unfinished.
+		var unfinishedWalkDepths = [ObjectIdentifier: Int]()
+		/// Results that lack what a scope whose walk is unfinished receives.
+		var incomplete = [ObjectIdentifier: WalkedReceivedProperties]()
+	}
+
+	/// A scope's received properties as one walk found them.
+	private struct WalkedReceivedProperties {
+		let receivedProperties: ReceivedProperties
+		/// The depth of the shallowest scope whose walk was unfinished and whose received properties
+		/// `receivedProperties` therefore lacks, or `nil` when it lacks none.
+		let shallowestUnfinishedWalkDepth: Int?
+	}
+
 	/// Mirrors ScopeGenerator's `receivedProperties` and `onlyIfAvailableUnwrappedReceivedProperties`
 	/// computation but operates on Scope objects directly, with memoization for O(1) revisits.
 	///
-	/// - Returns: `received`, every property the subtree needs from an ancestor, and
-	///   `onlyIfAvailable`, those of them that every receiver in the subtree receives only if
-	///   available. A property some receiver requires is not in `onlyIfAvailable`.
+	/// - Returns: The subtree's received properties. Its `requiredAliasFulfilling` mirrors
+	///   ScopeGenerator's `requiredAliasFulfillingProperties`, except that it does not leave out an
+	///   alias an enclosing scope's property stands in for.
 	private static func collectReceivedProperties(
 		from scope: Scope,
-		cache: inout [ObjectIdentifier: (received: Set<Property>, onlyIfAvailable: Set<Property>)],
-	) -> (received: Set<Property>, onlyIfAvailable: Set<Property>) {
+		cache: inout ReceivedPropertiesCache,
+	) -> ReceivedProperties {
+		walkReceivedProperties(from: scope, cache: &cache).receivedProperties
+	}
+
+	private static func walkReceivedProperties(
+		from scope: Scope,
+		cache: inout ReceivedPropertiesCache,
+	) -> WalkedReceivedProperties {
 		let id = ObjectIdentifier(scope)
-		if let cached = cache[id] {
-			return cached
+		if let complete = cache.complete[id] {
+			return WalkedReceivedProperties(receivedProperties: complete, shallowestUnfinishedWalkDepth: nil)
+		} else if let unfinishedWalkDepth = cache.unfinishedWalkDepths[id] {
+			// A cycle re-entered this scope. Its unfinished walk accounts for what it receives.
+			return WalkedReceivedProperties(
+				receivedProperties: ReceivedProperties(received: [], onlyIfAvailable: [], requiredAliasFulfilling: []),
+				shallowestUnfinishedWalkDepth: unfinishedWalkDepth,
+			)
+		} else if let incomplete = cache.incomplete[id] {
+			return incomplete
 		}
-		// Cycle sentinel — re-entrant calls return empty (cycles contribute no new received).
-		cache[id] = ([], [])
+		let walkDepth = cache.unfinishedWalkDepths.count
+		cache.unfinishedWalkDepths[id] = walkDepth
+		var shallowestUnfinishedWalkDepth: Int?
 
 		// Properties declared at this scope (instantiated/aliased children). A lazily instantiated
 		// property also declares the property that receives its instance by value.
@@ -1128,16 +1588,24 @@ public actor DependencyTreeGenerator {
 		// received both ways — e.g. a required `x: X` and an `onlyIfAvailable` alias
 		// fulfilled by `x: X` — and a required receive wins.
 		var required = Set<Property>()
+		// Properties the instantiated children's subtrees require, including those this scope declares.
+		var childRequiredReceived = Set<Property>()
+		var requiredAliasFulfilling = Set<Property>()
 
 		// Collect from instantiated children — mirrors ScopeGenerator's receivedProperties aggregation.
 		// Aliases are handled below in the own-dependency loop: alias children's receivedProperties
 		// = [fulfillingProperty], but the own-dependency union unconditionally adds the same
 		// fulfillingProperty, making the child-path subtraction/filter redundant.
 		for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
-			let (childReceived, childOnlyIfAvailable) = collectReceivedProperties(
+			let walkedChild = walkReceivedProperties(
 				from: childScope,
 				cache: &cache,
 			)
+			shallowestUnfinishedWalkDepth = [shallowestUnfinishedWalkDepth, walkedChild.shallowestUnfinishedWalkDepth].compactMap(\.self).min()
+			let childReceived = walkedChild.receivedProperties.received
+			let childOnlyIfAvailable = walkedChild.receivedProperties.onlyIfAvailable
+			childRequiredReceived.formUnion(childReceived.subtracting(childOnlyIfAvailable))
+			requiredAliasFulfilling.formUnion(walkedChild.receivedProperties.requiredAliasFulfilling)
 			let childReceivedFromAncestors = childReceived
 				.subtracting(propertiesToDeclare)
 				.filter { property in
@@ -1178,6 +1646,9 @@ public actor DependencyTreeGenerator {
 				received.insert(fulfillingProperty)
 				if isOnlyIfAvailable {
 					onlyIfAvailable.insert(fulfillingProperty)
+					if childRequiredReceived.contains(dependency.property) {
+						requiredAliasFulfilling.insert(fulfillingProperty)
+					}
 				} else {
 					required.insert(fulfillingProperty)
 				}
@@ -1186,9 +1657,30 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
-		let result = (received, onlyIfAvailable.subtracting(required))
-		cache[id] = result
-		return result
+		cache.unfinishedWalkDepths[id] = nil
+		if !cache.incomplete.isEmpty {
+			// Results that lack what this scope receives are stale now that its walk has finished.
+			cache.incomplete = cache.incomplete.filter { $0.value.shallowestUnfinishedWalkDepth != walkDepth }
+		}
+		let receivedProperties = ReceivedProperties(
+			received: received,
+			onlyIfAvailable: onlyIfAvailable.subtracting(required),
+			requiredAliasFulfilling: requiredAliasFulfilling
+				.subtracting(propertiesToDeclare)
+				.subtracting(forwardedProperties),
+		)
+		if let shallowestUnfinishedWalkDepth, shallowestUnfinishedWalkDepth < walkDepth {
+			let walkedReceivedProperties = WalkedReceivedProperties(
+				receivedProperties: receivedProperties,
+				shallowestUnfinishedWalkDepth: shallowestUnfinishedWalkDepth,
+			)
+			cache.incomplete[id] = walkedReceivedProperties
+			return walkedReceivedProperties
+		} else {
+			// Every walk that re-entered this scope is accounted for in this one.
+			cache.complete[id] = receivedProperties
+			return WalkedReceivedProperties(receivedProperties: receivedProperties, shallowestUnfinishedWalkDepth: nil)
+		}
 	}
 
 	/// Builds a scope mapping for mock generation. Similar to `createTypeDescriptionToScopeMapping`
@@ -1367,7 +1859,10 @@ public actor DependencyTreeGenerator {
 				}
 			}
 
-		// Populate the propertiesToGenerate on each scope.
+		// Populate the propertiesToGenerate on each scope. Scopes hash by identity, so they are
+		// visited in an order that changes from run to run, and of the dependencies that cannot
+		// be instantiated, the one reported is the first on the type whose name sorts first.
+		var firstForwardedPropertyError: ForwardedPropertyError?
 		for scope in Set(typeDescriptionToScopeMap.values) {
 			for dependency in scope.instantiable.dependencies {
 				switch dependency.source {
@@ -1376,11 +1871,18 @@ public actor DependencyTreeGenerator {
 					if let instantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType],
 					   let instantiatedScope = typeDescriptionToScopeMap[instantiatedType]
 					{
-						try validateNoForwardedProperties(
-							for: dependency,
-							instantiable: instantiable,
-							parent: scope.instantiable,
-						)
+						if let error = forwardedPropertyError(
+						   	for: dependency,
+						   	instantiable: instantiable,
+						   	parent: scope.instantiable,
+						   ),
+						   firstForwardedPropertyError.map({ scope.instantiable.concreteInstantiable < $0.parent }) ?? true
+						{
+							firstForwardedPropertyError = ForwardedPropertyError(
+								parent: scope.instantiable.concreteInstantiable,
+								error: error,
+							)
+						}
 						scope.propertiesToGenerate.append(.instantiated(
 							dependency.property,
 							instantiatedScope,
@@ -1399,6 +1901,9 @@ public actor DependencyTreeGenerator {
 					continue
 				}
 			}
+		}
+		if let firstForwardedPropertyError {
+			throw firstForwardedPropertyError.error
 		}
 		return typeDescriptionToScopeMap
 	}
@@ -1532,27 +2037,32 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
-	/// Validates that a constant or lazily instantiated `@Instantiated` dependency has no `@Forwarded` properties.
-	private func validateNoForwardedProperties(
+	/// A constant or lazily instantiated `@Instantiated` dependency whose type has `@Forwarded` properties, and
+	/// the type that declares it.
+	private struct ForwardedPropertyError {
+		let parent: TypeDescription
+		let error: DependencyTreeGeneratorError
+	}
+
+	/// The error for a constant or lazily instantiated `@Instantiated` dependency on `parent` whose `instantiable`
+	/// has `@Forwarded` properties, or `nil` when the dependency is valid.
+	private func forwardedPropertyError(
 		for dependency: Dependency,
 		instantiable: Instantiable,
 		parent: Instantiable,
-	) throws {
-		if dependency.property.propertyType.isConstant || dependency.property.propertyType.isLazilyInstantiated {
-			let forwardedDependencies = instantiable.dependencies.filter(\.isForwarded)
-			guard forwardedDependencies.isEmpty else {
-				throw DependencyTreeGeneratorError
-					.instantiableHasForwardedProperty(
-						property: dependency.property,
-						declarationLocation: dependency.declarationLocation,
-						instantiableWithForwardedProperty: instantiable,
-						forwardedDeclarations: forwardedDependencies.map {
-							DependencyTreeGeneratorError.LocatedProperty(property: $0.property, declarationLocation: $0.declarationLocation)
-						},
-						parent: parent,
-					)
-			}
-		}
+	) -> DependencyTreeGeneratorError? {
+		guard dependency.property.propertyType.isConstant || dependency.property.propertyType.isLazilyInstantiated else { return nil }
+		let forwardedDependencies = instantiable.dependencies.filter(\.isForwarded)
+		guard !forwardedDependencies.isEmpty else { return nil }
+		return .instantiableHasForwardedProperty(
+			property: dependency.property,
+			declarationLocation: dependency.declarationLocation,
+			instantiableWithForwardedProperty: instantiable,
+			forwardedDeclarations: forwardedDependencies.map {
+				DependencyTreeGeneratorError.LocatedProperty(property: $0.property, declarationLocation: $0.declarationLocation)
+			},
+			parent: parent,
+		)
 	}
 
 	/// The lazily instantiated properties on a cycle as they are declared, outermost first, for the diagnostic.
@@ -1579,142 +2089,275 @@ public actor DependencyTreeGenerator {
 	/// When `cyclesOnly` is true, unfulfillable property collection is skipped —
 	/// used for mock-only types where unfulfillable received properties are expected
 	/// (they become required mock parameters).
+	/// - Parameters:
+	///   - additionalMockRootScopes: The scopes of types whose mock is generated because `additionalMocksToGenerate`
+	///     lists them. Their trees are validated for hidden received dependencies only.
+	///   - receivedPropertiesCache: The results of `collectReceivedProperties` for scopes of
+	///     `typeDescriptionToScopeMap`, which the mock validation fills.
 	private func validatePropertiesAreFulfillable(
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		additionalMockRootScopes: Set<Scope> = [],
+		receivedPropertiesCache: inout ReceivedPropertiesCache,
 		cyclesOnly: Bool,
 	) throws {
-		var rootScopes = rootInstantiables.compactMap { typeDescriptionToScopeMap[$0] }
+		// Validate in type order, so that the error reported when several trees have one
+		// does not depend on set iteration order. A root receives nothing, so its tree binds
+		// nothing above its own properties.
+		var rootScopes = rootInstantiables.sorted().compactMap { typeDescriptionToScopeMap[$0] }.map { ValidatedRootScope(scope: $0, boundProperties: []) }
 		// When checking cycles only (mock validation), also validate non-root types
-		// that have generateMock enabled — they bypass root entry points.
+		// that have generateMock enabled — they bypass root entry points. Each one's
+		// mock binds every property its tree receives from above it.
 		if cyclesOnly {
 			let rootInstantiableSet = Set(rootInstantiables)
-			for scope in Set(typeDescriptionToScopeMap.values)
-				where scope.instantiable.generateMock && !rootInstantiableSet.contains(scope.instantiable.concreteInstantiable)
-			{
-				rootScopes.append(scope)
-			}
+			rootScopes += Set(typeDescriptionToScopeMap.values)
+				.filter { scope in
+					scope.instantiable.generateMock && !rootInstantiableSet.contains(scope.instantiable.concreteInstantiable)
+				}
+				.sorted { $0.instantiable.concreteInstantiable < $1.instantiable.concreteInstantiable }
+				.map { scope in ValidatedRootScope(scope: scope, boundProperties: Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received) }
 		}
 		try validatePropertiesAreFulfillable(
 			onRootScopes: rootScopes,
+			additionalMockRootScopes: additionalMockRootScopes
+				.sorted { $0.instantiable.concreteInstantiable < $1.instantiable.concreteInstantiable }
+				.map { scope in ValidatedRootScope(scope: scope, boundProperties: Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received) },
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 			cyclesOnly: cyclesOnly,
 		)
 	}
 
+	/// An alias that a receive of its property resolves to: the nearest scope above the receiver that provides the
+	/// property declares it with `@Received(fulfilledByDependencyNamed:ofType:)`.
+	private struct ReceivableAlias {
+		let fulfillingProperty: Property
+		let onlyIfAvailable: Bool
+		/// Whether the fulfilling property is provided where the alias is declared, or is an ancestor still being
+		/// built there. Only an `onlyIfAvailable` alias can lack it, and it is then not created.
+		let isFulfillingPropertyAvailable: Bool
+		/// The type that declares the alias.
+		let declaringType: TypeDescription
+		/// The property of the scope that declares the alias, followed by the properties of the scopes it is built
+		/// inside, innermost first. Empty when a root declares the alias.
+		let declaringInstantiationStack: [Property]
+	}
+
+	/// The scope at the root of a tree that `validatePropertiesAreFulfillable` walks.
+	private struct ValidatedRootScope {
+		let scope: Scope
+		/// The received properties the root's mock binds — as children it promotes, `mock()`
+		/// parameters, or `SafeDIOverrides` entries — which enclose its whole tree. Empty for a
+		/// root of the dependency tree, which receives nothing.
+		let boundProperties: Set<Property>
+	}
+
 	/// Validates the trees rooted at `rootScopes` for cycles and optionally for
 	/// unfulfillable properties. See `validatePropertiesAreFulfillable(typeDescriptionToScopeMap:cyclesOnly:)`.
+	/// Also validates, in production trees and in the trees of types that generate a mock, that no received
+	/// dependency is hidden by a closer ancestor's property with the same label.
+	/// - Parameter additionalMockRootScopes: The scopes of types whose mock is generated because
+	///   `additionalMocksToGenerate` lists them. Their trees are validated for hidden received dependencies only.
 	private func validatePropertiesAreFulfillable(
-		onRootScopes rootScopes: [Scope],
+		onRootScopes rootScopes: [ValidatedRootScope],
+		additionalMockRootScopes: [ValidatedRootScope] = [],
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
 		cyclesOnly: Bool,
 	) throws {
 		var unfulfillableProperties = Set<DependencyTreeGeneratorError.UnfulfillableProperty>()
+		var hiddenReceivedProperties = Set<DependencyTreeGeneratorError.HiddenReceivedProperty>()
+		/// Walks `requiredReceivedProperties`, which `directParent` requires, and, transitively, the required received
+		/// properties of the scopes that fulfill them, throwing when one is `property` or is on `instantiationStack`.
+		///
+		/// `stackPropertiesReliedOnByWalkedProperty` holds the received properties whose walk returned without
+		/// throwing, each with the properties already on the received-property stack that the walk relied on: those
+		/// it bailed out on as a cycle that isn't ours, and those that a skipped walk beneath it relied on. Walking
+		/// such a property again along a stack that holds all of them checks a subset of what its first walk checked,
+		/// because the stacks differ only in properties received before it, and any other property there can only
+		/// make the walk bail out sooner. So that walk would also return without throwing, and skipping it reports the
+		/// same error, from the same stack, as walking every path would. A property can rely only on properties that
+		/// share a received cycle with it, so a property on no received cycle is walked once, rather than once for
+		/// every path that leads to it.
+		/// - Parameters:
+		///   - declaredReceivedPropertyStack: The lazily instantiated properties on `receivedPropertyStack`, as
+		///     they are declared. The walk sees each as the constant it stands for; the diagnostic names them.
+		///   - lazilyInstantiatedDeclarations: The lazily instantiated properties on `instantiationStack`, keyed
+		///     by the constant each is validated as.
+		/// - Returns: The properties in `receivedPropertyStack` that the walk relied on.
+		func validateNoCycleInReceivedProperties(
+			_ requiredReceivedProperties: [Scope.RequiredReceivedProperty],
+			directParent: TypeDescription,
+			receivedPropertyStack: [Property],
+			declaredReceivedPropertyStack: [Property],
+			property: Property,
+			instantiationStack: [Property],
+			lazilyInstantiatedDeclarations: [Property: Property],
+			stackPropertiesReliedOnByWalkedProperty: inout [Property: Set<Property>],
+		) throws -> Set<Property> {
+			var stackPropertiesReliedOn = Set<Property>()
+			for requiredReceivedProperty in requiredReceivedProperties {
+				let childProperty = requiredReceivedProperty.property.asValidatedForDependencyCycles
+				guard childProperty != property else {
+					throw DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(
+						instantiated: property,
+						receivedPropertyChain: receivedPropertyStack + [childProperty],
+						declarationLocation: requiredReceivedProperty.declarationLocation,
+						lazilyInstantiatedProperties: Self.lazilyInstantiatedProperties(
+							closingCycleWith: requiredReceivedProperty.property,
+							validatedPropertiesInCycle: [property],
+							lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations,
+							receivedProperties: declaredReceivedPropertyStack,
+						),
+					)
+				}
+				guard !receivedPropertyStack.contains(childProperty) else {
+					// We've found a cycle, but it's not our cycle. Bail and let a future loop find this.
+					// The remaining received properties on this scope go unwalked, so a later visit
+					// along a stack without `childProperty` must walk this scope again.
+					stackPropertiesReliedOn.insert(childProperty)
+					return stackPropertiesReliedOn
+				}
+				let memoizedStackPropertiesReliedOn = stackPropertiesReliedOnByWalkedProperty[childProperty]
+				if let cycleIndex = instantiationStack.firstIndex(of: childProperty) {
+					let instantiationProperties = Array(instantiationStack[0...cycleIndex])
+					let propertiesInCycle = [childProperty]
+						+ receivedPropertyStack.reversed()
+						+ instantiationProperties
+					try throwIfInvalidCycle(
+						typesInCycle: propertiesInCycle.map(\.typeDescription),
+						property: childProperty,
+						declarationLocation: requiredReceivedProperty.declarationLocation,
+						directParent: directParent,
+						isReceived: !childProperty.propertyType.isConstant,
+						lazilyInstantiatedProperties: Self.lazilyInstantiatedProperties(
+							closingCycleWith: requiredReceivedProperty.property,
+							validatedPropertiesInCycle: propertiesInCycle,
+							lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations,
+							receivedProperties: declaredReceivedPropertyStack,
+						),
+					)
+				} else if let memoizedStackPropertiesReliedOn, memoizedStackPropertiesReliedOn.isSubset(of: receivedPropertyStack) {
+					stackPropertiesReliedOn.formUnion(memoizedStackPropertiesReliedOn)
+				} else if let receivedPropertyScope = typeDescriptionToScopeMap[childProperty.typeDescription] {
+					var childPropertyStack = receivedPropertyStack
+					childPropertyStack.append(childProperty)
+					// A cycle back to `childProperty` itself lies within its walk, wherever that walk starts.
+					let childStackPropertiesReliedOn = try validateNoCycleInReceivedProperties(
+						receivedPropertyScope.requiredReceivedProperties,
+						directParent: receivedPropertyScope.instantiable.concreteInstantiable,
+						receivedPropertyStack: childPropertyStack,
+						// Only the lazily instantiated receives are named by the diagnostic.
+						declaredReceivedPropertyStack: childProperty == requiredReceivedProperty.property
+							? declaredReceivedPropertyStack
+							: declaredReceivedPropertyStack + [requiredReceivedProperty.property],
+						property: property,
+						instantiationStack: instantiationStack,
+						lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations,
+						stackPropertiesReliedOnByWalkedProperty: &stackPropertiesReliedOnByWalkedProperty,
+					).subtracting([childProperty])
+					stackPropertiesReliedOnByWalkedProperty[childProperty] = childStackPropertiesReliedOn
+					stackPropertiesReliedOn.formUnion(childStackPropertiesReliedOn)
+				}
+			}
+			return stackPropertiesReliedOn
+		}
+		/// The fulfilling properties of the `onlyIfAvailable` aliases already walked by
+		/// `validateNoCycleInReceivedProperties`, each followed by its declaring scope's instantiation stack.
+		var walkedAliasFulfillingProperties = Set<[Property]>()
+		/// - Parameters:
+		///   - closestDeclarationByLabel: The property each label names in `scope`: the one declared by the closest
+		///     ancestor that declares the label.
+		///   - validatesCycles: Whether to validate the tree for dependency cycles and unfulfillable received
+		///     properties. `false` only for a tree validated for hidden received dependencies alone.
+		///   - validatesHiddenProperties: Whether to record received dependencies a closer declaration hides.
 		func validatePropertiesAreFulfillable(
 			on scope: Scope,
 			receivableProperties: Set<Property>,
+			receivableAliases: [Property: ReceivableAlias],
+			boundProperties: Set<Property>,
+			closestDeclarationByLabel: [String: DependencyTreeGeneratorError.LabelDeclaration],
+			validatesCycles: Bool,
+			validatesHiddenProperties: Bool,
 			property: Property?,
 			propertyStack: [Property],
 			lazilyInstantiatedDeclarations: [Property: Property],
 			root: TypeDescription,
 		) throws {
-			if let property {
-				// Received properties whose walk returned without throwing, each with the properties already
-				// on the received-property stack that the walk relied on: those it bailed out on as a cycle
-				// that isn't ours, and those that a skipped walk beneath it relied on. Walking such a
-				// property again along a stack that holds all of them checks a subset of what its first
-				// walk checked, because the stacks differ only in properties received before it, and any
-				// other property there can only make the walk bail out sooner. So that walk would also
-				// return without throwing, and skipping it reports the same error, from the same stack, as
-				// walking every path would. A property can rely only on properties that share a received
-				// cycle with it, so a property on no received cycle is walked once, rather than once for
-				// every path that leads to it.
+			let instantiationStack: [Property] = if let property {
+				[property] + propertyStack
+			} else {
+				[]
+			}
+			if validatesCycles, let property {
 				var stackPropertiesReliedOnByWalkedProperty = [Property: Set<Property>]()
-				/// - Returns: The properties in `receivedPropertyStack` that the walk relied on.
-				func validateNoCycleInReceivedProperties(
-					scope: Scope,
-					receivedPropertyStack: [Property],
-					declaredReceivedPropertyStack: [Property],
-					instantiationStack: [Property],
-				) throws -> Set<Property> {
-					var stackPropertiesReliedOn = Set<Property>()
-					for requiredReceivedProperty in scope.requiredReceivedProperties {
-						let childProperty = requiredReceivedProperty.property.asValidatedForDependencyCycles
-						guard childProperty != property else {
-							throw DependencyTreeGeneratorError.receivedConstantCycleDetected(
-								instantiated: property,
-								receivedPropertyChain: receivedPropertyStack + [childProperty],
-								declarationLocation: requiredReceivedProperty.declarationLocation,
-								lazilyInstantiatedProperties: Self.lazilyInstantiatedProperties(
-									closingCycleWith: requiredReceivedProperty.property,
-									validatedPropertiesInCycle: [property],
-									lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations,
-									receivedProperties: declaredReceivedPropertyStack,
-								),
-							)
-						}
-						guard !receivedPropertyStack.contains(childProperty) else {
-							// We've found a cycle, but it's not our cycle. Bail and let a future loop find this.
-							// The remaining received properties on this scope go unwalked, so a later visit
-							// along a stack without `childProperty` must walk this scope again.
-							stackPropertiesReliedOn.insert(childProperty)
-							return stackPropertiesReliedOn
-						}
-						let memoizedStackPropertiesReliedOn = stackPropertiesReliedOnByWalkedProperty[childProperty]
-						if let cycleIndex = instantiationStack.firstIndex(of: childProperty) {
-							let instantiationProperties = Array(instantiationStack[0...cycleIndex])
-							let propertiesInCycle = [childProperty]
-								+ receivedPropertyStack.reversed()
-								+ instantiationProperties
-							try throwIfInvalidCycle(
-								typesInCycle: propertiesInCycle.map(\.typeDescription),
-								property: childProperty,
-								declarationLocation: requiredReceivedProperty.declarationLocation,
-								directParent: scope.instantiable.concreteInstantiable,
-								isReceived: !childProperty.propertyType.isConstant,
-								lazilyInstantiatedProperties: Self.lazilyInstantiatedProperties(
-									closingCycleWith: requiredReceivedProperty.property,
-									validatedPropertiesInCycle: propertiesInCycle,
-									lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations,
-									receivedProperties: declaredReceivedPropertyStack,
-								),
-							)
-						} else if let memoizedStackPropertiesReliedOn, memoizedStackPropertiesReliedOn.isSubset(of: receivedPropertyStack) {
-							stackPropertiesReliedOn.formUnion(memoizedStackPropertiesReliedOn)
-						} else if let receivedPropertyScope = typeDescriptionToScopeMap[childProperty.typeDescription] {
-							var childPropertyStack = receivedPropertyStack
-							childPropertyStack.append(childProperty)
-							// A cycle back to `childProperty` itself lies within its walk, wherever that walk starts.
-							let childStackPropertiesReliedOn = try validateNoCycleInReceivedProperties(
-								scope: receivedPropertyScope,
-								receivedPropertyStack: childPropertyStack,
-								// Only the lazily instantiated receives are named by the diagnostic.
-								declaredReceivedPropertyStack: childProperty == requiredReceivedProperty.property
-									? declaredReceivedPropertyStack
-									: declaredReceivedPropertyStack + [requiredReceivedProperty.property],
-								instantiationStack: instantiationStack,
-							).subtracting([childProperty])
-							stackPropertiesReliedOnByWalkedProperty[childProperty] = childStackPropertiesReliedOn
-							stackPropertiesReliedOn.formUnion(childStackPropertiesReliedOn)
-						}
-					}
-					return stackPropertiesReliedOn
-				}
-				let instantiationStack: [Property] = [property] + propertyStack
 				_ = try validateNoCycleInReceivedProperties(
-					scope: scope,
+					scope.requiredReceivedProperties,
+					directParent: scope.instantiable.concreteInstantiable,
 					receivedPropertyStack: [],
 					declaredReceivedPropertyStack: [],
+					property: property,
 					instantiationStack: instantiationStack,
+					lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations,
+					stackPropertiesReliedOnByWalkedProperty: &stackPropertiesReliedOnByWalkedProperty,
 				)
 			}
 
-			if !cyclesOnly {
-				for requiredReceivedProperty in scope.requiredReceivedProperties {
-					let receivedProperty = requiredReceivedProperty.property
-					let parentContainsProperty = receivableProperties.contains(receivedProperty)
-					let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
-					if !parentContainsProperty, !propertyIsCreatedAtThisScope, property != nil {
-						// This property is in a dependency tree and is unfulfillable. Record the problem.
+			// The aliases this scope declares that a receive of their property resolves to. An `onlyIfAvailable`
+			// alias of a property an enclosing scope also provides, or a mock binds, is not one: when the alias is not
+			// created, the receive resolves to that property instead, as `Scope.createScopeGenerator`'s
+			// `isProvidedByEnclosingScope` has generation do. When such an alias is never created, it does not shadow
+			// an alias above it either.
+			var declaredAliases = [Property: ReceivableAlias]()
+			var uncreatedAliasPropertiesProvidedByEnclosingScope = Set<Property>()
+			for case let (aliasDependency, .aliased(fulfillingProperty, _, onlyIfAvailable)) in scope.instantiable.dependencies.lazy.map({ ($0, $0.source) }) {
+				let aliasProperty = aliasDependency.property
+				let isFulfillingPropertyProvided = receivableProperties.containsPropertyOrItsUnwrappedForm(fulfillingProperty)
+					|| scope.providedProperties.containsPropertyOrItsUnwrappedForm(fulfillingProperty)
+				if !onlyIfAvailable
+					|| !(receivableProperties.containsPropertyOrItsUnwrappedForm(aliasProperty) || boundProperties.containsPropertyOrItsUnwrappedForm(aliasProperty))
+				{
+					// The instantiation stack holds a lazily instantiated property as the constant it stands for.
+					let validatedFulfillingProperty = fulfillingProperty.asValidatedForDependencyCycles
+					let alias = ReceivableAlias(
+						fulfillingProperty: fulfillingProperty,
+						onlyIfAvailable: onlyIfAvailable,
+						// An ancestor still being built counts as available: a receive inside it is a cycle, reported below.
+						isFulfillingPropertyAvailable: isFulfillingPropertyProvided
+							|| [validatedFulfillingProperty, validatedFulfillingProperty.asUnwrappedProperty].contains(where: instantiationStack.contains),
+						declaringType: scope.instantiable.concreteInstantiable,
+						declaringInstantiationStack: instantiationStack,
+					)
+					declaredAliases[aliasProperty] = alias
+					// A lazily instantiated alias is also received by value, as the instance it creates.
+					if let aliasInstanceProperty = aliasDependency.lazilyInstantiatedInstanceProperty {
+						declaredAliases[aliasInstanceProperty] = alias
+					}
+				} else if !isFulfillingPropertyProvided {
+					uncreatedAliasPropertiesProvidedByEnclosingScope.insert(aliasProperty)
+				}
+			}
+			// A required receive of an alias needs the alias created, so it needs the alias's fulfilling property,
+			// as the scope that declares the alias would if the alias were not `onlyIfAvailable`.
+			for case let (requiredReceivedProperty, alias?) in scope.requiredReceivedProperties.lazy.map({
+				($0, declaredAliases[$0.property] ?? receivableAliases[$0.property])
+			}) where validatesCycles {
+				let receivedProperty = requiredReceivedProperty.property
+				let fulfillingProperty = alias.fulfillingProperty
+				// The instantiation stack holds a lazily instantiated property as the constant it stands for.
+				let validatedFulfillingProperty = fulfillingProperty.asValidatedForDependencyCycles
+				if let fulfillingPropertyBeingBuilt = [validatedFulfillingProperty, validatedFulfillingProperty.asUnwrappedProperty].first(where: instantiationStack.contains) {
+					// This scope is built inside the alias's fulfilling property, so the alias cannot be created before it.
+					throw DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(
+						instantiated: fulfillingPropertyBeingBuilt,
+						receivedPropertyChain: [receivedProperty.asValidatedForDependencyCycles, fulfillingPropertyBeingBuilt],
+						declarationLocation: requiredReceivedProperty.declarationLocation,
+						lazilyInstantiatedProperties: Self.lazilyInstantiatedProperties(
+							closingCycleWith: fulfillingProperty,
+							validatedPropertiesInCycle: [fulfillingPropertyBeingBuilt],
+							lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations,
+							receivedProperties: [receivedProperty],
+						),
+					)
+				} else if alias.onlyIfAvailable, !alias.isFulfillingPropertyAvailable {
+					if !cyclesOnly, property != nil {
 						unfulfillableProperties.insert(.init(
 							property: receivedProperty,
 							declarationLocation: requiredReceivedProperty.declarationLocation,
@@ -1724,12 +2367,112 @@ public actor DependencyTreeGenerator {
 							instantiable: scope.instantiable,
 							parentStack: propertyStack.map(\.typeDescription),
 							root: root,
-							suggestedAlternatives: receivableProperties.filter {
-								receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
-									|| receivedProperty.label == $0.label
-							}.sorted(),
+							suggestedAlternatives: [],
+							uncreatedAlias: .init(
+								declaringType: alias.declaringType,
+								fulfillingProperty: fulfillingProperty,
+							),
 						))
 					}
+				} else if alias.onlyIfAvailable,
+				          let declaringProperty = alias.declaringInstantiationStack.first,
+				          walkedAliasFulfillingProperties.insert([fulfillingProperty] + alias.declaringInstantiationStack).inserted
+				{
+					// A required alias's fulfilling property is walked where the alias is declared. Walk this
+					// one there too, since the receive requires it.
+					var stackPropertiesReliedOnByWalkedProperty = [Property: Set<Property>]()
+					_ = try validateNoCycleInReceivedProperties(
+						[Scope.RequiredReceivedProperty(
+							property: fulfillingProperty,
+							declarationLocation: requiredReceivedProperty.declarationLocation,
+							identifierRange: nil,
+							typeAnnotationRange: nil,
+							bareAttributeRange: nil,
+						)],
+						directParent: alias.declaringType,
+						receivedPropertyStack: [receivedProperty.asValidatedForDependencyCycles],
+						declaredReceivedPropertyStack: receivedProperty.propertyType.isLazilyInstantiated ? [receivedProperty] : [],
+						property: declaringProperty,
+						instantiationStack: alias.declaringInstantiationStack,
+						lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations,
+						stackPropertiesReliedOnByWalkedProperty: &stackPropertiesReliedOnByWalkedProperty,
+					)
+				}
+			}
+
+			/// The first required optional receive this scope can resolve only to the property's non-optional form,
+			/// still being built, with that form's index on `instantiationStack`. It is a cycle, thrown after the
+			/// cycles below, which match only exact properties, so it is reported as a non-optional receive would be.
+			var optionalReceiveOfPropertyBeingBuilt: (receive: Scope.RequiredReceivedProperty, beingBuiltIndex: Int)?
+			for requiredReceivedProperty in scope.requiredReceivedProperties where validatesCycles {
+				let receivedProperty = requiredReceivedProperty.property
+				let parentContainsProperty = receivableProperties.contains(receivedProperty)
+				let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
+				guard !parentContainsProperty, !propertyIsCreatedAtThisScope, property != nil else { continue }
+				// The instantiation stack holds a lazily instantiated property as the constant it stands for.
+				let beingBuiltIndex = receivableProperties.contains(receivedProperty.asUnwrappedProperty)
+					? nil
+					: instantiationStack.firstIndex(of: receivedProperty.asUnwrappedProperty.asValidatedForDependencyCycles)
+				if receivedProperty.typeDescription.isOptional, let beingBuiltIndex {
+					optionalReceiveOfPropertyBeingBuilt = optionalReceiveOfPropertyBeingBuilt ?? (requiredReceivedProperty, beingBuiltIndex)
+				} else if !cyclesOnly || beingBuiltIndex != nil {
+					// A mock binds every property its tree receives from above it, so there only a property still
+					// being built is unfulfillable. A non-optional one is a cycle, reported below.
+					// This property is in a dependency tree and is unfulfillable. Record the problem.
+					unfulfillableProperties.insert(.init(
+						property: receivedProperty,
+						declarationLocation: requiredReceivedProperty.declarationLocation,
+						identifierRange: requiredReceivedProperty.identifierRange,
+						typeAnnotationRange: requiredReceivedProperty.typeAnnotationRange,
+						bareAttributeRange: requiredReceivedProperty.bareAttributeRange,
+						instantiable: scope.instantiable,
+						parentStack: propertyStack.map(\.typeDescription),
+						root: root,
+						suggestedAlternatives: receivableProperties.filter {
+							receivedProperty.typeDescription.leastQualifiedTypeDescription == $0.typeDescription.leastQualifiedTypeDescription
+								|| receivedProperty.label == $0.label
+						}.sorted(),
+						uncreatedAlias: nil,
+					))
+				}
+			}
+
+			if validatesHiddenProperties {
+				// The generated code passes a received dependency by its label, which resolves to the closest
+				// ancestor's declaration of that label. A different property there is passed in its place.
+				for dependency in scope.instantiable.dependencies {
+					let receivedProperty: Property
+					switch dependency.source {
+					case .received:
+						receivedProperty = dependency.property
+					case let .aliased(fulfillingProperty, _, _):
+						receivedProperty = fulfillingProperty
+					case .instantiated, .forwarded:
+						continue
+					}
+					// A receive of an optional property, required or `onlyIfAvailable`, resolves to its non-optional
+					// form too.
+					let acceptedProperties: Set<Property> = [receivedProperty, receivedProperty.asUnwrappedProperty]
+					guard let closestDeclaration = closestDeclarationByLabel[receivedProperty.label],
+					      !acceptedProperties.contains(closestDeclaration.property),
+					      // A lazily instantiated declaration also fulfills a by-value receive of its instance.
+					      closestDeclaration.lazilyInstantiatedInstanceProperty.map({ !acceptedProperties.contains($0) }) ?? true,
+					      // An alias of a property this scope declares refers to that declaration.
+					      acceptedProperties.isDisjoint(with: scope.createdProperties),
+					      // Production passes `nil` for an `onlyIfAvailable` dependency no ancestor provides. A mock
+					      // declares every received dependency at its root, above every hiding declaration.
+					      cyclesOnly || !acceptedProperties.isDisjoint(with: receivableProperties)
+					else {
+						continue
+					}
+					hiddenReceivedProperties.insert(.init(
+						property: receivedProperty,
+						declarationLocation: dependency.declarationLocation,
+						hidingDeclaration: closestDeclaration,
+						receiver: scope.instantiable.concreteInstantiable,
+						parentStack: propertyStack.map(\.typeDescription),
+						root: root,
+					))
 				}
 			}
 
@@ -1740,7 +2483,7 @@ public actor DependencyTreeGenerator {
 			if let property {
 				childPropertyStack.insert(property, at: 0)
 			}
-			for dependency in scope.instantiable.dependencies where dependency.source != .forwarded {
+			for dependency in scope.instantiable.dependencies where validatesCycles && dependency.source != .forwarded {
 				let declaredPropertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
 				let propertyForDependency = declaredPropertyForDependency.asValidatedForDependencyCycles
 				guard let cycleIndex = childPropertyStack.firstIndex(of: propertyForDependency) else {
@@ -1760,7 +2503,84 @@ public actor DependencyTreeGenerator {
 					),
 				)
 			}
+			if case let (receive, beingBuiltIndex)? = optionalReceiveOfPropertyBeingBuilt {
+				let beingBuiltProperty = instantiationStack[beingBuiltIndex]
+				let validatedReceivedProperty = receive.property.asValidatedForDependencyCycles
+				let lazilyInstantiatedProperties = Self.lazilyInstantiatedProperties(
+					closingCycleWith: receive.property,
+					validatedPropertiesInCycle: instantiationStack[0...beingBuiltIndex],
+					lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations,
+				)
+				if beingBuiltIndex == 0 {
+					throw DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(
+						instantiated: beingBuiltProperty,
+						receivedPropertyChain: [validatedReceivedProperty],
+						declarationLocation: receive.declarationLocation,
+						lazilyInstantiatedProperties: lazilyInstantiatedProperties,
+					)
+				} else {
+					try throwIfInvalidCycle(
+						typesInCycle: ([validatedReceivedProperty] + instantiationStack[0...beingBuiltIndex]).map(\.typeDescription),
+						property: beingBuiltProperty,
+						declarationLocation: receive.declarationLocation,
+						directParent: scope.instantiable.concreteInstantiable,
+						isReceived: true,
+						lazilyInstantiatedProperties: lazilyInstantiatedProperties,
+					)
+				}
+			}
 
+			var childClosestDeclarationByLabel = closestDeclarationByLabel
+			for dependency in scope.instantiable.dependencies where scope.createdProperties.contains(dependency.property) {
+				childClosestDeclarationByLabel[dependency.property.label] = .init(
+					property: dependency.property,
+					lazilyInstantiatedInstanceProperty: dependency.lazilyInstantiatedInstanceProperty,
+					declarationLocation: dependency.declarationLocation,
+					declaringType: scope.instantiable.concreteInstantiable,
+				)
+			}
+			// A property this scope provides shadows an alias of it declared above, unless this scope's alias of it is
+			// never created.
+			var childReceivableAliases = receivableAliases.filter {
+				!scope.providedProperties.containsPropertyOrItsUnwrappedForm($0.key)
+					|| uncreatedAliasPropertiesProvidedByEnclosingScope.contains($0.key)
+			}
+			for (aliasProperty, alias) in declaredAliases {
+				childReceivableAliases[aliasProperty] = alias
+			}
+			lazy var childReceivableProperties: Set<Property> = {
+				// An `onlyIfAvailable` receive that is unavailable here is passed `nil`, so it provides nothing to the
+				// scopes below. Availability mirrors `Scope.createScopeGenerator`'s: in a mock, only a property that is
+				// still being built is unavailable.
+				func isAvailable(_ onlyIfAvailableProperty: Property) -> Bool {
+					// The instantiation stack holds a lazily instantiated property as the constant it stands for.
+					if cyclesOnly {
+						!instantiationStack.contains(onlyIfAvailableProperty.asUnwrappedProperty.asValidatedForDependencyCycles)
+					} else {
+						[onlyIfAvailableProperty, onlyIfAvailableProperty.asUnwrappedProperty].contains {
+							receivableProperties.contains($0) && !instantiationStack.contains($0.asValidatedForDependencyCycles)
+						}
+					}
+				}
+				var childReceivableProperties = receivableProperties
+				for dependency in scope.instantiable.dependencies {
+					switch dependency.source {
+					case let .received(onlyIfAvailable):
+						if !onlyIfAvailable || isAvailable(dependency.property) {
+							childReceivableProperties.insert(dependency.property)
+						}
+					case .instantiated, .forwarded, .aliased:
+						childReceivableProperties.insert(dependency.property)
+						// A lazily instantiated property can also be received by value, as the instance it creates.
+						if let instanceProperty = dependency.lazilyInstantiatedInstanceProperty {
+							childReceivableProperties.insert(instanceProperty)
+						}
+					}
+				}
+				// A mock root also provides the received dependencies it promotes.
+				childReceivableProperties.formUnion(scope.providedProperties)
+				return childReceivableProperties
+			}()
 			for childPropertyToGenerate in scope.propertiesToGenerate {
 				switch childPropertyToGenerate {
 				case let .instantiated(declaredChildProperty, childScope, _):
@@ -1771,14 +2591,19 @@ public actor DependencyTreeGenerator {
 						continue
 					}
 					// Neither the child nor, when it is lazily instantiated, its instance can be received in the tree it creates.
-					var childReceivableProperties = receivableProperties.union(scope.properties)
-					childReceivableProperties.remove(declaredChildProperty)
+					var receivablePropertiesInChildTree = childReceivableProperties
+					receivablePropertiesInChildTree.remove(declaredChildProperty)
 					if let instanceProperty = childPropertyToGenerate.lazilyInstantiatedInstanceProperty {
-						childReceivableProperties.remove(instanceProperty)
+						receivablePropertiesInChildTree.remove(instanceProperty)
 					}
 					try validatePropertiesAreFulfillable(
 						on: childScope,
-						receivableProperties: childReceivableProperties,
+						receivableProperties: receivablePropertiesInChildTree,
+						receivableAliases: childReceivableAliases,
+						boundProperties: boundProperties,
+						closestDeclarationByLabel: childClosestDeclarationByLabel,
+						validatesCycles: validatesCycles,
+						validatesHiddenProperties: validatesHiddenProperties,
 						property: childProperty,
 						propertyStack: childPropertyStack,
 						lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations.recordingLazilyInstantiated(declaredChildProperty),
@@ -1792,37 +2617,70 @@ public actor DependencyTreeGenerator {
 
 		for rootScope in rootScopes {
 			try validatePropertiesAreFulfillable(
-				on: rootScope,
-				receivableProperties: Set(rootScope.properties),
+				on: rootScope.scope,
+				receivableProperties: Set(rootScope.scope.properties),
+				receivableAliases: [:],
+				boundProperties: rootScope.boundProperties,
+				closestDeclarationByLabel: [:],
+				validatesCycles: true,
+				// A production root without a mock is validated for production; only mocks generate its tree here.
+				validatesHiddenProperties: !cyclesOnly
+					|| rootScope.scope.instantiable.generateMock
+					|| additionalMockRootScopes.contains { $0.scope == rootScope.scope },
 				property: nil,
 				propertyStack: [],
 				lazilyInstantiatedDeclarations: [:],
-				root: rootScope.instantiable.concreteInstantiable,
+				root: rootScope.scope.instantiable.concreteInstantiable,
+			)
+		}
+		// Walking the other additional mock roots for cycles here could reject a mock that compiles today. Their
+		// mocks are validated for cycles after promotion, in `createMockRootScopeGenerator`.
+		for rootScope in additionalMockRootScopes where !rootScopes.contains(where: { $0.scope == rootScope.scope }) {
+			try validatePropertiesAreFulfillable(
+				on: rootScope.scope,
+				receivableProperties: Set(rootScope.scope.properties),
+				receivableAliases: [:],
+				boundProperties: rootScope.boundProperties,
+				closestDeclarationByLabel: [:],
+				validatesCycles: false,
+				validatesHiddenProperties: true,
+				property: nil,
+				propertyStack: [],
+				lazilyInstantiatedDeclarations: [:],
+				root: rootScope.scope.instantiable.concreteInstantiable,
 			)
 		}
 
 		if !unfulfillableProperties.isEmpty {
 			throw DependencyTreeGeneratorError.unfulfillableProperties(Array(unfulfillableProperties))
 		}
+		if !hiddenReceivedProperties.isEmpty {
+			throw DependencyTreeGeneratorError.hiddenReceivedProperties(Array(hiddenReceivedProperties))
+		}
 	}
 
-	/// Validates that every reachable type description has a corresponding `@Instantiable`.
+	/// Validates that every reachable type description has a corresponding `@Instantiable` that production
+	/// code can build, reporting the first missing type in type order. A `mockOnly` declaration exists solely
+	/// for mock generation, so it does not count. Were it counted, a type it fulfills that shares a concrete
+	/// type with a production declaration would be built from whichever declaration a set iteration reached first.
 	private func validateReachableTypeDescriptions() throws {
-		for reachableTypeDescription in reachableTypeDescriptions.sorted() {
-			if typeDescriptionToFulfillingInstantiableMap[reachableTypeDescription] == nil {
-				// The map's values can hold the same instantiable under several keys, so collect into a set.
-				let referencingDeclarationLocations = Set(
-					typeDescriptionToFulfillingInstantiableMap.values.flatMap { instantiable in
-						instantiable.dependencies
-							.filter { $0.isInstantiated && $0.asInstantiatedType == reachableTypeDescription }
-							.map(\.declarationLocation)
-					},
-				)
-				throw DependencyTreeGeneratorError.noInstantiableFound(
-					reachableTypeDescription,
-					referencedAt: Array(referencingDeclarationLocations),
-				)
-			}
+		if let unbuildableTypeDescription = reachableTypeDescriptions
+			.filter({ typeDescriptionToFulfillingInstantiableMap[$0]?.mockOnly != false })
+			.min()
+		{
+			// The map's values can hold the same instantiable under several keys, so collect into a set.
+			let referencingDeclarationLocations = Set(
+				typeDescriptionToFulfillingInstantiableMap.values.flatMap { instantiable in
+					instantiable.dependencies
+						.filter { $0.isInstantiated && $0.asInstantiatedType == unbuildableTypeDescription }
+						.map(\.declarationLocation)
+				},
+			)
+			throw DependencyTreeGeneratorError.noInstantiableFound(
+				unbuildableTypeDescription,
+				referencedAt: Array(referencingDeclarationLocations),
+				fulfilledByMockOnlyDeclaration: typeDescriptionToFulfillingInstantiableMap[unbuildableTypeDescription] != nil,
+			)
 		}
 	}
 }
@@ -1846,6 +2704,15 @@ extension Dependency {
 		case .aliased, .instantiated, .received:
 			false
 		}
+	}
+}
+
+// MARK: - Set
+
+extension Set<Property> {
+	/// Whether the set contains `property` or, for an optional `property`, its non-optional form.
+	fileprivate func containsPropertyOrItsUnwrappedForm(_ property: Property) -> Bool {
+		contains(property) || contains(property.asUnwrappedProperty)
 	}
 }
 
