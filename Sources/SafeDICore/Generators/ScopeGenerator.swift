@@ -1439,10 +1439,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Whether the tree provides a received property, as a scope provides one to the scopes beneath it
 		/// (`provides`). A promoted node also provides the non-optional form of its optional property: a
 		/// mock builds it, so it binds a non-optional value even when it is promoted for a required `x: X?`.
+		/// An `onlyIfAvailable` alias of an optional property binds an optional value, so it does not.
 		func isProvidedByTree(_ property: Property) -> Bool {
 			Self.provides(property, declaredProperties: propertiesToDeclare, forwardedProperties: [])
 				|| (!property.typeDescription.isOptional
-					&& propertiesToDeclare.contains(Property(label: property.label, typeDescription: .optional(property.typeDescription))))
+					&& treePropertyLabels.contains(property.label)
+					&& treePropertyNodes.contains { $0.propertyLabel == property.label && $0.typeDescription == .optional(property.typeDescription) })
 		}
 
 		let receivedNonOptionalProperties = Set(
