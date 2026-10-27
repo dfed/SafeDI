@@ -57,6 +57,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for child in propertiesToGenerate where !child.cycleClosingProperties.isEmpty {
 			childCycleClosingProperties.formUnion(child.cycleClosingProperties)
 		}
+		childrenTakePartInCycle = !childCycleClosingProperties.isEmpty
+			|| propertiesToGenerate.contains(where: \.isReferencedByCycleClosingScope)
 		declaresBuilderFunction = property != nil && !isPropertyCycle
 		if let property, isPropertyCycle {
 			cycleClosingProperties = [property]
@@ -249,6 +251,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleClosingProperties = []
 		isReferencedByCycleClosingScope = false
 		declaresBuilderFunction = false
+		childrenTakePartInCycle = false
 		description = property.asSource
 		propertiesToGenerate = []
 		propertiesToDeclare = []
@@ -473,6 +476,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Whether this scope may declare a builder function in its parent's body: it is a property's
 	/// scope that is not a cycle-closing scope.
 	private let declaresBuilderFunction: Bool
+	/// Whether a child's subtree closes a cycle on a scope enclosing the child, or a child is the scope
+	/// a cycle beneath it closes on. Only then can this scope's body need `builderFunctionNames` to
+	/// rename a builder function or to refer to one by a name other than `functionName(toBuild:)`.
+	private let childrenTakePartInCycle: Bool
 	/// Received properties that are optional and not created by a parent.
 	private let unavailableOptionalProperties: Set<Property>
 	/// The `onlyIfAvailable` dependencies of this scope: for a type, those its declaration receives,
@@ -776,19 +783,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		leadingMemberWhitespace: String,
 	) async throws -> [String] {
 		let orderedChildren = orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater)
-		// Every child is a property's scope, so each has a candidate.
-		let childBuilderFunctionNames = Self.builderFunctionNames(
-			for: orderedChildren.compactMap(\.generator.builderFunctionCandidate),
-			enclosingFunctionNames: enclosingFunctionNames,
-		)
+		// Nearly every body holds no scope of a cycle, and its children keep their names. Every child
+		// is a property's scope, so each has a candidate.
+		let childBuilderFunctionNames = childrenTakePartInCycle
+			? Self.builderFunctionNames(
+				for: orderedChildren.compactMap(\.generator.builderFunctionCandidate),
+				enclosingFunctionNames: enclosingFunctionNames,
+			)
+			: nil
 		var generatedProperties = [String]()
-		for (child, builderFunctionNames) in zip(orderedChildren, childBuilderFunctionNames) {
+		for (index, child) in orderedChildren.enumerated() {
 			try await generatedProperties.append(
 				child.generator.generateCode(
 					codeGeneration: codeGeneration,
 					unavailableProperties: child.unavailableProperties,
 					propertiesGeneratedLater: child.propertiesGeneratedLater,
-					builderFunctionNames: builderFunctionNames,
+					builderFunctionNames: childBuilderFunctionNames?[index] ?? BuilderFunctionNames(),
 					leadingWhitespace: leadingMemberWhitespace,
 				),
 			)
@@ -846,6 +856,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `identifierSafeNames`), and underscores appended until neither another child nor a referenced
 	/// function has that name. Every other child keeps its name, so a body with no such clash is
 	/// generated as it was before. The names depend only on this body and the functions enclosing it.
+	/// Callers skip a body that holds no scope of a cycle (see `childrenTakePartInCycle`), whose children
+	/// all keep their names.
 	///
 	/// - Parameter enclosingFunctionNames: The `BuilderFunctionNames.enclosingFunctionNames` of the
 	///   scope whose body holds `children`.
@@ -856,10 +868,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var referencedProperties = Set<Property>()
 		for child in children where !child.cycleClosingProperties.isEmpty {
 			referencedProperties.formUnion(child.cycleClosingProperties)
-		}
-		// Nearly every body holds no scope of a cycle.
-		guard !referencedProperties.isEmpty || children.contains(where: \.isReferencedByCycleClosingScope) else {
-			return children.map { _ in BuilderFunctionNames() }
 		}
 		let referencedFunctionNames = Set(referencedProperties.map {
 			enclosingFunctionNames[$0, default: functionName(toBuild: $0)]
@@ -2590,19 +2598,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let labelMap = disambiguatePropertyLabels(for: propertyNodes)
 		// Each builder function is named after its disambiguated label, unless a cycle-closing
 		// scope beneath this level refers to an enclosing function of that name.
-		let builderFunctionNamesByNode = builderFunctionNames(
-			for: propertyNodes.map { node in
-				let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
-				return BuilderFunctionCandidate(
-					property: node.property,
-					name: disambiguated == node.propertyLabel ? nil : Self.functionName(toBuildPropertyNamed: disambiguated),
-					declaresFunction: !node.isPropertyCycle,
-					cycleClosingProperties: node.cycleClosingProperties,
-					isReferencedByCycleClosingScope: node.isReferencedByCycleClosingScope,
-				)
-			},
-			enclosingFunctionNames: enclosingFunctionNames,
-		)
+		// Nearly every level holds no node of a cycle, and its nodes keep their names.
+		let builderFunctionNamesByNode = propertyNodes.contains(where: { !$0.cycleClosingProperties.isEmpty || $0.isReferencedByCycleClosingScope })
+			? builderFunctionNames(
+				for: propertyNodes.map { node in
+					let disambiguated = disambiguatedLabel(for: node, labelMap: labelMap)
+					return BuilderFunctionCandidate(
+						property: node.property,
+						name: disambiguated == node.propertyLabel ? nil : Self.functionName(toBuildPropertyNamed: disambiguated),
+						declaresFunction: !node.isPropertyCycle,
+						cycleClosingProperties: node.cycleClosingProperties,
+						isReferencedByCycleClosingScope: node.isReferencedByCycleClosingScope,
+					)
+				},
+				enclosingFunctionNames: enclosingFunctionNames,
+			)
+			: nil
 		var propertyNodeIndex = 0
 
 		// Merge sibling-level disambiguations into the receiver-disambiguation
@@ -2623,7 +2634,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			case let .property(node):
 				let nodeTypeKey = node.instantiatedTypeDescription.asSource
 				let isCycleNode = ancestorTypes.contains(nodeTypeKey)
-				let builderFunctionNames = builderFunctionNamesByNode[propertyNodeIndex]
+				let builderFunctionNames = builderFunctionNamesByNode?[propertyNodeIndex] ?? BuilderFunctionNames()
 				propertyNodeIndex += 1
 
 				// A back-edge from parentConcreteType to this node means this node
