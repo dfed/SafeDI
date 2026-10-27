@@ -10197,7 +10197,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		try await performScan(
 			inputSourcesFile: swiftFileCSV.relativePath,
-			projectRoot: rootDirectory.path,
+			projectFilePaths: ProjectFilePaths(projectRoot: rootDirectory.path),
 			outputDirectory: outputDirectory.path,
 			manifestFile: manifestFile.path,
 		)
@@ -10267,7 +10267,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		try await performScan(
 			inputSourcesFile: swiftFileCSV.relativePath,
-			projectRoot: rootDirectory.path,
+			projectFilePaths: ProjectFilePaths(projectRoot: rootDirectory.path),
 			outputDirectory: outputDirectory.path,
 			manifestFile: manifestFile.path,
 		)
@@ -10323,7 +10323,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		try await performScan(
 			inputSourcesFile: swiftFileCSV.relativePath,
-			projectRoot: rootDirectory.path,
+			projectFilePaths: ProjectFilePaths(projectRoot: rootDirectory.path),
 			outputDirectory: outputDirectory.path,
 			manifestFile: manifestFile.path,
 		)
