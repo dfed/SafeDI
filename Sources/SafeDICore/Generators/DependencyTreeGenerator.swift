@@ -127,8 +127,14 @@ public actor DependencyTreeGenerator {
 		// isRoot) bypass root validation but can still have partially-lazy cycles.
 		// Uses cyclesOnly to skip unfulfillable property checks — mock-only types
 		// have unfulfillable received properties by design (they become mock parameters).
+		// `collectReceivedProperties` gives a scope the same complete result however it is
+		// reached, every scope it caches is in `typeDescriptionToScopeMap`, which lives through
+		// this method, and only complete results outlive a walk, so one cache serves this
+		// validation and every mock root.
+		var receivedPropertiesCache = ReceivedPropertiesCache()
 		try validatePropertiesAreFulfillable(
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			receivedPropertiesCache: &receivedPropertiesCache,
 			cyclesOnly: true,
 		)
 
@@ -236,6 +242,7 @@ public actor DependencyTreeGenerator {
 				scope: scope,
 				typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 				erasedToConcreteTypeMap: erasedToConcreteTypeMap,
+				receivedPropertiesCache: &receivedPropertiesCache,
 			)
 			mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
 		}
@@ -711,7 +718,12 @@ public actor DependencyTreeGenerator {
 				try validateReachableTypeDescriptions()
 
 				let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
-				try validatePropertiesAreFulfillable(typeDescriptionToScopeMap: typeDescriptionToScopeMap, cyclesOnly: false)
+				var unusedReceivedPropertiesCache = ReceivedPropertiesCache()
+				try validatePropertiesAreFulfillable(
+					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+					receivedPropertiesCache: &unusedReceivedPropertiesCache,
+					cyclesOnly: false,
+				)
 				return try rootInstantiables
 					.sorted()
 					.compactMap { typeDescription in
@@ -773,16 +785,19 @@ public actor DependencyTreeGenerator {
 	/// Creates a mock-root ScopeGenerator using the production Scope tree.
 	/// Unsatisfied received dependencies are promoted as root-level children
 	/// on a NEW Scope (the shared Scope is never mutated).
+	/// - Parameter cache: The results of `collectReceivedProperties` for scopes of `typeDescriptionToScopeMap`,
+	///   shared across mock roots. The mock root's own scope never enters it: nothing instantiates the mock
+	///   root, so only its children's results are collected.
 	private func createMockRootScopeGenerator(
 		for instantiable: Instantiable,
 		scope: Scope,
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
 		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
+		receivedPropertiesCache cache: inout ReceivedPropertiesCache,
 	) throws -> ScopeGenerator {
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
 		// (via ObjectIdentifier) so each scope outside a cycle is visited at most once.
-		var cache = ReceivedPropertiesCache()
 		let initialReceivedProperties = Self.collectReceivedProperties(
 			from: scope,
 			cache: &cache,
@@ -1069,7 +1084,7 @@ public actor DependencyTreeGenerator {
 		let requiredAliasFulfilling: Set<Property>
 	}
 
-	/// Memoizes `collectReceivedProperties` for one mock root.
+	/// Memoizes `collectReceivedProperties` across the mock roots of one mock scope map.
 	///
 	/// A walk that re-enters a scope whose own walk is unfinished – a cycle of `Instantiator`s – takes
 	/// nothing from it, since that scope's walk accounts for what it receives. A result computed that
@@ -1499,8 +1514,11 @@ public actor DependencyTreeGenerator {
 	/// When `cyclesOnly` is true, unfulfillable property collection is skipped —
 	/// used for mock-only types where unfulfillable received properties are expected
 	/// (they become required mock parameters).
+	/// - Parameter receivedPropertiesCache: The results of `collectReceivedProperties` for scopes of
+	///   `typeDescriptionToScopeMap`, which the mock validation fills.
 	private func validatePropertiesAreFulfillable(
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		receivedPropertiesCache: inout ReceivedPropertiesCache,
 		cyclesOnly: Bool,
 	) throws {
 		// Validate in type order, so that the error reported when several trees have one
@@ -1512,13 +1530,12 @@ public actor DependencyTreeGenerator {
 		// mock binds every property its tree receives from above it.
 		if cyclesOnly {
 			let rootInstantiableSet = Set(rootInstantiables)
-			var cache = ReceivedPropertiesCache()
 			rootScopes += Set(typeDescriptionToScopeMap.values)
 				.filter { scope in
 					scope.instantiable.generateMock && !rootInstantiableSet.contains(scope.instantiable.concreteInstantiable)
 				}
 				.sorted { $0.instantiable.concreteInstantiable < $1.instantiable.concreteInstantiable }
-				.map { scope in ValidatedRootScope(scope: scope, boundProperties: Self.collectReceivedProperties(from: scope, cache: &cache).received) }
+				.map { scope in ValidatedRootScope(scope: scope, boundProperties: Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received) }
 		}
 		try validatePropertiesAreFulfillable(
 			onRootScopes: rootScopes,
