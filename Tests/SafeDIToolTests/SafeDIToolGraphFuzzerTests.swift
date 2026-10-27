@@ -59,7 +59,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	// MARK: Known issues
 
-	@Test
+	@Test(.enabled(if: !SafeDIToolGraphFuzzerTests.knownIssues.isEmpty, "No seed is a known issue"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func knownIssueSeeds_remainAcceptedByTool_whenRunThroughTool() async throws {
 		// Compiling known-issue graphs, and running the tool twice to compare, costs more than the ordinary suite can
@@ -82,6 +82,22 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test
 	func knownIssues_listEachSeedOnceInIncreasingOrder_belowScheduledSeedCount() {
 		#expect(Self.knownIssueListProblems() == [])
+	}
+
+	@Test
+	func knownIssueListProblems_reportEachProblem_whenListIsMalformed() {
+		let knownIssues = [
+			GraphFuzzerKnownIssue(reason: "Unordered", signatures: [.compilerCrashInGeneratedMock], seeds: [20, 10]),
+			GraphFuzzerKnownIssue(reason: "Repeated and out of range", signatures: [.compilerCrashInGeneratedMock], seeds: [10, 5000]),
+			GraphFuzzerKnownIssue(reason: "Unsigned", signatures: [], seeds: [30]),
+		]
+
+		#expect(Self.knownIssueListProblems(knownIssues) == [
+			"The seeds of \"Unordered\" are not in increasing order.",
+			"Seed 10 is listed as a known issue more than once.",
+			"Seed 5000 is a known issue outside the scheduled seeds 0..<5000.",
+			"The known issue \"Unsigned\" lists no seeds or no signatures.",
+		])
 	}
 
 	@Test
@@ -371,7 +387,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `swiftc` invocation when nothing fails.
 	static let smokeSeeds: [UInt64] = [5, 6, 330, 426]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x9194EE53C9F61C98
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x2BA5_81C9_6E9D_318E
 
 	/// The seeds `graph-fuzzer.yml` runs before every release and weekly, `0..<scheduledSeedCount`, which
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=scheduled` selects. `knownIssues` lists every one that fails.
@@ -384,14 +400,9 @@ struct SafeDIToolGraphFuzzerTests {
 	static let scheduledAcceptedSeedsHash: UInt64 = 0x289314064BABE7C2
 
 	/// Seeds in `0..<scheduledSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
-	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
-	static let knownIssues: [GraphFuzzerKnownIssue] = [
-		GraphFuzzerKnownIssue(
-			reason: "A mock root's own onlyIfAvailable receive and a dependency the mock root promotes and builds share a label with different types, and the mock binds both under that label",
-			signatures: [.compilerError(containing: "invalid redeclaration")],
-			seeds: [2_810],
-		),
-	]
+	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix. Empty
+	/// since PRs 404, 407, and 408 fixed or rejected every shape the corpus found.
+	static let knownIssues: [GraphFuzzerKnownIssue] = []
 
 	/// Known issues for the tests of `GraphFuzzerFinding`, which must not depend on what `knownIssues` lists today.
 	private static let compilerErrorKnownIssue = GraphFuzzerKnownIssue(
@@ -412,7 +423,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What is wrong with `knownIssues`: a seed listed twice, a shape's seeds out of order, or a seed the long
 	/// run's corpus does not cover.
-	static func knownIssueListProblems() -> [String] {
+	static func knownIssueListProblems(_ knownIssues: [GraphFuzzerKnownIssue] = knownIssues) -> [String] {
 		var problems = [String]()
 		var seenSeeds = Set<UInt64>()
 		for knownIssue in knownIssues {
