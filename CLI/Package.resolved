@@ -1,13 +1,13 @@
 {
-  "originHash" : "f26f99e6e60d54fac1beb95ad7eab9c783110be250bf7ee150d6a5e22c47e221",
+  "originHash" : "129ce8ea21b5464dfc63e43dc1d83c50463a12d5b8aad8faa0dab9d7590cf621",
   "pins" : [
     {
       "identity" : "swiftformat",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/nicklockwood/SwiftFormat",
       "state" : {
-        "revision" : "a4e6fff24ebc51815d6653c18123c4ce6fa27406",
-        "version" : "0.64.2"
+        "revision" : "abc138dd52a104716fa248344309c875911d4195",
+        "version" : "0.64.3"
       }
     }
   ],
