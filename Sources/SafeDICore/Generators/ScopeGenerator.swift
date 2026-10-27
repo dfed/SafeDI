@@ -1829,7 +1829,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let child: String
 	}
 
-	/// Collects all unique configuration types from this scope's mock parameter tree.
+	/// Collects the nodes of all unique configuration types in this scope's mock parameter tree,
+	/// in the order this root reaches them. `generateMockCode` keeps the first root's node for each
+	/// type, in alphabetical root order, and generates its struct once with `generateConfigurationStruct`.
+	func collectConfigurationTypes() async -> [MockParameterNode] {
+		let parameterTree = await rootMockParameterTree
+		return Self.collectUniqueConfigurationTypes(from: parameterTree.propertyNodes)
+	}
+
+	/// The `SafeDIMockConfiguration` struct of a node `collectConfigurationTypes` returned.
 	/// Children edges are filtered against `cycleEdges` so the same back-edges are
 	/// removed across every root's view of a given type — required for type-level
 	/// consistency, since per-tree cycle detection (`isPropertyCycle`) breaks at
@@ -1838,24 +1846,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// struct must be `@Sendable`-typed because some root references them from a
 	/// `SendableInstantiator` scope. The set is computed once across all roots so
 	/// struct-per-type dedup remains consistent.
-	func collectConfigurationTypes(
+	static func generateConfigurationStruct(
+		for node: MockParameterNode,
 		cycleEdges: Set<CycleEdge>,
 		sendableConfigurationTypeNames: Set<String>,
-	) async -> [(typeName: String, structCode: String)] {
-		let parameterTree = await rootMockParameterTree
-		let uniqueTypes = Self.collectUniqueConfigurationTypes(from: parameterTree.propertyNodes)
-		let indent = Self.standardIndent
-		return uniqueTypes.map { node in
-			(
-				typeName: node.concreteType.asSource,
-				structCode: Self.generateConfigurationStruct(
-					for: node,
-					indent: indent,
-					cycleEdges: cycleEdges,
-					requiresSendable: sendableConfigurationTypeNames.contains(node.concreteType.asSource),
-				),
-			)
-		}
+	) -> String {
+		generateConfigurationStruct(
+			for: node,
+			indent: standardIndent,
+			cycleEdges: cycleEdges,
+			requiresSendable: sendableConfigurationTypeNames.contains(node.concreteType.asSource),
+		)
 	}
 
 	/// Concrete type names referenced by this scope's mock parameter tree from a
