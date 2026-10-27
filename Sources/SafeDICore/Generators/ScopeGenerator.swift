@@ -1700,13 +1700,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
+		// A root's own received dependency whose label the root scope already binds – to a node
+		// the mock builds for another receiver – cannot be rebound to its label without
+		// redeclaring that binding, so the root is passed the dependency's binding by name.
+		var rootDependenciesToRebind = [Dependency]()
+		for dependency in instantiable.dependencies {
+			if rootBindingNames.contains(dependency.property.label),
+			   let binding = Self.disambiguatedBinding(
+			   	ofReceived: dependency,
+			   	unavailableProperties: [],
+			   	lazilyInstantiatedInstanceProperties: [],
+			   	flatParameterDisambiguationMap: rootDisambiguationMap,
+			   )
+			{
+				returnDisambiguationMap[dependency.property.label, default: [:]][dependency.property.typeDescription] = binding.name
+			} else {
+				rootDependenciesToRebind.append(dependency)
+			}
+		}
+
 		// Emit the root's own `.received` disambiguation rebinds before the tree
 		// so any nested builder functions emitted within the tree can capture
 		// them without forward-referencing. Root-level aliases flow through the
 		// tree itself (as `MockTreeItem.alias` children of the root scope) in
 		// production's topological order.
 		let rootReceiverBindings = Self.emitReceiverBindings(
-			for: instantiable.dependencies,
+			for: rootDependenciesToRebind,
 			unavailableProperties: [],
 			flatParameterDisambiguationMap: rootDisambiguationMap,
 			indent: bodyIndent,
