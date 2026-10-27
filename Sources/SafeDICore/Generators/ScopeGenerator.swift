@@ -73,13 +73,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		aliasPropertyIsProvidedByEnclosingScope = false
 		let forwardedProperties = scopeData.forwardedProperties
 		/// Whether a property a child requires be passed in must be received by this scope too: this
-		/// scope does not declare it, does not declare the unwrapped form of an optional one (which
-		/// handles a non-optional version promoted to satisfy both required and onlyIfAvailable
-		/// receivers), and does not forward it.
+		/// scope neither declares nor forwards it or, for an optional one, its unwrapped form (a
+		/// declared form handles a non-optional version promoted to satisfy both required and
+		/// onlyIfAvailable receivers; a forwarded `x: X` fulfills an `x: X?` beneath it).
 		func isReceivedFromAncestors(_ property: Property) -> Bool {
 			!propertiesToDeclare.contains(property)
-				&& (!property.typeDescription.isOptional || !propertiesToDeclare.contains(property.asUnwrappedProperty))
 				&& !forwardedProperties.contains(property)
+				&& (!property.typeDescription.isOptional
+					|| (!propertiesToDeclare.contains(property.asUnwrappedProperty) && !forwardedProperties.contains(property.asUnwrappedProperty)))
 		}
 		// All the properties our children require be passed in, unioned with the properties we
 		// require to fulfill our own dependencies, and those of them some receiver requires. A
@@ -90,10 +91,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for child in propertiesToGenerate {
 			for property in child.receivedProperties where isReceivedFromAncestors(property) {
 				receivedProperties.insert(property)
-				// A forwarded `x: X` fulfills a required `x: X?` beneath it, so nothing above this scope needs it.
-				if child.requiredReceivedProperties.contains(property),
-				   !property.typeDescription.isOptional || !forwardedProperties.contains(property.asUnwrappedProperty)
-				{
+				if child.requiredReceivedProperties.contains(property) {
 					requiredReceivedProperties.insert(property)
 				}
 			}
@@ -109,9 +107,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				onlyIfAvailable = isOnlyIfAvailable
 			case let .aliased(fulfillingProperty, _, isOnlyIfAvailable):
 				// If the alias's fulfilling property is locally declared
-				// (e.g., as an @Instantiated sibling), the alias binds
-				// against that local — it doesn't need to be received.
-				guard !propertiesToDeclare.contains(fulfillingProperty) else { continue }
+				// (e.g., as an @Instantiated sibling) or forwarded, the alias
+				// binds against that local — it doesn't need to be received.
+				guard !propertiesToDeclare.contains(fulfillingProperty),
+				      !forwardedProperties.contains(fulfillingProperty)
+				else { continue }
 				receivedProperty = fulfillingProperty
 				onlyIfAvailable = isOnlyIfAvailable
 			}
@@ -177,9 +177,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							nil
 						}
 					case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-						// Skip locally-declared fulfilling properties — the
-						// alias binds to the local, not to an ancestor.
-						if onlyIfAvailable, !propertiesToDeclare.contains(fulfillingProperty) {
+						// Skip locally-declared and forwarded fulfilling properties —
+						// the alias binds to the local, not to an ancestor.
+						if onlyIfAvailable, !propertiesToDeclare.contains(fulfillingProperty), !forwardedProperties.contains(fulfillingProperty) {
 							fulfillingProperty.asUnwrappedProperty
 						} else {
 							nil
@@ -522,7 +522,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var siblingDependencies = propertiesToGenerate.map { scope in
 			Set(siblings.compactMap { sibling in
 				(scope.receivedProperties.contains(sibling.property)
-					&& !scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property))
+					&& !scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property.asUnwrappedProperty))
 					// A required optional property can resolve to a sibling of its non-optional form:
 					// in a mock, or through an `onlyIfAvailable` receive of it above the receiver.
 					|| (!scope.unwrappedOptionalRequiredReceivedProperties.isEmpty && scope.unwrappedOptionalRequiredReceivedProperties.contains(sibling.property))
@@ -546,29 +546,30 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		// An `onlyIfAvailable` alias a receiver requires is built after its fulfilling
 		// sibling, as a required alias is. A sibling that receives the alias only if
-		// available then waits on it only when that does not close a cycle.
+		// available then waits on it only when that does not close a cycle (below).
 		for case let (index, aliasProperty?) in propertiesToGenerate.map(\.property).enumerated()
 			where requiredOnlyIfAvailableAliasProperties.contains(aliasProperty)
 		{
 			for sibling in siblings where propertiesToGenerate[index].receivedProperties.contains(sibling.property) {
-				if dependsOn(index, from: sibling.index) {
-					for (receiverIndex, receiver) in propertiesToGenerate.enumerated()
-						where receiver.onlyIfAvailableUnwrappedReceivedProperties.contains(aliasProperty.asUnwrappedProperty)
-					{
-						siblingDependencies[receiverIndex].remove(index)
-					}
-				}
 				siblingDependencies[index].insert(sibling.index)
 			}
 		}
 		// Then each `onlyIfAvailable` receive, in sibling order, unless the sibling it
-		// would wait on already waits on the receiver.
-		for (index, scope) in propertiesToGenerate.enumerated() where !scope.onlyIfAvailableUnwrappedReceivedProperties.isEmpty {
-			for sibling in siblings
-				where scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property)
-				&& !dependsOn(index, from: sibling.index)
+		// would wait on already waits on the receiver. The `onlyIfAvailable` aliases go
+		// first: each waits on the sibling that fulfills it, so it is created once that
+		// sibling is built, and a sibling whose tree receives the alias only if available
+		// is then generated with the alias unavailable, as it is still being built.
+		for considersAliases in [true, false] {
+			for (index, scope) in propertiesToGenerate.enumerated()
+				where (scope.onlyIfAvailableAliasFulfillingProperty != nil) == considersAliases
+				&& !scope.onlyIfAvailableUnwrappedReceivedProperties.isEmpty
 			{
-				siblingDependencies[index].insert(sibling.index)
+				for sibling in siblings
+					where scope.onlyIfAvailableUnwrappedReceivedProperties.contains(sibling.property.asUnwrappedProperty)
+					&& !dependsOn(index, from: sibling.index)
+				{
+					siblingDependencies[index].insert(sibling.index)
+				}
 			}
 		}
 
@@ -1097,9 +1098,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var flatReceivedProperties = [Property]()
 		var onlyIfAvailableSafeDIParameterEntries = [(label: String, typeSource: String)]()
 		for receivedProperty in receivedProperties.sorted() {
+			// A forwarded `x: X` fulfills an `x: X?` too.
 			guard !treePropertyLabels.contains(receivedProperty.label),
 			      !forwardedPropertySet.contains(receivedProperty), !receivedProperty.typeDescription.isOptional
-			      || !receivedNonOptionalProperties.contains(receivedProperty.asUnwrappedProperty)
+			      || (!receivedNonOptionalProperties.contains(receivedProperty.asUnwrappedProperty) && !forwardedPropertySet.contains(receivedProperty.asUnwrappedProperty))
 			else { continue }
 			// Optional, defaulting to `nil`, only when every receiver — directly or
 			// through an alias, whose fulfilling property is non-optional — receives it
