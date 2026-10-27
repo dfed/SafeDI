@@ -134,8 +134,8 @@ let package = Package(
 		),
 		.binaryTarget(
 			name: "SafeDIToolBinary",
-			url: "https://github.com/dfed/SafeDI/releases/download/2.1.0/SafeDITool.artifactbundle.zip",
-			checksum: "c3f25aa6b8f2feaf40d695f03c9eafdb79e793888edb751e87ff710dd70fa50d",
+			url: "https://github.com/dfed/SafeDI/releases/download/2.1.1-rc-1/SafeDITool.artifactbundle.zip",
+			checksum: "fbf8ffb40734248d36b47ea767a7e371b196f57f0f159b4fb143801e1037eb46",
 		),
 		.executableTarget(
 			name: "SafeDITool",
