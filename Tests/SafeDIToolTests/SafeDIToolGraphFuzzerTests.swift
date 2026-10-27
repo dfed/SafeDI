@@ -86,7 +86,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	func finding_isFailure_whenKnownIssueSeedFailsAnotherWay() {
-		let knownIssue = Self.knownIssues[0]
+		let knownIssue = Self.compilerErrorKnownIssue
 		let failure = GraphFuzzerFailure(seed: knownIssue.seeds[0], kind: .runsDiffer, details: "First run: …")
 
 		let finding = GraphFuzzerFinding(failure: failure, knownIssue: knownIssue)
@@ -97,7 +97,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	func finding_isFailure_whenKnownIssueSeedReportsAnotherCompilerError() {
-		let knownIssue = Self.knownIssues[0]
+		let knownIssue = Self.compilerErrorKnownIssue
 		let failure = GraphFuzzerFailure(
 			seed: knownIssue.seeds[0],
 			kind: .generatedCodeDoesNotCompile,
@@ -112,7 +112,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	func finding_isKnownIssue_whenKnownIssueSeedFailsAsDocumented() {
-		let knownIssue = Self.knownIssues[2]
+		let knownIssue = Self.compilerErrorKnownIssue
 		let failure = GraphFuzzerFailure(
 			seed: knownIssue.seeds[0],
 			kind: .generatedCodeDoesNotCompile,
@@ -127,7 +127,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	func finding_isStaleKnownIssue_whenKnownIssueSeedNoLongerFails() {
-		let knownIssue = Self.knownIssues[0]
+		let knownIssue = Self.compilerErrorKnownIssue
 
 		let finding = GraphFuzzerFinding(failure: nil, knownIssue: knownIssue)
 
@@ -137,7 +137,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	func finding_isKnownIssue_whenKnownIssueSeedCrashesCompilerInGeneratedMock() {
-		let knownIssue = Self.knownIssues[4]
+		let knownIssue = Self.compilerCrashKnownIssue
 		let failure = GraphFuzzerFailure(
 			seed: knownIssue.seeds[0],
 			kind: .compilerCrashedOnGeneratedCode,
@@ -149,7 +149,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	func finding_isFailure_whenKnownIssueSeedCrashesCompilerInShapeThatDoesNotCrash() {
-		let knownIssue = Self.knownIssues[0]
+		let knownIssue = Self.compilerErrorKnownIssue
 		let failure = GraphFuzzerFailure(
 			seed: knownIssue.seeds[0],
 			kind: .compilerCrashedOnGeneratedCode,
@@ -291,10 +291,22 @@ struct SafeDIToolGraphFuzzerTests {
 			knownIssue.seeds.map { ($0, knownIssue) }
 		})
 
-		// Pin the whole corpus the long run covers, which the ordinary suite's hash covers only a sample of.
-		let corpusFixtureHash = Self.fixtureHash(forSeeds: (0..<Self.scheduledSeedCount).map(UInt64.init))
-		if corpusFixtureHash != Self.scheduledCorpusFixtureHash {
-			reportProblem("The generator's graphs for seeds 0..<\(Self.scheduledSeedCount) changed (fixture hash \(Self.hexadecimal(corpusFixtureHash)), pinned \(Self.hexadecimal(Self.scheduledCorpusFixtureHash))). Re-derive the known issues, smoke seeds, and pinned values.")
+		// Pin the whole corpus the long run covers, which the ordinary suite's hash covers only a sample of, and check
+		// that no graph uses a label beginning with `__safeDI_`, which the generated builder functions use.
+		var corpusFixtureHash = GraphFuzzerHash()
+		for seed in 0..<UInt64(Self.scheduledSeedCount) {
+			let fixture = GraphFuzzerGenerator.fixture(forSeed: seed)
+			corpusFixtureHash.combine(fixture.description)
+			let reservedLabels = fixture.swiftFileContent.flatMap(GraphFuzzerSourceLine.lines(of:)).compactMap { line -> String? in
+				guard case let .property(_, label, _) = line, label.hasPrefix("__safeDI_") else { return nil }
+				return label
+			}
+			if !reservedLabels.isEmpty {
+				reportProblem("Seed \(seed)'s graph uses \(reservedLabels), which begin with `__safeDI_`, the prefix of generated builder functions.")
+			}
+		}
+		if corpusFixtureHash.value != Self.scheduledCorpusFixtureHash {
+			reportProblem("The generator's graphs for seeds 0..<\(Self.scheduledSeedCount) changed (fixture hash \(Self.hexadecimal(corpusFixtureHash.value)), pinned \(Self.hexadecimal(Self.scheduledCorpusFixtureHash))). Re-derive the known issues, smoke seeds, and pinned values.")
 		}
 
 		var graphCount = 0
@@ -359,7 +371,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `swiftc` invocation when nothing fails.
 	static let smokeSeeds: [UInt64] = [5, 6, 330, 426]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xA19C5536163B6FBA
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x9194_EE53_C9F6_1C98
 
 	/// The seeds `graph-fuzzer.yml` runs before every release and weekly, `0..<scheduledSeedCount`, which
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=scheduled` selects. `knownIssues` lists every one that fails.
@@ -368,39 +380,30 @@ struct SafeDIToolGraphFuzzerTests {
 	static let scheduledCorpusFixtureHash: UInt64 = 0x812957047246024D
 
 	/// How many of the scheduled seeds' graphs the tool accepts, and a hash of which ones.
-	static let scheduledAcceptedSeedCount = 2_817
-	static let scheduledAcceptedSeedsHash: UInt64 = 0x16D5D124B19176E9
+	static let scheduledAcceptedSeedCount = 2814
+	static let scheduledAcceptedSeedsHash: UInt64 = 0x2893_1406_4BAB_E7C2
 
 	/// Seeds in `0..<scheduledSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
 	static let knownIssues: [GraphFuzzerKnownIssue] = [
 		GraphFuzzerKnownIssue(
-			reason: "Two types instantiate instantiators of different types under one label in a lazy cycle, and the generated builder closure for one is passed where the other is expected",
-			signatures: [.compilerError(containing: "cannot convert value"), .compilerError(containing: "argument passed to call that takes no arguments")],
-			seeds: [9, 321, 1_075, 1_334, 1_567, 1_599, 1_627, 1_681, 2_026, 2_101, 2_147, 2_903, 3_309, 3_741, 4_571, 4_652, 4_795],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "A mock passes an onlyIfAvailable receive the value of a property in the mock's tree that has the same label and a different type",
-			signatures: [.compilerError(containing: "cannot convert value")],
-			seeds: [1_225, 1_877, 2_016, 2_810, 2_896, 3_128, 3_254, 3_403, 3_514, 3_638, 3_692, 4_330],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "A mock declares one label twice for onlyIfAvailable receives of that label with different types",
+			reason: "A mock root's own onlyIfAvailable receive and a dependency the mock root promotes and builds share a label with different types, and the mock binds both under that label",
 			signatures: [.compilerError(containing: "invalid redeclaration")],
-			seeds: [84, 96, 768, 3_952, 4_696],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "A mock reads a label before declaring it when an onlyIfAvailable receive of that label has a different type than a required receive of it",
-			signatures: [.compilerError(containing: "before its declaration")],
-			seeds: [2_306, 2_626],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "A mock root requires an instantiator of its own type through an alias, or a promoted dependency's subtree requires the mock root's alias of that dependency, and the mock captures the closure before declaring it",
-			// Swift 6.2 crashes on this generated mock, in its SendNonSendable SIL pass, instead of diagnosing it.
-			signatures: [.compilerError(containing: "before it is declared"), .compilerCrashInGeneratedMock],
-			seeds: [705, 1_062, 3_004],
+			seeds: [2810],
 		),
 	]
+
+	/// Known issues for the tests of `GraphFuzzerFinding`, which must not depend on what `knownIssues` lists today.
+	private static let compilerErrorKnownIssue = GraphFuzzerKnownIssue(
+		reason: "A shape whose generated code redeclares a label",
+		signatures: [.compilerError(containing: "invalid redeclaration")],
+		seeds: [84],
+	)
+	private static let compilerCrashKnownIssue = GraphFuzzerKnownIssue(
+		reason: "A shape whose generated mock crashes the compiler, or captures a closure before declaring it",
+		signatures: [.compilerError(containing: "before it is declared"), .compilerCrashInGeneratedMock],
+		seeds: [705],
+	)
 
 	private static let longRunBatchSize = 20
 
