@@ -2187,9 +2187,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// default in the eraser, and wrap the override when it comes from a
 		/// configuration struct (whose builder returns the concrete type).
 		///
-		/// The unwrapped override is bound to `safeDIBuilder` unless an argument
-		/// is a dependency with that label, in which case underscores are
-		/// appended so the binding does not shadow the argument.
+		/// The unwrapped override is bound to `safeDIBuilder`, which shadows no
+		/// argument: each argument is `nil`, an override path, an extracted local
+		/// beginning with `__safeDI_`, a dependency's label, or a name derived from
+		/// one with a suffix, and the `@Instantiable` macro rejects a dependency
+		/// labeled `safeDIBuilder` (`ReservedName.configurationBuilderProperty`).
 		func constructionExpression(
 			overrideExpression: String?,
 			arguments: [String],
@@ -2204,10 +2206,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			guard let overrideExpression else {
 				return defaultConstruction
 			}
-			var overrideName = ReservedName.configurationBuilderPropertyName
-			while arguments.contains(overrideName) {
-				overrideName += "_"
-			}
+			let overrideName = ReservedName.configurationBuilderPropertyName
 			let overrideCall = "\(overrideName)(\(arguments.joined(separator: ", ")))"
 			let overrideConstruction = if erasedToConcreteExistential, needsConfigurationStruct {
 				"\(concreteExistentialType.asSource)(\(overrideCall))"
