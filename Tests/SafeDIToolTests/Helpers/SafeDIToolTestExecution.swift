@@ -173,7 +173,7 @@ func executeSafeDIToolTest(
 			try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 			try await performScan(
 				inputSourcesFile: swiftFileCSV.relativePath,
-				projectRoot: try #require(reportedFixtureDirectoryPath),
+				projectFilePaths: try ProjectFilePaths(projectRoot: #require(reportedFixtureDirectoryPath)),
 				outputDirectory: outputDirectory.path,
 				manifestFile: manifestFile.relativePath,
 				mockScopedFiles: compilerSwiftFilePaths,
@@ -200,7 +200,7 @@ func executeSafeDIToolTest(
 
 			try await performScan(
 				inputSourcesFile: scanCSV.relativePath,
-				projectRoot: projectRoot.path,
+				projectFilePaths: ProjectFilePaths(projectRoot: projectRoot.path),
 				outputDirectory: outputDirectory.path,
 				manifestFile: manifestFile.relativePath,
 				mockScopedFiles: swiftFiles.map(\.relativePath),

@@ -43,7 +43,7 @@ struct Scan: AsyncParsableCommand {
 	func run() async throws {
 		try await performScan(
 			inputSourcesFile: inputSourcesFile,
-			projectRoot: projectRoot,
+			projectFilePaths: ProjectFilePaths(projectRoot: projectRoot),
 			outputDirectory: outputDirectory,
 			manifestFile: manifestFile,
 			mockScopedFiles: mockScopedFiles,
@@ -58,51 +58,45 @@ struct Scan: AsyncParsableCommand {
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func performScan(
 	inputSourcesFile: String,
-	projectRoot: String,
+	projectFilePaths: ProjectFilePaths,
 	outputDirectory: String,
 	manifestFile: String,
 	mockScopedFiles: [String] = [],
 	activeCompilationConditions: Set<String> = [],
 ) async throws {
-	let projectRootURL = projectRoot.asFileURL
 	let outputDirectoryURL = outputDirectory.asFileURL
 
 	// Read CSV and resolve file paths relative to project root.
 	let inputFilePaths = try String(contentsOfFile: inputSourcesFile, encoding: .utf8)
 		.parsedPathListCSV()
 
-	let directoryBaseURL = projectRootURL.appendingPathComponent("", isDirectory: true)
-	let projectRootRelativePath = RelativePathBase(projectRootURL)
-
-	let allSwiftFiles = inputFilePaths.map {
-		URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL
-	}
-	let allFilePaths = Set(allSwiftFiles.map(\.relativePath))
+	// Each input's normalized path, which names it in the parse and in every comparison.
+	let allFilePaths = Set(inputFilePaths.map(projectFilePaths.normalizedPath(of:)))
 
 	// Each input's modification times, recorded before the input is read so that an edit made
 	// while scan runs shows in `generate`'s comparison. Keyed by absolute path, so `generate`'s
-	// freshness check works regardless of its working directory. The input URLs are already
-	// standardized, so their paths are absolute without resolving every input again.
+	// freshness check works regardless of its working directory.
 	var scannedInputStamps = [String: FileModificationStamp]()
-	for filePath in allSwiftFiles.map(\.path) {
-		scannedInputStamps[filePath] = FileModificationStamp(ofFileAtPath: filePath)
+	for filePath in allFilePaths {
+		scannedInputStamps[filePath.path] = FileModificationStamp(ofFileAtPath: filePath.path)
 	}
 
 	// Determine which files are scoped for mock scanning.
-	let mockScopedFilePaths: Set<String> = if mockScopedFiles.isEmpty {
+	let mockScopedFilePaths: Set<NormalizedFilePath> = if mockScopedFiles.isEmpty {
 		allFilePaths
 	} else {
-		Set(mockScopedFiles.map {
-			URL(fileURLWithPath: $0, relativeTo: directoryBaseURL).standardizedFileURL.relativePath
-		})
+		Set(mockScopedFiles.map(projectFilePaths.normalizedPath(of:)))
 	}
+
+	// Each file is parsed under its normalized path.
+	let mockScopedFileNames = Set(mockScopedFilePaths.map(\.path))
 
 	// Parse all files once to find roots, mocks, and configurations. Only the
 	// mock-scoped files can declare this module's configuration, which decides
 	// how every file's `#if` blocks are evaluated, so they are searched for it first.
 	let (parsedModule, fileScans) = try await parseModule(
-		filePaths: allFilePaths,
-		configurationFilePaths: mockScopedFilePaths,
+		filePaths: Set(allFilePaths.map(\.path)),
+		configurationFilePaths: mockScopedFileNames,
 		activeCompilationConditions: activeCompilationConditions,
 	)
 	let evaluator = parsedModule.conditionalCompilationEvaluator
@@ -114,7 +108,7 @@ func performScan(
 	// handed other conditions than this scan, so outputs are planned for the declarations in every
 	// clause of every `#if` block: `generate` writes a file without code for one that is inactive.
 	// Only the module's own files decide its mocks and configuration.
-	let mockScopedFileScans = fileScans.filter { mockScopedFilePaths.contains($0.path) }
+	let mockScopedFileScans = fileScans.filter { mockScopedFileNames.contains($0.path) }
 	let moduleOutputFileDeclarations = mockScopedFileScans.reduce(into: OutputFileDeclarations()) { moduleOutputFileDeclarations, fileScan in
 		moduleOutputFileDeclarations.formUnion(fileScan.outputFileDeclarations)
 	}
@@ -125,65 +119,60 @@ func performScan(
 	var additionalFileScans = [CachedFileScan]()
 	var plannedOnlyAdditionalFileScans = [FileScan]()
 	if !moduleOutputFileDeclarations.additionalDirectoriesToInclude.isEmpty {
-		func absolutePaths(_ filePaths: Set<String>) -> [String] {
-			filePaths.sorted().map { filePath in
-				URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL.path
-			}
-		}
-		// The directories the active configuration lists, which `generate` reads too.
+		// The directories the active configuration lists, which `generate` reads too. Files found relative to
+		// the working directory compare with the inputs only once spelled as the project spells them.
 		let configuredDirectories = configuration?.additionalDirectoriesToInclude ?? []
-		let configuredAdditionalFiles = try await findSwiftFiles(inDirectories: configuredDirectories)
+		let configuredAdditionalFiles = try await Set(findSwiftFiles(inDirectories: configuredDirectories).map(projectFilePaths.normalizedPath(of:)))
 		// Files only a configuration in an inactive clause reaches, which can declare roots `generate` finds
 		// when other conditions select that configuration.
-		let plannedOnlyAdditionalFiles = try await findSwiftFiles(
+		let plannedOnlyAdditionalFiles = try await Set(findSwiftFiles(
 			inDirectories: moduleOutputFileDeclarations.additionalDirectoriesToInclude.filter { !configuredDirectories.contains($0) },
-		).subtracting(configuredAdditionalFiles)
+		).map(projectFilePaths.normalizedPath(of:))).subtracting(configuredAdditionalFiles)
 
-		// Record the additional files for the plugin to use as build inputs.
-		additionalInputFiles = absolutePaths(configuredAdditionalFiles.union(plannedOnlyAdditionalFiles))
-		configuredAdditionalInputFiles = absolutePaths(configuredAdditionalFiles)
-		for filePath in additionalInputFiles where scannedInputStamps[filePath] == nil {
-			scannedInputStamps[filePath] = FileModificationStamp(ofFileAtPath: filePath)
+		// Record the additional files for the plugin to declare as build inputs.
+		additionalInputFiles = configuredAdditionalFiles.union(plannedOnlyAdditionalFiles).sorted().map(\.path)
+		configuredAdditionalInputFiles = configuredAdditionalFiles.sorted().map(\.path)
+		for filePath in configuredAdditionalFiles.union(plannedOnlyAdditionalFiles) where scannedInputStamps[filePath.path] == nil {
+			scannedInputStamps[filePath.path] = FileModificationStamp(ofFileAtPath: filePath.path)
 		}
 
-		// The input files' paths are already absolute and standardized.
 		additionalFileScans = try await parseAdditionalDirectoryFiles(
 			configuredAdditionalFiles,
 			excludingInputFilesAt: allFilePaths,
-			namedRelativeTo: projectRootRelativePath,
+			namedBy: projectFilePaths,
 			conditionalCompilation: evaluator,
 		)
 		// Parsed only to plan outputs: the module these conditions select does not include them.
 		plannedOnlyAdditionalFileScans = try await parseAdditionalDirectoryFiles(
 			plannedOnlyAdditionalFiles,
 			excludingInputFilesAt: allFilePaths,
-			namedRelativeTo: projectRootRelativePath,
+			namedBy: projectFilePaths,
 			conditionalCompilation: evaluator,
 		).map(\.fileScan)
 	}
 
-	/// The standardized URL of each file `fileScans` names, once each, sorted by path relative to the project root.
-	func sortedUniqueFileURLs(_ fileScans: [FileScan]) -> [URL] {
-		// Each relative path is computed once rather than in every comparison.
-		var fileURLsByRelativePath = [String: URL]()
+	/// The normalized path of each file `fileScans` names, once each, sorted by its name in the manifest.
+	func sortedUniqueFilePaths(_ fileScans: [FileScan]) -> [NormalizedFilePath] {
+		// Each manifest name is computed once rather than in every comparison.
+		var filePathsByManifestPath = [String: NormalizedFilePath]()
 		for fileScan in fileScans {
-			let fileURL = URL(fileURLWithPath: fileScan.path, relativeTo: directoryBaseURL).standardizedFileURL
-			fileURLsByRelativePath[projectRootRelativePath.relativePath(forStandardizedPath: fileURL.path)] = fileURL
+			let filePath = projectFilePaths.normalizedPath(of: fileScan.path)
+			filePathsByManifestPath[projectFilePaths.manifestPath(of: filePath)] = filePath
 		}
-		return fileURLsByRelativePath
+		return filePathsByManifestPath
 			.sorted { $0.key < $1.key }
 			.map(\.value)
 	}
 
 	// Collect root files and compute output file names.
-	let uniqueRootFileURLs = sortedUniqueFileURLs(
+	let uniqueRootFilePaths = sortedUniqueFilePaths(
 		(fileScans + additionalFileScans.map(\.fileScan) + plannedOnlyAdditionalFileScans).filter(\.outputFileDeclarations.declaresRoot),
 	)
-	let rootOutputNames = outputFileNames(for: uniqueRootFileURLs, relativeTo: projectRootURL)
+	let rootOutputNames = outputFileNames(for: uniqueRootFilePaths, relativeTo: projectFilePaths.normalizedProjectRoot)
 
 	// Collect mock files (only from scoped files) and compute output file names.
-	let uniqueMockFileURLs = sortedUniqueFileURLs(mockScopedFileScans.filter(\.outputFileDeclarations.declaresMockGeneratingType))
-	let mockOutputNames = mockOutputFileNames(for: uniqueMockFileURLs, relativeTo: projectRootURL)
+	let uniqueMockFilePaths = sortedUniqueFilePaths(mockScopedFileScans.filter(\.outputFileDeclarations.declaresMockGeneratingType))
+	let mockOutputNames = mockOutputFileNames(for: uniqueMockFilePaths, relativeTo: projectFilePaths.normalizedProjectRoot)
 
 	// Extract additional mocks to generate from every configuration, those the active configuration
 	// lists first and in its order.
@@ -202,12 +191,12 @@ func performScan(
 	}
 
 	// Compute configuration file paths (relative to project root, matching Generate's expectations).
-	let configurationFilePaths = sortedUniqueFileURLs(mockScopedFileScans.filter(\.outputFileDeclarations.declaresConfiguration)).map { url in
-		projectRootRelativePath.relativePath(forStandardizedPath: url.path)
+	let configurationFilePaths = sortedUniqueFilePaths(mockScopedFileScans.filter(\.outputFileDeclarations.declaresConfiguration)).map { filePath in
+		projectFilePaths.manifestPath(of: filePath)
 	}
 
 	// Determine mock configuration output file path.
-	let hasMockEntries = !uniqueMockFileURLs.isEmpty || !additionalMockEntries.isEmpty
+	let hasMockEntries = !uniqueMockFilePaths.isEmpty || !additionalMockEntries.isEmpty
 	let mockConfigurationOutputFilePath: String? = if hasMockEntries {
 		outputDirectoryURL
 			.appendingPathComponent("SafeDIMockConfiguration.swift")
@@ -218,17 +207,17 @@ func performScan(
 
 	// Build and write the manifest.
 	let manifest = SafeDIToolManifest(
-		dependencyTreeGeneration: zip(uniqueRootFileURLs, rootOutputNames).map { inputURL, outputFileName in
+		dependencyTreeGeneration: zip(uniqueRootFilePaths, rootOutputNames).map { inputFilePath, outputFileName in
 			.init(
-				inputFilePath: projectRootRelativePath.relativePath(forStandardizedPath: inputURL.path),
+				inputFilePath: projectFilePaths.manifestPath(of: inputFilePath),
 				outputFilePath: outputDirectoryURL
 					.appendingPathComponent(outputFileName)
 					.path,
 			)
 		},
-		mockGeneration: zip(uniqueMockFileURLs, mockOutputNames).map { inputURL, outputFileName in
+		mockGeneration: zip(uniqueMockFilePaths, mockOutputNames).map { inputFilePath, outputFileName in
 			.init(
-				inputFilePath: projectRootRelativePath.relativePath(forStandardizedPath: inputURL.path),
+				inputFilePath: projectFilePaths.manifestPath(of: inputFilePath),
 				outputFilePath: outputDirectoryURL
 					.appendingPathComponent(outputFileName)
 					.path,
@@ -239,10 +228,8 @@ func performScan(
 		additionalMocksToGenerate: additionalMocksToGenerate,
 		additionalInputFiles: additionalInputFiles,
 		activeCompilationConditions: activeCompilationConditions.sorted(),
-		mockScopedFilePaths: mockScopedFilePaths.map { filePath in
-			projectRootRelativePath.relativePath(forStandardizedPath: URL(fileURLWithPath: filePath, relativeTo: directoryBaseURL).standardizedFileURL.path)
-		}.sorted(),
-		projectRoot: projectRootURL.path,
+		mockScopedFilePaths: mockScopedFilePaths.map(projectFilePaths.manifestPath(of:)).sorted(),
+		projectRoot: projectFilePaths.reportedProjectRoot.asFileURL.path,
 	)
 
 	let encoder = JSONEncoder()
@@ -255,22 +242,20 @@ func performScan(
 	// manifest's `inputFilePath` (also project-relative) and what Generate
 	// would compute when parsing fresh from the same CSV.
 	func normalized(_ fileScan: FileScan) -> FileScan {
-		fileScan.relocated(to: projectRootRelativePath.relativePath(
-			forStandardizedPath: URL(fileURLWithPath: fileScan.path, relativeTo: directoryBaseURL).standardizedFileURL.path,
-		))
+		fileScan.relocated(to: projectFilePaths.manifestPath(of: projectFilePaths.normalizedPath(of: fileScan.path)))
 	}
 	func cached(_ fileScan: FileScan) -> CachedFileScan {
 		CachedFileScan(scannedPath: fileScan.path, fileScan: normalized(fileScan))
 	}
 	let additionalDirectories = configuration?.additionalDirectoriesToInclude.map { directory in
-		URL(fileURLWithPath: directory, relativeTo: directoryBaseURL).standardizedFileURL.path
+		projectFilePaths.normalizedPath(of: directory).path
 	}.sorted() ?? []
 	let cached = CachedScannedModuleInfo(
 		moduleInfo: ModuleInfo(fileScans.filter { !$0.consultsCompilationConditions }.map(normalized)),
 		conditionSensitiveFileScans: fileScans.filter(\.consultsCompilationConditions).map(cached),
 		additionalModuleInfo: ModuleInfo(additionalFileScans.map(\.fileScan).filter { !$0.consultsCompilationConditions }),
 		additionalConditionSensitiveFileScans: additionalFileScans.filter(\.fileScan.consultsCompilationConditions),
-		projectRoot: projectRootURL.path,
+		projectRoot: projectFilePaths.reportedProjectRoot.asFileURL.path,
 		// Every file scan read for this module — CSV inputs plus any files reached through
 		// `#SafeDIConfiguration.additionalDirectoriesToInclude` — so edits to either invalidate the cache.
 		scannedInputs: scannedInputStamps
@@ -296,72 +281,48 @@ func performScan(
 /// `generate` names them, and cites them in the locations it records, as scan's manifest and cache do.
 ///
 /// - Parameters:
-///   - filePaths: The files `findSwiftFiles(inDirectories:)` found, whose paths are absolute and standardized.
-///   - inputFilePaths: The absolute, standardized paths of the module's input files. A found file that is also an
-///     input is parsed only as an input: parsing it again would declare its types twice.
-///   - projectRoot: The directory a manifest names files relative to, or `nil` to name each file by its absolute path.
+///   - filePaths: The files found in the directories.
+///   - inputFilePaths: The module's input files. A found file that is also an input is parsed only as an input:
+///     parsing it again would declare its types twice.
+///   - projectFilePaths: The paths of the project a manifest names files in, or `nil` to name each file by its
+///     normalized path.
 ///   - evaluator: The evaluator the module's input files were parsed with.
-/// - Returns: What each found file that is not an input contributes, parsed under its absolute path, so the
+/// - Returns: What each found file that is not an input contributes, parsed under its normalized path, so the
 ///   locations it records name the file wherever the tool runs, and named as the manifest names files.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func parseAdditionalDirectoryFiles(
-	_ filePaths: Set<String>,
-	excludingInputFilesAt inputFilePaths: Set<String>,
-	namedRelativeTo projectRoot: RelativePathBase?,
+	_ filePaths: Set<NormalizedFilePath>,
+	excludingInputFilesAt inputFilePaths: Set<NormalizedFilePath>,
+	namedBy projectFilePaths: ProjectFilePaths?,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
 ) async throws -> [CachedFileScan] {
-	try await parseSwiftFiles(filePaths.subtracting(inputFilePaths), conditionalCompilation: evaluator).map { fileScan in
-		CachedFileScan(
-			scannedPath: fileScan.path,
-			fileScan: projectRoot.map { fileScan.relocated(to: $0.relativePath(forStandardizedPath: fileScan.path)) } ?? fileScan,
-		)
+	let filePathsToParse = filePaths.subtracting(inputFilePaths)
+	let fileScansByName = try await Dictionary(
+		uniqueKeysWithValues: parseSwiftFiles(Set(filePathsToParse.map(\.path)), conditionalCompilation: evaluator).map { ($0.path, $0) },
+	)
+	// A file that does not mention SafeDI is not walked, so it contributes nothing.
+	return filePathsToParse.compactMap { filePath in
+		fileScansByName[filePath.path].map { fileScan in
+			CachedFileScan(
+				scannedPath: fileScan.path,
+				fileScan: projectFilePaths.map { fileScan.relocated(to: $0.manifestPath(of: filePath)) } ?? fileScan,
+			)
+		}
 	}
 }
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 extension SafeDIToolManifest {
-	/// The members of `inputFilePaths` that are this module's configuration files.
-	/// Input paths are resolved the way scan resolved them before matching. Resolving a path is
-	/// far costlier than comparing its suffix, and the inputs are every file of every module the
-	/// target depends on, so only an input that ends in a configuration file's name is resolved;
-	/// resolving a path never changes its file name.
-	func configurationFilePaths(among inputFilePaths: Set<String>) -> Set<String> {
+	/// The members of `inputFilePaths` that are this module's configuration files, matched by how scan named them:
+	/// relative to `projectFilePaths`' project root, or, for a manifest without a project root, as written.
+	/// Normalizing a path is far costlier than comparing its suffix, and the inputs are every file of every module
+	/// the target depends on, so only an input that ends in a configuration file's name is normalized; normalizing
+	/// a path never changes its file name.
+	func configurationFilePaths(among inputFilePaths: Set<String>, in projectFilePaths: ProjectFilePaths?) -> Set<String> {
 		let configurationFileNames = configurationFilePaths.map { ($0 as NSString).lastPathComponent }
 		return inputFilePaths.filter { inputFilePath in
 			configurationFileNames.contains(where: inputFilePath.hasSuffix)
-				&& configurationFilePaths.contains(resolvedPath(for: inputFilePath))
-		}
-	}
-
-	/// `path` as scan would have recorded it: relative to the manifest's project root when the
-	/// path lies under it, otherwise absolute. A manifest without a project root takes paths as written.
-	func resolvedPath(for path: String) -> String {
-		guard let projectRoot else { return path }
-		let projectRootURL = projectRoot.asFileURL
-		let directoryBaseURL = projectRootURL.appendingPathComponent("", isDirectory: true)
-		return relativePath(
-			for: URL(fileURLWithPath: path, relativeTo: directoryBaseURL).standardizedFileURL,
-			relativeTo: projectRootURL,
-		)
-	}
-
-	/// The path the compiler is handed for the file at `path`, as a build tool plugin reports it, given the
-	/// manifest's `projectRoot`.
-	///
-	/// A build tool plugin writes each input path relative to a project root: the directory it hands `scan`,
-	/// written as the build system reported it, or, when the plugin could not run `scan`, the working
-	/// directory `generate` runs in. The build system hands the compiler the absolute path it reported to
-	/// the plugin, so joining the two restores that path, except when the working directory spells the root
-	/// differently; `generate` then also holds the plugin’s spelling, from `--mock-scoped-files`, and leaves
-	/// out a directive it cannot spell for certain. Standardizing the joined path would not help: on Apple
-	/// platforms, Foundation’s standardization removes a leading `/private` from paths such as
-	/// `/private/tmp/…`, which the compiler keeps.
-	func compilerFilePath(for path: String, underProjectRoot projectRoot: String) -> String {
-		let projectRootRelativePath = resolvedPath(for: path)
-		return if (projectRootRelativePath as NSString).isAbsolutePath {
-			projectRootRelativePath
-		} else {
-			(projectRoot as NSString).appendingPathComponent(projectRootRelativePath)
+				&& configurationFilePaths.contains(projectFilePaths.map { $0.manifestPath(of: $0.normalizedPath(of: inputFilePath)) } ?? inputFilePath)
 		}
 	}
 }

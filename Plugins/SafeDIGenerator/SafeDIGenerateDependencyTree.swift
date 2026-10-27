@@ -198,6 +198,25 @@ let buildSettingCompilationConditionArguments = [
 	"--build-setting-other-swift-flags=[${OTHER_SWIFT_FLAGS}]",
 ]
 
+/// Writes `swiftFiles` to `inputSourcesFile` as SafeDITool reads its input CSV, each relative to `base` when it lies
+/// inside it. `NormalizedFilePath` comes from SafeDICore's `FilePathSpelling.swift`, which this plugin compiles
+/// through a symbolic link.
+func writeInputSwiftFilesCSV(
+	_ swiftFiles: [URL],
+	relativeTo base: URL,
+	to inputSourcesFile: URL,
+) throws {
+	let normalizedBase = NormalizedFilePath(base.path(percentEncoded: false))
+	try swiftFiles
+		.map { NormalizedFilePath($0.path(percentEncoded: false)).path(relativeTo: normalizedBase) }
+		.joined(separator: ",")
+		.write(
+			to: inputSourcesFile,
+			atomically: true,
+			encoding: .utf8,
+		)
+}
+
 extension Target {
 	var sourceModuleRecursiveDependencies: [SwiftSourceModuleTarget] {
 		recursiveTargetDependencies.compactMap { target in

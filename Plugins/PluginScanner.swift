@@ -35,6 +35,12 @@ enum PluginScanner {
 		var additionalInputFiles: [URL]
 	}
 
+	/// A Swift file this scan reads, with its normalized path.
+	struct ScannedFile {
+		let url: URL
+		let path: NormalizedFilePath
+	}
+
 	static func scan(
 		swiftFiles: [URL],
 		mockScopedSwiftFiles: [URL],
@@ -80,25 +86,25 @@ enum PluginScanner {
 		}
 
 		// Include additional directory files when scanning for roots.
-		let allSwiftFiles = swiftFiles + additionalInputFiles
-		let sortedSwiftFiles = allSwiftFiles.sorted {
-			relativePath(for: $0, relativeTo: projectRoot) < relativePath(for: $1, relativeTo: projectRoot)
+		let normalizedProjectRoot = NormalizedFilePath(projectRoot.path(percentEncoded: false))
+		/// `fileURLs`, sorted by their paths relative to the project root, as `SafeDITool scan` sorts them.
+		func sortedByRelativePath(_ fileURLs: [URL]) -> [ScannedFile] {
+			fileURLs
+				.map { ScannedFile(url: $0, path: NormalizedFilePath($0.path(percentEncoded: false))) }
+				.sorted { $0.path.path(relativeTo: normalizedProjectRoot) < $1.path.path(relativeTo: normalizedProjectRoot) }
 		}
-		let rootFiles = sortedSwiftFiles.filter { fileContainsRoot(at: $0) }
-		let rootOutputFileNames = outputFileNames(for: rootFiles, relativeTo: projectRoot)
+		let rootFiles = sortedByRelativePath(swiftFiles + additionalInputFiles).filter { fileContainsRoot(at: $0.url) }
+		let rootOutputFileNames = outputFileNames(for: rootFiles.map(\.path), relativeTo: normalizedProjectRoot)
 
-		let sortedMockFiles = mockScopedSwiftFiles.sorted {
-			relativePath(for: $0, relativeTo: projectRoot) < relativePath(for: $1, relativeTo: projectRoot)
-		}
-		let mockFiles = sortedMockFiles.filter { fileContainsGenerateMockTrue(at: $0) }
-		let mockOutputFileNames = outputFileNames(for: mockFiles, relativeTo: projectRoot, suffix: "+SafeDIMock.swift")
+		let mockFiles = sortedByRelativePath(mockScopedSwiftFiles).filter { fileContainsGenerateMockTrue(at: $0.url) }
+		let mockFileOutputFileNames = mockOutputFileNames(for: mockFiles.map(\.path), relativeTo: normalizedProjectRoot)
 
 		let additionalMockOutputFiles = additionalMocksToGenerate.map {
 			outputDirectory.appendingPathComponent("\($0)+SafeDIMock.swift")
 		}
 
 		var outputFiles = rootOutputFileNames.map { outputDirectory.appendingPathComponent($0) }
-			+ mockOutputFileNames.map { outputDirectory.appendingPathComponent($0) }
+			+ mockFileOutputFileNames.map { outputDirectory.appendingPathComponent($0) }
 			+ additionalMockOutputFiles
 
 		let hasMockEntries = !mockFiles.isEmpty || !additionalMocksToGenerate.isEmpty
@@ -137,64 +143,4 @@ enum PluginScanner {
 		return stripped.range(of: #"@Instantiable\s*\((.|\n)*?generateMock\s*:\s*true"#, options: .regularExpression) != nil
 	}
 
-	private static func outputFileNames(
-		for inputURLs: [URL],
-		relativeTo baseURL: URL,
-		suffix: String = "+SafeDI.swift",
-	) -> [String] {
-		struct FileInfo {
-			let baseName: String
-			let parentComponents: [String]
-		}
-
-		let fileInfo = inputURLs.map { inputURL in
-			let relPath = relativePath(for: inputURL, relativeTo: baseURL)
-			let relativeDirectory = (relPath as NSString).deletingLastPathComponent
-			let parentComponents: [String] = if relativeDirectory.isEmpty || relativeDirectory == "." {
-				[]
-			} else {
-				relativeDirectory.split(separator: "/").map(String.init)
-			}
-			return FileInfo(
-				baseName: inputURL.deletingPathExtension().lastPathComponent,
-				parentComponents: parentComponents,
-			)
-		}
-
-		var outputFileNames = Array(repeating: "", count: fileInfo.count)
-		let groups = Dictionary(grouping: Array(fileInfo.enumerated()), by: \.element.baseName)
-
-		for (baseName, entries) in groups {
-			guard entries.count > 1 else {
-				outputFileNames[entries[0].offset] = "\(baseName)\(suffix)"
-				continue
-			}
-
-			var namesByIndex = entries.reduce(into: [Int: String]()) { partialResult, entry in
-				partialResult[entry.offset] = baseName
-			}
-
-			var maxParentDepth = 0
-			for entry in entries {
-				maxParentDepth = max(maxParentDepth, entry.element.parentComponents.count)
-			}
-			if maxParentDepth > 0 {
-				for parentDepth in 1...maxParentDepth where Set(namesByIndex.values).count < entries.count {
-					for entry in entries {
-						let prefix = entry.element.parentComponents
-							.suffix(parentDepth)
-							.joined(separator: "_")
-						namesByIndex[entry.offset] = prefix.isEmpty ? baseName : "\(prefix)_\(baseName)"
-					}
-				}
-			}
-
-			for entry in entries {
-				let name = namesByIndex[entry.offset, default: baseName]
-				outputFileNames[entry.offset] = "\(name)\(suffix)"
-			}
-		}
-
-		return outputFileNames
-	}
 }

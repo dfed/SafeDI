@@ -105,14 +105,18 @@ struct Generate: AsyncParsableCommand {
 		// When --output-directory is provided without --swift-manifest, run an
 		// inline scan to discover roots/mocks and build the manifest automatically.
 		var resolvedSwiftManifest = swiftManifest
+		// How the project spells its files, resolved once per run.
+		var scannedProjectFilePaths: ProjectFilePaths?
 		if resolvedSwiftManifest == nil, let outputDirectory {
 			guard let swiftSourcesFilePath else {
 				throw ValidationError("--output-directory requires 'swift-sources-file-path'.")
 			}
 			let manifestPath = (outputDirectory as NSString).appendingPathComponent("SafeDIManifest.json")
+			let projectFilePaths = ProjectFilePaths(projectRoot: FileManager.default.currentDirectoryPath)
+			scannedProjectFilePaths = projectFilePaths
 			try await performScan(
 				inputSourcesFile: swiftSourcesFilePath,
-				projectRoot: FileManager.default.currentDirectoryPath,
+				projectFilePaths: projectFilePaths,
 				outputDirectory: outputDirectory,
 				manifestFile: manifestPath,
 				mockScopedFiles: mockScopedFiles,
@@ -127,6 +131,8 @@ struct Generate: AsyncParsableCommand {
 			)
 		}
 
+		// A manifest without a project root, which only a hand-written manifest lacks, names files as written.
+		let projectFilePaths = scannedProjectFilePaths ?? manifest?.projectRoot.map(ProjectFilePaths.init(projectRoot:))
 		let inputFilePaths = try await findGenerateSwiftFiles()
 		let suppliedCompilationConditions = buildSettingConditions
 			?? Set(activeCompilationConditions).union(manifest?.activeCompilationConditions ?? [])
@@ -137,6 +143,7 @@ struct Generate: AsyncParsableCommand {
 				inputFilePaths: inputFilePaths,
 				manifestPath: resolvedSwiftManifest,
 				manifest: manifest,
+				projectFilePaths: projectFilePaths,
 				activeCompilationConditions: suppliedCompilationConditions,
 			),
 		)
@@ -164,17 +171,16 @@ struct Generate: AsyncParsableCommand {
 		   let sourceConfiguration,
 		   !sourceConfiguration.additionalDirectoriesToInclude.isEmpty
 		{
-			// Input paths are resolved as scan resolved them: relative to the manifest's project root, or else
-			// to the working directory. Each additional file is named as scan names it in the manifest, so the
-			// manifest lists the roots it declares; without a manifest, files are named as found.
-			let projectRootURL = manifest?.projectRoot?.asFileURL
-			let directoryBaseURL = projectRootURL?.appendingPathComponent("", isDirectory: true)
+			// Paths are compared as scan compared them: inputs relative to the manifest's project root, or else to
+			// the working directory. Each additional file is named as scan names it in the manifest, so the
+			// manifest lists the roots it declares; without a project root, files are named as found.
+			let foundFilePaths = try await findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude)
 			let additionalFileScans = try await parseAdditionalDirectoryFiles(
-				findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude),
+				projectFilePaths.map { projectFilePaths in Set(foundFilePaths.map(projectFilePaths.normalizedPath(of:))) } ?? foundFilePaths,
 				excludingInputFilesAt: Set(inputFilePaths.map { inputFilePath in
-					URL(fileURLWithPath: inputFilePath, relativeTo: directoryBaseURL).standardizedFileURL.path
+					projectFilePaths?.normalizedPath(of: inputFilePath) ?? NormalizedFilePath(inputFilePath)
 				}),
-				namedRelativeTo: projectRootURL.map(RelativePathBase.init),
+				namedBy: projectFilePaths,
 				conditionalCompilation: evaluator,
 			)
 			module = initialModule.including(ModuleInfo(additionalFileScans.map(\.fileScan)))
@@ -267,9 +273,11 @@ struct Generate: AsyncParsableCommand {
 						}
 					}
 				}),
-				compilerFilePaths: compilerFilePaths(manifest: manifest, inputFilePaths: inputFilePaths),
+				compilerFilePaths: compilerFilePaths(manifest: manifest, projectFilePaths: projectFilePaths, inputFilePaths: inputFilePaths),
 				// A plugin's paths relative to its project root, and any other integration's paths as it wrote them.
-				commentFilePath: { [manifest] filePath in manifest?.resolvedPath(for: filePath) ?? filePath },
+				commentFilePath: { [projectFilePaths] filePath in
+					projectFilePaths.map { $0.manifestPath(of: $0.normalizedPath(of: filePath)) } ?? filePath
+				},
 			),
 		)
 		if let moduleInfoOutput {
@@ -338,16 +346,16 @@ struct Generate: AsyncParsableCommand {
 					}
 					if let mockScopedFilePaths = manifest.mockScopedFilePaths {
 						// Paths are compared as scan wrote them, since this parse may name files as the CSV does.
-						// Resolving a path is far costlier than the comparisons, and this runs over every
-						// mock-generating type in every module the target depends on, so a path is resolved
-						// only when it could matter: resolving never changes a file name, and resolving a
-						// path already written as scan writes it returns it unchanged.
+						// Normalizing a path is far costlier than the comparisons, and this runs over every
+						// mock-generating type in every module the target depends on, so a path is normalized
+						// only when it could matter: normalizing never changes a file name, and naming a path
+						// already written as scan writes it returns it unchanged.
 						let mockScopedFilePathSet = Set(mockScopedFilePaths)
 						let mockScopedFileNames = Set(mockScopedFilePaths.map { ($0 as NSString).lastPathComponent })
 						func mockScopedFilePath(resolving sourceFilePath: String) -> String? {
 							guard mockScopedFileNames.contains((sourceFilePath as NSString).lastPathComponent) else { return nil }
-							let resolvedPath = manifest.resolvedPath(for: sourceFilePath)
-							return mockScopedFilePathSet.contains(resolvedPath) ? resolvedPath : nil
+							let manifestPath = projectFilePaths.map { $0.manifestPath(of: $0.normalizedPath(of: sourceFilePath)) } ?? sourceFilePath
+							return mockScopedFilePathSet.contains(manifestPath) ? manifestPath : nil
 						}
 						let manifestMockInputPaths = Set(manifest.mockGeneration.map(\.inputFilePath))
 						for instantiable in module.instantiables where instantiable.generateMock {
@@ -591,7 +599,7 @@ struct Generate: AsyncParsableCommand {
 	}
 
 	private func findGenerateSwiftFiles(additionalDirectories: [String]) async throws -> Set<String> {
-		var swiftFiles = try await findSwiftFiles(inDirectories: additionalDirectories)
+		var swiftFiles = try await Set(findSwiftFiles(inDirectories: additionalDirectories).map(\.path))
 		if let swiftSourcesFilePath {
 			let sourcesFromFile = try String(contentsOfFile: swiftSourcesFilePath, encoding: .utf8)
 				.parsedPathListCSV()
@@ -634,11 +642,13 @@ struct Generate: AsyncParsableCommand {
 	///   - manifest: The manifest `generate` runs with, whose `configurationFilePaths` name the files that can
 	///     declare this module's configuration. In multi-module builds the CSV includes every module's files, so
 	///     several configurations may be present; without a manifest every input file belongs to this module.
+	///   - projectFilePaths: How the manifest's project spells its files, or `nil` without a project root.
 	///   - activeCompilationConditions: The conditions supplied on the command line and through the manifest.
 	private func parsedModule(
 		inputFilePaths: Set<String>,
 		manifestPath: String?,
 		manifest: SafeDIToolManifest?,
+		projectFilePaths: ProjectFilePaths?,
 		activeCompilationConditions: Set<String>,
 	) async throws -> (module: ParsedModule, isFromCache: Bool) {
 		if include.isEmpty,
@@ -649,6 +659,7 @@ struct Generate: AsyncParsableCommand {
 		   	inputFilePaths: inputFilePaths,
 		   	// The cached `ModuleInfo` names files as scan recorded them in the manifest.
 		   	configurationFilePaths: Set(manifest.configurationFilePaths),
+		   	projectFilePaths: projectFilePaths,
 		   	activeCompilationConditions: activeCompilationConditions,
 		   )
 		{
@@ -659,7 +670,7 @@ struct Generate: AsyncParsableCommand {
 					filePaths: inputFilePaths,
 					// A fresh parse names files as the CSV does, so the manifest's configuration
 					// files are matched among the CSV's paths.
-					configurationFilePaths: manifest.map { $0.configurationFilePaths(among: inputFilePaths) } ?? inputFilePaths,
+					configurationFilePaths: manifest.map { $0.configurationFilePaths(among: inputFilePaths, in: projectFilePaths) } ?? inputFilePaths,
 					activeCompilationConditions: activeCompilationConditions,
 				).module,
 				false,
@@ -671,6 +682,7 @@ struct Generate: AsyncParsableCommand {
 		manifestPath: String,
 		inputFilePaths: Set<String>,
 		configurationFilePaths: Set<String>,
+		projectFilePaths: ProjectFilePaths?,
 		activeCompilationConditions: Set<String>,
 	) async throws -> ParsedModule? {
 		let cacheURL = scannedModuleInfoURL(forManifestPath: manifestPath)
@@ -701,8 +713,9 @@ struct Generate: AsyncParsableCommand {
 		// `cached.scannedInputs`.
 		if !cached.additionalDirectories.isEmpty {
 			let currentAdditionalFiles = await (try? findSwiftFiles(inDirectories: cached.additionalDirectories)) ?? []
+			// Spelled as scan spelled the files it found.
 			let currentAdditionalAbsolute = Set(currentAdditionalFiles.map { filePath in
-				URL(fileURLWithPath: filePath).standardizedFileURL.path
+				(projectFilePaths?.normalizedPath(of: filePath) ?? filePath).path
 			})
 			guard currentAdditionalAbsolute == Set(cached.additionalInputAbsolutePaths) else {
 				return nil
@@ -772,10 +785,9 @@ struct Generate: AsyncParsableCommand {
 		guard !staleFileScans.contains(where: \.fileScan.outputFileDeclarations.declaresConfiguration) else {
 			return nil
 		}
-		let projectRootURL = cached.projectRoot.asFileURL.appendingPathComponent("", isDirectory: true)
 		let rescans = try await parseSwiftFiles(
 			readingFilePathsByName: Dictionary(uniqueKeysWithValues: staleFileScans.map { cachedFileScan in
-				(cachedFileScan.scannedPath, URL(fileURLWithPath: cachedFileScan.scannedPath, relativeTo: projectRootURL).standardizedFileURL.path)
+				(cachedFileScan.scannedPath, NormalizedFilePath(cachedFileScan.scannedPath, relativeTo: cached.projectRoot).path)
 			}),
 			conditionalCompilation: evaluator,
 		)
@@ -810,11 +822,12 @@ struct Generate: AsyncParsableCommand {
 	/// then does not know how the compiler spells any path.
 	private func compilerFilePaths(
 		manifest: SafeDIToolManifest?,
+		projectFilePaths: ProjectFilePaths?,
 		inputFilePaths: Set<String>,
 	) -> AliasDeclarationReferences.CompilerFilePaths? {
-		if let manifest, let projectRoot = manifest.projectRoot {
-			guard projectRoot.isResolvedFilePath else { return nil }
-			let compilerFilePath = { manifest.compilerFilePath(for: $0, underProjectRoot: projectRoot) }
+		if let manifest, let projectFilePaths {
+			guard projectFilePaths.reportsResolvedProjectRoot else { return nil }
+			let compilerFilePath = { (filePath: String) in projectFilePaths.buildSystemPath(of: projectFilePaths.normalizedPath(of: filePath)) }
 			if swiftManifest == nil, !mockScopedFiles.isEmpty {
 				return .init(filePath: compilerFilePath, moduleFilePaths: Set(mockScopedFiles), moduleFilePath: { $0 })
 			} else {
