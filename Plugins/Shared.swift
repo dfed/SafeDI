@@ -107,41 +107,6 @@ import PackagePlugin
 	}
 #endif
 
-// MARK: - CSV Writing
-
-func writeInputSwiftFilesCSV(
-	_ swiftFiles: [URL],
-	relativeTo base: URL,
-	to inputSourcesFile: URL,
-) throws {
-	try swiftFiles
-		.map { relativePath(for: $0, relativeTo: base) }
-		.joined(separator: ",")
-		.write(
-			to: inputSourcesFile,
-			atomically: true,
-			encoding: .utf8,
-		)
-}
-
-// MARK: - Relative Path
-
-/// Compute a path string relative to a base directory.
-/// Falls back to the absolute path if the URL is not under the base directory.
-func relativePath(for url: URL, relativeTo base: URL) -> String {
-	let urlPath = url.standardizedFileURL.path
-	let standardizedBasePath = base.standardizedFileURL.path
-	let basePath = standardizedBasePath.hasSuffix("/")
-		? standardizedBasePath
-		: standardizedBasePath + "/"
-
-	if urlPath.hasPrefix(basePath) {
-		return String(urlPath.dropFirst(basePath.count))
-	} else {
-		return urlPath
-	}
-}
-
 // MARK: - Scan Manifest
 
 /// A Codable struct matching the JSON output of `SafeDITool scan`.

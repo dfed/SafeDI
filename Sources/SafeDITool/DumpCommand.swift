@@ -18,22 +18,31 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#if canImport(Darwin)
-	import Darwin
-#elseif canImport(Glibc)
-	import Glibc
-#elseif canImport(Musl)
-	import Musl
-#endif
+import ArgumentParser
+import Foundation
 
-extension String {
-	/// Whether this path is written exactly as `realpath(3)` resolves it: absolute, through no symbolic link, with
-	/// no `.` or `..` component and no repeated or trailing `/`, and with each name in the case the file system
-	/// stores. A path that names no file is not. Foundation's `resolvingSymlinksInPath()` cannot answer this on
-	/// Apple platforms, where it removes the leading `/private` that resolving `/tmp` adds.
-	var isResolvedFilePath: Bool {
-		let resolvedFilePath = realpath(self, nil)
-		defer { free(resolvedFilePath) }
-		return resolvedFilePath.map { String(cString: $0) } == self
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+struct Dump: ParsableCommand {
+	static let configuration = CommandConfiguration(
+		abstract: "Print a `.safedi` module info file or the cache `scan` writes for `generate` as JSON, or explain why SafeDITool cannot read it.",
+	)
+
+	@Argument(help: "The path to a `.safedi` file that `generate --module-info-output` wrote, or to the scan cache that `scan` writes beside its manifest, named after the manifest with the extension `safediScanCache`.") var file: String
+
+	func run() throws {
+		try print(json())
+	}
+
+	/// The file's contents as pretty-printed JSON with sorted keys.
+	func json() throws -> String {
+		let data = try Data(contentsOf: file.asFileURL)
+		let encoder = JSONEncoder()
+		encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+		let json = if BinaryFile.data(data, beginsAs: .moduleInfo) {
+			try encoder.encode(ModuleInfo(moduleInfoData: data))
+		} else {
+			try encoder.encode(CachedScannedModuleInfo(scanCacheData: data))
+		}
+		return String(decoding: json, as: UTF8.self)
 	}
 }

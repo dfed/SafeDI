@@ -63,6 +63,10 @@ struct FileModificationStamp: Codable, Equatable {
 
 	// MARK: Private
 
+	private init(times: [Int64]) {
+		self.times = times
+	}
+
 	/// Seconds and nanoseconds of each modification time recorded, in the order recorded. Kept as one
 	/// flat array so the thousands of stamps a cache holds stay small to write and read.
 	private let times: [Int64]
@@ -74,5 +78,19 @@ struct FileModificationStamp: Codable, Equatable {
 			let modificationTime = information.st_mtim
 		#endif
 		return [Int64(modificationTime.tv_sec), Int64(modificationTime.tv_nsec)]
+	}
+}
+
+extension FileModificationStamp: BinarySchemaMember {
+	static let binaryLayout = [
+		"times",
+	]
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(times: reader.read())
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(times)
 	}
 }
