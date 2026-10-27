@@ -1392,6 +1392,25 @@ public actor DependencyTreeGenerator {
 		directParent: TypeDescription,
 		isReceived: Bool,
 	) throws {
+		if property.propertyType.isConstant || isReceived {
+			throw invalidCycleError(
+				typesInCycle: typesInCycle,
+				property: property,
+				declarationLocation: declarationLocation,
+				directParent: directParent,
+			)
+		}
+		// Fully-lazy cycle (Instantiator entry, not received) — valid, no error.
+	}
+
+	/// The error `throwIfInvalidCycle` throws for a cycle through `property` that is constant or received:
+	/// a constant or partially lazy cycle when `property` is constant, and a received-`Instantiator` cycle otherwise.
+	private func invalidCycleError(
+		typesInCycle: [TypeDescription],
+		property: Property,
+		declarationLocation: Dependency.DeclarationLocation?,
+		directParent: TypeDescription,
+	) -> DependencyTreeGeneratorError {
 		let cycle = DependencyTreeGeneratorError.DependencyCycle(
 			declarationLocation: declarationLocation,
 			members: typesInCycle.map { typeDescription in
@@ -1404,18 +1423,17 @@ public actor DependencyTreeGenerator {
 		if property.propertyType.isConstant {
 			let hasLazyHop = typesInCycle.contains(where: { !$0.propertyType.isConstant })
 			if hasLazyHop {
-				throw DependencyTreeGeneratorError.partiallyLazyDependencyCycleDetected(cycle)
+				return .partiallyLazyDependencyCycleDetected(cycle)
 			} else {
-				throw DependencyTreeGeneratorError.constantDependencyCycleDetected(cycle)
+				return .constantDependencyCycleDetected(cycle)
 			}
-		} else if isReceived {
-			throw DependencyTreeGeneratorError.receivedInstantiatorDependencyCycleDetected(
+		} else {
+			return .receivedInstantiatorDependencyCycleDetected(
 				property: property,
 				directParent: directParent,
 				cycle: cycle,
 			)
 		}
-		// Fully-lazy cycle (Instantiator entry, not received) — valid, no error.
 	}
 
 	/// What a scope's subtree receives from its ancestors.
@@ -2237,12 +2255,12 @@ public actor DependencyTreeGenerator {
 						declarationLocation: receive.declarationLocation,
 					)
 				} else {
-					try throwIfInvalidCycle(
+					// A received cycle is never valid.
+					throw invalidCycleError(
 						typesInCycle: ([receive.property] + instantiationStack[0...beingBuiltIndex]).map(\.typeDescription),
 						property: beingBuiltProperty,
 						declarationLocation: receive.declarationLocation,
 						directParent: scope.instantiable.concreteInstantiable,
-						isReceived: true,
 					)
 				}
 			}
