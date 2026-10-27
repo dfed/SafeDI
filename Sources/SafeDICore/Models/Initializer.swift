@@ -52,7 +52,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 			.map(Argument.init)
 	}
 
-	init(
+	public init(
 		isPublicOrOpen: Bool = true,
 		isOptional: Bool = false,
 		isAsync: Bool = false,
@@ -325,7 +325,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 			defaultValueExpression = node.defaultValue?.value.trimmedDescription
 		}
 
-		init(outerLabel: String? = nil, innerLabel: String, typeDescription: TypeDescription, defaultValueExpression: String? = nil) {
+		public init(outerLabel: String? = nil, innerLabel: String, typeDescription: TypeDescription, defaultValueExpression: String? = nil) {
 			self.outerLabel = outerLabel
 			self.innerLabel = innerLabel
 			self.typeDescription = typeDescription

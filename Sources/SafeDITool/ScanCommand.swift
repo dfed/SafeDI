@@ -52,10 +52,12 @@ struct Scan: AsyncParsableCommand {
 	}
 }
 
-/// Performs the scan operation, producing a manifest JSON file.
+/// Performs the scan operation, producing a manifest JSON file and the scan cache beside it.
 /// Shared by the `scan` subcommand and the `generate` subcommand's
 /// `--output-directory` auto-scan mode.
+/// - Returns: What the scan cache holds.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+@discardableResult
 func performScan(
 	inputSourcesFile: String,
 	projectFilePaths: ProjectFilePaths,
@@ -63,7 +65,7 @@ func performScan(
 	manifestFile: String,
 	mockScopedFiles: [String] = [],
 	activeCompilationConditions: Set<String> = [],
-) async throws {
+) async throws -> CachedScannedModuleInfo {
 	let outputDirectoryURL = outputDirectory.asFileURL
 
 	// Read CSV and resolve file paths relative to project root.
@@ -251,11 +253,15 @@ func performScan(
 	let additionalDirectories = configuration?.additionalDirectoriesToInclude.map { directory in
 		projectFilePaths.normalizedPath(of: directory).path
 	}.sorted() ?? []
+	// Files are parsed in parallel and their scans arrive in the order parsing finished. Ordering them by
+	// path makes the cache the same bytes whenever the inputs are the same.
+	let sortedFileScans = fileScans.sorted { $0.path < $1.path }
+	let sortedAdditionalFileScans = additionalFileScans.sorted { $0.fileScan.path < $1.fileScan.path }
 	let cached = CachedScannedModuleInfo(
-		moduleInfo: ModuleInfo(fileScans.filter { !$0.consultsCompilationConditions }.map(normalized)),
-		conditionSensitiveFileScans: fileScans.filter(\.consultsCompilationConditions).map(cached),
-		additionalModuleInfo: ModuleInfo(additionalFileScans.map(\.fileScan).filter { !$0.consultsCompilationConditions }),
-		additionalConditionSensitiveFileScans: additionalFileScans.filter(\.fileScan.consultsCompilationConditions),
+		moduleInfo: ModuleInfo(sortedFileScans.filter { !$0.consultsCompilationConditions }.map(normalized)),
+		conditionSensitiveFileScans: sortedFileScans.filter(\.consultsCompilationConditions).map(cached),
+		additionalModuleInfo: ModuleInfo(sortedAdditionalFileScans.map(\.fileScan).filter { !$0.consultsCompilationConditions }),
+		additionalConditionSensitiveFileScans: sortedAdditionalFileScans.filter(\.fileScan.consultsCompilationConditions),
 		projectRoot: projectFilePaths.reportedProjectRoot.asFileURL.path,
 		// Every file scan read for this module — CSV inputs plus any files reached through
 		// `#SafeDIConfiguration.additionalDirectoriesToInclude` — so edits to either invalidate the cache.
@@ -267,14 +273,12 @@ func performScan(
 		additionalDirectories: additionalDirectories,
 		activeCompilationConditions: activeCompilationConditions.sorted(),
 	)
-	let scannedModuleInfoURL = scannedModuleInfoURL(forManifestPath: manifestFile)
 	// Cache write is best-effort. A full disk or other transient FS
 	// failure shouldn't block the build — `generate` always falls back
-	// to a fresh parse when the cache is missing or can't be decoded.
-	// Fresh encoder rather than reusing the manifest's — the cache is
-	// machine-read only, so the `.sortedKeys` formatting the manifest
-	// needs for determinism isn't load-bearing here.
-	try? JSONEncoder().encode(cached).write(to: scannedModuleInfoURL)
+	// to a fresh parse when the cache is missing or can't be read. The
+	// write is atomic, so a `generate` never reads a partly written cache.
+	try? cached.scanCacheData.write(to: scannedModuleInfoURL(forManifestPath: manifestFile), options: .atomic)
+	return cached
 }
 
 /// What the Swift files found in a module's `#SafeDIConfiguration(additionalDirectoriesToInclude:)` directories and
@@ -328,7 +332,7 @@ extension SafeDIToolManifest {
 	}
 }
 
-/// Wrapper persisted alongside the manifest so `generate` can both
+/// Wrapper persisted alongside the manifest, in the format `BinaryFile` describes, so `generate` can both
 /// consume the parsed `ModuleInfo` AND validate cache freshness against
 /// the exact file set `scan` observed (including
 /// `additionalDirectoriesToInclude` files, which don't appear in the
@@ -394,17 +398,42 @@ struct CachedFileScan: Codable {
 	/// `scannedPath` when it differs from `fileScan.path`, which it seldom does: omitting it keeps the
 	/// cache, which `generate` decodes on every build, small.
 	private let differingScannedPath: String?
+
+	private init(fileScan: FileScan, differingScannedPath: String?) {
+		self.fileScan = fileScan
+		self.differingScannedPath = differingScannedPath
+	}
+}
+
+extension CachedFileScan: BinarySchemaMember {
+	static let binaryLayout = [
+		"fileScan",
+		"differingScannedPath",
+	]
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(
+			fileScan: reader.read(),
+			differingScannedPath: reader.read() as String?,
+		)
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(fileScan)
+		writer.write(differingScannedPath)
+	}
 }
 
 /// Path alongside the manifest where `scan` persists the parsed
-/// `ModuleInfo` and `generate` reads it to skip re-parsing. Derived from
-/// the manifest path so concurrent runs writing to different manifests
-/// don't collide.
+/// `ModuleInfo` and `generate` reads it to skip re-parsing: the manifest's
+/// name with the extension `safediScanCache`, in the format `BinaryFile`
+/// describes. Derived from the manifest path so concurrent runs writing to
+/// different manifests don't collide.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func scannedModuleInfoURL(forManifestPath manifestPath: String) -> URL {
 	let manifestURL = manifestPath.asFileURL
 	let base = manifestURL.deletingPathExtension().lastPathComponent
 	return manifestURL
 		.deletingLastPathComponent()
-		.appendingPathComponent("\(base).safediScannedModuleInfo.json")
+		.appendingPathComponent("\(base).safediScanCache")
 }

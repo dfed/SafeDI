@@ -300,7 +300,8 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		}
 		#endif
 		""", "Unexpected combined output: \(output.combinedOutput ?? "")")
-		let moduleInfo = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: output.moduleInfoOutputPath)))
+		// The module info file is binary; `dump` shows every string it holds.
+		let moduleInfo = try JSONSerialization.jsonObject(with: Data(Dump.parse([output.moduleInfoOutputPath]).json().utf8))
 		#expect(absolutePaths(in: moduleInfo) == [])
 	}
 
