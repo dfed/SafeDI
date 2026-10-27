@@ -83,6 +83,14 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			return .skipChildren
 		}
 
+		// An alias's fulfilling property is named in generated code, where it is assigned to the alias.
+		if let fulfilledByDependencyNamed = dependencyAttribute.fulfilledByDependencyNamed,
+		   let fulfillingPropertyName = dependencyAttribute.fulfillingPropertyName,
+		   Dependency.isReservedName(fulfillingPropertyName)
+		{
+			diagnoseReservedName(fulfillingPropertyName, at: fulfilledByDependencyNamed)
+		}
+
 		// A fix-it rewrites the whole attribute, so its range is recorded only when there are no arguments to discard.
 		let bareAttributeRange: Dependency.SourceRange? = if dependencyAttribute.arguments == nil {
 			sourceRange(of: dependencyAttribute)
@@ -111,6 +119,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			if let identifier = IdentifierPatternSyntax(binding.pattern)?.identifier,
 			   let type = binding.typeAnnotation?.type
 			{
+				if Dependency.isReservedName(identifier.text) {
+					diagnoseReservedName(identifier.text, at: identifier)
+				}
 				dependencies.append(
 					Dependency(
 						property: Property(
@@ -264,6 +275,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 		let initializer = Initializer(node)
 		if let instantiableType = node.signature.returnClause?.type.typeDescription {
+			// Each parameter is a dependency named by its inner name. Its argument label binds nothing.
+			for name in node.signature.parameterClause.parameters.lazy.map({ $0.secondName ?? $0.firstName }) where Dependency.isReservedName(name.text) {
+				diagnoseReservedName(name.text, at: name)
+			}
 			extensionInstantiables.append(.init(
 				instantiableType: instantiableType,
 				isRoot: false,
@@ -529,6 +544,16 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	/// The location of the decorated declaration, recorded when the declaration is visited with a converter.
 	private var instantiableDeclarationLocation: Dependency.DeclarationLocation?
+
+	/// Reports that `name`, which generated code binds or refers to, begins with `Dependency.reservedNamePrefix`.
+	/// No fix-it is offered: SafeDI matches dependencies by label, so a new name could fulfill, or be fulfilled
+	/// by, a different dependency without any error, and nothing this visitor sees can rule that out.
+	private func diagnoseReservedName(_ name: String, at node: some SyntaxProtocol) {
+		diagnostics.append(Diagnostic(
+			node: node,
+			message: FixableInstantiableError.reservedNamePrefix(name: name).diagnostic,
+		))
+	}
 
 	/// Where `node` begins after its leading trivia – its first attribute for a decorated declaration – or `nil` without a converter.
 	private func declarationLocation(of node: some SyntaxProtocol) -> Dependency.DeclarationLocation? {

@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 import SwiftDiagnostics
+import SwiftParser
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
@@ -233,6 +234,11 @@ public struct InstantiableMacro: MemberMacro {
 					dependencies: visitor.dependencies,
 					context: context,
 				)
+				Self.validateReservedParameterLabels(
+					functionSyntax: selectedInitializerSyntax.signature,
+					dependencies: visitor.dependencies,
+					context: context,
+				)
 			}
 			if let mockInitializer = visitor.mockInitializer,
 			   let mockSyntax = visitor.mockFunctionSyntax
@@ -245,6 +251,11 @@ public struct InstantiableMacro: MemberMacro {
 					context: context,
 				)
 				Self.validateDefaultExpressions(
+					functionSyntax: mockSyntax.signature,
+					dependencies: visitor.dependencies,
+					context: context,
+				)
+				Self.validateReservedParameterLabels(
 					functionSyntax: mockSyntax.signature,
 					dependencies: visitor.dependencies,
 					context: context,
@@ -940,6 +951,11 @@ public struct InstantiableMacro: MemberMacro {
 					dependencies: dependenciesForMock,
 					context: context,
 				)
+				Self.validateReservedParameterLabels(
+					functionSyntax: mockFunction.signature,
+					dependencies: dependenciesForMock,
+					context: context,
+				)
 				let nonDependenciesWithoutDefaults = mockFunctionInitializer.arguments
 					.filter { !dependencyLabels.contains($0.innerLabel) && !$0.hasDefaultValue }
 					.map(\.asProperty)
@@ -1293,6 +1309,74 @@ public struct InstantiableMacro: MemberMacro {
 					parameterLabel: innerLabel,
 				).diagnostic,
 			))
+		}
+	}
+
+	/// Diagnoses each parameter that SafeDI binds by an argument label beginning with
+	/// `Dependency.reservedNamePrefix`: a default-valued parameter with an argument label that
+	/// fulfills no dependency. A generated `mock()` of the type takes such a parameter under that
+	/// label and passes it on by name, beside the builder functions it declares with the prefix.
+	/// The parameters `validateDefaultExpressions` checks are exactly these.
+	///
+	/// The fix-it renames the argument label alone. The parameter keeps its name inside the
+	/// function, so the function body still compiles and the parameter still fulfills no
+	/// dependency; only a call that spells the old label must change, and the compiler reports it.
+	/// It is not offered when the new label is not a valid variable name, still begins with the
+	/// prefix, or is the label of a dependency or of another parameter, which a generated `mock()`
+	/// would then declare twice.
+	private static func validateReservedParameterLabels(
+		functionSyntax: FunctionSignatureSyntax,
+		dependencies: [Dependency],
+		context: some MacroExpansionContext,
+	) {
+		let dependencyLabels = Set(dependencies.map(\.property.label))
+		let parameters = functionSyntax.parameterClause.parameters
+		for parameter in parameters where parameter.defaultValue != nil
+			&& Dependency.isReservedName(parameter.firstName.text)
+			&& !dependencyLabels.contains((parameter.secondName ?? parameter.firstName).text)
+		{
+			let label = parameter.firstName
+			let error = FixableInstantiableError.reservedNamePrefix(name: label.text)
+			let newLabel = Dependency.removingReservedNamePrefix(from: label.text)
+			let labelsInUse = dependencyLabels.union(
+				parameters.lazy
+					.filter { $0.id != parameter.id }
+					.map(\.firstName.text),
+			)
+			if newLabel.isValidSwiftIdentifier(for: .variableName),
+			   !Dependency.isReservedName(newLabel),
+			   !labelsInUse.contains(newLabel)
+			{
+				var fixedParameter = parameter
+				if let name = parameter.secondName {
+					if name.text == newLabel {
+						// `__safeDI_count count` becomes `count`, not the redundant `count count`.
+						fixedParameter.firstName = .identifier(newLabel, leadingTrivia: label.leadingTrivia, trailingTrivia: name.trailingTrivia)
+						fixedParameter.secondName = nil
+					} else {
+						fixedParameter.firstName = label.with(\.tokenKind, .identifier(newLabel))
+					}
+				} else {
+					// `__safeDI_count` becomes `count __safeDI_count`, so the body's uses still resolve.
+					fixedParameter.firstName = .identifier(newLabel, leadingTrivia: label.leadingTrivia, trailingTrivia: .space)
+					fixedParameter.secondName = .identifier(label.text, trailingTrivia: label.trailingTrivia)
+				}
+				context.diagnose(Diagnostic(
+					node: label,
+					error: error,
+					changes: [
+						.replace(
+							oldNode: Syntax(parameter),
+							newNode: Syntax(fixedParameter),
+						),
+					],
+				))
+			} else {
+				context.diagnose(Diagnostic(
+					node: label,
+					message: error.diagnostic,
+				))
+			}
 		}
 	}
 

@@ -897,7 +897,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The name of the builder function for a property bound as `name`, which in a mock is the
 	/// property's sibling-disambiguated label.
 	private static func functionName(toBuildPropertyNamed name: String) -> String {
-		"__safeDI_\(name)"
+		"\(Dependency.reservedNamePrefix)\(name)"
 	}
 
 	/// The names generated code refers to builder functions by, where they differ from `functionName(toBuild:)`.

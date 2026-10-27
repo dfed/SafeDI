@@ -46,6 +46,8 @@ public enum FixableInstantiableError: DiagnosticError {
 	case mockOnlyMissingMockMethod(typeName: String, methodName: String)
 	case unlabeledDefaultBeforeUnlabeledParameter(defaultedParameter: Property, followingParameter: Property)
 	case calleeScopeReferenceInDefaultExpression(parameterLabel: String)
+	/// A name SafeDI binds in generated code begins with `Dependency.reservedNamePrefix`.
+	case reservedNamePrefix(name: String)
 
 	public enum MissingInitializer: Sendable {
 		case hasOnlyInjectableProperties
@@ -118,6 +120,8 @@ public enum FixableInstantiableError: DiagnosticError {
 			"Unlabeled parameter `\(defaultedParameter.asSource)` has a default value but is followed by unlabeled required parameter `\(followingParameter.asSource)`. SafeDI cannot generate a mock for this signature: the default cannot be elided from the mock's override surface (Swift requires the earlier positional slot to be passed when a later unlabeled parameter is required), and an unlabeled parameter cannot be exposed as a labeled field on `SafeDIMockConfiguration`. Either add an external label to the defaulted parameter, reorder so unlabeled defaults come last, or remove the default."
 		case let .calleeScopeReferenceInDefaultExpression(parameterLabel):
 			"Default expression for parameter `\(parameterLabel)` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default."
+		case let .reservedNamePrefix(name):
+			"`\(name)` begins with `\(Dependency.reservedNamePrefix)`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `\(Dependency.reservedNamePrefix)`."
 		}
 	}
 
@@ -159,7 +163,8 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .mockOnlyWithIsRoot,
 			     .mockOnlyMissingMockMethod,
 			     .unlabeledDefaultBeforeUnlabeledParameter,
-			     .calleeScopeReferenceInDefaultExpression:
+			     .calleeScopeReferenceInDefaultExpression,
+			     .reservedNamePrefix:
 				.error
 			}
 			message = error.description
@@ -234,6 +239,8 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Promote `\(defaultedParameter.label)` to an external label (rewrite `_ \(defaultedParameter.label):` as `\(defaultedParameter.label):`)"
 			case let .calleeScopeReferenceInDefaultExpression(parameterLabel):
 				"Remove the default from `\(parameterLabel)` or move the referenced value to a file-scoped or module-scoped symbol"
+			case let .reservedNamePrefix(name):
+				"Rename `\(name)` to `\(Dependency.removingReservedNamePrefix(from: name))`"
 			}
 			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
 		}
