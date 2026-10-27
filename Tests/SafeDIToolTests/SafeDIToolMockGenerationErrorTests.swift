@@ -356,6 +356,47 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenRequiredReceivedPropertyIsHiddenByForwardedPropertyOfMockedTypeWithSameLabel() async {
+		// The mocked type's own tree hides `user: Draft`, as it does under a root. A mock names a required
+		// received parameter apart only from what its promotion of received dependencies binds beside it.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Editor.swift"]):4:5: error: @Received property `user: Draft` is hidden in chain: ProfileView -> Editor. `ProfileView` declares `user: User` with the same label, so the types below `ProfileView` receive `user: User` instead. Give `user: User` on `ProfileView` a different label to fix.
+				\(fixtures["ProfileView.swift"]):4:5: note: `user: User` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public final class User {}
+					public final class Draft {}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public final class ProfileView: Instantiable {
+					    public init(user: User, editor: Editor) { self.user = user; self.editor = editor }
+					    @Forwarded let user: User
+					    @Instantiated let editor: Editor
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Editor: Instantiable {
+					    public init(user: Draft) { self.user = user }
+					    @Received let user: Draft
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenOnlyIfAvailableReceivedPropertyIsHiddenByForwardedPropertyOfMockedTypeWithSameLabel() async {
 		// The mocked type's own tree hides `user: Draft?`: production builds `Editor` under `ProfileView`, beside
 		// the forwarded `user: User`. A mock names its `onlyIfAvailable` overrides apart only from what its
