@@ -101,7 +101,7 @@ Key consequence: if `throwIfInvalidCycle` accepts a cycle, every hop in it is no
 Validation is split between the macro and the plugin based on available context:
 
 - **Macro validation** (compile-time, local context only): The macro sees only the single decorated type or extension. Any error that can be determined from local context belongs here — missing `init`/`instantiate()`, invalid parameter combinations (`mockOnly + generateMock`), mock method signature issues, access control. These produce fix-its in the IDE.
-- **Plugin validation** (build-time, full context): The plugin (`SafeDITool generate`) sees all modules' types. Errors that require cross-type knowledge belong here — unfulfillable dependencies, dependency cycles, duplicate type declarations, duplicate mock providers, a `mockOnly` hand-written `mock` on a type whose `mock()` is generated.
+- **Plugin validation** (build-time, full context): The plugin (`SafeDITool generate`) sees all modules' types. Errors that require cross-type knowledge belong here — unfulfillable dependencies, received dependencies hidden by a closer ancestor's property with the same label (generated code passes dependencies by label), dependency cycles, duplicate type declarations, duplicate mock providers, a `mockOnly` hand-written `mock` on a type whose `mock()` is generated.
 
 ### Serialization
 

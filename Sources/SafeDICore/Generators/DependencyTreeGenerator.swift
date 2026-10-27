@@ -134,6 +134,14 @@ public actor DependencyTreeGenerator {
 		var receivedPropertiesCache = ReceivedPropertiesCache()
 		try validatePropertiesAreFulfillable(
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			// The scopes of the types the mock-root loop below generates a mock for because they are listed.
+			additionalMockRootScopes: additionalMocksToGenerate.isEmpty ? [] : Set(
+				typeDescriptionToFulfillingInstantiableMap.values.compactMap { instantiable in
+					additionalMocksToGenerate.contains(instantiable.concreteInstantiable.asSource)
+						? typeDescriptionToScopeMap[instantiable.concreteInstantiable]
+						: nil
+				},
+			),
 			receivedPropertiesCache: &receivedPropertiesCache,
 			cyclesOnly: true,
 		)
@@ -460,6 +468,9 @@ public actor DependencyTreeGenerator {
 		/// `fulfilledByMockOnlyDeclaration` is set when only a `mockOnly` declaration fulfills the type.
 		case noInstantiableFound(TypeDescription, referencedAt: [Dependency.DeclarationLocation?], fulfilledByMockOnlyDeclaration: Bool)
 		case unfulfillableProperties([UnfulfillableProperty])
+		/// Reported at each `@Received` declaration whose dependency a closer ancestor hides, with a note at the
+		/// hiding declaration. See `HiddenReceivedProperty`.
+		case hiddenReceivedProperties([HiddenReceivedProperty])
 		case instantiableHasForwardedProperty(property: Property, declarationLocation: Dependency.DeclarationLocation?, instantiableWithForwardedProperty: Instantiable, forwardedDeclarations: [LocatedProperty], parent: Instantiable)
 		/// Reported at the dependency declaration that closes the cycle – the `@Instantiated` or `@Received`
 		/// property whose type is already on the instantiation stack – with a note at each member type’s
@@ -506,6 +517,11 @@ public actor DependencyTreeGenerator {
 				.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 			case let .unfulfillableProperties(unfulfillableProperties):
 				unfulfillableProperties
+					.map(\.sourceDiagnostics)
+					.sorted { SourceDiagnostic.precedesInSourceOrder($0[0], $1[0]) }
+					.flatMap(\.self)
+			case let .hiddenReceivedProperties(hiddenReceivedProperties):
+				hiddenReceivedProperties
 					.map(\.sourceDiagnostics)
 					.sorted { SourceDiagnostic.precedesInSourceOrder($0[0], $1[0]) }
 					.flatMap(\.self)
@@ -654,6 +670,48 @@ public actor DependencyTreeGenerator {
 						location: declarationLocation,
 						message: "\(summary). \(hint)",
 						fixIts: fixIts,
+					),
+				]
+			}
+		}
+
+		/// A property an ancestor declares, which the generated code names by its label everywhere below that ancestor.
+		struct LabelDeclaration: Hashable {
+			let property: Property
+			let declarationLocation: Dependency.DeclarationLocation?
+			let declaringType: TypeDescription
+		}
+
+		/// A received dependency the generated code cannot pass, because a closer ancestor declares another property
+		/// with the same label – for example, an alias that retypes the dependency and keeps its label – and the generated
+		/// code names a dependency by its label.
+		struct HiddenReceivedProperty: Hashable {
+			/// The property received: the fulfilling property for an aliased dependency, the declared property otherwise.
+			let property: Property
+			let declarationLocation: Dependency.DeclarationLocation?
+			/// The closest declaration of the label, whose property differs from `property`.
+			let hidingDeclaration: LabelDeclaration
+			let receiver: TypeDescription
+			/// The types that instantiate `receiver`, innermost first, excluding `root`.
+			let parentStack: [TypeDescription]
+			let root: TypeDescription
+
+			/// An `error:` line that names the hiding declaration, since Xcode drops notes from build-tool output, and
+			/// a `note:` at the hiding declaration so command-line builds can navigate to it.
+			var sourceDiagnostics: [SourceDiagnostic] {
+				let chain = ([receiver] + parentStack + [root]).reversed()
+				let hidingProperty = hidingDeclaration.property.asSource
+				let declaringType = hidingDeclaration.declaringType.asSource
+				return [
+					SourceDiagnostic(
+						severity: .error,
+						location: declarationLocation,
+						message: "@\(Dependency.Source.receivedRawValue) property `\(property.asSource)` is hidden in chain: \(chain.map(\.asSource).joined(separator: " -> ")). `\(declaringType)` declares `\(hidingProperty)` with the same label, so the types below `\(declaringType)` receive `\(hidingProperty)` instead. Give `\(hidingProperty)` on `\(declaringType)` a different label to fix.",
+					),
+					SourceDiagnostic(
+						severity: .note,
+						location: hidingDeclaration.declarationLocation,
+						message: "`\(hidingProperty)` is declared here",
 					),
 				]
 			}
@@ -1514,10 +1572,14 @@ public actor DependencyTreeGenerator {
 	/// When `cyclesOnly` is true, unfulfillable property collection is skipped —
 	/// used for mock-only types where unfulfillable received properties are expected
 	/// (they become required mock parameters).
-	/// - Parameter receivedPropertiesCache: The results of `collectReceivedProperties` for scopes of
-	///   `typeDescriptionToScopeMap`, which the mock validation fills.
+	/// - Parameters:
+	///   - additionalMockRootScopes: The scopes of types whose mock is generated because `additionalMocksToGenerate`
+	///     lists them. Their trees are validated for hidden received dependencies only.
+	///   - receivedPropertiesCache: The results of `collectReceivedProperties` for scopes of
+	///     `typeDescriptionToScopeMap`, which the mock validation fills.
 	private func validatePropertiesAreFulfillable(
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
+		additionalMockRootScopes: Set<Scope> = [],
 		receivedPropertiesCache: inout ReceivedPropertiesCache,
 		cyclesOnly: Bool,
 	) throws {
@@ -1539,6 +1601,9 @@ public actor DependencyTreeGenerator {
 		}
 		try validatePropertiesAreFulfillable(
 			onRootScopes: rootScopes,
+			additionalMockRootScopes: additionalMockRootScopes
+				.sorted { $0.instantiable.concreteInstantiable < $1.instantiable.concreteInstantiable }
+				.map { scope in ValidatedRootScope(scope: scope, boundProperties: Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received) },
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 			cyclesOnly: cyclesOnly,
 		)
@@ -1570,12 +1635,18 @@ public actor DependencyTreeGenerator {
 
 	/// Validates the trees rooted at `rootScopes` for cycles and optionally for
 	/// unfulfillable properties. See `validatePropertiesAreFulfillable(typeDescriptionToScopeMap:cyclesOnly:)`.
+	/// Also validates, in production trees and in the trees of types that generate a mock, that no received
+	/// dependency is hidden by a closer ancestor's property with the same label.
+	/// - Parameter additionalMockRootScopes: The scopes of types whose mock is generated because
+	///   `additionalMocksToGenerate` lists them. Their trees are validated for hidden received dependencies only.
 	private func validatePropertiesAreFulfillable(
 		onRootScopes rootScopes: [ValidatedRootScope],
+		additionalMockRootScopes: [ValidatedRootScope] = [],
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
 		cyclesOnly: Bool,
 	) throws {
 		var unfulfillableProperties = Set<DependencyTreeGeneratorError.UnfulfillableProperty>()
+		var hiddenReceivedProperties = Set<DependencyTreeGeneratorError.HiddenReceivedProperty>()
 		/// Walks `requiredReceivedProperties`, which `directParent` requires, and, transitively, the required received
 		/// properties of the scopes that fulfill them, throwing when one is `property` or is on `instantiationStack`.
 		///
@@ -1652,11 +1723,20 @@ public actor DependencyTreeGenerator {
 		/// The fulfilling properties of the `onlyIfAvailable` aliases already walked by
 		/// `validateNoCycleInReceivedProperties`, each followed by its declaring scope's instantiation stack.
 		var walkedAliasFulfillingProperties = Set<[Property]>()
+		/// - Parameters:
+		///   - closestDeclarationByLabel: The property each label names in `scope`: the one declared by the closest
+		///     ancestor that declares the label.
+		///   - validatesCycles: Whether to validate the tree for dependency cycles and unfulfillable received
+		///     properties. `false` only for a tree validated for hidden received dependencies alone.
+		///   - validatesHiddenProperties: Whether to record received dependencies a closer declaration hides.
 		func validatePropertiesAreFulfillable(
 			on scope: Scope,
 			receivableProperties: Set<Property>,
 			receivableAliases: [Property: ReceivableAlias],
 			boundProperties: Set<Property>,
+			closestDeclarationByLabel: [String: DependencyTreeGeneratorError.LabelDeclaration],
+			validatesCycles: Bool,
+			validatesHiddenProperties: Bool,
 			property: Property?,
 			propertyStack: [Property],
 			root: TypeDescription,
@@ -1666,7 +1746,7 @@ public actor DependencyTreeGenerator {
 			} else {
 				[]
 			}
-			if let property {
+			if validatesCycles, let property {
 				var stackPropertiesReliedOnByWalkedProperty = [Property: Set<Property>]()
 				_ = try validateNoCycleInReceivedProperties(
 					scope.requiredReceivedProperties,
@@ -1708,7 +1788,7 @@ public actor DependencyTreeGenerator {
 			// as the scope that declares the alias would if the alias were not `onlyIfAvailable`.
 			for case let (requiredReceivedProperty, alias?) in scope.requiredReceivedProperties.lazy.map({
 				($0, declaredAliases[$0.property] ?? receivableAliases[$0.property])
-			}) {
+			}) where validatesCycles {
 				let receivedProperty = requiredReceivedProperty.property
 				let fulfillingProperty = alias.fulfillingProperty
 				if let fulfillingPropertyBeingBuilt = [fulfillingProperty, fulfillingProperty.asUnwrappedProperty].first(where: instantiationStack.contains) {
@@ -1764,7 +1844,7 @@ public actor DependencyTreeGenerator {
 			/// still being built, with that form's index on `instantiationStack`. It is a cycle, thrown after the
 			/// cycles below, which match only exact properties, so it is reported as a non-optional receive would be.
 			var optionalReceiveOfPropertyBeingBuilt: (receive: Scope.RequiredReceivedProperty, beingBuiltIndex: Int)?
-			for requiredReceivedProperty in scope.requiredReceivedProperties {
+			for requiredReceivedProperty in scope.requiredReceivedProperties where validatesCycles {
 				let receivedProperty = requiredReceivedProperty.property
 				let parentContainsProperty = receivableProperties.contains(receivedProperty)
 				let propertyIsCreatedAtThisScope = scope.createdProperties.contains(receivedProperty)
@@ -1796,6 +1876,43 @@ public actor DependencyTreeGenerator {
 				}
 			}
 
+			if validatesHiddenProperties {
+				// The generated code passes a received dependency by its label, which resolves to the closest
+				// ancestor's declaration of that label. A different property there is passed in its place.
+				for dependency in scope.instantiable.dependencies {
+					let receivedProperty: Property
+					switch dependency.source {
+					case .received:
+						receivedProperty = dependency.property
+					case let .aliased(fulfillingProperty, _, _):
+						receivedProperty = fulfillingProperty
+					case .instantiated, .forwarded:
+						continue
+					}
+					// A receive of an optional property, required or `onlyIfAvailable`, resolves to its non-optional
+					// form too.
+					let acceptedProperties: Set<Property> = [receivedProperty, receivedProperty.asUnwrappedProperty]
+					guard let closestDeclaration = closestDeclarationByLabel[receivedProperty.label],
+					      !acceptedProperties.contains(closestDeclaration.property),
+					      // An alias of a property this scope declares refers to that declaration.
+					      acceptedProperties.isDisjoint(with: scope.createdProperties),
+					      // Production passes `nil` for an `onlyIfAvailable` dependency no ancestor provides. A mock
+					      // declares every received dependency at its root, above every hiding declaration.
+					      cyclesOnly || !acceptedProperties.isDisjoint(with: receivableProperties)
+					else {
+						continue
+					}
+					hiddenReceivedProperties.insert(.init(
+						property: receivedProperty,
+						declarationLocation: dependency.declarationLocation,
+						hidingDeclaration: closestDeclaration,
+						receiver: scope.instantiable.concreteInstantiable,
+						parentStack: propertyStack.map(\.typeDescription),
+						root: root,
+					))
+				}
+			}
+
 			// Check children for cycles.
 			// Skip forwarded dependencies — they're runtime parameters passed through
 			// the Instantiator closure, not scope-level dependencies that create cycles.
@@ -1803,7 +1920,7 @@ public actor DependencyTreeGenerator {
 			if let property {
 				childPropertyStack.insert(property, at: 0)
 			}
-			for dependency in scope.instantiable.dependencies where dependency.source != .forwarded {
+			for dependency in scope.instantiable.dependencies where validatesCycles && dependency.source != .forwarded {
 				let propertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
 				guard let cycleIndex = childPropertyStack.firstIndex(of: propertyForDependency) else {
 					continue
@@ -1839,6 +1956,14 @@ public actor DependencyTreeGenerator {
 				}
 			}
 
+			var childClosestDeclarationByLabel = closestDeclarationByLabel
+			for dependency in scope.instantiable.dependencies where scope.createdProperties.contains(dependency.property) {
+				childClosestDeclarationByLabel[dependency.property.label] = .init(
+					property: dependency.property,
+					declarationLocation: dependency.declarationLocation,
+					declaringType: scope.instantiable.concreteInstantiable,
+				)
+			}
 			// A property this scope provides shadows an alias of it declared above, unless this scope's alias of it is
 			// never created.
 			var childReceivableAliases = receivableAliases.filter {
@@ -1885,6 +2010,9 @@ public actor DependencyTreeGenerator {
 						receivableProperties: childReceivableProperties.removing(childProperty),
 						receivableAliases: childReceivableAliases,
 						boundProperties: boundProperties,
+						closestDeclarationByLabel: childClosestDeclarationByLabel,
+						validatesCycles: validatesCycles,
+						validatesHiddenProperties: validatesHiddenProperties,
 						property: childProperty,
 						propertyStack: childPropertyStack,
 						root: root,
@@ -1901,6 +2029,28 @@ public actor DependencyTreeGenerator {
 				receivableProperties: Set(rootScope.scope.properties),
 				receivableAliases: [:],
 				boundProperties: rootScope.boundProperties,
+				closestDeclarationByLabel: [:],
+				validatesCycles: true,
+				// A production root without a mock is validated for production; only mocks generate its tree here.
+				validatesHiddenProperties: !cyclesOnly
+					|| rootScope.scope.instantiable.generateMock
+					|| additionalMockRootScopes.contains { $0.scope == rootScope.scope },
+				property: nil,
+				propertyStack: [],
+				root: rootScope.scope.instantiable.concreteInstantiable,
+			)
+		}
+		// Walking the other additional mock roots for cycles here could reject a mock that compiles today. Their
+		// mocks are validated for cycles after promotion, in `createMockRootScopeGenerator`.
+		for rootScope in additionalMockRootScopes where !rootScopes.contains(where: { $0.scope == rootScope.scope }) {
+			try validatePropertiesAreFulfillable(
+				on: rootScope.scope,
+				receivableProperties: Set(rootScope.scope.properties),
+				receivableAliases: [:],
+				boundProperties: rootScope.boundProperties,
+				closestDeclarationByLabel: [:],
+				validatesCycles: false,
+				validatesHiddenProperties: true,
 				property: nil,
 				propertyStack: [],
 				root: rootScope.scope.instantiable.concreteInstantiable,
@@ -1909,6 +2059,9 @@ public actor DependencyTreeGenerator {
 
 		if !unfulfillableProperties.isEmpty {
 			throw DependencyTreeGeneratorError.unfulfillableProperties(Array(unfulfillableProperties))
+		}
+		if !hiddenReceivedProperties.isEmpty {
+			throw DependencyTreeGeneratorError.hiddenReceivedProperties(Array(hiddenReceivedProperties))
 		}
 	}
 
