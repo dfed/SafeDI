@@ -306,7 +306,7 @@ struct Generate: AsyncParsableCommand {
 				}
 			} else {
 				let generatedRoots = try await generator.generatePerRootCodeTrees()
-				try await warnings.append(contentsOf: generator.generateWarnings())
+				await warnings.append(contentsOf: generator.generateWarnings())
 				// Every generated file asserts how `#if` conditions were evaluated, so a build
 				// whose compiler disagrees fails here with a message naming the condition.
 				let compileTimeAssertions = ConditionalCompilationDecision.compileTimeAssertions(for: module.conditionalCompilationDecisions)

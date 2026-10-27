@@ -214,11 +214,13 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 	/// The property with which a type receives the instance of an `@Instantiated` lazily instantiated dependency
 	/// rather than its `LazilyInstantiated` wrapper: `service: LazilyInstantiated<Service>` is received by value
 	/// as `service: Service`. The generated wrapper is never optional, so neither is this property.
-	/// `nil` when the property is not lazily instantiated.
+	/// `nil` when the property is not lazily instantiated, and when the instance it creates is itself
+	/// optional (`LazilyInstantiated<Service?>`): an instance that may be `nil` cannot be received by value.
 	var asLazilyInstantiatedInstanceProperty: Property? {
-		typeDescription.lazilyInstantiatedInstanceType.map {
-			Property(label: label, typeDescription: $0.unwrapped)
-		}
+		guard let instanceType = typeDescription.unwrapped.lazilyInstantiatedInstanceType,
+		      !instanceType.isOptional
+		else { return nil }
+		return Property(label: label, typeDescription: instanceType)
 	}
 
 	/// The by-value property a `@Forwarded` or aliased `LazilyInstantiated` property offers. Such a property is

@@ -127,6 +127,9 @@ final class Scope: Hashable {
 	private lazy var declaredProperties: [Property] = propertiesToGenerate.map(\.property)
 		+ instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)
 
+	/// The labels of `declaredProperties`.
+	private lazy var declaredLabels = Set(declaredProperties.map(\.label))
+
 	/// The by-value properties with which the scopes this scope builds receive the instance of a lazily
 	/// instantiated property this scope declares. A mock root can declare a property itself and also be given
 	/// a promoted lazily instantiated property with the same label. Types that receive the property by value
@@ -243,9 +246,15 @@ final class Scope: Hashable {
 		let childLazilyInstantiatedInstanceProperties: Set<Property> = if lazilyInstantiatedInstanceProperties.isEmpty {
 			// Nearly every scope: nothing above it is lazily instantiated, so there is nothing to shadow.
 			declaredLazilyInstantiatedInstanceProperties
+		} else if declaredLazilyInstantiatedInstanceProperties.isEmpty,
+		          !lazilyInstantiatedInstanceProperties.contains(where: { declaredLabels.contains($0.label) })
+		{
+			// Most scopes below a lazily instantiated property neither shadow it nor declare one of their
+			// own, so they share the set they were given.
+			lazilyInstantiatedInstanceProperties
 		} else {
 			lazilyInstantiatedInstanceProperties
-				.filter { inheritedProperty in !declaredProperties.contains { $0.label == inheritedProperty.label } }
+				.filter { !declaredLabels.contains($0.label) }
 				.union(declaredLazilyInstantiatedInstanceProperties)
 		}
 		/// Whether an `onlyIfAvailable` dependency of `property` is unavailable. A property this scope
@@ -355,6 +364,18 @@ extension Dependency {
 		} else {
 			[property]
 		}
+	}
+}
+
+extension Instantiable {
+	/// The properties the type is forwarded. A lazily instantiated one is followed by the property that
+	/// receives its instance by value.
+	var forwardedReceivableProperties: Set<Property> {
+		Set(
+			dependencies
+				.filter { $0.source == .forwarded }
+				.flatMap(\.receivableProperties),
+		)
 	}
 }
 

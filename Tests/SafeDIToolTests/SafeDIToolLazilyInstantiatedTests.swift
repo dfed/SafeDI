@@ -1882,6 +1882,104 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_warns_whenTypeCreatedWithOwnerReceivesInstanceThroughTwoRenamings() async throws {
+		// Home renames the `LazilyInstantiated` twice, and Child, created with Home, reads the instance of the second alias.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>, home: Home) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let analytics: LazilyInstantiated<Analytics>
+				    @Instantiated let home: Home
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Home: Instantiable {
+				    public init(tracker: LazilyInstantiated<Analytics>, recorder: LazilyInstantiated<Analytics>, child: Child) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "analytics", ofType: LazilyInstantiated<Analytics>.self) let tracker: LazilyInstantiated<Analytics>
+				    @Received(fulfilledByDependencyNamed: "tracker", ofType: LazilyInstantiated<Analytics>.self) let recorder: LazilyInstantiated<Analytics>
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(recorder: Analytics) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received let recorder: Analytics
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.warnings.map(\.formatted) == [
+			"\(output.fixtures["Root.swift"]):7:5: warning: @Instantiated property `analytics: LazilyInstantiated<Analytics>` is instantiated whenever `Root` is created: `Child` is created with `Root` and receives the instance as `recorder: Analytics`. To instantiate it lazily, receive `recorder: LazilyInstantiated<Analytics>` on `Child`.",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_warns_whenOwnerRenamesInstanceOfRenamingOfItsOwnLazilyInstantiatedProperty() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(home: Home) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let home: Home
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Home: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>, tracker: LazilyInstantiated<Analytics>, recorder: Analytics) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let analytics: LazilyInstantiated<Analytics>
+				    @Received(fulfilledByDependencyNamed: "analytics", ofType: LazilyInstantiated<Analytics>.self) let tracker: LazilyInstantiated<Analytics>
+				    @Received(fulfilledByDependencyNamed: "tracker", ofType: Analytics.self) let recorder: Analytics
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.warnings.map(\.formatted) == [
+			"\(output.fixtures["Home.swift"]):7:5: warning: @Instantiated property `analytics: LazilyInstantiated<Analytics>` is instantiated whenever `Home` is created: `Home` renames the instance to `recorder: Analytics`. Declare `analytics: Analytics` instead, or read `analytics.instance` where `Home` needs it.",
+		])
+	}
+
 	// MARK: Error Tests
 
 	// Each cycle below is reported with the diagnostic SafeDI produces for the same tree with every
@@ -2535,6 +2633,62 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 					"""
 					@Instantiable
 					public final class Analytics: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsError_whenInstanceOfLazilyInstantiatedOptionalIsReceivedByValue() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):7:5: error: @Received property `analytics: Analytics` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Feature> -> Child. Did you mean `analytics: LazilyInstantiated<Analytics?>`?
+				\(fixtures["Child.swift"]):7:30-7:39: fixit: LazilyInstantiated<Analytics?>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(featureBuilder: Instantiator<Feature>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let featureBuilder: Instantiator<Feature>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Feature: Instantiable {
+					    public init(analytics: LazilyInstantiated<Analytics?>, child: Child) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let analytics: LazilyInstantiated<Analytics?>
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(analytics: Analytics) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let analytics: Analytics
+					}
+					""",
+					"""
+					public final class Analytics {
 					    public init() {}
 					}
 					""",
@@ -3352,17 +3506,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics_lazilyInstantiated = LazilyInstantiated<Analytics> { analytics }
-		        func __safeDI_home() -> Home {
-		            let analytics: LazilyInstantiated<Analytics> = analytics_lazilyInstantiated
-		            return if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(analytics) } else { Home(analytics: analytics) }
-		        }
-		        let home: Home = __safeDI_home()
+		        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(analytics_lazilyInstantiated) } else { Home(analytics: analytics_lazilyInstantiated) }
 		        let settings = if let safeDIBuilder = safeDIOverrides.settings { safeDIBuilder(analytics) } else { Settings(analytics: analytics) }
-		        func __safeDI_profile() -> Profile {
-		            let analytics: LazilyInstantiated<Analytics>? = analytics_lazilyInstantiated
-		            return if let safeDIBuilder = safeDIOverrides.profile { safeDIBuilder(analytics) } else { Profile(analytics: analytics) }
-		        }
-		        let profile: Profile = __safeDI_profile()
+		        let profile = if let safeDIBuilder = safeDIOverrides.profile { safeDIBuilder(analytics_lazilyInstantiated) } else { Profile(analytics: analytics_lazilyInstantiated) }
 		        return Screen(home: home, settings: settings, profile: profile)
 		    }
 		}
@@ -3486,11 +3632,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    ) -> Screen {
 		        let analytics: Analytics? = safeDIOverrides.analytics
 		        let analytics_lazilyInstantiated = analytics.map { instance in LazilyInstantiated<Analytics> { instance } }
-		        func __safeDI_home() -> Home {
-		            let analytics: LazilyInstantiated<Analytics>? = analytics_lazilyInstantiated
-		            return if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(analytics) } else { Home(analytics: analytics) }
-		        }
-		        let home: Home = __safeDI_home()
+		        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(analytics_lazilyInstantiated) } else { Home(analytics: analytics_lazilyInstantiated) }
 		        let settings = if let safeDIBuilder = safeDIOverrides.settings { safeDIBuilder(analytics) } else { Settings(analytics: analytics) }
 		        return Screen(home: home, settings: settings)
 		    }
@@ -4487,6 +4629,770 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    ) -> Screen {
 		        let feature_lazilyInstantiated = LazilyInstantiated<Feature> { feature }
 		        return Screen(feature: feature_lazilyInstantiated)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesForwardedOptionalLazilyInstantiatedProperty_whenTreeReceivesItOnlyIfAvailable() async throws {
+		// The forwarded property is the one Home receives, so the mock takes no second `analytics`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Feature: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>?, home: Home) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Forwarded let analytics: LazilyInstantiated<Analytics>?
+				    @Instantiated let home: Home
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Home: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received(onlyIfAvailable: true) let analytics: LazilyInstantiated<Analytics>?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Feature+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Feature {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            home: ((LazilyInstantiated<Analytics>?) -> Home)? = nil
+		        ) {
+		            self.home = home
+		        }
+
+		        let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		    }
+
+		    static func mock(
+		        analytics: LazilyInstantiated<Analytics>?,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Feature {
+		        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(analytics) } else { Home(analytics: analytics) }
+		        return Feature(analytics: analytics, home: home)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Feature+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesForwardedOptionalLazilyInstantiatedProperty_whenTreeRequiresIt() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Feature: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>?, home: Home) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Forwarded let analytics: LazilyInstantiated<Analytics>?
+				    @Instantiated let home: Home
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Home: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received let analytics: LazilyInstantiated<Analytics>?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Feature+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Feature {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            home: ((LazilyInstantiated<Analytics>?) -> Home)? = nil
+		        ) {
+		            self.home = home
+		        }
+
+		        let home: ((LazilyInstantiated<Analytics>?) -> Home)?
+		    }
+
+		    static func mock(
+		        analytics: LazilyInstantiated<Analytics>?,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Feature {
+		        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(analytics) } else { Home(analytics: analytics) }
+		        return Feature(analytics: analytics, home: home)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Feature+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesInstanceParameter_whenTypeBelowReceiverOfLazilyInstantiatedPropertyMockCannotBuildReceivesInstance() async throws {
+		// Home receives the `LazilyInstantiated` the mock wraps around its `analytics` parameter. Banner, built by Home,
+		// still receives that parameter.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(home: Home) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let home: Home
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Home: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>, banner: Banner) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received let analytics: LazilyInstantiated<Analytics>
+				    @Instantiated let banner: Banner
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Banner: Instantiable {
+				    public init(analytics: Analytics) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received let analytics: Analytics
+				}
+				""",
+				"""
+				public final class Analytics {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            home: Home.SafeDIMockConfiguration = .init()
+		        ) {
+		            self.home = home
+		        }
+
+		        let home: Home.SafeDIMockConfiguration
+		    }
+
+		    static func mock(
+		        analytics: Analytics,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics_lazilyInstantiated = LazilyInstantiated<Analytics> { analytics }
+		        func __safeDI_home() -> Home {
+		            let banner = if let safeDIBuilder = safeDIOverrides.home.banner { safeDIBuilder(analytics) } else { Banner(analytics: analytics) }
+		            return if let safeDIBuilder = safeDIOverrides.home.safeDIBuilder { safeDIBuilder(analytics_lazilyInstantiated, banner) } else { Home(analytics: analytics_lazilyInstantiated, banner: banner) }
+		        }
+		        let home: Home = __safeDI_home()
+		        return Screen(home: home)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesInstanceParameter_whenReceiverOfLazilyInstantiatedPropertyMockCannotBuildAlsoRenamesInstance() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(home: Home) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let home: Home
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Home: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>, tracker: Analytics) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received let analytics: LazilyInstantiated<Analytics>
+				    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let tracker: Analytics
+				}
+				""",
+				"""
+				public final class Analytics {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            home: ((LazilyInstantiated<Analytics>, Analytics) -> Home)? = nil
+		        ) {
+		            self.home = home
+		        }
+
+		        let home: ((LazilyInstantiated<Analytics>, Analytics) -> Home)?
+		    }
+
+		    static func mock(
+		        analytics: Analytics,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics_lazilyInstantiated = LazilyInstantiated<Analytics> { analytics }
+		        func __safeDI_home() -> Home {
+		            #sourceLocation(file: "\(output.fixtures["Home.swift"])", line: 8)
+		            let tracker: Analytics = analytics
+		            #sourceLocation()
+		            return if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(analytics_lazilyInstantiated, tracker) } else { Home(analytics: analytics_lazilyInstantiated, tracker: tracker) }
+		        }
+		        let home: Home = __safeDI_home()
+		        return Screen(home: home)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_readsInstanceOfRenamedBinding_whenTypeRenamesInstanceOfPromotedLazilyInstantiatedPropertySharingLabelWithAnotherType() async throws {
+		// Screen’s own `analytics` is a Legacy, so the mock names the promoted `LazilyInstantiated` apart.
+		// Logger renames the instance of that one.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(analytics: Legacy, logger: Logger, tracker: Tracker) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let analytics: Legacy
+				    @Received let logger: Logger
+				    @Received let tracker: Tracker
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Logger: Instantiable {
+				    public init(renamed: Analytics) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let renamed: Analytics
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Tracker: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received let analytics: LazilyInstantiated<Analytics>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Legacy: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics_Legacy: (() -> Legacy)? = nil,
+		            analytics_Analytics: (() -> Analytics)? = nil,
+		            logger: ((Analytics) -> Logger)? = nil,
+		            tracker: ((LazilyInstantiated<Analytics>) -> Tracker)? = nil
+		        ) {
+		            self.analytics_Legacy = analytics_Legacy
+		            self.analytics_Analytics = analytics_Analytics
+		            self.logger = logger
+		            self.tracker = tracker
+		        }
+
+		        let analytics_Legacy: (() -> Legacy)?
+		        let analytics_Analytics: (() -> Analytics)?
+		        let logger: ((Analytics) -> Logger)?
+		        let tracker: ((LazilyInstantiated<Analytics>) -> Tracker)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics_Legacy = if let safeDIBuilder = safeDIOverrides.analytics_Legacy { safeDIBuilder() } else { Legacy() }
+		        func __safeDI_analytics_Analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics_Analytics { safeDIBuilder() } else { Analytics() }
+		        }
+		        let analytics_Analytics = LazilyInstantiated<Analytics>(__safeDI_analytics_Analytics)
+		        func __safeDI_logger() -> Logger {
+		            #sourceLocation(file: "\(output.fixtures["Logger.swift"])", line: 7)
+		            let renamed: Analytics = analytics_Analytics.instance
+		            #sourceLocation()
+		            return if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder(renamed) } else { Logger(renamed: renamed) }
+		        }
+		        let logger: Logger = __safeDI_logger()
+		        func __safeDI_tracker() -> Tracker {
+		            let analytics: LazilyInstantiated<Analytics> = analytics_Analytics
+		            return if let safeDIBuilder = safeDIOverrides.tracker { safeDIBuilder(analytics) } else { Tracker(analytics: analytics) }
+		        }
+		        let tracker: Tracker = __safeDI_tracker()
+		        return Screen(analytics: analytics_Legacy, logger: logger, tracker: tracker)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_readsInstanceOfRenamedBinding_whenTypeReceivesPromotedLazilyInstantiatedPropertyOnlyIfAvailableAndRenamesItsInstance() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(analytics: Legacy, logger: Logger, tracker: Tracker) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let analytics: Legacy
+				    @Received let logger: Logger
+				    @Received let tracker: Tracker
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Logger: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>?, renamed: Analytics) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received(onlyIfAvailable: true) let analytics: LazilyInstantiated<Analytics>?
+				    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let renamed: Analytics
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Tracker: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received let analytics: LazilyInstantiated<Analytics>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Legacy: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics_Legacy: (() -> Legacy)? = nil,
+		            analytics_Analytics: (() -> Analytics)? = nil,
+		            logger: ((LazilyInstantiated<Analytics>?, Analytics) -> Logger)? = nil,
+		            tracker: ((LazilyInstantiated<Analytics>) -> Tracker)? = nil
+		        ) {
+		            self.analytics_Legacy = analytics_Legacy
+		            self.analytics_Analytics = analytics_Analytics
+		            self.logger = logger
+		            self.tracker = tracker
+		        }
+
+		        let analytics_Legacy: (() -> Legacy)?
+		        let analytics_Analytics: (() -> Analytics)?
+		        let logger: ((LazilyInstantiated<Analytics>?, Analytics) -> Logger)?
+		        let tracker: ((LazilyInstantiated<Analytics>) -> Tracker)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics_Legacy = if let safeDIBuilder = safeDIOverrides.analytics_Legacy { safeDIBuilder() } else { Legacy() }
+		        func __safeDI_analytics_Analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics_Analytics { safeDIBuilder() } else { Analytics() }
+		        }
+		        let analytics_Analytics = LazilyInstantiated<Analytics>(__safeDI_analytics_Analytics)
+		        func __safeDI_logger() -> Logger {
+		            let analytics: LazilyInstantiated<Analytics>? = analytics_Analytics
+		            #sourceLocation(file: "\(output.fixtures["Logger.swift"])", line: 8)
+		            let renamed: Analytics = analytics_Analytics.instance
+		            #sourceLocation()
+		            return if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder(analytics, renamed) } else { Logger(analytics: analytics, renamed: renamed) }
+		        }
+		        let logger: Logger = __safeDI_logger()
+		        func __safeDI_tracker() -> Tracker {
+		            let analytics: LazilyInstantiated<Analytics> = analytics_Analytics
+		            return if let safeDIBuilder = safeDIOverrides.tracker { safeDIBuilder(analytics) } else { Tracker(analytics: analytics) }
+		        }
+		        let tracker: Tracker = __safeDI_tracker()
+		        return Screen(analytics: analytics_Legacy, logger: logger, tracker: tracker)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_promotesOptionalErasedLazilyInstantiatedProperty_whenTreeReceivesItBothLazilyInstantiatedAndByValue() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Owner: Instantiable {
+				    public init(userService: LazilyInstantiated<AnyUserService>?, screenBuilder: Instantiator<Screen>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) let userService: LazilyInstantiated<AnyUserService>?
+				    @Instantiated let screenBuilder: Instantiator<Screen>
+				}
+				""",
+				"""
+				public protocol UserService {}
+
+				public final class AnyUserService: UserService {
+				    public init(_ userService: some UserService) {}
+				}
+
+				@Instantiable
+				public final class DefaultUserService: Instantiable, UserService {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(userService: AnyUserService, home: Home) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received let userService: AnyUserService
+				    @Instantiated let home: Home
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Home: Instantiable {
+				    public init(userService: LazilyInstantiated<AnyUserService>?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received(onlyIfAvailable: true) let userService: LazilyInstantiated<AnyUserService>?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            userService: (() -> AnyUserService)? = nil,
+		            home: ((LazilyInstantiated<AnyUserService>?) -> Home)? = nil
+		        ) {
+		            self.userService = userService
+		            self.home = home
+		        }
+
+		        let userService: (() -> AnyUserService)?
+		        let home: ((LazilyInstantiated<AnyUserService>?) -> Home)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_userService() -> AnyUserService {
+		            if let safeDIBuilder = safeDIOverrides.userService { safeDIBuilder() } else { AnyUserService(DefaultUserService()) }
+		        }
+		        let userService = LazilyInstantiated<AnyUserService>(__safeDI_userService)
+		        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(userService) } else { Home(userService: userService) }
+		        return Screen(userService: userService.instance, home: home)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_lazilyInstantiatesErasedDependency_whenOnlyConstantDeclaresErasureAndTreeReceivesItLazilyInstantiated() async throws {
+		// Only Owner’s constant says which type `AnyUserService` is built from. The mock builds the
+		// `LazilyInstantiated` Home receives from it, so Screen and Home share one instance.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Owner: Instantiable {
+				    public init(userService: AnyUserService) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) let userService: AnyUserService
+				}
+				""",
+				"""
+				public protocol UserService {}
+
+				public final class AnyUserService: UserService {
+				    public init(_ userService: some UserService) {}
+				}
+
+				@Instantiable
+				public final class DefaultUserService: Instantiable, UserService {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(userService: AnyUserService, home: Home) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received let userService: AnyUserService
+				    @Instantiated let home: Home
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Home: Instantiable {
+				    public init(userService: LazilyInstantiated<AnyUserService>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received let userService: LazilyInstantiated<AnyUserService>
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            userService: (() -> AnyUserService)? = nil,
+		            home: ((LazilyInstantiated<AnyUserService>) -> Home)? = nil
+		        ) {
+		            self.userService = userService
+		            self.home = home
+		        }
+
+		        let userService: (() -> AnyUserService)?
+		        let home: ((LazilyInstantiated<AnyUserService>) -> Home)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_userService() -> AnyUserService {
+		            if let safeDIBuilder = safeDIOverrides.userService { safeDIBuilder() } else { AnyUserService(DefaultUserService()) }
+		        }
+		        let userService = LazilyInstantiated<AnyUserService>(__safeDI_userService)
+		        let home = if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(userService) } else { Home(userService: userService) }
+		        return Screen(userService: userService.instance, home: home)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesWrappedInstance_whenTypeRenamesLazilyInstantiatedPropertyMockCannotBuild() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(home: Home) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let home: Home
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Home: Instantiable {
+				    public init(tracker: LazilyInstantiated<Analytics>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "analytics", ofType: LazilyInstantiated<Analytics>.self) let tracker: LazilyInstantiated<Analytics>
+				}
+				""",
+				"""
+				public final class Analytics {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            home: ((LazilyInstantiated<Analytics>) -> Home)? = nil
+		        ) {
+		            self.home = home
+		        }
+
+		        let home: ((LazilyInstantiated<Analytics>) -> Home)?
+		    }
+
+		    static func mock(
+		        analytics: Analytics,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics_lazilyInstantiated = LazilyInstantiated<Analytics> { analytics }
+		        func __safeDI_home() -> Home {
+		            #sourceLocation(file: "\(output.fixtures["Home.swift"])", line: 7)
+		            let tracker: LazilyInstantiated<Analytics> = analytics_lazilyInstantiated
+		            #sourceLocation()
+		            return if let safeDIBuilder = safeDIOverrides.home { safeDIBuilder(tracker) } else { Home(tracker: tracker) }
+		        }
+		        let home: Home = __safeDI_home()
+		        return Screen(home: home)
 		    }
 		}
 		#endif
