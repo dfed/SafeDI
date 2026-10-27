@@ -132,7 +132,7 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test
 	func randomNumberGenerator_producesSplitMix64ReferenceSequence_forSeedZero() {
 		var random = GraphFuzzerRandomNumberGenerator(seed: 0)
-		#expect([random.next(), random.next(), random.next()] == [0xE220_A839_7B1D_CDAF, 0x6E78_9E6A_A1B9_65F4, 0x06C4_5D18_8009_454F])
+		#expect([random.next(), random.next(), random.next()] == [0xE220A8397B1DCDAF, 0x6E789E6AA1B965F4, 0x06C45D188009454F])
 	}
 
 	@Test
@@ -140,10 +140,10 @@ struct SafeDIToolGraphFuzzerTests {
 		// Every platform must generate the same graph for a seed, or a seed reported by the scheduled run would
 		// not reproduce elsewhere. Changing the generator changes this hash, and changes which graph every seed
 		// names, so re-derive the known issues' seeds when it changes.
-		var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+		var hash: UInt64 = 0xCBF29CE484222325
 		for fixture in Self.smokeSeeds.map(GraphFuzzerGenerator.fixture(forSeed:)) {
 			for byte in fixture.description.utf8 {
-				hash = (hash ^ UInt64(byte)) &* 0x0000_0100_0000_01B3
+				hash = (hash ^ UInt64(byte)) &* 0x00000100000001B3
 			}
 		}
 		#expect(hash == Self.smokeFixtureHash)
@@ -205,33 +205,33 @@ struct SafeDIToolGraphFuzzerTests {
 	/// with a label that names properties of different types. Compiling the batch is one `swiftc` invocation.
 	static let smokeSeeds: [UInt64] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 33]
 
-	static let smokeFixtureHash: UInt64 = 0xF80D_F42C_1884_CC80
+	static let smokeFixtureHash: UInt64 = 0xF80DF42C1884CC80
 
 	/// The seeds the scheduled workflow runs, `0..<scheduledSeedCount`. `knownIssues` lists every one that fails.
-	static let scheduledSeedCount = 5000
+	static let scheduledSeedCount = 5_000
 
 	/// Seeds in `0..<scheduledSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
 	static let knownIssues: [GraphFuzzerKnownIssue] = [
 		GraphFuzzerKnownIssue(
 			reason: "Two types instantiate instantiators of different types under one label in a lazy cycle, and the generated builder closure for one is passed where the other is expected",
-			seeds: [9, 321, 1075, 1334, 1567, 1599, 1627, 1681, 2026, 2101, 2147, 2903, 3309, 3741, 4571, 4652, 4795],
+			seeds: [9, 321, 1_075, 1_334, 1_567, 1_599, 1_627, 1_681, 2_026, 2_101, 2_147, 2_903, 3_309, 3_741, 4_571, 4_652, 4_795],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "A mock passes an onlyIfAvailable receive the value of a property in the mock's tree that has the same label and a different type",
-			seeds: [1225, 1877, 2016, 2810, 2896, 3128, 3254, 3403, 3514, 3638, 3692, 4330],
+			seeds: [1_225, 1_877, 2_016, 2_810, 2_896, 3_128, 3_254, 3_403, 3_514, 3_638, 3_692, 4_330],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "A mock declares one label twice for onlyIfAvailable receives of that label with different types",
-			seeds: [84, 96, 768, 3952, 4696],
+			seeds: [84, 96, 768, 3_952, 4_696],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "A mock reads a label before declaring it when an onlyIfAvailable receive of that label has a different type than a required receive of it",
-			seeds: [2306, 2626],
+			seeds: [2_306, 2_626],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "A mock root requires an instantiator of its own type through an alias, or a promoted dependency's subtree requires the mock root's alias of that dependency, and the mock captures the closure before declaring it",
-			seeds: [705, 1062, 3004],
+			seeds: [705, 1_062, 3_004],
 		),
 	]
 
@@ -253,8 +253,7 @@ struct SafeDIToolGraphFuzzerTests {
 }
 
 /// The smoke batch's results, computed once per process and shared by the tests that check them.
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-private let smokeResults = Task {
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) private let smokeResults = Task {
 	try await GraphFuzzerOracle.results(forSeeds: SafeDIToolGraphFuzzerTests.smokeSeeds)
 }
 

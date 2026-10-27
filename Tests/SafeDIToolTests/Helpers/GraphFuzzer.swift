@@ -33,10 +33,10 @@ struct GraphFuzzerRandomNumberGenerator {
 	}
 
 	mutating func next() -> UInt64 {
-		state &+= 0x9E37_79B9_7F4A_7C15
+		state &+= 0x9E3779B97F4A7C15
 		var value = state
-		value = (value ^ (value >> 30)) &* 0xBF58_476D_1CE4_E5B9
-		value = (value ^ (value >> 27)) &* 0x94D0_49BB_1331_11EB
+		value = (value ^ (value >> 30)) &* 0xBF58476D1CE4E5B9
+		value = (value ^ (value >> 27)) &* 0x94D049BB133111EB
 		return value ^ (value >> 31)
 	}
 
@@ -876,7 +876,7 @@ enum GraphFuzzerOracle {
 		var toolRuns = [GraphFuzzerToolRuns]()
 		for seed in seeds {
 			willRunSeed(seed)
-			toolRuns.append(try await self.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed)))
+			await toolRuns.append(try self.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed)))
 		}
 		return try results(of: toolRuns)
 	}
