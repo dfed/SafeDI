@@ -111,7 +111,7 @@ public struct SourceDiagnostic: Hashable, Sendable {
 	}
 
 	/// Returns a copy whose file path, and so its fix-its' too, is `spelling` applied to this one's. Build tools
-	/// attribute a diagnostic to a file by its path, so `generate` prints an absolute one.
+	/// attribute a diagnostic to a file by its path, so `generate` prints it as the build system spells the file.
 	public func respellingFilePath(_ spelling: (String) -> String) -> SourceDiagnostic {
 		SourceDiagnostic(
 			severity: severity,

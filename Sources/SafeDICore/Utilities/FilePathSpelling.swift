@@ -117,19 +117,22 @@ public struct ProjectFilePaths: Sendable {
 	///   working directory.
 	public init(projectRoot: String) {
 		let reportedProjectRootURL = URL(fileURLWithPath: projectRoot, isDirectory: true)
-		reportedProjectRoot = projectRoot
+		reportedProjectRoot = URL(fileURLWithPath: projectRoot).path
 		let reportedRoot = NormalizedFilePath(projectRoot)
-		let resolvedFilePath = realpath(projectRoot, nil)
+		let resolvedFilePath = realpath(reportedProjectRoot, nil)
 		defer { free(resolvedFilePath) }
 		let resolvedProjectRoot = resolvedFilePath.map { String(cString: $0) }
 		reportsResolvedProjectRoot = resolvedProjectRoot == reportedProjectRoot
 		normalizedProjectRoot = resolvedProjectRoot.map { NormalizedFilePath($0) } ?? reportedRoot
+		self.reportedRoot = reportedRoot
 		reportedRootPrefix = reportedRoot.directoryPrefix
 		rootPrefix = normalizedProjectRoot.directoryPrefix
 		self.reportedProjectRootURL = reportedProjectRootURL
 	}
 
-	/// The project root as the build system reported it, which is how the build system spells the paths inside it.
+	/// The project root as the build system reported it, made absolute against the working directory and without a
+	/// trailing `/`, but not normalized: the build system spells the files inside the root by joining this with their
+	/// paths inside it, and the manifest records it as its `projectRoot`.
 	public let reportedProjectRoot: String
 
 	/// Whether the reported root is spelled exactly as `realpath(3)` resolves it: absolute, through no symbolic
@@ -149,7 +152,9 @@ public struct ProjectFilePaths: Sendable {
 
 	/// The comparable spelling of `path`, such as a file found relative to the working directory.
 	public func projectFilePath(of path: NormalizedFilePath) -> ProjectFilePath {
-		if reportedRootPrefix != rootPrefix, path.path.hasPrefix(reportedRootPrefix) {
+		if path == reportedRoot {
+			ProjectFilePath(normalizedProjectRoot)
+		} else if reportedRootPrefix != rootPrefix, path.path.hasPrefix(reportedRootPrefix) {
 			ProjectFilePath(NormalizedFilePath(normalizedPath: rootPrefix + path.path.dropFirst(reportedRootPrefix.count)))
 		} else {
 			ProjectFilePath(path)
@@ -162,8 +167,9 @@ public struct ProjectFilePaths: Sendable {
 		path.normalizedPath.path(relativeToDirectoryPrefix: rootPrefix)
 	}
 
-	/// How the build system spells the file at `path`, for the plugin to declare it as an input and for a
-	/// `#sourceLocation` directive the compiler compares with its own paths: the reported project root joined with the file's path inside the project, or, for a file
+	/// How the build system spells the file at `path`, for the plugin to declare it as an input, for a
+	/// `#sourceLocation` directive the compiler compares with its own paths, and for a diagnostic an IDE maps to the
+	/// file it has open: the reported project root joined with the file's path inside the project, or, for a file
 	/// outside the project, its absolute normalized path. The build system hands the compiler the paths it reported
 	/// to the plugin, which are inside the reported root. Normalizing the joined path would not keep that spelling:
 	/// on Apple platforms, Foundation removes a leading `/private` from paths such as `/private/tmp/…`, which the
@@ -177,6 +183,7 @@ public struct ProjectFilePaths: Sendable {
 		}
 	}
 
+	private let reportedRoot: NormalizedFilePath
 	private let reportedRootPrefix: String
 	private let rootPrefix: String
 	private let reportedProjectRootURL: URL

@@ -60,6 +60,23 @@ struct SafeDIToolPathSpellingTests: ~Copyable {
 
 	@Test(arguments: ProjectRootSpelling.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func scan_listsAdditionalDirectoryFilesAsBuildInputsUnderManifestProjectRoot_whenProjectRootIsReportedEitherWay(projectRootSpelling: ProjectRootSpelling) async throws {
+		let project = try makeProject()
+
+		let manifest = try await project.scan(reportingProjectRoot: projectRootSpelling)
+
+		// The build system spells the files inside the project root as it reported the root, made absolute, which is
+		// also how the manifest records the root and how `generate` spells the files for the compiler.
+		let projectRoot = try #require(manifest.projectRoot)
+		#expect(projectRoot == project.absoluteProjectRoot(spelled: projectRootSpelling))
+		#expect(manifest.additionalInputFiles == [
+			"\(projectRoot)/Extra/InnerRoot.swift",
+			"\(projectRoot)/Shared/Dependency.swift",
+		])
+	}
+
+	@Test(arguments: ProjectRootSpelling.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_declaresInputInAdditionalDirectoryOnce_whenProjectRootIsReportedEitherWay(projectRootSpelling: ProjectRootSpelling) async throws {
 		let project = try makeProject()
 		_ = try await project.scan(reportingProjectRoot: projectRootSpelling)
@@ -79,6 +96,58 @@ struct SafeDIToolPathSpellingTests: ~Copyable {
 		try await project.generate()
 
 		#expect(try project.generatedFiles() == Self.expectedOutput)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_usesScanCache_whenAdditionalDirectoriesAreReachedThroughSymbolicLinkToProjectRoot() async throws {
+		// `generate` finds the additional directories' files again to check that none was added, and they compare
+		// with the files `scan` found only once both are spelled under the resolved root.
+		let project = try makeProject(additionalDirectories: { project in
+			["\(project.symbolicLinkFromWorkingDirectory)/Extra", "\(project.symbolicLinkFromWorkingDirectory)/Shared"]
+		})
+		_ = try await project.scan(reportingProjectRoot: .throughSymbolicLink)
+		try project.rewriteRootKeepingModificationTime()
+
+		try await project.generate()
+
+		// Only a fresh parse reads the rewritten root, which instantiates nothing.
+		#expect(try project.generatedFiles() == Self.expectedOutput)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_usesScanCache_whenAdditionalDirectoryIsProjectRootReportedThroughSymbolicLink() async throws {
+		// A configuration in a project built from its root can name the root itself, `"."`. `generate` must find the
+		// directory as `scan` did, from the working directory, rather than through the root as reported.
+		let project = try makeProject(additionalDirectories: { project in
+			[project.projectDirectoryFromWorkingDirectory]
+		})
+		_ = try await project.scan(reportingProjectRoot: .throughSymbolicLink)
+		try project.rewriteRootKeepingModificationTime()
+
+		try await project.generate()
+
+		// Only a fresh parse reads the rewritten root, which instantiates nothing.
+		#expect(try project.generatedFiles() == Self.expectedOutput)
+	}
+
+	@Test(arguments: [ProjectRootSpelling.throughSymbolicLink, .resolved])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func buildLog_namesDiagnosticFilesAsBuildSystemSpellsThem_whenProjectRootIsReportedEitherWay(projectRootSpelling: ProjectRootSpelling) async throws {
+		// An IDE maps a diagnostic to the file it has open by the path the build system handed it, which is under the
+		// root as reported.
+		let project = try makeProject(rootDependencyType: "MissingDependency")
+		_ = try await project.scan(reportingProjectRoot: projectRootSpelling)
+		let buildLog = Generate.BuildLog()
+
+		await assertThrowsError("\(project.absoluteProjectRoot(spelled: projectRootSpelling))/Extra/InnerRoot.swift:6:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `MissingDependency`") {
+			do {
+				try await project.generate(buildLog: buildLog)
+			} catch let error as any SourceLocatedError {
+				throw BuildLogError(description: buildLog.formatted(error.sourceDiagnostics))
+			}
+		}
 	}
 
 	// MARK: Private
@@ -127,6 +196,11 @@ struct SafeDIToolPathSpellingTests: ~Copyable {
 		}
 	}
 
+	/// A diagnostic formatted for the build log, thrown so `assertThrowsError` compares it.
+	private struct BuildLogError: Error, CustomStringConvertible {
+		let description: String
+	}
+
 	private struct Project {
 		/// The project directory as the temporary directory spells it.
 		let projectDirectory: URL
@@ -140,6 +214,10 @@ struct SafeDIToolPathSpellingTests: ~Copyable {
 
 		var projectDirectoryFromWorkingDirectory: String {
 			currentDirectoryRelativePath(to: projectDirectory)
+		}
+
+		var symbolicLinkFromWorkingDirectory: String {
+			currentDirectoryRelativePath(to: URL(fileURLWithPath: symbolicLink))
 		}
 
 		/// The project root as `scan` is handed it.
@@ -156,8 +234,7 @@ struct SafeDIToolPathSpellingTests: ~Copyable {
 			}
 		}
 
-		/// The project root `scan` is handed, made absolute against the working directory without resolving it, under
-		/// which the inputs are named.
+		/// The project root `scan` is handed, made absolute against the working directory without resolving it.
 		func absoluteProjectRoot(spelled projectRootSpelling: ProjectRootSpelling) -> String {
 			switch projectRootSpelling {
 			case .throughSymbolicLink, .throughSymbolicLinkWithTrailingSlash:
@@ -188,11 +265,25 @@ struct SafeDIToolPathSpellingTests: ~Copyable {
 		}
 
 		/// Runs `generate` with the manifest `scan` wrote.
-		func generate() async throws {
+		func generate(buildLog: Generate.BuildLog = Generate.BuildLog()) async throws {
 			try await Generate.parse([
 				swiftFileCSV.path,
 				"--swift-manifest", manifestFile.path,
-			]).generate()
+			]).generate(buildLog: buildLog)
+		}
+
+		/// Rewrites the root so it instantiates nothing, keeping the modification time `scan` recorded, so only a
+		/// `generate` that parses afresh reads the change.
+		func rewriteRootKeepingModificationTime() throws {
+			let rootFile = projectDirectory.appendingPathComponent("Extra/InnerRoot.swift")
+			let scannedModificationTime = try FileModificationTime(ofItemAtPath: rootFile.path)
+			try """
+			@Instantiable(isRoot: true)
+			public struct InnerRoot: Instantiable {
+			    public init() {}
+			}
+			""".write(to: rootFile, atomically: true, encoding: .utf8)
+			try scannedModificationTime.apply(toItemAtPath: rootFile.path)
 		}
 
 		/// The Swift files `generate` wrote, keyed by file name.
@@ -205,9 +296,17 @@ struct SafeDIToolPathSpellingTests: ~Copyable {
 		}
 	}
 
-	/// A project in a temporary directory, with a symbolic link to it beside it, whose configuration includes the
-	/// project's `Extra` and `Shared` directories relative to the working directory, reached without the link.
-	private mutating func makeProject() throws -> Project {
+	/// A project in a temporary directory, with a symbolic link to it beside it.
+	/// - Parameters:
+	///   - additionalDirectories: The directories the configuration includes, relative to the working directory. By
+	///     default, the project's `Extra` and `Shared` directories, reached without the link.
+	///   - rootDependencyType: The type the root instantiates.
+	private mutating func makeProject(
+		additionalDirectories: (Project) -> [String] = { project in
+			["\(project.projectDirectoryFromWorkingDirectory)/Extra", "\(project.projectDirectoryFromWorkingDirectory)/Shared"]
+		},
+		rootDependencyType: String = "Dependency",
+	) throws -> Project {
 		let fixtureDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
 		let projectDirectory = fixtureDirectory.appendingPathComponent("Project")
 		for directory in ["Target", "Shared", "Extra"] {
@@ -215,7 +314,11 @@ struct SafeDIToolPathSpellingTests: ~Copyable {
 		}
 		let outputDirectory = fixtureDirectory.appendingPathComponent("Output")
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let symbolicLink = fixtureDirectory.appendingPathComponent("Link")
+		// The link lies deeper than any working directory, so a directory named relative to the working directory names
+		// no directory when it is wrongly read relative to the root reported through the link.
+		let symbolicLinkDirectory = (0..<32).reduce(fixtureDirectory) { directory, _ in directory.appendingPathComponent("Nested") }
+		try FileManager.default.createDirectory(at: symbolicLinkDirectory, withIntermediateDirectories: true)
+		let symbolicLink = symbolicLinkDirectory.appendingPathComponent("Link")
 		try FileManager.default.createSymbolicLink(at: symbolicLink, withDestinationURL: projectDirectory)
 		filesToDelete.append(fixtureDirectory)
 
@@ -229,7 +332,7 @@ struct SafeDIToolPathSpellingTests: ~Copyable {
 		)
 		try """
 		#SafeDIConfiguration(
-		    additionalDirectoriesToInclude: ["\(project.projectDirectoryFromWorkingDirectory)/Extra", "\(project.projectDirectoryFromWorkingDirectory)/Shared"]
+		    additionalDirectoriesToInclude: [\(additionalDirectories(project).map { "\"\($0)\"" }.joined(separator: ", "))]
 		)
 		""".write(to: projectDirectory.appendingPathComponent("Target/SafeDIConfiguration.swift"), atomically: true, encoding: .utf8)
 		try """
@@ -241,10 +344,10 @@ struct SafeDIToolPathSpellingTests: ~Copyable {
 		try """
 		@Instantiable(isRoot: true)
 		public struct InnerRoot: Instantiable {
-		    public init(dependency: Dependency) {
+		    public init(dependency: \(rootDependencyType)) {
 		        self.dependency = dependency
 		    }
-		    @Instantiated let dependency: Dependency
+		    @Instantiated let dependency: \(rootDependencyType)
 		}
 		""".write(to: projectDirectory.appendingPathComponent("Extra/InnerRoot.swift"), atomically: true, encoding: .utf8)
 		return project

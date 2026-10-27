@@ -84,6 +84,12 @@ struct FilePathSpellingTests: ~Copyable {
 	}
 
 	@Test
+	func reportedProjectRoot_isAbsoluteWithoutTrailingSlash_whenRootIsRelativeOrEndsInSlash() {
+		#expect(ProjectFilePaths(projectRoot: ".").reportedProjectRoot == FileManager.default.currentDirectoryPath)
+		#expect(ProjectFilePaths(projectRoot: "\(linkedProjectRoot)/").reportedProjectRoot == linkedProjectRoot)
+	}
+
+	@Test
 	func projectFilePath_isTheSame_whenProjectRootIsReportedThroughSymbolicLinkOrResolved() throws {
 		let throughSymbolicLink = ProjectFilePaths(projectRoot: linkedProjectRoot)
 		let resolved = try ProjectFilePaths(projectRoot: resolvedProjectRoot)
@@ -97,6 +103,14 @@ struct FilePathSpellingTests: ~Copyable {
 			resolved.projectFilePath(of: "Sources/File.swift"),
 		]
 		#expect(Set(spellings).count == 1)
+	}
+
+	@Test
+	func projectFilePath_isResolvedRoot_whenPathIsProjectRootReportedThroughSymbolicLink() throws {
+		let projectFilePaths = ProjectFilePaths(projectRoot: linkedProjectRoot)
+
+		#expect(try projectFilePaths.projectFilePath(of: ".") == projectFilePaths.projectFilePath(of: resolvedProjectRoot))
+		#expect(projectFilePaths.projectFilePath(of: ".").path == projectFilePaths.normalizedProjectRoot.path)
 	}
 
 	@Test

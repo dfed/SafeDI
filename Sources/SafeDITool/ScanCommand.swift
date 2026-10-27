@@ -222,7 +222,7 @@ func performScan(
 		additionalInputFiles: additionalInputFiles,
 		activeCompilationConditions: activeCompilationConditions.sorted(),
 		mockScopedFilePaths: mockScopedFilePaths.map(projectFilePaths.manifestPath(of:)).sorted(),
-		projectRoot: projectFilePaths.reportedProjectRoot.asFileURL.path,
+		projectRoot: projectFilePaths.reportedProjectRoot,
 	)
 
 	let encoder = JSONEncoder()
@@ -240,15 +240,16 @@ func performScan(
 	func cached(_ fileScan: FileScan) -> CachedFileScan {
 		CachedFileScan(scannedPath: fileScan.path, fileScan: normalized(fileScan))
 	}
+	// The directories as this scan found them, relative to the working directory, so `generate` finds the same files.
 	let additionalDirectories = configuration?.additionalDirectoriesToInclude.map { directory in
-		projectFilePaths.projectFilePath(of: directory).path
+		NormalizedFilePath(directory).path
 	}.sorted() ?? []
 	let cached = CachedScannedModuleInfo(
 		moduleInfo: ModuleInfo(fileScans.filter { !$0.consultsCompilationConditions }.map(normalized)),
 		conditionSensitiveFileScans: fileScans.filter(\.consultsCompilationConditions).map(cached),
 		additionalModuleInfo: ModuleInfo(additionalFileScans.map(\.fileScan).filter { !$0.consultsCompilationConditions }),
 		additionalConditionSensitiveFileScans: additionalFileScans.filter(\.fileScan.consultsCompilationConditions),
-		projectRoot: projectFilePaths.reportedProjectRoot.asFileURL.path,
+		projectRoot: projectFilePaths.reportedProjectRoot,
 		// Every file scan read for this module — CSV inputs plus any files reached through
 		// `#SafeDIConfiguration.additionalDirectoriesToInclude` — so edits to either invalidate the cache.
 		scannedInputs: scannedInputStamps
