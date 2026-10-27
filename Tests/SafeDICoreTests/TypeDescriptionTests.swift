@@ -1723,6 +1723,66 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.typeIdentifier)
 		#expect(!typeDescription.containsSelf)
 	}
+
+	// MARK: - replacingInstantiatedType
+
+	@Test
+	func replacingInstantiatedType_replacesOnlyBuiltType_whenErasedInstantiatorForwardsTypeOfSameName() {
+		let typeDescription = TypeSyntax(stringLiteral: "ErasedInstantiator<Service, Service>").typeDescription
+
+		let replaced = typeDescription.replacingInstantiatedType { _ in
+			.nested(name: "Service", parentType: .simple(name: "Feature"))
+		}
+
+		#expect(replaced?.asSource == "ErasedInstantiator<Service, Feature.Service>")
+	}
+
+	@Test
+	func replacingInstantiatedType_replacesTypeThatAsInstantiatedTypeReturns_whenTypeWrapsInstantiatedType() throws {
+		for source in [
+			"Service",
+			"Service?",
+			"Service!",
+			"any Service",
+			"some Service",
+			"Instantiator<Service>?",
+			"SendableInstantiator<Service>",
+			"SendableErasedInstantiator<(), Service>",
+			"ErasedInstantiator<(), any Service>",
+			"LazilyInstantiated<Service>",
+			"LazilyInstantiated<any Service>?",
+			"SendableLazilyInstantiated<Service>",
+			"SendableLazilyInstantiated<any Service>",
+		] {
+			let typeDescription = TypeSyntax(stringLiteral: source).typeDescription
+			let replacementType = TypeDescription.nested(name: "Service", parentType: .simple(name: "Feature"))
+
+			let replaced = try #require(typeDescription.replacingInstantiatedType { instantiatedType in
+				#expect(instantiatedType == typeDescription.asInstantiatedType)
+				return replacementType
+			})
+
+			#expect(replaced.asInstantiatedType == replacementType)
+		}
+	}
+
+	@Test
+	func replacingInstantiatedType_keepsExistentialSpelling_whenLazilyInstantiatedBuildsExistential() {
+		let typeDescription = TypeSyntax(stringLiteral: "LazilyInstantiated<any Service>").typeDescription
+
+		let replaced = typeDescription.replacingInstantiatedType { _ in
+			.nested(name: "Service", parentType: .simple(name: "Feature"))
+		}
+
+		#expect(replaced?.asSource == "LazilyInstantiated<any Feature.Service>")
+	}
+
+	@Test
+	func replacingInstantiatedType_returnsNil_whenReplacementKeepsInstantiatedType() {
+		let typeDescription = TypeSyntax(stringLiteral: "Instantiator<Service>?").typeDescription
+
+		#expect(typeDescription.replacingInstantiatedType { _ in nil } == nil)
+	}
 }
 
 extension TypeDescription {

@@ -356,6 +356,48 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenOnlyIfAvailableReceivedPropertyIsHiddenByForwardedPropertyOfMockedTypeWithSameLabel() async {
+		// The mocked type's own tree hides `user: Draft?`: production builds `Editor` under `ProfileView`, beside
+		// the forwarded `user: User`. A mock names its `onlyIfAvailable` overrides apart only from what its
+		// promotion of received dependencies binds beside them.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Editor.swift"]):4:5: error: @Received property `user: Draft?` is hidden in chain: ProfileView -> Editor. `ProfileView` declares `user: User` with the same label, so the types below `ProfileView` receive `user: User` instead. Give `user: User` on `ProfileView` a different label to fix.
+				\(fixtures["ProfileView.swift"]):4:5: note: `user: User` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public final class User {}
+					public final class Draft {}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public final class ProfileView: Instantiable {
+					    public init(user: User, editorBuilder: Instantiator<Editor>) { self.user = user; self.editorBuilder = editorBuilder }
+					    @Forwarded let user: User
+					    @Instantiated let editorBuilder: Instantiator<Editor>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Editor: Instantiable {
+					    public init(user: Draft?) { self.user = user }
+					    @Received(onlyIfAvailable: true) let user: Draft?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenPromotedDependenciesReceiveEachOther() async {
 		// Child.mock() promotes `c` (Child receives it) and `b` (C receives it).
 		// Worker, built inside `b`, requires `c`, so each promoted dependency must be
@@ -1114,6 +1156,268 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 					}
 					""",
 				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenMockRootAliasesInstantiatorThatBuildsIt() async {
+		// The mock promotes `nodeBuilder` to build Node, and the Node it builds aliases `nodeBuilder`
+		// itself. An alias receives the property it renames, so this is a received cycle.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Node.swift"]):4:5: error: Dependency cycle detected! @Instantiated `nodeBuilder: Instantiator<Node>` is @Received as `childBuilder: Instantiator<Node>` in tree created by @Instantiated `nodeBuilder: Instantiator<Node>`. Declare @Received(fulfilledByDependencyNamed:ofType:) `childBuilder: Instantiator<Node>` on `Node` as @Instantiated to fix. Full cycle: Instantiator<Node> -> Instantiator<Node>
+				\(fixtures["Node.swift"]):1:1: note: `Node` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Node: Instantiable {
+					    public init(childBuilder: Instantiator<Node>) { self.childBuilder = childBuilder }
+					    @Received(fulfilledByDependencyNamed: "nodeBuilder", ofType: Instantiator<Node>.self) let childBuilder: Instantiator<Node>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenMockRootAliasesSendableInstantiatorThatBuildsIt() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Node.swift"]):4:5: error: Dependency cycle detected! @Instantiated `nodeBuilder: SendableInstantiator<Node>` is @Received as `childBuilder: SendableInstantiator<Node>` in tree created by @Instantiated `nodeBuilder: SendableInstantiator<Node>`. Declare @Received(fulfilledByDependencyNamed:ofType:) `childBuilder: SendableInstantiator<Node>` on `Node` as @Instantiated to fix. Full cycle: SendableInstantiator<Node> -> SendableInstantiator<Node>
+				\(fixtures["Node.swift"]):1:1: note: `Node` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Node: Instantiable, Sendable {
+					    public init(childBuilder: SendableInstantiator<Node>) { self.childBuilder = childBuilder }
+					    @Received(fulfilledByDependencyNamed: "nodeBuilder", ofType: SendableInstantiator<Node>.self) let childBuilder: SendableInstantiator<Node>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenMockRootAliasesErasedInstantiatorThatBuildsIt() async {
+		// Holder's erasure lets the mock build `nodeBuilder: ErasedInstantiator<(), AnyNode>` from Node,
+		// and the Node it builds aliases that instantiator, erased to another wrapper. AnyNode is not
+		// `@Instantiable`, so no note marks it.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Node.swift"]):4:5: error: Dependency cycle detected! @Instantiated `nodeBuilder: ErasedInstantiator<(), AnyNode>` is @Received as `childBuilder: AnyNodeFactory` in tree created by @Instantiated `nodeBuilder: ErasedInstantiator<(), AnyNode>`. Declare @Received(fulfilledByDependencyNamed:ofType:) `childBuilder: AnyNodeFactory` on `Node` as @Instantiated to fix. Full cycle: ErasedInstantiator<(), AnyNode> -> ErasedInstantiator<(), AnyNode>
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public final class AnyNode {
+					    public init(_ node: Node) { self.node = node }
+					    let node: Node
+					}
+					public struct AnyNodeFactory {
+					    public init(_ builder: ErasedInstantiator<(), AnyNode>) { self.builder = builder }
+					    let builder: ErasedInstantiator<(), AnyNode>
+					}
+					@Instantiable
+					public final class Holder: Instantiable {
+					    public init(nodeBuilder: ErasedInstantiator<(), AnyNode>) { self.nodeBuilder = nodeBuilder }
+					    @Instantiated(fulfilledByType: "Node", erasedToConcreteExistential: true) let nodeBuilder: ErasedInstantiator<(), AnyNode>
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public final class Node: Instantiable {
+					    public init(childBuilder: AnyNodeFactory) { self.childBuilder = childBuilder }
+					    @Received(fulfilledByDependencyNamed: "nodeBuilder", ofType: ErasedInstantiator<(), AnyNode>.self, erasedToConcreteExistential: true) let childBuilder: AnyNodeFactory
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenAliasOfAncestorsAliasReceivesInstantiatorThatBuildsIt() async {
+		// Screen renames `nodeBuilder` to `middleBuilder`, and Node renames `middleBuilder` to
+		// `childBuilder`. The mock promotes both instantiators, and the Node that `middleBuilder` builds
+		// aliases `middleBuilder` itself.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Node.swift"]):4:5: error: Dependency cycle detected! @Instantiated `middleBuilder: Instantiator<Node>` is @Received as `childBuilder: Instantiator<Node>` in tree created by @Instantiated `middleBuilder: Instantiator<Node>`. Declare @Received(fulfilledByDependencyNamed:ofType:) `childBuilder: Instantiator<Node>` on `Node` as @Instantiated to fix. Full cycle: Instantiator<Node> -> Instantiator<Node>
+				\(fixtures["Node.swift"]):1:1: note: `Node` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(middleBuilder: Instantiator<Node>) { self.middleBuilder = middleBuilder }
+					    @Received(fulfilledByDependencyNamed: "nodeBuilder", ofType: Instantiator<Node>.self) let middleBuilder: Instantiator<Node>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Node: Instantiable {
+					    public init(childBuilder: Instantiator<Node>) { self.childBuilder = childBuilder }
+					    @Received(fulfilledByDependencyNamed: "middleBuilder", ofType: Instantiator<Node>.self) let childBuilder: Instantiator<Node>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenAliasThatChildRenamesAgainReceivesInstantiatorThatBuildsIt() async {
+		// Node renames `nodeBuilder` to `middleBuilder`, and its child renames `middleBuilder` to
+		// `childBuilder`. The Node that the promoted `nodeBuilder` builds is the first alias's receiver,
+		// so the cycle is reported there.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Node.swift"]):4:5: error: Dependency cycle detected! @Instantiated `nodeBuilder: Instantiator<Node>` is @Received as `middleBuilder: Instantiator<Node>` in tree created by @Instantiated `nodeBuilder: Instantiator<Node>`. Declare @Received(fulfilledByDependencyNamed:ofType:) `middleBuilder: Instantiator<Node>` on `Node` as @Instantiated to fix. Full cycle: Instantiator<Node> -> Instantiator<Node>
+				\(fixtures["Node.swift"]):1:1: note: `Node` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Node: Instantiable {
+					    public init(middleBuilder: Instantiator<Node>, child: Child) { self.middleBuilder = middleBuilder; self.child = child }
+					    @Received(fulfilledByDependencyNamed: "nodeBuilder", ofType: Instantiator<Node>.self) let middleBuilder: Instantiator<Node>
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(childBuilder: Instantiator<Node>) { self.childBuilder = childBuilder }
+					    @Received(fulfilledByDependencyNamed: "middleBuilder", ofType: Instantiator<Node>.self) let childBuilder: Instantiator<Node>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenAliasInTreeOfPromotedInstantiatorReceivesThatInstantiator() async {
+		// Screen receives `nodeBuilder`, which the mock promotes. Child, built inside the Node it builds,
+		// aliases `nodeBuilder`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):4:5: error: Dependency cycle detected! @Instantiated `nodeBuilder: Instantiator<Node>` is @Received as `childBuilder: Instantiator<Node>` in tree created by @Instantiated `nodeBuilder: Instantiator<Node>`. Declare @Received(fulfilledByDependencyNamed:ofType:) `childBuilder: Instantiator<Node>` on `Child` as @Instantiated to fix. Full cycle: Instantiator<Node> -> Child -> Instantiator<Node>
+				\(fixtures["Node.swift"]):1:1: note: `Node` is part of the cycle
+				\(fixtures["Child.swift"]):1:1: note: `Child` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(nodeBuilder: Instantiator<Node>) { self.nodeBuilder = nodeBuilder }
+					    @Received let nodeBuilder: Instantiator<Node>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Node: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(childBuilder: Instantiator<Node>) { self.childBuilder = childBuilder }
+					    @Received(fulfilledByDependencyNamed: "nodeBuilder", ofType: Instantiator<Node>.self) let childBuilder: Instantiator<Node>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTypeListedInAdditionalMocksToGenerateAliasesInstantiatorThatBuildsIt() async throws {
+		// Node is defined in a dependent module without generateMock: true.
+		let dependentModuleOutput = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Node: Instantiable {
+				    public init(childBuilder: Instantiator<Node>) { self.childBuilder = childBuilder }
+				    @Received(fulfilledByDependencyNamed: "nodeBuilder", ofType: Instantiator<Node>.self) let childBuilder: Instantiator<Node>
+				}
+				""",
+			],
+			filesToDelete: &filesToDelete,
+		)
+		let dependentModuleFixtures = dependentModuleOutput.fixtures
+
+		await assertThrowsError(
+			diagnostics: { _ in
+				"""
+				\(dependentModuleFixtures["Node.swift"]):4:5: error: Dependency cycle detected! @Instantiated `nodeBuilder: Instantiator<Node>` is @Received as `childBuilder: Instantiator<Node>` in tree created by @Instantiated `nodeBuilder: Instantiator<Node>`. Declare @Received(fulfilledByDependencyNamed:ofType:) `childBuilder: Instantiator<Node>` on `Node` as @Instantiated to fix. Full cycle: Instantiator<Node> -> Instantiator<Node>
+				\(dependentModuleFixtures["Node.swift"]):1:1: note: `Node` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					#SafeDIConfiguration(
+					    additionalMocksToGenerate: [
+					        "Node",
+					    ]
+					)
+					""",
+				],
+				dependentModuleInfoPaths: [dependentModuleOutput.moduleInfoOutputPath],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
