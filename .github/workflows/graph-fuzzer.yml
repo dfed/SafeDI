@@ -33,11 +33,20 @@ permissions: {}
 
 jobs:
   fuzz:
-    name: Fuzz Dependency Graphs on Xcode 26
-    runs-on: macos-26
+    # Nothing here needs macOS: the long run runs the tool and compiles its
+    # output with `swiftc -emit-object`, as the test suite does on Linux in
+    # every pull request. So it uses the "Build and Test on Linux" job's
+    # container in ci.yml and leaves the scarce macOS runners to the release
+    # builds it runs beside in a publish.
+    name: Fuzz Dependency Graphs on Linux
+    runs-on: ubuntu-latest
+    container: swift:6.2
     timeout-minutes: 90
     permissions:
       contents: read
+    defaults:
+      run:
+        shell: bash
     env:
       # A call from another workflow has no `starting_seed` or `iterations`
       # input, so it runs the scheduled seeds.
@@ -46,25 +55,24 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
-      - name: Select Xcode Version
-        run: sudo xcode-select --switch /Applications/Xcode_26.0.app/Contents/Developer
       - name: Resolve Package Dependencies
         uses: ./.github/actions/retry
         with:
-          command: xcrun swift package resolve
+          command: swift package resolve
       - name: Name Report Files
         run: |
           mkdir -p "$RUNNER_TEMP/graph-fuzzer"
           echo "REPORT=$RUNNER_TEMP/graph-fuzzer/report.txt" >> "$GITHUB_ENV"
           echo "SUMMARY=$RUNNER_TEMP/graph-fuzzer/summary.md" >> "$GITHUB_ENV"
+      # Release, as the Linux test job builds, so the tool's thousands of runs are fast.
       - name: Build
-        run: xcrun swift build --traits sourceBuild --build-tests
+        run: swift build -c release -Xswiftc -enable-testing --traits sourceBuild --build-tests
       - name: Run Graph Fuzzer
         run: |
           SAFEDI_GRAPH_FUZZER_ITERATIONS="$ITERATIONS" \
           SAFEDI_GRAPH_FUZZER_STARTING_SEED="$STARTING_SEED" \
           SAFEDI_GRAPH_FUZZER_REPORT="$REPORT" \
-            xcrun swift test --traits sourceBuild --skip-build --filter 'SafeDIToolGraphFuzzerTests/longRun'
+            swift test -c release -Xswiftc -enable-testing --traits sourceBuild --skip-build --filter 'SafeDIToolGraphFuzzerTests/longRun'
       - name: Summarize
         if: ${{ !cancelled() }}
         # Fails when a graph failed, a known issue went stale, the run reported
@@ -85,9 +93,10 @@ jobs:
           {
             echo "### Graph fuzzer"
             echo
-            echo "Started $graph_count graphs ($ITERATIONS requested) from seed $STARTING_SEED on $(git rev-parse HEAD)."
+            echo "Started $graph_count graphs ($ITERATIONS requested) from seed $STARTING_SEED on $(git -c safe.directory="$PWD" rev-parse HEAD)."
             echo
-            grep '^problem ' "$REPORT" | sed 's/^problem /- **Problem:** /'
+            # Under `bash -e -o pipefail`, a grep that finds nothing must not end the script.
+            { grep '^problem ' "$REPORT" || true; } | sed 's/^problem /- **Problem:** /'
             if [ "$graph_count" -eq 0 ] && [ "$has_problems" = false ]; then
               echo "**It ran zero graphs.** If the build succeeded, check that \`longRun_findsNoUnknownFailures_whenEnabledByEnvironment\` still exists and reads \`SAFEDI_GRAPH_FUZZER_ITERATIONS\`."
             elif ! grep -q '^completed ' "$REPORT" && [ "$has_problems" = false ]; then
@@ -97,7 +106,7 @@ jobs:
               echo "Completed $(grep '^completed ' "$REPORT" | sed 's/^completed //')."
             fi
             echo
-            grep -E '^(failure|stale) ' "$REPORT" | while read -r kind seed reason; do
+            { grep -E '^(failure|stale) ' "$REPORT" || true; } | while read -r kind seed reason; do
               if [ "$kind" = failure ]; then
                 echo "- **Seed $seed**: $reason. Reproduce with \`$(reproduce "$seed")\`"
               else
