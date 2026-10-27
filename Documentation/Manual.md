@@ -196,6 +196,8 @@ public struct LoggedInView: Instantiable, View {
 
 The exact semantics of each dependency kind — including `@Instantiated`’s configuration parameters for dependency inversion, and `@Received`’s `onlyIfAvailable` option — are covered in [@Instantiated](#instantiated), [@Received](#received), and [@Forwarded](#forwarded).
 
+SafeDI reserves the prefix `__safeDI_` for names in the code it generates, so the `@Instantiable` macro reports an error for a name SafeDI uses in that code that begins with it: a decorated property’s name, the name of an `instantiate(…)` parameter, a `fulfilledByDependencyNamed:` name, or the argument label of a default-valued initializer or mock parameter that a generated `mock()` takes and passes on.
+
 #### Creating the root of your dependency tree
 
 Any type decorated with `@Instantiable(isRoot: true)` is a root of a SafeDI dependency tree. SafeDI creates a no-parameter `public init()` initializer that instantiates the dependency tree in an extension on each root type.
