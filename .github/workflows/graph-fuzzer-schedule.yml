@@ -90,14 +90,17 @@ jobs:
     if: ${{ needs.decide.outputs.should-fuzz == 'true' }}
     uses: ./.github/workflows/graph-fuzzer.yml
     permissions:
+      # `actions: read` is for graph-fuzzer.yml's check that this schedule is enabled.
+      actions: read
       contents: read
 
   # Fails when the decision and what the fuzz job did disagree, so a broken
-  # decision output cannot skip the fuzzer without the run turning red.
+  # decision output cannot skip the fuzzer without the run turning red. A
+  # cancelled run is not checked.
   verify:
     name: Verify the Decision Was Followed
     needs: [decide, fuzz]
-    if: ${{ always() }}
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions: {}
     env:
@@ -118,7 +121,7 @@ jobs:
   report:
     name: Open or Update Issue
     needs: [decide, fuzz, verify]
-    if: ${{ failure() }}
+    if: ${{ failure() && !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       issues: write

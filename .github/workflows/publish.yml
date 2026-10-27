@@ -41,6 +41,19 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.ref_name }}
+      - name: Verify the checked-out commit is the dispatched commit
+        # Every job checks out the branch tip when it starts. The graph fuzzer
+        # fuzzes the commit the publish was dispatched on, so a job that sees a
+        # newer tip would build or release a commit nobody fuzzed.
+        env:
+          DISPATCHED_SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          checked_out_sha=$(git -c safe.directory="$PWD" rev-parse HEAD)
+          if [ "$checked_out_sha" != "$DISPATCHED_SHA" ]; then
+            echo "::error::$REF_NAME moved from $DISPATCHED_SHA, which this publish was dispatched on and fuzzed, to $checked_out_sha. Dispatch the publish again."
+            exit 1
+          fi
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
       - name: Stamp version
@@ -97,6 +110,19 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.ref_name }}
+      - name: Verify the checked-out commit is the dispatched commit
+        # Every job checks out the branch tip when it starts. The graph fuzzer
+        # fuzzes the commit the publish was dispatched on, so a job that sees a
+        # newer tip would build or release a commit nobody fuzzed.
+        env:
+          DISPATCHED_SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          checked_out_sha=$(git -c safe.directory="$PWD" rev-parse HEAD)
+          if [ "$checked_out_sha" != "$DISPATCHED_SHA" ]; then
+            echo "::error::$REF_NAME moved from $DISPATCHED_SHA, which this publish was dispatched on and fuzzed, to $checked_out_sha. Dispatch the publish again."
+            exit 1
+          fi
       - name: Stamp version
         run: sed -i 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
       - name: Build SafeDITool
@@ -122,6 +148,19 @@ jobs:
         uses: actions/checkout@v7
         with:
           ref: ${{ github.ref_name }}
+      - name: Verify the checked-out commit is the dispatched commit
+        # Every job checks out the branch tip when it starts. The graph fuzzer
+        # fuzzes the commit the publish was dispatched on, so a job that sees a
+        # newer tip would build or release a commit nobody fuzzed.
+        env:
+          DISPATCHED_SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          checked_out_sha=$(git -c safe.directory="$PWD" rev-parse HEAD)
+          if [ "$checked_out_sha" != "$DISPATCHED_SHA" ]; then
+            echo "::error::$REF_NAME moved from $DISPATCHED_SHA, which this publish was dispatched on and fuzzed, to $checked_out_sha. Dispatch the publish again."
+            exit 1
+          fi
       - name: Stamp version
         run: sed -i 's|"0.0.0-development"|"${{ inputs.version }}"|' Sources/SafeDITool/SafeDITool.swift
       - name: Build SafeDITool
@@ -142,6 +181,8 @@ jobs:
     name: Graph Fuzzer
     uses: ./.github/workflows/graph-fuzzer.yml
     permissions:
+      # `actions: read` lets it warn when the weekly schedule is disabled.
+      actions: read
       contents: read
 
   assemble-and-publish:
@@ -157,12 +198,28 @@ jobs:
           ref: ${{ github.ref_name }}
           token: ${{ secrets.RELEASE_UPLOADER }}
 
+      - name: Verify the checked-out commit is the dispatched commit
+        # Every job checks out the branch tip when it starts. The graph fuzzer
+        # fuzzes the commit the publish was dispatched on, so a job that sees a
+        # newer tip would build or release a commit nobody fuzzed.
+        env:
+          DISPATCHED_SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          checked_out_sha=$(git -c safe.directory="$PWD" rev-parse HEAD)
+          if [ "$checked_out_sha" != "$DISPATCHED_SHA" ]; then
+            echo "::error::$REF_NAME moved from $DISPATCHED_SHA, which this publish was dispatched on and fuzzed, to $checked_out_sha. Dispatch the publish again."
+            exit 1
+          fi
+
       - name: Select Xcode Version
         run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
 
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
+          # Only the SafeDITool builds, not the graph fuzzer's report.
+          pattern: SafeDITool-*
           path: artifacts
 
       - name: Assemble artifact bundle
