@@ -7712,5 +7712,656 @@ import Testing
 				""",
 			)
 		}
+
+		// MARK: Reserved Name Prefix Tests
+
+		@Test
+		func declaration_producesReservedNameDiagnostic_whenInstantiatedPropertyLabelBeginsWithReservedPrefix() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_editor: Editor) {
+				        self.__safeDI_editor = __safeDI_editor
+				    }
+
+				    @Instantiated let __safeDI_editor: Editor
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_editor: Editor) {
+				        self.__safeDI_editor = __safeDI_editor
+				    }
+
+				    let __safeDI_editor: Editor
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI_editor` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 7,
+						column: 23,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedNameDiagnostic_whenReceivedPropertyLabelBeginsWithReservedPrefix() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_editor: Draft?) {
+				        self.__safeDI_editor = __safeDI_editor
+				    }
+
+				    @Received(onlyIfAvailable: true) let __safeDI_editor: Draft?
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_editor: Draft?) {
+				        self.__safeDI_editor = __safeDI_editor
+				    }
+
+				    let __safeDI_editor: Draft?
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI_editor` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 7,
+						column: 42,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedNameDiagnostic_whenForwardedPropertyLabelBeginsWithReservedPrefix() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_user: User) {
+				        self.__safeDI_user = __safeDI_user
+				    }
+
+				    @Forwarded let __safeDI_user: User
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_user: User) {
+				        self.__safeDI_user = __safeDI_user
+				    }
+
+				    let __safeDI_user: User
+
+				    public typealias ForwardedProperties = User
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI_user` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 7,
+						column: 20,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedNameDiagnostic_whenAliasFulfillingDependencyNameBeginsWithReservedPrefix() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(editorVendor: EditorVendor) {
+				        self.editorVendor = editorVendor
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "__safeDI_editor", ofType: Editor.self) let editorVendor: EditorVendor
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(editorVendor: EditorVendor) {
+				        self.editorVendor = editorVendor
+				    }
+
+				    let editorVendor: EditorVendor
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI_editor` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 7,
+						column: 43,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_producesReservedNameDiagnostic_whenInstantiateParameterNameBeginsWithReservedPrefix() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    public static func instantiate(__safeDI_editor: Editor) -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate(__safeDI_editor: Editor) -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI_editor` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 3,
+						column: 36,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_expandsWithoutIssue_whenOnlyInstantiateParameterArgumentLabelBeginsWithReservedPrefix() {
+			// The dependency is named by the parameter's inner name. Its argument label only labels the
+			// argument in the call SafeDI generates, which binds nothing.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    public static func instantiate(__safeDI_editor editor: Editor) -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate(__safeDI_editor editor: Editor) -> ExampleService { fatalError() }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_fixit_renamesArgumentLabelAndKeepsParameterName_whenInitializerDefaultParameterLabelBeginsWithReservedPrefix() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_retryCount: Int = 3) {
+				        self.retryCount = __safeDI_retryCount
+				    }
+
+				    let retryCount: Int
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_retryCount: Int = 3) {
+				        self.retryCount = __safeDI_retryCount
+				    }
+
+				    let retryCount: Int
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI_retryCount` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 3,
+						column: 17,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Rename `__safeDI_retryCount` to `retryCount`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Rename `__safeDI_retryCount` to `retryCount`"],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(retryCount __safeDI_retryCount: Int = 3) {
+				        self.retryCount = __safeDI_retryCount
+				    }
+
+				    let retryCount: Int
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_fixit_removesRepeatedParameterName_whenInitializerDefaultParameterNameMatchesArgumentLabelWithoutReservedPrefix() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_retryCount retryCount: Int = 3) {
+				        self.retryCount = retryCount
+				    }
+
+				    let retryCount: Int
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_retryCount retryCount: Int = 3) {
+				        self.retryCount = retryCount
+				    }
+
+				    let retryCount: Int
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI_retryCount` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 3,
+						column: 17,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Rename `__safeDI_retryCount` to `retryCount`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Rename `__safeDI_retryCount` to `retryCount`"],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(retryCount: Int = 3) {
+				        self.retryCount = retryCount
+				    }
+
+				    let retryCount: Int
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_fixit_renamesOnlyArgumentLabel_whenInitializerDefaultParameterHasAnotherParameterName() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_retryCount count: Int = 3) {
+				        self.retryCount = count
+				    }
+
+				    let retryCount: Int
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_retryCount count: Int = 3) {
+				        self.retryCount = count
+				    }
+
+				    let retryCount: Int
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI_retryCount` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 3,
+						column: 17,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Rename `__safeDI_retryCount` to `retryCount`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Rename `__safeDI_retryCount` to `retryCount`"],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(retryCount count: Int = 3) {
+				        self.retryCount = count
+				    }
+
+				    let retryCount: Int
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_fixit_renamesArgumentLabel_whenCustomMockDefaultParameterLabelBeginsWithReservedPrefix() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct ExampleService: Instantiable {
+				    public init() {}
+				    public static func customMock(__safeDI_delay: Double = 0) -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init() {}
+				    public static func customMock(__safeDI_delay: Double = 0) -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI_delay` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 4,
+						column: 35,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Rename `__safeDI_delay` to `delay`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Rename `__safeDI_delay` to `delay`"],
+				fixedSource: """
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public struct ExampleService: Instantiable {
+				    public init() {}
+				    public static func customMock(delay __safeDI_delay: Double = 0) -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_fixit_renamesArgumentLabel_whenCustomMockDefaultParameterLabelBeginsWithReservedPrefix() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+				    public static func customMock(__safeDI_delay: Double = 0) -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+				    public static func customMock(__safeDI_delay: Double = 0) -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI_delay` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 4,
+						column: 35,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Rename `__safeDI_delay` to `delay`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Rename `__safeDI_delay` to `delay`"],
+				fixedSource: """
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService { fatalError() }
+				    public static func customMock(delay __safeDI_delay: Double = 0) -> ExampleService { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutIssue_whenLabelContainsReservedPrefixAfterItsStart() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(my__safeDI_editor: Editor, my__safeDI_retryCount: Int = 3) {
+				        self.my__safeDI_editor = my__safeDI_editor
+				    }
+
+				    @Instantiated let my__safeDI_editor: Editor
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(my__safeDI_editor: Editor, my__safeDI_retryCount: Int = 3) {
+				        self.my__safeDI_editor = my__safeDI_editor
+				    }
+
+				    let my__safeDI_editor: Editor
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutIssue_whenLabelBeginsWithSingleUnderscoreSafeDI() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(_safeDI_editor: Editor, _safeDIUser: User, _safeDI_retryCount: Int = 3) {
+				        self._safeDI_editor = _safeDI_editor
+				        self._safeDIUser = _safeDIUser
+				    }
+
+				    @Instantiated let _safeDI_editor: Editor
+				    @Received let _safeDIUser: User
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(_safeDI_editor: Editor, _safeDIUser: User, _safeDI_retryCount: Int = 3) {
+				        self._safeDI_editor = _safeDI_editor
+				        self._safeDIUser = _safeDIUser
+				    }
+
+				    let _safeDI_editor: Editor
+				    let _safeDIUser: User
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutIssue_whenUnlabeledDefaultParameterNameBeginsWithReservedPrefix() {
+			// An unlabeled default is elided from the call SafeDI generates, so its name binds nothing.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(_ __safeDI_retryCount: Int = 3) {
+				        self.retryCount = __safeDI_retryCount
+				    }
+
+				    let retryCount: Int
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(_ __safeDI_retryCount: Int = 3) {
+				        self.retryCount = __safeDI_retryCount
+				    }
+
+				    let retryCount: Int
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedNameDiagnosticWithoutFixit_whenLabelIsOnlyReservedPrefix() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_: Int = 3) {}
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_: Int = 3) {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI_` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 3,
+						column: 17,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedNameDiagnosticWithoutFixit_whenLabelWithoutReservedPrefixIsKeyword() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_class: Int = 3) {}
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_class: Int = 3) {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI_class` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 3,
+						column: 17,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedNameDiagnosticWithoutFixit_whenLabelWithoutReservedPrefixBeginsWithDigit() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_1stRetryCount: Int = 3) {}
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI_1stRetryCount: Int = 3) {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI_1stRetryCount` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 3,
+						column: 17,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedNameDiagnosticWithoutFixit_whenLabelWithoutReservedPrefixBeginsWithReservedPrefix() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI___safeDI_retryCount: Int = 3) {}
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(__safeDI___safeDI_retryCount: Int = 3) {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI___safeDI_retryCount` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 3,
+						column: 17,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedNameDiagnosticWithoutFixit_whenLabelWithoutReservedPrefixIsAnotherParameterLabel() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(retryCount: Int = 3, __safeDI_retryCount: Int = 3) {}
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(retryCount: Int = 3, __safeDI_retryCount: Int = 3) {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI_retryCount` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 3,
+						column: 38,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedNameDiagnosticWithoutFixit_whenLabelWithoutReservedPrefixIsDependencyLabel() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(retryCount: Int, __safeDI_retryCount: Int = 3) {
+				        self.retryCount = retryCount
+				    }
+
+				    @Received let retryCount: Int
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(retryCount: Int, __safeDI_retryCount: Int = 3) {
+				        self.retryCount = retryCount
+				    }
+
+				    let retryCount: Int
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI_retryCount` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 3,
+						column: 34,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
 	}
 #endif
