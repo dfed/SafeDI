@@ -80,6 +80,20 @@ final class Scope: Hashable {
 			.map(\.property),
 	)
 
+	/// The properties this scope makes available to the scopes it builds: those it creates, and those a mock
+	/// root builds because a type in its tree receives them. Read only once `propertiesToGenerate` is complete.
+	private(set) lazy var providedProperties = createdProperties.union(
+		propertiesToGenerate.compactMap {
+			switch $0 {
+			case let .instantiated(property, _, _):
+				property
+			case .aliased:
+				// An alias is created, so it is already in `createdProperties`.
+				nil
+			}
+		},
+	)
+
 	/// A received property this scope requires an ancestor to provide, with the location of the declaration that requires it.
 	struct RequiredReceivedProperty {
 		/// The property an ancestor must provide: the fulfilling property for an aliased dependency, the declared property otherwise.
