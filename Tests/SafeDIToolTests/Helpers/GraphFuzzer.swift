@@ -892,14 +892,14 @@ enum GraphFuzzerFinding: Equatable {
 
 /// FNV-1a over strings, so a pinned value names the same content on every platform.
 struct GraphFuzzerHash {
-	private(set) var value: UInt64 = 0xCBF2_9CE4_8422_2325
+	private(set) var value: UInt64 = 0xCBF29CE484222325
 
 	mutating func combine(_ string: String) {
 		for byte in string.utf8 {
-			value = (value ^ UInt64(byte)) &* 0x0000_0100_0000_01B3
+			value = (value ^ UInt64(byte)) &* 0x00000100000001B3
 		}
 		// Separate consecutive strings, so that "ab" then "c" differs from "a" then "bc".
-		value = (value ^ 0xFF) &* 0x0000_0100_0000_01B3
+		value = (value ^ 0xFF) &* 0x00000100000001B3
 	}
 }
 

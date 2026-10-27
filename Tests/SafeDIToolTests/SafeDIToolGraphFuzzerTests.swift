@@ -21,7 +21,6 @@
 import Foundation
 import Testing
 
-
 /// Random dependency graphs, run through SafeDITool and the compiler. See "Graph fuzzer" in CLAUDE.md.
 struct SafeDIToolGraphFuzzerTests {
 	// MARK: Smoke batch
@@ -185,7 +184,7 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test
 	func randomNumberGenerator_producesSplitMix64ReferenceSequence_forSeedZero() {
 		var random = GraphFuzzerRandomNumberGenerator(seed: 0)
-		#expect([random.next(), random.next(), random.next()] == [0xE220_A839_7B1D_CDAF, 0x6E78_9E6A_A1B9_65F4, 0x06C4_5D18_8009_454F])
+		#expect([random.next(), random.next(), random.next()] == [0xE220A8397B1DCDAF, 0x6E789E6AA1B965F4, 0x06C45D188009454F])
 	}
 
 	@Test
@@ -292,17 +291,17 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `swiftc` invocation when nothing fails.
 	static let smokeSeeds: [UInt64] = [0, 1, 5, 6, 7, 10, 29, 450]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x67BE_AD0D_D163_0695
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x67BEAD0DD1630695
 
 	/// The seeds `graph-fuzzer.yml` runs before every release and weekly, `0..<scheduledSeedCount`, which
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=scheduled` selects. `knownIssues` lists every one that fails.
-	static let scheduledSeedCount = 5000
+	static let scheduledSeedCount = 5_000
 
-	static let scheduledCorpusFixtureHash: UInt64 = 0x8129_5704_7246_024D
+	static let scheduledCorpusFixtureHash: UInt64 = 0x812957047246024D
 
 	/// How many of the scheduled seeds' graphs the tool accepts, and a hash of which ones.
-	static let scheduledAcceptedSeedCount = 2817
-	static let scheduledAcceptedSeedsHash: UInt64 = 0x16D5_D124_B191_76E9
+	static let scheduledAcceptedSeedCount = 2_817
+	static let scheduledAcceptedSeedsHash: UInt64 = 0x16D5D124B19176E9
 
 	/// Seeds in `0..<scheduledSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
@@ -310,27 +309,27 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "Two types instantiate instantiators of different types under one label in a lazy cycle, and the generated builder closure for one is passed where the other is expected",
 			diagnostics: ["cannot convert value", "argument passed to call that takes no arguments"],
-			seeds: [9, 321, 1075, 1334, 1567, 1599, 1627, 1681, 2026, 2101, 2147, 2903, 3309, 3741, 4571, 4652, 4795],
+			seeds: [9, 321, 1_075, 1_334, 1_567, 1_599, 1_627, 1_681, 2_026, 2_101, 2_147, 2_903, 3_309, 3_741, 4_571, 4_652, 4_795],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "A mock passes an onlyIfAvailable receive the value of a property in the mock's tree that has the same label and a different type",
 			diagnostics: ["cannot convert value"],
-			seeds: [1225, 1877, 2016, 2810, 2896, 3128, 3254, 3403, 3514, 3638, 3692, 4330],
+			seeds: [1_225, 1_877, 2_016, 2_810, 2_896, 3_128, 3_254, 3_403, 3_514, 3_638, 3_692, 4_330],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "A mock declares one label twice for onlyIfAvailable receives of that label with different types",
 			diagnostics: ["invalid redeclaration"],
-			seeds: [84, 96, 768, 3952, 4696],
+			seeds: [84, 96, 768, 3_952, 4_696],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "A mock reads a label before declaring it when an onlyIfAvailable receive of that label has a different type than a required receive of it",
 			diagnostics: ["before its declaration"],
-			seeds: [2306, 2626],
+			seeds: [2_306, 2_626],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "A mock root requires an instantiator of its own type through an alias, or a promoted dependency's subtree requires the mock root's alias of that dependency, and the mock captures the closure before declaring it",
 			diagnostics: ["before it is declared"],
-			seeds: [705, 1062, 3004],
+			seeds: [705, 1_062, 3_004],
 		),
 	]
 
