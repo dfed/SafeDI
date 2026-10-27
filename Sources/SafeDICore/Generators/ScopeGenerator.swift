@@ -90,7 +90,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for child in propertiesToGenerate {
 			for property in child.receivedProperties where isReceivedFromAncestors(property) {
 				receivedProperties.insert(property)
-				if child.requiredReceivedProperties.contains(property) {
+				// A forwarded `x: X` fulfills a required `x: X?` beneath it, so nothing above this scope needs it.
+				if child.requiredReceivedProperties.contains(property),
+				   !property.typeDescription.isOptional || !forwardedProperties.contains(property.asUnwrappedProperty)
+				{
 					requiredReceivedProperties.insert(property)
 				}
 			}
