@@ -67,7 +67,11 @@ struct SafeDIToolGraphFuzzerTests {
 		// compile. This catches the other way a fix ends a known issue at once: the tool rejecting the shape.
 		for knownIssue in Self.knownIssues {
 			let outcome = try await GraphFuzzerOracle.toolOutcome(of: GraphFuzzerGenerator.fixture(forSeed: knownIssue.seeds[0]))
-			let isAccepted = if case .accepted = outcome { true } else { false }
+			let isAccepted = if case .accepted = outcome {
+				true
+			} else {
+				false
+			}
 			#expect(
 				isAccepted,
 				"The tool now rejects known-issue seed \(knownIssue.seeds[0]). If that is the fix for \"\(knownIssue.reason)\", remove its seeds from knownIssues after checking them with the long run.",
@@ -355,7 +359,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `swiftc` invocation when nothing fails.
 	static let smokeSeeds: [UInt64] = [5, 6, 330, 426]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xA19C_5536_163B_6FBA
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xA19C5536163B6FBA
 
 	/// The seeds `graph-fuzzer.yml` runs before every release and weekly, `0..<scheduledSeedCount`, which
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=scheduled` selects. `knownIssues` lists every one that fails.
