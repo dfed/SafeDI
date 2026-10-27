@@ -98,6 +98,9 @@ final class Scope: Hashable {
 	struct RequiredReceivedProperty {
 		/// The property an ancestor must provide: the fulfilling property for an aliased dependency, the declared property otherwise.
 		let property: Property
+		/// The declared property of an aliased dependency, which receives `property` under its own label and type. `nil`
+		/// for a dependency that receives `property` as declared.
+		let aliasProperty: Property?
 		let declarationLocation: Dependency.DeclarationLocation?
 		/// The range of the identifier a fix-it can rename to a near-match. `nil` for an aliased dependency, whose
 		/// unfulfilled name lives in the `@Received(fulfilledByDependencyNamed:)` attribute, not in an identifier token.
@@ -120,6 +123,7 @@ final class Scope: Hashable {
 				} else {
 					RequiredReceivedProperty(
 						property: $0.property,
+						aliasProperty: nil,
 						declarationLocation: $0.declarationLocation,
 						identifierRange: $0.identifierRange,
 						typeAnnotationRange: $0.typeAnnotationRange,
@@ -132,6 +136,7 @@ final class Scope: Hashable {
 				} else {
 					RequiredReceivedProperty(
 						property: fulfillingProperty,
+						aliasProperty: $0.property,
 						declarationLocation: $0.declarationLocation,
 						identifierRange: nil,
 						typeAnnotationRange: nil,
@@ -250,6 +255,9 @@ final class Scope: Hashable {
 }
 
 extension Dependency.Source {
+	/// Whether the dependency is `@Received` under its declared label and type. An aliased dependency is not: the
+	/// generated code binds it from its fulfilling property. Cycle validation counts a required alias as receiving
+	/// that property; see `DependencyTreeGenerator.closingReceive(of:in:)`.
 	var isReceived: Bool {
 		switch self {
 		case .received:

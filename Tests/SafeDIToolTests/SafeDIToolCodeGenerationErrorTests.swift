@@ -2494,6 +2494,50 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndReceivedThroughAlias_throwsErrorNamingAlias() async {
+		// B, built inside `aBuilder`, receives `aBuilder` as `renamedBuilder`. B declares no `aBuilder`, so the
+		// error names the alias it would declare as @Instantiated instead.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>` is @Received as `renamedBuilder: Instantiator<A>` in tree created by @Instantiated `aBuilder: Instantiator<A>`. Declare @Received(fulfilledByDependencyNamed:ofType:) `renamedBuilder: Instantiator<A>` on `B` as @Instantiated to fix. Full cycle: Instantiator<A> -> Instantiator<B> -> Instantiator<A>
+				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
+				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					    @Instantiated let aBuilder: Instantiator<A>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable {
+					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+					    @Instantiated let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(renamedBuilder: Instantiator<A>) { self.renamedBuilder = renamedBuilder }
+					    @Received(fulfilledByDependencyNamed: "aBuilder", ofType: Instantiator<A>.self) let renamedBuilder: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndOnlyIfAvailableReceived_throwsError() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
