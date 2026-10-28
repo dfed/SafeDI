@@ -257,8 +257,14 @@ struct ScannableClauses {
 	/// Whether the compiler and destination decide which of `clauses` compiles, so that SafeDI cannot know.
 	let isCompilerDetermined: Bool
 
+	/// The evaluations the selection rests on, even when `decisions` reports none because the block guards nothing
+	/// SafeDI generates code for.
+	private(set) var evaluatedDecisions = [ConditionalCompilationDecision]()
+
 	/// These clauses, reporting no decision to assert.
 	var withoutDecisions: Self {
-		ScannableClauses(clauses: clauses, decisions: [], consultedConditions: consultedConditions, isCompilerDetermined: isCompilerDetermined)
+		var withoutDecisions = ScannableClauses(clauses: clauses, decisions: [], consultedConditions: consultedConditions, isCompilerDetermined: isCompilerDetermined)
+		withoutDecisions.evaluatedDecisions = decisions
+		return withoutDecisions
 	}
 }
