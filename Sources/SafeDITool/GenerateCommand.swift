@@ -291,8 +291,15 @@ struct Generate: AsyncParsableCommand {
 				mockAttributes: unnormalizedInstantiable.mockAttributes,
 				generateMock: unnormalizedInstantiable.generateMock,
 				mockOnly: unnormalizedInstantiable.mockOnly,
-				mockInitializer: unnormalizedInstantiable.mockInitializer,
-				mockReturnType: unnormalizedInstantiable.mockReturnType,
+				// A hand-written mock's arguments are matched to dependencies by type. A `mockOnly` declaration has no
+				// dependencies of its own to map them by, and its mock is matched to those of the declaration it merges
+				// into, so each argument's type is qualified on its own.
+				mockInitializer: unnormalizedInstantiable.mockInitializer?.mapArguments {
+					$0.withUpdatedTypeDescription(normalized($0.typeDescription) ?? $0.typeDescription)
+				},
+				// The macro requires a hand-written mock to return `Self` or the type's name as its declaration spells
+				// it, so a nested type's mock returns its unqualified name.
+				mockReturnType: unnormalizedInstantiable.mockReturnType.map { normalized($0) ?? $0 },
 				customMockName: unnormalizedInstantiable.customMockName,
 				mockDeclarationLocation: unnormalizedInstantiable.mockDeclarationLocation,
 				declarationLocation: unnormalizedInstantiable.declarationLocation,

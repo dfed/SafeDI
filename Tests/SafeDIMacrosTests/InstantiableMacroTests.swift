@@ -6306,6 +6306,118 @@ import Testing
 		}
 
 		@Test
+		func expansion_producesReturnTypeDiagnostic_whenNestedTypeMockReturnsQualifiedTypeName() {
+			// The macro sees only the decorated declaration, so it cannot tell that `Feature.Consumer` names this type.
+			assertMacroExpansion(
+				"""
+				public enum Feature {
+				    @Instantiable
+				    public final class Consumer: Instantiable {
+				        public init() {}
+
+				        public static func mock() -> Feature.Consumer {
+				            Consumer()
+				        }
+				    }
+				}
+				""",
+				expandedSource: """
+				public enum Feature {
+				    public final class Consumer: Instantiable {
+				        public init() {}
+
+				        public static func mock() -> Feature.Consumer {
+				            Consumer()
+				        }
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `Consumer`.",
+						line: 6,
+						column: 9,
+						fixIts: [
+							FixItSpec(message: "Change mock() return type to `Consumer`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Change mock() return type to `Consumer`",
+				],
+				fixedSource: """
+				public enum Feature {
+				    @Instantiable
+				    public final class Consumer: Instantiable {
+				        public init() {}
+
+				        public static func mock() -> Consumer {
+				            Consumer()
+				        }
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesReturnTypeDiagnostic_whenMockReturnsTypealiasOfDecoratedType() {
+			// The macro compares names and does not resolve typealiases.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Consumer: Instantiable {
+				    public typealias Mocked = Consumer
+
+				    public init() {}
+
+				    public static func mock() -> Mocked {
+				        Consumer()
+				    }
+				}
+				""",
+				expandedSource: """
+				public final class Consumer: Instantiable {
+				    public typealias Mocked = Consumer
+
+				    public init() {}
+
+				    public static func mock() -> Mocked {
+				        Consumer()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `Consumer`.",
+						line: 7,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Change mock() return type to `Consumer`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Change mock() return type to `Consumer`",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class Consumer: Instantiable {
+				    public typealias Mocked = Consumer
+
+				    public init() {}
+
+				    public static func mock() -> Consumer {
+				        Consumer()
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
 		func mockMethodWithNoReturnTypeProducesDiagnostic() {
 			assertMacroExpansion(
 				"""
