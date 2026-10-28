@@ -1547,25 +1547,46 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// Wrap the instance of each lazily instantiated dependency the mock cannot build, under a name of its
 		// own. Types that receive the dependency as `LazilyInstantiated` are passed that name. Rebinding it
 		// under the dependency's label where they are built would hide the parameter that holds the instance
-		// from the types built there that receive it by value.
+		// from the types built there that receive it by value. One wrapper is bound for each wrapper type a
+		// label is received as: a receive of `x: LazilyInstantiated<X>?` is passed the binding a receive of
+		// `x: LazilyInstantiated<X>` is. Wrappers of one kind around instances of different types under one
+		// label are named apart by their instance types, as flat parameters sharing a label are.
+		var lazilyInstantiatedPropertiesToBind = [Property]()
+		var lazilyInstantiatedPropertiesSeen = Set<Property>()
+		for receivedProperty in lazilyInstantiatedReceivedProperties
+			where lazilyInstantiatedPropertiesSeen.insert(receivedProperty.asUnwrappedProperty).inserted
+		{
+			lazilyInstantiatedPropertiesToBind.append(receivedProperty.asUnwrappedProperty)
+		}
+		let lazilyInstantiatedInstanceProperties = lazilyInstantiatedPropertiesToBind.map(\.asValidatedForDependencyCycles)
+		let lazilyInstantiatedBindingNames = Self.namesApart(
+			preferredNames: lazilyInstantiatedPropertiesToBind.map { lazilyInstantiatedProperty in
+				"\(lazilyInstantiatedProperty.label)_\(lazilyInstantiatedProperty.propertyType.isSendable ? "sendableLazilyInstantiated" : "lazilyInstantiated")"
+			},
+			typeDescriptions: lazilyInstantiatedInstanceProperties.map(\.typeDescription),
+			namesInScope: [],
+			reservedNames: [],
+		)
 		var lazilyInstantiatedBindings = [String]()
+		var lazilyInstantiatedBindingNameByProperty = [Property: String]()
+		for index in lazilyInstantiatedPropertiesToBind.indices {
+			let lazilyInstantiatedProperty = lazilyInstantiatedPropertiesToBind[index]
+			let instanceProperty = lazilyInstantiatedInstanceProperties[index]
+			let bindingName = lazilyInstantiatedBindingNames[index]
+			let wrapperTypeSource = lazilyInstantiatedProperty.typeDescription.asSource
+			if flatReceivedProperties.contains(instanceProperty) {
+				let instanceName = flatParameterDisambiguationMap[instanceProperty.label]?[instanceProperty.typeDescription] ?? instanceProperty.label
+				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(wrapperTypeSource) { \(instanceName) }")
+			} else {
+				// The instance is an `onlyIfAvailable` override, which may be named apart from its label.
+				let instanceName = onlyIfAvailableOverrides.first { $0.receivedProperty.asUnwrappedProperty == instanceProperty }?.name ?? instanceProperty.label
+				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(instanceName).map { instance in \(wrapperTypeSource) { instance } }")
+			}
+			lazilyInstantiatedBindingNameByProperty[lazilyInstantiatedProperty] = bindingName
+		}
 		var lazilyInstantiatedBindingNameMap = [String: [TypeDescription: String]]()
 		for receivedProperty in lazilyInstantiatedReceivedProperties {
-			let lazilyInstantiatedProperty = receivedProperty.asUnwrappedProperty
-			let bindingName = "\(receivedProperty.label)_\(lazilyInstantiatedProperty.propertyType.isSendable ? "sendableLazilyInstantiated" : "lazilyInstantiated")"
-			if lazilyInstantiatedBindingNameMap[receivedProperty.label]?.values.contains(bindingName) != true {
-				let instanceProperty = lazilyInstantiatedProperty.asValidatedForDependencyCycles
-				let wrapperTypeSource = lazilyInstantiatedProperty.typeDescription.asSource
-				if flatReceivedProperties.contains(instanceProperty) {
-					let instanceName = flatParameterDisambiguationMap[instanceProperty.label]?[instanceProperty.typeDescription] ?? instanceProperty.label
-					lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(wrapperTypeSource) { \(instanceName) }")
-				} else {
-					// The instance is an `onlyIfAvailable` override, which may be named apart from its label.
-					let instanceName = onlyIfAvailableOverrides.first { $0.receivedProperty.asUnwrappedProperty == instanceProperty }?.name ?? instanceProperty.label
-					lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(instanceName).map { instance in \(wrapperTypeSource) { instance } }")
-				}
-			}
-			lazilyInstantiatedBindingNameMap[receivedProperty.label, default: [:]][receivedProperty.typeDescription] = bindingName
+			lazilyInstantiatedBindingNameMap[receivedProperty.label, default: [:]][receivedProperty.typeDescription] = lazilyInstantiatedBindingNameByProperty[receivedProperty.asUnwrappedProperty]
 		}
 
 		// 3. Simple mock case — no tree, no flat parameters.
@@ -2623,22 +2644,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		namesInMockScope: Set<String>,
 		reservedNames: Set<String>,
 	) -> [OnlyIfAvailableOverride] {
-		let labels = receivedProperties.map(\.label)
 		let typeDescriptions = receivedProperties.map { property in
 			property.typeDescription.isOptional ? property.typeDescription : .optional(property.typeDescription)
 		}
-		let collidingLabels = collidingLabels(in: labels).union(namesInMockScope.intersection(labels))
-		let collidingIndices = collidingLabels.isEmpty ? [] : receivedProperties.indices.filter { collidingLabels.contains(labels[$0]) }
-		let collidingNames = collidingIndices.isEmpty ? [] : identifierSafeNames(
-			for: collidingIndices.map { index in
-				(label: labels[index], suffixTypes: [typeDescriptions[index].simplified, typeDescriptions[index]])
-			},
-			reservedNames: namesInMockScope.union(reservedNames).union(labels),
+		let names = namesApart(
+			preferredNames: receivedProperties.map(\.label),
+			typeDescriptions: typeDescriptions,
+			namesInScope: namesInMockScope,
+			reservedNames: reservedNames,
 		)
-		var names = labels
-		for (index, name) in zip(collidingIndices, collidingNames) {
-			names[index] = name
-		}
 		return receivedProperties.indices.map { index in
 			OnlyIfAvailableOverride(
 				receivedProperty: receivedProperties[index],
@@ -2646,6 +2660,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				name: names[index],
 			)
 		}
+	}
+
+	/// The names of entries bound in one scope, in the order of `preferredNames`: each entry's preferred name,
+	/// unless another entry prefers it too or it is one of `namesInScope`. Those entries are named apart by
+	/// `identifierSafeNames`: by the preferred name followed by the entry's type in `typeDescriptions`, never
+	/// taking a name in `namesInScope`, in `reservedNames`, or that another entry prefers or is named by.
+	private static func namesApart(
+		preferredNames: [String],
+		typeDescriptions: [TypeDescription],
+		namesInScope: Set<String>,
+		reservedNames: Set<String>,
+	) -> [String] {
+		let collidingNames = collidingLabels(in: preferredNames).union(namesInScope.intersection(preferredNames))
+		guard !collidingNames.isEmpty else { return preferredNames }
+		let collidingIndices = preferredNames.indices.filter { collidingNames.contains(preferredNames[$0]) }
+		let disambiguatedNames = identifierSafeNames(
+			for: collidingIndices.map { index in
+				(label: preferredNames[index], suffixTypes: [typeDescriptions[index].simplified, typeDescriptions[index]])
+			},
+			reservedNames: namesInScope.union(reservedNames).union(preferredNames),
+		)
+		var names = preferredNames
+		for (index, name) in zip(collidingIndices, disambiguatedNames) {
+			names[index] = name
+		}
+		return names
 	}
 
 	/// The labels that appear more than once in `labels`.

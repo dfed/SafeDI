@@ -167,9 +167,8 @@ func performScan(
 	)
 	let rootOutputNames = outputFileNames(forFilesAt: uniqueRootFilePaths)
 
-	// Collect mock files (only from scoped files) and compute output file names.
+	// Collect mock files (only from scoped files).
 	let uniqueMockFilePaths = sortedUniqueManifestPaths(mockScopedFileScans.filter(\.outputFileDeclarations.declaresMockGeneratingType))
-	let mockOutputNames = mockOutputFileNames(forFilesAt: uniqueMockFilePaths)
 
 	// Extract additional mocks to generate from every configuration, those the active configuration
 	// lists first and in its order.
@@ -177,12 +176,15 @@ func performScan(
 	let additionalMocksToGenerate = configuredAdditionalMocksToGenerate
 		+ moduleOutputFileDeclarations.additionalMocksToGenerate.filter { !configuredAdditionalMocksToGenerate.contains($0) }
 
+	// Name the mock files and the additional mocks together, so that no two share an output file.
+	let mockOutputNames = mockOutputFileNames(forFilesAt: uniqueMockFilePaths, additionalMocksToGenerate: additionalMocksToGenerate)
+
 	// Build additional mock output entries.
-	let additionalMockEntries: [SafeDIToolManifest.InputOutputMap] = additionalMocksToGenerate.map { typeName in
+	let additionalMockEntries: [SafeDIToolManifest.InputOutputMap] = zip(additionalMocksToGenerate, mockOutputNames.additionalMocks).map { typeName, outputFileName in
 		.init(
 			inputFilePath: typeName,
 			outputFilePath: outputDirectoryURL
-				.appendingPathComponent("\(typeName)+SafeDIMock.swift")
+				.appendingPathComponent(outputFileName)
 				.path,
 		)
 	}
@@ -210,7 +212,7 @@ func performScan(
 					.path,
 			)
 		},
-		mockGeneration: zip(uniqueMockFilePaths, mockOutputNames).map { inputFilePath, outputFileName in
+		mockGeneration: zip(uniqueMockFilePaths, mockOutputNames.mockFiles).map { inputFilePath, outputFileName in
 			.init(
 				inputFilePath: inputFilePath,
 				outputFilePath: outputDirectoryURL
