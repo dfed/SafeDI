@@ -216,6 +216,11 @@ struct Generate: AsyncParsableCommand {
 						enclosingTypesByName[name, default: []].insert(enclosingType)
 					}
 				}
+				for typeDescription in instantiable.instantiableTypes.dropFirst() {
+					for (name, enclosingType) in resolver.resolutions(in: typeDescription, within: instantiable, writtenInEnclosingScope: true, ofNames: memberNames) {
+						enclosingTypesByName[name, default: []].insert(enclosingType)
+					}
+				}
 			}
 			return Set(enclosingTypesByName.filter { $0.value.count > 1 }.keys)
 		}()
@@ -280,11 +285,19 @@ struct Generate: AsyncParsableCommand {
 				$0.withUpdatedTypeDescription(unnormalizedToNormalizedTypeMap[$0.typeDescription] ?? lexicallyQualified($0.typeDescription) ?? $0.typeDescription)
 			}
 			let normalizedAdditionalInstantiables = unnormalizedInstantiable.instantiableTypes.dropFirst().map {
-				if let enclosingType = unnormalizedInstantiable.concreteInstantiable.popNested,
-				   let bestTypeDescription = TypeDescription.nestedOptions(
-				   	referencedType: $0,
-				   	within: enclosingType,
-				   ).first(where: { instantiableTypes.contains($0) })
+				// The types an attribute of the declaration names are written outside the declaration's own members.
+				if let lexicallyQualifiedTypeDescription = resolver.qualifying(
+					$0,
+					within: unnormalizedInstantiable,
+					writtenInEnclosingScope: true,
+					keepingSpellingOf: namesKeepingSpelling,
+				) {
+					lexicallyQualifiedTypeDescription
+				} else if let enclosingType = unnormalizedInstantiable.concreteInstantiable.popNested,
+				          let bestTypeDescription = TypeDescription.nestedOptions(
+				          	referencedType: $0,
+				          	within: enclosingType,
+				          ).first(where: { instantiableTypes.contains($0) })
 				{
 					bestTypeDescription
 				} else {
@@ -774,10 +787,10 @@ struct Generate: AsyncParsableCommand {
 			moduleInfo: moduleInfo,
 			configuration: parsedModuleFiles.configuration,
 			conditionalCompilationEvaluator: parsedModuleFiles.conditionalCompilationEvaluator,
-			// A fresh parse names files as the CSV does, and the files of additional directories as the manifest does.
-			moduleFilePaths: manifest?.moduleFilePaths(among: inputFilePaths, in: projectFilePaths).map { moduleFilePaths in
-				moduleFilePaths.union(additionalFileScans.map(\.fileScan.path))
-			},
+			// A fresh parse names files as the CSV does. The files of additional directories are other modules' sources,
+			// so they are not among the module's files even when every input file is.
+			moduleFilePaths: manifest?.moduleFilePaths(among: inputFilePaths, in: projectFilePaths)
+				?? (additionalFileScans.isEmpty ? nil : inputFilePaths),
 		)
 	}
 
@@ -906,12 +919,9 @@ struct Generate: AsyncParsableCommand {
 			moduleInfo: moduleInfo,
 			configuration: configuration,
 			conditionalCompilationEvaluator: evaluator,
-			// The cached module names files as the manifest does, the files of additional directories included.
-			moduleFilePaths: cachedManifest.mockScopedFilePaths.map { mockScopedFilePaths in
-				Set(mockScopedFilePaths).union(cached.additionalInputAbsolutePaths.map { additionalInputPath in
-					projectFilePaths.manifestPath(of: projectFilePaths.projectFilePath(of: additionalInputPath))
-				})
-			},
+			// The cached module names files as the manifest does. The files of additional directories are other modules'
+			// sources.
+			moduleFilePaths: cachedManifest.mockScopedFilePaths.map(Set.init),
 		)
 	}
 
