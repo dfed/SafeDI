@@ -368,6 +368,9 @@ public enum WrittenTypeDescriptions {
 extension TypeDescription {
 	/// This type as the declarations spell it.
 	public var asWritten: TypeDescription {
-		WrittenTypeDescriptions.writtenTypeDescriptionsByQualifiedType[self] ?? self
+		let writtenTypeDescriptionsByQualifiedType = WrittenTypeDescriptions.writtenTypeDescriptionsByQualifiedType
+		// Most modules qualify nothing, and hashing a type walks all of it.
+		guard !writtenTypeDescriptionsByQualifiedType.isEmpty else { return self }
+		return writtenTypeDescriptionsByQualifiedType[self] ?? self
 	}
 }

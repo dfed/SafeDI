@@ -831,6 +831,12 @@ struct Generate: AsyncParsableCommand {
 			}
 		}
 		namesKeepingSpelling.formUnion(enclosingTypesByName.filter { $0.value.count > 1 }.keys)
+		// Most modules qualify no name at all, which leaves no type that could become the same as another.
+		guard enclosingTypesByName.contains(where: { name, enclosingTypes in
+			!namesKeepingSpelling.contains(name) && enclosingTypes.contains { $0 != nil }
+		}) else {
+			return namesKeepingSpelling
+		}
 		// Keeping a name's spelling can make another type the same as one a declaration spells, so this repeats until
 		// no more names keep their spelling.
 		var collidingNames = Set<String>()
