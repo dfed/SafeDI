@@ -178,9 +178,10 @@ the plugin doesn't run anything during `tuist generate`.
 ### `Subproject` target
 
 `SafeDI.preCompileScript(module: "Subproject")` — emits
-`$(BUILT_PRODUCTS_DIR)/SafeDI/Subproject.safedi` (the JSON `@Instantiable`
-surface for `User`, `InMemoryStorage`, `NoteStorage`, `StringStorage`,
-`DefaultUserService`). Also writes `SafeDIGenerated.swift`; with no
+`$(BUILT_PRODUCTS_DIR)/SafeDI/Subproject.safedi` (the module info for
+`User`, `InMemoryStorage`, `NoteStorage`, `StringStorage`,
+`DefaultUserService`, in a compact binary format that `SafeDITool dump`
+prints as JSON). Also writes `SafeDIGenerated.swift`; with no
 `@Instantiable(isRoot: true)` or `@Instantiable(generateMock: true)` types
 in this module today, that file is just a header.
 

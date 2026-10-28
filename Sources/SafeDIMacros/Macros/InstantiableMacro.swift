@@ -1453,28 +1453,6 @@ public struct InstantiableMacro: MemberMacro {
 	) -> [DeclSyntax] {
 		if forwardedProperties.isEmpty {
 			[]
-		} else if forwardedProperties.count == 1, let forwardedProperty = forwardedProperties.first {
-			[
-				DeclSyntax(
-					TypeAliasDeclSyntax(
-						modifiers: DeclModifierListSyntax(
-							arrayLiteral: DeclModifierSyntax(
-								name: TokenSyntax(
-									TokenKind.keyword(.public),
-									presence: .present,
-								),
-								trailingTrivia: .space,
-							),
-						),
-						name: .identifier("ForwardedProperties"),
-						initializer: TypeInitializerClauseSyntax(
-							value: IdentifierTypeSyntax(
-								name: .identifier(forwardedProperty.typeDescription.asSource),
-							),
-						),
-					),
-				),
-			]
 		} else {
 			[
 				DeclSyntax(
@@ -1489,7 +1467,7 @@ public struct InstantiableMacro: MemberMacro {
 							),
 						),
 						name: .identifier("ForwardedProperties"),
-						initializer: TypeInitializerClauseSyntax(value: forwardedProperties.asTuple),
+						initializer: TypeInitializerClauseSyntax(value: forwardedProperties.asForwardedPropertiesType),
 					),
 				),
 			]
