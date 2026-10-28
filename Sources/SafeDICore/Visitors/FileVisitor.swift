@@ -39,6 +39,7 @@ public final class FileVisitor: SyntaxVisitor {
 	// MARK: SyntaxVisitor
 
 	public override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
 		// A protocol is no superclass, and a conforming type's lookup finds its associated types and type aliases only
 		// when no type of the name is in scope at all.
 		recordType(named: node.name.text, kind: .protocolType, modifiers: node.modifiers, attributes: node.attributes)
@@ -54,22 +55,31 @@ public final class FileVisitor: SyntaxVisitor {
 		return .skipChildren
 	}
 
-	public override func visit(_: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
-		.skipChildren
+	public override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
+		return .skipChildren
 	}
 
-	public override func visit(_: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
-		.skipChildren
+	public override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
+		return .skipChildren
 	}
 
-	public override func visit(_: DeinitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+	public override func visit(_ node: DeinitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
 		// A type declared in a body is local to it, not nested in the enclosing type.
-		.skipChildren
+		return .skipChildren
 	}
 
-	public override func visit(_: SubscriptDeclSyntax) -> SyntaxVisitorContinueKind {
+	public override func visit(_ node: SubscriptDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
 		// A type declared in a body is local to it, not nested in the enclosing type.
-		.skipChildren
+		return .skipChildren
+	}
+
+	public override func visit(_ node: EnumCaseDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
+		return .skipChildren
 	}
 
 	public override func visit(_ node: ImportDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -87,11 +97,13 @@ public final class FileVisitor: SyntaxVisitor {
 		return .skipChildren
 	}
 
-	public override func visit(_: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
-		.skipChildren
+	public override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
+		return .skipChildren
 	}
 
 	public override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
 		recordType(named: node.name.text, kind: .typeAlias, modifiers: node.modifiers, attributes: node.attributes)
 		return .skipChildren
 	}
@@ -107,10 +119,9 @@ public final class FileVisitor: SyntaxVisitor {
 			// The compiler may compile any of these clauses, so what they declare may not exist.
 			compilerDeterminedClauses.formUnion(scannable.clauses.map(\.id))
 		} else if content == .mockOnly {
-			// A clause selected only because the mock condition is assumed active may not exist where production
-			// code compiles.
-			let productionClauses = Set(conditionalCompilationEvaluator.scannableClauses(in: node, guarding: .production).clauses.map(\.id))
-			compilerDeterminedClauses.formUnion(scannable.clauses.map(\.id).filter { !productionClauses.contains($0) })
+			// The mock condition is assumed active to select the clauses, so what any clause declares may not exist
+			// where production code compiles, and none of it decides a spelling.
+			compilerDeterminedClauses.formUnion(scannable.clauses.map(\.id))
 		}
 		// The selection decides which declarations `nestedTypeDeclarations` records as existing, which may decide
 		// generated code. Each declaration records the conditions and decisions of the blocks enclosing it, and
@@ -126,9 +137,14 @@ public final class FileVisitor: SyntaxVisitor {
 			if selectedClauses.contains(clause.id) {
 				clauseConditions[clause.id] = blockConditions
 			} else if let elements = clause.elements {
+				if let parentPath, isParentTypeSpelledAsPath, elements.as(MemberBlockItemListSyntax.self)?.containsMemberCarryingUnrecognizedAttribute == true {
+					// What this visitor does not visit may still add members, whichever clause the compiler selects.
+					nestedTypeDeclarations.record(.unseenMembers(ofTypeAt: parentPath))
+				}
 				let absentDeclarationRecorder = AbsentDeclarationRecorder(
 					parentType: parentType,
 					conditions: declarationConditions.adding(blockConditions),
+					isCompilerDetermined: content == .mockOnly,
 				)
 				absentDeclarationRecorder.walk(elements)
 				nestedTypeDeclarations.formUnion(absentDeclarationRecorder.declarations)
@@ -222,6 +238,7 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
 		// Enums can't be instantiable because they can't have `let` properties.
 		// However, they can have nested types within them that are instantiable.
 		let access = recordType(
@@ -266,10 +283,8 @@ public final class FileVisitor: SyntaxVisitor {
 		parentPath = extendedTypeNamePath?.joined(separator: ".")
 		extendedTypePath = parentPath
 		isParentTypeSpelledAsPath = extendedTypeNamePath != nil
-		if let parentPath, node.attributes.hasUnrecognizedAttribute {
-			// An attached macro may add members to the type the extension extends.
-			nestedTypeDeclarations.record(.unseenMembers(ofTypeAt: parentPath))
-		}
+		// An attached macro may add members to the type the extension extends. Its members are visited in turn.
+		recordUnseenMembers(ifCarrying: node.attributes)
 		// A member's access defaults to the extension's, and the extended type's own access, declared elsewhere,
 		// does not limit it here.
 		let extensionAccess = node.modifiers.access
@@ -365,6 +380,7 @@ public final class FileVisitor: SyntaxVisitor {
 	private var importOnlyBlockDepth = 0
 
 	private func visitDecl(_ node: some ConcreteDeclSyntaxProtocol) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
 		let instantiableVisitor = InstantiableVisitor(
 			declarationType: .concreteDecl,
 			parentType: parentType,
@@ -395,6 +411,14 @@ public final class FileVisitor: SyntaxVisitor {
 
 		// Continue to find child types.
 		return .visitChildren
+	}
+
+	/// Records that the type or extension the walk is in may gain members SafeDI cannot see, when `attributes`, those of
+	/// one of its members, hold one that may be a peer macro, or `@_spi`, or an `@available` that may hide it.
+	private func recordUnseenMembers(ifCarrying attributes: AttributeListSyntax) {
+		if !attributes.isEmpty, let parentPath, isParentTypeSpelledAsPath, attributes.hasUnrecognizedAttribute {
+			nestedTypeDeclarations.record(.unseenMembers(ofTypeAt: parentPath))
+		}
 	}
 
 	/// The path of a type named `name` declared where the walk is, or `nil` inside an extension of a type that is
@@ -515,11 +539,54 @@ extension TypeSyntax {
 }
 
 extension AttributeListSyntax {
-	/// Whether any of these attributes is not one of `NestedTypeDeclaration.recognizedAttributeNames`, which an
-	/// attribute in an `#if` clause is not either.
+	/// Whether any of these attributes is not one of `NestedTypeDeclaration.recognizedAttributeNames`, or is an
+	/// `@available` whose arguments may make lookup skip the declaration. An attribute in an `#if` clause is not
+	/// recognized either.
 	fileprivate var hasUnrecognizedAttribute: Bool {
 		contains { element in
-			element.as(AttributeSyntax.self).map { !NestedTypeDeclaration.recognizedAttributeNames.contains($0.attributeName.trimmedDescription) } ?? true
+			element.as(AttributeSyntax.self).map { !$0.isRecognized } ?? true
+		}
+	}
+}
+
+extension AttributeSyntax {
+	/// Whether the attribute is one of `NestedTypeDeclaration.recognizedAttributeNames` that adds no members and keeps
+	/// lookup finding the declaration: an `@available` only when every argument names a platform and its version, or
+	/// is `*`. One that names a Swift version, or makes the declaration unavailable or obsolete, can hide it.
+	fileprivate var isRecognized: Bool {
+		// A name with a module's, such as `SafeDI.Instantiable`, is not recognized.
+		guard let name = attributeName.as(IdentifierTypeSyntax.self)?.name.text,
+		      NestedTypeDeclaration.recognizedAttributeNames.contains(name)
+		else { return false }
+		guard name == "available" else { return true }
+		return arguments?.as(AvailabilityArgumentListSyntax.self).map { availabilityArguments in
+			availabilityArguments.allSatisfy { availabilityArgument in
+				// `*`, or a platform other than Swift itself or the package manifest and the version it was introduced in.
+				let argument = availabilityArgument.argument.trimmedDescription.split(separator: " ")
+				return argument == ["*"]
+					|| argument.count == 2 && !["swift", "_PackageDescription"].contains(argument[0]) && argument[1].allSatisfy { $0.isNumber || $0 == "." }
+			}
+		} == true
+	}
+}
+
+extension MemberBlockItemListSyntax {
+	/// Whether any of these members, in any clause of the `#if` blocks among them, carries an attribute that is not
+	/// recognized, which may be a peer macro that adds a member type.
+	fileprivate var containsMemberCarryingUnrecognizedAttribute: Bool {
+		contains { $0.decl.carriesUnrecognizedAttribute }
+	}
+}
+
+extension DeclSyntax {
+	fileprivate var carriesUnrecognizedAttribute: Bool {
+		if let ifConfig = self.as(IfConfigDeclSyntax.self) {
+			// A clause among members holds members, or nothing.
+			ifConfig.clauses.contains { clause in
+				clause.elements?.as(MemberBlockItemListSyntax.self)?.containsMemberCarryingUnrecognizedAttribute == true
+			}
+		} else {
+			asProtocol(WithAttributesSyntax.self).map(\.attributes.hasUnrecognizedAttribute) == true
 		}
 	}
 }
@@ -571,9 +638,12 @@ private struct DeclarationConditions {
 
 /// Records the types an `#if` clause the conditions did not select declares, as absent declarations.
 private final class AbsentDeclarationRecorder: SyntaxVisitor {
-	init(parentType: TypeDescription?, conditions: DeclarationConditions) {
+	/// - Parameter isCompilerDetermined: Whether the declarations are recorded as ones SafeDI cannot know exist, which
+	///   decide no spelling, rather than as absent.
+	init(parentType: TypeDescription?, conditions: DeclarationConditions, isCompilerDetermined: Bool) {
 		self.parentType = parentType
 		self.conditions = conditions
+		self.isCompilerDetermined = isCompilerDetermined
 		super.init(viewMode: .sourceAccurate)
 	}
 
@@ -628,7 +698,7 @@ private final class AbsentDeclarationRecorder: SyntaxVisitor {
 	override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
 		parentType = node.extendedType.typeDescription
 		extendedTypePath = parentType?.namePath?.joined(separator: ".")
-		if let extendedTypePath, node.attributes.hasUnrecognizedAttribute {
+		if let extendedTypePath, node.attributes.hasUnrecognizedAttribute || node.memberBlock.members.containsMemberCarryingUnrecognizedAttribute {
 			declarations.record(.unseenMembers(ofTypeAt: extendedTypePath))
 		}
 		return .visitChildren
@@ -661,6 +731,7 @@ private final class AbsentDeclarationRecorder: SyntaxVisitor {
 	private var parentType: TypeDescription?
 	private var extendedTypePath: String?
 	private var conditions: DeclarationConditions
+	private let isCompilerDetermined: Bool
 
 	private func path(ofTypeNamed name: String) -> String? {
 		if let parentType {
@@ -688,7 +759,8 @@ private final class AbsentDeclarationRecorder: SyntaxVisitor {
 			kind: kind,
 			access: .module,
 			extendedTypePath: extendedTypePath,
-			isAbsent: true,
+			isCompilerDetermined: isCompilerDetermined,
+			isAbsent: !isCompilerDetermined,
 			consultedCompilationConditions: conditions.sortedConsultedCompilationConditions,
 			conditionalCompilationDecisions: conditions.conditionalCompilationDecisions,
 		))

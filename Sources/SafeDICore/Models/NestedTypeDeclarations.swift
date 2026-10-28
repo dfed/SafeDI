@@ -121,10 +121,12 @@ public struct NestedTypeDeclaration: Codable, Hashable, Sendable {
 		]
 	}
 
-	/// The attributes a type declaration may carry without SafeDI losing sight of its members: none of them is a macro
-	/// that adds member types.
+	/// The attributes a type declaration or any of its members may carry without SafeDI losing sight of the type's
+	/// members: none of them is a macro that adds member types, and `@available` counts only with platform versions.
 	public static let recognizedAttributeNames: Set<String> = [
+		"Forwarded",
 		"Instantiable",
+		"Instantiated",
 		"MainActor",
 		"Observable",
 		"available",
@@ -135,6 +137,7 @@ public struct NestedTypeDeclaration: Codable, Hashable, Sendable {
 		"objc",
 		"objcMembers",
 		"preconcurrency",
+		"Received",
 		"unchecked",
 		"usableFromInline",
 	]
@@ -143,6 +146,22 @@ public struct NestedTypeDeclaration: Codable, Hashable, Sendable {
 	/// the name, the same whichever clause the declaration is in and whether the clause is selected.
 	fileprivate var nameBlocker: NestedTypeDeclaration {
 		NestedTypeDeclaration(path: path, kind: .otherType, access: .module, isAbsent: true, filePath: filePath)
+	}
+
+	/// This declaration as one SafeDI cannot know exists, without the conditions that decided it, when a condition
+	/// decided it.
+	fileprivate var undecidableIfConditional: NestedTypeDeclaration {
+		guard isAbsent || !consultedCompilationConditions.isEmpty || !conditionalCompilationDecisions.isEmpty else { return self }
+		return NestedTypeDeclaration(
+			path: path,
+			kind: kind,
+			access: access,
+			superclassCandidate: superclassCandidate,
+			hasUnrecognizedAttribute: hasUnrecognizedAttribute,
+			extendedTypePath: extendedTypePath,
+			isCompilerDetermined: true,
+			filePath: filePath,
+		)
 	}
 
 	/// This declaration, in the file at `filePath`.
@@ -263,6 +282,12 @@ public struct NestedTypeDeclarations: Codable, Equatable, Sendable {
 		}).sortedDeclarations)
 	}
 
+	/// These declarations, with each that an `#if` condition decides, or that is in a clause that was not selected,
+	/// kept as one SafeDI cannot know exists, with no condition, as if only the compiler selected its clause.
+	public var undecidableWhereConditional: NestedTypeDeclarations {
+		NestedTypeDeclarations(declarations.map(\.undecidableIfConditional))
+	}
+
 	/// The conditions that decided whether these declarations exist, which decided what lookups read.
 	public var consultedCompilationConditions: Set<String> {
 		Set(declarations.flatMap(\.consultedCompilationConditions))
@@ -301,8 +326,7 @@ public struct NestedTypeLookups: Equatable, Sendable {
 					unsearchedEnclosingTypeCount: instantiable.unsearchedEnclosingTypeCount,
 				)
 				var instantiableNames = Set<String>()
-				// The additional types are looked up from the enclosing scope, which the declaration's scope includes.
-				for typeDescription in instantiable.typeDescriptionsQualifiedByLexicalLookup + instantiable.instantiableTypes.dropFirst() {
+				for typeDescription in instantiable.typeDescriptionsQualifiedByLexicalLookup {
 					typeDescription.forEachNameReference { instantiableNames.insert($0.withoutBackticks) }
 				}
 				names.formUnion(instantiableNames)
@@ -444,7 +468,8 @@ public struct NestedTypeResolver {
 			}
 		}
 		for (index, moduleDeclarations) in otherModuleDeclarations.enumerated() {
-			for declaration in Set(moduleDeclarations.declarations) {
+			// Another module was compiled under conditions this module does not know.
+			for declaration in Set(moduleDeclarations.undecidableWhereConditional.declarations) {
 				add(declaration, isInModule: false, origin: .otherModule(index))
 			}
 		}
@@ -487,16 +512,13 @@ public struct NestedTypeResolver {
 
 	/// The type each name among `names` that `typeDescription` spells first resolves to a nested type of, as Swift
 	/// resolves it inside the scope of `instantiable`, or `nil` for one that keeps its spelling.
-	///   - isWrittenInEnclosingScope: Whether the type is written where the declaration's own members are not in scope,
-	///     as in an attribute of the declaration, such as `@Instantiable(fulfillingAdditionalTypes:)`.
 	public func resolutions(
 		in typeDescription: TypeDescription,
 		within instantiable: Instantiable,
-		writtenInEnclosingScope isWrittenInEnclosingScope: Bool = false,
 		ofNames names: Set<String>,
 	) -> [(name: String, enclosingType: TypeDescription?)] {
 		var resolutions = [(name: String, enclosingType: TypeDescription?)]()
-		let resolution = Resolution(instantiable: instantiable, isWrittenInEnclosingScope: isWrittenInEnclosingScope, moduleFilePaths: moduleFilePaths)
+		let resolution = Resolution(instantiable: instantiable, moduleFilePaths: moduleFilePaths)
 		typeDescription.forEachNameReference { name in
 			let name = name.withoutBackticks
 			guard names.contains(name) else { return }
@@ -514,7 +536,6 @@ public struct NestedTypeResolver {
 	public func qualifying(
 		_ typeDescription: TypeDescription,
 		within instantiable: Instantiable,
-		writtenInEnclosingScope isWrittenInEnclosingScope: Bool = false,
 		keepingSpellingOf namesKeepingSpelling: Set<String> = [],
 	) -> TypeDescription? {
 		// Most modules declare nothing any lookup reads, and most names are no declaration's.
@@ -524,7 +545,7 @@ public struct NestedTypeResolver {
 			spellsMemberName = spellsMemberName || memberNames.contains(name.withoutBackticks)
 		}
 		guard spellsMemberName else { return nil }
-		let resolution = Resolution(instantiable: instantiable, isWrittenInEnclosingScope: isWrittenInEnclosingScope, moduleFilePaths: moduleFilePaths)
+		let resolution = Resolution(instantiable: instantiable, moduleFilePaths: moduleFilePaths)
 		var isQualified = false
 		let qualified = typeDescription.mappingNameReferences { name, generics in
 			guard memberNames.contains(name.withoutBackticks),
@@ -550,17 +571,16 @@ public struct NestedTypeResolver {
 
 	/// Where and from where an instantiable's names are resolved.
 	private struct Resolution {
-		init(instantiable: Instantiable, isWrittenInEnclosingScope: Bool, moduleFilePaths: Set<String>?) {
+		init(instantiable: Instantiable, moduleFilePaths: Set<String>?) {
 			observer = Observer(
 				filePath: instantiable.sourceFilePath,
 				// An instantiable without a source file is found in no file of the module.
 				isInModule: moduleFilePaths.map { moduleFilePaths in instantiable.sourceFilePath.map(moduleFilePaths.contains) == true } ?? true,
 			)
-			let declarationScope = LexicalScope(
+			lexicalScope = LexicalScope(
 				declaringType: instantiable.concreteInstantiable,
 				unsearchedEnclosingTypeCount: instantiable.unsearchedEnclosingTypeCount,
 			)
-			lexicalScope = isWrittenInEnclosingScope ? declarationScope.droppingDeclaringType : declarationScope
 		}
 
 		let observer: Observer
@@ -766,20 +786,17 @@ public struct NestedTypeResolver {
 
 extension Instantiable {
 	/// The types whose nested type names `generate` qualifies by lexical lookup from this declaration: every
-	/// dependency's property type, the type that fulfills an instantiated or aliased dependency, the initializer's
+	/// dependency's property type, the type that fulfills an aliased dependency, the initializer's
 	/// and the hand-written mock's argument types, and the hand-written mock's return type.
 	public var typeDescriptionsQualifiedByLexicalLookup: [TypeDescription] {
 		var typeDescriptions = [TypeDescription]()
 		for dependency in dependencies {
 			typeDescriptions.append(dependency.property.typeDescription)
 			switch dependency.source {
-			case let .instantiated(fulfillingTypeDescription, _):
-				if let fulfillingTypeDescription {
-					typeDescriptions.append(fulfillingTypeDescription)
-				}
 			case let .aliased(fulfillingProperty, _, _):
 				typeDescriptions.append(fulfillingProperty.typeDescription)
-			case .forwarded, .received:
+			case .instantiated, .forwarded, .received:
+				// A `fulfilledByType:` string is never resolved, and names an instantiable as written.
 				break
 			}
 		}
@@ -810,15 +827,6 @@ public struct LexicalScope {
 
 	/// Each searched type, innermost first, with its path from the module scope.
 	let searchedTypes: [(path: String, type: TypeDescription)]
-
-	/// The scope outside the declaring type, where its own members are not in scope.
-	fileprivate var droppingDeclaringType: LexicalScope {
-		LexicalScope(searchedTypes: Array(searchedTypes.dropFirst()))
-	}
-
-	private init(searchedTypes: [(path: String, type: TypeDescription)]) {
-		self.searchedTypes = searchedTypes
-	}
 }
 
 extension TypeDescription {

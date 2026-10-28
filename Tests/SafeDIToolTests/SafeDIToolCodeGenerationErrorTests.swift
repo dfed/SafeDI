@@ -69,12 +69,58 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithPropertyWithUnknownTypeWithDotSuffixOfFulfillableType_throwsError() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Grandchild.swift"]):6:5: error: @Received property `value: NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild. Did you mean `value: Grandchild.NestedType`?
+				\(fixtures["Grandchild.swift"]):6:26-6:36: fixit: Grandchild.NestedType
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					import SafeDI
+
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    @Instantiated let childBuilder: Instantiator<Child>
+					}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Child: Instantiable {
+					    @Forwarded let value: Grandchild.NestedType
+					    @Instantiated let grandchild: Grandchild
+					}
+					""",
+					"""
+					import SafeDI
+
+					@Instantiable
+					public final class Grandchild: Instantiable {
+					    public struct NestedType {}
+					    @Received let value: NestedType
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithPropertyWithUnknownTypeWithDotPrefixOfFulfillableType_throwsError() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Grandchild.swift"]):5:5: error: @Received property `value: Root.NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild. Did you mean `value: Child.NestedType`?
-				\(fixtures["Grandchild.swift"]):5:26-5:41: fixit: Child.NestedType
+				\(fixtures["Grandchild.swift"]):5:5: error: @Received property `value: Root.NestedType` is not @Instantiated or @Forwarded in chain: Root -> Instantiator<Child> -> Grandchild. Did you mean `value: NestedType`?
+				\(fixtures["Grandchild.swift"]):5:26-5:41: fixit: NestedType
 				"""
 			},
 		) {

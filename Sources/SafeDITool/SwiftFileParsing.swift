@@ -289,6 +289,7 @@ func parseModule(
 			// Only a configuration outside `SafeDIConfiguration.swift` that changes the mock condition gets here.
 			: walkFiles(named: Set(fileScans.map(\.path)), readingTypeNamesOf: [], conditionalCompilation: evaluator).fileScans,
 		typeNamesByFileWithoutSafeDIContent: typeNamesByFileWithoutSafeDIContent,
+		moduleFilePaths: configurationFilePaths,
 		configuration: configuration,
 		conditionalCompilationEvaluator: evaluator,
 	)
@@ -300,6 +301,8 @@ struct ParsedModuleFiles {
 	let fileScans: [FileScan]
 	/// The type names in the text of each file that mentions no SafeDI declaration.
 	let typeNamesByFileWithoutSafeDIContent: [String: DeclaredTypeNames]
+	/// The module's own files, which the other files are the sources of the modules it depends on.
+	let moduleFilePaths: Set<String>
 	/// The module's `#SafeDIConfiguration`, found among the configuration file paths it was parsed with.
 	let configuration: SafeDIConfiguration?
 	/// The evaluator the files were scanned with.
@@ -324,12 +327,14 @@ struct ParsedModuleFiles {
 			among: discoveredFileScans.reduce(into: knownDeclarations) { $0.formUnion($1.nestedTypeDeclarations) },
 		))
 		return (
-			fileScans.map { $0.resolvingNestedTypeDeclarations(for: lookups) }
+			fileScans.map { $0.resolvingNestedTypeDeclarations(for: lookups, isInModule: moduleFilePaths.contains($0.path)) }
 				+ discoveredFileScans
-				.map { $0.resolvingNestedTypeDeclarations(for: lookups) }
+				// Only the module's own files are read for the declarations they hold.
+				.map { $0.resolvingNestedTypeDeclarations(for: lookups, isInModule: true) }
 				// A file that declares nothing lookups read, under any conditions, contributes nothing.
 				.filter { !$0.nestedTypeDeclarations.isEmpty },
-			additionalFileScans.map { $0.resolvingNestedTypeDeclarations(for: lookups) },
+			// The files of additional directories are other modules' sources.
+			additionalFileScans.map { $0.resolvingNestedTypeDeclarations(for: lookups, isInModule: false) },
 		)
 	}
 }
@@ -453,10 +458,14 @@ struct FileScan: Codable, Sendable {
 
 	/// This scan, keeping the declarations `lookups` read, and consulting the conditions that decided whether they
 	/// exist, which decide generated code.
-	func resolvingNestedTypeDeclarations(for lookups: NestedTypeLookups) -> FileScan {
+	/// - Parameter isInModule: Whether the file is one of the module's own. Another module's file is compiled under
+	///   conditions this module does not know, so a declaration in its `#if` blocks decides nothing: it is kept as
+	///   one SafeDI cannot know exists, which keeps every name it could decide as written, and asserts nothing.
+	func resolvingNestedTypeDeclarations(for lookups: NestedTypeLookups, isInModule: Bool) -> FileScan {
 		// Most files that mention SafeDI declare nothing lookups read.
 		guard !nestedTypeDeclarations.isEmpty else { return self }
-		let nestedTypeDeclarations = nestedTypeDeclarations.restricted(to: lookups)
+		let restrictedDeclarations = nestedTypeDeclarations.restricted(to: lookups)
+		let nestedTypeDeclarations = isInModule ? restrictedDeclarations : restrictedDeclarations.undecidableWhereConditional
 		return FileScan(
 			path: path,
 			imports: imports,
