@@ -531,7 +531,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenTypeNestsMoreDeeplyThanDependentModulesRead() async throws {
+	mutating func generate_throwsError_whenTypeNestsMoreDeeplyThanDependentModulesRead() async {
 		let deeplyNestedType = "Int" + String(repeating: "?", count: BinaryReader.maximumNestingDepth)
 		await assertThrowsError("SafeDI cannot write `Deep` to a module info file: a type its declaration names nests more than 128 types deep, which is more than SafeDI reads back. To fix this, declare a typealias for part of that type, so that no type in the declaration nests more than 128 types deep.") {
 			try await executeSafeDIToolTest(
