@@ -61,7 +61,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			writtenTagsByType[String(reflecting: type(of: value)), default: []].insert(writer.bytes[0])
 		}
 
-		#expect(writtenTagsByType.count == 5)
+		#expect(writtenTagsByType.count == 7)
 		for schemaMember in BinaryFile.schemaMembers where writtenTagsByType[String(reflecting: schemaMember)] != nil {
 			#expect(writtenTagsByType[String(reflecting: schemaMember)] == Set(0..<UInt8(schemaMember.binaryLayout.count)), "\(schemaMember)")
 		}
@@ -591,7 +591,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			#endif
 
 			@Instantiable(isRoot: true, fulfillingAdditionalTypes: [KitchenProtocol.self], generateMock: true, mockAttributes: "@MainActor")
-			public final class Kitchen: Instantiable {
+			public final class Kitchen: KitchenProtocol, Instantiable {
 			    public init(
 			        pantry kitchenPantry: Pantry,
 			        stove: any Stove,
@@ -678,6 +678,26 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			    public static func instantiate() -> Timer {
 			        Timer()
 			    }
+			}
+			""",
+			"KitchenProtocol.swift": """
+			public protocol KitchenProtocol {}
+			""",
+			"Kitchen+TypeAliases.swift": """
+			extension Kitchen {
+			    fileprivate typealias Stove = Int
+			    typealias Oven = Int
+			    package typealias Timer = Int
+			}
+			""",
+			"Scale.swift": """
+			@Instantiable
+			public final class Scale<Pantry>: Instantiable {
+			    public init(pantry: Pantry) {
+			        self.pantry = pantry
+			    }
+
+			    @Forwarded let pantry: Pantry
 			}
 			""",
 			"Broken.swift": """

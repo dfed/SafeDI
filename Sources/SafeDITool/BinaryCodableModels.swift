@@ -221,20 +221,117 @@ extension ModuleInfo: BinarySchemaMember {
 
 extension NestedTypeDeclarations: BinarySchemaMember {
 	static let binaryLayout = [
-		"typeNames",
-		"genericParameterNames",
+		"declarations",
+	]
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(reader.read() as [NestedTypeDeclaration])
+	}
+
+	/// Writes the declarations sorted, because a set's iteration order differs between processes.
+	func write(to writer: inout BinaryWriter) {
+		writer.write(sortedDeclarations)
+	}
+}
+
+extension NestedTypeDeclaration: BinarySchemaMember {
+	static let binaryLayout = [
+		"path",
+		"kind",
+		"access",
+		"superclassCandidate",
+		"scopePath",
+		"isCompilerDetermined",
+		"isAbsent",
+		"consultedCompilationConditions",
+		"conditionalCompilationDecisions",
+		"filePath",
 	]
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
-			typeNames: reader.read(),
-			genericParameterNames: reader.read(),
+			path: reader.read(),
+			kind: reader.read(),
+			access: reader.read(),
+			superclassCandidate: reader.read() as String?,
+			scopePath: reader.read() as String?,
+			isCompilerDetermined: reader.read(),
+			isAbsent: reader.read(),
+			consultedCompilationConditions: reader.read(),
+			conditionalCompilationDecisions: reader.read(),
+			filePath: reader.read(),
 		)
 	}
 
 	func write(to writer: inout BinaryWriter) {
-		writer.write(typeNames)
-		writer.write(genericParameterNames)
+		writer.write(path)
+		writer.write(kind)
+		writer.write(access)
+		writer.write(superclassCandidate)
+		writer.write(scopePath)
+		writer.write(isCompilerDetermined)
+		writer.write(isAbsent)
+		writer.write(consultedCompilationConditions)
+		writer.write(conditionalCompilationDecisions)
+		writer.write(filePath)
+	}
+}
+
+extension NestedTypeDeclaration.Kind: BinarySchemaMember {
+	static let binaryLayout = tagNames(Tag.self)
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		self = switch try reader.readTag() as Tag {
+		case .classType: .classType
+		case .protocolType: .protocolType
+		case .otherType: .otherType
+		case .genericParameter: .genericParameter
+		}
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		switch self {
+		case .classType: writer.writeTag(Tag.classType)
+		case .protocolType: writer.writeTag(Tag.protocolType)
+		case .otherType: writer.writeTag(Tag.otherType)
+		case .genericParameter: writer.writeTag(Tag.genericParameter)
+		}
+	}
+
+	enum Tag: UInt8, BinaryTag {
+		case classType
+		case protocolType
+		case otherType
+		case genericParameter
+	}
+}
+
+extension NestedTypeDeclaration.Access: BinarySchemaMember {
+	static let binaryLayout = tagNames(Tag.self)
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		self = switch try reader.readTag() as Tag {
+		case .file: .file
+		case .module: .module
+		case .package: .package
+		case .exported: .exported
+		}
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		switch self {
+		case .file: writer.writeTag(Tag.file)
+		case .module: writer.writeTag(Tag.module)
+		case .package: writer.writeTag(Tag.package)
+		case .exported: writer.writeTag(Tag.exported)
+		}
+	}
+
+	enum Tag: UInt8, BinaryTag {
+		case file
+		case module
+		case package
+		case exported
 	}
 }
 
