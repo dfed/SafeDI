@@ -22,8 +22,11 @@
 final class Scope: Hashable {
 	// MARK: Initialization
 
-	init(instantiable: Instantiable) {
+	/// - Parameter dependenciesLeftOut: The dependencies `instantiable` declared before a mock scope
+	///   left them out because the type's hand-written mock is not passed them.
+	init(instantiable: Instantiable, dependenciesLeftOut: [Dependency] = []) {
 		self.instantiable = instantiable
+		self.dependenciesLeftOut = dependenciesLeftOut
 	}
 
 	// MARK: Equatable
@@ -42,6 +45,10 @@ final class Scope: Hashable {
 	// MARK: Internal
 
 	let instantiable: Instantiable
+
+	/// The dependencies of the type that this scope does not build or receive, because a mock builds the type
+	/// with a hand-written mock that is not passed them. Always empty in a scope of the dependency tree.
+	let dependenciesLeftOut: [Dependency]
 
 	/// The properties that this scope is responsible for instantiating.
 	var propertiesToGenerate = [PropertyToGenerate]()
