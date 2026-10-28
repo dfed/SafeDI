@@ -128,14 +128,12 @@ extension IfConfigDeclSyntax {
 		return detector.content
 	}
 
-	/// What SafeDI would learn from this block among type declarations, the declarations in every one of its
-	/// clauses that decide which files SafeDI generates, and the names of the types and generic parameters every
-	/// clause declares, which decide what `NestedTypeDeclarations` records for the block. All come from one walk of
-	/// the block.
-	func safeDIContentAmongDeclarations() -> (content: SafeDIContent, outputFileDeclarations: OutputFileDeclarations, declaredTypeNames: Set<String>) {
+	/// What SafeDI would learn from this block among type declarations, and the declarations in every
+	/// one of its clauses that decide which files SafeDI generates. Both come from one walk of the block.
+	func safeDIContentAmongDeclarations() -> (content: SafeDIContent, outputFileDeclarations: OutputFileDeclarations) {
 		let detector = SafeDIContentDetector(context: .declarations)
 		detector.walk(self)
-		return (detector.content, detector.outputFileDeclarations, detector.declaredTypeNames)
+		return (detector.content, detector.outputFileDeclarations)
 	}
 }
 
@@ -148,48 +146,31 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	private(set) var content = SafeDIContent.none
 	/// The declarations among type declarations, in every clause, that decide which files SafeDI generates.
 	private(set) var outputFileDeclarations = OutputFileDeclarations()
-	/// The name of every type, and of every generic parameter of a type, that any clause declares among type
-	/// declarations, without backticks.
-	private(set) var declaredTypeNames = Set<String>()
 
 	override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
-		recordTypeDeclaration(named: node.name, genericParameterClause: node.genericParameterClause)
-		return visitTypeDeclaration(node.attributes, isTypeDefinition: true)
+		visitTypeDeclaration(node.attributes, isTypeDefinition: true)
 	}
 
 	override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
-		recordTypeDeclaration(named: node.name, genericParameterClause: node.genericParameterClause)
-		return visitTypeDeclaration(node.attributes, isTypeDefinition: true)
+		visitTypeDeclaration(node.attributes, isTypeDefinition: true)
 	}
 
 	override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
-		recordTypeDeclaration(named: node.name, genericParameterClause: node.genericParameterClause)
-		return visitTypeDeclaration(node.attributes, isTypeDefinition: true)
+		visitTypeDeclaration(node.attributes, isTypeDefinition: true)
 	}
 
 	override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
 		visitTypeDeclaration(node.attributes, isTypeDefinition: false)
 	}
 
-	override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
-		recordTypeDeclaration(named: node.name, genericParameterClause: node.genericParameterClause)
+	override func visit(_: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
 		switch context {
 		case .declarations:
 			// Enums can nest instantiable types.
-			return .visitChildren
+			.visitChildren
 		case .members:
-			return .skipChildren
+			.skipChildren
 		}
-	}
-
-	override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
-		recordTypeDeclaration(named: node.name, genericParameterClause: nil)
-		return .skipChildren
-	}
-
-	override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
-		recordTypeDeclaration(named: node.name, genericParameterClause: nil)
-		return .skipChildren
 	}
 
 	override func visit(_ node: MacroExpansionExprSyntax) -> SyntaxVisitorContinueKind {
@@ -236,14 +217,6 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	// MARK: Private
 
 	private let context: SafeDIContentContext
-	/// Records a type declaration among type declarations.
-	private func recordTypeDeclaration(named name: TokenSyntax, genericParameterClause: GenericParameterClauseSyntax?) {
-		guard case .declarations = context else { return }
-		declaredTypeNames.insert(name.text.withoutBackticks)
-		for genericParameter in genericParameterClause?.parameters ?? [] {
-			declaredTypeNames.insert(genericParameter.name.text.withoutBackticks)
-		}
-	}
 
 	/// - Parameter isTypeDefinition: Whether the declaration defines a type, which only a type definition
 	///   can make a root: SafeDI never treats an `@Instantiable` extension as one.

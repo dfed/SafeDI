@@ -85,6 +85,9 @@ struct ParsedModule {
 	/// The evaluator the files were scanned with. Files parsed later for the same module, such as
 	/// those in `configuration.additionalDirectoriesToInclude`, must be scanned with it too.
 	let conditionalCompilationEvaluator: ConditionalCompilationEvaluator
+	/// The input files, named as `moduleInfo` names them, that belong to the modules this module depends on, which a
+	/// build tool plugin hands `SafeDITool` together with the module's own. Empty when every input is the module's.
+	let dependencyFilePaths: Set<String>
 }
 
 /// More than one `#SafeDIConfiguration` was declared among a module's own files.
@@ -242,7 +245,7 @@ func parseModule(
 	let conventionalConfigurationFileScans = conventionalConfigurationFiles.map { file in
 		walk(file.syntaxTree, at: file.path, conditionalCompilation: defaultEvaluator)
 	}
-	let conventionalConfigurations = conventionalConfigurationFileScans.flatMap(\.fileScan.configurations)
+	let conventionalConfigurations = conventionalConfigurationFileScans.flatMap(\.configurations)
 	// More than one configuration is rejected below, once every file has been walked, so the error lists
 	// them all. Until then such a module is walked as if its configuration were elsewhere.
 	let firstPassEvaluator = conditionalCompilationEvaluator(
@@ -259,7 +262,6 @@ func parseModule(
 		+ walkedFiles.fileScans
 
 	let configurations = fileScans
-		.map(\.fileScan)
 		.filter { configurationFilePaths.contains($0.path) }
 		.flatMap(\.configurations)
 	guard configurations.count <= 1 else {
@@ -272,10 +274,10 @@ func parseModule(
 	)
 
 	return try await ParsedModuleFiles(
-		walkedFileScans: evaluator == firstPassEvaluator
+		fileScans: evaluator == firstPassEvaluator
 			? fileScans
 			// Only a configuration outside `SafeDIConfiguration.swift` that changes the mock condition gets here.
-			: walkFiles(named: Set(fileScans.map(\.fileScan.path)), conditionalCompilation: evaluator).fileScans,
+			: walkFiles(named: Set(fileScans.map(\.path)), conditionalCompilation: evaluator).fileScans,
 		typeNamesByFileWithoutSafeDIContent: typeNamesByFileWithoutSafeDIContent,
 		configuration: configuration,
 		conditionalCompilationEvaluator: evaluator,
@@ -284,111 +286,113 @@ func parseModule(
 
 /// A module's parsed input files, before the nested type declarations SafeDI keeps are known.
 struct ParsedModuleFiles {
-	fileprivate init(
-		walkedFileScans: [WalkedFileScan],
-		typeNamesByFileWithoutSafeDIContent: [String: DeclaredTypeNames],
-		configuration: SafeDIConfiguration?,
-		conditionalCompilationEvaluator: ConditionalCompilationEvaluator,
-	) {
-		self.walkedFileScans = walkedFileScans
-		self.typeNamesByFileWithoutSafeDIContent = typeNamesByFileWithoutSafeDIContent
-		self.configuration = configuration
-		self.conditionalCompilationEvaluator = conditionalCompilationEvaluator
-	}
-
 	/// What each file that mentions SafeDI contributes, recording every nested type it declares.
-	var fileScans: [FileScan] {
-		walkedFileScans.map(\.fileScan)
-	}
-
+	let fileScans: [FileScan]
 	/// The type names in the text of each file that mentions no SafeDI declaration.
 	let typeNamesByFileWithoutSafeDIContent: [String: DeclaredTypeNames]
 	/// The module's `#SafeDIConfiguration`, found among the configuration file paths it was parsed with.
 	let configuration: SafeDIConfiguration?
 	/// The evaluator the files were scanned with.
 	let conditionalCompilationEvaluator: ConditionalCompilationEvaluator
-	private let walkedFileScans: [WalkedFileScan]
 
 	/// The module's file scans, and those of the files reached through `additionalDirectoriesToInclude`, keeping the
-	/// nested type declarations that the lookups of their instantiables reach, with what each file that mentions no
-	/// SafeDI declaration but declares such a nested type contributes added to the module's file scans.
-	///
-	/// A file that declares a type at a path a lookup asks about, `Feature.Settings.Configuration`, declares or
-	/// extends that path's outermost type, `Feature`, and declares a type or generic parameter named
-	/// `Configuration`, so only a file whose text names both is parsed. Neither depends on a condition, so
-	/// `generate` reuses scan's choice for the lookups it makes.
+	/// declarations that the lookups of their instantiables read, with what each file that mentions no SafeDI
+	/// declaration but declares such a declaration contributes added to the module's file scans.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func resolvingNestedTypeDeclarations(
 		additionalFileScans: [CachedFileScan],
 	) async throws -> (fileScans: [FileScan], additionalFileScans: [CachedFileScan]) {
-		let lookups = NestedTypeLookups(instantiables: (fileScans + additionalFileScans.map(\.fileScan)).flatMap(\.instantiables))
-		let filePathsDeclaringLookedUpTypes = typeNamesByFileWithoutSafeDIContent.compactMap { filePath, typeNames in
-			typeNames.canDeclareType(lookedUpBy: lookups) ? filePath : nil
-		}
-		let fileScansDeclaringOnlyNestedTypes = try await walkNestedTypeDeclarations(
-			inFilesAt: Set(filePathsDeclaringLookedUpTypes),
+		let knownFileScans = fileScans + additionalFileScans.map(\.fileScan)
+		let (lookups, discoveredFileScans) = try await discoverNestedTypeDeclarations(
+			lookedUpBy: knownFileScans.flatMap(\.instantiables),
+			knownDeclarations: knownFileScans.reduce(into: NestedTypeDeclarations()) { $0.formUnion($1.nestedTypeDeclarations) },
+			amongFilesWithTypeNames: typeNamesByFileWithoutSafeDIContent,
 			conditionalCompilation: conditionalCompilationEvaluator,
 		)
-		.map { $0.resolvingNestedTypeDeclarations(for: lookups) }
-		// A file that declares no such type under any conditions contributes nothing.
-		.filter { !$0.nestedTypeDeclarations.isEmpty || !$0.consultedCompilationConditions.isEmpty }
 		return (
-			walkedFileScans.map { $0.resolvingNestedTypeDeclarations(for: lookups) } + fileScansDeclaringOnlyNestedTypes,
-			// Their scans already consult the conditions of every block that declares a type.
-			additionalFileScans.map { $0.restrictingNestedTypeDeclarations(to: lookups) },
+			fileScans.map { $0.resolvingNestedTypeDeclarations(for: lookups) }
+				+ discoveredFileScans
+				.map { $0.resolvingNestedTypeDeclarations(for: lookups) }
+				// A file that declares nothing lookups read, under any conditions, contributes nothing.
+				.filter { !$0.nestedTypeDeclarations.isEmpty },
+			additionalFileScans.map { $0.resolvingNestedTypeDeclarations(for: lookups) },
 		)
 	}
 }
 
+/// The lookups `instantiables` make, and the scans of the files among `candidateFiles` that can declare what those
+/// lookups read, parsed and walked.
+///
+/// A file declares something at a path a lookup reads, such as `Feature.Settings.Configuration`, only when its text
+/// names that path's outermost type, `Feature`, right after a declaration keyword or `extension`, and names its last
+/// name, `Configuration`, right after a declaration keyword, among the generic parameters after a declared name, or
+/// in the path after `extension`. Only such files are parsed. The declarations they hold can make lookups follow
+/// more inheritance clauses, so files are parsed until no more can matter. Neither test depends on a condition.
+/// - Parameters:
+///   - knownDeclarations: The declarations of the files already walked.
+///   - candidateFiles: The type names in the text of each file that may hold more declarations.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+func discoverNestedTypeDeclarations(
+	lookedUpBy instantiables: [Instantiable],
+	knownDeclarations: NestedTypeDeclarations,
+	amongFilesWithTypeNames candidateFiles: [String: DeclaredTypeNames],
+	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+) async throws -> (lookups: NestedTypeLookups, fileScans: [FileScan]) {
+	var declarations = knownDeclarations
+	var lookups = NestedTypeLookups(instantiables: instantiables, declarations: declarations)
+	var unparsedFiles = candidateFiles
+	var discoveredFileScans = [FileScan]()
+	while case let filePaths = Set(unparsedFiles.keys.filter { unparsedFiles[$0]?.canDeclare(lookedUpBy: lookups) == true }), !filePaths.isEmpty {
+		for filePath in filePaths {
+			unparsedFiles[filePath] = nil
+		}
+		let fileScans = try await walkNestedTypeDeclarations(inFilesAt: filePaths, conditionalCompilation: evaluator)
+		discoveredFileScans += fileScans
+		for fileScan in fileScans {
+			declarations.formUnion(fileScan.nestedTypeDeclarations)
+		}
+		lookups = NestedTypeLookups(instantiables: instantiables, declarations: declarations)
+	}
+	return (lookups, discoveredFileScans)
+}
+
 /// Parses files that belong to an already-configured module, such as those reached through
 /// `#SafeDIConfiguration(additionalDirectoriesToInclude:)`, with the module's evaluator.
-/// - Returns: What each file that mentions SafeDI contributes to the module, recording every nested type it declares
-///   and consulting the conditions of every `#if` block that declares a type, whichever lookups the module makes.
+/// - Returns: What each file that mentions SafeDI contributes to the module, recording every nested type it declares.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func parseSwiftFiles(
 	_ filePaths: Set<String>,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
 ) async throws -> [FileScan] {
-	try await walkFiles(named: filePaths, conditionalCompilation: evaluator).fileScans.map(\.consultingEveryTypeDeclaringBlock)
+	try await walkFiles(named: filePaths, conditionalCompilation: evaluator).fileScans
 }
 
-/// The nested types at the paths `lookups` asks about that the files at `filePaths` declare, parsing only the files
-/// whose text can declare one, as `ParsedModuleFiles.resolvingNestedTypeDeclarations(additionalFileScans:)` does.
+/// The type names in the text of each file at `filePaths`.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-func nestedTypeDeclarations(
-	lookedUpBy lookups: NestedTypeLookups,
-	inFilesAt filePaths: Set<String>,
-	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
-) async throws -> NestedTypeDeclarations {
+func readTypeNames(inFilesAt filePaths: Set<String>) async throws -> [String: DeclaredTypeNames] {
 	try await withThrowingTaskGroup(
-		of: NestedTypeDeclarations.self,
-		returning: NestedTypeDeclarations.self,
+		of: (String, DeclaredTypeNames).self,
+		returning: [String: DeclaredTypeNames].self,
 	) { taskGroup in
 		for filePath in filePaths {
 			taskGroup.addTask {
 				var content = try String(contentsOfFile: filePath, encoding: .utf8)
-				guard content.withUTF8(DeclaredTypeNames.init(source:)).canDeclareType(lookedUpBy: lookups) else {
-					return NestedTypeDeclarations()
-				}
-				return walk(Parser.parse(source: content), at: filePath, conditionalCompilation: evaluator, reportingUnexpectedNodes: false)
-					.fileScan
-					.nestedTypeDeclarations
-					.restricted(to: lookups)
+				return (filePath, content.withUTF8(DeclaredTypeNames.init(source:)))
 			}
 		}
-		return try await taskGroup.reduce(into: NestedTypeDeclarations()) { $0.formUnion($1) }
+		return try await taskGroup.reduce(into: [:]) { $0[$1.0] = $1.1 }
 	}
 }
 
 /// Parses files that mention no SafeDI declaration but were parsed for the nested types they declare, as
-/// `ParsedModuleFiles.resolvingNestedTypeDeclarations(additionalFileScans:)` parses them.
+/// `discoverNestedTypeDeclarations` parses them.
 /// - Returns: What each file contributes to the module, recording every nested type it declares.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func parseSwiftFilesDeclaringOnlyNestedTypes(
 	_ filePaths: Set<String>,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
 ) async throws -> [FileScan] {
-	try await walkNestedTypeDeclarations(inFilesAt: filePaths, conditionalCompilation: evaluator).map(\.consultingEveryTypeDeclaringBlock)
+	try await walkNestedTypeDeclarations(inFilesAt: filePaths, conditionalCompilation: evaluator)
 }
 
 // MARK: - Private
@@ -414,8 +418,8 @@ struct FileScan: Codable, Sendable {
 	/// The declarations in every clause of the file's `#if` blocks that decide which files SafeDI generates,
 	/// which are the same whatever the conditions.
 	let outputFileDeclarations: OutputFileDeclarations
-	/// The nested types the file declares: every one when the file has just been walked, and once its scan is
-	/// resolved, those that the module's lookups reach.
+	/// The declarations lookup of type names can read that the file holds: every one when the file has just been
+	/// walked, and once its scan is resolved, those the module's lookups read.
 	let nestedTypeDeclarations: NestedTypeDeclarations
 
 	/// Whether any compilation condition decided what the file contributed. A file whose scan consults
@@ -430,22 +434,13 @@ struct FileScan: Codable, Sendable {
 		!instantiables.isEmpty || !configurations.isEmpty || encounteredUnexpectedNodes
 	}
 
-	/// This scan, keeping the nested type declarations `lookups` reach.
-	func restrictingNestedTypeDeclarations(to lookups: NestedTypeLookups) -> FileScan {
-		// Most files that mention SafeDI declare no nested type.
-		nestedTypeDeclarations.isEmpty ? self : replacing(nestedTypeDeclarations: nestedTypeDeclarations.restricted(to: lookups))
-	}
-
-	/// This scan, consulting `conditions` too.
-	fileprivate func consulting(_ conditions: Set<String>) -> FileScan {
-		conditions.isEmpty ? self : replacing(consultedCompilationConditions: consultedCompilationConditions.union(conditions))
-	}
-
-	private func replacing(
-		consultedCompilationConditions: Set<String>? = nil,
-		nestedTypeDeclarations: NestedTypeDeclarations? = nil,
-	) -> FileScan {
-		FileScan(
+	/// This scan, keeping the declarations `lookups` read, and consulting the conditions that decided whether they
+	/// exist, which decide generated code.
+	func resolvingNestedTypeDeclarations(for lookups: NestedTypeLookups) -> FileScan {
+		// Most files that mention SafeDI declare nothing lookups read.
+		guard !nestedTypeDeclarations.isEmpty else { return self }
+		let nestedTypeDeclarations = nestedTypeDeclarations.restricted(to: lookups)
+		return FileScan(
 			path: path,
 			imports: imports,
 			mockImports: mockImports,
@@ -453,11 +448,11 @@ struct FileScan: Codable, Sendable {
 			configurations: configurations,
 			encounteredUnexpectedNodes: encounteredUnexpectedNodes,
 			conditionalCompilationDecisions: conditionalCompilationDecisions,
-			consultedCompilationConditions: consultedCompilationConditions ?? self.consultedCompilationConditions,
+			consultedCompilationConditions: consultedCompilationConditions.union(nestedTypeDeclarations.consultedCompilationConditions),
 			importSegments: importSegments,
 			importOnlyConsultedCompilationConditions: importOnlyConsultedCompilationConditions,
 			outputFileDeclarations: outputFileDeclarations,
-			nestedTypeDeclarations: nestedTypeDeclarations ?? self.nestedTypeDeclarations,
+			nestedTypeDeclarations: nestedTypeDeclarations,
 		)
 	}
 
@@ -563,16 +558,18 @@ extension ModuleInfo {
 		)
 	}
 
-	/// This module, with `nestedTypeDeclarations` in place of its nested type declarations.
-	func replacingNestedTypeDeclarations(with nestedTypeDeclarations: NestedTypeDeclarations) -> ModuleInfo {
-		ModuleInfo(
+	/// This module, keeping the declarations `lookups` read, with `addedDeclarations` and the decisions they rest on.
+	/// The declarations of the files whose scans consult no condition rest on no decision.
+	func restrictingNestedTypeDeclarations(to lookups: NestedTypeLookups, adding addedDeclarations: NestedTypeDeclarations) -> ModuleInfo {
+		let addedDeclarations = addedDeclarations.restricted(to: lookups)
+		return ModuleInfo(
 			imports: imports,
 			mockImports: mockImports,
 			instantiables: instantiables,
 			configurations: configurations,
 			filesWithUnexpectedNodes: filesWithUnexpectedNodes,
-			conditionalCompilationDecisions: conditionalCompilationDecisions,
-			nestedTypeDeclarations: nestedTypeDeclarations,
+			conditionalCompilationDecisions: conditionalCompilationDecisions + addedDeclarations.conditionalCompilationDecisions,
+			nestedTypeDeclarations: nestedTypeDeclarations.restricted(to: lookups).union(addedDeclarations),
 		)
 	}
 
@@ -587,8 +584,10 @@ extension ModuleInfo {
 			instantiables: fileScans.flatMap(\.instantiables),
 			configurations: fileScans.flatMap(\.configurations),
 			filesWithUnexpectedNodes: filesWithUnexpectedNodes.isEmpty ? nil : filesWithUnexpectedNodes,
-			conditionalCompilationDecisions: fileScans.flatMap(\.conditionalCompilationDecisions),
-			nestedTypeDeclarations: fileScans.reduce(into: NestedTypeDeclarations()) { $0.formUnion($1.nestedTypeDeclarations) },
+			// A declaration a lookup reads decides generated code as much as an instantiable does.
+			conditionalCompilationDecisions: fileScans.flatMap(\.conditionalCompilationDecisions)
+				+ fileScans.flatMap(\.nestedTypeDeclarations.conditionalCompilationDecisions),
+			nestedTypeDeclarations: fileScans.reduce(into: NestedTypeDeclarations()) { $0.formUnion($1.nestedTypeDeclarations.located(at: $1.path)) },
 		)
 	}
 }
@@ -619,10 +618,10 @@ extension [SafeDIConfiguration] {
 private func walkFiles(
 	named filePaths: Set<String>,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
-) async throws -> (fileScans: [WalkedFileScan], typeNamesByFileWithoutSafeDIContent: [String: DeclaredTypeNames]) {
+) async throws -> (fileScans: [FileScan], typeNamesByFileWithoutSafeDIContent: [String: DeclaredTypeNames]) {
 	try await withThrowingTaskGroup(
 		of: (path: String, walkedFile: WalkedFile).self,
-		returning: ([WalkedFileScan], [String: DeclaredTypeNames]).self,
+		returning: ([FileScan], [String: DeclaredTypeNames]).self,
 	) { taskGroup in
 		for filePath in filePaths where !filePath.isEmpty {
 			taskGroup.addTask {
@@ -635,7 +634,7 @@ private func walkFiles(
 			}
 		}
 
-		var fileScans = [WalkedFileScan]()
+		var fileScans = [FileScan]()
 		var typeNamesByFileWithoutSafeDIContent = [String: DeclaredTypeNames]()
 		for try await (path, walkedFile) in taskGroup {
 			switch walkedFile {
@@ -652,7 +651,7 @@ private func walkFiles(
 /// What walking one file found.
 private enum WalkedFile {
 	/// The file mentions SafeDI, and this is what walking it found.
-	case scanned(WalkedFileScan)
+	case scanned(FileScan)
 	/// The file mentions no SafeDI declaration, and these are the type names in its text.
 	case declaringNoSafeDIContent(DeclaredTypeNames)
 }
@@ -662,10 +661,10 @@ private enum WalkedFile {
 private func walkNestedTypeDeclarations(
 	inFilesAt filePaths: Set<String>,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
-) async throws -> [WalkedFileScan] {
+) async throws -> [FileScan] {
 	try await withThrowingTaskGroup(
-		of: WalkedFileScan.self,
-		returning: [WalkedFileScan].self,
+		of: FileScan.self,
+		returning: [FileScan].self,
 	) { taskGroup in
 		for filePath in filePaths {
 			taskGroup.addTask {
@@ -675,7 +674,7 @@ private func walkNestedTypeDeclarations(
 			}
 		}
 
-		var fileScans = [WalkedFileScan]()
+		var fileScans = [FileScan]()
 		for try await fileScan in taskGroup {
 			fileScans.append(fileScan)
 		}
@@ -743,7 +742,7 @@ private func walk(
 	at filePath: String,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
 	reportingUnexpectedNodes reportsUnexpectedNodes: Bool = true,
-) -> WalkedFileScan {
+) -> FileScan {
 	let fileVisitor = FileVisitor(
 		conditionalCompilationEvaluator: evaluator,
 		sourceLocationConverter: SourceLocationConverter(fileName: filePath, tree: syntaxTree),
@@ -764,74 +763,45 @@ private func walk(
 		nestedTypeDeclarations: fileVisitor.nestedTypeDeclarations,
 	)
 	.relocated(to: filePath)
-	return WalkedFileScan(
-		fileScan: fileScan.declaresSafeDIContent ? fileScan : fileScan.replacingImports(with: [], mockImports: []),
-		conditionallyDeclaredTypes: fileVisitor.conditionallyDeclaredTypes,
-	)
-}
-
-/// What walking one file found: what the file contributes, recording every nested type it declares, and what each
-/// of its `#if` blocks declares, which decides the conditions its scan consults once the module's lookups are known.
-private struct WalkedFileScan {
-	let fileScan: FileScan
-	let conditionallyDeclaredTypes: [ConditionallyDeclaredTypes]
-
-	/// The file's scan, keeping the nested type declarations `lookups` reach, and consulting the conditions that
-	/// decided which of those the file declares.
-	func resolvingNestedTypeDeclarations(for lookups: NestedTypeLookups) -> FileScan {
-		fileScan
-			.restrictingNestedTypeDeclarations(to: lookups)
-			.consulting(conditionallyDeclaredTypes.consultedCompilationConditions(decidingDeclarationsFor: lookups))
-	}
-
-	/// The file's scan, consulting the conditions of every `#if` block that declares a type, which decide which
-	/// nested types it records whatever lookups the module makes.
-	var consultingEveryTypeDeclaringBlock: FileScan {
-		fileScan.consulting(conditionallyDeclaredTypes.reduce(into: Set<String>()) { $0.formUnion($1.consultedCompilationConditions) })
-	}
+	return fileScan.declaresSafeDIContent ? fileScan : fileScan.replacingImports(with: [], mockImports: [])
 }
 
 /// The names a file's text gives the types it can declare or extend, found without parsing it.
 ///
-/// A file declares a type at a path such as `Feature.Settings.Configuration` only inside a declaration or an
-/// extension of `Feature`, so its text names `Feature` right after `struct`, `enum`, `class`, `actor`, or
-/// `extension`, and names `Configuration` right after a declaration keyword, or among the generic parameters that
-/// follow a declared name. Comments and string literals are not skipped, so the names are a superset of those the
-/// file declares or extends, and a file whose names include no path's outermost type or no path's last name declares
-/// no type at any of those paths.
+/// A file declares something at a path a lookup reads, such as `Feature.Settings.Configuration`, only inside a
+/// declaration or an extension of `Feature`, so its text names `Feature` right after `struct`, `enum`, `class`,
+/// `actor`, `protocol`, or `extension`, and names `Configuration` right after a declaration keyword, among the
+/// generic parameters that follow a declared name, or in the path after `extension`. Comments and string literals
+/// are not skipped, so the names are a superset of those the file declares or extends, and a file whose names include
+/// no looked-up path's outermost type or no looked-up name declares nothing a lookup reads.
 struct DeclaredTypeNames: Sendable {
 	init(source: UnsafeBufferPointer<UInt8>) {
 		guard let start = source.baseAddress else { return }
 		// Arrays, which may repeat a name, rather than sets, whose hashing would cost more than all the rest.
-		var declaredNames = [String]()
-		var extendedNames = [String]()
+		var names = [String]()
 		Scanner.identifierByteTable.withUnsafeBufferPointer { identifierBytes in
 			var scanner = Scanner(position: start, end: start + source.count, identifierBytes: identifierBytes)
 			while let keyword = scanner.nextDeclarationKeyword() {
 				switch keyword {
 				case .declaration:
-					declaredNames.append(scanner.nameAfterKeyword())
+					names.append(scanner.nameAfterKeyword())
 					// Generic parameters follow the declared name.
-					declaredNames.append(contentsOf: scanner.genericParameterNames())
+					names.append(contentsOf: scanner.genericParameterNames())
 				case .extension:
-					extendedNames.append(scanner.nameAfterKeyword())
+					names.append(contentsOf: scanner.pathAfterKeyword())
 				}
 			}
 		}
-		self.declaredNames = declaredNames
-		self.extendedNames = extendedNames
+		self.names = names
 	}
 
-	/// Each name after a `struct`, `enum`, `class`, `actor`, `protocol`, or `typealias` keyword, and each identifier
-	/// among the generic parameters after such a name.
-	private(set) var declaredNames = [String]()
-	/// The first name after each `extension` keyword.
-	private(set) var extendedNames = [String]()
+	/// Each name after a `struct`, `enum`, `class`, `actor`, `protocol`, `typealias`, or `associatedtype` keyword,
+	/// each identifier among the generic parameters after such a name, and each name in the path after `extension`.
+	private(set) var names = [String]()
 
-	/// Whether the file can declare a type or generic parameter at a path `lookups` asks about.
-	func canDeclareType(lookedUpBy lookups: NestedTypeLookups) -> Bool {
-		declaredNames.contains(where: lookups.names.contains)
-			&& (declaredNames.contains(where: lookups.outermostTypeNames.contains) || extendedNames.contains(where: lookups.outermostTypeNames.contains))
+	/// Whether the file can declare something `lookups` read.
+	func canDeclare(lookedUpBy lookups: NestedTypeLookups) -> Bool {
+		names.contains(where: lookups.declarationNames.contains) && names.contains(where: lookups.outermostTypeNames.contains)
 	}
 
 	/// A keyword that names a type right after it.
@@ -847,6 +817,8 @@ struct DeclaredTypeNames: Sendable {
 		var position: UnsafePointer<UInt8>
 		/// The address after the last byte.
 		let end: UnsafePointer<UInt8>
+		/// `identifierByteTable`, read without checking for its initialization at each byte.
+		let identifierBytes: UnsafeBufferPointer<Bool>
 
 		/// The next keyword that names a type right after it, or `nil` at the end of the source.
 		mutating func nextDeclarationKeyword() -> DeclarationKeyword? {
@@ -854,13 +826,12 @@ struct DeclaredTypeNames: Sendable {
 			// and store at every byte.
 			var position = position
 			defer { self.position = position }
-			let identifierBytes = identifierBytes
 			while position < end {
-				while position < end, !identifierBytes[Int(position.pointee)] {
+				while position < end, !isIdentifierByte(at: position) {
 					position += 1
 				}
 				let identifierStart = position
-				while position < end, identifierBytes[Int(position.pointee)] {
+				while position < end, isIdentifierByte(at: position) {
 					position += 1
 				}
 				// Every keyword is at least four bytes long, and most identifiers are ruled out by their length and first
@@ -875,9 +846,10 @@ struct DeclaredTypeNames: Sendable {
 				case (8, UInt8(ascii: "p")): ("protocol", .declaration)
 				case (9, UInt8(ascii: "e")): ("extension", .extension)
 				case (9, UInt8(ascii: "t")): ("typealias", .declaration)
+				case (14, UInt8(ascii: "a")): ("associatedtype", .declaration)
 				default: nil
 				}
-				if let keyword, memcmp(identifierStart, keyword.spelling.utf8Start, length) == 0 {
+				if let keyword, UnsafeBufferPointer(start: identifierStart, count: length).elementsEqual(UnsafeBufferPointer(start: keyword.spelling.utf8Start, count: length)) {
 					return keyword.keyword
 				}
 			}
@@ -887,7 +859,7 @@ struct DeclaredTypeNames: Sendable {
 		/// The name right after a keyword, past whitespace and comments, without backticks, which is empty when no
 		/// name follows the keyword.
 		mutating func nameAfterKeyword() -> String {
-			skipWhitespaceAndComments()
+			skipTrivia()
 			if position < end, position.pointee == UInt8(ascii: "`") {
 				// A backticked name may hold any character but a backtick.
 				position += 1
@@ -904,26 +876,38 @@ struct DeclaredTypeNames: Sendable {
 			}
 		}
 
+		/// Each name in the dotted path right after a keyword, such as `Feature` and `Settings` in
+		/// `extension Feature.Settings`.
+		mutating func pathAfterKeyword() -> [String] {
+			var names = [nameAfterKeyword()]
+			skipTrivia()
+			while position < end, position.pointee == UInt8(ascii: ".") {
+				position += 1
+				names.append(nameAfterKeyword())
+				skipTrivia()
+			}
+			return names
+		}
+
 		/// Every identifier in the generic parameter clause right after a declared name, if there is one.
 		mutating func genericParameterNames() -> [String] {
-			skipWhitespaceAndComments()
+			skipTrivia()
 			guard position < end, position.pointee == UInt8(ascii: "<") else { return [] }
 			position += 1
 			var names = [String]()
 			var depth = 1
 			while depth > 0, position < end {
-				switch position.pointee {
-				case UInt8(ascii: "<"):
+				if position.pointee == UInt8(ascii: "<") {
 					depth += 1
 					position += 1
-				case UInt8(ascii: ">"):
+				} else if position.pointee == UInt8(ascii: ">") {
 					depth -= 1
 					position += 1
-				case let byte where isIdentifierByte(byte):
+				} else if isIdentifierByte(at: position) {
 					let nameStart = position
 					skipIdentifier()
 					names.append(String(decoding: UnsafeBufferPointer(start: nameStart, count: position - nameStart), as: UTF8.self))
-				default:
+				} else {
 					position += 1
 				}
 			}
@@ -932,55 +916,74 @@ struct DeclaredTypeNames: Sendable {
 
 		/// Whether each byte can be part of an identifier: letters, digits, underscores, and every byte of a
 		/// non-ASCII scalar.
-		static let identifierByteTable = (0...UInt8.max).map { byte in
-			byte >= 0x80
-				|| byte == UInt8(ascii: "_")
-				|| (byte | 0x20 >= UInt8(ascii: "a") && byte | 0x20 <= UInt8(ascii: "z"))
-				|| (byte >= UInt8(ascii: "0") && byte <= UInt8(ascii: "9"))
+		static let identifierByteTable: [Bool] = (0...UInt8.max).map { Self.isIdentifierByte($0) }
+
+		private static func isIdentifierByte(_ byte: UInt8) -> Bool {
+			let lowercased: UInt8 = byte | 0x20
+			let isLetter: Bool = lowercased >= UInt8(ascii: "a") && lowercased <= UInt8(ascii: "z")
+			let isDigit: Bool = byte >= UInt8(ascii: "0") && byte <= UInt8(ascii: "9")
+			let isUnderscore: Bool = byte == UInt8(ascii: "_")
+			let isNonASCII: Bool = byte >= 0x80
+			return isLetter || isDigit || isUnderscore || isNonASCII
 		}
 
-		/// `identifierByteTable`, read without checking for its initialization at each byte.
-		let identifierBytes: UnsafeBufferPointer<Bool>
+		/// Whether the byte at `position` is part of an identifier. A non-breaking space is whitespace to Swift's lexer,
+		/// though its bytes are not ASCII. A byte-order mark is too only at the start of a file, which reading the file
+		/// into a string removes, and anywhere else is part of an identifier.
+		private func isIdentifierByte(at position: UnsafePointer<UInt8>) -> Bool {
+			identifierBytes[Int(position.pointee)] && !(position.pointee == 0xC2 && isNonBreakingSpace(at: position))
+		}
 
-		private func isIdentifierByte(_ byte: UInt8) -> Bool {
-			identifierBytes[Int(byte)]
+		private func isNonBreakingSpace(at position: UnsafePointer<UInt8>) -> Bool {
+			continues(at: position, with: 0xC2, 0xA0)
+		}
+
+		/// Whether the source continues at `position` with `first` and then `second`.
+		private func continues(at position: UnsafePointer<UInt8>, with first: UInt8, _ second: UInt8) -> Bool {
+			end - position >= 2 && position[0] == first && position[1] == second
 		}
 
 		private mutating func skipIdentifier() {
-			while position < end, isIdentifierByte(position.pointee) {
+			while position < end, isIdentifierByte(at: position) {
 				position += 1
 			}
 		}
 
-		/// Whether the source continues with `first` and then `second`.
-		private func continues(with first: Unicode.Scalar, _ second: Unicode.Scalar) -> Bool {
-			position + 1 < end && position.pointee == UInt8(ascii: first) && position[1] == UInt8(ascii: second)
-		}
-
-		private mutating func skipWhitespaceAndComments() {
+		/// Skips what Swift's lexer treats as trivia: whitespace, including vertical tab, form feed, NUL, and the
+		/// non-breaking space, and comments.
+		private mutating func skipTrivia() {
 			while position < end {
-				if position.pointee == UInt8(ascii: " ") || position.pointee == UInt8(ascii: "\t") || position.pointee == UInt8(ascii: "\n") || position.pointee == UInt8(ascii: "\r") {
+				switch position.pointee {
+				case UInt8(ascii: " "), UInt8(ascii: "\t"), UInt8(ascii: "\n"), UInt8(ascii: "\r"), 0x0B, 0x0C, 0x00:
 					position += 1
-				} else if continues(with: "/", "/") {
-					while position < end, position.pointee != UInt8(ascii: "\n") {
-						position += 1
-					}
-				} else if continues(with: "/", "*") {
-					// Block comments nest.
+				case 0xC2:
+					guard isNonBreakingSpace(at: position) else { return }
 					position += 2
-					var depth = 1
-					while depth > 0, position < end {
-						if continues(with: "/", "*") {
-							depth += 1
-							position += 2
-						} else if continues(with: "*", "/") {
-							depth -= 1
-							position += 2
-						} else {
+				case UInt8(ascii: "/"):
+					if continues(at: position, with: UInt8(ascii: "/"), UInt8(ascii: "/")) {
+						// A line comment ends at either line break.
+						while position < end, position.pointee != UInt8(ascii: "\n"), position.pointee != UInt8(ascii: "\r") {
 							position += 1
 						}
+					} else if continues(at: position, with: UInt8(ascii: "/"), UInt8(ascii: "*")) {
+						// Block comments nest.
+						position += 2
+						var depth = 1
+						while depth > 0, position < end {
+							if continues(at: position, with: UInt8(ascii: "/"), UInt8(ascii: "*")) {
+								depth += 1
+								position += 2
+							} else if continues(at: position, with: UInt8(ascii: "*"), UInt8(ascii: "/")) {
+								depth -= 1
+								position += 2
+							} else {
+								position += 1
+							}
+						}
+					} else {
+						return
 					}
-				} else {
+				default:
 					return
 				}
 			}
