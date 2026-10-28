@@ -27,9 +27,9 @@ public enum FixableInjectableError: DiagnosticError {
 	public var description: String {
 		switch self {
 		case .unexpectedMutable:
-			"Dependency can not be mutable unless it is decorated with a property wrapper. Mutations to a dependency are not propagated through the dependency tree."
+			"A dependency cannot be a `var` unless a property wrapper decorates it: SafeDI does not pass changes to a dependency on to the types that receive it. Declare it with `let`."
 		case .onlyIfAvailableNotOptionalSpelledWithQuestionMark:
-			"The type of a dependency decorated with `onlyIfAvailable: true` must be marked as optional utilizing the `?` spelling"
+			"The type of a property received with `onlyIfAvailable: true` must be optional, spelled with `?`."
 		}
 	}
 

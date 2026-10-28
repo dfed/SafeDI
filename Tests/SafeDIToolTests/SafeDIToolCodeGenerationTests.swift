@@ -85,7 +85,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(DEBUG)
-		#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -132,7 +132,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(DEBUG)
-		#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -234,7 +234,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if DEBUG
-		#error("SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -296,7 +296,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(STAGING)
-		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -358,7 +358,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if STAGING
-		#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -464,11 +464,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(DEBUG)
-		#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		#if STAGING
-		#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -506,7 +506,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !DEBUG
-		#error("SafeDI scanned this module assuming `#if !DEBUG` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if !DEBUG` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		""" + "\n"])
@@ -10347,7 +10347,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		let rootFile = try #require(output.generatedFiles?["Root+SafeDI.swift"])
 		#expect(rootFile.contains("#error"))
-		#expect(rootFile.contains("Compiler errors prevented the generation of the dependency tree"))
+		#expect(rootFile.contains("SafeDI could not generate code because these files have syntax errors. Fix them and build again:"))
 	}
 
 	@Test
@@ -11878,7 +11878,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		#endif
 
 		#if !(DEPENDENCY)
-		#error("SafeDI scanned this module assuming `#if DEPENDENCY` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if DEPENDENCY` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -12320,7 +12320,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		#endif
 
 		#if !(STAGING)
-		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -12423,7 +12423,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		try FileManager.default.removeItem(at: extraHelperFile)
 
 		await assertThrowsError(
-			"\(rootFile.path):8:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `ExtraHelper`",
+			"\(rootFile.path):8:5: error: No @Instantiable type or extension fulfills `ExtraHelper`, which @Instantiated property `helper: ExtraHelper` instantiates. Decorate `ExtraHelper`, or an extension of it, with @Instantiable; list `ExtraHelper` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.",
 		) {
 			try await (Generate.parse([
 				swiftFileCSV.path,

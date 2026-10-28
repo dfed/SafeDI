@@ -26,18 +26,19 @@ public enum FixableInstantiableError: DiagnosticError {
 	case missingAttributes
 	case disallowedGenericParameter
 	case disallowedEffectSpecifiers
-	case incorrectReturnType
+	case incorrectReturnType(typeName: String)
 	case disallowedGenericWhereClause
 	case dependencyHasTooManyAttributes
-	case dependencyHasInitializer
+	case dependencyHasInitializer(propertyName: String, initializer: String)
 	case missingPublicOrOpenAttribute
 	case missingRequiredInitializer(MissingInitializer)
-	case mockMethodMissingArguments([Property])
+	case mockMethodMissingArguments(methodName: String, [Property])
 	case mockMethodNotPublic
 	case mockMethodIncorrectReturnType(typeName: String)
+	case extensionMockMethodIncorrectReturnType(typeName: String)
 	case duplicateMockMethod
 	case mockMethodNeedsCustomName
-	case mockMethodConflictsWithGeneratedMock
+	case mockMethodConflictsWithGeneratedMock(customMockName: String)
 	case customMockNameWithoutMockGeneration
 	case customMockNameMethodNotFound(String)
 	case mockMethodNonDependencyMissingDefaultValue([Property])
@@ -45,7 +46,7 @@ public enum FixableInstantiableError: DiagnosticError {
 	case mockOnlyWithIsRoot
 	case mockOnlyMissingMockMethod(typeName: String, methodName: String)
 	case unlabeledDefaultBeforeUnlabeledParameter(defaultedParameter: Property, followingParameter: Property)
-	case calleeScopeReferenceInDefaultExpression(parameterLabel: String)
+	case calleeScopeReferenceInDefaultExpression(parameterLabel: String, typeName: String)
 	/// A name SafeDI binds, or refers to, in generated code collides with a name generated code introduces.
 	case reservedName(name: String, reservation: ReservedName)
 
@@ -60,25 +61,25 @@ public enum FixableInstantiableError: DiagnosticError {
 	public var description: String {
 		switch self {
 		case .missingInstantiableConformance:
-			"@\(InstantiableVisitor.macroName)-decorated type or extension must declare conformance to `Instantiable`"
+			"@\(InstantiableVisitor.macroName)-decorated type or extension must declare conformance to `Instantiable`."
 		case let .missingRequiredInstantiateMethod(typeName):
-			"@\(InstantiableVisitor.macroName)-decorated extension of \(typeName) must have a `public static func instantiate() -> \(typeName)` method"
+			"@\(InstantiableVisitor.macroName)-decorated extension of `\(typeName)` must have a `public static func instantiate() -> \(typeName)` method."
 		case .missingAttributes:
-			"@\(InstantiableVisitor.macroName)-decorated extension must have an `instantiate()` method that is both `public` and `static`"
+			"@\(InstantiableVisitor.macroName)-decorated extension must have an `instantiate()` method that is both `public` and `static`."
 		case .disallowedGenericParameter:
-			"@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must not have a generic parameter"
+			"@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must not have a generic parameter."
 		case .disallowedEffectSpecifiers:
-			"@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must not throw or be async"
-		case .incorrectReturnType:
-			"@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must return the same base type as the extended type"
+			"@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must not throw or be async."
+		case let .incorrectReturnType(typeName):
+			"@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must return the extended type, `\(typeName)`."
 		case .disallowedGenericWhereClause:
-			"@\(InstantiableVisitor.macroName)-decorated extension must not have a generic `where` clause"
+			"@\(InstantiableVisitor.macroName)-decorated extension must not have a generic `where` clause. To build a specialization of a generic type, return that specialization from an `instantiate()` method instead."
 		case .dependencyHasTooManyAttributes:
-			"Dependency can have at most one of @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue) attached macro"
-		case .dependencyHasInitializer:
-			"Dependency must not have hand-written initializer"
+			"A property can be decorated with only one of @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)."
+		case let .dependencyHasInitializer(propertyName, initializer):
+			"`\(propertyName)` must not have a default value: SafeDI passes every @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), and @\(Dependency.Source.forwardedRawValue) property in through the initializer. Remove `\(initializer)`."
 		case .missingPublicOrOpenAttribute:
-			"@\(InstantiableVisitor.macroName)-decorated type must be `public` or `open`"
+			"@\(InstantiableVisitor.macroName)-decorated type must be `public` or `open`."
 		case let .missingRequiredInitializer(missingInitializer):
 			switch missingInitializer {
 			case .hasOnlyInjectableProperties:
@@ -89,37 +90,43 @@ public enum FixableInstantiableError: DiagnosticError {
 				"@\(InstantiableVisitor.macroName)-decorated type with no @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated properties must have a `public` or `open` initializer that either takes no parameters or has a default value for each parameter."
 			case .isNotPublicOrOpen:
 				"@\(InstantiableVisitor.macroName)-decorated type must have a `public` or `open` initializer."
-			case .missingArguments:
-				"@\(InstantiableVisitor.macroName)-decorated type must have a `public` or `open` initializer with a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property."
+			case let .missingArguments(properties):
+				"@\(InstantiableVisitor.macroName)-decorated type must have a `public` or `open` initializer with a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property. This initializer has no parameter for \(properties.asBacktickedList)."
 			}
-		case .mockMethodMissingArguments:
-			"@\(InstantiableVisitor.macroName)-decorated type’s `mock()` method must have a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property. Extra parameters with default values are allowed."
+		case let .mockMethodMissingArguments(methodName, properties):
+			"This `\(methodName)()` method has no parameter for \(properties.asBacktickedList). A hand-written mock must take a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property; extra parameters with default values are allowed."
 		case .mockMethodNotPublic:
 			"@\(InstantiableVisitor.macroName)-decorated type’s `mock()` method must be `public` or `open`."
 		case let .mockMethodIncorrectReturnType(typeName):
 			"@\(InstantiableVisitor.macroName)-decorated type’s `mock()` method must return `Self` or `\(typeName)`."
+		case let .extensionMockMethodIncorrectReturnType(typeName):
+			"@\(InstantiableVisitor.macroName)-decorated extension’s `mock()` method must return `\(typeName)` or a type listed in `fulfillingAdditionalTypes`."
 		case .duplicateMockMethod:
 			"@\(InstantiableVisitor.macroName)-decorated type must have at most one `mock()` method. Remove this duplicate."
 		case .mockMethodNeedsCustomName:
 			"@\(InstantiableVisitor.macroName)-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method because the generated and hand-written methods would have ambiguous signatures. Rename your method and add `customMockName` to `@\(InstantiableVisitor.macroName)`."
-		case .mockMethodConflictsWithGeneratedMock:
-			"@\(InstantiableVisitor.macroName)-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method. The generated `mock()` would conflict with this method. Remove it or rename it."
+		case let .mockMethodConflictsWithGeneratedMock(customMockName):
+			"This `mock()` method conflicts with the `mock()` that `generateMock: true` generates. This type’s hand-written mock is `\(customMockName)`, which `customMockName` names; remove this method or rename it."
 		case .customMockNameWithoutMockGeneration:
 			"`customMockName` requires `generateMock: true` or `mockOnly: true`."
 		case let .customMockNameMethodNotFound(name):
-			"No method named `\(name)` found. Add a `public static func \(name)(…)` method."
-		case .mockMethodNonDependencyMissingDefaultValue:
-			"@\(InstantiableVisitor.macroName)-decorated type’s `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values."
+			"`customMockName` names `\(name)`, but this declaration has no method named `\(name)`. Add a `public static func \(name)(…)` method."
+		case let .mockMethodNonDependencyMissingDefaultValue(properties):
+			if properties.count == 1 {
+				"This `mock()` method’s parameter \(properties.asBacktickedList) does not correspond to a dependency, so it must have a default value."
+			} else {
+				"This `mock()` method’s parameters \(properties.asBacktickedList) do not correspond to a dependency, so they must have default values."
+			}
 		case .mockOnlyWithGenerateMock:
-			"`mockOnly` and `generateMock` cannot both be `true`."
+			"`mockOnly` and `generateMock` cannot both be `true`: a `mockOnly` declaration provides a hand-written mock. To generate a mock, set `generateMock: true` on the production `@\(InstantiableVisitor.macroName)` declaration instead."
 		case .mockOnlyWithIsRoot:
 			"`mockOnly` types cannot be marked `isRoot`."
 		case let .mockOnlyMissingMockMethod(typeName, methodName):
 			"@\(InstantiableVisitor.macroName)(mockOnly: true) requires a `public static func \(methodName)(…) -> \(typeName)` method."
 		case let .unlabeledDefaultBeforeUnlabeledParameter(defaultedParameter, followingParameter):
-			"Unlabeled parameter `\(defaultedParameter.asSource)` has a default value but is followed by unlabeled required parameter `\(followingParameter.asSource)`. SafeDI cannot generate a mock for this signature: the default cannot be elided from the mock's override surface (Swift requires the earlier positional slot to be passed when a later unlabeled parameter is required), and an unlabeled parameter cannot be exposed as a labeled field on `SafeDIMockConfiguration`. Either add an external label to the defaulted parameter, reorder so unlabeled defaults come last, or remove the default."
-		case let .calleeScopeReferenceInDefaultExpression(parameterLabel):
-			"Default expression for parameter `\(parameterLabel)` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default."
+			"Unlabeled parameter `\(defaultedParameter.asSource)` has a default value but is followed by unlabeled required parameter `\(followingParameter.asSource)`, so a generated `mock()` cannot leave `\(defaultedParameter.label)` out of its call. Add an argument label to `\(defaultedParameter.label)`, move unlabeled parameters with defaults after the required ones, or remove the default."
+		case let .calleeScopeReferenceInDefaultExpression(parameterLabel, typeName):
+			"The default value of `\(parameterLabel)` refers to `Self`. A generated `mock()` repeats this default outside `\(typeName)`, where `Self` names a different type. Write `\(typeName)` instead of `Self`, or remove the default."
 		case let .reservedName(name, reservation):
 			switch reservation {
 			case .builderFunctionName:
@@ -162,6 +169,7 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .mockMethodMissingArguments,
 			     .mockMethodNotPublic,
 			     .mockMethodIncorrectReturnType,
+			     .extensionMockMethodIncorrectReturnType,
 			     .duplicateMockMethod,
 			     .mockMethodNeedsCustomName,
 			     .mockMethodConflictsWithGeneratedMock,
@@ -199,14 +207,14 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Remove generic parameter"
 			case .disallowedEffectSpecifiers:
 				"Remove effect specifiers"
-			case .incorrectReturnType:
-				"Make `instantiate()`’s return type the same base type as the extended type"
+			case let .incorrectReturnType(typeName):
+				"Make `instantiate()` return `\(typeName)`"
 			case .disallowedGenericWhereClause:
 				"Remove generic `where` clause"
 			case .dependencyHasTooManyAttributes:
 				"Remove excessive attached macros"
-			case .dependencyHasInitializer:
-				"Remove initializer"
+			case let .dependencyHasInitializer(_, initializer):
+				"Remove `\(initializer)`"
 			case .missingPublicOrOpenAttribute:
 				"Add `public` modifier"
 			case let .missingRequiredInitializer(missingInitError):
@@ -220,14 +228,15 @@ public enum FixableInstantiableError: DiagnosticError {
 				case let .missingArguments(properties):
 					"Add arguments for \(properties.map(\.asSource).joined(separator: ", "))"
 				}
-			case let .mockMethodMissingArguments(properties):
-				"Add mock() arguments for \(properties.map(\.asSource).joined(separator: ", "))"
+			case let .mockMethodMissingArguments(methodName, properties):
+				"Add `\(methodName)()` arguments for \(properties.map(\.asSource).joined(separator: ", "))"
 			case .mockMethodNotPublic:
-				"Add `public` modifier to mock() method"
-			case let .mockMethodIncorrectReturnType(typeName):
-				"Change mock() return type to `\(typeName)`"
+				"Add `public` modifier to `mock()` method"
+			case let .mockMethodIncorrectReturnType(typeName),
+			     let .extensionMockMethodIncorrectReturnType(typeName):
+				"Change `mock()` return type to `\(typeName)`"
 			case .duplicateMockMethod:
-				"Remove duplicate mock() method"
+				"Remove duplicate `mock()` method"
 			case .mockMethodNeedsCustomName:
 				"Rename method to `customMock` and add `customMockName: \"customMock\"` to `@Instantiable`"
 			case .mockMethodConflictsWithGeneratedMock:
@@ -237,7 +246,7 @@ public enum FixableInstantiableError: DiagnosticError {
 			case let .customMockNameMethodNotFound(name):
 				"Add `public static func \(name)(…)` method"
 			case let .mockMethodNonDependencyMissingDefaultValue(properties):
-				"Add default values to mock() non-dependency parameters for \(properties.map(\.asSource).joined(separator: ", "))"
+				"Add default values to `mock()` non-dependency parameters for \(properties.map(\.asSource).joined(separator: ", "))"
 			case .mockOnlyWithGenerateMock:
 				"Remove `generateMock: true`"
 			case .mockOnlyWithIsRoot:
@@ -245,8 +254,8 @@ public enum FixableInstantiableError: DiagnosticError {
 			case let .mockOnlyMissingMockMethod(typeName, methodName):
 				"Add `public static func \(methodName)(…) -> \(typeName)` method"
 			case let .unlabeledDefaultBeforeUnlabeledParameter(defaultedParameter, _):
-				"Promote `\(defaultedParameter.label)` to an external label (rewrite `_ \(defaultedParameter.label):` as `\(defaultedParameter.label):`)"
-			case let .calleeScopeReferenceInDefaultExpression(parameterLabel):
+				"Add argument label `\(defaultedParameter.label)`"
+			case let .calleeScopeReferenceInDefaultExpression(parameterLabel, _):
 				"Remove the default from `\(parameterLabel)` or move the referenced value to a file-scoped or module-scoped symbol"
 			case let .reservedName(name, reservation):
 				switch reservation {
@@ -261,5 +270,14 @@ public enum FixableInstantiableError: DiagnosticError {
 
 		let message: String
 		let fixItID: MessageID
+	}
+}
+
+// MARK: - [Property]
+
+extension [Property] {
+	/// The properties as a comma-separated list, each spelled as source in backticks.
+	fileprivate var asBacktickedList: String {
+		map { "`\($0.asSource)`" }.joined(separator: ", ")
 	}
 }

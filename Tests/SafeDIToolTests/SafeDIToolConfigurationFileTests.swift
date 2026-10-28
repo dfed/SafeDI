@@ -140,7 +140,7 @@ struct SafeDIToolConfigurationFileTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if DEBUG
-		#error("SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		#if DEBUG
@@ -183,7 +183,7 @@ struct SafeDIToolConfigurationFileTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(DEBUG)
-		#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		#if TESTING
@@ -464,9 +464,8 @@ struct SafeDIToolConfigurationFileTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				Found 2 #SafeDIConfiguration declarations in this module. Each module must have at most one #SafeDIConfiguration. Found in:
-				\t\(fixtures["Other.swift"])
-				\t\(fixtures["SafeDIConfiguration.swift"])
+				\(fixtures["Other.swift"]):1:1: error: This module declares #SafeDIConfiguration 2 times, but a module can declare it at most once. Keep one and remove the others.
+				\(fixtures["SafeDIConfiguration.swift"]):1:1: error: This module declares #SafeDIConfiguration 2 times, but a module can declare it at most once. Keep one and remove the others.
 				"""
 			},
 		) {
@@ -498,9 +497,8 @@ struct SafeDIToolConfigurationFileTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				Found 2 #SafeDIConfiguration declarations in this module. Each module must have at most one #SafeDIConfiguration. Found in:
-				\t\(fixtures["First/SafeDIConfiguration.swift"])
-				\t\(fixtures["Second/SafeDIConfiguration.swift"])
+				\(fixtures["First/SafeDIConfiguration.swift"]):1:1: error: This module declares #SafeDIConfiguration 2 times, but a module can declare it at most once. Keep one and remove the others.
+				\(fixtures["Second/SafeDIConfiguration.swift"]):1:1: error: This module declares #SafeDIConfiguration 2 times, but a module can declare it at most once. Keep one and remove the others.
 				"""
 			},
 		) {
@@ -799,7 +797,7 @@ struct SafeDIToolConfigurationFileTests: ~Copyable {
 	// Please refrain from editing this file directly.
 
 	#if DEBUG
-	#error("SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+	#error("SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 	#endif
 
 	extension Feature {
