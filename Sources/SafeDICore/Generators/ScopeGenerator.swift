@@ -1973,6 +1973,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var spelledTypeDescription: TypeDescription {
 			typeDescription.asWritten
 		}
+
 		/// The instantiated type — `typeDescription.asInstantiatedType` (e.g., `Child`).
 		/// Used for the builder closure's return type, disambiguation keys, and
 		/// cycle detection. Configuration struct nesting uses `concreteType` instead.
