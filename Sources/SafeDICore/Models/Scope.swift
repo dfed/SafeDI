@@ -310,9 +310,7 @@ final class Scope: Hashable {
 			propertiesToGenerate: isPropertyCycle ? [] : propertiesToGenerate.map {
 				switch $0 {
 				case let .instantiated(property, scope, erasedToConcreteExistential):
-					// Only the dependency tree checks this. A mock tree with a mismatched generic is not diagnosed.
-					if !forMockGeneration,
-					   let error = ErasedInstantiatorForwardedPropertiesMismatchError(
+					if let error = ErasedInstantiatorForwardedPropertiesMismatchError(
 					   	property: property,
 					   	declarationLocation: instantiable.dependencies.first(where: { $0.property == property })?.declarationLocation,
 					   	parent: instantiable.concreteInstantiable,
@@ -429,26 +427,14 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 		parent: TypeDescription,
 		builtInstantiable: Instantiable,
 	) {
-		let forwardedProperties = builtInstantiable.dependencies
-			.filter { $0.source == .forwarded }
-			.map(\.property)
-		guard property.propertyType.isErasedInstantiator,
-		      !forwardedProperties.isEmpty,
-		      let forwardedArgument = property.generics?.first,
-		      // The forwarded argument is the same type as the only `@Forwarded` property.
-		      forwardedProperties.count != 1 || forwardedArgument != forwardedProperties[0].typeDescription,
-		      // The forwarded argument is the same as `InstantiableName.ForwardedProperties`.
-		      forwardedArgument != .nested(name: "ForwardedProperties", parentType: builtInstantiable.concreteInstantiable),
-		      // The forwarded argument is the same as the tuple the macro generates for `InstantiableName.ForwardedProperties`.
-		      forwardedArgument != forwardedProperties.asTupleTypeDescription
-		else { return nil }
+		guard !property.firstGenericMatchesForwardedProperties(of: builtInstantiable) else { return nil }
 		self.property = property
 		self.declarationLocation = declarationLocation
 		self.parent = parent
 		builtType = builtInstantiable.concreteInstantiable
 		// The forwarded properties are spelled out rather than as `ForwardedProperties` on the built type, which the
 		// module that declares the property may not be able to see.
-		forwardedPropertiesType = forwardedProperties.asForwardedPropertiesType.typeDescription
+		forwardedPropertiesType = builtInstantiable.forwardedProperties.asForwardedPropertiesType.typeDescription
 	}
 
 	var sourceDiagnostics: [SourceDiagnostic] {
@@ -466,4 +452,32 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 	private let parent: TypeDescription
 	private let builtType: TypeDescription
 	private let forwardedPropertiesType: TypeDescription
+}
+
+extension Property {
+	/// Whether the property, when it is an `ErasedInstantiator` or `SendableErasedInstantiator` that builds
+	/// `builtInstantiable`, has the `@Forwarded` properties of `builtInstantiable` as its first generic argument.
+	/// Any other property matches, as does one that builds a type with no `@Forwarded` properties.
+	func firstGenericMatchesForwardedProperties(of builtInstantiable: Instantiable) -> Bool {
+		let forwardedProperties = builtInstantiable.forwardedProperties
+		guard propertyType.isErasedInstantiator,
+		      !forwardedProperties.isEmpty,
+		      let forwardedArgument = generics?.first
+		else { return true }
+		// The forwarded argument is the same type as the only `@Forwarded` property.
+		return (forwardedProperties.count == 1 && forwardedArgument == forwardedProperties[0].typeDescription)
+			// The forwarded argument is the same as `InstantiableName.ForwardedProperties`.
+			|| forwardedArgument == .nested(name: "ForwardedProperties", parentType: builtInstantiable.concreteInstantiable)
+			// The forwarded argument is the same as the tuple the macro generates for `InstantiableName.ForwardedProperties`.
+			|| forwardedArgument == forwardedProperties.asTupleTypeDescription
+	}
+}
+
+extension Instantiable {
+	/// The type's `@Forwarded` properties, in declaration order.
+	fileprivate var forwardedProperties: [Property] {
+		dependencies
+			.filter { $0.source == .forwarded }
+			.map(\.property)
+	}
 }

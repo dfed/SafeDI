@@ -1189,6 +1189,48 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithUnfulfillableReceivedErasedInstantiator_throwsErrorSuggestingInstantiatedPropertyWithFulfilledByType() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Middle.swift"]):7:5: error: @Received property `childBuilder: ErasedInstantiator<String, AnyChild>` is not @Instantiated or @Forwarded in chain: Root -> Middle. Declare `@Instantiated(fulfilledByType:) let childBuilder: ErasedInstantiator<String, AnyChild>`, naming the type it builds, on `Root` or on another type in the chain to fix.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(middle: Middle) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let middle: Middle
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Middle: Instantiable {
+					    public init(childBuilder: ErasedInstantiator<String, AnyChild>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let childBuilder: ErasedInstantiator<String, AnyChild>
+					}
+					""",
+					"""
+					public final class AnyChild {}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithDiamondDependencyWhereAReceivedPropertyIsUnfulfillableOnOneBranch_throwsError() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in

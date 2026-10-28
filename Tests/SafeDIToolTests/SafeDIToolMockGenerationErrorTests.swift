@@ -2185,6 +2185,108 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsErrorAtDeclaration_whenGeneratedMockRootDeclaresErasedInstantiatorWithIncorrectFirstGeneric() async {
+		// Parent is not a root, so only its generated mock builds `childBuilder`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Parent.swift"]):7:5: error: The first generic argument of `childBuilder: ErasedInstantiator<Int, AnyChild>` on `Parent` must be the @Forwarded properties of `Child`, which it builds. Declare it as `ErasedInstantiator<String, AnyChild>`.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Parent: Instantiable {
+					    public init(childBuilder: ErasedInstantiator<Int, AnyChild>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Child", erasedToConcreteExistential: true) let childBuilder: ErasedInstantiator<Int, AnyChild>
+					}
+					""",
+					"""
+					public final class AnyChild {
+					    public init(_ child: Child) {}
+					}
+
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsErrorAtDeclaration_whenTypeBelowAdditionalMockRootDeclaresErasedInstantiatorWithIncorrectFirstGeneric() async {
+		// Screen's mock exists only because it is listed in additionalMocksToGenerate, and only that mock builds Header.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Header.swift"]):7:5: error: The first generic argument of `titleBuilder: SendableErasedInstantiator<String, AnyTitle>` on `Header` must be the @Forwarded properties of `Title`, which it builds. Declare it as `SendableErasedInstantiator<(subtitle: String, text: String), AnyTitle>`.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					#SafeDIConfiguration(additionalMocksToGenerate: ["Screen"])
+					""",
+					"""
+					@Instantiable
+					public final class Screen: Instantiable {
+					    public init(header: Header) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let header: Header
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Header: Instantiable {
+					    public init(titleBuilder: SendableErasedInstantiator<String, AnyTitle>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Title", erasedToConcreteExistential: true) let titleBuilder: SendableErasedInstantiator<String, AnyTitle>
+					}
+					""",
+					"""
+					public final class AnyTitle: Sendable {
+					    public init(_ title: Title) {}
+					}
+
+					@Instantiable
+					public final class Title: Instantiable, Sendable {
+					    public init(text: String, subtitle: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let text: String
+					    @Forwarded let subtitle: String
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()

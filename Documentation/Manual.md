@@ -638,6 +638,8 @@ public struct ParentView: View, Instantiable {
 }
 ```
 
+An `@Instantiated` erased instantiator must name the type it builds with `fulfilledByType`. An `@Received` or `@Forwarded` one is handed in rather than built, so it names no type: a type below `ParentView` can declare `@Received let childViewBuilder: ErasedInstantiator<(), AnyView>` to receive the instantiator `ParentView` creates. As with any received dependency, the label and the full type must match.
+
 ### LazilyInstantiated
 
 An [`Instantiator`](#instantiator) creates a new instance every time you call `instantiate()`. A [`LazilyInstantiated`](../Sources/SafeDI/DelayedInstantiation/LazilyInstantiated.swift) dependency is created once, the first time its `instance` is read, and every later read returns that same instance. Use it for a dependency that is expensive to create, or that some sessions never need, but that the rest of the dependency tree should still share.
@@ -963,6 +965,8 @@ public struct SettingsView: View, Instantiable {
 
 SettingsView.mock(userService: AnyUserService(StubUserService()))
 ```
+
+The same matching applies to a received erased instantiator: a received `childViewBuilder: ErasedInstantiator<(), AnyView>` is built from a property of that type, such as `ParentView`’s in [ErasedInstantiator](#erasedinstantiator). It is a required flat `mock()` parameter instead when that property’s first generic is not the `@Forwarded` properties of the type it builds, since such an instantiator cannot be built. SafeDI reports that property as an error wherever a dependency tree or a generated mock builds it.
 
 ### Mock visibility
 

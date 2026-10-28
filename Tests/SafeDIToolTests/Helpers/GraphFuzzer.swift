@@ -391,8 +391,9 @@ enum GraphFuzzerGenerator {
 
 		// MARK: Second pass
 
-		/// Makes `property` receivable below `providerIndex`. The macro rejects a received erased instantiator,
-		/// which only `@Instantiated(fulfilledByType:)` can declare, so such a property is never received.
+		/// Makes `property` receivable below `providerIndex`. An erased instantiator is never received: the
+		/// fuzzer predates the macro accepting `@Received` erased instantiators, and receiving one would change
+		/// every corpus pin. Targeted tests cover received erased instantiators.
 		private mutating func provide(_ property: PropertyDeclaration, providerIndex: Int?, builtIndex: Int?) {
 			guard !property.type.contains("ErasedInstantiator<") else { return }
 			provided.append(ProvidedProperty(label: property.label, type: property.type, providerIndex: providerIndex, builtIndex: builtIndex))

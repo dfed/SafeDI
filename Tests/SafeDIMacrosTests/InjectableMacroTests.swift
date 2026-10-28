@@ -82,6 +82,74 @@ import Testing
 		}
 
 		@Test
+		func expansion_expandsWithoutIssue_whenReceivedPropertyIsErasedInstantiator() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received let childBuilder: ErasedInstantiator<String, AnyChild>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let childBuilder: ErasedInstantiator<String, AnyChild>
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenReceivedPropertyIsOnlyIfAvailableSendableErasedInstantiator() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(onlyIfAvailable: true) let childBuilder: SendableErasedInstantiator<String, AnyChild>?
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let childBuilder: SendableErasedInstantiator<String, AnyChild>?
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenReceivedAliasIsErasedInstantiator() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received(fulfilledByDependencyNamed: "childBuilder", ofType: ErasedInstantiator<String, AnyChild>.self) let renamedChildBuilder: ErasedInstantiator<String, AnyChild>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let renamedChildBuilder: ErasedInstantiator<String, AnyChild>
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenForwardedPropertyIsErasedInstantiator() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Forwarded let childBuilder: ErasedInstantiator<String, AnyChild>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let childBuilder: ErasedInstantiator<String, AnyChild>
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
 		func propertyIsOnlyIfAvailableAndOptional_expandsWthoutIssue() {
 			assertMacroExpansion(
 				"""
@@ -269,7 +337,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "An `ErasedInstantiator` or `SendableErasedInstantiator` property must name the type it builds with the argument `fulfilledByType`, such as `@Instantiated(fulfilledByType: \"DefaultService\")`. Use an `Instantiator` or `SendableInstantiator` when the property’s type is the type it builds.",
+						message: "An @Instantiated `ErasedInstantiator` or `SendableErasedInstantiator` property must name the type it builds with the argument `fulfilledByType`, such as `@Instantiated(fulfilledByType: \"DefaultService\")`. Use an `Instantiator` or `SendableInstantiator` when the property’s type is the type it builds.",
 						line: 2,
 						column: 5,
 						severity: .error,
