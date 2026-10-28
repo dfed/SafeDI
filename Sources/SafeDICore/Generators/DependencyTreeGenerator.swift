@@ -255,7 +255,7 @@ public actor DependencyTreeGenerator {
 			// mockOnly types can win additional-type slots and may have different @Forwarded properties.
 			// For fulfilledByType deps, validate against the declared type (same as mock resolution).
 			for dependency in scope.instantiable.dependencies {
-				guard case let .instantiated(fulfillingTypeDescription, _) = dependency.source else { continue }
+				guard case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential) = dependency.source else { continue }
 				let instantiatedType = dependency.asInstantiatedType
 				let childScope: Scope? = if fulfillingTypeDescription != nil {
 					typeDescriptionToScopeMap[dependency.property.typeDescription.asInstantiatedType]
@@ -266,6 +266,8 @@ public actor DependencyTreeGenerator {
 				if let childScope,
 				   let error = forwardedPropertyError(
 				   	for: dependency,
+				   	fulfillingTypeDescription: fulfillingTypeDescription,
+				   	erasedToConcreteExistential: erasedToConcreteExistential,
 				   	instantiable: childScope.instantiable,
 				   	parent: scope.instantiable,
 				   )
@@ -515,19 +517,16 @@ public actor DependencyTreeGenerator {
 
 	private enum DependencyTreeGeneratorError: SourceLocatedError {
 		/// `fulfilledByMockOnlyDeclaration` is set when only a `mockOnly` declaration fulfills the type.
-		case noInstantiableFound(TypeDescription, referencedAt: [Dependency.DeclarationLocation?], fulfilledByMockOnlyDeclaration: Bool)
+		case noInstantiableFound(TypeDescription, referencedBy: [LocatedProperty], fulfilledByMockOnlyDeclaration: Bool)
 		case unfulfillableProperties([UnfulfillableProperty])
 		/// Reported at each `@Received` declaration whose dependency a closer ancestor hides, with a note at the
 		/// hiding declaration. See `HiddenReceivedProperty`.
 		case hiddenReceivedProperties([HiddenReceivedProperty])
-		case instantiableHasForwardedProperty(property: Property, declarationLocation: Dependency.DeclarationLocation?, instantiableWithForwardedProperty: Instantiable, forwardedDeclarations: [LocatedProperty], parent: Instantiable)
+		case instantiableHasForwardedProperty(ForwardedPropertyViolation)
 		/// Reported at the dependency declaration that closes the cycle – the `@Instantiated` or `@Received`
-		/// property whose type is already on the instantiation stack – with a note at each member type’s
-		/// `@Instantiable` declaration. See `DependencyCycle`.
-		case constantDependencyCycleDetected(DependencyCycle)
-		/// Reported at the dependency declaration that closes the cycle, with a note at each member type’s
-		/// `@Instantiable` declaration. See `DependencyCycle`.
-		case partiallyLazyDependencyCycleDetected(DependencyCycle)
+		/// property whose type is already on the instantiation stack, and which is not an `@Instantiated`
+		/// instantiator – with a note at each member type’s `@Instantiable` declaration. See `DependencyCycle`.
+		case constantDependencyCycleDetected(DependencyCycle, closingDependency: ClosingDependency)
 		/// Reported at the `@Received` declaration on `directParent` that closes the cycle, with a note at each
 		/// member type’s `@Instantiable` declaration. See `DependencyCycle`. `aliasProperty` is the declared property
 		/// when that declaration is a `@Received(fulfilledByDependencyNamed:ofType:)` alias that `property` fulfills.
@@ -559,14 +558,17 @@ public actor DependencyTreeGenerator {
 						)
 					}
 					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
-			case let .noInstantiableFound(typeDescription, referencedAt, fulfilledByMockOnlyDeclaration):
+			case let .noInstantiableFound(typeDescription, referencedBy, fulfilledByMockOnlyDeclaration):
 				// Sorted by location so the order never depends on map iteration.
-				referencedAt.map {
+				referencedBy.map {
 					SourceDiagnostic(
 						severity: .error,
-						location: $0,
-						message: "No `@\(InstantiableVisitor.macroName)`-decorated type or extension found to fulfill `@\(Dependency.Source.instantiatedRawValue)`-decorated property with type `\(typeDescription.asSource)`"
-							+ (fulfilledByMockOnlyDeclaration ? ". A `mockOnly: true` declaration fulfills it, and is used only to generate mocks." : ""),
+						location: $0.declarationLocation,
+						message: Self.noInstantiableFoundMessage(
+							typeDescription: typeDescription,
+							referencingProperty: $0.property,
+							fulfilledByMockOnlyDeclaration: fulfilledByMockOnlyDeclaration,
+						),
 					)
 				}
 				.sorted(by: SourceDiagnostic.precedesInSourceOrder)
@@ -580,41 +582,28 @@ public actor DependencyTreeGenerator {
 					.map(\.sourceDiagnostics)
 					.sorted { SourceDiagnostic.precedesInSourceOrder($0[0], $1[0]) }
 					.flatMap(\.self)
-			case let .instantiableHasForwardedProperty(property, declarationLocation, instantiable, forwardedDeclarations, parent):
-				[
-					SourceDiagnostic(
-						severity: .error,
-						location: declarationLocation,
-						message: "Property `\(property.asSource)` on \(parent.concreteInstantiable.asSource) has at least one @\(Dependency.Source.forwardedRawValue) property. Property should instead be of type `\(Dependency.instantiatorType)<\(instantiable.concreteInstantiable.asSource)>`.",
-					),
-				] + forwardedDeclarations.map {
-					SourceDiagnostic(
-						severity: .note,
-						location: $0.declarationLocation,
-						message: "@\(Dependency.Source.forwardedRawValue) property `\($0.property.asSource)` is declared here",
-					)
-				}
-			case let .constantDependencyCycleDetected(cycle):
-				cycle.sourceDiagnostics(summary: "Dependency cycle detected: \(cycle.asSource)\(Self.lazilyInstantiatedHint(for: cycle.lazilyInstantiatedProperties))")
-			case let .partiallyLazyDependencyCycleDetected(cycle):
-				cycle.sourceDiagnostics(summary: "Dependency cycle detected. Cycles with a mix of constant and lazy (Instantiator) dependencies cannot be resolved. Make all dependencies in the cycle lazy by using Instantiator: \(cycle.asSource)\(Self.lazilyInstantiatedHint(for: cycle.lazilyInstantiatedProperties))")
+			case let .instantiableHasForwardedProperty(violation):
+				violation.sourceDiagnostics
+			case let .constantDependencyCycleDetected(cycle, closingDependency):
+				cycle.sourceDiagnostics(summary: "Dependency cycle: \(cycle.asSource). \(closingDependency.remedy)\(Self.lazilyInstantiatedHint(for: cycle.lazilyInstantiatedProperties))")
 			case let .receivedInstantiatorDependencyCycleDetected(property, aliasProperty, directParent, cycle):
 				if let aliasProperty {
 					// The alias, not a declaration of `property`, is what `directParent` would declare as instantiated.
-					cycle.sourceDiagnostics(summary: "Dependency cycle detected! @\(Dependency.Source.instantiatedRawValue) `\(property.asSource)` is @\(Dependency.Source.receivedRawValue) as `\(aliasProperty.asSource)` in tree created by @\(Dependency.Source.instantiatedRawValue) `\(property.asSource)`. Declare @\(Dependency.Source.receivedRawValue)(fulfilledByDependencyNamed:ofType:) `\(aliasProperty.asSource)` on `\(directParent.asSource)` as @\(Dependency.Source.instantiatedRawValue) to fix. Full cycle: \(cycle.asSource)")
+					cycle.sourceDiagnostics(summary: "Dependency cycle: \(cycle.asSource). `\(directParent.asSource)` receives `\(property.asSource)` as `\(aliasProperty.asSource)` inside the tree that `\(property.label)` builds. Declare `\(aliasProperty.asSource)` on `\(directParent.asSource)` as @\(Dependency.Source.instantiatedRawValue) instead of @\(Dependency.Source.receivedRawValue)(fulfilledByDependencyNamed:ofType:).")
 				} else {
-					cycle.sourceDiagnostics(summary: "Dependency cycle detected! @\(Dependency.Source.instantiatedRawValue) `\(property.asSource)` is @\(Dependency.Source.receivedRawValue) in tree created by @\(Dependency.Source.instantiatedRawValue) `\(property.asSource)`. Declare @\(Dependency.Source.receivedRawValue) `\(property.asSource)` on `\(directParent.asSource)` as @\(Dependency.Source.instantiatedRawValue) to fix. Full cycle: \(cycle.asSource)")
+					cycle.sourceDiagnostics(summary: "Dependency cycle: \(cycle.asSource). `\(directParent.asSource)` receives `\(property.asSource)` inside the tree that `\(property.label)` builds. Declare `\(property.asSource)` on `\(directParent.asSource)` as @\(Dependency.Source.instantiatedRawValue) instead of @\(Dependency.Source.receivedRawValue).")
 				}
 			case let .dependencyReceivedInSameChainItIsInstantiated(instantiated, receivedPropertyChain, declarationLocation, lazilyInstantiatedProperties):
 				[
 					SourceDiagnostic(
 						severity: .error,
 						location: declarationLocation,
-						message: "Dependency received in same chain it is instantiated: "
-							+ "@\(Dependency.Source.instantiatedRawValue) \(instantiated.asSource) -> "
+						message: "Dependency cycle: "
+							+ "@\(Dependency.Source.instantiatedRawValue) `\(instantiated.asSource)` -> "
 							+ receivedPropertyChain
-							.map { "@\(Dependency.Source.receivedRawValue) \($0.asSource)" }
+							.map { "@\(Dependency.Source.receivedRawValue) `\($0.asSource)`" }
 							.joined(separator: " -> ")
+							+ ". `\(instantiated.asSource)` is received while it is still being instantiated. \(Self.onlyIfAvailableRemedy)"
 							+ Self.lazilyInstantiatedHint(for: lazilyInstantiatedProperties),
 					),
 				]
@@ -623,12 +612,16 @@ public actor DependencyTreeGenerator {
 					SourceDiagnostic(
 						severity: .error,
 						location: declarationLocation,
-						message: "Dependency cycle detected: each @\(Dependency.Source.receivedRawValue)(fulfilledByDependencyNamed:ofType:) dependency is fulfilled by the next: "
-							+ aliasChain.map(\.asSource).joined(separator: " -> "),
+						message: "Dependency cycle: each @\(Dependency.Source.receivedRawValue)(fulfilledByDependencyNamed:ofType:) dependency is fulfilled by the next: "
+							+ aliasChain.map { "`\($0.asSource)`" }.joined(separator: " -> ")
+							+ ". Change one of them to be fulfilled by a property outside this cycle.",
 					),
 				]
 			}
 		}
+
+		/// How to break a cycle closed by a receive of a property that is still being built.
+		fileprivate static let onlyIfAvailableRemedy = "Remove this @\(Dependency.Source.receivedRawValue) property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required."
 
 		/// A sentence to end a cycle diagnostic with when lazily instantiated properties are on the cycle, or an
 		/// empty string when none are. Cycle validation sees such a property as the constant it stands for, so the
@@ -638,7 +631,21 @@ public actor DependencyTreeGenerator {
 			let validatedAs = lazilyInstantiatedProperties
 				.map { "`\($0.asSource)` is validated as `\($0.asValidatedForDependencyCycles.asSource)`" }
 				.joined(separator: ", ")
-			return ". A lazily instantiated dependency is created once, so it cannot break a dependency cycle: \(validatedAs)."
+			return " A lazily instantiated dependency is created once, so it cannot break a dependency cycle: \(validatedAs)."
+		}
+
+		private static func noInstantiableFoundMessage(
+			typeDescription: TypeDescription,
+			referencingProperty: Property,
+			fulfilledByMockOnlyDeclaration: Bool,
+		) -> String {
+			let typeName = typeDescription.asSource
+			let reference = "`\(typeName)`, which @\(Dependency.Source.instantiatedRawValue) property `\(referencingProperty.asSource)` instantiates"
+			return if fulfilledByMockOnlyDeclaration {
+				"No production @\(InstantiableVisitor.macroName) declaration fulfills \(reference). A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @\(InstantiableVisitor.macroName) declaration that fulfills `\(typeName)`."
+			} else {
+				"No @\(InstantiableVisitor.macroName) type or extension fulfills \(reference). Decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName); list `\(typeName)` in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target."
+			}
 		}
 
 		private static func handWrittenMockSharesGeneratedMockNameMessage(
@@ -650,6 +657,51 @@ public actor DependencyTreeGenerator {
 				"`\(typeName)` cannot have a hand-written `mock()` method because this module generates a `mock()` method for it (it is listed in `additionalMocksToGenerate`), and the generated and hand-written methods would have ambiguous signatures. Give the hand-written method a different name and pass that name as `customMockName` on the `@\(InstantiableVisitor.macroName)` that declares it, or remove `\(typeName)` from `additionalMocksToGenerate`."
 			} else {
 				"`\(typeName)` cannot have a hand-written `mock()` method because it is decorated with `@\(InstantiableVisitor.macroName)(generateMock: true)`, and the generated and hand-written methods would have ambiguous signatures. Give the hand-written method a different name and pass that name as `customMockName` on the `@\(InstantiableVisitor.macroName)` that declares it."
+			}
+		}
+
+		/// A constant or lazily instantiated `@Instantiated` dependency whose type has `@Forwarded` properties, which
+		/// only an instantiator is passed.
+		struct ForwardedPropertyViolation {
+			let dependency: Dependency
+			/// The `fulfilledByType` argument of the dependency's `@Instantiated`, if it has one.
+			let fulfillingTypeDescription: TypeDescription?
+			let erasedToConcreteExistential: Bool
+			/// The type the dependency builds.
+			let instantiable: Instantiable
+			let forwardedDeclarations: [LocatedProperty]
+			/// The type that declares the dependency.
+			let parent: TypeDescription
+
+			/// An `error:` line at the dependency, and a `note:` at each `@Forwarded` declaration.
+			var sourceDiagnostics: [SourceDiagnostic] {
+				[
+					SourceDiagnostic(
+						severity: .error,
+						location: dependency.declarationLocation,
+						message: message,
+					),
+				] + forwardedDeclarations.map {
+					SourceDiagnostic(
+						severity: .note,
+						location: $0.declarationLocation,
+						message: "@\(Dependency.Source.forwardedRawValue) property `\($0.property.asSource)` is declared here",
+					)
+				}
+			}
+
+			private var message: String {
+				let concreteTypeName = instantiable.concreteInstantiable.asSource
+				let instantiatedType = dependency.property.typeDescription.asInstantiatedType
+				let problem = "`\(dependency.property.asSource)` on `\(parent.asSource)` cannot build `\(concreteTypeName)`, which has @\(Dependency.Source.forwardedRawValue) properties that only an instantiator is passed."
+				if instantiatedType == instantiable.concreteInstantiable {
+					return "\(problem) Declare it as `\(Dependency.instantiatorType)<\(concreteTypeName)>`."
+				} else {
+					let fulfilledByType = (fulfillingTypeDescription ?? instantiable.concreteInstantiable).asSource
+					let erasedToConcreteExistentialArgument = erasedToConcreteExistential ? ", erasedToConcreteExistential: true" : ""
+					let forwardedPropertiesType = forwardedDeclarations.map(\.property).asForwardedPropertiesType.asSource
+					return "\(problem) Declare it as `\(Dependency.erasedInstantiatorType)<\(forwardedPropertiesType), \(instantiatedType.asSource)>` with `@\(Dependency.Source.instantiatedRawValue)(fulfilledByType: \"\(fulfilledByType)\"\(erasedToConcreteExistentialArgument))`."
+				}
 			}
 		}
 
@@ -801,6 +853,24 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
+		/// The dependency declaration that closes a constant dependency cycle, at which the cycle is reported.
+		enum ClosingDependency {
+			/// A dependency the declaring type instantiates, as declared.
+			case instantiated(Property)
+			/// A dependency `receiver` receives, as declared, while the property it is fulfilled by is still being built.
+			case received(Property, receiver: TypeDescription)
+
+			/// The sentence that tells the user how to break the cycle at this declaration.
+			var remedy: String {
+				switch self {
+				case let .instantiated(property):
+					"SafeDI accepts a dependency cycle only if the dependency that closes it is an @\(Dependency.Source.instantiatedRawValue) instantiator, such as an `\(Dependency.instantiatorType)` or `\(Dependency.erasedInstantiatorType)`, which builds its type each time it is called. Change `\(property.asSource)` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too."
+				case let .received(property, receiver):
+					"`\(receiver.asSource)` receives `\(property.asSource)`, which is still being built when `\(receiver.asSource)` is built. \(DependencyTreeGeneratorError.onlyIfAvailableRemedy)"
+				}
+			}
+		}
+
 		/// A dependency cycle. The error is reported at the dependency declaration that closes the cycle – the edge
 		/// whose target type is already on the instantiation stack when validation reaches it – because that is the
 		/// property the user changes (to an `Instantiator`, or from `@Received` to `@Instantiated`) to break the cycle.
@@ -823,7 +893,7 @@ public actor DependencyTreeGenerator {
 
 			var asSource: String {
 				members
-					.map(\.typeDescription.asSource)
+					.map { "`\($0.typeDescription.asSource)`" }
 					.reversed()
 					.joined(separator: " -> ")
 			}
@@ -1167,12 +1237,15 @@ public actor DependencyTreeGenerator {
 				continue
 			}
 			let propertiesInCycle = [propertyForDependency] + propertyStack[0...cycleIndex]
+			let closingReceive = Self.closingReceive(of: dependency, in: scope)
 			try throwIfInvalidCycle(
 				typesInCycle: propertiesInCycle.map(\.typeDescription),
 				property: propertyForDependency,
+				// A receive is reported as declared; an instantiation as the property it instantiates.
+				declaredProperty: closingReceive == nil ? declaredPropertyForDependency : dependency.property,
 				declarationLocation: dependency.declarationLocation,
 				directParent: scope.instantiable.concreteInstantiable,
-				closingReceive: Self.closingReceive(of: dependency, in: scope),
+				closingReceive: closingReceive,
 				lazilyInstantiatedProperties: Self.lazilyInstantiatedProperties(
 					closingCycleWith: declaredPropertyForDependency,
 					validatedPropertiesInCycle: propertiesInCycle,
@@ -1478,8 +1551,7 @@ public actor DependencyTreeGenerator {
 	/// graph after `@Received` promotion).
 	///
 	/// Rejected:
-	/// - Constant entry point in a fully-constant cycle → `.constantDependencyCycleDetected`.
-	/// - Constant entry point with any lazy hop → `.partiallyLazyDependencyCycleDetected`.
+	/// - Constant entry point, whether or not the cycle has a lazy hop → `.constantDependencyCycleDetected`.
 	/// - Non-constant entry point that originated from a receive (`closingReceive` is not `nil`) → `.receivedInstantiatorDependencyCycleDetected`.
 	///
 	/// Accepted (returns without throwing):
@@ -1493,9 +1565,12 @@ public actor DependencyTreeGenerator {
 	/// this function would have rejected the cycle before code generation.
 	/// See the `erasedToConcreteExistential` matrix in CLAUDE.md's "Common
 	/// Pitfalls" for how this interacts with erased properties.
+	/// - Parameter declaredProperty: The property of the dependency that closes the cycle, as declared at
+	///   `declarationLocation`: the property instantiated, or the property received – the alias for an alias.
 	private func throwIfInvalidCycle(
 		typesInCycle: [TypeDescription],
 		property: Property,
+		declaredProperty: Property,
 		declarationLocation: Dependency.DeclarationLocation?,
 		directParent: TypeDescription,
 		closingReceive: CycleClosingReceive?,
@@ -1505,9 +1580,10 @@ public actor DependencyTreeGenerator {
 			throw invalidCycleError(
 				typesInCycle: typesInCycle,
 				property: property,
+				declaredProperty: declaredProperty,
 				declarationLocation: declarationLocation,
 				directParent: directParent,
-				aliasProperty: closingReceive?.aliasProperty,
+				closingReceive: closingReceive,
 				lazilyInstantiatedProperties: lazilyInstantiatedProperties,
 			)
 		}
@@ -1515,14 +1591,16 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// The error `throwIfInvalidCycle` throws for a cycle through `property` that is constant or received:
-	/// a constant or partially lazy cycle when `property` is constant, and a received-`Instantiator` cycle otherwise.
-	/// - Parameter aliasProperty: The `CycleClosingReceive.aliasProperty` of the receive that closes a received cycle.
+	/// a constant cycle when `property` is constant, and a received-`Instantiator` cycle otherwise.
+	/// - Parameter declaredProperty: See `throwIfInvalidCycle`.
+	/// - Parameter closingReceive: The receive that closes the cycle, or `nil` when an instantiation closes it.
 	private func invalidCycleError(
 		typesInCycle: [TypeDescription],
 		property: Property,
+		declaredProperty: Property,
 		declarationLocation: Dependency.DeclarationLocation?,
 		directParent: TypeDescription,
-		aliasProperty: Property?,
+		closingReceive: CycleClosingReceive?,
 		lazilyInstantiatedProperties: [Property],
 	) -> DependencyTreeGeneratorError {
 		let cycle = DependencyTreeGeneratorError.DependencyCycle(
@@ -1536,16 +1614,16 @@ public actor DependencyTreeGenerator {
 			lazilyInstantiatedProperties: lazilyInstantiatedProperties,
 		)
 		if property.propertyType.isConstant {
-			let hasLazyHop = typesInCycle.contains(where: { !$0.propertyType.isConstant })
-			if hasLazyHop {
-				return .partiallyLazyDependencyCycleDetected(cycle)
-			} else {
-				return .constantDependencyCycleDetected(cycle)
-			}
+			return .constantDependencyCycleDetected(
+				cycle,
+				closingDependency: closingReceive == nil
+					? .instantiated(declaredProperty)
+					: .received(declaredProperty, receiver: directParent),
+			)
 		} else {
 			return .receivedInstantiatorDependencyCycleDetected(
 				property: property,
-				aliasProperty: aliasProperty,
+				aliasProperty: closingReceive?.aliasProperty,
 				directParent: directParent,
 				cycle: cycle,
 			)
@@ -1945,13 +2023,15 @@ public actor DependencyTreeGenerator {
 		for scope in Set(typeDescriptionToScopeMap.values) {
 			for dependency in scope.instantiable.dependencies {
 				switch dependency.source {
-				case let .instantiated(_, erasedToConcreteExistential):
+				case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential):
 					let instantiatedType = dependency.asInstantiatedType
 					if let instantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType],
 					   let instantiatedScope = typeDescriptionToScopeMap[instantiatedType]
 					{
 						if let error = forwardedPropertyError(
 						   	for: dependency,
+						   	fulfillingTypeDescription: fulfillingTypeDescription,
+						   	erasedToConcreteExistential: erasedToConcreteExistential,
 						   	instantiable: instantiable,
 						   	parent: scope.instantiable,
 						   ),
@@ -2143,23 +2223,29 @@ public actor DependencyTreeGenerator {
 
 	/// The error for a constant or lazily instantiated `@Instantiated` dependency on `parent` whose `instantiable`
 	/// has `@Forwarded` properties, or `nil` when the dependency is valid.
+	/// - Parameters:
+	///   - fulfillingTypeDescription: The `fulfilledByType` argument of the dependency's `@Instantiated`, if any.
+	///   - erasedToConcreteExistential: The `erasedToConcreteExistential` argument of the dependency's `@Instantiated`.
 	private func forwardedPropertyError(
 		for dependency: Dependency,
+		fulfillingTypeDescription: TypeDescription?,
+		erasedToConcreteExistential: Bool,
 		instantiable: Instantiable,
 		parent: Instantiable,
 	) -> DependencyTreeGeneratorError? {
 		guard dependency.property.propertyType.isConstant || dependency.property.propertyType.isLazilyInstantiated else { return nil }
 		let forwardedDependencies = instantiable.dependencies.filter(\.isForwarded)
 		guard !forwardedDependencies.isEmpty else { return nil }
-		return .instantiableHasForwardedProperty(
-			property: dependency.property,
-			declarationLocation: dependency.declarationLocation,
-			instantiableWithForwardedProperty: instantiable,
+		return .instantiableHasForwardedProperty(.init(
+			dependency: dependency,
+			fulfillingTypeDescription: fulfillingTypeDescription,
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			instantiable: instantiable,
 			forwardedDeclarations: forwardedDependencies.map {
 				DependencyTreeGeneratorError.LocatedProperty(property: $0.property, declarationLocation: $0.declarationLocation)
 			},
-			parent: parent,
-		)
+			parent: parent.concreteInstantiable,
+		))
 	}
 
 	/// The lazily instantiated properties on a cycle as they are declared, outermost first, for the diagnostic.
@@ -2321,6 +2407,7 @@ public actor DependencyTreeGenerator {
 					try throwIfInvalidCycle(
 						typesInCycle: propertiesInCycle.map(\.typeDescription),
 						property: childProperty,
+						declaredProperty: requiredReceivedProperty.aliasProperty ?? requiredReceivedProperty.property,
 						declarationLocation: requiredReceivedProperty.declarationLocation,
 						directParent: directParent,
 						closingReceive: CycleClosingReceive(aliasProperty: requiredReceivedProperty.aliasProperty),
@@ -2592,12 +2679,15 @@ public actor DependencyTreeGenerator {
 					continue
 				}
 				let propertiesInCycle = [propertyForDependency] + childPropertyStack[0...cycleIndex]
+				let closingReceive = Self.closingReceive(of: dependency, in: scope)
 				try throwIfInvalidCycle(
 					typesInCycle: propertiesInCycle.map(\.typeDescription),
 					property: propertyForDependency,
+					// A receive is reported as declared; an instantiation as the property it instantiates.
+					declaredProperty: closingReceive == nil ? declaredPropertyForDependency : dependency.property,
 					declarationLocation: dependency.declarationLocation,
 					directParent: scope.instantiable.concreteInstantiable,
-					closingReceive: Self.closingReceive(of: dependency, in: scope),
+					closingReceive: closingReceive,
 					lazilyInstantiatedProperties: Self.lazilyInstantiatedProperties(
 						closingCycleWith: declaredPropertyForDependency,
 						validatedPropertiesInCycle: propertiesInCycle,
@@ -2625,9 +2715,10 @@ public actor DependencyTreeGenerator {
 					throw invalidCycleError(
 						typesInCycle: ([validatedReceivedProperty] + instantiationStack[0...beingBuiltIndex]).map(\.typeDescription),
 						property: beingBuiltProperty,
+						declaredProperty: receive.aliasProperty ?? receive.property,
 						declarationLocation: receive.declarationLocation,
 						directParent: scope.instantiable.concreteInstantiable,
-						aliasProperty: receive.aliasProperty,
+						closingReceive: CycleClosingReceive(aliasProperty: receive.aliasProperty),
 						lazilyInstantiatedProperties: lazilyInstantiatedProperties,
 					)
 				}
@@ -2772,16 +2863,16 @@ public actor DependencyTreeGenerator {
 			.min()
 		{
 			// The map's values can hold the same instantiable under several keys, so collect into a set.
-			let referencingDeclarationLocations = Set(
+			let referencingProperties = Set(
 				typeDescriptionToFulfillingInstantiableMap.values.flatMap { instantiable in
 					instantiable.dependencies
 						.filter { $0.isInstantiated && $0.asInstantiatedType == unbuildableTypeDescription }
-						.map(\.declarationLocation)
+						.map { DependencyTreeGeneratorError.LocatedProperty(property: $0.property, declarationLocation: $0.declarationLocation) }
 				},
 			)
 			throw DependencyTreeGeneratorError.noInstantiableFound(
 				unbuildableTypeDescription,
-				referencedAt: Array(referencingDeclarationLocations),
+				referencedBy: Array(referencingProperties),
 				fulfilledByMockOnlyDeclaration: typeDescriptionToFulfillingInstantiableMap[unbuildableTypeDescription] != nil,
 			)
 		}

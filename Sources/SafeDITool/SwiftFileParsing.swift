@@ -88,11 +88,20 @@ struct ParsedModule {
 }
 
 /// More than one `#SafeDIConfiguration` was declared among a module's own files.
-struct MultipleConfigurationsError: Error, CustomStringConvertible {
-	let sourceFilePaths: [String]
+/// More than one `#SafeDIConfiguration` in a module, reported at each of them.
+struct MultipleConfigurationsError: SourceLocatedError {
+	let declarationLocations: [Dependency.DeclarationLocation?]
 
-	var description: String {
-		"Found \(sourceFilePaths.count) #\(SafeDIConfigurationVisitor.macroName) declarations in this module. Each module must have at most one #\(SafeDIConfigurationVisitor.macroName). Found in:\n\t\(sourceFilePaths.joined(separator: "\n\t"))"
+	var sourceDiagnostics: [SourceDiagnostic] {
+		declarationLocations
+			.map {
+				SourceDiagnostic(
+					severity: .error,
+					location: $0,
+					message: "This module declares #\(SafeDIConfigurationVisitor.macroName) \(declarationLocations.count) times, but a module can declare it at most once. Keep one and remove the others.",
+				)
+			}
+			.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 	}
 }
 
@@ -158,7 +167,7 @@ func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<Nor
 						let directory: String
 
 						var description: String {
-							"Could not create file enumerator for directory '\(directory)'"
+							"Could not list the Swift files in directory '\(directory)'. Check that the directory exists and is readable."
 						}
 					}
 					throw CouldNotEnumerateDirectoryError(directory: included)
@@ -254,7 +263,7 @@ func parseModule(
 		.filter { configurationFilePaths.contains($0.path) }
 		.flatMap(\.configurations)
 	guard configurations.count <= 1 else {
-		throw MultipleConfigurationsError(sourceFilePaths: configurations.compactMap(\.sourceFilePath).sorted())
+		throw MultipleConfigurationsError(declarationLocations: configurations.map(\.declarationLocation))
 	}
 	let configuration = configurations.first
 	let evaluator = conditionalCompilationEvaluator(

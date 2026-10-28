@@ -247,7 +247,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if DEBUG
-		#error("SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Feature {
@@ -309,7 +309,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(!DEBUG)
-		#error("SafeDI scanned this module assuming `#if !DEBUG` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if !DEBUG` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Feature {
@@ -371,7 +371,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(!DEBUG)
-		#error("SafeDI scanned this module assuming `#if !DEBUG` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if !DEBUG` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		#if TESTING
@@ -435,7 +435,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if DEBUG && canImport(XCTest)
-		#error("SafeDI scanned this module assuming `#if DEBUG && canImport(XCTest)` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if DEBUG && canImport(XCTest)` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Feature {
@@ -497,7 +497,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(!DEBUG)
-		#error("SafeDI scanned this module assuming `#if !DEBUG` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if !DEBUG` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Feature {
@@ -559,7 +559,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(!DEBUG)
-		#error("SafeDI scanned this module assuming `#if !DEBUG` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if !DEBUG` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		#if TESTING
@@ -623,7 +623,7 @@ struct SafeDIToolMockOnlyTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if DEBUG && canImport(XCTest)
-		#error("SafeDI scanned this module assuming `#if DEBUG && canImport(XCTest)` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if DEBUG && canImport(XCTest)` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Feature {

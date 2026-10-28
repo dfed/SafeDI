@@ -44,8 +44,8 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
-				\(fixtures["File_2.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(fixtures["File.swift"]):1:1: error: Found multiple hand-written mocks for `MyService`. A type can have at most one, on its production declaration or on a single `mockOnly: true` declaration. Remove all but one.
+				\(fixtures["File_2.swift"]):1:1: error: Found multiple hand-written mocks for `MyService`. A type can have at most one, on its production declaration or on a single `mockOnly: true` declaration. Remove all but one.
 				"""
 			},
 		) {
@@ -79,8 +79,8 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["MyService.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
-				\(fixtures["MyService.swift"]):6:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(fixtures["MyService.swift"]):1:1: error: Found multiple hand-written mocks for `MyService`. A type can have at most one, on its production declaration or on a single `mockOnly: true` declaration. Remove all but one.
+				\(fixtures["MyService.swift"]):6:1: error: Found multiple hand-written mocks for `MyService`. A type can have at most one, on its production declaration or on a single `mockOnly: true` declaration. Remove all but one.
 				"""
 			},
 		) {
@@ -114,8 +114,8 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["MyService.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
-				\(fixtures["MyService.swift"]):7:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(fixtures["MyService.swift"]):1:1: error: Found multiple hand-written mocks for `MyService`. A type can have at most one, on its production declaration or on a single `mockOnly: true` declaration. Remove all but one.
+				\(fixtures["MyService.swift"]):7:1: error: Found multiple hand-written mocks for `MyService`. A type can have at most one, on its production declaration or on a single `mockOnly: true` declaration. Remove all but one.
 				"""
 			},
 		) {
@@ -146,8 +146,8 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["MockServiceA.swift"]):1:1: error: Found multiple hand-written mock providers for `ServiceProtocol`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
-				\(fixtures["MockServiceB.swift"]):1:1: error: Found multiple hand-written mock providers for `ServiceProtocol`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(fixtures["MockServiceA.swift"]):1:1: error: Found multiple hand-written mocks for `ServiceProtocol`. A type can have at most one, on its production declaration or on a single `mockOnly: true` declaration. Remove all but one.
+				\(fixtures["MockServiceB.swift"]):1:1: error: Found multiple hand-written mocks for `ServiceProtocol`. A type can have at most one, on its production declaration or on a single `mockOnly: true` declaration. Remove all but one.
 				"""
 			},
 		) {
@@ -186,7 +186,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Root.swift"]):6:5: error: Property `service: AnyService` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<MockService>`.
+				\(fixtures["Root.swift"]):6:5: error: `service: AnyService` on `Root` cannot build `MockService`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<String, AnyService>` with `@Instantiated(fulfilledByType: "ConcreteService", erasedToConcreteExistential: true)`.
 				\(fixtures["MockService.swift"]):6:5: note: @Forwarded property `name: String` is declared here
 				"""
 			},
@@ -233,7 +233,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Root.swift"]):7:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `ServiceProtocol`. A `mockOnly: true` declaration fulfills it, and is used only to generate mocks.
+				\(fixtures["Root.swift"]):7:5: error: No production @Instantiable declaration fulfills `ServiceProtocol`, which @Instantiated property `service: ServiceProtocol` instantiates. A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @Instantiable declaration that fulfills `ServiceProtocol`.
 				"""
 			},
 		) {
@@ -282,8 +282,8 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["MyService.swift"]):6:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
-				\(fixtures["ZzzFakeService.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(fixtures["MyService.swift"]):6:1: error: Found multiple hand-written mocks for `MyService`. A type can have at most one, on its production declaration or on a single `mockOnly: true` declaration. Remove all but one.
+				\(fixtures["ZzzFakeService.swift"]):1:1: error: Found multiple hand-written mocks for `MyService`. A type can have at most one, on its production declaration or on a single `mockOnly: true` declaration. Remove all but one.
 				"""
 			},
 		) {
@@ -320,8 +320,8 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["FakeService.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
-				\(fixtures["File.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(fixtures["FakeService.swift"]):1:1: error: Found multiple hand-written mocks for `MyService`. A type can have at most one, on its production declaration or on a single `mockOnly: true` declaration. Remove all but one.
+				\(fixtures["File.swift"]):1:1: error: Found multiple hand-written mocks for `MyService`. A type can have at most one, on its production declaration or on a single `mockOnly: true` declaration. Remove all but one.
 				"""
 			},
 		) {
@@ -359,7 +359,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Root.swift"]):6:5: error: Property `service: ServiceProtocol` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<MockService>`.
+				\(fixtures["Root.swift"]):6:5: error: `service: ServiceProtocol` on `Root` cannot build `MockService`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<String, ServiceProtocol>` with `@Instantiated(fulfilledByType: "MockService")`.
 				\(fixtures["MockService.swift"]):6:5: note: @Forwarded property `name: String` is declared here
 				"""
 			},
@@ -407,8 +407,8 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["FakeService.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
-				\(fixtures["File.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(fixtures["FakeService.swift"]):1:1: error: Found multiple hand-written mocks for `MyService`. A type can have at most one, on its production declaration or on a single `mockOnly: true` declaration. Remove all but one.
+				\(fixtures["File.swift"]):1:1: error: Found multiple hand-written mocks for `MyService`. A type can have at most one, on its production declaration or on a single `mockOnly: true` declaration. Remove all but one.
 				"""
 			},
 		) {
@@ -446,8 +446,8 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File.swift"]):1:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
-				\(fixtures["ServiceProtocol.swift"]):5:1: error: Found multiple hand-written mock providers for `MyService`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both.
+				\(fixtures["File.swift"]):1:1: error: Found multiple hand-written mocks for `MyService`. A type can have at most one, on its production declaration or on a single `mockOnly: true` declaration. Remove all but one.
+				\(fixtures["ServiceProtocol.swift"]):5:1: error: Found multiple hand-written mocks for `MyService`. A type can have at most one, on its production declaration or on a single `mockOnly: true` declaration. Remove all but one.
 				"""
 			},
 		) {

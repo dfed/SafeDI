@@ -106,12 +106,15 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		// Check the bindings.
 		for binding in node.bindings {
 			// Check that each variable has no initializer.
-			if binding.initializer != nil {
+			if let initializer = binding.initializer {
 				var bindingWithoutInitializer = binding
 				bindingWithoutInitializer.initializer = nil
 				diagnostics.append(Diagnostic(
 					node: node,
-					error: FixableInstantiableError.dependencyHasInitializer,
+					error: FixableInstantiableError.dependencyHasInitializer(
+						propertyName: binding.pattern.trimmedDescription,
+						initializer: initializer.trimmedDescription,
+					),
 					changes: [
 						.replace(
 							oldNode: Syntax(binding),
@@ -268,7 +271,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			)
 			diagnostics.append(Diagnostic(
 				node: node,
-				error: FixableInstantiableError.incorrectReturnType,
+				error: FixableInstantiableError.incorrectReturnType(typeName: instantiableType.strippingGenerics.asSource),
 				changes: [
 					.replace(
 						oldNode: Syntax(node.signature),

@@ -49,7 +49,7 @@ struct MigrateSafeDIFromVersionOne: CommandPlugin {
 		      let major = Int(versionMatch.output.1),
 		      let minor = Int(versionMatch.output.2)
 		else {
-			Diagnostics.error("Could not parse swift-tools-version from Package.swift")
+			Diagnostics.error("Could not read the swift-tools-version from the first line of Package.swift. It must begin with a comment such as `// swift-tools-version: 6.2`.")
 			return
 		}
 		guard major > 6 || (major == 6 && minor >= 2) else {
@@ -71,7 +71,7 @@ struct MigrateSafeDIFromVersionOne: CommandPlugin {
 		if let existingConfigurationFile {
 			Diagnostics.warning("#SafeDIConfiguration already exists at \(existingConfigurationFile.path(percentEncoded: false)). Skipping file creation.")
 			if includeValues != nil || additionalImportedModulesValues != nil {
-				Diagnostics.warning("CSV configuration files were found but a #SafeDIConfiguration file already exists. Please manually migrate CSV values into your existing #SafeDIConfiguration and delete the CSV files.")
+				Diagnostics.warning("CSV configuration files were found but a #SafeDIConfiguration file already exists. Move the values in .safedi/configuration/include.csv into `additionalDirectoriesToInclude` and those in .safedi/configuration/additionalImportedModules.csv into `additionalImportedModules` of your #SafeDIConfiguration, then delete the CSV files.")
 			}
 		} else {
 			let configurationFileContent = generateSafeDIConfigurationFile(

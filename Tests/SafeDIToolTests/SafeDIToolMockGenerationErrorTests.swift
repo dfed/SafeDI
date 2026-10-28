@@ -44,7 +44,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["CachedItem.swift"]):7:5: error: Dependency cycle detected. Cycles with a mix of constant and lazy (Instantiator) dependencies cannot be resolved. Make all dependencies in the cycle lazy by using Instantiator: Player -> Instantiator<CachedItem> -> Player
+				\(fixtures["CachedItem.swift"]):7:5: error: Dependency cycle: `Player` -> `Instantiator<CachedItem>` -> `Player`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `player: Player` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
 				\(fixtures["Player.swift"]):1:1: note: `Player` is part of the cycle
 				\(fixtures["CachedItem.swift"]):1:1: note: `CachedItem` is part of the cycle
 				"""
@@ -85,7 +85,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):4:5: error: Dependency cycle detected: A -> B -> C -> A
+				\(fixtures["C.swift"]):4:5: error: Dependency cycle: `A` -> `B` -> `C` -> `A`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `a: A` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
@@ -447,7 +447,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):4:5: error: Dependency cycle detected: B -> Worker -> C -> B
+				\(fixtures["C.swift"]):4:5: error: Dependency cycle: `B` -> `Worker` -> `C` -> `B`. `C` receives `b: B`, which is still being built when `C` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				\(fixtures["Worker.swift"]):1:1: note: `Worker` is part of the cycle
 				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
@@ -499,7 +499,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):6:5: error: Dependency received in same chain it is instantiated: @Instantiated child: Child -> @Received maybe: Greeter? -> @Received x: X -> @Received child: Child
+				\(fixtures["X.swift"]):6:5: error: Dependency cycle: @Instantiated `child: Child` -> @Received `maybe: Greeter?` -> @Received `x: X` -> @Received `child: Child`. `child: Child` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -560,7 +560,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):4:5: error: Dependency cycle detected: User -> Child -> User?
+				\(fixtures["Child.swift"]):4:5: error: Dependency cycle: `User` -> `Child` -> `User?`. `Child` receives `user: User?`, which is still being built when `Child` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				\(fixtures["User.swift"]):1:1: note: `User` is part of the cycle
 				\(fixtures["Child.swift"]):1:1: note: `Child` is part of the cycle
 				"""
@@ -605,7 +605,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):4:5: error: Dependency cycle detected: User -> Parent -> Child -> User?
+				\(fixtures["Child.swift"]):4:5: error: Dependency cycle: `User` -> `Parent` -> `Child` -> `User?`. `Child` receives `user: User?`, which is still being built when `Child` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				\(fixtures["User.swift"]):1:1: note: `User` is part of the cycle
 				\(fixtures["Parent.swift"]):1:1: note: `Parent` is part of the cycle
 				\(fixtures["Child.swift"]):1:1: note: `Child` is part of the cycle
@@ -681,7 +681,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["ZetaPeer.swift"]):4:5: error: Dependency cycle detected: Zeta -> ZetaWorker -> ZetaPeer -> Zeta
+				\(fixtures["ZetaPeer.swift"]):4:5: error: Dependency cycle: `Zeta` -> `ZetaWorker` -> `ZetaPeer` -> `Zeta`. `ZetaPeer` receives `zeta: Zeta`, which is still being built when `ZetaPeer` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				\(fixtures["Zeta.swift"]):1:1: note: `Zeta` is part of the cycle
 				\(fixtures["ZetaWorker.swift"]):1:1: note: `ZetaWorker` is part of the cycle
 				\(fixtures["ZetaPeer.swift"]):1:1: note: `ZetaPeer` is part of the cycle
@@ -762,7 +762,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Pong.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated ping: Ping -> @Received pong: Pong -> @Received ping: Ping
+				\(fixtures["Pong.swift"]):7:5: error: Dependency cycle: @Instantiated `ping: Ping` -> @Received `pong: Pong` -> @Received `ping: Ping`. `ping: Ping` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -838,7 +838,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Pong.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated pingBuilder: Instantiator<Ping> -> @Received pongBuilder: Instantiator<Pong> -> @Received pingBuilder: Instantiator<Ping>
+				\(fixtures["Pong.swift"]):7:5: error: Dependency cycle: @Instantiated `pingBuilder: Instantiator<Ping>` -> @Received `pongBuilder: Instantiator<Pong>` -> @Received `pingBuilder: Instantiator<Ping>`. `pingBuilder: Instantiator<Ping>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -935,7 +935,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Pong.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated pingBuilder: Instantiator<Ping> -> @Received pongAlias: Instantiator<Pong> -> @Received pingAlias\(aliasChainLength - 1): Instantiator<Ping> -> @Received pingBuilder: Instantiator<Ping>
+				\(fixtures["Pong.swift"]):7:5: error: Dependency cycle: @Instantiated `pingBuilder: Instantiator<Ping>` -> @Received `pongAlias: Instantiator<Pong>` -> @Received `pingAlias\(aliasChainLength - 1): Instantiator<Ping>` -> @Received `pingBuilder: Instantiator<Ping>`. `pingBuilder: Instantiator<Ping>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -986,7 +986,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):4:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `Unknown`
+				\(fixtures["Child.swift"]):4:5: error: No @Instantiable type or extension fulfills `Unknown`, which @Instantiated property `unknown: Unknown` instantiates. Decorate `Unknown`, or an extension of it, with @Instantiable; list `Unknown` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
 				"""
 			},
 		) {
@@ -1062,7 +1062,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["SelfReferencing.swift"]):4:5: error: Dependency cycle detected: SelfReferencing -> SelfReferencing
+				\(fixtures["SelfReferencing.swift"]):4:5: error: Dependency cycle: `SelfReferencing` -> `SelfReferencing`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `selfReferencing: SelfReferencing` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
 				\(fixtures["SelfReferencing.swift"]):1:1: note: `SelfReferencing` is part of the cycle
 				"""
 			},
@@ -1096,7 +1096,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Root.swift"]):4:5: error: Property `child: Child` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<Child>`.
+				\(fixtures["Root.swift"]):4:5: error: `child: Child` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `Instantiator<Child>`.
 				\(fixtures["Child.swift"]):4:5: note: @Forwarded property `name: String` is declared here
 				"""
 			},
@@ -1130,7 +1130,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>`. Declare @Received `aBuilder: Instantiator<A>` on `B` as @Instantiated to fix. Full cycle: Instantiator<A> -> B -> Instantiator<A>
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: `Instantiator<A>` -> `B` -> `Instantiator<A>`. `B` receives `aBuilder: Instantiator<A>` inside the tree that `aBuilder` builds. Declare `aBuilder: Instantiator<A>` on `B` as @Instantiated instead of @Received.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				"""
@@ -1174,7 +1174,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>`. Declare @Received `aBuilder: Instantiator<A>` on `B` as @Instantiated to fix. Full cycle: Instantiator<A> -> B -> Instantiator<A>
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: `Instantiator<A>` -> `B` -> `Instantiator<A>`. `B` receives `aBuilder: Instantiator<A>` inside the tree that `aBuilder` builds. Declare `aBuilder: Instantiator<A>` on `B` as @Instantiated instead of @Received.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				"""
@@ -1211,7 +1211,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Node.swift"]):4:5: error: Dependency cycle detected! @Instantiated `nodeBuilder: Instantiator<Node>` is @Received as `childBuilder: Instantiator<Node>` in tree created by @Instantiated `nodeBuilder: Instantiator<Node>`. Declare @Received(fulfilledByDependencyNamed:ofType:) `childBuilder: Instantiator<Node>` on `Node` as @Instantiated to fix. Full cycle: Instantiator<Node> -> Instantiator<Node>
+				\(fixtures["Node.swift"]):4:5: error: Dependency cycle: `Instantiator<Node>` -> `Instantiator<Node>`. `Node` receives `nodeBuilder: Instantiator<Node>` as `childBuilder: Instantiator<Node>` inside the tree that `nodeBuilder` builds. Declare `childBuilder: Instantiator<Node>` on `Node` as @Instantiated instead of @Received(fulfilledByDependencyNamed:ofType:).
 				\(fixtures["Node.swift"]):1:1: note: `Node` is part of the cycle
 				"""
 			},
@@ -1238,7 +1238,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Node.swift"]):4:5: error: Dependency cycle detected! @Instantiated `nodeBuilder: SendableInstantiator<Node>` is @Received as `childBuilder: SendableInstantiator<Node>` in tree created by @Instantiated `nodeBuilder: SendableInstantiator<Node>`. Declare @Received(fulfilledByDependencyNamed:ofType:) `childBuilder: SendableInstantiator<Node>` on `Node` as @Instantiated to fix. Full cycle: SendableInstantiator<Node> -> SendableInstantiator<Node>
+				\(fixtures["Node.swift"]):4:5: error: Dependency cycle: `SendableInstantiator<Node>` -> `SendableInstantiator<Node>`. `Node` receives `nodeBuilder: SendableInstantiator<Node>` as `childBuilder: SendableInstantiator<Node>` inside the tree that `nodeBuilder` builds. Declare `childBuilder: SendableInstantiator<Node>` on `Node` as @Instantiated instead of @Received(fulfilledByDependencyNamed:ofType:).
 				\(fixtures["Node.swift"]):1:1: note: `Node` is part of the cycle
 				"""
 			},
@@ -1268,7 +1268,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Node.swift"]):4:5: error: Dependency cycle detected! @Instantiated `nodeBuilder: ErasedInstantiator<(), AnyNode>` is @Received as `childBuilder: AnyNodeFactory` in tree created by @Instantiated `nodeBuilder: ErasedInstantiator<(), AnyNode>`. Declare @Received(fulfilledByDependencyNamed:ofType:) `childBuilder: AnyNodeFactory` on `Node` as @Instantiated to fix. Full cycle: ErasedInstantiator<(), AnyNode> -> ErasedInstantiator<(), AnyNode>
+				\(fixtures["Node.swift"]):4:5: error: Dependency cycle: `ErasedInstantiator<(), AnyNode>` -> `ErasedInstantiator<(), AnyNode>`. `Node` receives `nodeBuilder: ErasedInstantiator<(), AnyNode>` as `childBuilder: AnyNodeFactory` inside the tree that `nodeBuilder` builds. Declare `childBuilder: AnyNodeFactory` on `Node` as @Instantiated instead of @Received(fulfilledByDependencyNamed:ofType:).
 				"""
 			},
 		) {
@@ -1312,7 +1312,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Node.swift"]):4:5: error: Dependency cycle detected! @Instantiated `middleBuilder: Instantiator<Node>` is @Received as `childBuilder: Instantiator<Node>` in tree created by @Instantiated `middleBuilder: Instantiator<Node>`. Declare @Received(fulfilledByDependencyNamed:ofType:) `childBuilder: Instantiator<Node>` on `Node` as @Instantiated to fix. Full cycle: Instantiator<Node> -> Instantiator<Node>
+				\(fixtures["Node.swift"]):4:5: error: Dependency cycle: `Instantiator<Node>` -> `Instantiator<Node>`. `Node` receives `middleBuilder: Instantiator<Node>` as `childBuilder: Instantiator<Node>` inside the tree that `middleBuilder` builds. Declare `childBuilder: Instantiator<Node>` on `Node` as @Instantiated instead of @Received(fulfilledByDependencyNamed:ofType:).
 				\(fixtures["Node.swift"]):1:1: note: `Node` is part of the cycle
 				"""
 			},
@@ -1349,7 +1349,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Node.swift"]):4:5: error: Dependency cycle detected! @Instantiated `nodeBuilder: Instantiator<Node>` is @Received as `middleBuilder: Instantiator<Node>` in tree created by @Instantiated `nodeBuilder: Instantiator<Node>`. Declare @Received(fulfilledByDependencyNamed:ofType:) `middleBuilder: Instantiator<Node>` on `Node` as @Instantiated to fix. Full cycle: Instantiator<Node> -> Instantiator<Node>
+				\(fixtures["Node.swift"]):4:5: error: Dependency cycle: `Instantiator<Node>` -> `Instantiator<Node>`. `Node` receives `nodeBuilder: Instantiator<Node>` as `middleBuilder: Instantiator<Node>` inside the tree that `nodeBuilder` builds. Declare `middleBuilder: Instantiator<Node>` on `Node` as @Instantiated instead of @Received(fulfilledByDependencyNamed:ofType:).
 				\(fixtures["Node.swift"]):1:1: note: `Node` is part of the cycle
 				"""
 			},
@@ -1386,7 +1386,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):4:5: error: Dependency cycle detected! @Instantiated `nodeBuilder: Instantiator<Node>` is @Received as `childBuilder: Instantiator<Node>` in tree created by @Instantiated `nodeBuilder: Instantiator<Node>`. Declare @Received(fulfilledByDependencyNamed:ofType:) `childBuilder: Instantiator<Node>` on `Child` as @Instantiated to fix. Full cycle: Instantiator<Node> -> Child -> Instantiator<Node>
+				\(fixtures["Child.swift"]):4:5: error: Dependency cycle: `Instantiator<Node>` -> `Child` -> `Instantiator<Node>`. `Child` receives `nodeBuilder: Instantiator<Node>` as `childBuilder: Instantiator<Node>` inside the tree that `nodeBuilder` builds. Declare `childBuilder: Instantiator<Node>` on `Child` as @Instantiated instead of @Received(fulfilledByDependencyNamed:ofType:).
 				\(fixtures["Node.swift"]):1:1: note: `Node` is part of the cycle
 				\(fixtures["Child.swift"]):1:1: note: `Child` is part of the cycle
 				"""
@@ -1443,7 +1443,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { _ in
 				"""
-				\(dependentModuleFixtures["Node.swift"]):4:5: error: Dependency cycle detected! @Instantiated `nodeBuilder: Instantiator<Node>` is @Received as `childBuilder: Instantiator<Node>` in tree created by @Instantiated `nodeBuilder: Instantiator<Node>`. Declare @Received(fulfilledByDependencyNamed:ofType:) `childBuilder: Instantiator<Node>` on `Node` as @Instantiated to fix. Full cycle: Instantiator<Node> -> Instantiator<Node>
+				\(dependentModuleFixtures["Node.swift"]):4:5: error: Dependency cycle: `Instantiator<Node>` -> `Instantiator<Node>`. `Node` receives `nodeBuilder: Instantiator<Node>` as `childBuilder: Instantiator<Node>` inside the tree that `nodeBuilder` builds. Declare `childBuilder: Instantiator<Node>` on `Node` as @Instantiated instead of @Received(fulfilledByDependencyNamed:ofType:).
 				\(dependentModuleFixtures["Node.swift"]):1:1: note: `Node` is part of the cycle
 				"""
 			},
@@ -1471,7 +1471,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -1516,7 +1516,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received renamedAgainBBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `renamedAgainBBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -1562,7 +1562,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Parent.swift"]):8:5: error: Dependency cycle detected: each @Received(fulfilledByDependencyNamed:ofType:) dependency is fulfilled by the next: y: X -> x: X -> y: X
+				\(fixtures["Parent.swift"]):8:5: error: Dependency cycle: each @Received(fulfilledByDependencyNamed:ofType:) dependency is fulfilled by the next: `y: X` -> `x: X` -> `y: X`. Change one of them to be fulfilled by a property outside this cycle.
 				"""
 			},
 		) {
@@ -1594,7 +1594,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["A.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated a: A -> @Received renamedA: A -> @Received a: A
+				\(fixtures["A.swift"]):4:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `renamedA: A` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -1631,7 +1631,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["A.swift"]):8:5: error: Dependency received in same chain it is instantiated: @Instantiated qBuilder: Instantiator<Q> -> @Received bBuilder: Instantiator<B> -> @Received qBuilder: Instantiator<Q>
+				\(fixtures["A.swift"]):8:5: error: Dependency cycle: @Instantiated `qBuilder: Instantiator<Q>` -> @Received `bBuilder: Instantiator<B>` -> @Received `qBuilder: Instantiator<Q>`. `qBuilder: Instantiator<Q>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -1688,7 +1688,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated user: User -> @Received x: X? -> @Received user: User
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `user: User` -> @Received `x: X?` -> @Received `user: User`. `user: User` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -1733,7 +1733,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -1767,7 +1767,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -1821,7 +1821,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated a: A -> @Received b: B -> @Received a: A
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `b: B` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -1906,7 +1906,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Parent.swift"]):4:5: error: Property `child: Child` on Parent has at least one @Forwarded property. Property should instead be of type `Instantiator<Child>`.
+				\(fixtures["Parent.swift"]):4:5: error: `child: Child` on `Parent` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `Instantiator<Child>`.
 				\(fixtures["Child.swift"]):4:5: note: @Forwarded property `name: String` is declared here
 				"""
 			},
@@ -2021,7 +2021,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Mock000.swift"]):4:5: error: Dependency cycle detected: Partner000 -> Mock000 -> Partner000
+				\(fixtures["Mock000.swift"]):4:5: error: Dependency cycle: `Partner000` -> `Mock000` -> `Partner000`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `partner: Partner000` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
 				\(fixtures["Mock000.swift"]):6:1: note: `Partner000` is part of the cycle
 				\(fixtures["Mock000.swift"]):1:1: note: `Mock000` is part of the cycle
 				"""

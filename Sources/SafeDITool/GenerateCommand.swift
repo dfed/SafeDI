@@ -337,7 +337,7 @@ struct Generate: AsyncParsableCommand {
 				// Please refrain from editing this file directly.
 
 				#error(\"""
-				Compiler errors prevented the generation of the dependency tree. Files with errors:
+				SafeDI could not generate code because these files have syntax errors. Fix them and build again:
 					\(filesWithUnexpectedNodes.joined(separator: "\n\t"))
 				\""")
 				"""
@@ -451,7 +451,7 @@ struct Generate: AsyncParsableCommand {
 					var destinations = [String: URL]()
 					for entry in manifest.dependencyTreeGeneration {
 						guard destinations[entry.inputFilePath] == nil else {
-							throw ValidationError("Manifest contains duplicate dependencyTreeGeneration inputFilePath: \(entry.inputFilePath)")
+							throw ValidationError("Manifest contains duplicate dependencyTreeGeneration inputFilePath: \(entry.inputFilePath). List each input file once.")
 						}
 						destinations[entry.inputFilePath] = URL(fileURLWithPath: entry.outputFilePath)
 					}
@@ -1096,10 +1096,10 @@ struct Generate: AsyncParsableCommand {
 			let declarationLocations: [Dependency.DeclarationLocation?]
 			switch self {
 			case let .foundDuplicateInstantiable(duplicateInstantiable, declaredAt):
-				message = "@\(InstantiableVisitor.macroName)-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `\(duplicateInstantiable.asSource)`"
+				message = "Found multiple @\(InstantiableVisitor.macroName) types or extensions that fulfill `\(duplicateInstantiable.asSource)`. Each type can be fulfilled by only one @\(InstantiableVisitor.macroName) declaration, across all modules. Keep one, and remove `\(duplicateInstantiable.asSource)` from the others’ `fulfillingAdditionalTypes` or remove their @\(InstantiableVisitor.macroName)."
 				declarationLocations = declaredAt
 			case let .duplicateMockProvider(duplicateInstantiable, declaredAt):
-				message = "Found multiple hand-written mock providers for `\(duplicateInstantiable.asSource)`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both."
+				message = "Found multiple hand-written mocks for `\(duplicateInstantiable.asSource)`. A type can have at most one, on its production declaration or on a single `mockOnly: true` declaration. Remove all but one."
 				declarationLocations = declaredAt
 			}
 			// Sorted by location so the output does not depend on collection order.

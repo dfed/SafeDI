@@ -48,6 +48,16 @@ extension Collection<Property> {
 		TypeSyntax(asTuple).typeDescription
 	}
 
+	/// The type of the `ForwardedProperties` the `@Instantiable` macro declares for a type with these `@Forwarded`
+	/// properties: the property's type for one property, and a tuple of the labeled properties otherwise.
+	var asForwardedPropertiesType: TypeDescription {
+		if count == 1, let property = first {
+			property.typeDescription
+		} else {
+			asTupleTypeDescription
+		}
+	}
+
 	var initializerFunctionParameters: [FunctionParameterSyntax] {
 		map(\.asFunctionParamterSyntax)
 			.transformUntilLast {

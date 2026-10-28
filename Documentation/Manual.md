@@ -48,7 +48,7 @@ The `additionalDirectoriesToInclude` parameter specifies folders outside of your
 
 ##### Installing the prebuilt SafeDITool binary
 
-If you see a build warning that starts with **"SafeDI's build-tool plugin is falling back to a regex-based output scanner..."** — installing the prebuilt tool fixes it.
+If you see a build warning that starts with **"SafeDI is planning this target’s generated files with a simpler scanner..."** — installing the prebuilt tool fixes it.
 
 In Xcode, right-click your project in the navigator and choose **SafeDI → Safedi Release Install**. Approve the network-access and write-to-package-directory prompts. Xcode runs the command and downloads the prebuilt SafeDITool release binary for your SafeDI version into `.safedi/<version>/safeditool` next to your `.xcodeproj`. The build plugin picks it up automatically on subsequent builds.
 
@@ -1017,7 +1017,7 @@ The reported conditions are taken as complete, so a condition your build defines
 
 ```swift
 #if !(DEBUG)
-#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \"Conditional compilation\" section of the SafeDI manual.")
+#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \"Reporting active conditions\" section of the SafeDI manual describes for your build system.")
 #endif
 ```
 
