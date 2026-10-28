@@ -372,7 +372,7 @@ public final class FileVisitor: SyntaxVisitor {
 			kind: node.declType == .classType ? .classType : .otherType,
 			modifiers: node.modifiers,
 			// Only a class has a superclass, which its inheritance clause names first.
-			superclassCandidate: node.declType == .classType ? node.inheritanceClause.map { $0.superclassCandidate } : nil,
+			superclassCandidate: node.declType == .classType ? node.inheritanceClause.map(\.superclassCandidate) : nil,
 			genericParameterClause: node.genericParameterClause,
 		)
 		// Keep track of how nested we are.

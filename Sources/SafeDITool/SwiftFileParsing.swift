@@ -333,7 +333,7 @@ func discoverNestedTypeDeclarations(
 	var lookups = NestedTypeLookups(instantiables: instantiables, declarations: declarations)
 	var unparsedFiles = candidateFiles
 	var discoveredFileScans = [FileScan]()
-	while case let filePaths = Set(unparsedFiles.keys.filter({ unparsedFiles[$0]?.canDeclare(lookedUpBy: lookups) == true })), !filePaths.isEmpty {
+	while case let filePaths = Set(unparsedFiles.keys.filter { unparsedFiles[$0]?.canDeclare(lookedUpBy: lookups) == true }), !filePaths.isEmpty {
 		for filePath in filePaths {
 			unparsedFiles[filePath] = nil
 		}
