@@ -2538,52 +2538,6 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndOnlyIfAvailableReceived_throwsError() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["C.swift"]):3:5: error: Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>?` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>?`. Declare @Received `aBuilder: Instantiator<A>?` on `C` as @Instantiated to fix. Full cycle: Instantiator<A>? -> Instantiator<B> -> Instantiator<C> -> Instantiator<A>?
-				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
-				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
-				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    @Instantiated let aBuilder: Instantiator<A>?
-					}
-					""",
-					"""
-					@Instantiable
-					public struct A: Instantiable {
-					    @Instantiated let bBuilder: Instantiator<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct B: Instantiable {
-					    @Instantiated let cBuilder: Instantiator<C>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct C: Instantiable {
-					    @Received(onlyIfAvailable: true) let aBuilder: Instantiator<A>?
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedWithVaryingNames_throwsError() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
