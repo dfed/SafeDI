@@ -873,31 +873,31 @@ struct DeclaredTypeNames: Sendable {
 			let firstBytes = word(at: identifierStart)
 			let keyword: (keyword: DeclarationKeyword, length: Int)? = switch firstBytes & 0xFF {
 			case UInt64(UInt8(ascii: "a")):
-				if firstBytes & Self.firstBytesMask(5) == 0x72_6F74_6361 /* actor */ {
+				if firstBytes & Self.firstBytesMask(5) == 0x726F746361 /* actor */ {
 					(.declaration, 5)
-				} else if firstBytes == 0x7461_6963_6F73_7361 /* associat */,
-				          word(at: identifierStart + 8) & Self.firstBytesMask(6) == 0x6570_7974_6465 /* edtype */
+				} else if firstBytes == 0x746169636F737361 /* associat */,
+				          word(at: identifierStart + 8) & Self.firstBytesMask(6) == 0x657079746465 /* edtype */
 				{
 					(.declaration, 14)
 				} else {
 					nil
 				}
 			case UInt64(UInt8(ascii: "c")):
-				firstBytes & Self.firstBytesMask(5) == 0x73_7361_6C63 /* class */ ? (.declaration, 5) : nil
+				firstBytes & Self.firstBytesMask(5) == 0x7373616C63 /* class */ ? (.declaration, 5) : nil
 			case UInt64(UInt8(ascii: "e")):
-				if firstBytes & Self.firstBytesMask(4) == 0x6D75_6E65 /* enum */ {
+				if firstBytes & Self.firstBytesMask(4) == 0x6D756E65 /* enum */ {
 					(.declaration, 4)
-				} else if firstBytes == 0x6F69_736E_6574_7865 /* extensio */, end - identifierStart > 8, identifierStart[8] == UInt8(ascii: "n") {
+				} else if firstBytes == 0x6F69736E65747865 /* extensio */, end - identifierStart > 8, identifierStart[8] == UInt8(ascii: "n") {
 					(.extension, 9)
 				} else {
 					nil
 				}
 			case UInt64(UInt8(ascii: "p")):
-				firstBytes == 0x6C6F_636F_746F_7270 /* protocol */ ? (.declaration, 8) : nil
+				firstBytes == 0x6C6F636F746F7270 /* protocol */ ? (.declaration, 8) : nil
 			case UInt64(UInt8(ascii: "s")):
-				firstBytes & Self.firstBytesMask(6) == 0x7463_7572_7473 /* struct */ ? (.declaration, 6) : nil
+				firstBytes & Self.firstBytesMask(6) == 0x746375727473 /* struct */ ? (.declaration, 6) : nil
 			case UInt64(UInt8(ascii: "t")):
-				firstBytes == 0x6169_6C61_6570_7974 /* typealia */ && end - identifierStart > 8 && identifierStart[8] == UInt8(ascii: "s") ? (.declaration, 9) : nil
+				firstBytes == 0x61696C6165707974 /* typealia */ && end - identifierStart > 8 && identifierStart[8] == UInt8(ascii: "s") ? (.declaration, 9) : nil
 			default:
 				nil
 			}
@@ -938,7 +938,7 @@ struct DeclaredTypeNames: Sendable {
 
 		@inline(__always)
 		private static func repeated(_ byte: UInt8) -> UInt64 {
-			UInt64(byte) &* 0x0101_0101_0101_0101
+			UInt64(byte) &* 0x0101010101010101
 		}
 
 		/// The bits of a little-endian word that hold its first `count` bytes.

@@ -629,7 +629,7 @@ private final class AbsentDeclarationRecorder: SyntaxVisitor {
 		if let path = path(ofTypeNamed: name) {
 			record(path: path, kind: kind)
 			// Building an empty parameter list for a type without generic parameters would allocate a syntax tree.
-		for genericParameter in genericParameterClause.map({ Array($0.parameters) }) ?? [] {
+			for genericParameter in genericParameterClause.map({ Array($0.parameters) }) ?? [] {
 				record(path: path + "." + genericParameter.name.text.withoutBackticks, kind: .genericParameter)
 			}
 		}
