@@ -23,7 +23,8 @@ jobs:
     # isn't Markdown (sources, workflows, lockfiles, project files)
     # counts as a source change. DocC articles are Markdown but feed
     # the DocC build, so they're tracked separately. The link checker
-    # always runs: Markdown is its input, and the two coverage jobs run
+    # and the update-version check always run: Markdown is an input to
+    # both, and the two coverage jobs run
     # on every push to main so the README badge's report is never an
     # empty one. When in doubt (a scheduled run, or a diff that can't
     # be computed) the answer is "everything changed", and the gates
@@ -77,18 +78,19 @@ jobs:
 
   update-version-check:
     name: Update Version Script Check
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
-    # The script uses portable `sed -i.bak`, so this needn't take one of
-    # the five concurrent macOS slots. The publish workflow still runs
-    # it on macOS.
+    # Runs on every change, Markdown-only ones included: the script
+    # edits the install snippets in the documentation, and the last
+    # step fails when a Markdown file states a SafeDI version the
+    # script does not update. The script uses portable `sed -i.bak`, so
+    # this needn't take one of the five concurrent macOS slots. The
+    # publish workflow still runs it on macOS.
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
-      - name: Run update-version script
+      - name: Run update-version script for a prerelease
         run: ./Scripts/update-version.sh 99.99.99-test abc123testchecksum456
       - name: Verify URL was updated
         run: grep -q 'releases/download/99.99.99-test/SafeDITool.artifactbundle.zip' Package.swift
@@ -106,6 +108,57 @@ jobs:
         # also carry `version = "X"` can't false-positive.
         run: |
           awk '/^module\(/,/^\)/' MODULE.bazel | grep -q 'version = "99.99.99-test"'
+      - name: Verify a prerelease leaves the install snippets unchanged
+        run: |
+          changed=$(git diff --name-only | sort)
+          expected=$(printf '%s\n' MODULE.bazel Package.swift Plugins/Shared.swift | sort)
+          if [ "$changed" != "$expected" ]; then
+            echo "::error::A prerelease should change exactly these files:"
+            echo "$expected"
+            echo "It changed:"
+            echo "$changed"
+            exit 1
+          fi
+      - name: Run update-version script for a stable release
+        run: ./Scripts/update-version.sh 99.99.99 abc123testchecksum456
+      - name: Verify a stable release changes the expected files
+        # Keep this list in step with DOCUMENTATION_FILES in the script
+        # and with the files publish.yml's Commit step adds.
+        run: |
+          changed=$(git diff --name-only | sort)
+          expected=$(printf '%s\n' \
+            MODULE.bazel \
+            Package.swift \
+            Plugins/Shared.swift \
+            README.md \
+            Documentation/Manual.md \
+            Sources/SafeDI/SafeDI.docc/SafeDI.md \
+            Examples/ExampleTuistIntegration/README.md | sort)
+          if [ "$changed" != "$expected" ]; then
+            echo "::error::A stable release should change exactly these files:"
+            echo "$expected"
+            echo "It changed:"
+            echo "$changed"
+            exit 1
+          fi
+      - name: Verify every install snippet was updated
+        # Every Markdown line that states a SafeDI version in one of the
+        # snippet shapes must now name the scratch version. A snippet in
+        # a file the script does not list fails here: add the file to
+        # DOCUMENTATION_FILES in the script, to the list in the step
+        # above, and to publish.yml's Commit step.
+        run: |
+          snippets=$(git grep -n -E 'SafeDI\.git", from: "[0-9]|bazel_dep\(name = "safedi", version = "[0-9]|SafeDI dependency to .from: "[0-9]' -- '*.md')
+          echo "$snippets"
+          if [ -z "$snippets" ]; then
+            echo "::error::Found no install snippets; the patterns in this step are out of date."
+            exit 1
+          fi
+          if stale=$(grep -v '"99\.99\.99"' <<< "$snippets"); then
+            echo "::error::Scripts/update-version.sh did not update these install snippets:"
+            echo "$stale"
+            exit 1
+          fi
 
   xcodebuild:
     # The job name spells out the matrix value so the check names stay
