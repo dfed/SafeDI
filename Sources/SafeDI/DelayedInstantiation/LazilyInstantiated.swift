@@ -30,8 +30,9 @@
 /// SafeDI rejects a dependency tree in which creating the instance would require the instance. It does not
 /// inspect what initializers do: an initializer that runs while the instance is being created must not
 /// cause `instance` to be read, whether directly or through a callback. Such a read creates the instance
-/// itself. Every read still returns the same instance, but the type is initialized more than once, and
-/// without end if each initialization causes another read.
+/// itself. Every read still returns the same instance, but the type is initialized more than once. If each
+/// initialization causes another read, the initializations recurse until the stack overflows and the process
+/// crashes.
 ///
 /// - SeeAlso: `SendableLazilyInstantiated`
 /// - SeeAlso: `Instantiator`

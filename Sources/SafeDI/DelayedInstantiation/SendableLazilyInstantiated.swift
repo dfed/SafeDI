@@ -32,8 +32,9 @@ import Synchronization
 ///
 /// SafeDI rejects a dependency tree in which creating the instance would require the instance. It does not
 /// inspect what initializers do: an initializer that runs while the instance is being created must not
-/// cause `instance` to be read, whether directly or through a callback. Such a read requests the lock
-/// that is already held.
+/// cause `instance` to be read, whether directly or through a callback. Such a read tries to acquire the
+/// `Mutex` its own thread already holds, which `Mutex` does not support: it documents the outcome as
+/// platform dependent, either terminating the process or never returning. On macOS, the process is terminated.
 ///
 /// - SeeAlso: `LazilyInstantiated`
 /// - SeeAlso: `SendableInstantiator`
