@@ -154,7 +154,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 
 		#expect(writtenTagsByType.count == 5)
 		for schemaMember in BinaryFile.schemaMembers where writtenTagsByType[String(reflecting: schemaMember)] != nil {
-			#expect(writtenTagsByType[String(reflecting: schemaMember)] == Set(0..<UInt8(schemaMember.binaryLayout.count)), "\(schemaMember)")
+			#expect(writtenTagsByType[String(reflecting: schemaMember)] == Set(0..<UInt8(Self.caseCount(of: schemaMember))), "\(schemaMember)")
 		}
 	}
 
@@ -173,13 +173,41 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 				Issue.record("\(typeName) is cached but is not one of `BinaryFile.schemaMembers`")
 				continue
 			}
-			let mirror = Mirror(reflecting: value)
-			if mirror.displayStyle == .struct {
-				#expect(type(of: schemaMember).binaryLayout == mirror.children.map { $0.label ?? "" }, "\(typeName)")
+			if Mirror(reflecting: value).displayStyle == .struct {
+				Self.expectLayoutListsEveryStoredProperty(of: schemaMember)
 			}
 		}
 
 		#expect(Set(BinaryFile.schemaMembers.map { String(reflecting: $0) }) == foundTypeNames)
+	}
+
+	@Test
+	func binaryLayout_matchesBytesEachCachedStructWritesAndReads_whenEachFieldInTurnHoldsADistinctValue() throws {
+		// The schema fingerprint describes each struct by its layout, so a layout that lists fields in another
+		// order or of other types than the struct writes and reads them would let a file written one way be read
+		// another. A struct whose fields all hold the same value would write the same bytes in either order, so
+		// each field in turn holds a value that differs from every other field's.
+		for schemaMember in BinaryFile.schemaMembers {
+			try Self.expectStructureLayoutMatchesCoder(of: schemaMember)
+		}
+	}
+
+	@Test
+	func binaryLayout_matchesBytesEachCachedEnumerationWritesAndReads_whenEachAssociatedValueInTurnIsDistinct() throws {
+		// The schema fingerprint describes each enum by the payload of each case, so a layout that lists an
+		// associated value in another order or of another type than the enum writes and reads it would let a file
+		// written one way be read another.
+		for schemaMember in BinaryFile.schemaMembers {
+			try Self.expectEnumerationLayoutMatchesCoder(of: schemaMember)
+		}
+	}
+
+	@Test
+	func schemaDescription_describesTypeOfEveryFieldAndPayloadInWriteOrder() {
+		let lines = BinaryFile.schemaDescription.split(separator: "\n").map(String.init)
+
+		#expect(lines.contains("SafeDICore.SafeDIConfiguration: additionalImportedModules: Swift.Array<Swift.String>, additionalDirectoriesToInclude: Swift.Array<Swift.String>, additionalMocksToGenerate: Swift.Array<Swift.String>, mockConditionalCompilation: Swift.Optional<Swift.String>, declarationLocation: Swift.Optional<SafeDICore.Dependency.DeclarationLocation>, sourceFilePath: Swift.Optional<Swift.String>"))
+		#expect(lines.contains("SafeDICore.Dependency.Source: instantiated(fulfillingTypeDescription: Swift.Optional<SafeDICore.TypeDescription>, erasedToConcreteExistential: Swift.Bool), received(onlyIfAvailable: Swift.Bool), aliased(fulfillingProperty: SafeDICore.Property, erasedToConcreteExistential: Swift.Bool, onlyIfAvailable: Swift.Bool), forwarded"))
 	}
 
 	@Test
@@ -457,29 +485,59 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func dumpScanCache_explains_whenTypeNestsTooDeeply() async throws {
-		let project = try await scannedProject(files: [
-			"Root.swift": """
-			@Instantiable(isRoot: true)
-			public struct Root: Instantiable {
-			    public init(value: Int\(String(repeating: "?", count: 128))) {
-			        self.value = value
-			    }
+	mutating func dumpScanCache_explains_whenBodyNestsTooDeeply() async throws {
+		let project = try await scannedKitchenSinkProject()
+		// An empty string table; no imports or mock imports; then one instantiable, whose concrete type is
+		// `optional` (tag 4) wrapped one level more deeply than SafeDITool reads.
+		let body: [UInt8] = [0, 0, 0, 1] + [UInt8](repeating: 4, count: BinaryReader.maximumNestingDepth + 1)
+		try BinaryFile.data(.scanCache, body: body).write(to: project.cacheURL)
 
-			    @Forwarded let value: Int\(String(repeating: "?", count: 128))
-			}
-			""",
+		try assertDumpThrows("The scan cache’s body nests values too deeply at byte \(4 + BinaryReader.maximumNestingDepth).", project: project)
+	}
+
+	// MARK: Nesting
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func scanCache_readsBack_whenTypeNestsAsDeeplyAsSafeDIReads() async throws {
+		// `Int` and 127 optionals nest 128 type descriptions deep.
+		let deeplyNestedType = "Int" + String(repeating: "?", count: BinaryReader.maximumNestingDepth - 1)
+		let project = try await scannedProject(files: [
+			"Deep.swift": Self.deepSource(forwarding: deeplyNestedType),
 		])
 
-		do {
-			_ = try Dump.parse([project.cacheURL.path]).json()
-			Issue.record("Did not throw error!")
-		} catch let error as BinaryFileReadError {
-			guard case .malformedBody(.nestedTooDeeply) = error.reason else {
-				Issue.record("Unexpected error: \(error)")
-				return
-			}
-			#expect("\(error)".hasPrefix("The scan cache’s body nests values too deeply at byte "))
+		// Counted rather than spelled: spelling a type recurses as deeply as it nests.
+		var cachedType = try #require(project.readCache().moduleInfo.instantiables.first?.dependencies.first?.property.typeDescription)
+		var optionalCount = 0
+		while case let .optional(wrappedType) = cachedType {
+			optionalCount += 1
+			cachedType = wrappedType
+		}
+		#expect(optionalCount == BinaryReader.maximumNestingDepth - 1)
+		#expect(cachedType == .simple(name: "Int"))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func scan_writesNoCache_whenTypeNestsMoreDeeplyThanSafeDIReads() async throws {
+		// A cache no SafeDITool reads would only cost `generate` the time to read it before parsing afresh.
+		let project = try await scannedProject(files: [
+			"Deep.swift": Self.deepSource(forwarding: "Int" + String(repeating: "?", count: BinaryReader.maximumNestingDepth)),
+		])
+
+		#expect(!FileManager.default.fileExists(atPath: project.cacheURL.path))
+		#expect(project.scannedModuleInfo.moduleInfo.instantiables.map(\.concreteInstantiable) == [.simple(name: "Deep")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenTypeNestsMoreDeeplyThanDependentModulesRead() async throws {
+		let deeplyNestedType = "Int" + String(repeating: "?", count: BinaryReader.maximumNestingDepth)
+		await assertThrowsError("SafeDI cannot write `Deep` to a module info file: a type its declaration names nests more than 128 types deep, which is more than SafeDI reads back. To fix this, declare a typealias for part of that type, so that no type in the declaration nests more than 128 types deep.") {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [Self.deepSource(forwarding: deeplyNestedType)],
+				filesToDelete: &filesToDelete,
+			)
 		}
 	}
 
@@ -547,6 +605,20 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	/// `café` with `e` followed by a combining acute accent (U+0301), the spelling Normalization Form D produces.
 	private static let decomposedCafe = "cafe\u{301}"
 
+	/// A type that forwards a value of `typeSource`.
+	private static func deepSource(forwarding typeSource: String) -> String {
+		"""
+		@Instantiable
+		public struct Deep: Instantiable {
+		    public init(value: \(typeSource)) {
+		        self.value = value
+		    }
+
+		    @Forwarded let value: \(typeSource)
+		}
+		"""
+	}
+
 	private static let upstreamServiceSource = """
 	@Instantiable
 	public struct UpstreamService: Instantiable {
@@ -609,6 +681,122 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 				generatedCode[fileName] = try Data(contentsOf: outputDirectory.appendingPathComponent(fileName))
 			}
 			return generatedCode
+		}
+	}
+
+	/// The number of cases an enum's layout lists.
+	private static func caseCount<Member: BinarySchemaMember>(of _: Member.Type) -> Int {
+		switch Member.binaryLayout {
+		case .structure:
+			0
+		case let .enumeration(cases):
+			cases.count
+		}
+	}
+
+	/// `value` with a string table holding the strings it writes.
+	private static func encoded(_ value: some BinaryCodable) -> [UInt8] {
+		var writer = BinaryWriter()
+		writer.write(value)
+		return writer.encoded
+	}
+
+	/// A sample value of `type` with a string table holding the strings it writes.
+	private static func encodedSample(of type: any BinaryCodable.Type, isDistinct: Bool) throws -> [UInt8] {
+		var writer = BinaryWriter()
+		try writeSample(of: type, isDistinct: isDistinct, to: &writer)
+		return writer.encoded
+	}
+
+	private static func expectLayoutListsEveryStoredProperty<Member: BinarySchemaMember>(of value: Member) {
+		guard case let .structure(fields, unwrittenProperties) = Member.binaryLayout else {
+			Issue.record("\(Member.self) is a struct, but its layout lists cases")
+			return
+		}
+		let fieldNames = fields.map(\.name)
+		let storedProperties = Mirror(reflecting: value).children.map { $0.label ?? "" }
+
+		#expect(storedProperties.filter { !fieldNames.contains($0) }.sorted() == unwrittenProperties.sorted(), "\(Member.self)")
+	}
+
+	/// Writes each field of `Member` with a sample value, one field in turn distinct from the rest, reads the
+	/// bytes back as `Member`, and expects it to write the same bytes and to hold the distinct value in that field.
+	private static func expectStructureLayoutMatchesCoder<Member: BinarySchemaMember>(of _: Member.Type) throws {
+		switch Member.binaryLayout {
+		case let .structure(fields, _):
+			for distinctField in fields {
+				var writer = BinaryWriter()
+				for field in fields {
+					try writeSample(of: field.type, isDistinct: field.name == distinctField.name, to: &writer)
+				}
+				let bytes = writer.encoded
+				let context = "\(Member.self) with a distinct \(distinctField.name)"
+				let value: Member
+				do {
+					value = try read(bytes)
+				} catch {
+					Issue.record("\(context) does not read back: \(error)")
+					continue
+				}
+				let fieldValue = try #require(value[keyPath: distinctField.keyPath] as? any BinaryCodable)
+
+				#expect(encoded(value) == bytes, "\(context)")
+				#expect(try encoded(fieldValue) == encodedSample(of: distinctField.type, isDistinct: true), "\(context)")
+			}
+		case .enumeration:
+			break
+		}
+	}
+
+	/// Writes each case of `Member` with a sample payload, one associated value in turn distinct from the rest,
+	/// reads the bytes back as `Member`, and expects it to write the same bytes and to hold each associated value
+	/// in the order and of the type the layout lists, with the distinct value where the layout puts it.
+	private static func expectEnumerationLayoutMatchesCoder<Member: BinarySchemaMember>(of _: Member.Type) throws {
+		switch Member.binaryLayout {
+		case .structure:
+			break
+		case let .enumeration(cases):
+			for (tag, layoutCase) in cases.enumerated() {
+				for distinctIndex in layoutCase.payload.isEmpty ? [nil] : layoutCase.payload.indices.map(Optional.some) {
+					var writer = BinaryWriter()
+					writer.writeUnsigned(UInt64(tag))
+					for (index, element) in layoutCase.payload.enumerated() {
+						try writeSample(of: element.type, isDistinct: index == distinctIndex, to: &writer)
+					}
+					let bytes = writer.encoded
+					let context = "\(Member.self).\(layoutCase.name)" + (distinctIndex.map { " with associated value \($0) distinct" } ?? "")
+					let value: Member
+					do {
+						value = try read(bytes)
+					} catch {
+						Issue.record("\(context) does not read back: \(error)")
+						continue
+					}
+					let payload = Self.payload(of: value, laidOutAs: layoutCase)
+
+					#expect(encoded(value) == bytes, "\(context)")
+					#expect(payload.map { String(reflecting: type(of: $0.value)) } == layoutCase.payload.map { String(reflecting: $0.type) }, "\(context)")
+					#expect(zip(layoutCase.payload, payload).allSatisfy { element, child in element.label == nil || element.label == child.label }, "\(context)")
+					if let distinctIndex {
+						let distinctValue = try #require(payload[distinctIndex].value as? any BinaryCodable)
+						#expect(try encoded(distinctValue) == encodedSample(of: layoutCase.payload[distinctIndex].type, isDistinct: true), "\(context)")
+					}
+				}
+			}
+		}
+	}
+
+	/// The associated values `value` holds, in declaration order: a lone unlabeled value as itself, and any other
+	/// payload as a tuple.
+	private static func payload(of value: some BinarySchemaMember, laidOutAs layoutCase: BinaryLayoutCase) -> [Mirror.Child] {
+		if let caseChild = Mirror(reflecting: value).children.first {
+			if layoutCase.payload.count == 1, layoutCase.payload[0].label == nil {
+				[(label: nil, value: caseChild.value)]
+			} else {
+				Array(Mirror(reflecting: caseChild.value).children)
+			}
+		} else {
+			[]
 		}
 	}
 
@@ -809,7 +997,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
-		filesToDelete += [sourceDirectory, swiftFileCSV, outputDirectory, manifestFile, scannedModuleInfoURL(forManifestPath: manifestFile.path)]
+		filesToDelete += [sourceDirectory, swiftFileCSV, outputDirectory, manifestFile]
 
 		let scannedModuleInfo = try await performScan(
 			inputSourcesFile: swiftFileCSV.path,
@@ -817,6 +1005,11 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			outputDirectory: outputDirectory.path,
 			manifestFile: manifestFile.path,
 		)
+		// Scan writes no cache for a module it could not read back.
+		let cacheURL = scannedModuleInfoURL(forManifestPath: manifestFile.path)
+		if FileManager.default.fileExists(atPath: cacheURL.path) {
+			filesToDelete.append(cacheURL)
+		}
 		return ScannedProject(
 			sourcePaths: filePaths,
 			swiftFileCSV: swiftFileCSV,
@@ -827,3 +1020,138 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		)
 	}
 }
+
+// MARK: - Samples
+
+/// A type whose value tests can make from the type alone, so that each field of a layout can be written with a value
+/// that differs from every other field's.
+private protocol BinarySample: BinaryCodable {
+	/// A value of this type. A distinct value and one that is not distinct are written as different bytes.
+	static func sample(isDistinct: Bool) throws -> Self
+}
+
+/// Writes a sample value of `type`, which every type a cached struct or enum writes must provide.
+private func writeSample(of type: any BinaryCodable.Type, isDistinct: Bool, to writer: inout BinaryWriter) throws {
+	guard let sampleType = type as? any BinarySample.Type else {
+		throw MissingSampleError(type: type)
+	}
+	let sample = try sampleType.sample(isDistinct: isDistinct)
+	writer.write(sample)
+}
+
+/// The value `bytes`, which ``BinaryWriter/encoded`` produced, hold.
+private func read<Value: BinaryCodable>(_ bytes: [UInt8]) throws -> Value {
+	try bytes.withUnsafeBytes { bytes in
+		var reader = try BinaryReader(bytes: bytes)
+		let value: Value = try reader.read()
+		try reader.finish()
+		return value
+	}
+}
+
+private struct MissingSampleError: Error, CustomStringConvertible {
+	let type: any BinaryCodable.Type
+
+	var description: String {
+		"\(String(reflecting: type)) has no sample value: conform it to `BinarySample`"
+	}
+}
+
+private struct TooFewCasesError: Error, CustomStringConvertible {
+	let type: any BinaryCodable.Type
+
+	var description: String {
+		"\(String(reflecting: type)) has too few cases for a distinct sample value"
+	}
+}
+
+extension BinarySample where Self: BinarySchemaMember {
+	/// A struct whose fields all hold distinct values or all do not, or an enum's second case or first case,
+	/// with an associated value that is not distinct, which keeps a sample of a type that contains itself finite.
+	static func sample(isDistinct: Bool) throws -> Self {
+		var writer = BinaryWriter()
+		switch binaryLayout {
+		case let .structure(fields, _):
+			for field in fields {
+				try writeSample(of: field.type, isDistinct: isDistinct, to: &writer)
+			}
+		case let .enumeration(cases):
+			let tag = isDistinct ? 1 : 0
+			guard cases.indices.contains(tag) else {
+				throw TooFewCasesError(type: Self.self)
+			}
+			writer.writeUnsigned(UInt64(tag))
+			for element in cases[tag].payload {
+				try writeSample(of: element.type, isDistinct: false, to: &writer)
+			}
+		}
+		return try read(writer.encoded)
+	}
+}
+
+extension String: BinarySample {
+	fileprivate static func sample(isDistinct: Bool) -> String {
+		isDistinct ? "distinct" : ""
+	}
+}
+
+extension Int: BinarySample {
+	fileprivate static func sample(isDistinct: Bool) -> Int {
+		isDistinct ? 1 : 0
+	}
+}
+
+extension Int64: BinarySample {
+	fileprivate static func sample(isDistinct: Bool) -> Int64 {
+		isDistinct ? 1 : 0
+	}
+}
+
+extension Bool: BinarySample {
+	fileprivate static func sample(isDistinct: Bool) -> Bool {
+		isDistinct
+	}
+}
+
+extension Optional: BinarySample where Wrapped: BinarySample {
+	fileprivate static func sample(isDistinct: Bool) throws -> Wrapped? {
+		isDistinct ? try Wrapped.sample(isDistinct: false) : nil
+	}
+}
+
+extension Array: BinarySample where Element: BinarySample {
+	fileprivate static func sample(isDistinct: Bool) throws -> [Element] {
+		isDistinct ? [try Element.sample(isDistinct: false)] : []
+	}
+}
+
+extension Set: BinarySample where Element: BinarySample & Comparable {
+	fileprivate static func sample(isDistinct: Bool) throws -> Set<Element> {
+		isDistinct ? [try Element.sample(isDistinct: false)] : []
+	}
+}
+
+extension CachedScannedModuleInfo: BinarySample {}
+extension ScannedInput: BinarySample {}
+extension FileModificationStamp: BinarySample {}
+extension CachedFileScan: BinarySample {}
+extension FileScan: BinarySample {}
+extension OutputFileDeclarations: BinarySample {}
+extension ModuleInfo: BinarySample {}
+extension ImportStatement: BinarySample {}
+extension FileVisitor.ImportSegment: BinarySample {}
+extension ConditionalCompilationDecision: BinarySample {}
+extension SafeDIConfiguration: BinarySample {}
+extension Instantiable: BinarySample {}
+extension Instantiable.DeclarationType: BinarySample {}
+extension Initializer: BinarySample {}
+extension Initializer.Argument: BinarySample {}
+extension Dependency: BinarySample {}
+extension Dependency.Source: BinarySample {}
+extension Dependency.SourceRange: BinarySample {}
+extension Dependency.DeclarationLocation: BinarySample {}
+extension Property: BinarySample {}
+extension TypeDescription: BinarySample {}
+extension TypeDescription.VoidSpelling: BinarySample {}
+extension TypeDescription.TupleElement: BinarySample {}
+extension UnorderedEquatingCollection: BinarySample where Element: BinarySample {}
