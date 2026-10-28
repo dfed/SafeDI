@@ -97,15 +97,11 @@ enum PluginScanner {
 		let rootOutputFileNames = outputFileNames(forFilesAt: rootFiles.map(\.relativePath))
 
 		let mockFiles = sortedByRelativePath(mockScopedSwiftFiles).filter { fileContainsGenerateMockTrue(at: $0.url) }
-		let mockFileOutputFileNames = mockOutputFileNames(forFilesAt: mockFiles.map(\.relativePath))
-
-		let additionalMockOutputFiles = additionalMocksToGenerate.map {
-			outputDirectory.appendingPathComponent("\($0)+SafeDIMock.swift")
-		}
+		let mockOutputNames = mockOutputFileNames(forFilesAt: mockFiles.map(\.relativePath), additionalMocksToGenerate: additionalMocksToGenerate)
 
 		var outputFiles = rootOutputFileNames.map { outputDirectory.appendingPathComponent($0) }
-			+ mockFileOutputFileNames.map { outputDirectory.appendingPathComponent($0) }
-			+ additionalMockOutputFiles
+			+ mockOutputNames.mockFiles.map { outputDirectory.appendingPathComponent($0) }
+			+ mockOutputNames.additionalMocks.map { outputDirectory.appendingPathComponent($0) }
 
 		let hasMockEntries = !mockFiles.isEmpty || !additionalMocksToGenerate.isEmpty
 		if hasMockEntries {
