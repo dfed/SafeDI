@@ -421,6 +421,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		/// The parameters without default values.
 		public let dependencies: [Dependency]
 	}
+
 	public private(set) var conflictingMockFunctionSyntax: FunctionDeclSyntax?
 	public private(set) var diagnostics = [Diagnostic]()
 	public private(set) var uninitializedNonOptionalPropertyNames = [String]()
