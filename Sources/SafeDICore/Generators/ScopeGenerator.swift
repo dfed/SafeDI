@@ -1692,7 +1692,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		})
 		let rootBindingNames = treePropertyNodeBindingNames
 			.union(onlyIfAvailableOverrides.map(\.name))
-		.union(lazilyInstantiatedBindingNameMap.values.flatMap(\.values))
+			.union(lazilyInstantiatedBindingNameMap.values.flatMap(\.values))
 		let (rootItems, aliasBindingNames) = Self.renamingAliases(
 			in: parameterTree,
 			thatRedeclare: rootBindingNames,
@@ -1729,12 +1729,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var rootDependenciesToRebind = [Dependency]()
 		for dependency in instantiable.dependencies {
 			if let binding = Self.disambiguatedBinding(
-				ofReceived: dependency,
-				unavailableProperties: [],
-				lazilyInstantiatedInstanceProperties: [],
-				flatParameterDisambiguationMap: rootDisambiguationMap,
-			),
-				rootBindingNames.contains(dependency.property.label) || treePropertyNodeBindingNames.contains(binding.name)
+			   	ofReceived: dependency,
+			   	unavailableProperties: [],
+			   	lazilyInstantiatedInstanceProperties: [],
+			   	flatParameterDisambiguationMap: rootDisambiguationMap,
+			   ),
+			   rootBindingNames.contains(dependency.property.label) || treePropertyNodeBindingNames.contains(binding.name)
 			{
 				returnDisambiguationMap[dependency.property.label, default: [:]][dependency.property.typeDescription] = binding.name
 			} else {
