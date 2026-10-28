@@ -22,6 +22,12 @@ import Foundation
 
 /// Compute output file names for the given input files, each named relative to the project root (or absolute for a
 /// file outside it), deduplicating basenames by prepending the components of their directories when collisions occur.
+///
+/// Every returned name is unique. When files that share a name still collide once their directories are prepended –
+/// or a prepended name matches another file's name, as `Feature/Root.swift` and `Feature_Root.swift` both become
+/// `Feature_Root` – the file whose path sorts first keeps the name, and each other file, in path order, takes the
+/// name followed by the smallest `_2`, `_3`, … that no other file's name uses. The result depends only on the set of
+/// input paths, not their order.
 public func outputFileNames(
 	forFilesAt inputFilePaths: [String],
 	suffix: String = "+SafeDI.swift",
@@ -46,13 +52,13 @@ public func outputFileNames(
 		)
 	}
 
-	var outputFileNames = Array(repeating: "", count: fileInfo.count)
+	var names = Array(repeating: "", count: fileInfo.count)
 	let groups = Dictionary(grouping: Array(fileInfo.enumerated()), by: \.element.baseName)
 
 	for (baseName, entries) in groups {
 		guard entries.count > 1 else {
 			let entry = entries[0]
-			outputFileNames[entry.offset] = "\(baseName)\(suffix)"
+			names[entry.offset] = baseName
 			continue
 		}
 
@@ -76,12 +82,25 @@ public func outputFileNames(
 		}
 
 		for entry in entries {
-			let name = namesByIndex[entry.offset, default: baseName]
-			outputFileNames[entry.offset] = "\(name)\(suffix)"
+			names[entry.offset] = namesByIndex[entry.offset, default: baseName]
 		}
 	}
 
-	return outputFileNames
+	// Files whose names still collide, within a group or across groups, keep the name only for the first path.
+	var usedNames = Set(names)
+	let indicesByName = Dictionary(grouping: names.indices, by: { names[$0] })
+	for (name, indices) in indicesByName.sorted(by: { $0.key < $1.key }) {
+		var nameSuffixNumber = 2
+		for index in indices.sorted(by: { inputFilePaths[$0] < inputFilePaths[$1] }).dropFirst() {
+			while usedNames.contains("\(name)_\(nameSuffixNumber)") {
+				nameSuffixNumber += 1
+			}
+			names[index] = "\(name)_\(nameSuffixNumber)"
+			usedNames.insert(names[index])
+		}
+	}
+
+	return names.map { "\($0)\(suffix)" }
 }
 
 /// Compute output file names for mock generation output files.
