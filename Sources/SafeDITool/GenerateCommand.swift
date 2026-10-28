@@ -294,10 +294,10 @@ struct Generate: AsyncParsableCommand {
 				) {
 					lexicallyQualifiedTypeDescription
 				} else if let enclosingType = unnormalizedInstantiable.concreteInstantiable.popNested,
-				   let bestTypeDescription = TypeDescription.nestedOptions(
-				   	referencedType: $0,
-				   	within: enclosingType,
-				   ).first(where: { instantiableTypes.contains($0) })
+				          let bestTypeDescription = TypeDescription.nestedOptions(
+				          	referencedType: $0,
+				          	within: enclosingType,
+				          ).first(where: { instantiableTypes.contains($0) })
 				{
 					bestTypeDescription
 				} else {

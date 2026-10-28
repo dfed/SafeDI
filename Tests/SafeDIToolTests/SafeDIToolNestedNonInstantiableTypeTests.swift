@@ -3312,23 +3312,23 @@ struct SafeDIToolNestedNonInstantiableTypeTests: ~Copyable {
 	mutating func mock_doesNotQualifyForwardedType_whenExtensionThroughTypeAliasDeclaresNestedTypeOfThatName() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: ["""
-					public enum Outer {
-					    public struct Configuration {
-					        public init() {}
-					    }
+				public enum Outer {
+				    public struct Configuration {
+				        public init() {}
+				    }
 
-					    public enum Feature {
-					        @Instantiable(generateMock: true)
-					        public final class Service: Instantiable {
-					            public init(configuration: Configuration) {
-					                self.configuration = configuration
-					            }
+				    public enum Feature {
+				        @Instantiable(generateMock: true)
+				        public final class Service: Instantiable {
+				            public init(configuration: Configuration) {
+				                self.configuration = configuration
+				            }
 
-					            @Forwarded let configuration: Configuration
-					        }
-					    }
-					}
-				"""],
+				            @Forwarded let configuration: Configuration
+				        }
+				    }
+				}
+			"""],
 			swiftFileContentByFilePath: [
 				"Alias.swift": """
 				public typealias F = Outer.Feature
@@ -3368,23 +3368,23 @@ struct SafeDIToolNestedNonInstantiableTypeTests: ~Copyable {
 	mutating func mock_doesNotQualifyForwardedType_whenModuleQualifiedExtensionDeclaresNestedTypeOfThatName() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: ["""
-					public enum Outer {
-					    public struct Configuration {
-					        public init() {}
-					    }
+				public enum Outer {
+				    public struct Configuration {
+				        public init() {}
+				    }
 
-					    public enum Feature {
-					        @Instantiable(generateMock: true)
-					        public final class Service: Instantiable {
-					            public init(configuration: Configuration) {
-					                self.configuration = configuration
-					            }
+				    public enum Feature {
+				        @Instantiable(generateMock: true)
+				        public final class Service: Instantiable {
+				            public init(configuration: Configuration) {
+				                self.configuration = configuration
+				            }
 
-					            @Forwarded let configuration: Configuration
-					        }
-					    }
-					}
-				"""],
+				            @Forwarded let configuration: Configuration
+				        }
+				    }
+				}
+			"""],
 			swiftFileContentByFilePath: [
 				"Qualified.swift": """
 				extension SomeModule.Outer.Feature {
@@ -3471,23 +3471,23 @@ struct SafeDIToolNestedNonInstantiableTypeTests: ~Copyable {
 	mutating func mock_doesNotQualifyForwardedType_whenExtensionOfEnclosingTypeCarriesUnrecognizedAttribute() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: ["""
-					public enum Outer {
-					    public struct Configuration {
-					        public init() {}
-					    }
+				public enum Outer {
+				    public struct Configuration {
+				        public init() {}
+				    }
 
-					    public enum Feature {
-					        @Instantiable(generateMock: true)
-					        public final class Service: Instantiable {
-					            public init(configuration: Configuration) {
-					                self.configuration = configuration
-					            }
+				    public enum Feature {
+				        @Instantiable(generateMock: true)
+				        public final class Service: Instantiable {
+				            public init(configuration: Configuration) {
+				                self.configuration = configuration
+				            }
 
-					            @Forwarded let configuration: Configuration
-					        }
-					    }
-					}
-				"""],
+				            @Forwarded let configuration: Configuration
+				        }
+				    }
+				}
+			"""],
 			swiftFileContentByFilePath: [
 				"Macro.swift": """
 				@AddConfiguration
@@ -3618,20 +3618,20 @@ struct SafeDIToolNestedNonInstantiableTypeTests: ~Copyable {
 		)
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: ["""
-					public protocol P {}
+				public protocol P {}
 
-					extension Outer {
-					    @Instantiable(generateMock: true)
-					    public final class Service: P, Instantiable {
-					        public init(configuration: Configuration) {
-					            self.configuration = configuration
-					            super.init()
-					        }
+				extension Outer {
+				    @Instantiable(generateMock: true)
+				    public final class Service: P, Instantiable {
+				        public init(configuration: Configuration) {
+				            self.configuration = configuration
+				            super.init()
+				        }
 
-					        @Forwarded let configuration: Configuration
-					    }
-					}
-				"""],
+				        @Forwarded let configuration: Configuration
+				    }
+				}
+			"""],
 			dependentModuleInfoPaths: [upstream.moduleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,

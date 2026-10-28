@@ -455,17 +455,17 @@ public struct NestedTypeResolver {
 			for located in locatedDeclarations {
 				if let extendedTypePath = located.declaration.extendedTypePath {
 					let components = extendedTypePath.split(separator: ".").map(String.init)
-				let prefixes = components.indices.map { components[...$0].joined(separator: ".") }
-				let suffixes = components.indices.dropFirst().map { components[$0...].joined(separator: ".") }
-				let isThroughTypeAlias = prefixes.contains { prefix in
-					(declarationsByPath[prefix] ?? []).contains { $0.declaration.kind == .typeAlias }
-				}
-				let isModuleQualified = declarationsByPath[components[0]] == nil && suffixes.contains { suffix in
-					(declarationsByPath[suffix] ?? []).contains { $0.declaration.isTypeDeclaration }
-				}
-				if isThroughTypeAlias || isModuleQualified {
-					namesOfUnresolvedExtensions.insert(String(located.declaration.name))
-				}
+					let prefixes = components.indices.map { components[...$0].joined(separator: ".") }
+					let suffixes = components.indices.dropFirst().map { components[$0...].joined(separator: ".") }
+					let isThroughTypeAlias = prefixes.contains { prefix in
+						(declarationsByPath[prefix] ?? []).contains { $0.declaration.kind == .typeAlias }
+					}
+					let isModuleQualified = declarationsByPath[components[0]] == nil && suffixes.contains { suffix in
+						(declarationsByPath[suffix] ?? []).contains { $0.declaration.isTypeDeclaration }
+					}
+					if isThroughTypeAlias || isModuleQualified {
+						namesOfUnresolvedExtensions.insert(String(located.declaration.name))
+					}
 				}
 			}
 		}
