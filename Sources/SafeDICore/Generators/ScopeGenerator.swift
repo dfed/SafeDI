@@ -1422,33 +1422,37 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			onlyIfAvailableUnwrappedReceivedParameterProperties = Set(onlyIfAvailableUnwrappedReceivedProperties.map(\.asValidatedForDependencyCycles))
 				.subtracting(requiredReceivedProperties.map(\.asValidatedForDependencyCycles.asUnwrappedProperty))
 		}
+		// A tree node binds a non-optional value, even when it is promoted for a required `x: X?`.
+		let unwrappedTreeProperties: Set<Property> = if onlyIfAvailableUnwrappedReceivedParameterProperties.isEmpty {
+			[]
+		} else {
+			Set(treePropertyNodes.map { Property(label: $0.propertyLabel, typeDescription: $0.typeDescription.unwrapped) })
+		}
 
 		let receivedNonOptionalProperties = Set(
 			receivedParameterProperties
 				.filter { !$0.typeDescription.isOptional },
 		)
 		var flatReceivedProperties = [Property]()
-		var onlyIfAvailableSafeDIParameterEntries = [(label: String, typeSource: String)]()
+		var onlyIfAvailableReceivedProperties = [Property]()
 		for receivedProperty in receivedParameterProperties.sorted() {
 			// A forwarded `x: X` fulfills an `x: X?` too.
-			guard !treePropertyLabels.contains(receivedProperty.label),
-			      !forwardedPropertySet.contains(receivedProperty), !receivedProperty.typeDescription.isOptional
-			      || (!receivedNonOptionalProperties.contains(receivedProperty.asUnwrappedProperty) && !forwardedPropertySet.contains(receivedProperty.asUnwrappedProperty))
+			guard !forwardedPropertySet.contains(receivedProperty), !receivedProperty.typeDescription.isOptional
+				|| (!receivedNonOptionalProperties.contains(receivedProperty.asUnwrappedProperty) && !forwardedPropertySet.contains(receivedProperty.asUnwrappedProperty))
 			else { continue }
 			// Optional, defaulting to `nil`, only when every receiver — directly or
 			// through an alias, whose fulfilling property is non-optional — receives it
 			// `onlyIfAvailable`. A property any receiver requires is a required parameter.
+			// A receive of a property the tree builds for another receiver, in either its optional
+			// or its non-optional form, is handed that node: the mock root's own receive, or an
+			// `onlyIfAvailable` alias's fulfilling property. A tree node with the label and
+			// another type is not: the receivers are handed an override of their own type,
+			// named apart from that node below.
 			if onlyIfAvailableUnwrappedReceivedParameterProperties.contains(receivedProperty.asUnwrappedProperty) {
-				let typeSource: String = if receivedProperty.typeDescription.isOptional {
-					receivedProperty.typeDescription.asSource
-				} else {
-					"\(receivedProperty.typeDescription.asSource)?"
+				if !unwrappedTreeProperties.contains(receivedProperty.asUnwrappedProperty) {
+					onlyIfAvailableReceivedProperties.append(receivedProperty)
 				}
-				onlyIfAvailableSafeDIParameterEntries.append((
-					label: receivedProperty.label,
-					typeSource: typeSource,
-				))
-			} else {
+			} else if !treePropertyLabels.contains(receivedProperty.label) {
 				flatReceivedProperties.append(receivedProperty)
 			}
 		}
@@ -1478,14 +1482,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Disambiguate flat received parameter labels when collisions exist.
 		// Include onlyIfAvailable labels so flat params with the same label
-		// get disambiguated (onlyIfAvailable entries are accessed via
-		// safeDIOverrides.label, so they don't need disambiguation).
+		// get disambiguated: an onlyIfAvailable override keeps its label over
+		// a flat received parameter.
 		// Forwarded parameters keep their original labels (must match init signature).
 		let allFlatLabels = forwardedDependencies.map(\.property.label)
 			+ rootDefaultParameters.map(\.label)
 			+ flatReceivedProperties.map(\.label)
 			+ flatUncoveredParameters.map(\.label)
-			+ onlyIfAvailableSafeDIParameterEntries.map(\.label)
+			+ onlyIfAvailableReceivedProperties.map(\.label)
 		let collidingFlatLabels = Self.collidingLabels(in: allFlatLabels)
 		// Map of (label → (type → disambiguatedLabel)) for flat received
 		// parameters whose label collided with another flat parameter. Builder calls
@@ -1508,6 +1512,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				typeSource: property.typeDescription.asFunctionParameter.asSource,
 			)
 		}
+		let onlyIfAvailableOverrides: [OnlyIfAvailableOverride] = if onlyIfAvailableReceivedProperties.isEmpty {
+			[]
+		} else {
+			Self.onlyIfAvailableOverrides(
+				for: onlyIfAvailableReceivedProperties,
+				namesInMockScope: Set(forwardedDependencies.map(\.property.label))
+					.union(rootDefaultParameters.map(\.label))
+					.union(flatUncoveredParameters.map(\.label))
+					.union(Self.bindingNames(of: treePropertyNodes, labels: treePropertyLabels)),
+				reservedNames: Set(flatReceivedParameters.map(\.label)),
+			)
+		}
 		// Wrap the instance of each lazily instantiated dependency the mock cannot build, under a name of its
 		// own. Types that receive the dependency as `LazilyInstantiated` are passed that name. Rebinding it
 		// under the dependency's label where they are built would hide the parameter that holds the instance
@@ -1524,18 +1540,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					let instanceName = flatParameterDisambiguationMap[instanceProperty.label]?[instanceProperty.typeDescription] ?? instanceProperty.label
 					lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(wrapperTypeSource) { \(instanceName) }")
 				} else {
-					lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(instanceProperty.label).map { instance in \(wrapperTypeSource) { instance } }")
+					// The instance is an `onlyIfAvailable` override, which may be named apart from its label.
+					let instanceName = onlyIfAvailableOverrides.first { $0.receivedProperty.asUnwrappedProperty == instanceProperty }?.name ?? instanceProperty.label
+					lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(instanceName).map { instance in \(wrapperTypeSource) { instance } }")
 				}
 			}
 			lazilyInstantiatedBindingNameMap[receivedProperty.label, default: [:]][receivedProperty.typeDescription] = bindingName
 		}
 
 		// 3. Simple mock case — no tree, no flat parameters.
-		let hasTree = !parameterTree.isEmpty || !onlyIfAvailableSafeDIParameterEntries.isEmpty
+		let hasTree = !parameterTree.isEmpty || !onlyIfAvailableOverrides.isEmpty
 		// SafeDIOverrides is only needed when there are property children or
 		// onlyIfAvailable entries. Alias-only trees emit `let` bindings directly
 		// in the mock body and require no override storage.
-		let hasOverridableTree = !treePropertyNodes.isEmpty || !onlyIfAvailableSafeDIParameterEntries.isEmpty
+		let hasOverridableTree = !treePropertyNodes.isEmpty || !onlyIfAvailableOverrides.isEmpty
 		let hasFlatParameters = !forwardedDependencies.isEmpty
 			|| !rootDefaultParameters.isEmpty
 			|| !flatReceivedParameters.isEmpty
@@ -1571,7 +1589,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		if hasOverridableTree {
 			lines.append(Self.generateSafeDIOverridesStruct(
 				rootChildren: treePropertyNodes,
-				onlyIfAvailableEntries: onlyIfAvailableSafeDIParameterEntries,
+				onlyIfAvailableOverrides: onlyIfAvailableOverrides,
 				indent: indent,
 			))
 			lines.append("")
@@ -1630,7 +1648,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// scopes. The return call must NOT apply flat-received renames: they
 		// target a separate mock parameter, and the root's own `.instantiated`
 		// dep must reference its own parameter — not the renamed flat-received.
-		var rootDisambiguationMap = flatParameterDisambiguationMap
+		// An `onlyIfAvailable` override named apart from its label is rebound to the label
+		// by its receivers, as a renamed flat parameter is, at the root and in the tree.
+		var renamedFlatParameterAndOverrideMap = flatParameterDisambiguationMap
+		for onlyIfAvailableOverride in onlyIfAvailableOverrides
+			where onlyIfAvailableOverride.name != onlyIfAvailableOverride.receivedProperty.label
+		{
+			renamedFlatParameterAndOverrideMap[onlyIfAvailableOverride.receivedProperty.label, default: [:]][onlyIfAvailableOverride.receivedProperty.typeDescription] = onlyIfAvailableOverride.name
+		}
+		var rootDisambiguationMap = renamedFlatParameterAndOverrideMap
 		for (label, typeMap) in siblingDisambiguationMap {
 			for (typeDescription, name) in typeMap {
 				rootDisambiguationMap[label, default: [:]][typeDescription] = name
@@ -1644,7 +1670,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let rootBindingNames = Set(treePropertyNodes.map { node in
 			siblingDisambiguationMap[node.propertyLabel]?[node.typeDescription] ?? node.propertyLabel
 		})
-		.union(onlyIfAvailableSafeDIParameterEntries.map(\.label))
+		.union(onlyIfAvailableOverrides.map(\.name))
 		.union(lazilyInstantiatedBindingNameMap.values.flatMap(\.values))
 		let (rootItems, aliasBindingNames) = Self.renamingAliases(
 			in: parameterTree,
@@ -1659,7 +1685,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					return alias.property.label
 				}),
 		)
-		var treeDisambiguationMap = flatParameterDisambiguationMap
+		var treeDisambiguationMap = renamedFlatParameterAndOverrideMap
 		for (label, typeMap) in aliasBindingNames {
 			for (typeDescription, name) in typeMap {
 				treeDisambiguationMap[label, default: [:]][typeDescription] = name
@@ -1674,22 +1700,41 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
+		// A root's own received dependency whose label the root scope already binds – to a node
+		// the mock builds for another receiver – cannot be rebound to its label without
+		// redeclaring that binding, so the root is passed the dependency's binding by name.
+		var rootDependenciesToRebind = [Dependency]()
+		for dependency in instantiable.dependencies {
+			if rootBindingNames.contains(dependency.property.label),
+			   let binding = Self.disambiguatedBinding(
+			   	ofReceived: dependency,
+			   	unavailableProperties: [],
+			   	lazilyInstantiatedInstanceProperties: [],
+			   	flatParameterDisambiguationMap: rootDisambiguationMap,
+			   )
+			{
+				returnDisambiguationMap[dependency.property.label, default: [:]][dependency.property.typeDescription] = binding.name
+			} else {
+				rootDependenciesToRebind.append(dependency)
+			}
+		}
+
 		// Emit the root's own `.received` disambiguation rebinds before the tree
 		// so any nested builder functions emitted within the tree can capture
 		// them without forward-referencing. Root-level aliases flow through the
 		// tree itself (as `MockTreeItem.alias` children of the root scope) in
 		// production's topological order.
 		let rootReceiverBindings = Self.emitReceiverBindings(
-			for: instantiable.dependencies,
+			for: rootDependenciesToRebind,
 			unavailableProperties: [],
 			flatParameterDisambiguationMap: rootDisambiguationMap,
 			indent: bodyIndent,
 		)
 
 		if hasTree {
-			// Bind onlyIfAvailable entries first — tree bindings may reference them.
-			for entry in onlyIfAvailableSafeDIParameterEntries {
-				lines.append("\(bodyIndent)let \(entry.label): \(entry.typeSource) = safeDIOverrides.\(entry.label)")
+			// Bind onlyIfAvailable overrides first — tree bindings may reference them.
+			for onlyIfAvailableOverride in onlyIfAvailableOverrides {
+				lines.append("\(bodyIndent)let \(onlyIfAvailableOverride.name): \(onlyIfAvailableOverride.typeDescription.asSource) = safeDIOverrides.\(onlyIfAvailableOverride.name)")
 			}
 			lines.append(contentsOf: lazilyInstantiatedBindings)
 			lines.append(contentsOf: rootReceiverBindings)
@@ -1788,8 +1833,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	// MARK: Mock scope context
 
 	/// Emits the `let <label>: <Type> = <disambiguatedName>` rebinds a scope needs
-	/// for `.received` dependencies whose flat mock parameter was renamed to
-	/// disambiguate a collision. The alias becomes a real Swift binding so the
+	/// for `.received` dependencies whose flat mock parameter, `onlyIfAvailable`
+	/// override, or sibling binding was renamed to disambiguate a collision. The
+	/// alias becomes a real Swift binding so the
 	/// scope's construction arguments can resolve the dep via its bare label.
 	/// A dependency in `unavailableProperties` is passed `nil` and is not rebound,
 	/// since the binding it would name is not declared at that point: it is
@@ -2239,6 +2285,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let declarationReference: AliasDeclarationReferences.Reference?
 	}
 
+	// MARK: OnlyIfAvailableOverride
+
+	/// A property a mock root's tree receives only if available that nothing in the mock provides.
+	/// The generated `mock()` reads it from an optional `SafeDIOverrides` field, which defaults to `nil`,
+	/// into a binding of the same name, and hands it to the receivers of the property.
+	private struct OnlyIfAvailableOverride {
+		/// The property the tree receives: a `@Received(onlyIfAvailable: true)` property, or the
+		/// non-optional fulfilling property of an `onlyIfAvailable` alias.
+		let receivedProperty: Property
+		/// The type of the field and the binding: `receivedProperty`'s type, made optional.
+		let typeDescription: TypeDescription
+		/// The name of the field and the binding (see `onlyIfAvailableOverrides(for:namesInMockScope:reservedNames:)`).
+		let name: String
+	}
+
 	// MARK: MockTreeItem
 
 	/// One entry in a scope's mock parameter tree. Properties carry the metadata
@@ -2519,6 +2580,55 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return result
 	}
 
+	/// The names `nodes`, the property children of one scope whose labels are `labels`, are bound to:
+	/// each node's label, disambiguated when siblings share it.
+	private static func bindingNames(of nodes: [MockParameterNode], labels: Set<String>) -> Set<String> {
+		// Most scopes have no two children with one label, which leaves every label as it is.
+		guard labels.count < nodes.count else { return labels }
+		let labelMap = disambiguatePropertyLabels(for: nodes)
+		return Set(nodes.map { disambiguatedLabel(for: $0, labelMap: labelMap) })
+	}
+
+	/// The overrides of a mock root's `onlyIfAvailable` received properties, one per property, in the
+	/// order of `receivedProperties`, each named for its `SafeDIOverrides` field and its `mock()` binding.
+	///
+	/// An override is named by its label, unless the label is one of `namesInMockScope` – a `mock()`
+	/// parameter the binding would hide, or a binding of the root's tree it would redeclare – or another
+	/// override has the same label. Those overrides are named apart by `identifierSafeNames`, as sibling
+	/// entries are: by the label followed by the type of the field, never taking a name in
+	/// `namesInMockScope`, in `reservedNames`, or that another override is named by. Every input is a label
+	/// or a type of the mock root's scope, in an order fixed by them, so the names depend only on what the
+	/// declarations say.
+	private static func onlyIfAvailableOverrides(
+		for receivedProperties: [Property],
+		namesInMockScope: Set<String>,
+		reservedNames: Set<String>,
+	) -> [OnlyIfAvailableOverride] {
+		let labels = receivedProperties.map(\.label)
+		let typeDescriptions = receivedProperties.map { property in
+			property.typeDescription.isOptional ? property.typeDescription : .optional(property.typeDescription)
+		}
+		let collidingLabels = collidingLabels(in: labels).union(namesInMockScope.intersection(labels))
+		let collidingIndices = collidingLabels.isEmpty ? [] : receivedProperties.indices.filter { collidingLabels.contains(labels[$0]) }
+		let collidingNames = collidingIndices.isEmpty ? [] : identifierSafeNames(
+			for: collidingIndices.map { index in
+				(label: labels[index], suffixTypes: [typeDescriptions[index].simplified, typeDescriptions[index]])
+			},
+			reservedNames: namesInMockScope.union(reservedNames).union(labels),
+		)
+		var names = labels
+		for (index, name) in zip(collidingIndices, collidingNames) {
+			names[index] = name
+		}
+		return receivedProperties.indices.map { index in
+			OnlyIfAvailableOverride(
+				receivedProperty: receivedProperties[index],
+				typeDescription: typeDescriptions[index],
+				name: names[index],
+			)
+		}
+	}
+
 	/// The labels that appear more than once in `labels`.
 	private static func collidingLabels(in labels: [String]) -> Set<String> {
 		var seenLabels = Set<String>()
@@ -2627,7 +2737,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// use qualified names (e.g., `ChildA.SafeDIMockConfiguration`).
 	private static func generateSafeDIOverridesStruct(
 		rootChildren: [MockParameterNode],
-		onlyIfAvailableEntries: [(label: String, typeSource: String)],
+		onlyIfAvailableOverrides: [OnlyIfAvailableOverride],
 		indent: String,
 	) -> String {
 		let innerIndent = "\(indent)\(standardIndent)"
@@ -2651,8 +2761,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				return "\(memberIndent)\(label): (\(sendableAnnotation)\(child.builderClosureType))? = nil"
 			}
 		}
-		for entry in onlyIfAvailableEntries {
-			initParameters.append("\(memberIndent)\(entry.label): \(entry.typeSource) = nil")
+		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
+			initParameters.append("\(memberIndent)\(onlyIfAvailableOverride.name): \(onlyIfAvailableOverride.typeDescription.asSource) = nil")
 		}
 		lines.append(initParameters.joined(separator: ",\n"))
 		lines.append("\(innerIndent)) {")
@@ -2660,8 +2770,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
 			lines.append("\(memberIndent)self.\(label) = \(label)")
 		}
-		for entry in onlyIfAvailableEntries {
-			lines.append("\(memberIndent)self.\(entry.label) = \(entry.label)")
+		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
+			lines.append("\(memberIndent)self.\(onlyIfAvailableOverride.name) = \(onlyIfAvailableOverride.name)")
 		}
 		lines.append("\(innerIndent)}")
 
@@ -2676,8 +2786,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				lines.append("\(innerIndent)let \(label): (\(sendableAnnotation)\(child.builderClosureType))?")
 			}
 		}
-		for entry in onlyIfAvailableEntries {
-			lines.append("\(innerIndent)let \(entry.label): \(entry.typeSource)")
+		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
+			lines.append("\(innerIndent)let \(onlyIfAvailableOverride.name): \(onlyIfAvailableOverride.typeDescription.asSource)")
 		}
 
 		lines.append("\(indent)}")
@@ -2985,12 +3095,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// receiver bindings a place to live.
 					let propertyTypeName = node.instantiatedTypeDescription.asSource
 					let innerIndent = "\(indent)\(standardIndent)"
+					let functionDisambiguationMap = removingRenames(
+						hiddenByDeclarationsOf: node.children,
+						from: combinedDisambiguationMap,
+					)
 
 					let receiverBindings = emitReceiverBindings(
 						for: node.dependencies,
 						unavailableProperties: node.unavailableProperties,
 						lazilyInstantiatedInstanceProperties: node.lazilyInstantiatedInstanceProperties,
-						flatParameterDisambiguationMap: combinedDisambiguationMap,
+						flatParameterDisambiguationMap: functionDisambiguationMap,
 						indent: innerIndent,
 					)
 
@@ -3002,7 +3116,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						indent: innerIndent,
 						ancestorTypes: childAncestors,
 						sendableOverrideExtractor: sendableOverrideExtractor,
-						flatParameterDisambiguationMap: combinedDisambiguationMap,
+						flatParameterDisambiguationMap: functionDisambiguationMap,
 						enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 						lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
 						parentConcreteType: node.concreteType.asSource,
@@ -3100,6 +3214,42 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return (renamedItems, bindingNames)
 	}
 
+	/// `disambiguationMap` without the renames that a nested scope's declarations hide: those of the
+	/// properties `children` declare – each property node's property and each alias's property – and of
+	/// `parameters`, the forwarded properties a builder function is handed.
+	///
+	/// A receiver of `x: X` or `x: X?` in a scope that declares, or is handed as a parameter, `x: X` resolves
+	/// to that declaration by its label, as in production, not to a renamed flat parameter or override of
+	/// the same property that an enclosing scope binds.
+	private static func removingRenames(
+		hiddenByDeclarationsOf children: [MockTreeItem],
+		parameters: [Property] = [],
+		from disambiguationMap: [String: [TypeDescription: String]],
+	) -> [String: [TypeDescription: String]] {
+		guard !disambiguationMap.isEmpty else { return disambiguationMap }
+		var disambiguationMap = disambiguationMap
+		// Writing through a subscript copies the map even when nothing is removed, so look first.
+		func removeRenames(of property: Property) {
+			guard let renames = disambiguationMap[property.label] else { return }
+			let optionalTypeDescription = TypeDescription.optional(property.typeDescription)
+			guard renames[property.typeDescription] != nil || renames[optionalTypeDescription] != nil else { return }
+			disambiguationMap[property.label]?[property.typeDescription] = nil
+			disambiguationMap[property.label]?[optionalTypeDescription] = nil
+		}
+		for parameter in parameters {
+			removeRenames(of: parameter)
+		}
+		for child in children {
+			switch child {
+			case let .property(node):
+				removeRenames(of: Property(label: node.propertyLabel, typeDescription: node.typeDescription))
+			case let .alias(alias):
+				removeRenames(of: alias.property)
+			}
+		}
+		return disambiguationMap
+	}
+
 	/// Resolves the positional arguments for a builder call.
 	/// Every dependency is referenced by its bare property label at this scope —
 	/// `.aliased` and disambiguated `.received` deps are bound as `let`s by
@@ -3183,6 +3333,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let forwardedProperties = node.forwardedProperties.sorted()
 		let propertyType = node.typeDescription.propertyType
 		let innerIndent = "\(indent)\(standardIndent)"
+		// The builder function's parameters and bindings hide the renames of their properties.
+		let builderDisambiguationMap = removingRenames(
+			hiddenByDeclarationsOf: node.children,
+			parameters: forwardedProperties,
+			from: flatParameterDisambiguationMap,
+		)
 
 		// Emit disambiguated-receiver rebinds inside the inner builder function
 		// so construction arguments resolve by bare label via Swift lexical
@@ -3193,7 +3349,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for: node.dependencies,
 			unavailableProperties: node.unavailableProperties,
 			lazilyInstantiatedInstanceProperties: node.lazilyInstantiatedInstanceProperties,
-			flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+			flatParameterDisambiguationMap: builderDisambiguationMap,
 			indent: innerIndent,
 		)
 
@@ -3251,7 +3407,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				indent: innerIndent,
 				ancestorTypes: functionAncestors,
 				sendableOverrideExtractor: sendableOverrideExtractor ?? startedSendableOverrideExtractor,
-				flatParameterDisambiguationMap: flatParameterDisambiguationMap,
+				flatParameterDisambiguationMap: builderDisambiguationMap,
 				enclosingFunctionNames: enclosingFunctionNames,
 				lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
 				parentConcreteType: node.concreteType.asSource,
