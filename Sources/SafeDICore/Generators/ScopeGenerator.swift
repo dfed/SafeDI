@@ -3118,6 +3118,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						hiddenByDeclarationsOf: node.children,
 						from: combinedDisambiguationMap,
 					)
+					let functionLazilyInstantiatedBindingNames = removingRenames(
+						hiddenByDeclarationsOf: node.children,
+						from: lazilyInstantiatedBindingNames,
+					)
 
 					let receiverBindings = emitReceiverBindings(
 						for: node.dependencies,
@@ -3137,7 +3141,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						sendableOverrideExtractor: sendableOverrideExtractor,
 						flatParameterDisambiguationMap: functionDisambiguationMap,
 						enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
-						lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
+						lazilyInstantiatedBindingNames: functionLazilyInstantiatedBindingNames,
 						parentConcreteType: node.concreteType.asSource,
 						cycleEdges: cycleEdges,
 						overridePathReachable: thisOverrideReachable,
@@ -3239,7 +3243,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///
 	/// A receiver of `x: X` or `x: X?` in a scope that declares, or is handed as a parameter, `x: X` resolves
 	/// to that declaration by its label, as in production, not to a renamed flat parameter or override of
-	/// the same property that an enclosing scope binds.
+	/// the same property that an enclosing scope binds, nor to the `LazilyInstantiated` an enclosing mock
+	/// wraps around the instance it is passed. Prune the flat parameter and override renames and the
+	/// lazily instantiated binding names alike.
 	private static func removingRenames(
 		hiddenByDeclarationsOf children: [MockTreeItem],
 		parameters: [Property] = [],
@@ -3358,6 +3364,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			parameters: forwardedProperties,
 			from: flatParameterDisambiguationMap,
 		)
+		let builderLazilyInstantiatedBindingNames = removingRenames(
+			hiddenByDeclarationsOf: node.children,
+			parameters: forwardedProperties,
+			from: lazilyInstantiatedBindingNames,
+		)
 
 		// Emit disambiguated-receiver rebinds inside the inner builder function
 		// so construction arguments resolve by bare label via Swift lexical
@@ -3428,7 +3439,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				sendableOverrideExtractor: sendableOverrideExtractor ?? startedSendableOverrideExtractor,
 				flatParameterDisambiguationMap: builderDisambiguationMap,
 				enclosingFunctionNames: enclosingFunctionNames,
-				lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
+				lazilyInstantiatedBindingNames: builderLazilyInstantiatedBindingNames,
 				parentConcreteType: node.concreteType.asSource,
 				cycleEdges: cycleEdges,
 				overridePathReachable: overridePathReachable,
