@@ -205,28 +205,21 @@ struct Generate: AsyncParsableCommand {
 		}()
 		let unnormalizedInstantiables = unnormalizedInstantiablesAndResolvers.map(\.0)
 		let instantiableTypes = Set(unnormalizedInstantiables.flatMap(\.instantiableTypes))
-		// A name keeps its spelling everywhere when it would be spelled differently in different scopes, or qualified
-		// in one and kept in another: matching a received dependency to the one that fulfills it compares the spelled
-		// types, so qualifying the name in only some of them could split a match that holds before qualification.
-		let namesKeepingSpelling: Set<String> = {
-			let memberNames = Set(unnormalizedInstantiablesAndResolvers.flatMap(\.1.memberNames))
-			// Most modules keep no declaration, so no name resolves to a nested type anywhere.
-			guard !memberNames.isEmpty else { return [] }
-			var enclosingTypesByName = [String: Set<TypeDescription?>]()
-			for (instantiable, resolver) in unnormalizedInstantiablesAndResolvers {
-				for typeDescription in instantiable.typeDescriptionsQualifiedByLexicalLookup {
-					for (name, enclosingType) in resolver.resolutions(in: typeDescription, within: instantiable, ofNames: memberNames) {
-						enclosingTypesByName[name, default: []].insert(enclosingType)
-					}
-				}
-				for typeDescription in instantiable.instantiableTypes.dropFirst() {
-					for (name, enclosingType) in resolver.resolutions(in: typeDescription, within: instantiable, writtenInEnclosingScope: true, ofNames: memberNames) {
-						enclosingTypesByName[name, default: []].insert(enclosingType)
-					}
-				}
-			}
-			return Set(enclosingTypesByName.filter { $0.value.count > 1 }.keys)
-		}()
+		/// The type `typeDescription` names as the version of SafeDI before nested types were qualified spelled it,
+		/// written inside `instantiable`: qualified only to match the instantiable that fulfills it.
+		func instantiableQualified(_ typeDescription: TypeDescription, within instantiable: Instantiable) -> TypeDescription? {
+			typeDescription.qualifyingInstantiatedType(
+				within: instantiable.concreteInstantiable,
+				amongInstantiableTypes: instantiableTypes,
+			)
+		}
+		let namesKeepingSpelling = namesKeepingSpelling(
+			of: unnormalizedInstantiablesAndResolvers,
+			spelledAs: instantiableQualified,
+		)
+		// A name keeps its spelling wherever qualifying it would make a type the same as one spelled differently, so each
+		// qualified type has one spelling.
+		var writtenTypeDescriptionsByQualifiedType = [TypeDescription: TypeDescription]()
 		let normalizedInstantiables = unnormalizedInstantiablesAndResolvers.map { unnormalizedInstantiable, resolver in
 			/// The type with each name that names a nested type spelled from the module scope, or `nil`
 			/// when no name does. The types this is called with are `Instantiable.typeDescriptionsQualifiedByLexicalLookup`,
@@ -234,35 +227,56 @@ struct Generate: AsyncParsableCommand {
 			func lexicallyQualified(_ typeDescription: TypeDescription) -> TypeDescription? {
 				resolver.qualifying(typeDescription, within: unnormalizedInstantiable, keepingSpellingOf: namesKeepingSpelling)
 			}
-			func normalized(_ typeDescription: TypeDescription) -> TypeDescription? {
-				let lexicallyQualifiedTypeDescription = lexicallyQualified(typeDescription)
-				return (lexicallyQualifiedTypeDescription ?? typeDescription).qualifyingInstantiatedType(
-					within: unnormalizedInstantiable.concreteInstantiable,
-					amongInstantiableTypes: instantiableTypes,
-				) ?? lexicallyQualifiedTypeDescription
+			/// The type, and how the declaration spells it when lexical qualification changed it, or `nil` when the type
+			/// is spelled as written.
+			func normalization(of typeDescription: TypeDescription) -> (typeDescription: TypeDescription, writtenAs: TypeDescription?)? {
+				let instantiableQualifiedTypeDescription = instantiableQualified(typeDescription, within: unnormalizedInstantiable)
+				guard let lexicallyQualifiedTypeDescription = lexicallyQualified(typeDescription) else {
+					return instantiableQualifiedTypeDescription.map { ($0, nil) }
+				}
+				return (
+					instantiableQualified(lexicallyQualifiedTypeDescription, within: unnormalizedInstantiable) ?? lexicallyQualifiedTypeDescription,
+					instantiableQualifiedTypeDescription ?? typeDescription,
+				)
 			}
-			let unnormalizedToNormalizedTypeMap = unnormalizedInstantiable.dependencies.reduce(
-				into: [TypeDescription: TypeDescription](),
-			) { partialResult, nextDependency in
-				if let bestTypeDescription = normalized(nextDependency.property.typeDescription) {
-					partialResult[nextDependency.property.typeDescription] = bestTypeDescription
+			func normalized(_ typeDescription: TypeDescription) -> TypeDescription? {
+				normalization(of: typeDescription)?.typeDescription
+			}
+			/// `property` with its type normalized, remembering how the declaration spells it when qualification changed it.
+			func normalized(_ property: Property, as normalization: (typeDescription: TypeDescription, writtenAs: TypeDescription?)?) -> Property? {
+				normalization.map { normalization in
+					if let writtenAs = normalization.writtenAs {
+						writtenTypeDescriptionsByQualifiedType[normalization.typeDescription] = writtenAs
+					}
+					return property.withUpdatedTypeDescription(normalization.typeDescription)
 				}
 			}
+			let normalizationsByType = unnormalizedInstantiable.dependencies.reduce(
+				into: [TypeDescription: (typeDescription: TypeDescription, writtenAs: TypeDescription?)](),
+			) { partialResult, nextDependency in
+				if partialResult[nextDependency.property.typeDescription] == nil,
+				   let normalization = normalization(of: nextDependency.property.typeDescription)
+				{
+					partialResult[nextDependency.property.typeDescription] = normalization
+				}
+			}
+			let unnormalizedToNormalizedTypeMap = normalizationsByType.mapValues(\.typeDescription)
 
 			let normalizedDependencies = unnormalizedInstantiable.dependencies.map { dependency in
-				// The type that fulfills an instantiated or aliased dependency is written where the property is.
 				let normalizedSource: Dependency.Source? = switch dependency.source {
 				case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential):
-					fulfillingTypeDescription.flatMap(normalized).map {
+					// `fulfilledByType:` is a string Swift never resolves, so it names an instantiable as written.
+					fulfillingTypeDescription.flatMap { instantiableQualified($0, within: unnormalizedInstantiable) }.map {
 						.instantiated(
 							fulfillingTypeDescription: $0,
 							erasedToConcreteExistential: erasedToConcreteExistential,
 						)
 					}
 				case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
-					normalized(fulfillingProperty.typeDescription).map {
+					// The type `ofType:` names is written where the property is.
+					normalized(fulfillingProperty, as: normalization(of: fulfillingProperty.typeDescription)).map {
 						.aliased(
-							fulfillingProperty: fulfillingProperty.withUpdatedTypeDescription($0),
+							fulfillingProperty: $0,
 							erasedToConcreteExistential: erasedToConcreteExistential,
 							onlyIfAvailable: onlyIfAvailable,
 						)
@@ -270,13 +284,13 @@ struct Generate: AsyncParsableCommand {
 				case .forwarded, .received:
 					nil
 				}
-				let normalizedTypeDescription = unnormalizedToNormalizedTypeMap[dependency.property.typeDescription]
-				guard normalizedSource != nil || normalizedTypeDescription != nil else {
+				let normalizedProperty = normalized(dependency.property, as: normalizationsByType[dependency.property.typeDescription])
+				guard normalizedSource != nil || normalizedProperty != nil else {
 					// Default to what was in the code – we'll probably error later
 					return dependency
 				}
 				return Dependency(
-					property: normalizedTypeDescription.map(dependency.property.withUpdatedTypeDescription) ?? dependency.property,
+					property: normalizedProperty ?? dependency.property,
 					source: normalizedSource ?? dependency.source,
 					declarationLocation: dependency.declarationLocation,
 					identifierRange: dependency.identifierRange,
@@ -288,19 +302,11 @@ struct Generate: AsyncParsableCommand {
 				$0.withUpdatedTypeDescription(unnormalizedToNormalizedTypeMap[$0.typeDescription] ?? lexicallyQualified($0.typeDescription) ?? $0.typeDescription)
 			}
 			let normalizedAdditionalInstantiables = unnormalizedInstantiable.instantiableTypes.dropFirst().map {
-				// The types an attribute of the declaration names are written outside the declaration's own members.
-				if let lexicallyQualifiedTypeDescription = resolver.qualifying(
-					$0,
-					within: unnormalizedInstantiable,
-					writtenInEnclosingScope: true,
-					keepingSpellingOf: namesKeepingSpelling,
-				) {
-					lexicallyQualifiedTypeDescription
-				} else if let enclosingType = unnormalizedInstantiable.concreteInstantiable.popNested,
-				          let bestTypeDescription = TypeDescription.nestedOptions(
-				          	referencedType: $0,
-				          	within: enclosingType,
-				          ).first(where: { instantiableTypes.contains($0) })
+				if let enclosingType = unnormalizedInstantiable.concreteInstantiable.popNested,
+				   let bestTypeDescription = TypeDescription.nestedOptions(
+				   	referencedType: $0,
+				   	within: enclosingType,
+				   ).first(where: { instantiableTypes.contains($0) })
 				{
 					bestTypeDescription
 				} else {
@@ -335,330 +341,333 @@ struct Generate: AsyncParsableCommand {
 			normalized.sourceFilePath = unnormalizedInstantiable.sourceFilePath
 			return normalized
 		}
-		let additionalImportStatements = resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
-		let typeDescriptionToFulfillingInstantiableMap = try resolveSafeDIFulfilledTypes(instantiables: normalizedInstantiables)
-		let generator = try DependencyTreeGenerator(
-			importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportStatements + module.imports,
-			// A dependent module's mock-only declarations reach this module's mocks, so its mock imports do too.
-			mockImportStatements: dependentModuleInfo.flatMap(\.mockImports) + additionalImportStatements + module.mockImports,
-			typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap,
-			aliasDeclarationReferences: AliasDeclarationReferences(
-				declarationFilePaths: Set(normalizedInstantiables.flatMap { instantiable in
-					instantiable.dependencies.compactMap { dependency in
-						switch dependency.source {
-						case .aliased:
-							dependency.declarationLocation?.filePath
-						case .forwarded, .instantiated, .received:
-							nil
-						}
-					}
-				}),
-				compilerFilePaths: compilerFilePaths(manifest: manifest, projectFilePaths: projectFilePaths, inputFilePaths: inputFilePaths),
-				// A plugin's paths relative to its project root, and any other integration's paths as it wrote them.
-				commentFilePath: { [projectFilePaths] filePath in
-					projectFilePaths.map { $0.manifestPath(of: $0.projectFilePath(of: filePath)) } ?? filePath
-				},
-			),
-		)
-		if let moduleInfoOutput {
-			try module.moduleInfoData.write(toPath: moduleInfoOutput)
-		}
-
-		if manifest != nil || combinedOutput != nil {
-			let filesWithUnexpectedNodes = dependentModuleInfo.compactMap(\.filesWithUnexpectedNodes).flatMap(\.self) + (module.filesWithUnexpectedNodes ?? [])
-			if !filesWithUnexpectedNodes.isEmpty {
-				// Write `#error(…)` instead of generated Swift so the
-				// build surfaces the parse failure at the compile step.
-				let errorContent = """
-				// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-				// Any modifications made to this file will be overwritten on subsequent builds.
-				// Please refrain from editing this file directly.
-
-				#error(\"""
-				SafeDI could not generate code because these files have syntax errors. Fix them and build again:
-					\(filesWithUnexpectedNodes.joined(separator: "\n\t"))
-				\""")
-				"""
-				if let combinedOutput {
-					try errorContent.write(toPath: combinedOutput)
-				} else if let manifest {
-					for entry in manifest.dependencyTreeGeneration {
-						try errorContent.write(toPath: entry.outputFilePath)
-					}
-					for entry in manifest.mockGeneration {
-						try errorContent.write(toPath: entry.outputFilePath)
-					}
-				}
-			} else {
-				let generatedRoots = try await generator.generatePerRootCodeTrees()
-				await warnings.append(contentsOf: generator.generateWarnings())
-				// Every generated file asserts how `#if` conditions were evaluated, so a build
-				// whose compiler disagrees fails here with a message naming the condition.
-				let compileTimeAssertions = ConditionalCompilationDecision.compileTimeAssertions(for: module.conditionalCompilationDecisions)
-				let fileHeader = await generator.fileHeader + compileTimeAssertions
-				// Generated mocks compile only where the mock condition is active, so they import
-				// what the module's `#if` blocks select there.
-				let mockFileHeader = await generator.mockFileHeader + compileTimeAssertions
-
-				// Build a map from source file path → extension code(s).
-				var sourceFileToExtensions = [String: [String]]()
-				for root in generatedRoots {
-					if let sourceFilePath = root.sourceFilePath, !root.code.isEmpty {
-						sourceFileToExtensions[sourceFilePath, default: []].append(root.code)
-					}
-				}
-
-				// The additional mocks that get a file. `scan` lists those of every configuration in every
-				// clause, and this run generates the ones the configuration these conditions select lists.
-				let listedAdditionalMocksToGenerate = manifest?.additionalMocksToGenerate ?? sourceConfiguration?.additionalMocksToGenerate ?? []
-				var additionalMocksToGenerate = listedAdditionalMocksToGenerate
-
-				// `scan` lists a file for every root and mock that any clause of any `#if` block declares, so
-				// every declaration found here has its file unless its source changed since `scan` ran or a
-				// hand-written manifest omits it. Validate before writing any output (manifest mode only).
-				// Combined mode has no manifest to validate against.
-				if let manifest {
-					let manifestInputPaths = Set(manifest.dependencyTreeGeneration.map(\.inputFilePath))
-					if let sourceFilePath = Set(module.instantiables.filter(\.isRoot).compactMap(\.sourceFilePath)).subtracting(manifestInputPaths).min() {
-						throw ManifestError.rootNotInManifest(sourceFilePath: sourceFilePath)
-					}
-					if let mockScopedFilePaths = manifest.mockScopedFilePaths {
-						// Paths are compared as scan wrote them, since this parse may name files as the CSV does.
-						// Normalizing a path is far costlier than the comparisons, and this runs over every
-						// mock-generating type in every module the target depends on, so a path is normalized
-						// only when it could matter: normalizing never changes a file name, and naming a path
-						// already written as scan writes it returns it unchanged.
-						let manifestMockInputPaths = Set(manifest.mockGeneration.map(\.inputFilePath))
-						// Only a module file sharing its name with a configuration's file, or with a mock-generating
-						// declaration's file the manifest does not list by this parse's name, needs matching.
-						let matchedSourceFilePaths = module.instantiables.filter(\.generateMock).compactMap(\.sourceFilePath).filter { !manifestMockInputPaths.contains($0) }
-							+ module.configurations.compactMap(\.sourceFilePath)
-						let matchedFileNames = Set(matchedSourceFilePaths.map { ($0 as NSString).lastPathComponent })
-						let candidateMockScopedFilePaths = mockScopedFilePaths.filter { matchedFileNames.contains(($0 as NSString).lastPathComponent) }
-						let candidateFileNames = Set(candidateMockScopedFilePaths.map { ($0 as NSString).lastPathComponent })
-						// The manifest's name for a module file, matched by its comparable path, or for a manifest
-						// without a project root, as written.
-						let mockScopedManifestPath: (String) -> String? = if let projectFilePaths {
-							{ [mockScopedManifestPathsByFilePath = Dictionary(uniqueKeysWithValues: candidateMockScopedFilePaths.map { (projectFilePaths.projectFilePath(of: $0), $0) })] sourceFilePath in
-								mockScopedManifestPathsByFilePath[projectFilePaths.projectFilePath(of: sourceFilePath)]
-							}
-						} else {
-							{ [mockScopedFilePathSet = Set(candidateMockScopedFilePaths)] sourceFilePath in
-								mockScopedFilePathSet.contains(sourceFilePath) ? sourceFilePath : nil
+		// The names generated code derives from types, and diagnostics, spell types as the declarations do.
+		return try await WrittenTypeDescriptions.$writtenTypeDescriptionsByQualifiedType.withValue(writtenTypeDescriptionsByQualifiedType) {
+			let additionalImportStatements = resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
+			let typeDescriptionToFulfillingInstantiableMap = try resolveSafeDIFulfilledTypes(instantiables: normalizedInstantiables)
+			let generator = try DependencyTreeGenerator(
+				importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportStatements + module.imports,
+				// A dependent module's mock-only declarations reach this module's mocks, so its mock imports do too.
+				mockImportStatements: dependentModuleInfo.flatMap(\.mockImports) + additionalImportStatements + module.mockImports,
+				typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap,
+				aliasDeclarationReferences: AliasDeclarationReferences(
+					declarationFilePaths: Set(normalizedInstantiables.flatMap { instantiable in
+						instantiable.dependencies.compactMap { dependency in
+							switch dependency.source {
+							case .aliased:
+								dependency.declarationLocation?.filePath
+							case .forwarded, .instantiated, .received:
+								nil
 							}
 						}
-						func mockScopedFilePath(resolving sourceFilePath: String) -> String? {
-							guard candidateFileNames.contains((sourceFilePath as NSString).lastPathComponent) else { return nil }
-							return mockScopedManifestPath(sourceFilePath)
-						}
-						for instantiable in module.instantiables where instantiable.generateMock {
-							if let sourceFilePath = instantiable.sourceFilePath,
-							   !manifestMockInputPaths.contains(sourceFilePath),
-							   let mockScopedFilePath = mockScopedFilePath(resolving: sourceFilePath),
-							   !manifestMockInputPaths.contains(mockScopedFilePath)
-							{
-								throw ManifestError.mockNotInManifest(typeName: instantiable.concreteInstantiable.asSource, sourceFilePath: mockScopedFilePath)
-							}
-						}
-						let configurationFilePaths = Set(module.configurations.compactMap(\.sourceFilePath).compactMap(mockScopedFilePath(resolving:)))
-						if let sourceFilePath = configurationFilePaths.subtracting(manifest.configurationFilePaths).min() {
-							throw ManifestError.configurationNotInManifest(sourceFilePath: sourceFilePath)
-						}
-						// Only the mocks the selected configuration lists are generated; the files of the others
-						// are written without code.
-						let configuredAdditionalMocksToGenerate = sourceConfiguration?.additionalMocksToGenerate ?? []
-						if let typeName = Set(configuredAdditionalMocksToGenerate).subtracting(manifest.additionalMocksToGenerate).min() {
-							throw ManifestError.additionalMockNotInManifest(typeName: typeName)
-						}
-						additionalMocksToGenerate = configuredAdditionalMocksToGenerate
-					}
-				}
-				// Only the configuration these conditions select is judged: `scan` lists the mocks of every
-				// configuration, and those of the others are written without code.
-				try sourceConfiguration?.validateAdditionalMocksToGenerate(fulfilledBy: typeDescriptionToFulfillingInstantiableMap)
+					}),
+					compilerFilePaths: compilerFilePaths(manifest: manifest, projectFilePaths: projectFilePaths, inputFilePaths: inputFilePaths),
+					// A plugin's paths relative to its project root, and any other integration's paths as it wrote them.
+					commentFilePath: { [projectFilePaths] filePath in
+						projectFilePaths.map { $0.manifestPath(of: $0.projectFilePath(of: filePath)) } ?? filePath
+					},
+				),
+			)
+			if let moduleInfoOutput {
+				try module.moduleInfoData.write(toPath: moduleInfoOutput)
+			}
 
-				// Accumulate every emission as a `(destination, header, body)`
-				// triple. `destination == nil` means the write is combined-
-				// only (no standalone file). A manifest-driven run
-				// populates destinations from the manifest; a
-				// combined-output run leaves them all nil and lets the
-				// concat step below do the emission under one header.
-				var writes: [(destination: URL?, header: String, body: String)] = []
+			if manifest != nil || combinedOutput != nil {
+				let filesWithUnexpectedNodes = dependentModuleInfo.compactMap(\.filesWithUnexpectedNodes).flatMap(\.self) + (module.filesWithUnexpectedNodes ?? [])
+				if !filesWithUnexpectedNodes.isEmpty {
+					// Write `#error(…)` instead of generated Swift so the
+					// build surfaces the parse failure at the compile step.
+					let errorContent = """
+					// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+					// Any modifications made to this file will be overwritten on subsequent builds.
+					// Please refrain from editing this file directly.
 
-				// ---- Dependency tree ----
-				let dependencyTreeDestinationsBySource: [String: URL]
-				let dependencyTreeSourcesInOrder: [String]
-				if let manifest {
-					var destinations = [String: URL]()
-					for entry in manifest.dependencyTreeGeneration {
-						guard destinations[entry.inputFilePath] == nil else {
-							throw ValidationError("Manifest contains duplicate dependencyTreeGeneration inputFilePath: \(entry.inputFilePath). List each input file once.")
+					#error(\"""
+					SafeDI could not generate code because these files have syntax errors. Fix them and build again:
+						\(filesWithUnexpectedNodes.joined(separator: "\n\t"))
+					\""")
+					"""
+					if let combinedOutput {
+						try errorContent.write(toPath: combinedOutput)
+					} else if let manifest {
+						for entry in manifest.dependencyTreeGeneration {
+							try errorContent.write(toPath: entry.outputFilePath)
 						}
-						destinations[entry.inputFilePath] = URL(fileURLWithPath: entry.outputFilePath)
+						for entry in manifest.mockGeneration {
+							try errorContent.write(toPath: entry.outputFilePath)
+						}
 					}
-					dependencyTreeDestinationsBySource = destinations
-					dependencyTreeSourcesInOrder = manifest.dependencyTreeGeneration.map(\.inputFilePath)
 				} else {
-					// Combined mode: enumerate current-module roots.
-					// Sort by source file path so the concatenated
-					// output is stable for stable inputs.
-					dependencyTreeDestinationsBySource = [:]
-					dependencyTreeSourcesInOrder = Set(
-						module.instantiables.filter(\.isRoot).compactMap(\.sourceFilePath),
-					).sorted()
-				}
-				for sourceFile in dependencyTreeSourcesInOrder {
-					writes.append((
-						destination: dependencyTreeDestinationsBySource[sourceFile],
-						header: fileHeader,
-						body: sourceFileToExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? "",
-					))
-				}
+					let generatedRoots = try await generator.generatePerRootCodeTrees()
+					await warnings.append(contentsOf: generator.generateWarnings())
+					// Every generated file asserts how `#if` conditions were evaluated, so a build
+					// whose compiler disagrees fails here with a message naming the condition.
+					let compileTimeAssertions = ConditionalCompilationDecision.compileTimeAssertions(for: module.conditionalCompilationDecisions)
+					let fileHeader = await generator.fileHeader + compileTimeAssertions
+					// Generated mocks compile only where the mock condition is active, so they import
+					// what the module's `#if` blocks select there.
+					let mockFileHeader = await generator.mockFileHeader + compileTimeAssertions
 
-				// ---- Mocks ----
-				let currentModuleMockSourceFiles: [String]
-				if let manifest {
-					let additionalMockTypeNames = Set(manifest.additionalMocksToGenerate)
-					currentModuleMockSourceFiles = manifest.mockGeneration
-						.map(\.inputFilePath)
-						.filter { !additionalMockTypeNames.contains($0) }
-				} else {
-					// Sorted for deterministic combined output.
-					currentModuleMockSourceFiles = Set(
-						module.instantiables.filter(\.generateMock).compactMap(\.sourceFilePath),
-					).sorted()
-				}
-				let hasAnyMockGeneration = !currentModuleMockSourceFiles.isEmpty
-					|| !listedAdditionalMocksToGenerate.isEmpty
-
-				if hasAnyMockGeneration {
-					// Use the config's mockConditionalCompilation if a config exists;
-					// default to "DEBUG" when no config exists (per-type opt-in without config).
-					let mockConditionalCompilation: String? = if let sourceConfiguration {
-						sourceConfiguration.mockConditionalCompilation
-					} else {
-						"DEBUG"
-					}
-					let currentModuleSourceFilePaths: Set<String> = if let manifest {
-						Set(manifest.mockGeneration.map(\.inputFilePath))
-					} else {
-						Set(currentModuleMockSourceFiles)
-					}
-					let mockResult = try await generator.generateMockCode(
-						mockConditionalCompilation: mockConditionalCompilation,
-						currentModuleSourceFilePaths: currentModuleSourceFilePaths,
-						additionalMocksToGenerate: Set(additionalMocksToGenerate),
-					)
-
-					var sourceFileToMockExtensions = [String: [String]]()
-					var typeNameToMockExtensions = [String: [String]]()
-					for mock in mockResult.generatedRoots {
-						if let sourceFilePath = mock.sourceFilePath {
-							sourceFileToMockExtensions[sourceFilePath, default: []].append(mock.code)
+					// Build a map from source file path → extension code(s).
+					var sourceFileToExtensions = [String: [String]]()
+					for root in generatedRoots {
+						if let sourceFilePath = root.sourceFilePath, !root.code.isEmpty {
+							sourceFileToExtensions[sourceFilePath, default: []].append(root.code)
 						}
-						typeNameToMockExtensions[mock.typeDescription.asSource, default: []].append(mock.code)
 					}
 
+					// The additional mocks that get a file. `scan` lists those of every configuration in every
+					// clause, and this run generates the ones the configuration these conditions select lists.
+					let listedAdditionalMocksToGenerate = manifest?.additionalMocksToGenerate ?? sourceConfiguration?.additionalMocksToGenerate ?? []
+					var additionalMocksToGenerate = listedAdditionalMocksToGenerate
+
+					// `scan` lists a file for every root and mock that any clause of any `#if` block declares, so
+					// every declaration found here has its file unless its source changed since `scan` ran or a
+					// hand-written manifest omits it. Validate before writing any output (manifest mode only).
+					// Combined mode has no manifest to validate against.
+					if let manifest {
+						let manifestInputPaths = Set(manifest.dependencyTreeGeneration.map(\.inputFilePath))
+						if let sourceFilePath = Set(module.instantiables.filter(\.isRoot).compactMap(\.sourceFilePath)).subtracting(manifestInputPaths).min() {
+							throw ManifestError.rootNotInManifest(sourceFilePath: sourceFilePath)
+						}
+						if let mockScopedFilePaths = manifest.mockScopedFilePaths {
+							// Paths are compared as scan wrote them, since this parse may name files as the CSV does.
+							// Normalizing a path is far costlier than the comparisons, and this runs over every
+							// mock-generating type in every module the target depends on, so a path is normalized
+							// only when it could matter: normalizing never changes a file name, and naming a path
+							// already written as scan writes it returns it unchanged.
+							let manifestMockInputPaths = Set(manifest.mockGeneration.map(\.inputFilePath))
+							// Only a module file sharing its name with a configuration's file, or with a mock-generating
+							// declaration's file the manifest does not list by this parse's name, needs matching.
+							let matchedSourceFilePaths = module.instantiables.filter(\.generateMock).compactMap(\.sourceFilePath).filter { !manifestMockInputPaths.contains($0) }
+								+ module.configurations.compactMap(\.sourceFilePath)
+							let matchedFileNames = Set(matchedSourceFilePaths.map { ($0 as NSString).lastPathComponent })
+							let candidateMockScopedFilePaths = mockScopedFilePaths.filter { matchedFileNames.contains(($0 as NSString).lastPathComponent) }
+							let candidateFileNames = Set(candidateMockScopedFilePaths.map { ($0 as NSString).lastPathComponent })
+							// The manifest's name for a module file, matched by its comparable path, or for a manifest
+							// without a project root, as written.
+							let mockScopedManifestPath: (String) -> String? = if let projectFilePaths {
+								{ [mockScopedManifestPathsByFilePath = Dictionary(uniqueKeysWithValues: candidateMockScopedFilePaths.map { (projectFilePaths.projectFilePath(of: $0), $0) })] sourceFilePath in
+									mockScopedManifestPathsByFilePath[projectFilePaths.projectFilePath(of: sourceFilePath)]
+								}
+							} else {
+								{ [mockScopedFilePathSet = Set(candidateMockScopedFilePaths)] sourceFilePath in
+									mockScopedFilePathSet.contains(sourceFilePath) ? sourceFilePath : nil
+								}
+							}
+							func mockScopedFilePath(resolving sourceFilePath: String) -> String? {
+								guard candidateFileNames.contains((sourceFilePath as NSString).lastPathComponent) else { return nil }
+								return mockScopedManifestPath(sourceFilePath)
+							}
+							for instantiable in module.instantiables where instantiable.generateMock {
+								if let sourceFilePath = instantiable.sourceFilePath,
+								   !manifestMockInputPaths.contains(sourceFilePath),
+								   let mockScopedFilePath = mockScopedFilePath(resolving: sourceFilePath),
+								   !manifestMockInputPaths.contains(mockScopedFilePath)
+								{
+									throw ManifestError.mockNotInManifest(typeName: instantiable.concreteInstantiable.asSource, sourceFilePath: mockScopedFilePath)
+								}
+							}
+							let configurationFilePaths = Set(module.configurations.compactMap(\.sourceFilePath).compactMap(mockScopedFilePath(resolving:)))
+							if let sourceFilePath = configurationFilePaths.subtracting(manifest.configurationFilePaths).min() {
+								throw ManifestError.configurationNotInManifest(sourceFilePath: sourceFilePath)
+							}
+							// Only the mocks the selected configuration lists are generated; the files of the others
+							// are written without code.
+							let configuredAdditionalMocksToGenerate = sourceConfiguration?.additionalMocksToGenerate ?? []
+							if let typeName = Set(configuredAdditionalMocksToGenerate).subtracting(manifest.additionalMocksToGenerate).min() {
+								throw ManifestError.additionalMockNotInManifest(typeName: typeName)
+							}
+							additionalMocksToGenerate = configuredAdditionalMocksToGenerate
+						}
+					}
+					// Only the configuration these conditions select is judged: `scan` lists the mocks of every
+					// configuration, and those of the others are written without code.
+					try sourceConfiguration?.validateAdditionalMocksToGenerate(fulfilledBy: typeDescriptionToFulfillingInstantiableMap)
+
+					// Accumulate every emission as a `(destination, header, body)`
+					// triple. `destination == nil` means the write is combined-
+					// only (no standalone file). A manifest-driven run
+					// populates destinations from the manifest; a
+					// combined-output run leaves them all nil and lets the
+					// concat step below do the emission under one header.
+					var writes: [(destination: URL?, header: String, body: String)] = []
+
+					// ---- Dependency tree ----
+					let dependencyTreeDestinationsBySource: [String: URL]
+					let dependencyTreeSourcesInOrder: [String]
+					if let manifest {
+						var destinations = [String: URL]()
+						for entry in manifest.dependencyTreeGeneration {
+							guard destinations[entry.inputFilePath] == nil else {
+								throw ValidationError("Manifest contains duplicate dependencyTreeGeneration inputFilePath: \(entry.inputFilePath). List each input file once.")
+							}
+							destinations[entry.inputFilePath] = URL(fileURLWithPath: entry.outputFilePath)
+						}
+						dependencyTreeDestinationsBySource = destinations
+						dependencyTreeSourcesInOrder = manifest.dependencyTreeGeneration.map(\.inputFilePath)
+					} else {
+						// Combined mode: enumerate current-module roots.
+						// Sort by source file path so the concatenated
+						// output is stable for stable inputs.
+						dependencyTreeDestinationsBySource = [:]
+						dependencyTreeSourcesInOrder = Set(
+							module.instantiables.filter(\.isRoot).compactMap(\.sourceFilePath),
+						).sorted()
+					}
+					for sourceFile in dependencyTreeSourcesInOrder {
+						writes.append((
+							destination: dependencyTreeDestinationsBySource[sourceFile],
+							header: fileHeader,
+							body: sourceFileToExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? "",
+						))
+					}
+
+					// ---- Mocks ----
+					let currentModuleMockSourceFiles: [String]
 					if let manifest {
 						let additionalMockTypeNames = Set(manifest.additionalMocksToGenerate)
-						for entry in manifest.mockGeneration {
-							let extensions: [String]? = if additionalMockTypeNames.contains(entry.inputFilePath) {
-								typeNameToMockExtensions[entry.inputFilePath]
-							} else {
-								sourceFileToMockExtensions[entry.inputFilePath]
-							}
-							writes.append((
-								destination: URL(fileURLWithPath: entry.outputFilePath),
-								header: mockFileHeader,
-								body: extensions?.sorted().joined(separator: "\n\n") ?? "",
-							))
-						}
-						// Shared mock-configuration file. Declared even
-						// when empty — the build system expects the
-						// output to exist.
-						if let mockConfigurationOutputFilePath = manifest.mockConfigurationOutputFilePath {
-							writes.append((
-								destination: URL(fileURLWithPath: mockConfigurationOutputFilePath),
-								header: mockFileHeader,
-								body: mockResult.mockConfigurationCode ?? "",
-							))
-						}
+						currentModuleMockSourceFiles = manifest.mockGeneration
+							.map(\.inputFilePath)
+							.filter { !additionalMockTypeNames.contains($0) }
 					} else {
-						// Combined mode: per-source mocks sorted, then
-						// per-type-name additional mocks sorted.
-						let currentModuleMockSourceFileSet = Set(currentModuleMockSourceFiles)
-						let typeNamesEmittedBySource = Set(
-							mockResult.generatedRoots
-								.filter { $0.sourceFilePath.map(currentModuleMockSourceFileSet.contains) ?? false }
-								.map(\.typeDescription.asSource),
+						// Sorted for deterministic combined output.
+						currentModuleMockSourceFiles = Set(
+							module.instantiables.filter(\.generateMock).compactMap(\.sourceFilePath),
+						).sorted()
+					}
+					let hasAnyMockGeneration = !currentModuleMockSourceFiles.isEmpty
+						|| !listedAdditionalMocksToGenerate.isEmpty
+
+					if hasAnyMockGeneration {
+						// Use the config's mockConditionalCompilation if a config exists;
+						// default to "DEBUG" when no config exists (per-type opt-in without config).
+						let mockConditionalCompilation: String? = if let sourceConfiguration {
+							sourceConfiguration.mockConditionalCompilation
+						} else {
+							"DEBUG"
+						}
+						let currentModuleSourceFilePaths: Set<String> = if let manifest {
+							Set(manifest.mockGeneration.map(\.inputFilePath))
+						} else {
+							Set(currentModuleMockSourceFiles)
+						}
+						let mockResult = try await generator.generateMockCode(
+							mockConditionalCompilation: mockConditionalCompilation,
+							currentModuleSourceFilePaths: currentModuleSourceFilePaths,
+							additionalMocksToGenerate: Set(additionalMocksToGenerate),
 						)
-						for sourceFile in currentModuleMockSourceFiles {
-							writes.append((
-								destination: nil,
-								header: mockFileHeader,
-								body: sourceFileToMockExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? "",
-							))
+
+						var sourceFileToMockExtensions = [String: [String]]()
+						var typeNameToMockExtensions = [String: [String]]()
+						for mock in mockResult.generatedRoots {
+							if let sourceFilePath = mock.sourceFilePath {
+								sourceFileToMockExtensions[sourceFilePath, default: []].append(mock.code)
+							}
+							typeNameToMockExtensions[mock.typeDescription.asSource, default: []].append(mock.code)
 						}
-						// Skip types already emitted via the per-source
-						// loop — a type declared locally with
-						// `generateMock: true` AND listed in
-						// `additionalMocksToGenerate` otherwise emits
-						// twice and fails to compile.
-						for typeName in Set(additionalMocksToGenerate).sorted()
-							where !typeNamesEmittedBySource.contains(typeName)
-						{
-							writes.append((
-								destination: nil,
-								header: mockFileHeader,
-								body: typeNameToMockExtensions[typeName]?.sorted().joined(separator: "\n\n") ?? "",
-							))
-						}
-						if let mockConfigurationCode = mockResult.mockConfigurationCode,
-						   !mockConfigurationCode.isEmpty
-						{
-							writes.append((destination: nil, header: mockFileHeader, body: mockConfigurationCode))
+
+						if let manifest {
+							let additionalMockTypeNames = Set(manifest.additionalMocksToGenerate)
+							for entry in manifest.mockGeneration {
+								let extensions: [String]? = if additionalMockTypeNames.contains(entry.inputFilePath) {
+									typeNameToMockExtensions[entry.inputFilePath]
+								} else {
+									sourceFileToMockExtensions[entry.inputFilePath]
+								}
+								writes.append((
+									destination: URL(fileURLWithPath: entry.outputFilePath),
+									header: mockFileHeader,
+									body: extensions?.sorted().joined(separator: "\n\n") ?? "",
+								))
+							}
+							// Shared mock-configuration file. Declared even
+							// when empty — the build system expects the
+							// output to exist.
+							if let mockConfigurationOutputFilePath = manifest.mockConfigurationOutputFilePath {
+								writes.append((
+									destination: URL(fileURLWithPath: mockConfigurationOutputFilePath),
+									header: mockFileHeader,
+									body: mockResult.mockConfigurationCode ?? "",
+								))
+							}
+						} else {
+							// Combined mode: per-source mocks sorted, then
+							// per-type-name additional mocks sorted.
+							let currentModuleMockSourceFileSet = Set(currentModuleMockSourceFiles)
+							let typeNamesEmittedBySource = Set(
+								mockResult.generatedRoots
+									.filter { $0.sourceFilePath.map(currentModuleMockSourceFileSet.contains) ?? false }
+									.map(\.typeDescription.asSource),
+							)
+							for sourceFile in currentModuleMockSourceFiles {
+								writes.append((
+									destination: nil,
+									header: mockFileHeader,
+									body: sourceFileToMockExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? "",
+								))
+							}
+							// Skip types already emitted via the per-source
+							// loop — a type declared locally with
+							// `generateMock: true` AND listed in
+							// `additionalMocksToGenerate` otherwise emits
+							// twice and fails to compile.
+							for typeName in Set(additionalMocksToGenerate).sorted()
+								where !typeNamesEmittedBySource.contains(typeName)
+							{
+								writes.append((
+									destination: nil,
+									header: mockFileHeader,
+									body: typeNameToMockExtensions[typeName]?.sorted().joined(separator: "\n\n") ?? "",
+								))
+							}
+							if let mockConfigurationCode = mockResult.mockConfigurationCode,
+							   !mockConfigurationCode.isEmpty
+							{
+								writes.append((destination: nil, header: mockFileHeader, body: mockConfigurationCode))
+							}
 						}
 					}
-				}
 
-				// ---- Emission ----
-				if let combinedOutput {
-					// Concat every non-empty body under a single header,
-					// with one blank line between each body. An empty
-					// module (no roots, no mocks) still writes the
-					// header-only file so the build system's declared
-					// output is populated. A file that holds mocks imports
-					// what both the dependency tree and the mocks need.
-					let combinedFileHeader = hasAnyMockGeneration
-						? await generator.dependencyTreeAndMockFileHeader + compileTimeAssertions
-						: fileHeader
-					let bodies = writes.map(\.body).filter { !$0.isEmpty }
-					let code = combinedFileHeader + bodies.joined(separator: "\n\n")
-					// Always write — this flag is used to support Bazel and Buck2, which content-hash their inputs, so a stat-identical re-write costs them nothing. Moreover, these tools require that genrules write the outputs that are expected.
-					try code.write(toPath: combinedOutput)
-				} else {
-					for write in writes {
-						guard let destination = write.destination else { continue }
-						let content = write.header + write.body
-						let existingContent = try? String(contentsOf: destination, encoding: .utf8)
-						if existingContent != content {
-							try content.write(to: destination, atomically: true, encoding: .utf8)
+					// ---- Emission ----
+					if let combinedOutput {
+						// Concat every non-empty body under a single header,
+						// with one blank line between each body. An empty
+						// module (no roots, no mocks) still writes the
+						// header-only file so the build system's declared
+						// output is populated. A file that holds mocks imports
+						// what both the dependency tree and the mocks need.
+						let combinedFileHeader = hasAnyMockGeneration
+							? await generator.dependencyTreeAndMockFileHeader + compileTimeAssertions
+							: fileHeader
+						let bodies = writes.map(\.body).filter { !$0.isEmpty }
+						let code = combinedFileHeader + bodies.joined(separator: "\n\n")
+						// Always write — this flag is used to support Bazel and Buck2, which content-hash their inputs, so a stat-identical re-write costs them nothing. Moreover, these tools require that genrules write the outputs that are expected.
+						try code.write(toPath: combinedOutput)
+					} else {
+						for write in writes {
+							guard let destination = write.destination else { continue }
+							let content = write.header + write.body
+							let existingContent = try? String(contentsOf: destination, encoding: .utf8)
+							if existingContent != content {
+								try content.write(to: destination, atomically: true, encoding: .utf8)
+							}
 						}
 					}
 				}
 			}
-		}
 
-		if let dotFileOutput {
-			let dotGraph = try await generator.generateDOTTree()
-			try """
-			graph SafeDI {
-			    ranksep=2
-			\(dotGraph)
+			if let dotFileOutput {
+				let dotGraph = try await generator.generateDOTTree()
+				try """
+				graph SafeDI {
+				    ranksep=2
+				\(dotGraph)
+				}
+				""".write(toPath: dotFileOutput)
 			}
-			""".write(toPath: dotFileOutput)
+			return warnings
 		}
-		return warnings
 	}
 
 	// MARK: Private
@@ -800,6 +809,73 @@ struct Generate: AsyncParsableCommand {
 		)
 	}
 
+	/// The names that keep their spelling everywhere, for the instantiables `instantiablesAndResolvers` hold, so that
+	/// qualification never changes what the types generated code matches and names would be without it:
+	/// - a name an instantiable's type has, which matching finds the instantiable by as written;
+	/// - a name that would be qualified differently in different scopes, or qualified in one and kept in another,
+	///   which could split a received dependency from the one that fulfills it;
+	/// - a name whose qualification would make two types the declarations spell differently the same, or one the
+	///   same as a type a declaration spells qualified, which would merge what is apart without qualification.
+	/// - Parameter instantiableQualified: The type a type written inside an instantiable is matched as, before
+	///   qualification.
+	private func namesKeepingSpelling(
+		of instantiablesAndResolvers: [(Instantiable, NestedTypeResolver)],
+		spelledAs instantiableQualified: (TypeDescription, Instantiable) -> TypeDescription?,
+	) -> Set<String> {
+		let memberNames = Set(instantiablesAndResolvers.flatMap(\.1.memberNames))
+		// Most modules keep no declaration, so no name resolves to a nested type anywhere.
+		guard !memberNames.isEmpty else { return [] }
+		var namesKeepingSpelling = Set(instantiablesAndResolvers.flatMap { instantiable, _ in
+			instantiable.instantiableTypes.compactMap { $0.namePath?.last }
+		})
+		var enclosingTypesByName = [String: Set<TypeDescription?>]()
+		for (instantiable, resolver) in instantiablesAndResolvers {
+			for typeDescription in instantiable.typeDescriptionsQualifiedByLexicalLookup {
+				for (name, enclosingType) in resolver.resolutions(in: typeDescription, within: instantiable, ofNames: memberNames) {
+					enclosingTypesByName[name, default: []].insert(enclosingType)
+				}
+			}
+		}
+		namesKeepingSpelling.formUnion(enclosingTypesByName.filter { $0.value.count > 1 }.keys)
+		// Most modules qualify no name at all, which leaves no type that could become the same as another.
+		guard enclosingTypesByName.contains(where: { name, enclosingTypes in
+			!namesKeepingSpelling.contains(name) && enclosingTypes.contains { $0 != nil }
+		}) else {
+			return namesKeepingSpelling
+		}
+		// Keeping a name's spelling can make another type the same as one a declaration spells, so this repeats until
+		// no more names keep their spelling.
+		var collidingNames = Set<String>()
+		repeat {
+			namesKeepingSpelling.formUnion(collidingNames)
+			var spelledTypesByQualifiedType = [TypeDescription: Set<TypeDescription>]()
+			var qualifiedNamesByQualifiedType = [TypeDescription: Set<String>]()
+			var unqualifiedTypes = Set<TypeDescription>()
+			for (instantiable, resolver) in instantiablesAndResolvers {
+				for typeDescription in instantiable.typeDescriptionsQualifiedByLexicalLookup {
+					let spelledType = instantiableQualified(typeDescription, instantiable) ?? typeDescription
+					if let qualifiedTypeDescription = resolver.qualifying(typeDescription, within: instantiable, keepingSpellingOf: namesKeepingSpelling) {
+						let qualifiedType = instantiableQualified(qualifiedTypeDescription, instantiable) ?? qualifiedTypeDescription
+						spelledTypesByQualifiedType[qualifiedType, default: []].insert(spelledType)
+						for (name, enclosingType) in resolver.resolutions(in: typeDescription, within: instantiable, ofNames: memberNames)
+							where enclosingType != nil && !namesKeepingSpelling.contains(name)
+						{
+							qualifiedNamesByQualifiedType[qualifiedType, default: []].insert(name)
+						}
+					} else {
+						unqualifiedTypes.insert(spelledType)
+					}
+				}
+			}
+			collidingNames = spelledTypesByQualifiedType.reduce(into: Set<String>()) { collidingNames, entry in
+				if entry.value.count > 1 || unqualifiedTypes.contains(entry.key) {
+					collidingNames.formUnion(qualifiedNamesByQualifiedType[entry.key] ?? [])
+				}
+			}
+		} while !collidingNames.isSubset(of: namesKeepingSpelling)
+		return namesKeepingSpelling
+	}
+
 	private func loadCachedModule(
 		manifestPath: String,
 		manifest cachedManifest: SafeDIToolManifest,
@@ -911,7 +987,15 @@ struct Generate: AsyncParsableCommand {
 				declaredNames = lookups.declaredNames(among: declarations.union(discoveredDeclarations))
 			}
 			let readLookups = lookups.readingOnly(declaredNames)
-			let resolved = { (fileScan: FileScan) in fileScan.resolvingNestedTypeDeclarations(for: readLookups) }
+			// The files of additional directories, like the other files the manifest does not list among the module's own,
+			// are other modules' sources.
+			let mockScopedFilePaths = cachedManifest.mockScopedFilePaths.map(Set.init)
+			let resolved = { (fileScan: FileScan) in
+				fileScan.resolvingNestedTypeDeclarations(
+					for: readLookups,
+					isInModule: mockScopedFilePaths?.contains(projectFilePaths.manifestPath(of: projectFilePaths.projectFilePath(of: fileScan.path))) != false,
+				)
+			}
 			moduleInfo = cached.moduleInfo
 				.adding(fileScans.fileScans.map(resolved))
 				.including(cached.additionalModuleInfo.adding(additionalFileScans.fileScans.map(resolved)))
