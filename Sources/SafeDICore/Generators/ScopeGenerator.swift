@@ -112,14 +112,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			scopeData.forwardedProperties.union(forwardedLazilyInstantiatedInstanceProperties)
 		}
 		/// Whether a property a child requires be passed in must be received by this scope too: this
-		/// scope neither declares nor forwards it or, for an optional one, its unwrapped form (a
-		/// declared form handles a non-optional version promoted to satisfy both required and
-		/// onlyIfAvailable receivers; a forwarded `x: X` fulfills an `x: X?` beneath it).
+		/// scope does not provide it.
 		func isReceivedFromAncestors(_ property: Property) -> Bool {
-			!propertiesToDeclare.contains(property)
-				&& !forwardedProperties.contains(property)
-				&& (!property.typeDescription.isOptional
-					|| (!propertiesToDeclare.contains(property.asUnwrappedProperty) && !forwardedProperties.contains(property.asUnwrappedProperty)))
+			!Self.provides(property, declaredProperties: propertiesToDeclare, forwardedProperties: forwardedProperties)
 		}
 		// All the properties our children require be passed in, unioned with the properties we
 		// require to fulfill our own dependencies, and those of them some receiver requires. A
@@ -296,6 +291,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Used both to order child generation (dependencies before dependents) and by mock
 	/// generation to surface dependencies the tree does not itself provide.
 	let receivedProperties: Set<Property>
+
+	/// Whether a scope that declares `declaredProperties` and forwards `forwardedProperties` provides
+	/// `property` to the scopes beneath it, which then do not receive it from the scope's ancestors:
+	/// the scope declares or forwards the property itself or, for an optional property, its unwrapped
+	/// form (a declared form handles a non-optional version promoted to satisfy both required and
+	/// onlyIfAvailable receivers; a forwarded `x: X` fulfills an `x: X?` beneath it). A scope declares a
+	/// lazily instantiated property together with the property that receives its instance by value,
+	/// and forwards it together with that property too.
+	private static func provides(
+		_ property: Property,
+		declaredProperties: Set<Property>,
+		forwardedProperties: Set<Property>,
+	) -> Bool {
+		declaredProperties.contains(property)
+			|| forwardedProperties.contains(property)
+			|| (property.typeDescription.isOptional
+				&& (declaredProperties.contains(property.asUnwrappedProperty) || forwardedProperties.contains(property.asUnwrappedProperty)))
+	}
 
 	/// Generates the code of this scope as the root of what is generated, with nothing
 	/// generated before it.
@@ -1423,10 +1436,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.subtracting(requiredReceivedProperties.map(\.asValidatedForDependencyCycles.asUnwrappedProperty))
 		}
 		// A tree node binds a non-optional value, even when it is promoted for a required `x: X?`.
-		let unwrappedTreeProperties: Set<Property> = if onlyIfAvailableUnwrappedReceivedParameterProperties.isEmpty {
-			[]
-		} else {
-			Set(treePropertyNodes.map { Property(label: $0.propertyLabel, typeDescription: $0.typeDescription.unwrapped) })
+		/// Whether the tree provides a received property, as a scope provides one to the scopes beneath it
+		/// (`provides`). A promoted node also provides the non-optional form of its optional property: a
+		/// mock builds it, so it binds a non-optional value even when it is promoted for a required `x: X?`.
+		/// An `onlyIfAvailable` alias of an optional property binds an optional value, so it does not.
+		func isProvidedByTree(_ property: Property) -> Bool {
+			Self.provides(property, declaredProperties: propertiesToDeclare, forwardedProperties: [])
+				|| (!property.typeDescription.isOptional
+					&& treePropertyLabels.contains(property.label)
+					&& treePropertyNodes.contains { $0.propertyLabel == property.label && $0.typeDescription == .optional(property.typeDescription) })
 		}
 
 		let receivedNonOptionalProperties = Set(
@@ -1443,16 +1461,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// Optional, defaulting to `nil`, only when every receiver — directly or
 			// through an alias, whose fulfilling property is non-optional — receives it
 			// `onlyIfAvailable`. A property any receiver requires is a required parameter.
-			// A receive of a property the tree builds for another receiver, in either its optional
-			// or its non-optional form, is handed that node: the mock root's own receive, or an
-			// `onlyIfAvailable` alias's fulfilling property. A tree node with the label and
-			// another type is not: the receivers are handed an override of their own type,
-			// named apart from that node below.
+			// A receive of a property the tree provides is handed that node: the mock root's own
+			// receive, or an alias's fulfilling property. A tree node with the label and another
+			// type does not provide it: the receivers are handed a parameter or an override of
+			// their own type, named apart from that node below.
+			guard !isProvidedByTree(receivedProperty) else { continue }
 			if onlyIfAvailableUnwrappedReceivedParameterProperties.contains(receivedProperty.asUnwrappedProperty) {
-				if !unwrappedTreeProperties.contains(receivedProperty.asUnwrappedProperty) {
-					onlyIfAvailableReceivedProperties.append(receivedProperty)
-				}
-			} else if !treePropertyLabels.contains(receivedProperty.label) {
+				onlyIfAvailableReceivedProperties.append(receivedProperty)
+			} else {
 				flatReceivedProperties.append(receivedProperty)
 			}
 		}
@@ -1485,12 +1501,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// get disambiguated: an onlyIfAvailable override keeps its label over
 		// a flat received parameter.
 		// Forwarded parameters keep their original labels (must match init signature).
+		// A flat received parameter is named apart from the root's tree bindings too: a tree node with
+		// its label and another type does not provide it, and the parameter would be hidden by it.
+		let treeBindingNames = Self.bindingNames(of: treePropertyNodes, labels: treePropertyLabels)
 		let allFlatLabels = forwardedDependencies.map(\.property.label)
 			+ rootDefaultParameters.map(\.label)
 			+ flatReceivedProperties.map(\.label)
 			+ flatUncoveredParameters.map(\.label)
 			+ onlyIfAvailableReceivedProperties.map(\.label)
 		let collidingFlatLabels = Self.collidingLabels(in: allFlatLabels)
+			.union(flatReceivedProperties.lazy.map(\.label).filter(treeBindingNames.contains))
 		// Map of (label → (type → disambiguatedLabel)) for flat received
 		// parameters whose label collided with another flat parameter. Builder calls
 		// for child nodes that would reference the original label must substitute
@@ -1500,7 +1520,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for: collidingFlatReceivedProperties.map {
 				(label: $0.label, suffixTypes: [$0.typeDescription.simplified, $0.typeDescription])
 			},
-			reservedNames: Set(allFlatLabels),
+			reservedNames: Set(allFlatLabels).union(treeBindingNames),
 		)
 		var flatParameterDisambiguationMap = [String: [TypeDescription: String]]()
 		for (property, disambiguatedLabel) in zip(collidingFlatReceivedProperties, collidingFlatReceivedNames) {
@@ -1520,7 +1540,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				namesInMockScope: Set(forwardedDependencies.map(\.property.label))
 					.union(rootDefaultParameters.map(\.label))
 					.union(flatUncoveredParameters.map(\.label))
-					.union(Self.bindingNames(of: treePropertyNodes, labels: treePropertyLabels)),
+					.union(treeBindingNames),
 				reservedNames: Set(flatReceivedParameters.map(\.label)),
 			)
 		}
