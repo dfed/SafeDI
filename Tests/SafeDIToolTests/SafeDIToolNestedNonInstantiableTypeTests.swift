@@ -2639,22 +2639,22 @@ struct SafeDIToolNestedNonInstantiableTypeTests: ~Copyable {
 		)
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: ["""
-				public enum Feature {
-				    public struct Configuration {
-				        public init() {}
-				    }
+			public enum Feature {
+			    public struct Configuration {
+			        public init() {}
+			    }
 
-				    @Instantiable(generateMock: true)
-				    public final class Service: Equatable, Instantiable {
-				        public init(configuration: Configuration) {
-				            self.configuration = configuration
-				            super.init()
-				        }
+			    @Instantiable(generateMock: true)
+			    public final class Service: Equatable, Instantiable {
+			        public init(configuration: Configuration) {
+			            self.configuration = configuration
+			            super.init()
+			        }
 
-				        @Forwarded let configuration: Configuration
-				    }
-				}
-				"""],
+			        @Forwarded let configuration: Configuration
+			    }
+			}
+			"""],
 			dependentModuleInfoPaths: [upstream.moduleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
@@ -2869,22 +2869,22 @@ struct SafeDIToolNestedNonInstantiableTypeTests: ~Copyable {
 	mutating func mock_doesNotQualifyForwardedType_whenGenerateActivatesConditionThatDeclaresClassNamedLikeInheritedNameInFileWithoutSafeDIContent() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: ["""
-				public enum Feature {
-				    public struct Configuration {
-				        public init() {}
-				    }
+			public enum Feature {
+			    public struct Configuration {
+			        public init() {}
+			    }
 
-				    @Instantiable(generateMock: true)
-				    public final class Service: Hashable, Instantiable {
-				        public init(configuration: Configuration) {
-				            self.configuration = configuration
-				            super.init()
-				        }
+			    @Instantiable(generateMock: true)
+			    public final class Service: Hashable, Instantiable {
+			        public init(configuration: Configuration) {
+			            self.configuration = configuration
+			            super.init()
+			        }
 
-				        @Forwarded let configuration: Configuration
-				    }
-				}
-				"""],
+			        @Forwarded let configuration: Configuration
+			    }
+			}
+			"""],
 			swiftFileContentByFilePath: [
 				"Hashable.swift": """
 				#if FOO
