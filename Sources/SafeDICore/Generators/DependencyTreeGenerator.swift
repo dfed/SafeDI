@@ -733,6 +733,8 @@ public actor DependencyTreeGenerator {
 			/// The `@Received(onlyIfAvailable: true)` alias that declares `property` where `instantiable` receives it,
 			/// when that alias is not created because its fulfilling property is unavailable. `nil` otherwise.
 			let uncreatedAlias: UncreatedAlias?
+			/// How the declarations spell the types where this was found, for the message, which may be built later.
+			let writtenTypeDescriptionsByQualifiedType: [TypeDescription: TypeDescription]
 
 			/// An `@Received(onlyIfAvailable: true)` alias that is not created because its fulfilling property is unavailable.
 			struct UncreatedAlias: Hashable {
@@ -743,16 +745,23 @@ public actor DependencyTreeGenerator {
 
 			/// A single `error:` line. The suggestion or fix hint is folded into it rather than emitted as a
 			/// `note:` because it belongs at the same location, and Xcode drops notes from build-tool output.
+			/// Each property is shown as its declaration spells it.
 			var sourceDiagnostics: [SourceDiagnostic] {
+				WrittenTypeDescriptions.$writtenTypeDescriptionsByQualifiedType.withValue(writtenTypeDescriptionsByQualifiedType) {
+					spelledSourceDiagnostics
+				}
+			}
+
+			private var spelledSourceDiagnostics: [SourceDiagnostic] {
 				let chain = ([instantiable.concreteInstantiable] + parentStack + [root]).reversed()
-				let summary = "@\(Dependency.Source.receivedRawValue) property `\(property.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain: \(chain.map(\.asSource).joined(separator: " -> "))"
+				let summary = "@\(Dependency.Source.receivedRawValue) property `\(property.spelledAsSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain: \(chain.map(\.asSource).joined(separator: " -> "))"
 				// A diagnostic carries at most one fix-it – Xcode offers no Apply at all for a diagnostic with several –
 				// and a fix-it is offered only when it is exactly the repair the hint names.
 				let hint: String
 				let fixIts: [SourceDiagnostic.FixIt]
 				if let uncreatedAlias {
 					// The alias's property is optional, as `onlyIfAvailable` requires, so a receive of it can be `onlyIfAvailable` too.
-					hint = "`\(property.asSource)` is created by `\(uncreatedAlias.declaringType.asSource)` only if `\(uncreatedAlias.fulfillingProperty.asSource)` is available, and `\(uncreatedAlias.fulfillingProperty.asSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain. Did you mean to receive this property with `onlyIfAvailable: true`?"
+					hint = "`\(property.spelledAsSource)` is created by `\(uncreatedAlias.declaringType.asSource)` only if `\(uncreatedAlias.fulfillingProperty.spelledAsSource)` is available, and `\(uncreatedAlias.fulfillingProperty.spelledAsSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain. Did you mean to receive this property with `onlyIfAvailable: true`?"
 					// The range is recorded only for a bare attribute, so rewriting it never discards arguments the user wrote.
 					fixIts = if let bareAttributeRange {
 						[SourceDiagnostic.FixIt(range: bareAttributeRange, replacement: "@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)")]
@@ -766,7 +775,7 @@ public actor DependencyTreeGenerator {
 				          })
 				{
 					let onlyIfAvailableAttribute = "@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)"
-					hint = "The non-optional `\(nonOptionalAlternative.asSource)` is available in chain. Did you mean to decorate this property with `\(onlyIfAvailableAttribute)`?"
+					hint = "The non-optional `\(nonOptionalAlternative.spelledAsSource)` is available in chain. Did you mean to decorate this property with `\(onlyIfAvailableAttribute)`?"
 					// The range is recorded only for a bare attribute, so rewriting it never discards arguments the user wrote.
 					fixIts = if let bareAttributeRange {
 						[SourceDiagnostic.FixIt(range: bareAttributeRange, replacement: onlyIfAvailableAttribute)]
@@ -776,14 +785,14 @@ public actor DependencyTreeGenerator {
 				} else if suggestedAlternatives.isEmpty {
 					hint = if property.propertyType.isErasedInstantiator {
 						// The `@Instantiated` macro requires an erased instantiator to name the type it builds.
-						"Declare `@\(Dependency.Source.instantiatedRawValue)(fulfilledByType:) let \(property.asSource)`, naming the type it builds, on `\(root.asSource)` or on another type in the chain to fix."
+						"Declare `@\(Dependency.Source.instantiatedRawValue)(fulfilledByType:) let \(property.spelledAsSource)`, naming the type it builds, on `\(root.asSource)` or on another type in the chain to fix."
 					} else {
-						"Declare `@\(Dependency.Source.instantiatedRawValue) let \(property.asSource)` on `\(root.asSource)` or on another type in the chain to fix."
+						"Declare `@\(Dependency.Source.instantiatedRawValue) let \(property.spelledAsSource)` on `\(root.asSource)` or on another type in the chain to fix."
 					}
 					fixIts = []
 				} else if suggestedAlternatives.count == 1 {
 					let suggestedAlternative = suggestedAlternatives[0]
-					hint = "Did you mean `\(suggestedAlternative.asSource)`?"
+					hint = "Did you mean `\(suggestedAlternative.spelledAsSource)`?"
 					// The suggestion list mixes same-type and same-label near-matches, and a single-token edit repairs the
 					// property only when exactly one of label and type differs: a differing label is renamed and a differing
 					// type is rewritten. Both differing gets no fix-it, and neither differing cannot happen, since the property
@@ -798,12 +807,12 @@ public actor DependencyTreeGenerator {
 					} else if suggestedAlternative.label == property.label,
 					          let typeAnnotationRange
 					{
-						[SourceDiagnostic.FixIt(range: typeAnnotationRange, replacement: suggestedAlternative.typeDescription.asSource)]
+						[SourceDiagnostic.FixIt(range: typeAnnotationRange, replacement: suggestedAlternative.spelledTypeDescription.asSource)]
 					} else {
 						[]
 					}
 				} else {
-					hint = "Did you mean one of \(suggestedAlternatives.map { "`\($0.asSource)`" }.joined(separator: ", "))?"
+					hint = "Did you mean one of \(suggestedAlternatives.map { "`\($0.spelledAsSource)`" }.joined(separator: ", "))?"
 					// Several candidates leave the choice to the user.
 					fixIts = []
 				}
@@ -2779,6 +2788,7 @@ public actor DependencyTreeGenerator {
 								declaringType: alias.declaringType,
 								fulfillingProperty: fulfillingProperty,
 							),
+							writtenTypeDescriptionsByQualifiedType: WrittenTypeDescriptions.writtenTypeDescriptionsByQualifiedType,
 						))
 					}
 				} else if alias.onlyIfAvailable,
@@ -2852,6 +2862,7 @@ public actor DependencyTreeGenerator {
 								|| receivedProperty.label == $0.label
 						}.sorted(),
 						uncreatedAlias: nil,
+						writtenTypeDescriptionsByQualifiedType: WrittenTypeDescriptions.writtenTypeDescriptionsByQualifiedType,
 					))
 				}
 			}

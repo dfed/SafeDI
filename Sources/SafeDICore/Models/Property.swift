@@ -78,6 +78,16 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		"\(label): \(typeDescription.asSource)"
 	}
 
+	/// The type as the declaration spells it, from which the names generated code derives from the type come.
+	public var spelledTypeDescription: TypeDescription {
+		typeDescription.asWritten
+	}
+
+	/// The property represented as source code as its declaration spells it, for diagnostics.
+	public var spelledAsSource: String {
+		"\(label): \(spelledTypeDescription.asSource)"
+	}
+
 	// MARK: Comparable
 
 	public static func < (lhs: Property, rhs: Property) -> Bool {
@@ -342,4 +352,25 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 	/// The hash of `label` and `typeDescription`, computed once by the initializer every
 	/// property is created through. Not encoded, and not compared by `==`.
 	private let hashOfLabelAndTypeDescription: Int
+}
+
+/// How the declarations spell the types that qualification changed, while code is generated from them.
+///
+/// The names generated code derives from types, such as the parameters of `mock()` that share a label, depend only on
+/// what the declarations say. Each qualified type has one spelling: a name keeps its spelling wherever qualifying it
+/// would make a type the same as one spelled differently. A table rather than a property of `Property`, which code
+/// generation copies far more often than it names anything.
+public enum WrittenTypeDescriptions {
+	/// The spelling of each type qualification changed, by the type it changed it to.
+	@TaskLocal public static var writtenTypeDescriptionsByQualifiedType = [TypeDescription: TypeDescription]()
+}
+
+extension TypeDescription {
+	/// This type as the declarations spell it.
+	public var asWritten: TypeDescription {
+		let writtenTypeDescriptionsByQualifiedType = WrittenTypeDescriptions.writtenTypeDescriptionsByQualifiedType
+		// Most modules qualify nothing, and hashing a type walks all of it.
+		guard !writtenTypeDescriptionsByQualifiedType.isEmpty else { return self }
+		return writtenTypeDescriptionsByQualifiedType[self] ?? self
+	}
 }
