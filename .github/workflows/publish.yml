@@ -268,17 +268,12 @@ jobs:
           echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
           echo "Computed checksum: $CHECKSUM"
 
-      - name: Update Package.swift
+      - name: Update version
         run: ./Scripts/update-version.sh "${{ inputs.version }}" "${{ steps.checksum.outputs.checksum }}"
 
       - name: Show changes
         run: |
-          echo "=== Package.swift changes ==="
-          git diff Package.swift
-          echo "=== Plugins/Shared.swift changes ==="
-          git diff Plugins/Shared.swift
-          echo "=== MODULE.bazel changes ==="
-          git diff MODULE.bazel
+          git diff
           echo "=== Checksum: ${{ steps.checksum.outputs.checksum }} ==="
 
       - name: Upload artifact bundle
@@ -291,7 +286,17 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Package.swift Plugins/Shared.swift MODULE.bazel
+          # The files Scripts/update-version.sh edits. A prerelease
+          # leaves the documentation as it is, and adding an unchanged
+          # file is a no-op.
+          git add \
+            Package.swift \
+            Plugins/Shared.swift \
+            MODULE.bazel \
+            README.md \
+            Documentation/Manual.md \
+            Sources/SafeDI/SafeDI.docc/SafeDI.md \
+            Examples/ExampleTuistIntegration/README.md
           git commit -m "Release ${{ inputs.version }}"
 
       - name: Upload release commit patch (dry run)
