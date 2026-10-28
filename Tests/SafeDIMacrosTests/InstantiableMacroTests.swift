@@ -80,6 +80,206 @@ import Testing
 			)
 		}
 
+		// MARK: Default-valued instantiate parameters
+
+		@Test
+		func extension_expandsWithoutIssue_whenInstantiateParameterHasDefaultValue() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(database: Database, title: String = "production") -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(database: Database, title: String = "production") -> Service { fatalError() }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_expandsWithoutIssue_whenMockOmitsDefaultValuedInstantiateParameter() {
+			// A default-valued parameter of `instantiate(…)` is not a dependency, so a mock need not take it.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(database: Database, title: String = "production") -> Service { fatalError() }
+
+				    public static func mock(database: Database) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(database: Database, title: String = "production") -> Service { fatalError() }
+
+				    public static func mock(database: Database) -> Service { fatalError() }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_producesDiagnostic_whenMockTakesDefaultValuedInstantiateParameterWithoutDefault() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(title: String = "production") -> Service { fatalError() }
+
+				    public static func mock(title: String) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(title: String = "production") -> Service { fatalError() }
+
+				    public static func mock(title: String) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type’s `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add default values to mock() non-dependency parameters for title: String"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_doesNotThrow_whenRootInstantiateHasOnlyDefaultValuedParameters() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true)
+				extension Service: Instantiable {
+				    public static func instantiate(title: String = "production") -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(title: String = "production") -> Service { fatalError() }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_producesDiagnostic_whenInstantiateDefaultValueReferencesSelf() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(title: String = Self.defaultTitle) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(title: String = Self.defaultTitle) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "Default expression for parameter `title` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						line: 3,
+						column: 36,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_producesDiagnostic_whenInstantiateHasUnlabeledDefaultBeforeUnlabeledParameter() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(_ enabled: Bool = false, _ leaf: Leaf) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(_ enabled: Bool = false, _ leaf: Leaf) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "Unlabeled parameter `enabled: Bool` has a default value but is followed by unlabeled required parameter `leaf: Leaf`. SafeDI cannot generate a mock for this signature: the default cannot be elided from the mock's override surface (Swift requires the earlier positional slot to be passed when a later unlabeled parameter is required), and an unlabeled parameter cannot be exposed as a labeled field on `SafeDIMockConfiguration`. Either add an external label to the defaulted parameter, reorder so unlabeled defaults come last, or remove the default.",
+						line: 3,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Promote `enabled` to an external label (rewrite `_ enabled:` as `enabled:`)"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_fixit_renamesArgumentLabel_whenDefaultValuedInstantiateParameterLabelBeginsWithReservedPrefix() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(__safeDI_delay: Double = 0) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(__safeDI_delay: Double = 0) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI_delay` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 3,
+						column: 36,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Rename `__safeDI_delay` to `delay`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Rename `__safeDI_delay` to `delay`"],
+				fixedSource: """
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(delay __safeDI_delay: Double = 0) -> Service { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_expandsWithoutIssue_whenDefaultValuedInstantiateParameterNameBeginsWithReservedPrefix() {
+			// A default-valued parameter is not a dependency, so its parameter name binds nothing SafeDI generates,
+			// as for an initializer.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(delay __safeDI_delay: Double = 0) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(delay __safeDI_delay: Double = 0) -> Service { fatalError() }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
 		// MARK: Error tests
 
 		@Test
