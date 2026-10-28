@@ -18,6 +18,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#if canImport(Darwin)
+	import Darwin
+#elseif canImport(Glibc)
+	import Glibc
+#elseif canImport(Musl)
+	import Musl
+#endif
 import Foundation
 import SafeDICore
 import SwiftParser
@@ -462,13 +469,44 @@ private func walkFiles(
 /// Reads and parses the file at `filePath`, or returns `nil` without parsing when its text shows it
 /// declares nothing SafeDI scans for.
 private func parseFileDeclaringSafeDIContent(atPath filePath: String) throws -> SourceFileSyntax? {
-	let content = try String(contentsOfFile: filePath, encoding: .utf8)
-	let containsInstantiable = content.contains("@\(InstantiableVisitor.macroName)")
-	let containsConfiguration = content.contains("#\(SafeDIConfigurationVisitor.macroName)")
-	return if containsInstantiable || containsConfiguration {
+	var content = try String(contentsOfFile: filePath, encoding: .utf8)
+	// Searching the bytes rather than the characters is many times faster, and finds the markers wherever a
+	// character search does: no other sequence of characters is equivalent to these ASCII ones. It also finds a
+	// marker whose last character a combining mark changes, which a character search does not.
+	let mentionsSafeDI = content.withUTF8 { source in
+		safeDIMarkers.contains(where: source.containsBytes(of:))
+	}
+	return if mentionsSafeDI {
 		Parser.parse(source: content)
 	} else {
 		nil
+	}
+}
+
+/// The text that every file declaring SafeDI content contains.
+private let safeDIMarkers = [
+	"@\(InstantiableVisitor.macroName)",
+	"#\(SafeDIConfigurationVisitor.macroName)",
+].map { Array($0.utf8) }
+
+extension UnsafeBufferPointer<UInt8> {
+	/// Whether these bytes contain `bytes`, which must not be empty, in a row.
+	fileprivate func containsBytes(of bytes: [UInt8]) -> Bool {
+		guard var position = baseAddress else { return false }
+		let end = position + count
+		return bytes.withUnsafeBufferPointer { bytes in
+			// Each occurrence of the first byte, with room for the rest after it, is a candidate.
+			while end - position >= bytes.count,
+			      let candidate = memchr(position, Int32(bytes[0]), end - position - bytes.count + 1)?.assumingMemoryBound(to: UInt8.self)
+			{
+				if memcmp(candidate, bytes.baseAddress, bytes.count) == 0 {
+					return true
+				} else {
+					position = UnsafePointer(candidate) + 1
+				}
+			}
+			return false
+		}
 	}
 }
 
