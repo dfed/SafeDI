@@ -1104,6 +1104,6 @@ struct UnreadableModuleInfoError: Error, CustomStringConvertible {
 	let reason: BinaryFileReadError
 
 	var description: String {
-		"Could not read the SafeDI module info file at \(path): \(reason) A different version of SafeDI most likely wrote this file, or its write was interrupted. To fix this, clean your build (in Xcode: Product > Clean Build Folder) and build again, so that the module that wrote the file regenerates it."
+		"Could not read the SafeDI module info file at \(path): \(reason) \(BinaryFile.unreadableFileExplanation)"
 	}
 }

@@ -38,11 +38,23 @@ struct Dump: ParsableCommand {
 		let data = try Data(contentsOf: file.asFileURL)
 		let encoder = JSONEncoder()
 		encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+		// The header, not the file's extension, decides how to read it: a scan cache can be named anything.
 		let json = if BinaryFile.data(data, beginsAs: .moduleInfo) {
 			try encoder.encode(ModuleInfo(moduleInfoData: data))
-		} else {
+		} else if BinaryFile.data(data, beginsAs: .scanCache) {
 			try encoder.encode(CachedScannedModuleInfo(scanCacheData: data))
+		} else {
+			throw UnrecognizedFileError()
 		}
 		return String(decoding: json, as: UTF8.self)
+	}
+}
+
+/// A file named to `dump` that begins as neither a module info file nor a scan cache does.
+struct UnrecognizedFileError: Error, CustomStringConvertible {
+	var description: String {
+		let moduleInfo = BinaryFile.Kind.moduleInfo
+		let scanCache = BinaryFile.Kind.scanCache
+		return "The file begins with neither \(moduleInfo.magicDescription), as a \(moduleInfo.name) does, nor \(scanCache.magicDescription), as a \(scanCache.name) does. \(BinaryFile.unreadableFileExplanation)"
 	}
 }
