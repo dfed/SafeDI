@@ -27,12 +27,13 @@
 ///
 /// This type is not `Sendable`: reads of `instance` are not synchronized.
 ///
+/// Guarantees: `instance` is created the first time it is read, by the closure this type was created with,
+/// and every later read returns that same instance.
+///
 /// SafeDI rejects a dependency tree in which creating the instance would require the instance. It does not
-/// inspect what initializers do: an initializer that runs while the instance is being created must not
-/// cause `instance` to be read, whether directly or through a callback. Such a read creates the instance
-/// itself. Every read still returns the same instance, but the type is initialized more than once. If each
-/// initialization causes another read, the initializations recurse until the stack overflows and the process
-/// crashes.
+/// inspect what initializers do. Do not read `instance` from the initializer of the type that holds this
+/// dependency, or from any initializer that runs while the instance is being created, whether directly or
+/// through a callback. Doing so violates this type’s contract and produces undefined behavior.
 ///
 /// - SeeAlso: `SendableLazilyInstantiated`
 /// - SeeAlso: `Instantiator`

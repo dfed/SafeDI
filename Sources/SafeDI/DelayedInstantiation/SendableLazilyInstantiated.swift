@@ -30,11 +30,13 @@ import Synchronization
 /// This type can be shared across concurrency domains. The instance is created exactly once, while a lock
 /// is held: a read of `instance` that races with the first one waits for it and receives the same instance.
 ///
+/// Guarantees: `instance` is created exactly once, by the closure this type was created with, and every
+/// read, from any concurrency domain, returns that same instance.
+///
 /// SafeDI rejects a dependency tree in which creating the instance would require the instance. It does not
-/// inspect what initializers do: an initializer that runs while the instance is being created must not
-/// cause `instance` to be read, whether directly or through a callback. Such a read tries to acquire the
-/// `Mutex` its own thread already holds, which `Mutex` does not support: it documents the outcome as
-/// platform dependent, either terminating the process or never returning. On macOS, the process is terminated.
+/// inspect what initializers do. Do not read `instance` from the initializer of the type that holds this
+/// dependency, or from any initializer that runs while the instance is being created, whether directly or
+/// through a callback. Doing so violates this type’s contract and produces undefined behavior.
 ///
 /// - SeeAlso: `LazilyInstantiated`
 /// - SeeAlso: `SendableInstantiator`
