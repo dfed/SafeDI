@@ -119,12 +119,17 @@ enum GraphFuzzerGenerator {
 	private enum InstantiationKind {
 		case constant
 		case erasedConstant
+		/// Created once, when its instance is first read. SafeDI validates it exactly as a constant: it does not
+		/// break a dependency cycle, and its type cannot have forwarded properties.
+		case lazilyInstantiated
+		case erasedLazilyInstantiated
 		case instantiator
 		case erasedInstantiator
 
+		/// Whether the property breaks a dependency cycle, as only an instantiator does.
 		var isLazy: Bool {
 			switch self {
-			case .constant, .erasedConstant:
+			case .constant, .erasedConstant, .lazilyInstantiated, .erasedLazilyInstantiated:
 				false
 			case .instantiator, .erasedInstantiator:
 				true
@@ -133,9 +138,9 @@ enum GraphFuzzerGenerator {
 
 		var lazyKind: InstantiationKind {
 			switch self {
-			case .constant, .instantiator:
+			case .constant, .lazilyInstantiated, .instantiator:
 				.instantiator
-			case .erasedConstant, .erasedInstantiator:
+			case .erasedConstant, .erasedLazilyInstantiated, .erasedInstantiator:
 				.erasedInstantiator
 			}
 		}
@@ -242,11 +247,31 @@ enum GraphFuzzerGenerator {
 					continue
 				}
 				let target = random.integer(in: 0...(typeCount - 1))
-				forwardedProperties.append(PropertyDeclaration(
-					attribute: "@Forwarded",
-					label: "t\(borrowedLabelIndex(for: target))",
-					type: typeName(target) + (random.percentChance(30) ? "?" : ""),
-				))
+				let labelIndex = borrowedLabelIndex(for: target)
+				let roll = random.integer(in: 0...99)
+				if roll < 8 {
+					// A forwarded `LazilyInstantiated` of a type that is not `@Instantiable`, under one label every
+					// type shares: a mock that receives it cannot build the instance, so it takes the instance and
+					// wraps it, while types below it forward their own.
+					forwardedProperties.append(PropertyDeclaration(
+						attribute: "@Forwarded",
+						label: "lazyValue",
+						type: "\(lazilyInstantiatedWrapper)<\(valueTypeName)>",
+					))
+				} else if roll < 15 {
+					// A forwarded `LazilyInstantiated`, whose instance receivers can also receive.
+					forwardedProperties.append(PropertyDeclaration(
+						attribute: "@Forwarded",
+						label: "lazyT\(labelIndex)",
+						type: "\(lazilyInstantiatedWrapper)<\(typeName(target))>",
+					))
+				} else {
+					forwardedProperties.append(PropertyDeclaration(
+						attribute: "@Forwarded",
+						label: "t\(labelIndex)",
+						type: typeName(target) + (roll < 45 ? "?" : ""),
+					))
+				}
 			}
 
 			rootCount = random.integer(in: 1...3)
@@ -322,7 +347,16 @@ enum GraphFuzzerGenerator {
 			if isLazy {
 				return random.percentChance(20) ? .erasedInstantiator : .instantiator
 			} else {
-				return random.percentChance(15) ? .erasedConstant : .constant
+				let roll = random.integer(in: 0...99)
+				if roll < 12 {
+					return .erasedConstant
+				} else if roll < 26 {
+					return .lazilyInstantiated
+				} else if roll < 32 {
+					return .erasedLazilyInstantiated
+				} else {
+					return .constant
+				}
 			}
 		}
 
@@ -362,6 +396,12 @@ enum GraphFuzzerGenerator {
 		private mutating func provide(_ property: PropertyDeclaration, providerIndex: Int?, builtIndex: Int?) {
 			guard !property.type.contains("ErasedInstantiator<") else { return }
 			provided.append(ProvidedProperty(label: property.label, type: property.type, providerIndex: providerIndex, builtIndex: builtIndex))
+			// A `LazilyInstantiated` property also provides its instance under its label. An optional one does not.
+			for wrapper in ["SendableLazilyInstantiated<", "LazilyInstantiated<"] where property.type.hasPrefix(wrapper) && property.type.hasSuffix(">") {
+				let instanceType = String(property.type.dropFirst(wrapper.count).dropLast())
+				provided.append(ProvidedProperty(label: property.label, type: instanceType, providerIndex: providerIndex, builtIndex: builtIndex))
+				break
+			}
 		}
 
 		private mutating func typeDeclaration(index: Int) -> TypeDeclaration {
@@ -539,7 +579,20 @@ enum GraphFuzzerGenerator {
 				let wrapper = isSendable ? "SendableErasedInstantiator" : "ErasedInstantiator"
 				let forwardedPropertiesType = forwardedProperties[target]?.type ?? "()"
 				return PropertyDeclaration(attribute: erasedAttribute, label: "anyT\(label)Builder", type: "\(wrapper)<\(forwardedPropertiesType), \(erasedTypeName(target))>")
+			case .lazilyInstantiated:
+				return PropertyDeclaration(attribute: "@Instantiated", label: "lazyT\(label)", type: "\(lazilyInstantiatedWrapper)<\(typeName(target))>")
+			case .erasedLazilyInstantiated:
+				return PropertyDeclaration(attribute: erasedAttribute, label: "lazyAnyT\(label)", type: "\(lazilyInstantiatedWrapper)<\(erasedTypeName(target))>")
 			}
+		}
+
+		/// A type of the graph's that is not `@Instantiable`, which only a forwarded property can provide.
+		private var valueTypeName: String {
+			"\(prefix)Value"
+		}
+
+		private var lazilyInstantiatedWrapper: String {
+			isSendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
 		}
 
 		private func source(of declaration: TypeDeclaration) -> String {
@@ -578,6 +631,8 @@ enum GraphFuzzerGenerator {
 					"\tpublic let value: \(declaration.name)",
 					"}",
 				]
+			} else if declaration.name == "\(prefix)Root0" {
+				lines += ["", "public final class \(valueTypeName)\(isSendable ? ": Sendable" : "") {}"]
 			}
 			return lines.joined(separator: "\n") + "\n"
 		}
@@ -595,6 +650,12 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case sendableInstantiatorProperty
 	case erasedInstantiatorProperty
 	case sendableErasedInstantiatorProperty
+	case lazilyInstantiatedProperty
+	case sendableLazilyInstantiatedProperty
+	case erasedLazilyInstantiatedProperty
+	case forwardedLazilyInstantiatedProperty
+	/// A receive of the instance a `LazilyInstantiated` property under the same label creates.
+	case receivedLazilyInstantiatedInstance
 	case forwardedProperty
 	case optionalForwardedProperty
 	case requiredReceive
@@ -616,6 +677,8 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		var features = Set<GraphFuzzerFeature>()
 		var rootCount = 0
 		var typesByLabel = [String: Set<String>]()
+		var lazilyInstantiatedInstanceTypesByLabel = [String: Set<String>]()
+		var receivedTypesByLabel = [String: Set<String>]()
 		var instantiationEdges = [GraphFuzzerInstantiationEdge]()
 		for content in fixture.swiftFileContent {
 			var currentTypeName: String?
@@ -631,14 +694,24 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				case let .typeDeclaration(name):
 					currentTypeName = name
 				case let .property(attribute, label, type):
-					// A receive of `x: T?` names the same type as `x: T` does.
-					typesByLabel[label, default: []].insert(type.hasSuffix("?") ? String(type.dropLast()) : type)
+					// A receive of `x: T?` names the same type as `x: T` does, and so does a receive of the instance of
+					// `x: LazilyInstantiated<T>`.
+					let nonOptionalType = type.hasSuffix("?") ? String(type.dropLast()) : type
+					let instanceType = Self.lazilyInstantiatedInstanceType(of: nonOptionalType)
+					typesByLabel[label, default: []].insert(instanceType ?? nonOptionalType)
+					if let instanceType, attribute.hasPrefix("@Instantiated") || attribute == "@Forwarded" {
+						lazilyInstantiatedInstanceTypesByLabel[label, default: []].insert(instanceType)
+					}
+					if attribute == "@Received" || attribute == "@Received(onlyIfAvailable: true)" {
+						receivedTypesByLabel[label, default: []].insert(nonOptionalType)
+					}
 					features.formUnion(Self.features(ofPropertyWithAttribute: attribute, type: type))
 					if attribute.hasPrefix("@Instantiated"), let currentTypeName {
 						instantiationEdges.append(GraphFuzzerInstantiationEdge(
 							source: currentTypeName,
 							target: Self.instantiatedTypeName(attribute: attribute, type: type),
-							isLazy: type.contains("<"),
+							// Only an instantiator breaks a cycle; a `LazilyInstantiated` is validated as a constant.
+							isLazy: type.contains("Instantiator<"),
 						))
 					}
 				case .other:
@@ -651,6 +724,11 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		if typesByLabel.values.contains(where: { $0.count > 1 }) {
 			features.insert(.sameLabelWithDifferentTypes)
+		}
+		if receivedTypesByLabel.contains(where: { label, types in
+			!types.isDisjoint(with: lazilyInstantiatedInstanceTypesByLabel[label] ?? [])
+		}) {
+			features.insert(.receivedLazilyInstantiatedInstance)
 		}
 		if GraphFuzzerInstantiationEdge.containsLazyCycle(instantiationEdges) {
 			features.insert(.lazyCycle)
@@ -669,6 +747,12 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			features.insert(.erasedInstantiatorProperty)
 		} else if type.hasPrefix("SendableErasedInstantiator<") {
 			features.insert(.sendableErasedInstantiatorProperty)
+		} else if type.hasPrefix("LazilyInstantiated<") || type.hasPrefix("SendableLazilyInstantiated<") {
+			if attribute.hasPrefix("@Instantiated") {
+				features.insert(isErased ? .erasedLazilyInstantiatedProperty : type.hasPrefix("Sendable") ? .sendableLazilyInstantiatedProperty : .lazilyInstantiatedProperty)
+			} else if attribute == "@Forwarded" {
+				features.insert(.forwardedLazilyInstantiatedProperty)
+			}
 		}
 		if attribute.hasPrefix("@Instantiated"), !type.contains("<") {
 			features.insert(isErased ? .erasedConstantProperty : .constantProperty)
@@ -685,6 +769,14 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 		}
 		return features
+	}
+
+	/// `T` for `LazilyInstantiated<T>` or `SendableLazilyInstantiated<T>`, and otherwise `nil`.
+	private static func lazilyInstantiatedInstanceType(of type: String) -> String? {
+		for wrapper in ["SendableLazilyInstantiated<", "LazilyInstantiated<"] where type.hasPrefix(wrapper) && type.hasSuffix(">") {
+			return String(type.dropFirst(wrapper.count).dropLast())
+		}
+		return nil
 	}
 
 	private static func instantiatedTypeName(attribute: String, type: String) -> String {
