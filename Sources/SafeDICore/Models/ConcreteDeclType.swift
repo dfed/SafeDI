@@ -23,6 +23,17 @@ public enum ConcreteDeclType {
 	case classType
 	case structType
 
+	/// Whether the declaration's inheritance clause may name a superclass first. An actor's cannot, but SafeDI treats it
+	/// as a class's.
+	var mayHaveSuperclass: Bool {
+		switch self {
+		case .actorType, .classType:
+			true
+		case .structType:
+			false
+		}
+	}
+
 	var asDeclarationType: Instantiable.DeclarationType {
 		switch self {
 		case .actorType:

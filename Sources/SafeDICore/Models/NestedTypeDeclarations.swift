@@ -27,7 +27,6 @@ public struct NestedTypeDeclaration: Codable, Hashable, Sendable {
 		kind: Kind,
 		access: Access,
 		superclassCandidate: String? = nil,
-		scopePath: String? = nil,
 		isCompilerDetermined: Bool = false,
 		isAbsent: Bool = false,
 		consultedCompilationConditions: [String] = [],
@@ -38,7 +37,6 @@ public struct NestedTypeDeclaration: Codable, Hashable, Sendable {
 		self.kind = kind
 		self.access = access
 		self.superclassCandidate = superclassCandidate
-		self.scopePath = scopePath
 		self.isCompilerDetermined = isCompilerDetermined
 		self.isAbsent = isAbsent
 		self.consultedCompilationConditions = consultedCompilationConditions
@@ -47,7 +45,6 @@ public struct NestedTypeDeclaration: Codable, Hashable, Sendable {
 	}
 
 	public enum Kind: Codable, Hashable, Sendable {
-		/// A class, whose superclass's nested types unqualified lookup searches.
 		case classType
 		case protocolType
 		/// A struct, enum, actor, or type alias.
@@ -73,12 +70,10 @@ public struct NestedTypeDeclaration: Codable, Hashable, Sendable {
 	public let kind: Kind
 	/// The effective access level: a member of a `private` type is no more visible than the type.
 	public let access: Access
-	/// For a class, the first type its inheritance clause names, which is its superclass when it is a class, as
-	/// written without backticks, or an empty string for one SafeDI cannot follow, such as a generic type with
-	/// arguments. `nil` for a class that names none, and for every other declaration.
+	/// For a class or an actor, the first type its inheritance clause names, which is its superclass when it is a
+	/// class, as written without backticks, or an empty string for one not spelled as a path of names, or with
+	/// generic arguments. `nil` for a class or actor that names none, and for every other declaration.
 	public let superclassCandidate: String?
-	/// The path of the type whose scope the inheritance clause is written in, or `nil` at the top level.
-	public let scopePath: String?
 	/// Whether the declaration is in an `#if` clause that only the compiler and destination can select, such as
 	/// one guarded by `os(iOS)`, so that SafeDI cannot know whether it exists.
 	public let isCompilerDetermined: Bool
@@ -101,7 +96,6 @@ public struct NestedTypeDeclaration: Codable, Hashable, Sendable {
 			"\(kind)",
 			"\(access)",
 			superclassCandidate ?? "",
-			scopePath ?? "",
 			"\(isCompilerDetermined)",
 			"\(isAbsent)",
 			consultedCompilationConditions.joined(separator: ","),
@@ -117,15 +111,9 @@ public struct NestedTypeDeclaration: Codable, Hashable, Sendable {
 		return located
 	}
 
-	/// The path of the type this declaration is a member type or generic parameter of, which is empty for a type
-	/// declared at the top level.
-	fileprivate var memberOwnerPath: String {
-		if kind == .genericParameter {
-			// A generic parameter's path is its type's with its name after a dot.
-			path.split(separator: ".").dropLast().joined(separator: ".")
-		} else {
-			scopePath ?? ""
-		}
+	/// The last name of the declaration's path: its own name.
+	fileprivate var name: Substring {
+		path[(path.lastIndex(of: ".").map { path.index(after: $0) } ?? path.startIndex)...]
 	}
 
 	fileprivate var isTypeDeclaration: Bool {
@@ -204,21 +192,12 @@ public struct NestedTypeDeclarations: Codable, Equatable, Sendable {
 
 	/// These declarations, each once and in the order `sortedDeclarations` gives, without those no lookup in `lookups`
 	/// reaches, which change no qualification. The order is the one a cache that holds them reads back.
-	///
-	/// Every member type and generic parameter of a kept type is kept too, whatever its name: the modules that depend
-	/// on this one look up their own names in the types they inherit from or extend, and reading a kept type without
-	/// its members would tell them that it has none.
 	public func restricted(to lookups: NestedTypeLookups) -> NestedTypeDeclarations {
 		NestedTypeDeclarations(NestedTypeDeclarations(declarations.filter { declaration in
 			lookups.paths.contains(declaration.path)
 				|| lookups.typePaths.contains(declaration.path)
-				|| lookups.typePaths.contains(declaration.memberOwnerPath)
+				|| (!lookups.inheritedNames.isEmpty && lookups.inheritedNames.contains(String(declaration.name)))
 		}).sortedDeclarations)
-	}
-
-	/// The declarations at each path.
-	var declarationsByPath: [String: [NestedTypeDeclaration]] {
-		Dictionary(grouping: declarations, by: \.path)
 	}
 
 	/// The conditions that decided whether these declarations exist, which decided what lookups read.
@@ -233,7 +212,7 @@ public struct NestedTypeDeclarations: Codable, Equatable, Sendable {
 
 	/// The last name of every declaration's path.
 	fileprivate var lastNames: Set<String> {
-		Set(declarations.compactMap { $0.path.split(separator: ".").last.map(String.init) })
+		Set(declarations.map { String($0.name) })
 	}
 }
 
@@ -243,8 +222,8 @@ public struct NestedTypeDeclarations: Codable, Equatable, Sendable {
 public struct NestedTypeLookups: Equatable, Sendable {
 	/// - Parameters:
 	///   - instantiables: The instantiables whose types `generate` qualifies.
-	///   - declarations: The declarations known so far. Lookup also searches the types the searched types inherit
-	///     from, so the declarations of those, found by following inheritance clauses, are looked up too.
+	///   - declarations: The declarations known so far. The searched classes' and actors' first inherited names,
+	///     which they hold, are looked up too.
 	public init(instantiables: some Sequence<Instantiable>, declarations: NestedTypeDeclarations) {
 		self.init(searchedNames: SearchedNames(instantiables: instantiables), declarations: declarations)
 	}
@@ -275,73 +254,45 @@ public struct NestedTypeLookups: Equatable, Sendable {
 
 	public init(searchedNames: SearchedNames, declarations: NestedTypeDeclarations) {
 		names = searchedNames.names
-		let namesBySearchedPath = searchedNames.namesBySearchedPath
-		// Follow each class's superclass candidate from the searched types, whatever its visibility: keeping more
-		// declarations than a lookup reads changes no qualification.
-		var declaredTypePaths = Set<String>()
-		var superclassCandidatesByPath = [String: [(candidate: String, scopePath: String?)]]()
-		for declaration in declarations.declarations where declaration.isTypeDeclaration {
-			declaredTypePaths.insert(declaration.path)
-			if let superclassCandidate = declaration.superclassCandidate,
-			   !superclassCandidate.isEmpty,
-			   !NestedTypeResolver.knownProtocols.contains(superclassCandidate)
-			{
-				superclassCandidatesByPath[declaration.path, default: []].append((superclassCandidate, declaration.scopePath))
+		namesByTypePath = searchedNames.namesBySearchedPath
+		typePaths = Set(namesByTypePath.keys)
+		for (typePath, typeNames) in namesByTypePath {
+			for name in typeNames {
+				paths.insert(typePath + "." + name)
 			}
 		}
-		var superclassPathsByPath = [String: [String]]()
-		var unresolvedTypePaths = Set<String>()
-		/// The superclasses that lookup searches after the type at `path`, nearest first.
-		func superclassPaths(of path: String, visited: Set<String> = []) -> [String] {
-			if let knownPaths = superclassPathsByPath[path] {
-				return knownPaths
-			}
-			var paths = [String]()
-			for (candidate, scopePath) in superclassCandidatesByPath[path] ?? [] {
-				if let resolvedPath = resolvedTypePath(of: candidate, inScopeOf: scopePath, isDeclared: declaredTypePaths.contains) {
-					// Sources that do not compile can make a class inherit from itself.
-					if !visited.contains(resolvedPath) {
-						paths += [resolvedPath] + superclassPaths(of: resolvedPath, visited: visited.union([path]))
-					}
-				} else {
-					unresolvedTypePaths.insert(candidate)
-				}
-			}
-			superclassPathsByPath[path] = paths
-			return paths
-		}
-		for (searchedPath, searchedNames) in namesBySearchedPath {
-			for typePath in [searchedPath] + superclassPaths(of: searchedPath) {
-				typePaths.insert(typePath)
-				namesByTypePath[typePath, default: []].formUnion(searchedNames)
-				for name in searchedNames {
-					paths.insert(typePath + "." + name)
-				}
+		// A searched class or actor whose first inherited type may be a class stops lookup unless that type is provably
+		// a protocol, which every declaration of its name decides.
+		for declaration in declarations.declarations where declaration.isTypeDeclaration && typePaths.contains(declaration.path) {
+			if let inheritedName = declaration.superclassCandidate.flatMap(NestedTypeResolver.provablyProtocolCandidate) {
+				inheritedNamesByTypePath[declaration.path, default: []].insert(inheritedName)
 			}
 		}
-		self.unresolvedTypePaths = unresolvedTypePaths
-		let allTypePaths = typePaths.union(unresolvedTypePaths)
-		outermostTypeNames = Set(allTypePaths.map { String($0.prefix { $0 != "." }) })
-		typeNames = Set(allTypePaths.compactMap { $0.split(separator: ".").last.map(String.init) })
+		inheritedNames = inheritedNamesByTypePath.values.reduce(into: Set()) { $0.formUnion($1) }
+		outermostTypeNames = Set(typePaths.map { String($0.prefix { $0 != "." }) })
+		typeNames = Set(typePaths.compactMap { $0.split(separator: ".").last.map(String.init) })
 	}
 
 	/// The path of every type, generic parameter, or member type a lookup can ask about: each name the
 	/// instantiables' types spell, inside each type in `typePaths`.
 	public private(set) var paths = Set<String>()
-	/// The types lookups search: the types the instantiables' scopes search, and the superclasses of those.
+	/// The types lookups search: the types the instantiables' scopes search.
 	public private(set) var typePaths = Set<String>()
+	/// The first inherited name of each searched class or actor that may be a protocol: whether it is one depends on
+	/// every declaration of the name.
+	public private(set) var inheritedNames = Set<String>()
 	/// The names the instantiables' types spell, which lookups ask for.
 	public private(set) var names = Set<String>()
 	/// The top-level types whose declarations and extensions can declare something a lookup reads.
 	public private(set) var outermostTypeNames = Set<String>()
-	/// The last name of every type lookups search, whose declarations decide what it inherits.
+	/// The last name of every type lookups search, whose declarations decide whether it is a class.
 	public private(set) var typeNames = Set<String>()
 
 	/// Whether these lookups read only declarations `other`'s read too.
 	public func isCovered(by other: NestedTypeLookups) -> Bool {
 		paths.isSubset(of: other.paths)
 			&& typePaths.isSubset(of: other.typePaths)
-			&& unresolvedTypePaths.isSubset(of: other.unresolvedTypePaths)
+			&& inheritedNames.isSubset(of: other.inheritedNames)
 	}
 
 	/// The names lookups ask for that some declaration among `declarations` is a member type or generic parameter of.
@@ -359,6 +310,9 @@ public struct NestedTypeLookups: Equatable, Sendable {
 		let readNamesByTypePath = namesByTypePath.mapValues { $0.intersection(declaredNames) }.filter { !$0.value.isEmpty }
 		readLookups.typePaths = Set(readNamesByTypePath.keys)
 		readLookups.paths = Set(readNamesByTypePath.flatMap { typePath, names in names.map { typePath + "." + $0 } })
+		readLookups.inheritedNames = readLookups.typePaths.reduce(into: Set()) { inheritedNames, typePath in
+			inheritedNames.formUnion(inheritedNamesByTypePath[typePath] ?? [])
+		}
 		return readLookups
 	}
 
@@ -366,9 +320,8 @@ public struct NestedTypeLookups: Equatable, Sendable {
 
 	/// The names each type in `typePaths` is asked for.
 	private var namesByTypePath = [String: Set<String>]()
-
-	/// The superclasses no known declaration declares.
-	private var unresolvedTypePaths: Set<String> = []
+	/// The first inherited names that may be protocols of the classes and actors at each path in `typePaths`.
+	private var inheritedNamesByTypePath = [String: Set<String>]()
 }
 
 /// Resolves the type names an instantiable's types spell as Swift does where they are written, among the
@@ -377,35 +330,49 @@ public struct NestedTypeResolver {
 	/// - Parameters:
 	///   - declarations: The declarations of the instantiable's module and, unless `otherModuleDeclarations` lists
 	///     them, of the modules it depends on.
-	///   - otherModuleDeclarations: Declarations of the modules the instantiable's module depends on, which it sees
+	///   - otherModuleDeclarations: The declarations of each module the instantiable's module depends on, which it sees
 	///     only when they are public.
 	///   - moduleFilePaths: The files of the instantiable's module among the files `declarations` name, when one
 	///     input list holds every module's files, or `nil` when every file `declarations` name is the module's.
 	public init(
 		declarations: NestedTypeDeclarations,
-		otherModuleDeclarations: NestedTypeDeclarations = NestedTypeDeclarations(),
+		otherModuleDeclarations: [NestedTypeDeclarations] = [],
 		moduleFilePaths: Set<String>? = nil,
 	) {
-		var declarationsByPath = [String: [(declaration: NestedTypeDeclaration, isInModule: Bool)]]()
+		var declarationsByPath = [String: [Located]]()
+		var declarationsByName = [Substring: [Located]]()
+		func add(_ declaration: NestedTypeDeclaration, isInModule: Bool, origin: Origin) {
+			let located = Located(declaration: declaration, isInModule: isInModule, origin: origin)
+			declarationsByPath[declaration.path, default: []].append(located)
+			declarationsByName[declaration.name, default: []].append(located)
+		}
 		// The same declaration can arrive more than once, as when generate adds what a file walked again declares to
 		// what scan kept, and counts once: two declarations of a type are different modules' types.
 		for declaration in Set(declarations.declarations) where !declaration.isAbsent {
-			declarationsByPath[declaration.path, default: []].append((declaration, moduleFilePaths?.contains(declaration.filePath) ?? true))
+			if let moduleFilePaths, !moduleFilePaths.contains(declaration.filePath) {
+				// One input list holds every module's files, and nothing says which module a dependency file is in.
+				add(declaration, isInModule: false, origin: .file(declaration.filePath))
+			} else {
+				add(declaration, isInModule: true, origin: .module)
+			}
 		}
-		for declaration in Set(otherModuleDeclarations.declarations) where !declaration.isAbsent {
-			declarationsByPath[declaration.path, default: []].append((declaration, false))
+		for (index, moduleDeclarations) in otherModuleDeclarations.enumerated() {
+			for declaration in Set(moduleDeclarations.declarations) where !declaration.isAbsent {
+				add(declaration, isInModule: false, origin: .otherModule(index))
+			}
 		}
 		self.declarationsByPath = declarationsByPath
+		self.declarationsByName = declarationsByName
 		self.moduleFilePaths = moduleFilePaths
-		memberNames = declarations.lastNames.union(otherModuleDeclarations.lastNames)
+		memberNames = otherModuleDeclarations.reduce(into: declarations.lastNames) { $0.formUnion($1.lastNames) }
 	}
 
 	public var isEmpty: Bool {
 		declarationsByPath.isEmpty
 	}
 
-	/// `typeDescription` with each name that names a nested or inherited type spelled from the module scope, as
-	/// Swift resolves it inside the scope of `instantiable`, or `nil` when no name changes.
+	/// `typeDescription` with each name that names a nested type spelled from the module scope, as Swift resolves it
+	/// inside the scope of `instantiable`, or `nil` when no name changes.
 	public func qualifying(_ typeDescription: TypeDescription, within instantiable: Instantiable) -> TypeDescription? {
 		// Most modules declare nothing any lookup reads, and most names are no declaration's.
 		guard !isEmpty else { return nil }
@@ -415,7 +382,7 @@ public struct NestedTypeResolver {
 		}
 		guard spellsMemberName else { return nil }
 		let observer = Observer(
-			filePath: instantiable.sourceFilePath ?? "",
+			filePath: instantiable.sourceFilePath,
 			// An instantiable without a source file is found in no file of the module.
 			isInModule: moduleFilePaths.map { moduleFilePaths in instantiable.sourceFilePath.map(moduleFilePaths.contains) == true } ?? true,
 		)
@@ -436,23 +403,46 @@ public struct NestedTypeResolver {
 		return isQualified ? qualified : nil
 	}
 
+	/// The name `candidate`, a class's or actor's first inherited type as `NestedTypeDeclaration.superclassCandidate`
+	/// spells it, when it may be provably a protocol, or `nil` when it cannot be: a path of names, or a type SafeDI
+	/// cannot spell as one, could name a class whatever the declarations say.
+	static func provablyProtocolCandidate(_ candidate: String) -> String? {
+		!candidate.isEmpty && !candidate.contains(".") ? candidate : nil
+	}
+
 	// MARK: Private
 
 	/// The instantiable whose types are resolved.
 	private struct Observer {
-		let filePath: String
+		let filePath: String?
 		let isInModule: Bool
+	}
+
+	/// Where a declaration came from, which decides whose type its path names.
+	private enum Origin: Hashable {
+		/// The instantiable's module.
+		case module
+		/// A file of a module the instantiable's module depends on, when one input list holds every module's files.
+		case file(String)
+		/// The module info of the module at this index among those the instantiable's module depends on.
+		case otherModule(Int)
+	}
+
+	private struct Located {
+		let declaration: NestedTypeDeclaration
+		let isInModule: Bool
+		let origin: Origin
 	}
 
 	/// What the members of a type with one name are.
 	private enum MemberLookup: Equatable {
 		/// The type that declares the member, which spells it from the module scope.
 		case declared(by: TypeDescription)
-		/// Lookup stops here, and the name keeps its spelling: the member is a generic parameter, a protocol's member,
-		/// or one generated code cannot spell, or SafeDI cannot see every member that could match.
+		/// Lookup stops here, and the name keeps its spelling: the member is a generic parameter or one generated code
+		/// cannot spell, or SafeDI cannot see every member that could match.
 		case unqualifiable
-		/// The type has no member of that name, so lookup continues outward.
-		case absent
+		/// The type has no member of that name, so lookup continues outward unless the type inherits one.
+		case absent(inheritedTypeName: String?)
 	}
 
 	private enum Visibility {
@@ -462,135 +452,123 @@ public struct NestedTypeResolver {
 		case unknown
 	}
 
-	private let declarationsByPath: [String: [(declaration: NestedTypeDeclaration, isInModule: Bool)]]
+	private let declarationsByPath: [String: [Located]]
+	private let declarationsByName: [Substring: [Located]]
 	private let moduleFilePaths: Set<String>?
 	/// The last name of every declaration's path. Lookup of any other name finds no member type or generic
 	/// parameter anywhere, so the name keeps its spelling.
 	private let memberNames: Set<String>
 
-	/// The type at whose level `name` resolves to a nested or inherited type, searching outward from the innermost
-	/// type of `scope`, or `nil` when the name keeps its spelling.
+	/// The type at whose level `name` resolves to a nested type, searching outward from the innermost type of
+	/// `scope`, or `nil` when the name keeps its spelling.
 	private func enclosingType(ofTypeNamed name: String, searching scope: LexicalScope, as observer: Observer) -> TypeDescription? {
 		for searchedType in scope.searchedTypes {
-			switch member(named: name, of: searchedType.path, type: searchedType.type, isLexical: true, as: observer) {
+			switch member(named: name, of: searchedType.path, type: searchedType.type, as: observer) {
 			case let .declared(type):
 				return type
 			case .unqualifiable:
 				return nil
-			case .absent:
-				continue
+			case let .absent(inheritedTypeName):
+				// A class's superclass's nested types are members too, found before those of the types enclosing it.
+				// SafeDI does not follow superclasses: a class whose first inherited type may be a class keeps every
+				// name it does not declare itself as written. A protocol's members never change a spelling: swiftc
+				// finds a protocol's associated types and type aliases only when no type of the name is in scope.
+				guard inheritedTypeName.map({ isProvablyProtocol(named: $0, as: observer) }) ?? true else {
+					return nil
+				}
 			}
 		}
 		return nil
 	}
 
-	/// - Parameter isLexical: Whether the type at `path` encloses the declaration, so that its generic parameters
-	///   are in scope, rather than being a superclass of such a type.
 	private func member(
 		named name: String,
 		of path: String,
 		type: TypeDescription,
-		isLexical: Bool,
-		visitedSuperclassPaths: Set<String> = [],
 		as observer: Observer,
 	) -> MemberLookup {
+		var typeDeclarations = [Located]()
+		for located in declarationsByPath[path] ?? [] where located.declaration.isTypeDeclaration {
+			switch visibility(of: located, as: observer) {
+			case .visible:
+				typeDeclarations.append(located)
+			case .invisible:
+				break
+			case .unknown:
+				return .unqualifiable
+			}
+		}
+		// With no declaration, the type is declared where SafeDI cannot see its generic parameters or whether it is a
+		// class, and with more than one, they are different modules' types of the same name.
+		guard typeDeclarations.count == 1, let typeDeclaration = typeDeclarations.first, !typeDeclaration.declaration.isCompilerDetermined else {
+			return .unqualifiable
+		}
+
 		// The declarations at the path decide together, whatever order they are in: a generic parameter hides a member
-		// type of the same name, and a member type hides those of the superclass and of the enclosing types, unless
-		// SafeDI cannot know whether it exists or is visible.
+		// type of the same name, unless SafeDI cannot know whether it exists or is visible. Only a declaration from
+		// where the type is declared is the type's: another module's declaration at the same path is of its own type
+		// of that name, or of one SafeDI cannot tell apart from it.
 		var memberDeclarations = [NestedTypeDeclaration]()
-		for (declaration, isInModule) in declarationsByPath[path + "." + name] ?? [] {
-			switch visibility(of: declaration, isInModule: isInModule, as: observer) {
+		for located in declarationsByPath[path + "." + name] ?? [] where located.origin == typeDeclaration.origin {
+			switch visibility(of: located, as: observer) {
 			case .visible:
-				memberDeclarations.append(declaration)
+				memberDeclarations.append(located.declaration)
 			case .invisible:
 				break
 			case .unknown:
 				return .unqualifiable
 			}
 		}
-		if isLexical, memberDeclarations.contains(where: { $0.kind == .genericParameter }) {
+		if memberDeclarations.contains(where: { $0.kind == .genericParameter }) {
 			return .unqualifiable
 		}
-
-		var typeDeclarations = [(declaration: NestedTypeDeclaration, isInModule: Bool)]()
-		for (declaration, isInModule) in declarationsByPath[path] ?? [] where declaration.isTypeDeclaration {
-			switch visibility(of: declaration, isInModule: isInModule, as: observer) {
-			case .visible:
-				typeDeclarations.append((declaration, isInModule))
-			case .invisible:
-				break
-			case .unknown:
-				return .unqualifiable
-			}
-		}
-		// With no declaration, the type is declared where SafeDI cannot see its generic parameters or whether it has
-		// a superclass, and with more than one, they are different modules' types of the same name.
-		guard typeDeclarations.count == 1, let (typeDeclaration, isTypeInModule) = typeDeclarations.first, !typeDeclaration.isCompilerDetermined else {
-			return .unqualifiable
-		}
-
-		// A superclass's generic parameters are not members.
-		let memberTypeDeclarations = memberDeclarations.filter(\.isTypeDeclaration)
-		if !memberTypeDeclarations.isEmpty {
-			return memberTypeDeclarations.contains(where: \.isCompilerDetermined) ? .unqualifiable : .declared(by: type)
+		if !memberDeclarations.isEmpty {
+			return memberDeclarations.contains(where: \.isCompilerDetermined) ? .unqualifiable : .declared(by: type)
 		}
 		// SafeDI reads every file of the observer's module, but not every file of the modules it depends on, whose
 		// extensions may declare a member of the name.
-		guard observer.isInModule, isTypeInModule else {
+		guard observer.isInModule, typeDeclaration.isInModule else {
 			return .unqualifiable
 		}
-
-		// A superclass's nested types are members too, found before those of the types enclosing the declaration.
-		// A protocol's associated types and type aliases are found only when no type of the name is in scope at
-		// all, so they never change what a name names where it resolves to a nested type.
-		guard let superclassCandidate = typeDeclaration.superclassCandidate else {
-			return .absent
-		}
-		if let superclassPath = resolvedTypePath(
-			of: superclassCandidate,
-			inScopeOf: typeDeclaration.scopePath,
-			isDeclared: { isVisiblyDeclared($0, as: observer) },
-		) {
-			// A protocol is not a superclass. Sources that do not compile can make a class inherit from itself.
-			guard isVisiblyDeclared(superclassPath, kind: .classType, as: observer) else { return .absent }
-			guard !visitedSuperclassPaths.contains(superclassPath) else { return .unqualifiable }
-			return member(
-				named: name,
-				of: superclassPath,
-				type: TypeDescription(path: superclassPath),
-				isLexical: false,
-				visitedSuperclassPaths: visitedSuperclassPaths.union([path]),
-				as: observer,
-			)
-		} else {
-			// A protocol SafeDI knows is no superclass. Any other type SafeDI cannot see, or cannot follow, such as a
-			// generic class with arguments, may have nested types of the name.
-			return Self.knownProtocols.contains(superclassCandidate) ? .absent : .unqualifiable
-		}
+		return .absent(inheritedTypeName: typeDeclaration.declaration.superclassCandidate)
 	}
 
-	private func isVisiblyDeclared(_ path: String, kind: NestedTypeDeclaration.Kind? = nil, as observer: Observer) -> Bool {
-		(declarationsByPath[path] ?? []).contains { declaration, isInModule in
-			declaration.isTypeDeclaration
-				&& kind.map { $0 == declaration.kind } ?? true
-				&& visibility(of: declaration, isInModule: isInModule, as: observer) == .visible
+	/// Whether the type an inheritance clause names `name` is provably a protocol: no declaration SafeDI read that
+	/// could be visible where it is written gives the name to anything but a protocol, and either a protocol of the
+	/// name is visible or the name is one of `protocolNames`.
+	private func isProvablyProtocol(named name: String, as observer: Observer) -> Bool {
+		guard Self.provablyProtocolCandidate(name) != nil else { return false }
+		var declaresVisibleProtocol = false
+		for located in declarationsByName[Substring(name)] ?? [] {
+			let visibility = visibility(of: located, as: observer)
+			switch (located.declaration.kind, visibility) {
+			case (_, .invisible):
+				break
+			case (.protocolType, .visible):
+				declaresVisibleProtocol = declaresVisibleProtocol || !located.declaration.isCompilerDetermined
+			case (.protocolType, .unknown):
+				break
+			case (.classType, _), (.otherType, _), (.genericParameter, _):
+				return false
+			}
 		}
+		return declaresVisibleProtocol || Self.protocolNames.contains(name)
 	}
 
-	private func visibility(of declaration: NestedTypeDeclaration, isInModule: Bool, as observer: Observer) -> Visibility {
-		switch declaration.access {
+	private func visibility(of located: Located, as observer: Observer) -> Visibility {
+		switch located.declaration.access {
 		case .file:
 			// Generated code is in another file, where it cannot spell the declaration.
 			return .unknown
 		case .module, .package, .exported:
 			break
 		}
-		switch (observer.isInModule, isInModule) {
+		switch (observer.isInModule, located.isInModule) {
 		case (true, true):
 			return .visible
 		case (true, false):
 			// A module sees what the modules it depends on make public.
-			switch declaration.access {
+			switch located.declaration.access {
 			case .exported:
 				return .visible
 			case .module, .file:
@@ -603,55 +581,30 @@ public struct NestedTypeResolver {
 			return .invisible
 		case (false, false):
 			// Both are in modules this module depends on, which may or may not be the same one.
-			return declaration.filePath == observer.filePath ? .visible : .unknown
+			return located.declaration.filePath == observer.filePath ? .visible : .unknown
 		}
 	}
 
-	/// Protocols of the standard library and of SafeDI that a class's inheritance clause commonly names first, which
-	/// SafeDI knows are not superclasses.
-	static let knownProtocols: Set<String> = [
-		"AnyObject",
-		"BitwiseCopyable",
+	/// Protocols of the standard library, Foundation, Combine, Observation, and SafeDI that a class's inheritance clause
+	/// commonly names first, which SafeDI takes to be protocols when no declaration it read gives the name to anything
+	/// else.
+	private static let protocolNames: Set<String> = [
 		"CaseIterable",
 		"Codable",
 		"Comparable",
-		"Copyable",
 		"CustomDebugStringConvertible",
 		"CustomStringConvertible",
 		"Decodable",
 		"Encodable",
 		"Equatable",
 		"Error",
-		"Escapable",
 		"Hashable",
 		"Identifiable",
 		"Instantiable",
-		"RawRepresentable",
-		"SafeDI.Instantiable",
+		"Observable",
+		"ObservableObject",
 		"Sendable",
-		"SendableMetatype",
-		"Swift.Sendable",
 	]
-}
-
-/// The path of the type an inheritance clause names with `spelling`, written inside the type at `scopePath`:
-/// the innermost enclosing type that declares the first name, or the top level.
-/// - Parameter isDeclared: Whether a type is declared at a path.
-private func resolvedTypePath(of spelling: String, inScopeOf scopePath: String?, isDeclared: (String) -> Bool) -> String? {
-	let scopeComponents = scopePath.map { $0.split(separator: ".").map(String.init) } ?? []
-	return (0...scopeComponents.count).reversed().lazy
-		.map { (scopeComponents.prefix($0) + [spelling]).joined(separator: ".") }
-		.first(where: isDeclared)
-}
-
-extension TypeDescription {
-	/// The type spelled by the dotted path `path`.
-	fileprivate init(path: String) {
-		let components = path.split(separator: ".").map(String.init)
-		self = components.dropFirst().reduce(.simple(name: components[0])) { parentType, name in
-			.nested(name: name, parentType: parentType)
-		}
-	}
 }
 
 extension Instantiable {
