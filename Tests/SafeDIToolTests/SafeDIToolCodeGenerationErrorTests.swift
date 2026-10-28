@@ -4038,6 +4038,51 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_throwsErrorSuggestingNestedForwardedType_whenInstantiableForwardsNestedType() async {
+		await assertThrowsError(
+			"""
+			Property `childBuilder: ErasedInstantiator<Int, AnyChild>` on Child incorrectly configured. Property should instead be of type `ErasedInstantiator<Feature.Configuration, AnyChild>`.
+			""",
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(childBuilder: ErasedInstantiator<Int, AnyChild>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Child", erasedToConcreteExistential: true) let childBuilder: ErasedInstantiator<Int, AnyChild>
+					}
+					""",
+					"""
+					public enum Feature {
+					    public struct Configuration {}
+					}
+
+					public final class AnyChild {
+					    public init(_ child: Child) {}
+					}
+
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(configuration: Feature.Configuration) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let configuration: Feature.Configuration
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithIncorrectSendableErasedInstantiatorFirstGeneric_throwsErrorSuggestingSendableErasedInstantiator() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
