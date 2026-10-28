@@ -4319,6 +4319,40 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsError_whenMockScopedFilePathsSpellsOneFileTwoWays() async throws {
+		let swiftFile = try writeTemporarySwiftFileInProjectDirectory(named: "SafeDIConfiguration.swift", """
+		#SafeDIConfiguration()
+		""")
+
+		await assertThrowsError(
+			"The manifest’s mockScopedFilePaths lists one file as both './SafeDIConfiguration.swift' and 'SafeDIConfiguration.swift'. A hand-written manifest must list each file once, spelled as its configurationFilePaths and mockGeneration spell it.",
+		) {
+			try await generate(swiftFile, manifest: SafeDIToolManifest(
+				dependencyTreeGeneration: [],
+				configurationFilePaths: ["SafeDIConfiguration.swift"],
+				mockScopedFilePaths: ["SafeDIConfiguration.swift", "./SafeDIConfiguration.swift"],
+				projectRoot: swiftFile.deletingLastPathComponent().path,
+			))
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_doesNotThrow_whenMockScopedFilePathsListsOneFileTwiceWithOneSpelling() async throws {
+		let swiftFile = try writeTemporarySwiftFileInProjectDirectory(named: "SafeDIConfiguration.swift", """
+		#SafeDIConfiguration()
+		""")
+
+		try await generate(swiftFile, manifest: SafeDIToolManifest(
+			dependencyTreeGeneration: [],
+			configurationFilePaths: ["SafeDIConfiguration.swift"],
+			mockScopedFilePaths: ["SafeDIConfiguration.swift", "SafeDIConfiguration.swift"],
+			projectRoot: swiftFile.deletingLastPathComponent().path,
+		))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_throwsError_whenConfiguredAdditionalMockIsNotInManifest() async throws {
 		let swiftFile = try writeTemporarySwiftFile("""
 		#SafeDIConfiguration(additionalMocksToGenerate: ["Service"])
@@ -5704,6 +5738,17 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		let swiftFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".swift")
 		try content.write(to: swiftFile, atomically: true, encoding: .utf8)
 		filesToDelete.append(swiftFile)
+		return swiftFile
+	}
+
+	/// A new Swift file named `fileName` holding `content`, alone in a new directory a manifest can name as its
+	/// project root, which the test deletes.
+	private mutating func writeTemporarySwiftFileInProjectDirectory(named fileName: String, _ content: String) throws -> URL {
+		let projectDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: projectDirectory, withIntermediateDirectories: true)
+		filesToDelete.append(projectDirectory)
+		let swiftFile = projectDirectory.appendingPathComponent(fileName)
+		try content.write(to: swiftFile, atomically: true, encoding: .utf8)
 		return swiftFile
 	}
 

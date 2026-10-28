@@ -411,12 +411,25 @@ struct Generate: AsyncParsableCommand {
 						let candidateFileNames = Set(candidateMockScopedFilePaths.map { ($0 as NSString).lastPathComponent })
 						// The manifest's name for a module file, matched by its comparable path, or for a manifest
 						// without a project root, as written.
-						let mockScopedManifestPath: (String) -> String? = if let projectFilePaths {
-							{ [mockScopedManifestPathsByFilePath = Dictionary(uniqueKeysWithValues: candidateMockScopedFilePaths.map { (projectFilePaths.projectFilePath(of: $0), $0) })] sourceFilePath in
+						let mockScopedManifestPath: (String) -> String?
+						if let projectFilePaths {
+							// The name found here is compared as written with configurationFilePaths and mockGeneration,
+							// so a file listed under two spellings has no one name to compare.
+							let mockScopedManifestPathsByFilePath = try Dictionary(
+								candidateMockScopedFilePaths.map { (projectFilePaths.projectFilePath(of: $0), $0) },
+								uniquingKeysWith: { firstSpelling, secondSpelling in
+									guard firstSpelling == secondSpelling else {
+										throw ManifestError.mockScopedFileListedUnderTwoSpellings(firstSpelling: min(firstSpelling, secondSpelling), secondSpelling: max(firstSpelling, secondSpelling))
+									}
+									return firstSpelling
+								},
+							)
+							mockScopedManifestPath = { sourceFilePath in
 								mockScopedManifestPathsByFilePath[projectFilePaths.projectFilePath(of: sourceFilePath)]
 							}
 						} else {
-							{ [mockScopedFilePathSet = Set(candidateMockScopedFilePaths)] sourceFilePath in
+							let mockScopedFilePathSet = Set(candidateMockScopedFilePaths)
+							mockScopedManifestPath = { sourceFilePath in
 								mockScopedFilePathSet.contains(sourceFilePath) ? sourceFilePath : nil
 							}
 						}
@@ -637,12 +650,14 @@ struct Generate: AsyncParsableCommand {
 	/// each declaration that decides which files exist, in any clause of any `#if` block. `generate` writes a
 	/// file without code for a declaration these conditions leave inactive, but it cannot write a file the
 	/// manifest does not name, which happens when a source file gained such a declaration after `scan` ran,
-	/// or when a hand-written manifest omits it. These errors say so instead of omitting code.
+	/// or when a hand-written manifest omits it. These errors say so instead of omitting code, and reject a
+	/// hand-written manifest whose paths `generate` cannot match.
 	private enum ManifestError: Error, CustomStringConvertible {
 		case rootNotInManifest(sourceFilePath: String)
 		case mockNotInManifest(typeName: String, sourceFilePath: String)
 		case configurationNotInManifest(sourceFilePath: String)
 		case additionalMockNotInManifest(typeName: String)
+		case mockScopedFileListedUnderTwoSpellings(firstSpelling: String, secondSpelling: String)
 
 		var description: String {
 			switch self {
@@ -654,6 +669,8 @@ struct Generate: AsyncParsableCommand {
 				"Found #\(SafeDIConfigurationVisitor.macroName) in '\(sourceFilePath)', but this file is not listed in the manifest’s configurationFilePaths. \(Self.planningExplanation) A hand-written manifest must list the file."
 			case let .additionalMockNotInManifest(typeName):
 				"The #\(SafeDIConfigurationVisitor.macroName) lists `\(typeName)` in additionalMocksToGenerate, but the manifest’s additionalMocksToGenerate does not. \(Self.planningExplanation) A hand-written manifest must list the type in additionalMocksToGenerate and mockGeneration."
+			case let .mockScopedFileListedUnderTwoSpellings(firstSpelling, secondSpelling):
+				"The manifest’s mockScopedFilePaths lists one file as both '\(firstSpelling)' and '\(secondSpelling)'. A hand-written manifest must list each file once, spelled as its configurationFilePaths and mockGeneration spell it."
 			}
 		}
 
