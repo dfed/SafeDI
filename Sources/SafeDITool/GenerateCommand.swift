@@ -205,12 +205,29 @@ struct Generate: AsyncParsableCommand {
 		}()
 		let unnormalizedInstantiables = unnormalizedInstantiablesAndResolvers.map(\.0)
 		let instantiableTypes = Set(unnormalizedInstantiables.flatMap(\.instantiableTypes))
+		// A name keeps its spelling everywhere when it would be spelled differently in different scopes, or qualified
+		// in one and kept in another: matching a received dependency to the one that fulfills it compares the spelled
+		// types, so qualifying the name in only some of them could split a match that holds before qualification.
+		let namesKeepingSpelling: Set<String> = {
+			let memberNames = Set(unnormalizedInstantiablesAndResolvers.flatMap(\.1.memberNames))
+			// Most modules keep no declaration, so no name resolves to a nested type anywhere.
+			guard !memberNames.isEmpty else { return [] }
+			var enclosingTypesByName = [String: Set<TypeDescription?>]()
+			for (instantiable, resolver) in unnormalizedInstantiablesAndResolvers {
+				for typeDescription in instantiable.typeDescriptionsQualifiedByLexicalLookup {
+					for (name, enclosingType) in resolver.resolutions(in: typeDescription, within: instantiable, ofNames: memberNames) {
+						enclosingTypesByName[name, default: []].insert(enclosingType)
+					}
+				}
+			}
+			return Set(enclosingTypesByName.filter { $0.value.count > 1 }.keys)
+		}()
 		let normalizedInstantiables = unnormalizedInstantiablesAndResolvers.map { unnormalizedInstantiable, resolver in
 			/// The type with each name that names a nested type spelled from the module scope, or `nil`
 			/// when no name does. The types this is called with are `Instantiable.typeDescriptionsQualifiedByLexicalLookup`,
 			/// whose lookups decided which declarations the module keeps.
 			func lexicallyQualified(_ typeDescription: TypeDescription) -> TypeDescription? {
-				resolver.qualifying(typeDescription, within: unnormalizedInstantiable)
+				resolver.qualifying(typeDescription, within: unnormalizedInstantiable, keepingSpellingOf: namesKeepingSpelling)
 			}
 			func normalized(_ typeDescription: TypeDescription) -> TypeDescription? {
 				let lexicallyQualifiedTypeDescription = lexicallyQualified(typeDescription)
