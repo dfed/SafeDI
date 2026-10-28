@@ -2214,7 +2214,7 @@ struct SafeDIToolNestedNonInstantiableTypeTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(FOO)
-		#error("SafeDI scanned this module assuming `#if FOO` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if FOO` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		#if DEBUG
@@ -2280,7 +2280,7 @@ struct SafeDIToolNestedNonInstantiableTypeTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(FOO)
-		#error("SafeDI scanned this module assuming `#if FOO` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if FOO` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		#if DEBUG
@@ -2613,7 +2613,7 @@ struct SafeDIToolNestedNonInstantiableTypeTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(FOO)
-		#error("SafeDI scanned this module assuming `#if FOO` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if FOO` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		#if DEBUG
