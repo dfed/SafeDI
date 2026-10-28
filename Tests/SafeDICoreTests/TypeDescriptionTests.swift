@@ -1783,6 +1783,51 @@ struct TypeDescriptionTests {
 
 		#expect(typeDescription.replacingInstantiatedType { _ in nil } == nil)
 	}
+
+	// MARK: - Equatable and Hashable
+
+	@Test
+	func equals_returnsTrueAndHashesAlike_whenTypesDifferOnlyInAnyAtAnyDepth() {
+		for (anySpelling, plainSpelling) in [
+			("any Service", "Service"),
+			("(any Service)?", "Service?"),
+			("(any Service)!", "Service!"),
+			("[any Service]", "[Service]"),
+			("[String: any Service]", "[String: Service]"),
+			("(any Service, label: any Other)", "(Service, label: Other)"),
+			("(any Service) async throws -> any Other", "(Service) async throws -> Other"),
+			("@Sendable (any Service) -> Void", "@Sendable (Service) -> Void"),
+			("any Service & Other", "Service & Other"),
+			("(any Service & Other)?", "(Service & Other)?"),
+			("any Service.Type", "Service.Type"),
+			("(any Service).Type", "Service.Protocol"),
+			("Instantiator<any Service>", "Instantiator<Service>"),
+			("Feature<any Service>.Nested<any Other>", "Feature<Service>.Nested<Other>"),
+		] {
+			let anyType = TypeSyntax(stringLiteral: anySpelling).typeDescription
+			let plainType = TypeSyntax(stringLiteral: plainSpelling).typeDescription
+
+			#expect(anyType == plainType, "\(anySpelling) != \(plainSpelling)")
+			#expect(Set([anyType]).contains(plainType), "\(anySpelling) does not hash as \(plainSpelling)")
+		}
+	}
+
+	@Test
+	func equals_returnsFalse_whenTypesDifferInMoreThanAny() {
+		for (lhsSpelling, rhsSpelling) in [
+			("some Service", "Service"),
+			("some Service", "any Service"),
+			("(any Service).Type", "Service.Type"),
+			("any Service.Type", "Service.Protocol"),
+			("any Service", "Other"),
+			("(any Service)?", "any Service"),
+		] {
+			let lhs = TypeSyntax(stringLiteral: lhsSpelling).typeDescription
+			let rhs = TypeSyntax(stringLiteral: rhsSpelling).typeDescription
+
+			#expect(lhs != rhs, "\(lhsSpelling) == \(rhsSpelling)")
+		}
+	}
 }
 
 extension TypeDescription {

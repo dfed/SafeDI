@@ -20,8 +20,8 @@
 
 /// Every stored property of `value` and of everything it holds, private ones included, read through
 /// reflection. Two values with the same description hold the same data, even where `==` would not tell
-/// them apart: `TypeDescription.VoidSpelling` compares both spellings equal, and
-/// `UnorderedEquatingCollection` ignores order. A set's elements are sorted, because a set's iteration
+/// them apart: `TypeDescription.VoidSpelling` compares both spellings equal, `TypeDescription` ignores
+/// `any`, and `UnorderedEquatingCollection` ignores order. A set's elements are sorted, because a set's iteration
 /// order is not part of its value.
 func reflectedDescription(of value: Any) -> String {
 	let mirror = Mirror(reflecting: value)

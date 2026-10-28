@@ -313,12 +313,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToUnexpectedAny_throwsError() async {
+	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToUnexpectedSome_throwsError() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):5:5: error: @Received property `erasedType: any ErasedType` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `erasedType: ErasedType`?
-				\(fixtures["Child.swift"]):5:31-5:45: fixit: ErasedType
+				\(fixtures["Child.swift"]):5:5: error: @Received property `erasedType: some ErasedType` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `erasedType: ErasedType`?
+				\(fixtures["Child.swift"]):5:31-5:46: fixit: ErasedType
 				"""
 			},
 		) {
@@ -346,52 +346,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 					@Instantiable
 					public final class Child: Instantiable {
-					    @Received let erasedType: any ErasedType
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithUnfulfillableReceivedPropertyDueToDroppedAny_throwsError() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["Child.swift"]):5:5: error: @Received property `erasedType: ErasedType` is not @Instantiated or @Forwarded in chain: Root -> Child. Did you mean `erasedType: any ErasedType`?
-				\(fixtures["Child.swift"]):5:31-5:41: fixit: any ErasedType
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					import SafeDI
-
-					@Instantiable(isRoot: true)
-					public final class Root: Instantiable {
-					    @Instantiated(fulfilledByType: "SomeErasedType") let erasedType: any ErasedType
-					    @Instantiated let child: Child
-					}
-					""",
-					"""
-					import SafeDI
-
-					public protocol ErasedType {}
-
-					@Instantiable
-					public final class SomeErasedType: ErasedType, Instantiable {}
-					""",
-					"""
-					import SafeDI
-
-					@Instantiable
-					public final class Child: Instantiable {
-					    @Received let erasedType: ErasedType
+					    @Received let erasedType: some ErasedType
 					}
 					""",
 				],
