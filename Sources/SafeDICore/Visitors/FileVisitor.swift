@@ -502,15 +502,15 @@ extension DeclModifierListSyntax {
 		lazy.compactMap { modifier -> NestedTypeDeclaration.Access? in
 			switch modifier.name.tokenKind {
 			case .keyword(.private), .keyword(.fileprivate):
-				return .file
+				.file
 			case .keyword(.internal):
-				return .module
+				.module
 			case .keyword(.package):
-				return .package
+				.package
 			case .keyword(.public), .keyword(.open):
-				return .exported
+				.exported
 			default:
-				return nil
+				nil
 			}
 		}.first
 	}
