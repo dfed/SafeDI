@@ -679,6 +679,8 @@ public actor DependencyTreeGenerator {
 			/// The `@Received(onlyIfAvailable: true)` alias that declares `property` where `instantiable` receives it,
 			/// when that alias is not created because its fulfilling property is unavailable. `nil` otherwise.
 			let uncreatedAlias: UncreatedAlias?
+			/// How the declarations spell the types where this was found, for the message, which may be built later.
+			let writtenTypeDescriptionsByQualifiedType = WrittenTypeDescriptions.writtenTypeDescriptionsByQualifiedType
 
 			/// An `@Received(onlyIfAvailable: true)` alias that is not created because its fulfilling property is unavailable.
 			struct UncreatedAlias: Hashable {
@@ -689,8 +691,14 @@ public actor DependencyTreeGenerator {
 
 			/// A single `error:` line. The suggestion or fix hint is folded into it rather than emitted as a
 			/// `note:` because it belongs at the same location, and Xcode drops notes from build-tool output.
-			// Each property is shown as its declaration spells it.
+			/// Each property is shown as its declaration spells it.
 			var sourceDiagnostics: [SourceDiagnostic] {
+				WrittenTypeDescriptions.$writtenTypeDescriptionsByQualifiedType.withValue(writtenTypeDescriptionsByQualifiedType) {
+					spelledSourceDiagnostics
+				}
+			}
+
+			private var spelledSourceDiagnostics: [SourceDiagnostic] {
 				let chain = ([instantiable.concreteInstantiable] + parentStack + [root]).reversed()
 				let summary = "@\(Dependency.Source.receivedRawValue) property `\(property.spelledAsSource)` is not @\(Dependency.Source.instantiatedRawValue) or @\(Dependency.Source.forwardedRawValue) in chain: \(chain.map(\.asSource).joined(separator: " -> "))"
 				// A diagnostic carries at most one fix-it – Xcode offers no Apply at all for a diagnostic with several –

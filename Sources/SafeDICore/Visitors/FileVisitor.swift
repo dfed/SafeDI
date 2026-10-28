@@ -39,6 +39,7 @@ public final class FileVisitor: SyntaxVisitor {
 	// MARK: SyntaxVisitor
 
 	public override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
 		// A protocol is no superclass, and a conforming type's lookup finds its associated types and type aliases only
 		// when no type of the name is in scope at all.
 		recordType(named: node.name.text, kind: .protocolType, modifiers: node.modifiers, attributes: node.attributes)
@@ -54,22 +55,31 @@ public final class FileVisitor: SyntaxVisitor {
 		return .skipChildren
 	}
 
-	public override func visit(_: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
-		.skipChildren
+	public override func visit(_ node: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
+		return .skipChildren
 	}
 
-	public override func visit(_: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
-		.skipChildren
+	public override func visit(_ node: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
+		return .skipChildren
 	}
 
-	public override func visit(_: DeinitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+	public override func visit(_ node: DeinitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
 		// A type declared in a body is local to it, not nested in the enclosing type.
-		.skipChildren
+		return .skipChildren
 	}
 
-	public override func visit(_: SubscriptDeclSyntax) -> SyntaxVisitorContinueKind {
+	public override func visit(_ node: SubscriptDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
 		// A type declared in a body is local to it, not nested in the enclosing type.
-		.skipChildren
+		return .skipChildren
+	}
+
+	public override func visit(_ node: EnumCaseDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
+		return .skipChildren
 	}
 
 	public override func visit(_ node: ImportDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -87,11 +97,13 @@ public final class FileVisitor: SyntaxVisitor {
 		return .skipChildren
 	}
 
-	public override func visit(_: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
-		.skipChildren
+	public override func visit(_ node: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
+		return .skipChildren
 	}
 
 	public override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
 		recordType(named: node.name.text, kind: .typeAlias, modifiers: node.modifiers, attributes: node.attributes)
 		return .skipChildren
 	}
@@ -125,6 +137,10 @@ public final class FileVisitor: SyntaxVisitor {
 			if selectedClauses.contains(clause.id) {
 				clauseConditions[clause.id] = blockConditions
 			} else if let elements = clause.elements {
+				if let parentPath, isParentTypeSpelledAsPath, elements.as(MemberBlockItemListSyntax.self)?.containsMemberCarryingUnrecognizedAttribute == true {
+					// What this visitor does not visit may still add members, whichever clause the compiler selects.
+					nestedTypeDeclarations.record(.unseenMembers(ofTypeAt: parentPath))
+				}
 				let absentDeclarationRecorder = AbsentDeclarationRecorder(
 					parentType: parentType,
 					conditions: declarationConditions.adding(blockConditions),
@@ -222,6 +238,7 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
 		// Enums can't be instantiable because they can't have `let` properties.
 		// However, they can have nested types within them that are instantiable.
 		let access = recordType(
@@ -230,7 +247,6 @@ public final class FileVisitor: SyntaxVisitor {
 			modifiers: node.modifiers,
 			attributes: node.attributes,
 			genericParameterClause: node.genericParameterClause,
-			memberBlock: node.memberBlock,
 		)
 		enterTypeNamed(node.name.text, access: access)
 		return .visitChildren
@@ -267,11 +283,8 @@ public final class FileVisitor: SyntaxVisitor {
 		parentPath = extendedTypeNamePath?.joined(separator: ".")
 		extendedTypePath = parentPath
 		isParentTypeSpelledAsPath = extendedTypeNamePath != nil
-		if let parentPath, node.attributes.hasUnrecognizedAttribute || node.memberBlock.hasMemberCarryingUnrecognizedAttribute {
-			// An attached macro may add members to the type the extension extends, and a peer macro attached to a
-			// member may add a member type.
-			nestedTypeDeclarations.record(.unseenMembers(ofTypeAt: parentPath))
-		}
+		// An attached macro may add members to the type the extension extends. Its members are visited in turn.
+		recordUnseenMembers(ifCarrying: node.attributes)
 		// A member's access defaults to the extension's, and the extended type's own access, declared elsewhere,
 		// does not limit it here.
 		let extensionAccess = node.modifiers.access
@@ -367,6 +380,7 @@ public final class FileVisitor: SyntaxVisitor {
 	private var importOnlyBlockDepth = 0
 
 	private func visitDecl(_ node: some ConcreteDeclSyntaxProtocol) -> SyntaxVisitorContinueKind {
+		recordUnseenMembers(ifCarrying: node.attributes)
 		let instantiableVisitor = InstantiableVisitor(
 			declarationType: .concreteDecl,
 			parentType: parentType,
@@ -391,13 +405,20 @@ public final class FileVisitor: SyntaxVisitor {
 			// does a class's.
 			superclassCandidate: node.declType.mayHaveSuperclass ? node.inheritanceClause?.superclassCandidate : nil,
 			genericParameterClause: node.genericParameterClause,
-			memberBlock: node.memberBlock,
 		)
 		// Keep track of how nested we are.
 		enterTypeNamed(node.name.text, access: access)
 
 		// Continue to find child types.
 		return .visitChildren
+	}
+
+	/// Records that the type or extension the walk is in may gain members SafeDI cannot see, when `attributes`, those of
+	/// one of its members, hold one that may be a peer macro, or `@_spi`, or an `@available` that may hide it.
+	private func recordUnseenMembers(ifCarrying attributes: AttributeListSyntax) {
+		if !attributes.isEmpty, let parentPath, isParentTypeSpelledAsPath, attributes.hasUnrecognizedAttribute {
+			nestedTypeDeclarations.record(.unseenMembers(ofTypeAt: parentPath))
+		}
 	}
 
 	/// The path of a type named `name` declared where the walk is, or `nil` inside an extension of a type that is
@@ -417,14 +438,9 @@ public final class FileVisitor: SyntaxVisitor {
 		attributes: AttributeListSyntax,
 		superclassCandidate: String? = nil,
 		genericParameterClause: GenericParameterClauseSyntax? = nil,
-		memberBlock: MemberBlockSyntax? = nil,
 	) -> NestedTypeDeclaration.Access {
 		let access = min(modifiers.access ?? defaultMemberAccess, accessStack.last ?? .exported)
 		guard let path = path(ofTypeNamed: name) else { return access }
-		if memberBlock?.hasMemberCarryingUnrecognizedAttribute == true {
-			// A peer macro attached to a member may add a member type SafeDI cannot see.
-			nestedTypeDeclarations.record(.unseenMembers(ofTypeAt: path))
-		}
 		nestedTypeDeclarations.record(NestedTypeDeclaration(
 			path: path,
 			kind: kind,
@@ -538,8 +554,10 @@ extension AttributeSyntax {
 	/// lookup finding the declaration: an `@available` only when every argument names a platform and its version, or
 	/// is `*`. One that names a Swift version, or makes the declaration unavailable or obsolete, can hide it.
 	fileprivate var isRecognized: Bool {
-		let name = attributeName.trimmedDescription
-		guard NestedTypeDeclaration.recognizedAttributeNames.contains(name) else { return false }
+		// A name with a module's, such as `SafeDI.Instantiable`, is not recognized.
+		guard let name = attributeName.as(IdentifierTypeSyntax.self)?.name.text,
+		      NestedTypeDeclaration.recognizedAttributeNames.contains(name)
+		else { return false }
 		guard name == "available" else { return true }
 		return arguments?.as(AvailabilityArgumentListSyntax.self).map { availabilityArguments in
 			availabilityArguments.allSatisfy { availabilityArgument in
@@ -552,11 +570,11 @@ extension AttributeSyntax {
 	}
 }
 
-extension MemberBlockSyntax {
-	/// Whether any member, in any clause of the `#if` blocks among the members, carries an attribute that is not
+extension MemberBlockItemListSyntax {
+	/// Whether any of these members, in any clause of the `#if` blocks among them, carries an attribute that is not
 	/// recognized, which may be a peer macro that adds a member type.
-	fileprivate var hasMemberCarryingUnrecognizedAttribute: Bool {
-		members.contains { $0.decl.carriesUnrecognizedAttribute }
+	fileprivate var containsMemberCarryingUnrecognizedAttribute: Bool {
+		contains { $0.decl.carriesUnrecognizedAttribute }
 	}
 }
 
@@ -565,7 +583,7 @@ extension DeclSyntax {
 		if let ifConfig = self.as(IfConfigDeclSyntax.self) {
 			// A clause among members holds members, or nothing.
 			ifConfig.clauses.contains { clause in
-				clause.elements?.as(MemberBlockItemListSyntax.self)?.contains { $0.decl.carriesUnrecognizedAttribute } == true
+				clause.elements?.as(MemberBlockItemListSyntax.self)?.containsMemberCarryingUnrecognizedAttribute == true
 			}
 		} else {
 			asProtocol(WithAttributesSyntax.self).map(\.attributes.hasUnrecognizedAttribute) == true
@@ -680,7 +698,7 @@ private final class AbsentDeclarationRecorder: SyntaxVisitor {
 	override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
 		parentType = node.extendedType.typeDescription
 		extendedTypePath = parentType?.namePath?.joined(separator: ".")
-		if let extendedTypePath, node.attributes.hasUnrecognizedAttribute || node.memberBlock.hasMemberCarryingUnrecognizedAttribute {
+		if let extendedTypePath, node.attributes.hasUnrecognizedAttribute || node.memberBlock.members.containsMemberCarryingUnrecognizedAttribute {
 			declarations.record(.unseenMembers(ofTypeAt: extendedTypePath))
 		}
 		return .visitChildren

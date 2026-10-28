@@ -1970,7 +1970,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The full type description of the property (e.g., `Instantiator<Child>`).
 		let typeDescription: TypeDescription
 		/// The property's type as its declaration spells it, from which generated names derive.
-		let spelledTypeDescription: TypeDescription
+		var spelledTypeDescription: TypeDescription {
+			typeDescription.asWritten
+		}
 		/// The instantiated type — `typeDescription.asInstantiatedType` (e.g., `Child`).
 		/// Used for the builder closure's return type, disambiguation keys, and
 		/// cycle detection. Configuration struct nesting uses `concreteType` instead.
@@ -2486,7 +2488,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				items.append(.property(MockParameterNode(
 					propertyLabel: childProperty.label,
 					typeDescription: childProperty.typeDescription,
-					spelledTypeDescription: childProperty.spelledTypeDescription,
 					instantiatedTypeDescription: childProperty.typeDescription.asInstantiatedType,
 					isInstantiator: isInstantiator,
 					isExtensionBased: childInstantiable.declarationType.isExtension,

@@ -26,13 +26,8 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 	// MARK: Initialization
 
 	public init(label: String, typeDescription: TypeDescription) {
-		self.init(label: label, typeDescription: typeDescription, writtenTypeDescription: nil)
-	}
-
-	private init(label: String, typeDescription: TypeDescription, writtenTypeDescription: TypeDescription?) {
 		self.label = label
 		self.typeDescription = typeDescription
-		self.writtenTypeDescription = writtenTypeDescription
 		var hasher = Hasher()
 		hasher.combine(label)
 		hasher.combine(typeDescription)
@@ -55,16 +50,6 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 	public let label: String
 	/// The type to which the property conforms.
 	public let typeDescription: TypeDescription
-	/// The type as the declaration spells it, when `typeDescription` spells a nested type the declaration names
-	/// without its enclosing types from the module scope, or `nil` when the two are spelled alike. It is neither
-	/// compared, hashed, nor encoded: it decides only the names generated code derives from the type, which depend
-	/// on what the declaration says alone.
-	public let writtenTypeDescription: TypeDescription?
-
-	/// The type as the declaration spells it.
-	public var spelledTypeDescription: TypeDescription {
-		writtenTypeDescription ?? typeDescription
-	}
 
 	// MARK: Equatable
 
@@ -88,19 +73,14 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		)
 	}
 
-	/// This property with `typeDescription`, which spells nested types from the module scope that the declaration
-	/// spells as `writtenTypeDescription`.
-	public func withQualifiedTypeDescription(_ typeDescription: TypeDescription, writtenAs writtenTypeDescription: TypeDescription) -> Self {
-		.init(
-			label: label,
-			typeDescription: typeDescription,
-			writtenTypeDescription: writtenTypeDescription,
-		)
-	}
-
 	/// The property represented as source code.
 	public var asSource: String {
 		"\(label): \(typeDescription.asSource)"
+	}
+
+	/// The type as the declaration spells it, from which the names generated code derives from the type come.
+	public var spelledTypeDescription: TypeDescription {
+		typeDescription.asWritten
 	}
 
 	/// The property represented as source code as its declaration spells it, for diagnostics.
@@ -372,4 +352,22 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 	/// The hash of `label` and `typeDescription`, computed once by the initializer every
 	/// property is created through. Not encoded, and not compared by `==`.
 	private let hashOfLabelAndTypeDescription: Int
+}
+
+/// How the declarations spell the types that qualification changed, while code is generated from them.
+///
+/// The names generated code derives from types, such as the parameters of `mock()` that share a label, depend only on
+/// what the declarations say. Each qualified type has one spelling: a name keeps its spelling wherever qualifying it
+/// would make a type the same as one spelled differently. A table rather than a property of `Property`, which code
+/// generation copies far more often than it names anything.
+public enum WrittenTypeDescriptions {
+	/// The spelling of each type qualification changed, by the type it changed it to.
+	@TaskLocal public static var writtenTypeDescriptionsByQualifiedType = [TypeDescription: TypeDescription]()
+}
+
+extension TypeDescription {
+	/// This type as the declarations spell it.
+	public var asWritten: TypeDescription {
+		WrittenTypeDescriptions.writtenTypeDescriptionsByQualifiedType[self] ?? self
+	}
 }
