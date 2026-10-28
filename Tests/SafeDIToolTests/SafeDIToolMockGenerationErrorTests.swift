@@ -499,7 +499,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):6:5: error: Dependency cycle: @Instantiated `child: Child` -> @Received `maybe: Greeter?` -> @Received `x: X` -> @Received `child: Child`. `child: Child` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["X.swift"]):6:5: error: Dependency cycle: @Instantiated `child: Child` -> @Received `maybe: Greeter?` -> @Received `x: X` -> @Received `child: Child`. `child: Child` is received while it is still being instantiated. `maybe: Greeter?` renames `x: X` only if available, so a type that receives `maybe` without `onlyIfAvailable` must be built after `x: X`. Receive `maybe` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X` cannot be built first.
 				"""
 			},
 		) {
@@ -542,6 +542,156 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 					public final class Grand: Instantiable {
 					    public init(maybe: Greeter?) { self.maybe = maybe }
 					    @Received let maybe: Greeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenPromotedDependencyFulfillsOnlyIfAvailableAliasRequiredByItsOwnTree() async {
+		// Mocked.mock() promotes `t`. T requires Mocked's `onlyIfAvailable` alias of `t`, so `t`
+		// must be built before T is.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["T.swift"]):4:5: error: Dependency cycle: @Instantiated `t: T` -> @Received `tProtocol: TProtocol?` -> @Received `t: T`. `t: T` is received while it is still being instantiated. `tProtocol: TProtocol?` renames `t: T` only if available, so a type that receives `tProtocol` without `onlyIfAvailable` must be built after `t: T`. Receive `tProtocol` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `t: T` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol TProtocol: AnyObject {}
+
+					@Instantiable(generateMock: true)
+					public final class Mocked: Instantiable {
+					    public init(tProtocol: TProtocol?, t: T) { self.tProtocol = tProtocol; self.t = t }
+					    @Received(fulfilledByDependencyNamed: "t", ofType: T.self, onlyIfAvailable: true) let tProtocol: TProtocol?
+					    @Received let t: T
+					}
+					""",
+					"""
+					@Instantiable
+					public final class T: Instantiable, TProtocol {
+					    public init(tProtocol: TProtocol?) { self.tProtocol = tProtocol }
+					    @Received let tProtocol: TProtocol?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenInstantiatedDependencyFulfillsOnlyIfAvailableAliasRequiredByItsOwnTree() async {
+		// T requires Mocked's `onlyIfAvailable` alias of `t`, so `t` must be built before T is.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["T.swift"]):4:5: error: Dependency cycle: @Instantiated `t: T` -> @Received `tProtocol: TProtocol?` -> @Received `t: T`. `t: T` is received while it is still being instantiated. `tProtocol: TProtocol?` renames `t: T` only if available, so a type that receives `tProtocol` without `onlyIfAvailable` must be built after `t: T`. Receive `tProtocol` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `t: T` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol TProtocol: AnyObject {}
+
+					@Instantiable(generateMock: true)
+					public final class Mocked: Instantiable {
+					    public init(tProtocol: TProtocol?, t: T) { self.tProtocol = tProtocol; self.t = t }
+					    @Received(fulfilledByDependencyNamed: "t", ofType: T.self, onlyIfAvailable: true) let tProtocol: TProtocol?
+					    @Instantiated let t: T
+					}
+					""",
+					"""
+					@Instantiable
+					public final class T: Instantiable, TProtocol {
+					    public init(tProtocol: TProtocol?) { self.tProtocol = tProtocol }
+					    @Received let tProtocol: TProtocol?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenRootGeneratingMockInstantiatesDependencyFulfillingOnlyIfAvailableAliasRequiredByItsOwnTree() async {
+		// T requires Root's `onlyIfAvailable` alias of `t`, so `t` must be built before T is,
+		// in Root's dependency tree and in its mock alike.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["T.swift"]):4:5: error: Dependency cycle: @Instantiated `t: T` -> @Received `tProtocol: TProtocol?` -> @Received `t: T`. `t: T` is received while it is still being instantiated. `tProtocol: TProtocol?` renames `t: T` only if available, so a type that receives `tProtocol` without `onlyIfAvailable` must be built after `t: T`. Receive `tProtocol` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `t: T` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol TProtocol: AnyObject {}
+
+					@Instantiable(isRoot: true, generateMock: true)
+					public final class Root: Instantiable {
+					    public init(tProtocol: TProtocol?, t: T) { self.tProtocol = tProtocol; self.t = t }
+					    @Received(fulfilledByDependencyNamed: "t", ofType: T.self, onlyIfAvailable: true) let tProtocol: TProtocol?
+					    @Instantiated let t: T
+					}
+					""",
+					"""
+					@Instantiable
+					public final class T: Instantiable, TProtocol {
+					    public init(tProtocol: TProtocol?) { self.tProtocol = tProtocol }
+					    @Received let tProtocol: TProtocol?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenPromotedDependencyFulfillsAliasRequiredByItsOwnTree() async {
+		// Mocked.mock() promotes `t`. T requires Mocked's alias of `t`, which is built from the T being built.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["T.swift"]):4:5: error: Dependency cycle: @Instantiated `t: T` -> @Received `tProtocol: TProtocol?` -> @Received `t: T`. `t: T` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol TProtocol: AnyObject {}
+
+					@Instantiable(generateMock: true)
+					public final class Mocked: Instantiable {
+					    public init(tProtocol: TProtocol?, t: T) { self.tProtocol = tProtocol; self.t = t }
+					    @Received(fulfilledByDependencyNamed: "t", ofType: T.self) let tProtocol: TProtocol?
+					    @Received let t: T
+					}
+					""",
+					"""
+					@Instantiable
+					public final class T: Instantiable, TProtocol {
+					    public init(tProtocol: TProtocol?) { self.tProtocol = tProtocol }
+					    @Received let tProtocol: TProtocol?
 					}
 					""",
 				],

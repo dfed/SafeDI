@@ -4038,6 +4038,53 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_throwsErrorSuggestingNestedForwardedType_whenInstantiableForwardsNestedType() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: The first generic argument of `childBuilder: ErasedInstantiator<Int, AnyChild>` on `Root` must be the @Forwarded properties of `Child`, which it builds. Declare it as `ErasedInstantiator<Feature.Configuration, AnyChild>`.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(childBuilder: ErasedInstantiator<Int, AnyChild>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Child", erasedToConcreteExistential: true) let childBuilder: ErasedInstantiator<Int, AnyChild>
+					}
+					""",
+					"""
+					public enum Feature {
+					    public struct Configuration {}
+					}
+
+					public final class AnyChild {
+					    public init(_ child: Child) {}
+					}
+
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(configuration: Feature.Configuration) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let configuration: Feature.Configuration
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithIncorrectSendableErasedInstantiatorFirstGeneric_throwsErrorSuggestingSendableErasedInstantiator() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
@@ -5478,7 +5525,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):6:5: error: Dependency cycle: @Instantiated `child: Child` -> @Received `maybe: Greeter?` -> @Received `x: X` -> @Received `child: Child`. `child: Child` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["X.swift"]):6:5: error: Dependency cycle: @Instantiated `child: Child` -> @Received `maybe: Greeter?` -> @Received `x: X` -> @Received `child: Child`. `child: Child` is received while it is still being instantiated. `maybe: Greeter?` renames `x: X` only if available, so a type that receives `maybe` without `onlyIfAvailable` must be built after `x: X`. Receive `maybe` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X` cannot be built first.
 				"""
 			},
 		) {
@@ -5531,7 +5578,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["DefaultGreeter.swift"]):6:5: error: Dependency cycle: @Instantiated `missing: DefaultGreeter` -> @Received `maybe: Greeter?` -> @Received `missing: DefaultGreeter`. `missing: DefaultGreeter` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["DefaultGreeter.swift"]):6:5: error: Dependency cycle: @Instantiated `missing: DefaultGreeter` -> @Received `maybe: Greeter?` -> @Received `missing: DefaultGreeter`. `missing: DefaultGreeter` is received while it is still being instantiated. `maybe: Greeter?` renames `missing: DefaultGreeter` only if available, so a type that receives `maybe` without `onlyIfAvailable` must be built after `missing: DefaultGreeter`. Receive `maybe` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `missing: DefaultGreeter` cannot be built first.
 				"""
 			},
 		) {
@@ -5576,7 +5623,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Grand.swift"]):4:5: error: Dependency cycle: @Instantiated `greeterBuilder: Instantiator<DefaultGreeter>` -> @Received `maybeBuilder: Instantiator<DefaultGreeter>?` -> @Received `greeterBuilder: Instantiator<DefaultGreeter>`. `greeterBuilder: Instantiator<DefaultGreeter>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["Grand.swift"]):4:5: error: Dependency cycle: @Instantiated `greeterBuilder: Instantiator<DefaultGreeter>` -> @Received `maybeBuilder: Instantiator<DefaultGreeter>?` -> @Received `greeterBuilder: Instantiator<DefaultGreeter>`. `greeterBuilder: Instantiator<DefaultGreeter>` is received while it is still being instantiated. `maybeBuilder: Instantiator<DefaultGreeter>?` renames `greeterBuilder: Instantiator<DefaultGreeter>` only if available, so a type that receives `maybeBuilder` without `onlyIfAvailable` must be built after `greeterBuilder: Instantiator<DefaultGreeter>`. Receive `maybeBuilder` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `greeterBuilder: Instantiator<DefaultGreeter>` cannot be built first.
 				"""
 			},
 		) {
@@ -5609,6 +5656,212 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public final class Grand: Instantiable {
 					    public init(maybeBuilder: Instantiator<DefaultGreeter>?) { self.maybeBuilder = maybeBuilder }
 					    @Received let maybeBuilder: Instantiator<DefaultGreeter>?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfRootsOnlyIfAvailableAliasInsideItsFulfillingProperty_throwsError() async {
+		// T requires `tProtocol`, which Root can create only once `t`, the T being built, exists.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["T.swift"]):4:5: error: Dependency cycle: @Instantiated `t: T` -> @Received `tProtocol: TProtocol?` -> @Received `t: T`. `t: T` is received while it is still being instantiated. `tProtocol: TProtocol?` renames `t: T` only if available, so a type that receives `tProtocol` without `onlyIfAvailable` must be built after `t: T`. Receive `tProtocol` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `t: T` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol TProtocol: AnyObject {}
+
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(tProtocol: TProtocol?, t: T) { self.tProtocol = tProtocol; self.t = t }
+					    @Received(fulfilledByDependencyNamed: "t", ofType: T.self, onlyIfAvailable: true) let tProtocol: TProtocol?
+					    @Instantiated let t: T
+					}
+					""",
+					"""
+					@Instantiable
+					public final class T: Instantiable, TProtocol {
+					    public init(tProtocol: TProtocol?) { self.tProtocol = tProtocol }
+					    @Received let tProtocol: TProtocol?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfRootsOnlyIfAvailableAliasInsideItsInstantiatorFulfillingProperty_throwsError() async {
+		// T requires `maybeBuilder`, which Root can create only once `tBuilder`, the Instantiator T is built by, exists.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["T.swift"]):4:5: error: Dependency cycle: @Instantiated `tBuilder: Instantiator<T>` -> @Received `maybeBuilder: Instantiator<T>?` -> @Received `tBuilder: Instantiator<T>`. `tBuilder: Instantiator<T>` is received while it is still being instantiated. `maybeBuilder: Instantiator<T>?` renames `tBuilder: Instantiator<T>` only if available, so a type that receives `maybeBuilder` without `onlyIfAvailable` must be built after `tBuilder: Instantiator<T>`. Receive `maybeBuilder` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tBuilder: Instantiator<T>` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(maybeBuilder: Instantiator<T>?, tBuilder: Instantiator<T>) { self.maybeBuilder = maybeBuilder; self.tBuilder = tBuilder }
+					    @Received(fulfilledByDependencyNamed: "tBuilder", ofType: Instantiator<T>.self, onlyIfAvailable: true) let maybeBuilder: Instantiator<T>?
+					    @Instantiated let tBuilder: Instantiator<T>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class T: Instantiable {
+					    public init(maybeBuilder: Instantiator<T>?) { self.maybeBuilder = maybeBuilder }
+					    @Received let maybeBuilder: Instantiator<T>?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfRootsOnlyIfAvailableAliasOfSiblingThatReceivesTheReceiver_throwsError() async {
+		// B requires `maybe`, which Root can create only once `a` is built, but A requires `b`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `b: B` -> @Received `maybe: Greeter?` -> @Received `a: A`. `a: A` is received while it is still being instantiated. `maybe: Greeter?` renames `a: A` only if available, so a type that receives `maybe` without `onlyIfAvailable` must be built after `a: A`. Receive `maybe` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `a: A` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol Greeter: AnyObject {}
+
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(maybe: Greeter?, a: A, b: B) { self.maybe = maybe; self.a = a; self.b = b }
+					    @Received(fulfilledByDependencyNamed: "a", ofType: A.self, onlyIfAvailable: true) let maybe: Greeter?
+					    @Instantiated let a: A
+					    @Instantiated let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable, Greeter {
+					    public init(b: B) { self.b = b }
+					    @Received let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(maybe: Greeter?) { self.maybe = maybe }
+					    @Received let maybe: Greeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasOfSiblingThatReceivesTheReceiver_throwsError() async {
+		// B requires `maybe`, which Child can create only once `a` is built, but A requires `b`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `b: B` -> @Received `maybe: Greeter?` -> @Received `a: A`. `a: A` is received while it is still being instantiated. `maybe: Greeter?` renames `a: A` only if available, so a type that receives `maybe` without `onlyIfAvailable` must be built after `a: A`. Receive `maybe` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `a: A` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					public protocol Greeter: AnyObject {}
+
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(maybe: Greeter?, a: A, b: B) { self.maybe = maybe; self.a = a; self.b = b }
+					    @Received(fulfilledByDependencyNamed: "a", ofType: A.self, onlyIfAvailable: true) let maybe: Greeter?
+					    @Instantiated let a: A
+					    @Instantiated let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable, Greeter {
+					    public init(b: B) { self.b = b }
+					    @Received let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(maybe: Greeter?) { self.maybe = maybe }
+					    @Received let maybe: Greeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfRootsAliasInsideItsFulfillingProperty_throwsError() async {
+		// T requires `tProtocol`, which Root creates from `t`, the T being built.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["T.swift"]):4:5: error: Dependency cycle: @Instantiated `t: T` -> @Received `tProtocol: TProtocol?` -> @Received `t: T`. `t: T` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol TProtocol: AnyObject {}
+
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(tProtocol: TProtocol?, t: T) { self.tProtocol = tProtocol; self.t = t }
+					    @Received(fulfilledByDependencyNamed: "t", ofType: T.self) let tProtocol: TProtocol?
+					    @Instantiated let t: T
+					}
+					""",
+					"""
+					@Instantiable
+					public final class T: Instantiable, TProtocol {
+					    public init(tProtocol: TProtocol?) { self.tProtocol = tProtocol }
+					    @Received let tProtocol: TProtocol?
 					}
 					""",
 				],
