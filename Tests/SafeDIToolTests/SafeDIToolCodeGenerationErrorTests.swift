@@ -916,7 +916,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["RootViewController.swift"]):5:5: error: `networkService: NetworkService` on `RootViewController` cannot build `DefaultNetworkService`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<URLSession, NetworkService>` with `@Instantiated(fulfilledByType: "DefaultNetworkService")`.
+				\(fixtures["RootViewController.swift"]):5:5: error: `networkService: NetworkService` on `RootViewController` cannot build `DefaultNetworkService`, which has @Forwarded properties that only an instantiator is passed. Declare it as `Instantiator<DefaultNetworkService>`.
 				\(fixtures["DefaultNetworkService.swift"]):7:5: note: @Forwarded property `urlSession: URLSession` is declared here
 				"""
 			},
@@ -940,6 +940,137 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public final class RootViewController: UIViewController, Instantiable {
 					    @Instantiated let networkService: NetworkService
 					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorSuggestingErasedInstantiator_whenErasedConstantTypeHasForwardedProperty() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: `child: AnyChild` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<Child.ForwardedProperties, AnyChild>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: AnyChild) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Child", erasedToConcreteExistential: true) let child: AnyChild
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+
+					public final class AnyChild {
+					    public init(_ child: Child) {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorSuggestingErasedInstantiator_whenOptionalErasedConstantTypeHasForwardedProperty() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: `child: AnyChild?` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<Child.ForwardedProperties, AnyChild>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: AnyChild?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Child", erasedToConcreteExistential: true) let child: AnyChild?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+
+					public final class AnyChild {
+					    public init(_ child: Child) {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorSuggestingErasedInstantiator_whenConstantFulfilledByTypeHasForwardedProperty() async {
+		// `fulfilledByType` cannot be used on an `Instantiator`, so the suggestion is an `ErasedInstantiator`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: `child: any ChildProtocol` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<Child.ForwardedProperties, any ChildProtocol>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: any ChildProtocol) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Child") let child: any ChildProtocol
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable, ChildProtocol {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+
+					public protocol ChildProtocol {}
 					""",
 				],
 				buildSwiftOutputDirectory: true,
@@ -3695,7 +3826,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["RootViewController.swift"]):17:5: error: The first generic argument of `loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>` on `RootViewController` must be the @Forwarded properties of `LoggedInViewController`, which it builds. Change it to `User`.
+				\(fixtures["RootViewController.swift"]):17:5: error: The first generic argument of `loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>` on `RootViewController` must be the @Forwarded properties of `LoggedInViewController`, which it builds. Declare it as `ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>`.
 				"""
 			},
 		) {
@@ -3779,7 +3910,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["RootViewController.swift"]):17:5: error: The first generic argument of `loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>` on `RootViewController` must be the @Forwarded properties of `LoggedInViewController`, which it builds. Change it to `(user: User, userManager: UserManager)`.
+				\(fixtures["RootViewController.swift"]):17:5: error: The first generic argument of `loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>` on `RootViewController` must be the @Forwarded properties of `LoggedInViewController`, which it builds. Declare it as `ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>`.
 				"""
 			},
 		) {

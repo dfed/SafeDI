@@ -444,8 +444,7 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 		self.property = property
 		self.declarationLocation = declarationLocation
 		self.parent = parent
-		self.builtType = builtInstantiable.concreteInstantiable
-		self.forwardedPropertiesType = forwardedProperties.asForwardedPropertiesType
+		builtType = builtInstantiable.concreteInstantiable
 	}
 
 	var sourceDiagnostics: [SourceDiagnostic] {
@@ -453,7 +452,7 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 			SourceDiagnostic(
 				severity: .error,
 				location: declarationLocation,
-				message: "The first generic argument of `\(property.asSource)` on `\(parent.asSource)` must be the @\(Dependency.Source.forwardedRawValue) properties of `\(builtType.asSource)`, which it builds. Change it to `\(forwardedPropertiesType.asSource)`.",
+				message: "The first generic argument of `\(property.asSource)` on `\(parent.asSource)` must be the @\(Dependency.Source.forwardedRawValue) properties of `\(builtType.asSource)`, which it builds. Declare it as `\(Dependency.erasedInstantiatorType)<\(builtType.asSource).ForwardedProperties, \(property.typeDescription.asInstantiatedType.asSource)>`.",
 			),
 		]
 	}
@@ -462,5 +461,4 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 	private let declarationLocation: Dependency.DeclarationLocation?
 	private let parent: TypeDescription
 	private let builtType: TypeDescription
-	private let forwardedPropertiesType: TypeDescription
 }

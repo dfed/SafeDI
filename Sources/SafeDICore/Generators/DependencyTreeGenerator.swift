@@ -258,7 +258,7 @@ public actor DependencyTreeGenerator {
 			// mockOnly types can win additional-type slots and may have different @Forwarded properties.
 			// For fulfilledByType deps, validate against the declared type (same as mock resolution).
 			for dependency in scope.instantiable.dependencies {
-				guard case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential) = dependency.source else { continue }
+				guard case let .instantiated(fulfillingTypeDescription, _) = dependency.source else { continue }
 				let instantiatedType = dependency.asInstantiatedType
 				let childScope: Scope? = if fulfillingTypeDescription != nil {
 					typeDescriptionToScopeMap[dependency.property.typeDescription.asInstantiatedType]
@@ -269,8 +269,6 @@ public actor DependencyTreeGenerator {
 				if let childScope,
 				   let error = forwardedPropertyError(
 				   	for: dependency,
-				   	fulfillingTypeDescription: fulfillingTypeDescription,
-				   	erasedToConcreteExistential: erasedToConcreteExistential,
 				   	instantiable: childScope.instantiable,
 				   	parent: scope.instantiable,
 				   )
@@ -667,11 +665,10 @@ public actor DependencyTreeGenerator {
 		/// only an instantiator is passed.
 		struct ForwardedPropertyViolation {
 			let dependency: Dependency
-			/// The `fulfilledByType` argument of the dependency's `@Instantiated`, if it has one.
-			let fulfillingTypeDescription: TypeDescription?
-			let erasedToConcreteExistential: Bool
 			/// The type the dependency builds.
 			let instantiable: Instantiable
+			/// The type with which the dependency can instead build `instantiable`.
+			let suggestedPropertyType: TypeDescription
 			let forwardedDeclarations: [LocatedProperty]
 			/// The type that declares the dependency.
 			let parent: TypeDescription
@@ -682,7 +679,7 @@ public actor DependencyTreeGenerator {
 					SourceDiagnostic(
 						severity: .error,
 						location: dependency.declarationLocation,
-						message: message,
+						message: "`\(dependency.property.asSource)` on `\(parent.asSource)` cannot build `\(instantiable.concreteInstantiable.asSource)`, which has @\(Dependency.Source.forwardedRawValue) properties that only an instantiator is passed. Declare it as `\(suggestedPropertyType.asSource)`.",
 					),
 				] + forwardedDeclarations.map {
 					SourceDiagnostic(
@@ -690,20 +687,6 @@ public actor DependencyTreeGenerator {
 						location: $0.declarationLocation,
 						message: "@\(Dependency.Source.forwardedRawValue) property `\($0.property.asSource)` is declared here",
 					)
-				}
-			}
-
-			private var message: String {
-				let concreteTypeName = instantiable.concreteInstantiable.asSource
-				let instantiatedType = dependency.property.typeDescription.asInstantiatedType
-				let problem = "`\(dependency.property.asSource)` on `\(parent.asSource)` cannot build `\(concreteTypeName)`, which has @\(Dependency.Source.forwardedRawValue) properties that only an instantiator is passed."
-				if instantiatedType == instantiable.concreteInstantiable {
-					return "\(problem) Declare it as `\(Dependency.instantiatorType)<\(concreteTypeName)>`."
-				} else {
-					let fulfilledByType = (fulfillingTypeDescription ?? instantiable.concreteInstantiable).asSource
-					let erasedToConcreteExistentialArgument = erasedToConcreteExistential ? ", erasedToConcreteExistential: true" : ""
-					let forwardedPropertiesType = forwardedDeclarations.map(\.property).asForwardedPropertiesType.asSource
-					return "\(problem) Declare it as `\(Dependency.erasedInstantiatorType)<\(forwardedPropertiesType), \(instantiatedType.asSource)>` with `@\(Dependency.Source.instantiatedRawValue)(fulfilledByType: \"\(fulfilledByType)\"\(erasedToConcreteExistentialArgument))`."
 				}
 			}
 		}
@@ -2097,15 +2080,13 @@ public actor DependencyTreeGenerator {
 		for scope in Set(typeDescriptionToScopeMap.values) {
 			for dependency in scope.instantiable.dependencies {
 				switch dependency.source {
-				case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential):
+				case let .instantiated(_, erasedToConcreteExistential):
 					let instantiatedType = dependency.asInstantiatedType
 					if let instantiable = typeDescriptionToFulfillingInstantiableMap[instantiatedType],
 					   let instantiatedScope = typeDescriptionToScopeMap[instantiatedType]
 					{
 						if let error = forwardedPropertyError(
 						   	for: dependency,
-						   	fulfillingTypeDescription: fulfillingTypeDescription,
-						   	erasedToConcreteExistential: erasedToConcreteExistential,
 						   	instantiable: instantiable,
 						   	parent: scope.instantiable,
 						   ),
@@ -2297,13 +2278,8 @@ public actor DependencyTreeGenerator {
 
 	/// The error for a constant or lazily instantiated `@Instantiated` dependency on `parent` whose `instantiable`
 	/// has `@Forwarded` properties, or `nil` when the dependency is valid.
-	/// - Parameters:
-	///   - fulfillingTypeDescription: The `fulfilledByType` argument of the dependency's `@Instantiated`, if any.
-	///   - erasedToConcreteExistential: The `erasedToConcreteExistential` argument of the dependency's `@Instantiated`.
 	private func forwardedPropertyError(
 		for dependency: Dependency,
-		fulfillingTypeDescription: TypeDescription?,
-		erasedToConcreteExistential: Bool,
 		instantiable: Instantiable,
 		parent: Instantiable,
 	) -> DependencyTreeGeneratorError? {
@@ -2312,14 +2288,42 @@ public actor DependencyTreeGenerator {
 		guard !forwardedDependencies.isEmpty else { return nil }
 		return .instantiableHasForwardedProperty(.init(
 			dependency: dependency,
-			fulfillingTypeDescription: fulfillingTypeDescription,
-			erasedToConcreteExistential: erasedToConcreteExistential,
 			instantiable: instantiable,
+			suggestedPropertyType: Self.instantiatorType(building: instantiable, for: dependency),
 			forwardedDeclarations: forwardedDependencies.map {
 				DependencyTreeGeneratorError.LocatedProperty(property: $0.property, declarationLocation: $0.declarationLocation)
 			},
 			parent: parent.concreteInstantiable,
 		))
+	}
+
+	/// The type with which `dependency`, a constant or lazily instantiated `@Instantiated` property, can instead
+	/// build `instantiable` when it is asked for, which `instantiable`’s `@Forwarded` properties require:
+	/// `Instantiator<Child>` for `child: Child` or `child: LazilyInstantiated<Child>`. `fulfilledByType` cannot
+	/// be used on an `Instantiator`, so a property with that argument gets an `ErasedInstantiator` of the type the
+	/// property declares, such as `ErasedInstantiator<Child.ForwardedProperties, AnyChild>` for `child: AnyChild`.
+	/// The suggestion is `Sendable` when the property is, and the type an erased instantiator builds is not optional.
+	private static func instantiatorType(
+		building instantiable: Instantiable,
+		for dependency: Dependency,
+	) -> TypeDescription {
+		let propertyType = dependency.property.propertyType
+		if case .instantiated(fulfillingTypeDescription: .some, _) = dependency.source {
+			let declaredType = dependency.property.typeDescription.unwrapped
+			let builtType = declaredType.lazilyInstantiatedInstanceType?.unwrapped ?? declaredType
+			return .simple(
+				name: propertyType.isSendable ? Dependency.sendableErasedInstantiatorType : Dependency.erasedInstantiatorType,
+				generics: [
+					.nested(name: "ForwardedProperties", parentType: instantiable.concreteInstantiable),
+					builtType,
+				],
+			)
+		} else {
+			return .simple(
+				name: propertyType.isSendable ? Dependency.sendableInstantiatorType : Dependency.instantiatorType,
+				generics: [instantiable.concreteInstantiable],
+			)
+		}
 	}
 
 	/// The lazily instantiated properties on a cycle as they are declared, outermost first, for the diagnostic.

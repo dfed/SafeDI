@@ -2400,6 +2400,218 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorSuggestingSendableInstantiator_whenSendableLazilyInstantiatedTypeHasForwardedProperty() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: `child: SendableLazilyInstantiated<Child>` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `SendableInstantiator<Child>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: SendableLazilyInstantiated<Child>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let child: SendableLazilyInstantiated<Child>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable, Sendable {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorSuggestingSendableInstantiator_whenOptionalSendableLazilyInstantiatedTypeHasForwardedProperty() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: `child: SendableLazilyInstantiated<Child>?` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `SendableInstantiator<Child>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: SendableLazilyInstantiated<Child>?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let child: SendableLazilyInstantiated<Child>?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable, Sendable {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorSuggestingErasedInstantiator_whenErasedLazilyInstantiatedTypeHasForwardedProperty() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: `child: LazilyInstantiated<AnyChild>` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<Child.ForwardedProperties, AnyChild>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: LazilyInstantiated<AnyChild>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Child", erasedToConcreteExistential: true) let child: LazilyInstantiated<AnyChild>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+
+					public final class AnyChild {
+					    public init(_ child: Child) {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorSuggestingErasedInstantiator_whenOptionalErasedLazilyInstantiatedTypeHasForwardedProperty() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: `child: LazilyInstantiated<AnyChild>?` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<Child.ForwardedProperties, AnyChild>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: LazilyInstantiated<AnyChild>?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Child", erasedToConcreteExistential: true) let child: LazilyInstantiated<AnyChild>?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+
+					public final class AnyChild {
+					    public init(_ child: Child) {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorSuggestingSendableErasedInstantiator_whenErasedSendableLazilyInstantiatedTypeHasForwardedProperty() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: `child: SendableLazilyInstantiated<AnyChild>` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `SendableErasedInstantiator<Child.ForwardedProperties, AnyChild>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: SendableLazilyInstantiated<AnyChild>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Child", erasedToConcreteExistential: true) let child: SendableLazilyInstantiated<AnyChild>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable, Sendable {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+
+					public final class AnyChild: Sendable {
+					    public init(_ child: Child) {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_throwsError_whenPropertyReceivedAsLazilyInstantiatedIsInstantiatedAsConstant() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in

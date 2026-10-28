@@ -186,7 +186,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Root.swift"]):6:5: error: `service: AnyService` on `Root` cannot build `MockService`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<String, AnyService>` with `@Instantiated(fulfilledByType: "ConcreteService", erasedToConcreteExistential: true)`.
+				\(fixtures["Root.swift"]):6:5: error: `service: AnyService` on `Root` cannot build `MockService`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<MockService.ForwardedProperties, AnyService>`.
 				\(fixtures["MockService.swift"]):6:5: note: @Forwarded property `name: String` is declared here
 				"""
 			},
@@ -359,7 +359,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Root.swift"]):6:5: error: `service: ServiceProtocol` on `Root` cannot build `MockService`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<String, ServiceProtocol>` with `@Instantiated(fulfilledByType: "MockService")`.
+				\(fixtures["Root.swift"]):6:5: error: `service: ServiceProtocol` on `Root` cannot build `MockService`, which has @Forwarded properties that only an instantiator is passed. Declare it as `Instantiator<MockService>`.
 				\(fixtures["MockService.swift"]):6:5: note: @Forwarded property `name: String` is declared here
 				"""
 			},
