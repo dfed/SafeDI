@@ -26,8 +26,13 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 	// MARK: Initialization
 
 	public init(label: String, typeDescription: TypeDescription) {
+		self.init(label: label, typeDescription: typeDescription, writtenTypeDescription: nil)
+	}
+
+	private init(label: String, typeDescription: TypeDescription, writtenTypeDescription: TypeDescription?) {
 		self.label = label
 		self.typeDescription = typeDescription
+		self.writtenTypeDescription = writtenTypeDescription
 		var hasher = Hasher()
 		hasher.combine(label)
 		hasher.combine(typeDescription)
@@ -50,6 +55,16 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 	public let label: String
 	/// The type to which the property conforms.
 	public let typeDescription: TypeDescription
+	/// The type as the declaration spells it, when `typeDescription` spells a nested type the declaration names
+	/// without its enclosing types from the module scope, or `nil` when the two are spelled alike. It is neither
+	/// compared, hashed, nor encoded: it decides only the names generated code derives from the type, which depend
+	/// on what the declaration says alone.
+	public let writtenTypeDescription: TypeDescription?
+
+	/// The type as the declaration spells it.
+	public var spelledTypeDescription: TypeDescription {
+		writtenTypeDescription ?? typeDescription
+	}
 
 	// MARK: Equatable
 
@@ -73,9 +88,24 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		)
 	}
 
+	/// This property with `typeDescription`, which spells nested types from the module scope that the declaration
+	/// spells as `writtenTypeDescription`.
+	public func withQualifiedTypeDescription(_ typeDescription: TypeDescription, writtenAs writtenTypeDescription: TypeDescription) -> Self {
+		.init(
+			label: label,
+			typeDescription: typeDescription,
+			writtenTypeDescription: writtenTypeDescription,
+		)
+	}
+
 	/// The property represented as source code.
 	public var asSource: String {
 		"\(label): \(typeDescription.asSource)"
+	}
+
+	/// The property represented as source code as its declaration spells it, for diagnostics.
+	public var spelledAsSource: String {
+		"\(label): \(spelledTypeDescription.asSource)"
 	}
 
 	// MARK: Comparable

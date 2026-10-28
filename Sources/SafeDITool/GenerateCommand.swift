@@ -202,28 +202,18 @@ struct Generate: AsyncParsableCommand {
 		}()
 		let unnormalizedInstantiables = unnormalizedInstantiablesAndResolvers.map(\.0)
 		let instantiableTypes = Set(unnormalizedInstantiables.flatMap(\.instantiableTypes))
-		// A name keeps its spelling everywhere when it would be spelled differently in different scopes, or qualified
-		// in one and kept in another: matching a received dependency to the one that fulfills it compares the spelled
-		// types, so qualifying the name in only some of them could split a match that holds before qualification.
-		let namesKeepingSpelling: Set<String> = {
-			let memberNames = Set(unnormalizedInstantiablesAndResolvers.flatMap(\.1.memberNames))
-			// Most modules keep no declaration, so no name resolves to a nested type anywhere.
-			guard !memberNames.isEmpty else { return [] }
-			var enclosingTypesByName = [String: Set<TypeDescription?>]()
-			for (instantiable, resolver) in unnormalizedInstantiablesAndResolvers {
-				for typeDescription in instantiable.typeDescriptionsQualifiedByLexicalLookup {
-					for (name, enclosingType) in resolver.resolutions(in: typeDescription, within: instantiable, ofNames: memberNames) {
-						enclosingTypesByName[name, default: []].insert(enclosingType)
-					}
-				}
-				for typeDescription in instantiable.instantiableTypes.dropFirst() {
-					for (name, enclosingType) in resolver.resolutions(in: typeDescription, within: instantiable, writtenInEnclosingScope: true, ofNames: memberNames) {
-						enclosingTypesByName[name, default: []].insert(enclosingType)
-					}
-				}
-			}
-			return Set(enclosingTypesByName.filter { $0.value.count > 1 }.keys)
-		}()
+		/// The type `typeDescription` names as the version of SafeDI before nested types were qualified spelled it,
+		/// written inside `instantiable`: qualified only to match the instantiable that fulfills it.
+		func instantiableQualified(_ typeDescription: TypeDescription, within instantiable: Instantiable) -> TypeDescription? {
+			typeDescription.qualifyingInstantiatedType(
+				within: instantiable.concreteInstantiable,
+				amongInstantiableTypes: instantiableTypes,
+			)
+		}
+		let namesKeepingSpelling = namesKeepingSpelling(
+			of: unnormalizedInstantiablesAndResolvers,
+			spelledAs: instantiableQualified,
+		)
 		let normalizedInstantiables = unnormalizedInstantiablesAndResolvers.map { unnormalizedInstantiable, resolver in
 			/// The type with each name that names a nested type spelled from the module scope, or `nil`
 			/// when no name does. The types this is called with are `Instantiable.typeDescriptionsQualifiedByLexicalLookup`,
@@ -233,10 +223,20 @@ struct Generate: AsyncParsableCommand {
 			}
 			func normalized(_ typeDescription: TypeDescription) -> TypeDescription? {
 				let lexicallyQualifiedTypeDescription = lexicallyQualified(typeDescription)
-				return (lexicallyQualifiedTypeDescription ?? typeDescription).qualifyingInstantiatedType(
-					within: unnormalizedInstantiable.concreteInstantiable,
-					amongInstantiableTypes: instantiableTypes,
-				) ?? lexicallyQualifiedTypeDescription
+				return instantiableQualified(lexicallyQualifiedTypeDescription ?? typeDescription, within: unnormalizedInstantiable)
+					?? lexicallyQualifiedTypeDescription
+			}
+			/// `property` with its type normalized, remembering how the declaration spells it when qualification changed it.
+			func normalized(_ property: Property) -> Property? {
+				guard lexicallyQualified(property.typeDescription) != nil else {
+					return instantiableQualified(property.typeDescription, within: unnormalizedInstantiable).map(property.withUpdatedTypeDescription)
+				}
+				return normalized(property.typeDescription).map {
+					property.withQualifiedTypeDescription(
+						$0,
+						writtenAs: instantiableQualified(property.typeDescription, within: unnormalizedInstantiable) ?? property.typeDescription,
+					)
+				}
 			}
 			let unnormalizedToNormalizedTypeMap = unnormalizedInstantiable.dependencies.reduce(
 				into: [TypeDescription: TypeDescription](),
@@ -247,19 +247,20 @@ struct Generate: AsyncParsableCommand {
 			}
 
 			let normalizedDependencies = unnormalizedInstantiable.dependencies.map { dependency in
-				// The type that fulfills an instantiated or aliased dependency is written where the property is.
 				let normalizedSource: Dependency.Source? = switch dependency.source {
 				case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential):
-					fulfillingTypeDescription.flatMap(normalized).map {
+					// `fulfilledByType:` is a string Swift never resolves, so it names an instantiable as written.
+					fulfillingTypeDescription.flatMap { instantiableQualified($0, within: unnormalizedInstantiable) }.map {
 						.instantiated(
 							fulfillingTypeDescription: $0,
 							erasedToConcreteExistential: erasedToConcreteExistential,
 						)
 					}
 				case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
-					normalized(fulfillingProperty.typeDescription).map {
+					// The type `ofType:` names is written where the property is.
+					normalized(fulfillingProperty).map {
 						.aliased(
-							fulfillingProperty: fulfillingProperty.withUpdatedTypeDescription($0),
+							fulfillingProperty: $0,
 							erasedToConcreteExistential: erasedToConcreteExistential,
 							onlyIfAvailable: onlyIfAvailable,
 						)
@@ -267,13 +268,13 @@ struct Generate: AsyncParsableCommand {
 				case .forwarded, .received:
 					nil
 				}
-				let normalizedTypeDescription = unnormalizedToNormalizedTypeMap[dependency.property.typeDescription]
-				guard normalizedSource != nil || normalizedTypeDescription != nil else {
+				let normalizedProperty = normalized(dependency.property)
+				guard normalizedSource != nil || normalizedProperty != nil else {
 					// Default to what was in the code – we'll probably error later
 					return dependency
 				}
 				return Dependency(
-					property: normalizedTypeDescription.map(dependency.property.withUpdatedTypeDescription) ?? dependency.property,
+					property: normalizedProperty ?? dependency.property,
 					source: normalizedSource ?? dependency.source,
 					declarationLocation: dependency.declarationLocation,
 					identifierRange: dependency.identifierRange,
@@ -285,15 +286,7 @@ struct Generate: AsyncParsableCommand {
 				$0.withUpdatedTypeDescription(unnormalizedToNormalizedTypeMap[$0.typeDescription] ?? lexicallyQualified($0.typeDescription) ?? $0.typeDescription)
 			}
 			let normalizedAdditionalInstantiables = unnormalizedInstantiable.instantiableTypes.dropFirst().map {
-				// The types an attribute of the declaration names are written outside the declaration's own members.
-				if let lexicallyQualifiedTypeDescription = resolver.qualifying(
-					$0,
-					within: unnormalizedInstantiable,
-					writtenInEnclosingScope: true,
-					keepingSpellingOf: namesKeepingSpelling,
-				) {
-					lexicallyQualifiedTypeDescription
-				} else if let enclosingType = unnormalizedInstantiable.concreteInstantiable.popNested,
+				if let enclosingType = unnormalizedInstantiable.concreteInstantiable.popNested,
 				          let bestTypeDescription = TypeDescription.nestedOptions(
 				          	referencedType: $0,
 				          	within: enclosingType,
@@ -794,6 +787,67 @@ struct Generate: AsyncParsableCommand {
 		)
 	}
 
+	/// The names that keep their spelling everywhere, for the instantiables `instantiablesAndResolvers` hold, so that
+	/// qualification never changes what the types generated code matches and names would be without it:
+	/// - a name an instantiable's type has, which matching finds the instantiable by as written;
+	/// - a name that would be qualified differently in different scopes, or qualified in one and kept in another,
+	///   which could split a received dependency from the one that fulfills it;
+	/// - a name whose qualification would make two types the declarations spell differently the same, or one the
+	///   same as a type a declaration spells qualified, which would merge what is apart without qualification.
+	/// - Parameter instantiableQualified: The type a type written inside an instantiable is matched as, before
+	///   qualification.
+	private func namesKeepingSpelling(
+		of instantiablesAndResolvers: [(Instantiable, NestedTypeResolver)],
+		spelledAs instantiableQualified: (TypeDescription, Instantiable) -> TypeDescription?,
+	) -> Set<String> {
+		let memberNames = Set(instantiablesAndResolvers.flatMap(\.1.memberNames))
+		// Most modules keep no declaration, so no name resolves to a nested type anywhere.
+		guard !memberNames.isEmpty else { return [] }
+		var namesKeepingSpelling = Set(instantiablesAndResolvers.flatMap { instantiable, _ in
+			instantiable.instantiableTypes.compactMap { $0.namePath?.last }
+		})
+		var enclosingTypesByName = [String: Set<TypeDescription?>]()
+		for (instantiable, resolver) in instantiablesAndResolvers {
+			for typeDescription in instantiable.typeDescriptionsQualifiedByLexicalLookup {
+				for (name, enclosingType) in resolver.resolutions(in: typeDescription, within: instantiable, ofNames: memberNames) {
+					enclosingTypesByName[name, default: []].insert(enclosingType)
+				}
+			}
+		}
+		namesKeepingSpelling.formUnion(enclosingTypesByName.filter { $0.value.count > 1 }.keys)
+		// Keeping a name's spelling can make another type the same as one a declaration spells, so this repeats until
+		// no more names keep their spelling.
+		var collidingNames = Set<String>()
+		repeat {
+			namesKeepingSpelling.formUnion(collidingNames)
+			var spelledTypesByQualifiedType = [TypeDescription: Set<TypeDescription>]()
+			var qualifiedNamesByQualifiedType = [TypeDescription: Set<String>]()
+			var unqualifiedTypes = Set<TypeDescription>()
+			for (instantiable, resolver) in instantiablesAndResolvers {
+				for typeDescription in instantiable.typeDescriptionsQualifiedByLexicalLookup {
+					let spelledType = instantiableQualified(typeDescription, instantiable) ?? typeDescription
+					if let qualifiedTypeDescription = resolver.qualifying(typeDescription, within: instantiable, keepingSpellingOf: namesKeepingSpelling) {
+						let qualifiedType = instantiableQualified(qualifiedTypeDescription, instantiable) ?? qualifiedTypeDescription
+						spelledTypesByQualifiedType[qualifiedType, default: []].insert(spelledType)
+						for (name, enclosingType) in resolver.resolutions(in: typeDescription, within: instantiable, ofNames: memberNames)
+							where enclosingType != nil && !namesKeepingSpelling.contains(name)
+						{
+							qualifiedNamesByQualifiedType[qualifiedType, default: []].insert(name)
+						}
+					} else {
+						unqualifiedTypes.insert(spelledType)
+					}
+				}
+			}
+			collidingNames = spelledTypesByQualifiedType.reduce(into: Set<String>()) { collidingNames, entry in
+				if entry.value.count > 1 || unqualifiedTypes.contains(entry.key) {
+					collidingNames.formUnion(qualifiedNamesByQualifiedType[entry.key] ?? [])
+				}
+			}
+		} while !collidingNames.isSubset(of: namesKeepingSpelling)
+		return namesKeepingSpelling
+	}
+
 	private func loadCachedModule(
 		manifestPath: String,
 		manifest cachedManifest: SafeDIToolManifest,
@@ -905,7 +959,15 @@ struct Generate: AsyncParsableCommand {
 				declaredNames = lookups.declaredNames(among: declarations.union(discoveredDeclarations))
 			}
 			let readLookups = lookups.readingOnly(declaredNames)
-			let resolved = { (fileScan: FileScan) in fileScan.resolvingNestedTypeDeclarations(for: readLookups) }
+			// The files of additional directories, like the other files the manifest does not list among the module's own,
+			// are other modules' sources.
+			let mockScopedFilePaths = cachedManifest.mockScopedFilePaths.map(Set.init)
+			let resolved = { (fileScan: FileScan) in
+				fileScan.resolvingNestedTypeDeclarations(
+					for: readLookups,
+					isInModule: mockScopedFilePaths?.contains(projectFilePaths.manifestPath(of: projectFilePaths.projectFilePath(of: fileScan.path))) != false,
+				)
+			}
 			moduleInfo = cached.moduleInfo
 				.adding(fileScans.fileScans.map(resolved))
 				.including(cached.additionalModuleInfo.adding(additionalFileScans.fileScans.map(resolved)))

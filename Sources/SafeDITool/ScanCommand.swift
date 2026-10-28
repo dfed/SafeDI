@@ -425,9 +425,9 @@ struct CachedFileScan: Codable {
 }
 
 extension CachedFileScan {
-	/// This scan, keeping the declarations `lookups` read, as `FileScan.resolvingNestedTypeDeclarations(for:)` does.
-	func resolvingNestedTypeDeclarations(for lookups: NestedTypeLookups) -> CachedFileScan {
-		CachedFileScan(scannedPath: scannedPath, fileScan: fileScan.resolvingNestedTypeDeclarations(for: lookups))
+	/// This scan, keeping the declarations `lookups` read, as `FileScan.resolvingNestedTypeDeclarations(for:isInModule:)` does.
+	func resolvingNestedTypeDeclarations(for lookups: NestedTypeLookups, isInModule: Bool) -> CachedFileScan {
+		CachedFileScan(scannedPath: scannedPath, fileScan: fileScan.resolvingNestedTypeDeclarations(for: lookups, isInModule: isInModule))
 	}
 }
 

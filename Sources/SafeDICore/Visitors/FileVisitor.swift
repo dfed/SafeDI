@@ -107,10 +107,9 @@ public final class FileVisitor: SyntaxVisitor {
 			// The compiler may compile any of these clauses, so what they declare may not exist.
 			compilerDeterminedClauses.formUnion(scannable.clauses.map(\.id))
 		} else if content == .mockOnly {
-			// A clause selected only because the mock condition is assumed active may not exist where production
-			// code compiles.
-			let productionClauses = Set(conditionalCompilationEvaluator.scannableClauses(in: node, guarding: .production).clauses.map(\.id))
-			compilerDeterminedClauses.formUnion(scannable.clauses.map(\.id).filter { !productionClauses.contains($0) })
+			// The mock condition is assumed active to select the clauses, so what any clause declares may not exist
+			// where production code compiles, and none of it decides a spelling.
+			compilerDeterminedClauses.formUnion(scannable.clauses.map(\.id))
 		}
 		// The selection decides which declarations `nestedTypeDeclarations` records as existing, which may decide
 		// generated code. Each declaration records the conditions and decisions of the blocks enclosing it, and
@@ -129,6 +128,7 @@ public final class FileVisitor: SyntaxVisitor {
 				let absentDeclarationRecorder = AbsentDeclarationRecorder(
 					parentType: parentType,
 					conditions: declarationConditions.adding(blockConditions),
+					isCompilerDetermined: content == .mockOnly,
 				)
 				absentDeclarationRecorder.walk(elements)
 				nestedTypeDeclarations.formUnion(absentDeclarationRecorder.declarations)
@@ -230,6 +230,7 @@ public final class FileVisitor: SyntaxVisitor {
 			modifiers: node.modifiers,
 			attributes: node.attributes,
 			genericParameterClause: node.genericParameterClause,
+			memberBlock: node.memberBlock,
 		)
 		enterTypeNamed(node.name.text, access: access)
 		return .visitChildren
@@ -266,8 +267,9 @@ public final class FileVisitor: SyntaxVisitor {
 		parentPath = extendedTypeNamePath?.joined(separator: ".")
 		extendedTypePath = parentPath
 		isParentTypeSpelledAsPath = extendedTypeNamePath != nil
-		if let parentPath, node.attributes.hasUnrecognizedAttribute {
-			// An attached macro may add members to the type the extension extends.
+		if let parentPath, node.attributes.hasUnrecognizedAttribute || node.memberBlock.hasMemberCarryingUnrecognizedAttribute {
+			// An attached macro may add members to the type the extension extends, and a peer macro attached to a
+			// member may add a member type.
 			nestedTypeDeclarations.record(.unseenMembers(ofTypeAt: parentPath))
 		}
 		// A member's access defaults to the extension's, and the extended type's own access, declared elsewhere,
@@ -389,6 +391,7 @@ public final class FileVisitor: SyntaxVisitor {
 			// does a class's.
 			superclassCandidate: node.declType.mayHaveSuperclass ? node.inheritanceClause?.superclassCandidate : nil,
 			genericParameterClause: node.genericParameterClause,
+			memberBlock: node.memberBlock,
 		)
 		// Keep track of how nested we are.
 		enterTypeNamed(node.name.text, access: access)
@@ -414,9 +417,14 @@ public final class FileVisitor: SyntaxVisitor {
 		attributes: AttributeListSyntax,
 		superclassCandidate: String? = nil,
 		genericParameterClause: GenericParameterClauseSyntax? = nil,
+		memberBlock: MemberBlockSyntax? = nil,
 	) -> NestedTypeDeclaration.Access {
 		let access = min(modifiers.access ?? defaultMemberAccess, accessStack.last ?? .exported)
 		guard let path = path(ofTypeNamed: name) else { return access }
+		if memberBlock?.hasMemberCarryingUnrecognizedAttribute == true {
+			// A peer macro attached to a member may add a member type SafeDI cannot see.
+			nestedTypeDeclarations.record(.unseenMembers(ofTypeAt: path))
+		}
 		nestedTypeDeclarations.record(NestedTypeDeclaration(
 			path: path,
 			kind: kind,
@@ -515,11 +523,52 @@ extension TypeSyntax {
 }
 
 extension AttributeListSyntax {
-	/// Whether any of these attributes is not one of `NestedTypeDeclaration.recognizedAttributeNames`, which an
-	/// attribute in an `#if` clause is not either.
+	/// Whether any of these attributes is not one of `NestedTypeDeclaration.recognizedAttributeNames`, or is an
+	/// `@available` whose arguments may make lookup skip the declaration. An attribute in an `#if` clause is not
+	/// recognized either.
 	fileprivate var hasUnrecognizedAttribute: Bool {
 		contains { element in
-			element.as(AttributeSyntax.self).map { !NestedTypeDeclaration.recognizedAttributeNames.contains($0.attributeName.trimmedDescription) } ?? true
+			element.as(AttributeSyntax.self).map { !$0.isRecognized } ?? true
+		}
+	}
+}
+
+extension AttributeSyntax {
+	/// Whether the attribute is one of `NestedTypeDeclaration.recognizedAttributeNames` that adds no members and keeps
+	/// lookup finding the declaration: an `@available` only when every argument names a platform and its version, or
+	/// is `*`. One that names a Swift version, or makes the declaration unavailable or obsolete, can hide it.
+	fileprivate var isRecognized: Bool {
+		let name = attributeName.trimmedDescription
+		guard NestedTypeDeclaration.recognizedAttributeNames.contains(name) else { return false }
+		guard name == "available" else { return true }
+		return arguments?.as(AvailabilityArgumentListSyntax.self).map { availabilityArguments in
+			availabilityArguments.allSatisfy { availabilityArgument in
+				// `*`, or a platform other than Swift itself or the package manifest and the version it was introduced in.
+				let argument = availabilityArgument.argument.trimmedDescription.split(separator: " ")
+				return argument == ["*"]
+					|| argument.count == 2 && !["swift", "_PackageDescription"].contains(argument[0]) && argument[1].allSatisfy { $0.isNumber || $0 == "." }
+			}
+		} == true
+	}
+}
+
+extension MemberBlockSyntax {
+	/// Whether any member, in any clause of the `#if` blocks among the members, carries an attribute that is not
+	/// recognized, which may be a peer macro that adds a member type.
+	fileprivate var hasMemberCarryingUnrecognizedAttribute: Bool {
+		members.contains { $0.decl.carriesUnrecognizedAttribute }
+	}
+}
+
+extension DeclSyntax {
+	fileprivate var carriesUnrecognizedAttribute: Bool {
+		if let ifConfig = self.as(IfConfigDeclSyntax.self) {
+			// A clause among members holds members, or nothing.
+			ifConfig.clauses.contains { clause in
+				clause.elements?.as(MemberBlockItemListSyntax.self)?.contains { $0.decl.carriesUnrecognizedAttribute } == true
+			}
+		} else {
+			asProtocol(WithAttributesSyntax.self).map(\.attributes.hasUnrecognizedAttribute) == true
 		}
 	}
 }
@@ -571,9 +620,12 @@ private struct DeclarationConditions {
 
 /// Records the types an `#if` clause the conditions did not select declares, as absent declarations.
 private final class AbsentDeclarationRecorder: SyntaxVisitor {
-	init(parentType: TypeDescription?, conditions: DeclarationConditions) {
+	/// - Parameter isCompilerDetermined: Whether the declarations are recorded as ones SafeDI cannot know exist, which
+	///   decide no spelling, rather than as absent.
+	init(parentType: TypeDescription?, conditions: DeclarationConditions, isCompilerDetermined: Bool) {
 		self.parentType = parentType
 		self.conditions = conditions
+		self.isCompilerDetermined = isCompilerDetermined
 		super.init(viewMode: .sourceAccurate)
 	}
 
@@ -628,7 +680,7 @@ private final class AbsentDeclarationRecorder: SyntaxVisitor {
 	override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
 		parentType = node.extendedType.typeDescription
 		extendedTypePath = parentType?.namePath?.joined(separator: ".")
-		if let extendedTypePath, node.attributes.hasUnrecognizedAttribute {
+		if let extendedTypePath, node.attributes.hasUnrecognizedAttribute || node.memberBlock.hasMemberCarryingUnrecognizedAttribute {
 			declarations.record(.unseenMembers(ofTypeAt: extendedTypePath))
 		}
 		return .visitChildren
@@ -661,6 +713,7 @@ private final class AbsentDeclarationRecorder: SyntaxVisitor {
 	private var parentType: TypeDescription?
 	private var extendedTypePath: String?
 	private var conditions: DeclarationConditions
+	private let isCompilerDetermined: Bool
 
 	private func path(ofTypeNamed name: String) -> String? {
 		if let parentType {
@@ -688,7 +741,8 @@ private final class AbsentDeclarationRecorder: SyntaxVisitor {
 			kind: kind,
 			access: .module,
 			extendedTypePath: extendedTypePath,
-			isAbsent: true,
+			isCompilerDetermined: isCompilerDetermined,
+			isAbsent: !isCompilerDetermined,
 			consultedCompilationConditions: conditions.sortedConsultedCompilationConditions,
 			conditionalCompilationDecisions: conditions.conditionalCompilationDecisions,
 		))

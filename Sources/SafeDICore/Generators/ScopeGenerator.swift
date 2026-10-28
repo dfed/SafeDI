@@ -975,7 +975,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		let renamedNames = identifierSafeNames(
 			for: renamedIndices.map { index in
-				let typeDescription = children[index].property.typeDescription
+				// Names derive from the type as the declaration spells it.
+				let typeDescription = children[index].property.spelledTypeDescription
 				return (
 					label: childNames[index],
 					suffixTypes: [typeDescription.asInstantiatedType.simplified, typeDescription.asInstantiatedType, typeDescription],
@@ -1518,7 +1519,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let collidingFlatReceivedProperties = flatReceivedProperties.filter { collidingFlatLabels.contains($0.label) }
 		let collidingFlatReceivedNames = Self.identifierSafeNames(
 			for: collidingFlatReceivedProperties.map {
-				(label: $0.label, suffixTypes: [$0.typeDescription.simplified, $0.typeDescription])
+				(label: $0.label, suffixTypes: [$0.spelledTypeDescription.simplified, $0.spelledTypeDescription])
 			},
 			reservedNames: Set(allFlatLabels).union(treeBindingNames),
 		)
@@ -1968,6 +1969,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let propertyLabel: String
 		/// The full type description of the property (e.g., `Instantiator<Child>`).
 		let typeDescription: TypeDescription
+		/// The property's type as its declaration spells it, from which generated names derive.
+		let spelledTypeDescription: TypeDescription
 		/// The instantiated type — `typeDescription.asInstantiatedType` (e.g., `Child`).
 		/// Used for the builder closure's return type, disambiguation keys, and
 		/// cycle detection. Configuration struct nesting uses `concreteType` instead.
@@ -2483,6 +2486,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				items.append(.property(MockParameterNode(
 					propertyLabel: childProperty.label,
 					typeDescription: childProperty.typeDescription,
+					spelledTypeDescription: childProperty.spelledTypeDescription,
 					instantiatedTypeDescription: childProperty.typeDescription.asInstantiatedType,
 					isInstantiator: isInstantiator,
 					isExtensionBased: childInstantiable.declarationType.isExtension,
@@ -2583,7 +2587,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for: collidingNodes.map {
 				(
 					label: $0.propertyLabel,
-					suffixTypes: [$0.instantiatedTypeDescription.simplified, $0.instantiatedTypeDescription, $0.typeDescription],
+					suffixTypes: [$0.spelledTypeDescription.asInstantiatedType.simplified, $0.spelledTypeDescription.asInstantiatedType, $0.spelledTypeDescription],
 				)
 			},
 			// Labels that don't need disambiguation stay as they are.
@@ -2631,7 +2635,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let collidingIndices = collidingLabels.isEmpty ? [] : receivedProperties.indices.filter { collidingLabels.contains(labels[$0]) }
 		let collidingNames = collidingIndices.isEmpty ? [] : identifierSafeNames(
 			for: collidingIndices.map { index in
-				(label: labels[index], suffixTypes: [typeDescriptions[index].simplified, typeDescriptions[index]])
+				let spelledTypeDescription = receivedProperties[index].spelledTypeDescription
+				let suffixType = spelledTypeDescription.isOptional ? spelledTypeDescription : .optional(spelledTypeDescription)
+				return (label: labels[index], suffixTypes: [suffixType.simplified, suffixType])
 			},
 			reservedNames: namesInMockScope.union(reservedNames).union(labels),
 		)
@@ -3219,7 +3225,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			guard case let .alias(alias) = item,
 			      redeclaredNames.contains(alias.property.label)
 			else { return item }
-			var bindingName = "\(alias.property.label)_\(alias.property.typeDescription.simplified.asIdentifier)"
+			var bindingName = "\(alias.property.label)_\(alias.property.spelledTypeDescription.simplified.asIdentifier)"
 			while !takenNames.insert(bindingName).inserted {
 				bindingName += "_"
 			}

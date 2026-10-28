@@ -714,12 +714,14 @@ extension Property: BinarySchemaMember {
 	static let binaryLayout = [
 		"label",
 		"typeDescription",
+		"writtenTypeDescription",
 		"hashOfLabelAndTypeDescription",
 	]
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		// The stored hash is not written: Swift seeds hashing differently in every process, so the
-		// initializer computes it again from the label and type description.
+		// initializer computes it again from the label and type description. Nor is the written type, which only
+		// generate sets, after reading what scan cached.
 		try self.init(
 			label: reader.read(),
 			typeDescription: reader.read(),
