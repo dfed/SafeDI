@@ -241,6 +241,7 @@ extension NestedTypeDeclaration: BinarySchemaMember {
 		"access",
 		"superclassCandidate",
 		"hasUnrecognizedAttribute",
+		"extendedTypePath",
 		"isCompilerDetermined",
 		"isAbsent",
 		"consultedCompilationConditions",
@@ -255,6 +256,7 @@ extension NestedTypeDeclaration: BinarySchemaMember {
 			access: reader.read(),
 			superclassCandidate: reader.read() as String?,
 			hasUnrecognizedAttribute: reader.read(),
+			extendedTypePath: reader.read() as String?,
 			isCompilerDetermined: reader.read(),
 			isAbsent: reader.read(),
 			consultedCompilationConditions: reader.read(),
@@ -269,6 +271,7 @@ extension NestedTypeDeclaration: BinarySchemaMember {
 		writer.write(access)
 		writer.write(superclassCandidate)
 		writer.write(hasUnrecognizedAttribute)
+		writer.write(extendedTypePath)
 		writer.write(isCompilerDetermined)
 		writer.write(isAbsent)
 		writer.write(consultedCompilationConditions)
@@ -285,7 +288,9 @@ extension NestedTypeDeclaration.Kind: BinarySchemaMember {
 		case .classType: .classType
 		case .protocolType: .protocolType
 		case .otherType: .otherType
+		case .typeAlias: .typeAlias
 		case .genericParameter: .genericParameter
+		case .unseenMembers: .unseenMembers
 		}
 	}
 
@@ -294,7 +299,9 @@ extension NestedTypeDeclaration.Kind: BinarySchemaMember {
 		case .classType: writer.writeTag(Tag.classType)
 		case .protocolType: writer.writeTag(Tag.protocolType)
 		case .otherType: writer.writeTag(Tag.otherType)
+		case .typeAlias: writer.writeTag(Tag.typeAlias)
 		case .genericParameter: writer.writeTag(Tag.genericParameter)
+		case .unseenMembers: writer.writeTag(Tag.unseenMembers)
 		}
 	}
 
@@ -302,7 +309,9 @@ extension NestedTypeDeclaration.Kind: BinarySchemaMember {
 		case classType
 		case protocolType
 		case otherType
+		case typeAlias
 		case genericParameter
+		case unseenMembers
 	}
 }
 

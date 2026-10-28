@@ -688,6 +688,8 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			    fileprivate typealias Stove = Int
 			    typealias Oven = Int
 			    package typealias Timer = Int
+
+			    #warning("A freestanding macro among a type's members may declare members SafeDI cannot see.")
 			}
 			""",
 			"Scale.swift": """

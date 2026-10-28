@@ -882,14 +882,19 @@ struct DeclaredTypeNames: Sendable {
 	/// The first name after each `extension` keyword.
 	private(set) var extendedNames = [String]()
 
-	/// Whether the file can declare something `lookups` read: a type or generic parameter of a name lookups ask for,
-	/// or a type lookups search, whose declaration decides whether it is a class, inside a declaration or extension
-	/// of a looked-up path's outermost type; or anything of a name a searched class or actor inherits first, whose
-	/// declarations decide whether that name is provably a protocol, wherever it is declared.
+	/// Whether the file can declare something `lookups` read:
+	/// - a type or generic parameter of a name lookups ask for, or a type lookups search, whose declaration decides
+	///   whether it is a class, inside a declaration or extension of a looked-up path's outermost type;
+	/// - anything in an extension of such a type, which may carry an attribute or a macro that adds members;
+	/// - a type of a name lookups ask for in any extension, which may extend a searched type under another spelling;
+	/// - anything of a name a searched class or actor inherits first, or that an extension spells its extended type
+	///   with first, wherever it is declared.
 	func canDeclare(lookedUpBy lookups: NestedTypeLookups) -> Bool {
-		declaredNames.contains { lookups.names.contains($0) || lookups.typeNames.contains($0) }
-			&& (declaredNames.contains(where: lookups.outermostTypeNames.contains) || extendedNames.contains(where: lookups.outermostTypeNames.contains))
-			|| declaredNames.contains(where: lookups.inheritedNames.contains)
+		let extendsSearchedType = extendedNames.contains(where: lookups.outermostTypeNames.contains)
+		let declaresSearchedName = declaredNames.contains { lookups.names.contains($0) || lookups.typeNames.contains($0) }
+		return extendsSearchedType
+			|| declaresSearchedName && (declaredNames.contains(where: lookups.outermostTypeNames.contains) || !extendedNames.isEmpty)
+			|| declaredNames.contains { lookups.inheritedNames.contains($0) || lookups.extendedTypePathPrefixes.contains($0) }
 	}
 
 	/// A keyword that names a type right after it.
