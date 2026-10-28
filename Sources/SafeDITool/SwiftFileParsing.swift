@@ -251,7 +251,10 @@ func parseModule(
 		readingTypeNamesOf: configurationFilePaths,
 		conditionalCompilation: firstPassEvaluator,
 	)
-	typeNamesByFileWithoutSafeDIContent.merge(walkedFiles.typeNamesByFileWithoutSafeDIContent) { first, _ in first }
+	// The configuration files were not walked again, so no file has two entries.
+	for (filePath, typeNames) in walkedFiles.typeNamesByFileWithoutSafeDIContent {
+		typeNamesByFileWithoutSafeDIContent[filePath] = typeNames
+	}
 	let fileScans = (firstPassEvaluator == defaultEvaluator
 		? conventionalConfigurationFileScans
 		: conventionalConfigurationFiles.map { file in
@@ -328,9 +331,10 @@ struct ParsedModuleFiles {
 /// A file declares something at a path a lookup reads, such as `Feature.Settings.Configuration`, only when its text
 /// names that path's outermost type, `Feature`, right after a declaration keyword or `extension`, and names its last
 /// name, `Configuration`, right after a declaration keyword or among the generic parameters after a declared name.
-/// A searched type's superclass is decided by its declaration, whose name follows a declaration keyword. Only such
-/// files are parsed. The declarations they hold can make lookups follow more superclasses, so files are parsed until
-/// no more can matter. Neither test depends on a condition.
+/// Whether a searched type is a class, and what it inherits first, is decided by its declaration, whose name follows
+/// a declaration keyword, and whether that first inherited name is provably a protocol by every declaration of the
+/// name, which follows a declaration keyword too. Only such files are parsed. The declarations they hold can name
+/// more inherited names, so files are parsed until no more can matter. No test depends on a condition.
 /// - Parameters:
 ///   - knownDeclarations: The declarations of the files already walked.
 ///   - candidateFiles: The type names in the text of each file that may hold more declarations.
@@ -782,7 +786,8 @@ private func walk(
 /// or no looked-up name declares nothing a lookup reads.
 struct DeclaredTypeNames: Sendable {
 	init(source: UnsafeBufferPointer<UInt8>) {
-		guard let start = source.baseAddress else { return }
+		// An empty file names no type.
+		guard let start = source.baseAddress, !source.isEmpty else { return }
 		// Arrays, which may repeat a name, rather than sets, whose hashing would cost more than all the rest.
 		var declaredNames = [String]()
 		var extendedNames = [String]()
@@ -810,11 +815,13 @@ struct DeclaredTypeNames: Sendable {
 	private(set) var extendedNames = [String]()
 
 	/// Whether the file can declare something `lookups` read: a type or generic parameter of a name lookups ask for,
-	/// or a type lookups search, whose declaration decides its superclass, inside a declaration or extension of a
-	/// looked-up path's outermost type. An extension adds no superclass, so only declarations count for the first.
+	/// or a type lookups search, whose declaration decides whether it is a class, inside a declaration or extension
+	/// of a looked-up path's outermost type; or anything of a name a searched class or actor inherits first, whose
+	/// declarations decide whether that name is provably a protocol, wherever it is declared.
 	func canDeclare(lookedUpBy lookups: NestedTypeLookups) -> Bool {
 		declaredNames.contains { lookups.names.contains($0) || lookups.typeNames.contains($0) }
 			&& (declaredNames.contains(where: lookups.outermostTypeNames.contains) || extendedNames.contains(where: lookups.outermostTypeNames.contains))
+			|| declaredNames.contains(where: lookups.inheritedNames.contains)
 	}
 
 	/// A keyword that names a type right after it.

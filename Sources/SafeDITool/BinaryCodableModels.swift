@@ -221,7 +221,6 @@ extension NestedTypeDeclaration: BinarySchemaMember {
 		"kind",
 		"access",
 		"superclassCandidate",
-		"scopePath",
 		"isCompilerDetermined",
 		"isAbsent",
 		"consultedCompilationConditions",
@@ -235,7 +234,6 @@ extension NestedTypeDeclaration: BinarySchemaMember {
 			kind: reader.read(),
 			access: reader.read(),
 			superclassCandidate: reader.read() as String?,
-			scopePath: reader.read() as String?,
 			isCompilerDetermined: reader.read(),
 			isAbsent: reader.read(),
 			consultedCompilationConditions: reader.read(),
@@ -249,7 +247,6 @@ extension NestedTypeDeclaration: BinarySchemaMember {
 		writer.write(kind)
 		writer.write(access)
 		writer.write(superclassCandidate)
-		writer.write(scopePath)
 		writer.write(isCompilerDetermined)
 		writer.write(isAbsent)
 		writer.write(consultedCompilationConditions)

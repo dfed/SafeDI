@@ -98,7 +98,6 @@ public final class FileVisitor: SyntaxVisitor {
 		let (content, blockOutputFileDeclarations) = node.safeDIContentAmongDeclarations()
 		outputFileDeclarations.formUnion(blockOutputFileDeclarations)
 		let scannable = conditionalCompilationEvaluator.scannableClauses(in: node, guarding: content)
-		activeIfConfigClauses.formUnion(scannable.clauses.map(\.id))
 		record(scannable.decisions)
 		if scannable.isCompilerDetermined {
 			// The compiler may compile any of these clauses, so what they declare may not exist.
@@ -166,17 +165,18 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: IfConfigClauseSyntax) -> SyntaxVisitorContinueKind {
-		guard activeIfConfigClauses.contains(node.id) else { return .skipChildren }
+		// Only the clauses the conditions select are scanned, and each has its block's conditions.
+		guard let conditions = clauseConditions[node.id] else { return .skipChildren }
 		if compilerDeterminedClauses.contains(node.id) {
 			compilerDeterminedClauseDepth += 1
 		}
 		declarationConditionsStack.append(declarationConditions)
-		declarationConditions = declarationConditions.adding(clauseConditions[node.id] ?? DeclarationConditions())
+		declarationConditions = declarationConditions.adding(conditions)
 		return .visitChildren
 	}
 
 	public override func visitPost(_ node: IfConfigClauseSyntax) {
-		guard activeIfConfigClauses.contains(node.id) else { return }
+		guard clauseConditions[node.id] != nil else { return }
 		if compilerDeterminedClauses.contains(node.id) {
 			compilerDeterminedClauseDepth -= 1
 		}
@@ -339,7 +339,7 @@ public final class FileVisitor: SyntaxVisitor {
 	private var compilerDeterminedClauses = Set<SyntaxIdentifier>()
 	/// How many of those clauses enclose the walk.
 	private var compilerDeterminedClauseDepth = 0
-	/// The conditions and decisions of each selected clause's block.
+	/// The conditions and decisions of each selected clause's block, which only the selected clauses have.
 	private var clauseConditions = [SyntaxIdentifier: DeclarationConditions]()
 	/// The conditions and decisions of the blocks enclosing the walk.
 	private var declarationConditions = DeclarationConditions()
@@ -350,7 +350,6 @@ public final class FileVisitor: SyntaxVisitor {
 	private let conditionalCompilationEvaluator: ConditionalCompilationEvaluator
 	private let sourceLocationConverter: SourceLocationConverter?
 	/// The `#if` clauses the evaluator selected for scanning.
-	private var activeIfConfigClauses = Set<SyntaxIdentifier>()
 	/// How many `#if` blocks deep the walk is inside a block that `importSegments` holds as source.
 	private var importOnlyBlockDepth = 0
 
@@ -374,8 +373,9 @@ public final class FileVisitor: SyntaxVisitor {
 			named: node.name.text,
 			kind: node.declType == .classType ? .classType : .otherType,
 			modifiers: node.modifiers,
-			// Only a class has a superclass, which its inheritance clause names first.
-			superclassCandidate: node.declType == .classType ? node.inheritanceClause.map(\.superclassCandidate) : nil,
+			// Only a class has a superclass, which its inheritance clause names first, and SafeDI treats an actor's as it
+			// does a class's.
+			superclassCandidate: node.declType.mayHaveSuperclass ? node.inheritanceClause?.superclassCandidate : nil,
 			genericParameterClause: node.genericParameterClause,
 		)
 		// Keep track of how nested we are.
@@ -404,13 +404,11 @@ public final class FileVisitor: SyntaxVisitor {
 	) -> NestedTypeDeclaration.Access {
 		let access = min(modifiers.access ?? defaultMemberAccess, accessStack.last ?? .exported)
 		guard let path = path(ofTypeNamed: name) else { return access }
-		let scopePath = parentPath
 		nestedTypeDeclarations.record(NestedTypeDeclaration(
 			path: path,
 			kind: kind,
 			access: access,
 			superclassCandidate: superclassCandidate,
-			scopePath: scopePath,
 			isCompilerDetermined: compilerDeterminedClauseDepth > 0,
 			consultedCompilationConditions: declarationConditions.sortedConsultedCompilationConditions,
 			conditionalCompilationDecisions: declarationConditions.conditionalCompilationDecisions,
@@ -475,10 +473,18 @@ extension IfConfigDeclSyntax {
 }
 
 extension InheritanceClauseSyntax {
-	/// The first type this clause names, spelled as a path without backticks, or an empty string for one SafeDI cannot
-	/// follow, such as a generic class with arguments.
+	/// The first type this clause names, spelled as a path without backticks, or an empty string for one not spelled
+	/// as a path of names, or with generic arguments.
+	fileprivate var superclassCandidate: String? {
+		inheritedTypes.first.map(\.type.superclassCandidate)
+	}
+}
+
+extension TypeSyntax {
+	/// This type, the first an inheritance clause names, spelled as a path without backticks, or an empty string for
+	/// one not spelled as a path of names, or with generic arguments.
 	fileprivate var superclassCandidate: String {
-		guard let firstType = inheritedTypes.first?.type else { return "" }
+		let firstType = self
 		// `@unchecked Sendable` and the like name protocols, whatever their attributes.
 		let type = firstType.as(AttributedTypeSyntax.self)?.baseType ?? firstType
 		guard type.is(IdentifierTypeSyntax.self) || type.is(MemberTypeSyntax.self),
@@ -494,8 +500,6 @@ extension DeclModifierListSyntax {
 	/// The access level these modifiers give a declaration, or `nil` when they name none.
 	fileprivate var access: NestedTypeDeclaration.Access? {
 		lazy.compactMap { modifier -> NestedTypeDeclaration.Access? in
-			// `private(set)` and the like only restrict setters, which types do not have.
-			guard modifier.detail == nil else { return nil }
 			switch modifier.name.tokenKind {
 			case .keyword(.private), .keyword(.fileprivate):
 				return .file

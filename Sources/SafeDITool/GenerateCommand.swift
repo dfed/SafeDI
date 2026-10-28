@@ -194,7 +194,8 @@ struct Generate: AsyncParsableCommand {
 		} + {
 			let resolver = NestedTypeResolver(
 				declarations: module.nestedTypeDeclarations,
-				otherModuleDeclarations: dependentModuleInfo.reduce(into: NestedTypeDeclarations()) { $0.formUnion($1.nestedTypeDeclarations) },
+				// Each module's declarations stay apart, so a path one module declares is never taken to be another's type.
+				otherModuleDeclarations: dependentModuleInfo.map(\.nestedTypeDeclarations),
 				moduleFilePaths: parsed.moduleFilePaths,
 			)
 			return module.instantiables.map { ($0, resolver) }
@@ -202,7 +203,7 @@ struct Generate: AsyncParsableCommand {
 		let unnormalizedInstantiables = unnormalizedInstantiablesAndResolvers.map(\.0)
 		let instantiableTypes = Set(unnormalizedInstantiables.flatMap(\.instantiableTypes))
 		let normalizedInstantiables = unnormalizedInstantiablesAndResolvers.map { unnormalizedInstantiable, resolver in
-			/// The type with each name that names a nested or inherited type spelled from the module scope, or `nil`
+			/// The type with each name that names a nested type spelled from the module scope, or `nil`
 			/// when no name does. The types this is called with are `Instantiable.typeDescriptionsQualifiedByLexicalLookup`,
 			/// whose lookups decided which declarations the module keeps.
 			func lexicallyQualified(_ typeDescription: TypeDescription) -> TypeDescription? {
@@ -838,15 +839,15 @@ struct Generate: AsyncParsableCommand {
 		if fileScans.walkedFilesAgain || additionalFileScans.walkedFilesAgain {
 			// A file walked again can declare instantiables or declarations that make lookups scan did not make,
 			// which read declarations scan did not keep, in files it did not parse.
-			let instantiables = cached.moduleInfo.instantiables + fileScans.fileScans.flatMap(\.instantiables)
-				+ cached.additionalModuleInfo.instantiables + additionalFileScans.fileScans.flatMap(\.instantiables)
-			let declarations = [cached.moduleInfo.nestedTypeDeclarations, cached.additionalModuleInfo.nestedTypeDeclarations]
-				.reduce(into: (fileScans.fileScans + additionalFileScans.fileScans).reduce(into: NestedTypeDeclarations()) { $0.formUnion($1.nestedTypeDeclarations) }) { $0.formUnion($1) }
-			let scanDeclarations = [cached.moduleInfo.nestedTypeDeclarations, cached.additionalModuleInfo.nestedTypeDeclarations]
-				.reduce(into: (cached.conditionSensitiveFileScans + cached.additionalConditionSensitiveFileScans).reduce(into: NestedTypeDeclarations()) { $0.formUnion($1.fileScan.nestedTypeDeclarations) }) { $0.formUnion($1) }
+			let walkedFileScans = fileScans.fileScans + additionalFileScans.fileScans
+			let scannedFileScans = (cached.conditionSensitiveFileScans + cached.additionalConditionSensitiveFileScans).map(\.fileScan)
+			let cachedInstantiables = cached.moduleInfo.instantiables + cached.additionalModuleInfo.instantiables
+			let cachedDeclarations = cached.moduleInfo.nestedTypeDeclarations.union(cached.additionalModuleInfo.nestedTypeDeclarations)
+			let instantiables = cachedInstantiables + walkedFileScans.flatMap(\.instantiables)
+			let declarations = walkedFileScans.reduce(into: cachedDeclarations) { $0.formUnion($1.nestedTypeDeclarations) }
+			let scanDeclarations = scannedFileScans.reduce(into: cachedDeclarations) { $0.formUnion($1.nestedTypeDeclarations) }
 			let scanLookups = NestedTypeLookups(
-				instantiables: cached.moduleInfo.instantiables + cached.conditionSensitiveFileScans.flatMap(\.fileScan.instantiables)
-					+ cached.additionalModuleInfo.instantiables + cached.additionalConditionSensitiveFileScans.flatMap(\.fileScan.instantiables),
+				instantiables: cachedInstantiables + scannedFileScans.flatMap(\.instantiables),
 				declarations: scanDeclarations,
 			)
 			var lookups = NestedTypeLookups(instantiables: instantiables, declarations: declarations)
@@ -873,12 +874,13 @@ struct Generate: AsyncParsableCommand {
 				}
 				declaredNames = lookups.declaredNames(among: declarations.union(discoveredDeclarations))
 			}
-			lookups = lookups.readingOnly(declaredNames)
+			let readLookups = lookups.readingOnly(declaredNames)
+			let resolved = { (fileScan: FileScan) in fileScan.resolvingNestedTypeDeclarations(for: readLookups) }
 			moduleInfo = cached.moduleInfo
-				.adding(fileScans.fileScans.map { $0.resolvingNestedTypeDeclarations(for: lookups) })
-				.including(cached.additionalModuleInfo.adding(additionalFileScans.fileScans.map { $0.resolvingNestedTypeDeclarations(for: lookups) }))
+				.adding(fileScans.fileScans.map(resolved))
+				.including(cached.additionalModuleInfo.adding(additionalFileScans.fileScans.map(resolved)))
 				// The declarations a fresh parse keeps.
-				.restrictingNestedTypeDeclarations(to: lookups, adding: discoveredDeclarations)
+				.restrictingNestedTypeDeclarations(to: readLookups, adding: discoveredDeclarations)
 		} else {
 			// Every file contributes what it contributed to scan, so the module makes the lookups scan made.
 			moduleInfo = cached.moduleInfo.adding(fileScans.fileScans).including(cached.additionalModuleInfo.adding(additionalFileScans.fileScans))
