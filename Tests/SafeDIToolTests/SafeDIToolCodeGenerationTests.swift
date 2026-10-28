@@ -11598,6 +11598,41 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func scan_listsAdditionalMockOnce_whenConfigurationListsItTwice() async throws {
+		let rootDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: rootDirectory, withIntermediateDirectories: true)
+
+		let configurationFile = rootDirectory.appendingPathComponent("SafeDIConfiguration.swift")
+		try """
+		#SafeDIConfiguration(additionalMocksToGenerate: ["Service", "OtherService", "Service"])
+		""".write(to: configurationFile, atomically: true, encoding: .utf8)
+
+		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try configurationFile.relativePath.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+
+		filesToDelete += [rootDirectory, swiftFileCSV, outputDirectory, manifestFile]
+
+		try await performScan(
+			inputSourcesFile: swiftFileCSV.relativePath,
+			projectFilePaths: ProjectFilePaths(projectRoot: rootDirectory.path),
+			outputDirectory: outputDirectory.path,
+			manifestFile: manifestFile.path,
+		)
+
+		let manifest = try JSONDecoder().decode(SafeDIToolManifest.self, from: Data(contentsOf: manifestFile))
+		#expect(manifest.additionalMocksToGenerate == ["Service", "OtherService"])
+		#expect(manifest.mockGeneration.map { "\($0.inputFilePath) -> \(URL(fileURLWithPath: $0.outputFilePath).lastPathComponent)" } == [
+			"Service -> Service+SafeDIMock.swift",
+			"OtherService -> OtherService+SafeDIMock.swift",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesEveryRootToItsOwnOutputFile_whenADisambiguatedNameMatchesAnotherRootFileName() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [

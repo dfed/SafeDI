@@ -4287,6 +4287,21 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				configurationFilePaths: ["SafeDIConfiguration.swift"],
 				mockScopedFilePaths: ["SafeDIConfiguration.swift", "./SafeDIConfiguration.swift"],
 				projectRoot: swiftFile.deletingLastPathComponent().path,
+	mutating func run_throwsError_whenDependencyTreeAndMockEntriesShareOutputFilePath() async throws {
+		let swiftFile = try writeTemporarySwiftFile("""
+		@Instantiable(isRoot: true, generateMock: true)
+		public struct Root: Instantiable {
+		    public init() {}
+		}
+		""")
+		let outputFilePath = temporaryOutputFilePath(named: "Root+SafeDI.swift")
+
+		await assertThrowsError(
+			"The manifest’s dependencyTreeGeneration entry for '\(swiftFile.relativePath)' and its mockGeneration entry for '\(swiftFile.relativePath)' both write '\(outputFilePath)'. A hand-written manifest must name a different file for each.",
+		) {
+			try await generate(swiftFile, manifest: SafeDIToolManifest(
+				dependencyTreeGeneration: [.init(inputFilePath: swiftFile.relativePath, outputFilePath: outputFilePath)],
+				mockGeneration: [.init(inputFilePath: swiftFile.relativePath, outputFilePath: outputFilePath)],
 			))
 		}
 	}
@@ -4304,6 +4319,112 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			mockScopedFilePaths: ["SafeDIConfiguration.swift", "SafeDIConfiguration.swift"],
 			projectRoot: swiftFile.deletingLastPathComponent().path,
 		))
+	mutating func run_throwsError_whenTwoMockEntriesShareOutputFilePath() async throws {
+		let swiftFile = try writeTemporarySwiftFile("""
+		#SafeDIConfiguration(additionalMocksToGenerate: ["Service"])
+
+		@Instantiable(generateMock: true)
+		public struct LocalService: Instantiable {
+		    public init() {}
+		}
+		""")
+		let outputFilePath = temporaryOutputFilePath(named: "Service+SafeDIMock.swift")
+
+		await assertThrowsError(
+			"The manifest’s mockGeneration entry for '\(swiftFile.relativePath)' and its mockGeneration entry for 'Service' both write '\(outputFilePath)'. A hand-written manifest must name a different file for each.",
+		) {
+			try await generate(swiftFile, manifest: SafeDIToolManifest(
+				dependencyTreeGeneration: [],
+				mockGeneration: [
+					.init(inputFilePath: swiftFile.relativePath, outputFilePath: outputFilePath),
+					.init(inputFilePath: "Service", outputFilePath: outputFilePath),
+				],
+				configurationFilePaths: [swiftFile.relativePath],
+				additionalMocksToGenerate: ["Service"],
+			))
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsError_whenMockEntryAndMockConfigurationShareOutputFilePath() async throws {
+		let swiftFile = try writeTemporarySwiftFile("""
+		@Instantiable(generateMock: true)
+		public struct Service: Instantiable {
+		    public init() {}
+		}
+		""")
+		let outputFilePath = temporaryOutputFilePath(named: "SafeDIMockConfiguration.swift")
+
+		await assertThrowsError(
+			"The manifest’s mockGeneration entry for '\(swiftFile.relativePath)' and its mockConfigurationOutputFilePath both write '\(outputFilePath)'. A hand-written manifest must name a different file for each.",
+		) {
+			try await generate(swiftFile, manifest: SafeDIToolManifest(
+				dependencyTreeGeneration: [],
+				mockGeneration: [.init(inputFilePath: swiftFile.relativePath, outputFilePath: outputFilePath)],
+				mockConfigurationOutputFilePath: outputFilePath,
+			))
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsError_whenTwoEntriesSpellOneOutputFilePathTwoWays() async throws {
+		let swiftFile = try writeTemporarySwiftFile("""
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {
+		    public init() {}
+		}
+		""")
+		let outputFilePath = temporaryOutputFilePath(named: "Root+SafeDI.swift")
+		let otherSpelling = (outputFilePath as NSString).deletingLastPathComponent + "/./Root+SafeDI.swift"
+
+		await assertThrowsError(
+			"The manifest’s dependencyTreeGeneration entry for '\(swiftFile.relativePath)' and its dependencyTreeGeneration entry for 'OtherRoot.swift' both write '\(outputFilePath)'. A hand-written manifest must name a different file for each.",
+		) {
+			try await generate(swiftFile, manifest: SafeDIToolManifest(
+				dependencyTreeGeneration: [
+					.init(inputFilePath: swiftFile.relativePath, outputFilePath: outputFilePath),
+					.init(inputFilePath: "OtherRoot.swift", outputFilePath: otherSpelling),
+				],
+			))
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_writesMock_whenManifestListsOneMockEntryTwice() async throws {
+		let swiftFile = try writeTemporarySwiftFile("""
+		@Instantiable(generateMock: true)
+		public struct Service: Instantiable {
+		    public init() {}
+		}
+		""")
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		filesToDelete.append(outputDirectory)
+		let outputFile = outputDirectory.appendingPathComponent("Service+SafeDIMock.swift")
+		let entry = SafeDIToolManifest.InputOutputMap(inputFilePath: swiftFile.relativePath, outputFilePath: outputFile.path)
+
+		try await generate(swiftFile, manifest: SafeDIToolManifest(
+			dependencyTreeGeneration: [],
+			mockGeneration: [entry, entry],
+		))
+
+		let mockFileContent = try String(contentsOf: outputFile, encoding: .utf8)
+		#expect(mockFileContent == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Service {
+		    static func mock() -> Service {
+		        Service()
+		    }
+		}
+		#endif
+		""")
 	}
 
 	@Test
@@ -5705,6 +5826,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		let swiftFile = projectDirectory.appendingPathComponent(fileName)
 		try content.write(to: swiftFile, atomically: true, encoding: .utf8)
 		return swiftFile
+	/// A path named `fileName` in a new directory, for a manifest whose outputs `generate` rejects before writing any.
+	private func temporaryOutputFilePath(named fileName: String) -> String {
+		URL(fileURLWithPath: NSTemporaryDirectory())
+			.appendingPathComponent(UUID().uuidString)
+			.appendingPathComponent(fileName)
+			.path
 	}
 
 	/// Runs `generate` on `swiftFile` with the hand-written `manifest`.

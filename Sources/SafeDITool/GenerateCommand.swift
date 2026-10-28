@@ -153,6 +153,9 @@ struct Generate: AsyncParsableCommand {
 				from: Data(contentsOf: resolvedSwiftManifest.asFileURL),
 			)
 		}
+		if let manifest {
+			try Self.validateEachOutputIsWrittenOnce(by: manifest)
+		}
 
 		// A manifest without a project root, which only a hand-written manifest lacks, names files as written.
 		let projectFilePaths = scannedProjectFilePaths ?? manifest?.projectRoot.map(ProjectFilePaths.init(projectRoot:))
@@ -650,13 +653,14 @@ struct Generate: AsyncParsableCommand {
 	/// file without code for a declaration these conditions leave inactive, but it cannot write a file the
 	/// manifest does not name, which happens when a source file gained such a declaration after `scan` ran,
 	/// or when a hand-written manifest omits it. These errors say so instead of omitting code, and reject a
-	/// hand-written manifest whose paths `generate` cannot match.
+	/// hand-written manifest whose paths `generate` cannot match or whose outputs would overwrite one another.
 	private enum ManifestError: Error, CustomStringConvertible {
 		case rootNotInManifest(sourceFilePath: String)
 		case mockNotInManifest(typeName: String, sourceFilePath: String)
 		case configurationNotInManifest(sourceFilePath: String)
 		case additionalMockNotInManifest(typeName: String)
 		case mockScopedFileListedUnderTwoSpellings(firstSpelling: String, secondSpelling: String)
+		case outputWrittenTwice(outputFilePath: String, firstOutput: ManifestOutput, secondOutput: ManifestOutput)
 
 		var description: String {
 			switch self {
@@ -670,10 +674,51 @@ struct Generate: AsyncParsableCommand {
 				"The #\(SafeDIConfigurationVisitor.macroName) lists `\(typeName)` in additionalMocksToGenerate, but the manifest’s additionalMocksToGenerate does not. \(Self.planningExplanation) A hand-written manifest must list the type in additionalMocksToGenerate and mockGeneration."
 			case let .mockScopedFileListedUnderTwoSpellings(firstSpelling, secondSpelling):
 				"The manifest’s mockScopedFilePaths lists one file as both '\(firstSpelling)' and '\(secondSpelling)'. A hand-written manifest must list each file once, spelled as its configurationFilePaths and mockGeneration spell it."
+			case let .outputWrittenTwice(outputFilePath, firstOutput, secondOutput):
+				"The manifest’s \(firstOutput) and its \(secondOutput) both write '\(outputFilePath)'. A hand-written manifest must name a different file for each."
 			}
 		}
 
 		private static let planningExplanation = "SafeDI decides which files to generate before the build runs, listing every file that declares a root, a type that sets `generateMock: true`, or a #\(SafeDIConfigurationVisitor.macroName) in any clause of its `#if` blocks, so the file most likely changed after that decision; building again lists it."
+	}
+
+	/// A file a manifest tells `generate` to write.
+	private enum ManifestOutput: Equatable, CustomStringConvertible {
+		case dependencyTree(inputFilePath: String)
+		case mock(inputFilePath: String)
+		case mockConfiguration
+
+		var description: String {
+			switch self {
+			case let .dependencyTree(inputFilePath):
+				"dependencyTreeGeneration entry for '\(inputFilePath)'"
+			case let .mock(inputFilePath):
+				"mockGeneration entry for '\(inputFilePath)'"
+			case .mockConfiguration:
+				"mockConfigurationOutputFilePath"
+			}
+		}
+	}
+
+	/// Throws when two of `manifest`'s outputs name one file, since the one written last would replace the
+	/// other's code. `scan` gives each output its own file, so only a hand-written manifest can do this. An
+	/// entry listed twice writes the same code twice, so it is not rejected here.
+	private static func validateEachOutputIsWrittenOnce(by manifest: SafeDIToolManifest) throws {
+		let outputs: [(output: ManifestOutput, outputFilePath: String)] = manifest.dependencyTreeGeneration.map { (.dependencyTree(inputFilePath: $0.inputFilePath), $0.outputFilePath) }
+			+ manifest.mockGeneration.map { (.mock(inputFilePath: $0.inputFilePath), $0.outputFilePath) }
+			+ (manifest.mockConfigurationOutputFilePath.map { [(.mockConfiguration, $0)] } ?? [])
+		// Files are written at their paths relative to the working directory, so two spellings can name one file.
+		var outputsByFilePath = [NormalizedFilePath: (output: ManifestOutput, outputFilePath: String)]()
+		for (output, outputFilePath) in outputs {
+			let filePath = NormalizedFilePath(outputFilePath)
+			if let firstOutput = outputsByFilePath[filePath] {
+				guard firstOutput.output == output else {
+					throw ManifestError.outputWrittenTwice(outputFilePath: firstOutput.outputFilePath, firstOutput: firstOutput.output, secondOutput: output)
+				}
+			} else {
+				outputsByFilePath[filePath] = (output, outputFilePath)
+			}
+		}
 	}
 
 	private func findGenerateSwiftFiles() async throws -> Set<String> {
