@@ -36,8 +36,10 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		customMockName: String? = nil,
 		mockDeclarationLocation: Dependency.DeclarationLocation? = nil,
 		declarationLocation: Dependency.DeclarationLocation? = nil,
+		unsearchedEnclosingTypeCount: Int = 0,
 	) {
 		instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
+		self.unsearchedEnclosingTypeCount = unsearchedEnclosingTypeCount
 		self.declarationLocation = declarationLocation
 		self.isRoot = isRoot
 		self.initializer = initializer
@@ -121,6 +123,14 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// declaration – and such values never reach the dependency tree generator, which only consumes
 	/// instantiables that `SafeDITool` parsed from files.
 	public let declarationLocation: Dependency.DeclarationLocation?
+
+	/// How many of the outermost types enclosing the concrete type, counting the concrete type itself, unqualified
+	/// lookup does not search from inside the declaration. An extension's scope starts at the type it extends, so
+	/// in `extension Feature.Settings { final class Service }` lookup searches `Feature.Settings.Service` and
+	/// `Feature.Settings` but not `Feature`, and this is 1, as it is for `extension Feature.Service: Instantiable`,
+	/// where lookup searches only `Feature.Service`. It is 0 for a type declared inside type declarations, or in
+	/// an extension of a top-level type.
+	public let unsearchedEnclosingTypeCount: Int
 
 	/// The type of declaration where this Instantiable was defined.
 	public enum DeclarationType: Codable, Hashable, Sendable {

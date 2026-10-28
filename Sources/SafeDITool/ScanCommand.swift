@@ -98,11 +98,12 @@ func performScan(
 	// Parse all files once to find roots, mocks, and configurations. Only the
 	// mock-scoped files can declare this module's configuration, which decides
 	// how every file's `#if` blocks are evaluated, so they are searched for it first.
-	let (parsedModule, fileScans) = try await parseModule(
+	let parsedModule = try await parseModule(
 		filePaths: Set(allFilePathsByName.keys),
 		configurationFilePaths: Set(allFilePathsByName.keys.filter(isMockScoped)),
 		activeCompilationConditions: activeCompilationConditions,
 	)
+	let unresolvedFileScans = parsedModule.fileScans
 	let evaluator = parsedModule.conditionalCompilationEvaluator
 
 	// The parse rejected more than one configuration among the scoped files.
@@ -112,7 +113,7 @@ func performScan(
 	// handed other conditions than this scan, so outputs are planned for the declarations in every
 	// clause of every `#if` block: `generate` writes a file without code for one that is inactive.
 	// Only the module's own files decide its mocks and configuration.
-	let mockScopedFileScans = fileScans.filter { isMockScoped($0.path) }
+	let mockScopedFileScans = unresolvedFileScans.filter { isMockScoped($0.path) }
 	let moduleOutputFileDeclarations = mockScopedFileScans.reduce(into: OutputFileDeclarations()) { moduleOutputFileDeclarations, fileScan in
 		moduleOutputFileDeclarations.formUnion(fileScan.outputFileDeclarations)
 	}
@@ -120,7 +121,7 @@ func performScan(
 	// Discover additional directories from every configuration the module's files declare.
 	var additionalInputFiles = [String]()
 	var configuredAdditionalInputFiles = [String]()
-	var additionalFileScans = [CachedFileScan]()
+	var unresolvedAdditionalFileScans = [CachedFileScan]()
 	var plannedOnlyAdditionalFileScans = [FileScan]()
 	if !moduleOutputFileDeclarations.additionalDirectoriesToInclude.isEmpty {
 		// The directories the active configuration lists, which `generate` reads too. Files found relative to
@@ -141,7 +142,7 @@ func performScan(
 			scannedInputStamps[filePath] = FileModificationStamp(ofFileAtPath: filePath.path)
 		}
 
-		additionalFileScans = try await parseAdditionalDirectoryFiles(
+		unresolvedAdditionalFileScans = try await parseAdditionalDirectoryFiles(
 			configuredAdditionalFiles,
 			excludingInputFilesAt: allFilePaths,
 			namedBy: projectFilePaths,
@@ -155,6 +156,11 @@ func performScan(
 			conditionalCompilation: evaluator,
 		).map(\.fileScan)
 	}
+
+	// Every instantiable of the module is known, so the nested types its lookups reach are too.
+	let (fileScans, additionalFileScans) = try await parsedModule.resolvingNestedTypeDeclarations(
+		additionalFileScans: unresolvedAdditionalFileScans,
+	)
 
 	/// The manifest name of each file `fileScans` names, once each, sorted.
 	func sortedUniqueManifestPaths(_ fileScans: [FileScan]) -> [String] {
@@ -401,6 +407,13 @@ struct CachedFileScan: Codable {
 	private init(fileScan: FileScan, differingScannedPath: String?) {
 		self.fileScan = fileScan
 		self.differingScannedPath = differingScannedPath
+	}
+}
+
+extension CachedFileScan {
+	/// This scan, keeping the nested type declarations `lookups` reach.
+	func restrictingNestedTypeDeclarations(to lookups: NestedTypeLookups) -> CachedFileScan {
+		CachedFileScan(scannedPath: scannedPath, fileScan: fileScan.restrictingNestedTypeDeclarations(to: lookups))
 	}
 }
 

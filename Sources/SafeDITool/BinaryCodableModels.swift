@@ -102,6 +102,7 @@ extension FileScan: BinarySchemaMember {
 		"importSegments",
 		"importOnlyConsultedCompilationConditions",
 		"outputFileDeclarations",
+		"nestedTypeDeclarations",
 	]
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
@@ -117,6 +118,7 @@ extension FileScan: BinarySchemaMember {
 			importSegments: reader.read(),
 			importOnlyConsultedCompilationConditions: reader.read(),
 			outputFileDeclarations: reader.read(),
+			nestedTypeDeclarations: reader.read(),
 		)
 	}
 
@@ -132,6 +134,7 @@ extension FileScan: BinarySchemaMember {
 		writer.write(importSegments)
 		writer.write(importOnlyConsultedCompilationConditions)
 		writer.write(outputFileDeclarations)
+		writer.write(nestedTypeDeclarations)
 	}
 }
 
@@ -171,6 +174,7 @@ extension ModuleInfo: BinarySchemaMember {
 		"configurations",
 		"filesWithUnexpectedNodes",
 		"conditionalCompilationDecisions",
+		"nestedTypeDeclarations",
 	]
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
@@ -181,6 +185,7 @@ extension ModuleInfo: BinarySchemaMember {
 			configurations: reader.read(),
 			filesWithUnexpectedNodes: reader.read() as [String]?,
 			conditionalCompilationDecisions: reader.read(),
+			nestedTypeDeclarations: reader.read(),
 		)
 	}
 
@@ -191,6 +196,26 @@ extension ModuleInfo: BinarySchemaMember {
 		writer.write(configurations)
 		writer.write(filesWithUnexpectedNodes)
 		writer.write(conditionalCompilationDecisions)
+		writer.write(nestedTypeDeclarations)
+	}
+}
+
+extension NestedTypeDeclarations: BinarySchemaMember {
+	static let binaryLayout = [
+		"typeNames",
+		"genericParameterNames",
+	]
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(
+			typeNames: reader.read(),
+			genericParameterNames: reader.read(),
+		)
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(typeNames)
+		writer.write(genericParameterNames)
 	}
 }
 
@@ -316,6 +341,7 @@ extension Instantiable: BinarySchemaMember {
 		"mockDeclarationLocation",
 		"sourceFilePath",
 		"declarationLocation",
+		"unsearchedEnclosingTypeCount",
 	]
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
@@ -335,6 +361,7 @@ extension Instantiable: BinarySchemaMember {
 			customMockName: reader.read() as String?,
 			mockDeclarationLocation: reader.read() as Dependency.DeclarationLocation?,
 			declarationLocation: reader.read() as Dependency.DeclarationLocation?,
+			unsearchedEnclosingTypeCount: reader.read(),
 		)
 		sourceFilePath = try reader.read() as String?
 	}
@@ -354,6 +381,7 @@ extension Instantiable: BinarySchemaMember {
 		writer.write(customMockName)
 		writer.write(mockDeclarationLocation)
 		writer.write(declarationLocation)
+		writer.write(unsearchedEnclosingTypeCount)
 		writer.write(sourceFilePath)
 	}
 }

@@ -171,10 +171,8 @@ struct Generate: AsyncParsableCommand {
 				activeCompilationConditions: suppliedCompilationConditions,
 			),
 		)
-		let initialModule = parsed.module.moduleInfo
-		let initialModuleIsFromCache = parsed.isFromCache
-		let sourceConfiguration = parsed.module.configuration
-		let evaluator = parsed.module.conditionalCompilationEvaluator
+		let module = parsed.moduleInfo
+		let sourceConfiguration = parsed.configuration
 		// Derived from the configuration rather than from how this run parsed, so a module loaded from
 		// scan's cache warns too. Only `generate` warns, so a build that runs `scan` first warns once.
 		var warnings = [sourceConfiguration?.placementWarning].compactMap(\.self)
@@ -185,42 +183,32 @@ struct Generate: AsyncParsableCommand {
 			additionalImportedModules
 		}
 
-		// If the source configuration specifies additional directories to include,
-		// find and parse swift files in those directories and merge with initial
-		// results. Skipped when the initial module came from scan's cache —
-		// scan already merged the additional directories into the cached
-		// ModuleInfo, so re-parsing would be wasted work.
-		let module: ModuleInfo
-		if !initialModuleIsFromCache,
-		   let sourceConfiguration,
-		   !sourceConfiguration.additionalDirectoriesToInclude.isEmpty
-		{
-			// Paths are compared as scan compared them: inputs relative to the manifest's project root, or else to
-			// the working directory. Each additional file is named as scan names it in the manifest, so the
-			// manifest lists the roots it declares; without a project root, files are named as found.
-			// Without a project root, paths compare as the working directory spells them.
-			let comparisonFilePaths = projectFilePaths ?? ProjectFilePaths(projectRoot: FileManager.default.currentDirectoryPath)
-			let additionalFileScans = try await parseAdditionalDirectoryFiles(
-				Set(findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude).map(comparisonFilePaths.projectFilePath(of:))),
-				excludingInputFilesAt: Set(inputFilePaths.map(comparisonFilePaths.projectFilePath(of:))),
-				namedBy: projectFilePaths,
-				conditionalCompilation: evaluator,
-			)
-			module = initialModule.including(ModuleInfo(additionalFileScans.map(\.fileScan)))
-		} else {
-			module = initialModule
-		}
-
 		// Each module's instantiables are already ordered by `parseSwiftFiles`, so the
 		// combined order depends only on the caller's dependent-module list.
 		let unnormalizedInstantiables = dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
 		let instantiableTypes = Set(unnormalizedInstantiables.flatMap(\.instantiableTypes))
+		// A dependent module's nested types are spelled unqualified only within its own declarations, which this
+		// module's generated code may spell elsewhere.
+		let nestedTypeDeclarations = dependentModuleInfo.reduce(into: module.nestedTypeDeclarations) { nestedTypeDeclarations, moduleInfo in
+			nestedTypeDeclarations.formUnion(moduleInfo.nestedTypeDeclarations)
+		}
 		let normalizedInstantiables = unnormalizedInstantiables.map { unnormalizedInstantiable in
+			let lexicalScope = LexicalScope(
+				declaringType: unnormalizedInstantiable.concreteInstantiable,
+				unsearchedEnclosingTypeCount: unnormalizedInstantiable.unsearchedEnclosingTypeCount,
+			)
+			/// The type with each name that names a nested type spelled from the module scope, or `nil` when no name does.
+			/// The types this is called with are `Instantiable.typeDescriptionsQualifiedByLexicalLookup`, whose lookups
+			/// decided which nested types the module keeps.
+			func lexicallyQualified(_ typeDescription: TypeDescription) -> TypeDescription? {
+				typeDescription.qualifyingNestedTypeNames(within: lexicalScope, among: nestedTypeDeclarations)
+			}
 			func normalized(_ typeDescription: TypeDescription) -> TypeDescription? {
-				typeDescription.qualifyingInstantiatedType(
+				let lexicallyQualifiedTypeDescription = lexicallyQualified(typeDescription)
+				return (lexicallyQualifiedTypeDescription ?? typeDescription).qualifyingInstantiatedType(
 					within: unnormalizedInstantiable.concreteInstantiable,
 					amongInstantiableTypes: instantiableTypes,
-				)
+				) ?? lexicallyQualifiedTypeDescription
 			}
 			let unnormalizedToNormalizedTypeMap = unnormalizedInstantiable.dependencies.reduce(
 				into: [TypeDescription: TypeDescription](),
@@ -266,7 +254,7 @@ struct Generate: AsyncParsableCommand {
 				)
 			}
 			let normalizedInitializer = unnormalizedInstantiable.initializer?.mapArguments {
-				$0.withUpdatedTypeDescription(unnormalizedToNormalizedTypeMap[$0.typeDescription, default: $0.typeDescription])
+				$0.withUpdatedTypeDescription(unnormalizedToNormalizedTypeMap[$0.typeDescription] ?? lexicallyQualified($0.typeDescription) ?? $0.typeDescription)
 			}
 			let normalizedAdditionalInstantiables = unnormalizedInstantiable.instantiableTypes.dropFirst().map {
 				if let enclosingType = unnormalizedInstantiable.concreteInstantiable.popNested,
@@ -303,6 +291,7 @@ struct Generate: AsyncParsableCommand {
 				customMockName: unnormalizedInstantiable.customMockName,
 				mockDeclarationLocation: unnormalizedInstantiable.mockDeclarationLocation,
 				declarationLocation: unnormalizedInstantiable.declarationLocation,
+				unsearchedEnclosingTypeCount: unnormalizedInstantiable.unsearchedEnclosingTypeCount,
 			)
 			normalized.sourceFilePath = unnormalizedInstantiable.sourceFilePath
 			return normalized
@@ -680,10 +669,9 @@ struct Generate: AsyncParsableCommand {
 	/// alongside the manifest; reading that JSON is dramatically cheaper
 	/// than re-parsing every Swift file through SwiftParser.
 	///
-	/// Returns `(module, isFromCache)`. On a cache hit the returned module
-	/// already includes files discovered through
-	/// `#SafeDIConfiguration.additionalDirectoriesToInclude`, so the caller
-	/// should skip its additional-directory re-parse.
+	/// The returned module includes the files discovered through
+	/// `#SafeDIConfiguration.additionalDirectoriesToInclude`: scan already
+	/// merged them into its cache, and a fresh parse parses them here.
 	///
 	/// Cache is only consulted when `include` is empty — CLI callers who
 	/// pass `--include` expect those directories scanned afresh, and scan
@@ -717,7 +705,7 @@ struct Generate: AsyncParsableCommand {
 		manifest: SafeDIToolManifest?,
 		projectFilePaths: ProjectFilePaths?,
 		activeCompilationConditions: Set<String>,
-	) async throws -> (module: ParsedModule, isFromCache: Bool) {
+	) async throws -> ParsedModule {
 		// Only `scan` writes a cache, beside a manifest that records its project root.
 		if include.isEmpty,
 		   let manifestPath,
@@ -732,19 +720,36 @@ struct Generate: AsyncParsableCommand {
 		   	activeCompilationConditions: activeCompilationConditions,
 		   )
 		{
-			(cached, true)
-		} else {
-			try await (
-				parseModule(
-					filePaths: inputFilePaths,
-					// A fresh parse names files as the CSV does, so the manifest's configuration
-					// files are matched among the CSV's paths.
-					configurationFilePaths: manifest.map { $0.configurationFilePaths(among: inputFilePaths, in: projectFilePaths) } ?? inputFilePaths,
-					activeCompilationConditions: activeCompilationConditions,
-				).module,
-				false,
-			)
+			return cached
 		}
+		let parsedModuleFiles = try await parseModule(
+			filePaths: inputFilePaths,
+			// A fresh parse names files as the CSV does, so the manifest's configuration
+			// files are matched among the CSV's paths.
+			configurationFilePaths: manifest.map { $0.configurationFilePaths(among: inputFilePaths, in: projectFilePaths) } ?? inputFilePaths,
+			activeCompilationConditions: activeCompilationConditions,
+		)
+		let additionalDirectoriesToInclude = parsedModuleFiles.configuration?.additionalDirectoriesToInclude ?? []
+		// Paths are compared as scan compared them: inputs relative to the manifest's project root, or else to
+		// the working directory. Each additional file is named as scan names it in the manifest, so the
+		// manifest lists the roots it declares; without a project root, files are named as found.
+		let comparisonFilePaths = projectFilePaths ?? ProjectFilePaths(projectRoot: FileManager.default.currentDirectoryPath)
+		let unresolvedAdditionalFileScans = additionalDirectoriesToInclude.isEmpty
+			? []
+			: try await parseAdditionalDirectoryFiles(
+				Set(findSwiftFiles(inDirectories: additionalDirectoriesToInclude).map(comparisonFilePaths.projectFilePath(of:))),
+				excludingInputFilesAt: Set(inputFilePaths.map(comparisonFilePaths.projectFilePath(of:))),
+				namedBy: projectFilePaths,
+				conditionalCompilation: parsedModuleFiles.conditionalCompilationEvaluator,
+			)
+		let (fileScans, additionalFileScans) = try await parsedModuleFiles.resolvingNestedTypeDeclarations(
+			additionalFileScans: unresolvedAdditionalFileScans,
+		)
+		return ParsedModule(
+			moduleInfo: ModuleInfo(fileScans).including(ModuleInfo(additionalFileScans.map(\.fileScan))),
+			configuration: parsedModuleFiles.configuration,
+			conditionalCompilationEvaluator: parsedModuleFiles.conditionalCompilationEvaluator,
+		)
 	}
 
 	private func loadCachedModule(
@@ -817,15 +822,39 @@ struct Generate: AsyncParsableCommand {
 		else {
 			return nil
 		}
+		let moduleInfo = cached.moduleInfo.adding(fileScans.fileScans).including(cached.additionalModuleInfo.adding(additionalFileScans.fileScans))
+		guard fileScans.walkedFilesAgain || additionalFileScans.walkedFilesAgain else {
+			// Every file contributes what it contributed to scan, so the module makes the lookups scan resolved.
+			return ParsedModule(moduleInfo: moduleInfo, configuration: configuration, conditionalCompilationEvaluator: evaluator)
+		}
+		// A file walked again can declare instantiables that make lookups scan did not resolve: scan kept only the
+		// nested types its own lookups reach, and parsed only the files that can declare those. The files that can
+		// declare a type at one of the other paths are found among every file scan read, as scan finds them.
+		let lookups = NestedTypeLookups(instantiables: moduleInfo.instantiables)
+		let unresolvedLookups = lookups.subtracting(NestedTypeLookups(instantiables: cached.moduleInfo.instantiables
+				+ cached.conditionSensitiveFileScans.flatMap(\.fileScan.instantiables)
+				+ cached.additionalModuleInfo.instantiables
+				+ cached.additionalConditionSensitiveFileScans.flatMap(\.fileScan.instantiables)))
+		let unresolvedNestedTypeDeclarations = unresolvedLookups.paths.isEmpty
+			? NestedTypeDeclarations()
+			: try await nestedTypeDeclarations(
+				lookedUpBy: unresolvedLookups,
+				inFilesAt: Set(cached.scannedInputs.map(\.path)),
+				conditionalCompilation: evaluator,
+			)
 		return ParsedModule(
-			moduleInfo: cached.moduleInfo.adding(fileScans).including(cached.additionalModuleInfo.adding(additionalFileScans)),
+			// The nested types a fresh parse keeps.
+			moduleInfo: moduleInfo.replacingNestedTypeDeclarations(
+				with: moduleInfo.nestedTypeDeclarations.union(unresolvedNestedTypeDeclarations).restricted(to: lookups),
+			),
 			configuration: configuration,
 			conditionalCompilationEvaluator: evaluator,
 		)
 	}
 
-	/// What each file in `cachedFileScans` contributes under `activeCompilationConditions`, or `nil` when
-	/// the module must be parsed afresh.
+	/// What each file in `cachedFileScans` contributes under `activeCompilationConditions`, recording every nested
+	/// type a file walked again declares, and whether any file was walked again, or `nil` when the module must be
+	/// parsed afresh.
 	///
 	/// A file's scan records every bare condition whose value decided what the file contributed, so a
 	/// file is walked again only when one of those has a different value now. The build settings
@@ -841,7 +870,7 @@ struct Generate: AsyncParsableCommand {
 		from cached: CachedScannedModuleInfo,
 		activeCompilationConditions: Set<String>,
 		evaluator: ConditionalCompilationEvaluator,
-	) async throws -> [FileScan]? {
+	) async throws -> (fileScans: [FileScan], walkedFilesAgain: Bool)? {
 		let scanActiveCompilationConditions = Set(cached.activeCompilationConditions)
 		func hasChangedValue(_ condition: String) -> Bool {
 			scanActiveCompilationConditions.contains(condition) != activeCompilationConditions.contains(condition)
@@ -853,11 +882,16 @@ struct Generate: AsyncParsableCommand {
 			return nil
 		}
 		// Scan parsed every file under its absolute path, so the file is read from the name it is parsed under.
-		let rescans = try await parseSwiftFiles(Set(staleFileScans.map(\.scannedPath)), conditionalCompilation: evaluator)
-		let rescanByScannedPath = Dictionary(uniqueKeysWithValues: rescans.map { ($0.path, $0) })
 		let staleScannedPaths = Set(staleFileScans.map(\.scannedPath))
+		let rescans = try await parseSwiftFiles(staleScannedPaths, conditionalCompilation: evaluator)
+		// A file that mentions no SafeDI declaration was parsed for the nested types it declares.
+		let nestedTypeRescans = try await parseSwiftFilesDeclaringOnlyNestedTypes(
+			staleScannedPaths.subtracting(rescans.map(\.path)),
+			conditionalCompilation: evaluator,
+		)
+		let rescanByScannedPath = Dictionary(uniqueKeysWithValues: (rescans + nestedTypeRescans).map { ($0.path, $0) })
 		// A file that no longer mentions SafeDI is not walked, so it contributes nothing, as in a fresh parse.
-		return cachedFileScans.compactMap { cachedFileScan in
+		let fileScans = cachedFileScans.compactMap { cachedFileScan in
 			if staleScannedPaths.contains(cachedFileScan.scannedPath) {
 				rescanByScannedPath[cachedFileScan.scannedPath]?.relocated(to: cachedFileScan.fileScan.path)
 			} else if cachedFileScan.fileScan.importOnlyConsultedCompilationConditions.contains(where: hasChangedValue) {
@@ -867,6 +901,7 @@ struct Generate: AsyncParsableCommand {
 				cachedFileScan.fileScan
 			}
 		}
+		return (fileScans, !staleFileScans.isEmpty)
 	}
 
 	/// How the compiler spells the paths this tool was handed, or `nil` when this tool does not know.

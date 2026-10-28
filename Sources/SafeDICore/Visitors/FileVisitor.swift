@@ -38,8 +38,9 @@ public final class FileVisitor: SyntaxVisitor {
 
 	// MARK: SyntaxVisitor
 
-	public override func visit(_: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
-		.skipChildren
+	public override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordType(named: node.name.text)
+		return .skipChildren
 	}
 
 	public override func visit(_: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -47,6 +48,16 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+		.skipChildren
+	}
+
+	public override func visit(_: DeinitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+		// A type declared in a body is local to it, not nested in the enclosing type.
+		.skipChildren
+	}
+
+	public override func visit(_: SubscriptDeclSyntax) -> SyntaxVisitorContinueKind {
+		// A type declared in a body is local to it, not nested in the enclosing type.
 		.skipChildren
 	}
 
@@ -69,18 +80,26 @@ public final class FileVisitor: SyntaxVisitor {
 		.skipChildren
 	}
 
-	public override func visit(_: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
-		.skipChildren
+	public override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordType(named: node.name.text)
+		return .skipChildren
 	}
 
 	public override func visit(_ node: IfConfigDeclSyntax) -> SyntaxVisitorContinueKind {
 		// The block's declarations in every clause, including those of nested blocks, which this visitor
 		// reaches again only in the clauses it scans.
-		let (content, blockOutputFileDeclarations) = node.safeDIContentAmongDeclarations()
+		let (content, blockOutputFileDeclarations, declaredTypeNames) = node.safeDIContentAmongDeclarations()
 		outputFileDeclarations.formUnion(blockOutputFileDeclarations)
 		let scannable = conditionalCompilationEvaluator.scannableClauses(in: node, guarding: content)
 		activeIfConfigClauses.formUnion(scannable.clauses.map(\.id))
 		record(scannable.decisions)
+		if !declaredTypeNames.isEmpty, !scannable.consultedConditions.isEmpty {
+			// The selection decides which of these names `nestedTypeDeclarations` records.
+			conditionallyDeclaredTypes.append(ConditionallyDeclaredTypes(
+				names: declaredTypeNames,
+				consultedCompilationConditions: scannable.consultedConditions,
+			))
+		}
 		if importOnlyBlockDepth > 0 {
 			// The enclosing block's source, which `importSegments` holds, contains this block too.
 			importOnlyBlockDepth += 1
@@ -156,6 +175,7 @@ public final class FileVisitor: SyntaxVisitor {
 	public override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
 		// Enums can't be instantiable because they can't have `let` properties.
 		// However, they can have nested types within them that are instantiable.
+		recordType(named: node.name.text, genericParameterClause: node.genericParameterClause)
 		enterTypeNamed(node.name.text)
 		return .visitChildren
 	}
@@ -165,11 +185,15 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
+		// Lookup from inside an extension searches the type it extends and that type's members, but none of the
+		// types that enclose it.
+		unsearchedEnclosingTypeCount = max((node.extendedType.typeDescription.namePath?.count ?? 0) - 1, 0)
 		let instantiableVisitor = InstantiableVisitor(
 			declarationType: .extensionDecl,
 			parentType: nil,
 			conditionalCompilation: .evaluate(conditionalCompilationEvaluator),
 			sourceLocationConverter: sourceLocationConverter,
+			unsearchedEnclosingTypeCount: unsearchedEnclosingTypeCount,
 		)
 		instantiableVisitor.walk(node)
 		for instantiable in instantiableVisitor.instantiables {
@@ -191,6 +215,7 @@ public final class FileVisitor: SyntaxVisitor {
 	public override func visitPost(_: ExtensionDeclSyntax) {
 		// Extensions are always top-level.
 		parentType = nil
+		unsearchedEnclosingTypeCount = 0
 	}
 
 	// SwiftSyntax 602 and prior could not recover from certain parse errors, causing the remainder
@@ -229,6 +254,14 @@ public final class FileVisitor: SyntaxVisitor {
 	/// The declarations that decide which files SafeDI generates, found in every clause of every `#if`
 	/// block. They depend on no condition, so walking the file with any evaluator finds the same.
 	public private(set) var outputFileDeclarations = OutputFileDeclarations()
+	/// The types declared inside other types or extensions, in the clauses the evaluator selects. Types declared in
+	/// function, initializer, accessor, or subscript bodies are local, not nested, and are not recorded.
+	public private(set) var nestedTypeDeclarations = NestedTypeDeclarations()
+	/// The types and generic parameters that `#if` blocks declare in any clause, with the conditions that decided
+	/// which of them `nestedTypeDeclarations` records. Once the lookups SafeDI makes are known, the conditions of
+	/// a block that declares a name a lookup asks for are consulted conditions, and those of other blocks decide
+	/// nothing SafeDI keeps.
+	public private(set) var conditionallyDeclaredTypes = [ConditionallyDeclaredTypes]()
 
 	/// A run of a file's imports.
 	public enum ImportSegment: Codable, Hashable, Sendable {
@@ -241,6 +274,9 @@ public final class FileVisitor: SyntaxVisitor {
 	// MARK: Private
 
 	private var parentType: TypeDescription?
+	/// How many of `parentType`'s outermost types unqualified lookup does not search, which is nonzero inside an
+	/// extension of a nested type.
+	private var unsearchedEnclosingTypeCount = 0
 	private let conditionalCompilationEvaluator: ConditionalCompilationEvaluator
 	private let sourceLocationConverter: SourceLocationConverter?
 	/// The `#if` clauses the evaluator selected for scanning.
@@ -254,6 +290,7 @@ public final class FileVisitor: SyntaxVisitor {
 			parentType: parentType,
 			conditionalCompilation: .evaluate(conditionalCompilationEvaluator),
 			sourceLocationConverter: sourceLocationConverter,
+			unsearchedEnclosingTypeCount: unsearchedEnclosingTypeCount,
 		)
 		instantiableVisitor.walk(node)
 		for instantiable in instantiableVisitor.instantiables {
@@ -263,11 +300,21 @@ public final class FileVisitor: SyntaxVisitor {
 		consultedCompilationConditions.formUnion(instantiableVisitor.consultedCompilationConditions)
 		outputFileDeclarations.recordInstantiable(isRoot: instantiableVisitor.isRoot, generatesMock: instantiableVisitor.generateMock)
 
+		recordType(named: node.name.text, genericParameterClause: node.genericParameterClause)
 		// Keep track of how nested we are.
 		enterTypeNamed(node.name.text)
 
 		// Continue to find child types.
 		return .visitChildren
+	}
+
+	/// Records a type declaration, which is nested when it is inside a type or an extension.
+	private func recordType(named name: String, genericParameterClause: GenericParameterClauseSyntax? = nil) {
+		nestedTypeDeclarations.recordType(
+			named: name,
+			genericParameterNames: genericParameterClause?.parameters.map(\.name.text) ?? [],
+			within: parentType,
+		)
 	}
 
 	private func enterTypeNamed(_ name: String) {

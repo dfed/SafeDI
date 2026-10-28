@@ -26,6 +26,7 @@ public protocol ConcreteDeclSyntaxProtocol: SyntaxProtocol {
 	var inheritanceClause: InheritanceClauseSyntax? { get set }
 	var keyword: TokenSyntax { get set }
 	var name: TokenSyntax { get set }
+	var genericParameterClause: GenericParameterClauseSyntax? { get set }
 	var memberBlock: MemberBlockSyntax { get set }
 	var declType: ConcreteDeclType { get }
 }

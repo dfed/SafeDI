@@ -29,14 +29,19 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	///   - parentType: The type enclosing the walked declaration, if any.
 	///   - conditionalCompilation: How `#if` blocks among the declaration's members are scanned. The macro scans every clause because the compiler has already selected the active one; SafeDITool evaluates them.
 	///   - sourceLocationConverter: A converter for the tree being walked. When provided, the declaration and each dependency record where they begin.
+	///   - unsearchedEnclosingTypeCount: How many of the outermost types enclosing the walked declaration's type, counting
+	///     that type itself, unqualified lookup does not search from inside the declaration, as
+	///     `Instantiable.unsearchedEnclosingTypeCount` describes.
 	public init(
 		declarationType: DeclarationType,
 		parentType: TypeDescription? = nil,
 		conditionalCompilation: ConditionalCompilationHandling = .scanAllClauses,
 		sourceLocationConverter: SourceLocationConverter? = nil,
+		unsearchedEnclosingTypeCount: Int = 0,
 	) {
 		self.declarationType = declarationType
 		self.parentType = parentType
+		self.unsearchedEnclosingTypeCount = unsearchedEnclosingTypeCount
 		self.conditionalCompilation = conditionalCompilation
 		self.sourceLocationConverter = sourceLocationConverter
 		super.init(viewMode: .sourceAccurate)
@@ -305,6 +310,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				customMockName: customMockName,
 				mockDeclarationLocation: mockDeclarationLocation,
 				declarationLocation: instantiableDeclarationLocation,
+				unsearchedEnclosingTypeCount: unsearchedEnclosingTypeCount,
 			))
 		}
 
@@ -482,6 +488,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						customMockName: customMockName,
 						mockDeclarationLocation: mockDeclarationLocation,
 						declarationLocation: instantiableDeclarationLocation,
+						unsearchedEnclosingTypeCount: unsearchedEnclosingTypeCount,
 					),
 				]
 			} else {
@@ -509,6 +516,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						customMockName: customMockName,
 						mockDeclarationLocation: mockDeclarationLocation,
 						declarationLocation: instantiableDeclarationLocation,
+						unsearchedEnclosingTypeCount: unsearchedEnclosingTypeCount,
 					),
 				]
 			} else {
@@ -539,6 +547,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	private let declarationType: DeclarationType
 	private let parentType: TypeDescription?
+	private let unsearchedEnclosingTypeCount: Int
 	private let conditionalCompilation: ConditionalCompilationHandling
 	private let sourceLocationConverter: SourceLocationConverter?
 	/// The `#if` clauses the evaluator selected for scanning.

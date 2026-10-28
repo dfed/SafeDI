@@ -82,6 +82,7 @@ enum BinaryFile {
 			CachedFileScan.self,
 			FileScan.self,
 			OutputFileDeclarations.self,
+			NestedTypeDeclarations.self,
 			ModuleInfo.self,
 			ImportStatement.self,
 			FileVisitor.ImportSegment.self,
