@@ -322,17 +322,17 @@ extension SafeDIToolManifest {
 	/// Normalizing a path is far costlier than comparing its suffix, and the inputs are every file of every module
 	/// the target depends on, so only an input that ends in a configuration file's name is normalized; normalizing
 	/// a path never changes its file name.
-	/// The members of `inputFilePaths` that are not this module's own files: those of the modules it depends on, which
-	/// a build tool plugin hands `SafeDITool` together with the module's own. Matched as `configurationFilePaths(among:in:)`
-	/// matches files. Empty for a manifest that does not list the module's own files.
-	func dependencyFilePaths(among inputFilePaths: Set<String>, in projectFilePaths: ProjectFilePaths?) -> Set<String> {
-		guard let mockScopedFilePaths else { return [] }
-		if let projectFilePaths {
-			let moduleFilePaths = Set(mockScopedFilePaths.map(projectFilePaths.projectFilePath(of:)))
-			return inputFilePaths.filter { !moduleFilePaths.contains(projectFilePaths.projectFilePath(of: $0)) }
-		} else {
-			let moduleFilePaths = Set(mockScopedFilePaths)
-			return inputFilePaths.filter { !moduleFilePaths.contains($0) }
+	/// The members of `inputFilePaths` that are this module's own files, which a build tool plugin hands `SafeDITool`
+	/// together with those of the modules it depends on. Matched as `configurationFilePaths(among:in:)` matches files.
+	/// `nil` for a manifest that does not list the module's own files.
+	func moduleFilePaths(among inputFilePaths: Set<String>, in projectFilePaths: ProjectFilePaths?) -> Set<String>? {
+		mockScopedFilePaths.map { mockScopedFilePaths in
+			if let projectFilePaths {
+				let moduleFilePaths = Set(mockScopedFilePaths.map(projectFilePaths.projectFilePath(of:)))
+				return inputFilePaths.filter { moduleFilePaths.contains(projectFilePaths.projectFilePath(of: $0)) }
+			} else {
+				return inputFilePaths.intersection(mockScopedFilePaths)
+			}
 		}
 	}
 
