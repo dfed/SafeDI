@@ -499,7 +499,7 @@ extension UnsafeBufferPointer<UInt8> {
 			while end - position >= bytes.count,
 			      let candidate = memchr(position, Int32(bytes[0]), end - position - bytes.count + 1)?.assumingMemoryBound(to: UInt8.self)
 			{
-				if memcmp(candidate, bytes.baseAddress, bytes.count) == 0 {
+				if UnsafeBufferPointer(start: candidate, count: bytes.count).elementsEqual(bytes) {
 					return true
 				} else {
 					position = UnsafePointer(candidate) + 1
