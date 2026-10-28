@@ -1245,11 +1245,9 @@ public actor DependencyTreeGenerator {
 	/// properties. Such a received property stays a `mock()` parameter; an `@Instantiated` declaration of the
 	/// mismatched type is reported where a tree builds that declaration.
 	private static func mockCanBuild(_ property: Property, from scope: Scope) -> Bool {
-		(
-			!(property.propertyType.isConstant || property.propertyType.isLazilyInstantiated)
-				|| !scope.instantiable.dependencies.contains(where: \.isForwarded)
-		)
-			&& property.firstGenericMatchesForwardedProperties(of: scope.instantiable)
+		guard property.firstGenericMatchesForwardedProperties(of: scope.instantiable) else { return false }
+		return !(property.propertyType.isConstant || property.propertyType.isLazilyInstantiated)
+			|| !scope.instantiable.dependencies.contains(where: \.isForwarded)
 	}
 
 	/// Walks a post-promotion mock root scope for dependency cycles.
