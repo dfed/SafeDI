@@ -1551,7 +1551,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// from the types built there that receive it by value. One wrapper is bound for each wrapper type a
 		// label is received as: a receive of `x: LazilyInstantiated<X>?` is passed the binding a receive of
 		// `x: LazilyInstantiated<X>` is. Wrappers of one kind around instances of different types under one
-		// label are named apart by their instance types, as flat parameters sharing a label are.
+		// label are named apart by their instance types, as flat parameters sharing a label are, and so is a
+		// wrapper whose name the mock's scope already holds: a parameter, an override, or a binding of the
+		// tree. Renaming the generated binding leaves every label the declarations wrote as it is.
 		var lazilyInstantiatedPropertiesToBind = [Property]()
 		var lazilyInstantiatedPropertiesSeen = Set<Property>()
 		for receivedProperty in lazilyInstantiatedReceivedProperties
@@ -1565,7 +1567,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				"\(lazilyInstantiatedProperty.label)_\(lazilyInstantiatedProperty.propertyType.isSendable ? "sendableLazilyInstantiated" : "lazilyInstantiated")"
 			},
 			typeDescriptions: lazilyInstantiatedInstanceProperties.map(\.typeDescription),
-			namesInScope: [],
+			namesInScope: Set(allFlatLabels)
+				.union(flatReceivedParameters.map(\.label))
+				.union(onlyIfAvailableOverrides.map(\.name))
+				.union(treeBindingNames),
 			reservedNames: [],
 		)
 		var lazilyInstantiatedBindings = [String]()
