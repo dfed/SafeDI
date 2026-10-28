@@ -523,7 +523,8 @@ public actor DependencyTreeGenerator {
 		/// Reported at each `@Received` declaration whose dependency a closer ancestor hides, with a note at the
 		/// hiding declaration. See `HiddenReceivedProperty`.
 		case hiddenReceivedProperties([HiddenReceivedProperty])
-		case instantiableHasForwardedProperty(property: Property, declarationLocation: Dependency.DeclarationLocation?, instantiableWithForwardedProperty: Instantiable, forwardedDeclarations: [LocatedProperty], parent: Instantiable)
+		/// `suggestedPropertyType` is the type with which `property` can instead build `instantiableWithForwardedProperty`.
+		case instantiableHasForwardedProperty(property: Property, declarationLocation: Dependency.DeclarationLocation?, instantiableWithForwardedProperty: Instantiable, suggestedPropertyType: TypeDescription, forwardedDeclarations: [LocatedProperty], parent: Instantiable)
 		/// Reported at the dependency declaration that closes the cycle – the `@Instantiated` or `@Received`
 		/// property whose type is already on the instantiation stack – with a note at each member type’s
 		/// `@Instantiable` declaration. See `DependencyCycle`.
@@ -583,12 +584,12 @@ public actor DependencyTreeGenerator {
 					.map(\.sourceDiagnostics)
 					.sorted { SourceDiagnostic.precedesInSourceOrder($0[0], $1[0]) }
 					.flatMap(\.self)
-			case let .instantiableHasForwardedProperty(property, declarationLocation, instantiable, forwardedDeclarations, parent):
+			case let .instantiableHasForwardedProperty(property, declarationLocation, _, suggestedPropertyType, forwardedDeclarations, parent):
 				[
 					SourceDiagnostic(
 						severity: .error,
 						location: declarationLocation,
-						message: "Property `\(property.asSource)` on \(parent.concreteInstantiable.asSource) has at least one @\(Dependency.Source.forwardedRawValue) property. Property should instead be of type `\(Dependency.instantiatorType)<\(instantiable.concreteInstantiable.asSource)>`.",
+						message: "Property `\(property.asSource)` on \(parent.concreteInstantiable.asSource) has at least one @\(Dependency.Source.forwardedRawValue) property. Property should instead be of type `\(suggestedPropertyType.asSource)`.",
 					),
 				] + forwardedDeclarations.map {
 					SourceDiagnostic(
@@ -2236,11 +2237,48 @@ public actor DependencyTreeGenerator {
 			property: dependency.property,
 			declarationLocation: dependency.declarationLocation,
 			instantiableWithForwardedProperty: instantiable,
+			suggestedPropertyType: Self.instantiatorType(
+				building: instantiable,
+				forwarding: forwardedDependencies.map(\.property),
+				for: dependency,
+			),
 			forwardedDeclarations: forwardedDependencies.map {
 				DependencyTreeGeneratorError.LocatedProperty(property: $0.property, declarationLocation: $0.declarationLocation)
 			},
 			parent: parent,
 		)
+	}
+
+	/// The type with which `dependency`, a constant or lazily instantiated `@Instantiated` property, can instead
+	/// build `instantiable` when it is asked for, which `instantiable`’s `@Forwarded` properties require:
+	/// `Instantiator<Child>` for `child: Child` or `child: LazilyInstantiated<Child>`. `fulfilledByType` cannot
+	/// be used on an `Instantiator`, so a property with that argument gets an `ErasedInstantiator` of the type the
+	/// property declares, such as `ErasedInstantiator<String, AnyChild>` for `child: AnyChild` when `Child`
+	/// forwards a `String`. The forwarded properties are spelled out rather than as `Child.ForwardedProperties`,
+	/// which the module that declares the property may not be able to see. The suggestion is `Sendable` when the
+	/// property is, and the type an erased instantiator builds is not optional.
+	private static func instantiatorType(
+		building instantiable: Instantiable,
+		forwarding forwardedProperties: [Property],
+		for dependency: Dependency,
+	) -> TypeDescription {
+		let propertyType = dependency.property.propertyType
+		if case .instantiated(fulfillingTypeDescription: .some, _) = dependency.source {
+			let declaredType = dependency.property.typeDescription.unwrapped
+			let builtType = declaredType.lazilyInstantiatedInstanceType?.unwrapped ?? declaredType
+			return .simple(
+				name: propertyType.isSendable ? Dependency.sendableErasedInstantiatorType : Dependency.erasedInstantiatorType,
+				generics: [
+					forwardedProperties.asForwardedPropertiesType.typeDescription,
+					builtType,
+				],
+			)
+		} else {
+			return .simple(
+				name: propertyType.isSendable ? Dependency.sendableInstantiatorType : Dependency.instantiatorType,
+				generics: [instantiable.concreteInstantiable],
+			)
+		}
 	}
 
 	/// The lazily instantiated properties on a cycle as they are declared, outermost first, for the diagnostic.

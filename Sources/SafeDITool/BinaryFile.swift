@@ -67,7 +67,16 @@ enum BinaryFile {
 				"module info file"
 			}
 		}
+
+		/// The kind's ``magic`` in a sentence.
+		var magicDescription: String {
+			"`\(String(decoding: magic, as: UTF8.self))`"
+		}
 	}
+
+	/// Why SafeDITool most likely cannot read a file meant to be one it writes, and how to fix that. It
+	/// follows the reason the file could not be read.
+	static let unreadableFileExplanation = "A different version of SafeDI most likely wrote this file, or its write was interrupted. To fix this, clean your build (in Xcode: Product > Clean Build Folder) and build again, so that the module that wrote the file regenerates it."
 
 	/// The version of the layout of the header and of the primitives in ``BinaryCodable``. Changes to how a
 	/// stored type is laid out change ``schemaFingerprint`` instead.
@@ -241,7 +250,7 @@ struct BinaryFileReadError: Error, Equatable, CustomStringConvertible {
 		case let .shorterThanHeader(byteCount):
 			"The file is \(byteCount) bytes long, shorter than a \(name)’s header."
 		case .wrongKind:
-			"The file is not a \(name): it does not begin with `\(String(decoding: kind.magic, as: UTF8.self))`."
+			"The file is not a \(name): it does not begin with \(kind.magicDescription)."
 		case let .formatVersionMismatch(found, expected):
 			"The \(name) is in format version \(found), but this SafeDITool reads format version \(expected)."
 		case let .schemaFingerprintMismatch(found, expected):

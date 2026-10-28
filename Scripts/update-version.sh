@@ -2,7 +2,9 @@
 
 # Updates the artifact bundle URL and checksum in Package.swift, the
 # InstallSafeDITool plugin's hardcoded SafeDI version in
-# Plugins/Shared.swift, and the Bazel module version in MODULE.bazel.
+# Plugins/Shared.swift, the Bazel module version in MODULE.bazel, and,
+# for a stable release, the install snippets in the documentation that
+# state a SafeDI version.
 # Used by the publish workflow after building the artifact bundle.
 #
 # Usage: ./Scripts/update-version.sh <version> <checksum>
@@ -17,6 +19,19 @@ fi
 
 VERSION="$1"
 CHECKSUM="$2"
+
+# The documentation files whose install snippets state a SafeDI version.
+# The publish workflow commits each of them, and the CI check fails when
+# a Markdown file outside this list states one. The examples' own
+# dependency pins (Examples/ExampleTuistIntegration/Tuist/Package.swift
+# and Examples/ExampleBazelIntegration/MODULE.bazel) are not snippets:
+# they move in the example-pin pull request after a release.
+DOCUMENTATION_FILES=(
+    README.md
+    Documentation/Manual.md
+    Sources/SafeDI/SafeDI.docc/SafeDI.md
+    Examples/ExampleTuistIntegration/README.md
+)
 
 # In-place sed that works with both BSD sed (macOS) and GNU sed (Linux):
 # BSD requires an argument to -i and GNU treats a separate argument as
@@ -52,4 +67,27 @@ echo "  Plugins/Shared.swift: safeDIVersion updated"
 sed_in_place -E "/^module\(/,/^\)/ s|version = \"[^\"]*\"|version = \"${VERSION}\"|" MODULE.bazel
 
 echo "  MODULE.bazel: module version updated"
+
+# Update the install snippets. A prerelease (a version with a hyphen,
+# such as 2.2.0-rc-1) leaves them on the last stable release: the
+# publish commit lands on main, and readers copying a snippet should not
+# pick up a release candidate. Each pattern requires the version to
+# start with a digit, so a placeholder such as `version = "…"` stays put.
+case "$VERSION" in
+    *-*)
+        echo "  Documentation install snippets: left unchanged for prerelease $VERSION"
+        ;;
+    *)
+        for file in "${DOCUMENTATION_FILES[@]}"; do
+            # `.package(url: "https://github.com/dfed/SafeDI.git", from: "X")`
+            sed_in_place -E "s|(github\.com/dfed/SafeDI\.git\", from: \")[0-9][^\"]*\"|\1${VERSION}\"|g" "$file"
+            # `bazel_dep(name = "safedi", version = "X")`
+            sed_in_place -E "s|(bazel_dep\(name = \"safedi\", version = \")[0-9][^\"]*\"|\1${VERSION}\"|g" "$file"
+            # The migration guide's "Update your SafeDI dependency to `from: "X"`".
+            sed_in_place -E "s|(SafeDI dependency to .from: \")[0-9][^\"]*\"|\1${VERSION}\"|g" "$file"
+            echo "  $file: install snippets updated"
+        done
+        ;;
+esac
+
 echo "Done."
