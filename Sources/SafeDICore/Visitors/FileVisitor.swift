@@ -41,7 +41,7 @@ public final class FileVisitor: SyntaxVisitor {
 	public override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
 		// A protocol is no superclass, and a conforming type's lookup finds its associated types and type aliases only
 		// when no type of the name is in scope at all.
-		recordType(named: node.name.text, kind: .protocolType, modifiers: node.modifiers)
+		recordType(named: node.name.text, kind: .protocolType, modifiers: node.modifiers, attributes: node.attributes)
 		return .skipChildren
 	}
 
@@ -88,7 +88,7 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
-		recordType(named: node.name.text, kind: .otherType, modifiers: node.modifiers)
+		recordType(named: node.name.text, kind: .otherType, modifiers: node.modifiers, attributes: node.attributes)
 		return .skipChildren
 	}
 
@@ -224,6 +224,7 @@ public final class FileVisitor: SyntaxVisitor {
 			named: node.name.text,
 			kind: .otherType,
 			modifiers: node.modifiers,
+			attributes: node.attributes,
 			genericParameterClause: node.genericParameterClause,
 		)
 		enterTypeNamed(node.name.text, access: access)
@@ -373,6 +374,7 @@ public final class FileVisitor: SyntaxVisitor {
 			named: node.name.text,
 			kind: node.declType == .classType ? .classType : .otherType,
 			modifiers: node.modifiers,
+			attributes: node.attributes,
 			// Only a class has a superclass, which its inheritance clause names first, and SafeDI treats an actor's as it
 			// does a class's.
 			superclassCandidate: node.declType.mayHaveSuperclass ? node.inheritanceClause?.superclassCandidate : nil,
@@ -399,6 +401,7 @@ public final class FileVisitor: SyntaxVisitor {
 		named name: String,
 		kind: NestedTypeDeclaration.Kind,
 		modifiers: DeclModifierListSyntax,
+		attributes: AttributeListSyntax,
 		superclassCandidate: String? = nil,
 		genericParameterClause: GenericParameterClauseSyntax? = nil,
 	) -> NestedTypeDeclaration.Access {
@@ -409,6 +412,10 @@ public final class FileVisitor: SyntaxVisitor {
 			kind: kind,
 			access: access,
 			superclassCandidate: superclassCandidate,
+			hasUnrecognizedAttribute: attributes.contains { element in
+				// An attribute in an `#if` clause is not recognized either.
+				element.as(AttributeSyntax.self).map { !NestedTypeDeclaration.recognizedAttributeNames.contains($0.attributeName.trimmedDescription) } ?? true
+			},
 			isCompilerDetermined: compilerDeterminedClauseDepth > 0,
 			consultedCompilationConditions: declarationConditions.sortedConsultedCompilationConditions,
 			conditionalCompilationDecisions: declarationConditions.conditionalCompilationDecisions,

@@ -221,6 +221,7 @@ extension NestedTypeDeclaration: BinarySchemaMember {
 		"kind",
 		"access",
 		"superclassCandidate",
+		"hasUnrecognizedAttribute",
 		"isCompilerDetermined",
 		"isAbsent",
 		"consultedCompilationConditions",
@@ -234,6 +235,7 @@ extension NestedTypeDeclaration: BinarySchemaMember {
 			kind: reader.read(),
 			access: reader.read(),
 			superclassCandidate: reader.read() as String?,
+			hasUnrecognizedAttribute: reader.read(),
 			isCompilerDetermined: reader.read(),
 			isAbsent: reader.read(),
 			consultedCompilationConditions: reader.read(),
@@ -247,6 +249,7 @@ extension NestedTypeDeclaration: BinarySchemaMember {
 		writer.write(kind)
 		writer.write(access)
 		writer.write(superclassCandidate)
+		writer.write(hasUnrecognizedAttribute)
 		writer.write(isCompilerDetermined)
 		writer.write(isAbsent)
 		writer.write(consultedCompilationConditions)
