@@ -2484,7 +2484,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Root.swift"]):7:5: error: `child: LazilyInstantiated<AnyChild>` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<Child.ForwardedProperties, AnyChild>`.
+				\(fixtures["Root.swift"]):7:5: error: `child: LazilyInstantiated<AnyChild>` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<String, AnyChild>`.
 				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
 				"""
 			},
@@ -2528,7 +2528,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Root.swift"]):7:5: error: `child: LazilyInstantiated<AnyChild>?` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<Child.ForwardedProperties, AnyChild>`.
+				\(fixtures["Root.swift"]):7:5: error: `child: LazilyInstantiated<AnyChild>?` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<String, AnyChild>`.
 				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
 				"""
 			},
@@ -2572,7 +2572,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Root.swift"]):7:5: error: `child: SendableLazilyInstantiated<AnyChild>` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `SendableErasedInstantiator<Child.ForwardedProperties, AnyChild>`.
+				\(fixtures["Root.swift"]):7:5: error: `child: SendableLazilyInstantiated<AnyChild>` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `SendableErasedInstantiator<String, AnyChild>`.
 				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
 				"""
 			},

@@ -435,7 +435,8 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 		guard property.propertyType.isErasedInstantiator,
 		      !forwardedProperties.isEmpty,
 		      let forwardedArgument = property.generics?.first,
-		      forwardedArgument != forwardedProperties.asForwardedPropertiesType,
+		      // The forwarded argument is the same type as the only `@Forwarded` property.
+		      forwardedProperties.count != 1 || forwardedArgument != forwardedProperties[0].typeDescription,
 		      // The forwarded argument is the same as `InstantiableName.ForwardedProperties`.
 		      forwardedArgument != .nested(name: "ForwardedProperties", parentType: builtInstantiable.concreteInstantiable),
 		      // The forwarded argument is the same as the tuple the macro generates for `InstantiableName.ForwardedProperties`.
@@ -445,6 +446,9 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 		self.declarationLocation = declarationLocation
 		self.parent = parent
 		builtType = builtInstantiable.concreteInstantiable
+		// The forwarded properties are spelled out rather than as `ForwardedProperties` on the built type, which the
+		// module that declares the property may not be able to see.
+		forwardedPropertiesType = forwardedProperties.asForwardedPropertiesType.typeDescription
 	}
 
 	var sourceDiagnostics: [SourceDiagnostic] {
@@ -452,7 +456,7 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 			SourceDiagnostic(
 				severity: .error,
 				location: declarationLocation,
-				message: "The first generic argument of `\(property.asSource)` on `\(parent.asSource)` must be the @\(Dependency.Source.forwardedRawValue) properties of `\(builtType.asSource)`, which it builds. Declare it as `\(Dependency.erasedInstantiatorType)<\(builtType.asSource).ForwardedProperties, \(property.typeDescription.asInstantiatedType.asSource)>`.",
+				message: "The first generic argument of `\(property.asSource)` on `\(parent.asSource)` must be the @\(Dependency.Source.forwardedRawValue) properties of `\(builtType.asSource)`, which it builds. Declare it as `\(property.propertyType.isSendable ? Dependency.sendableErasedInstantiatorType : Dependency.erasedInstantiatorType)<\(forwardedPropertiesType.asSource), \(property.typeDescription.asInstantiatedType.asSource)>`.",
 			),
 		]
 	}
@@ -461,4 +465,5 @@ struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
 	private let declarationLocation: Dependency.DeclarationLocation?
 	private let parent: TypeDescription
 	private let builtType: TypeDescription
+	private let forwardedPropertiesType: TypeDescription
 }
