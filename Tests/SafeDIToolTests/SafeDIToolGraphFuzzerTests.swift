@@ -417,24 +417,25 @@ struct SafeDIToolGraphFuzzerTests {
 
 	// MARK: Seeds
 
-	/// The ordinary suite's batch: seeds 330 and 426, whose graphs the tool accepts and which between them exercise
-	/// every feature, and seeds 5 and 6, whose graphs it rejects. It is small because compiling generated code is
-	/// what the fuzzer costs; the long run pins the accepted set over the whole corpus. Compiling the batch is one
-	/// `swiftc` invocation when nothing fails.
-	static let smokeSeeds: [UInt64] = [5, 6, 330, 426]
+	/// The ordinary suite's batch: seeds 33, 476, and 797, whose graphs the tool accepts and which between them
+	/// exercise every feature (no two do: the sendable features need a sendable graph, the others a graph that is
+	/// not), and seed 5, whose graph it rejects. It is small because compiling generated code is what the fuzzer
+	/// costs; ci.yml fuzzes the whole corpus on every pull request. Compiling the batch is one `swiftc` invocation
+	/// when nothing fails.
+	static let smokeSeeds: [UInt64] = [5, 33, 476, 797]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x2BA581C96E9D318E
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xE0CB_79CB_4018_E4F3
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0x812957047246024D
+	static let corpusFixtureHash: UInt64 = 0xE10A_7D96_8433_DCA5
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
-	static let corpusAcceptedSeedCount = 2_814
-	static let corpusAcceptedSeedsSum: UInt64 = 0x05FB74D4688F6B21
+	static let corpusAcceptedSeedCount = 2788
+	static let corpusAcceptedSeedsSum: UInt64 = 0x7D69_795E_0AF2_D0A7
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix. Empty
