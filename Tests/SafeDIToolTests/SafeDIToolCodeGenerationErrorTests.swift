@@ -4040,9 +4040,11 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_throwsErrorSuggestingNestedForwardedType_whenInstantiableForwardsNestedType() async {
 		await assertThrowsError(
-			"""
-			Property `childBuilder: ErasedInstantiator<Int, AnyChild>` on Child incorrectly configured. Property should instead be of type `ErasedInstantiator<Feature.Configuration, AnyChild>`.
-			""",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: The first generic argument of `childBuilder: ErasedInstantiator<Int, AnyChild>` on `Root` must be the @Forwarded properties of `Child`, which it builds. Declare it as `ErasedInstantiator<Feature.Configuration, AnyChild>`.
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
