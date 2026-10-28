@@ -59,28 +59,8 @@ struct SafeDIToolGraphFuzzerTests {
 
 	// MARK: Known issues
 
-	@Test(.enabled(if: !SafeDIToolGraphFuzzerTests.knownIssues.isEmpty, "No seed is a known issue"))
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func knownIssueSeeds_remainAcceptedByTool_whenRunThroughTool() async throws {
-		// Compiling known-issue graphs, and running the tool twice to compare, costs more than the ordinary suite can
-		// afford, so the long run, which every publish and the weekly run execute, checks that they still fail to
-		// compile. This catches the other way a fix ends a known issue at once: the tool rejecting the shape.
-		for knownIssue in Self.knownIssues {
-			let outcome = try await GraphFuzzerOracle.toolOutcome(of: GraphFuzzerGenerator.fixture(forSeed: knownIssue.seeds[0]))
-			let isAccepted = if case .accepted = outcome {
-				true
-			} else {
-				false
-			}
-			#expect(
-				isAccepted,
-				"The tool now rejects known-issue seed \(knownIssue.seeds[0]). If that is the fix for \"\(knownIssue.reason)\", remove its seeds from knownIssues after checking them with the long run.",
-			)
-		}
-	}
-
 	@Test
-	func knownIssues_listEachSeedOnceInIncreasingOrder_belowScheduledSeedCount() {
+	func knownIssues_listEachSeedOnceInIncreasingOrder_belowCorpusSeedCount() {
 		#expect(Self.knownIssueListProblems() == [])
 	}
 
@@ -95,7 +75,7 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(Self.knownIssueListProblems(knownIssues) == [
 			"The seeds of \"Unordered\" are not in increasing order.",
 			"Seed 10 is listed as a known issue more than once.",
-			"Seed 5000 is a known issue outside the scheduled seeds 0..<5000.",
+			"Seed 5000 is a known issue outside the corpus, seeds 0..<5000.",
 			"The known issue \"Unsigned\" lists no seeds or no signatures.",
 		])
 	}
@@ -271,6 +251,25 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func seedSetSum_addsUpAcrossShards_whicheverOrderSeedsAreAdded() {
+		var whole = GraphFuzzerSeedSetSum()
+		for seed in [UInt64(3), 1, 4, 1_000, 59] {
+			whole.add(seed)
+		}
+		var firstShard = GraphFuzzerSeedSetSum()
+		var secondShard = GraphFuzzerSeedSetSum()
+		for seed in [UInt64(59), 1] {
+			firstShard.add(seed)
+		}
+		for seed in [UInt64(1_000), 3, 4] {
+			secondShard.add(seed)
+		}
+
+		#expect(firstShard.value &+ secondShard.value == whole.value)
+		#expect(firstShard.value != whole.value)
+	}
+
+	@Test
 	func fixture_matchesReferenceHash_forSmokeAndKnownIssueSeeds() {
 		// Every platform must generate the same graph for a seed, or a seed reported by the long run would not
 		// reproduce elsewhere. Changing the generator changes this hash and changes which graph every seed names, so
@@ -295,7 +294,7 @@ struct SafeDIToolGraphFuzzerTests {
 			return
 		}
 		guard configuration.iterations > 0 else {
-			reportProblem("SAFEDI_GRAPH_FUZZER_ITERATIONS must be a positive integer or `scheduled`.")
+			reportProblem("SAFEDI_GRAPH_FUZZER_ITERATIONS must be a positive integer or `corpus`.")
 			return
 		}
 		let knownIssueListProblems = Self.knownIssueListProblems()
@@ -309,10 +308,10 @@ struct SafeDIToolGraphFuzzerTests {
 
 		// Pin the whole corpus the long run covers, which the ordinary suite's hash covers only a sample of, and check
 		// that no graph uses a label beginning with `__safeDI_`, which the generated builder functions use.
-		var corpusFixtureHash = GraphFuzzerHash()
-		for seed in 0..<UInt64(Self.scheduledSeedCount) {
+		var generatedCorpusHash = GraphFuzzerHash()
+		for seed in 0..<UInt64(Self.corpusSeedCount) {
 			let fixture = GraphFuzzerGenerator.fixture(forSeed: seed)
-			corpusFixtureHash.combine(fixture.description)
+			generatedCorpusHash.combine(fixture.description)
 			let reservedLabels = fixture.swiftFileContent.flatMap(GraphFuzzerSourceLine.lines(of:)).compactMap { line -> String? in
 				guard case let .property(_, label, _) = line, label.hasPrefix("__safeDI_") else { return nil }
 				return label
@@ -321,46 +320,80 @@ struct SafeDIToolGraphFuzzerTests {
 				reportProblem("Seed \(seed)'s graph uses \(reservedLabels), which begin with `__safeDI_`, the prefix of generated builder functions.")
 			}
 		}
-		if corpusFixtureHash.value != Self.scheduledCorpusFixtureHash {
-			reportProblem("The generator's graphs for seeds 0..<\(Self.scheduledSeedCount) changed (fixture hash \(Self.hexadecimal(corpusFixtureHash.value)), pinned \(Self.hexadecimal(Self.scheduledCorpusFixtureHash))). Re-derive the known issues, smoke seeds, and pinned values.")
+		if generatedCorpusHash.value != Self.corpusFixtureHash {
+			reportProblem("The generator's graphs for seeds 0..<\(Self.corpusSeedCount) changed (fixture hash \(Self.hexadecimal(generatedCorpusHash.value)), pinned \(Self.hexadecimal(Self.corpusFixtureHash))). Re-derive the known issues, smoke seeds, and pinned values.")
 		}
 
 		var graphCount = 0
 		var acceptedCount = 0
-		var acceptedSeedsHash = GraphFuzzerHash()
+		var acceptedSeedsSum = GraphFuzzerSeedSetSum()
 		var knownIssueCount = 0
 		var failureCount = 0
+		// Batches run concurrently, one per core, but their findings are recorded in seed order, so the report and
+		// the issues are the same on every run. A batch's seeds are all finished when its results arrive.
+		let batchStarts = Array(stride(from: 0, to: configuration.iterations, by: Self.longRunBatchSize))
+		let concurrentBatchCount = max(1, ProcessInfo.processInfo.activeProcessorCount)
 		do {
-			for batchStart in stride(from: 0, to: configuration.iterations, by: Self.longRunBatchSize) {
-				let seeds = (batchStart..<min(batchStart + Self.longRunBatchSize, configuration.iterations))
-					.map { configuration.startingSeed &+ UInt64($0) }
-				let results = try await GraphFuzzerOracle.results(forSeeds: seeds) { seed in
-					report.append("seed \(seed)")
+			try await withThrowingTaskGroup(of: (Int, [GraphFuzzerResult]).self) { group in
+				var nextBatchIndex = 0
+				func addNextBatch() {
+					guard nextBatchIndex < batchStarts.count else { return }
+					let batchIndex = nextBatchIndex
+					let batchStart = batchStarts[batchIndex]
+					let seeds = (batchStart..<min(batchStart + Self.longRunBatchSize, configuration.iterations))
+						.map { configuration.startingSeed &+ UInt64($0) }
+					nextBatchIndex += 1
+					group.addTask {
+						var results = try await GraphFuzzerOracle.results(forSeeds: seeds) { seed in
+							report.append("seed \(seed)")
+						}
+						for index in results.indices where results[index].failure == nil
+							&& results[index].fixture.seed % Self.crossProcessSampleInterval == 0
+						{
+							results[index] = try GraphFuzzerResult(
+								fixture: results[index].fixture,
+								outcome: results[index].outcome,
+								failure: GraphFuzzerOracle.crossProcessFailure(of: results[index].fixture),
+							)
+						}
+						for result in results {
+							report.append("finished \(result.fixture.seed)")
+						}
+						return (batchIndex, results)
+					}
 				}
-				for result in results {
-					let seed = result.fixture.seed
-					graphCount += 1
-					if result.isAccepted {
-						acceptedCount += 1
-						acceptedSeedsHash.combine(String(seed))
+				for _ in 0..<concurrentBatchCount {
+					addNextBatch()
+				}
+				var finishedBatches = [Int: [GraphFuzzerResult]]()
+				var nextBatchToRecord = 0
+				while let (batchIndex, results) = try await group.next() {
+					finishedBatches[batchIndex] = results
+					addNextBatch()
+					while let results = finishedBatches.removeValue(forKey: nextBatchToRecord) {
+						nextBatchToRecord += 1
+						for result in results {
+							let seed = result.fixture.seed
+							graphCount += 1
+							if result.isAccepted {
+								acceptedCount += 1
+								acceptedSeedsSum.add(seed)
+							}
+							let finding = GraphFuzzerFinding(failure: result.failure, knownIssue: knownIssuesBySeed[seed])
+							if let reportLine = finding.reportLine(seed: seed) {
+								report.append(reportLine)
+							}
+							switch finding {
+							case .knownIssue:
+								knownIssueCount += 1
+							case .failure:
+								failureCount += 1
+							case .passed, .staleKnownIssue:
+								break
+							}
+							Self.record(finding, fixture: result.fixture)
+						}
 					}
-					var failure = result.failure
-					if failure == nil, seed % Self.crossProcessSampleInterval == 0 {
-						failure = try GraphFuzzerOracle.crossProcessFailure(of: result.fixture)
-					}
-					let finding = GraphFuzzerFinding(failure: failure, knownIssue: knownIssuesBySeed[seed])
-					if let reportLine = finding.reportLine(seed: seed) {
-						report.append(reportLine)
-					}
-					switch finding {
-					case .knownIssue:
-						knownIssueCount += 1
-					case .failure:
-						failureCount += 1
-					case .passed, .staleKnownIssue:
-						break
-					}
-					Self.record(finding, fixture: result.fixture)
 				}
 			}
 		} catch {
@@ -369,11 +402,14 @@ struct SafeDIToolGraphFuzzerTests {
 		}
 
 		// The oracle accepts any error the tool reports, so pin which graphs the tool accepts: a change that makes
-		// it reject valid graphs changes this.
-		if configuration.startingSeed == 0, configuration.iterations == Self.scheduledSeedCount,
-		   acceptedCount != Self.scheduledAcceptedSeedCount || acceptedSeedsHash.value != Self.scheduledAcceptedSeedsHash
+		// it reject valid graphs changes this. A shard of the corpus reports its part, which ci.yml's combine job
+		// adds up, and a run of the whole corpus checks the pins itself.
+		report.append("shard \(configuration.startingSeed) \(configuration.iterations) \(acceptedCount) \(Self.hexadecimal(acceptedSeedsSum.value))")
+		report.append("corpus \(Self.corpusSeedCount) \(Self.corpusAcceptedSeedCount) \(Self.hexadecimal(Self.corpusAcceptedSeedsSum))")
+		if configuration.startingSeed == 0, configuration.iterations == Self.corpusSeedCount,
+		   acceptedCount != Self.corpusAcceptedSeedCount || acceptedSeedsSum.value != Self.corpusAcceptedSeedsSum
 		{
-			reportProblem("The tool accepted \(acceptedCount) of seeds 0..<\(Self.scheduledSeedCount) (hash \(Self.hexadecimal(acceptedSeedsHash.value))), but \(Self.scheduledAcceptedSeedCount) are pinned (hash \(Self.hexadecimal(Self.scheduledAcceptedSeedsHash))). A tool change that rejects or accepts different graphs must update the pinned values deliberately.")
+			reportProblem("The tool accepted \(acceptedCount) of seeds 0..<\(Self.corpusSeedCount) (sum \(Self.hexadecimal(acceptedSeedsSum.value))), but \(Self.corpusAcceptedSeedCount) are pinned (sum \(Self.hexadecimal(Self.corpusAcceptedSeedsSum))). A tool change that rejects or accepts different graphs must update the pinned values deliberately.")
 		}
 		report.append("completed \(graphCount) graphs, \(acceptedCount) accepted, \(knownIssueCount) known issues, \(failureCount) unknown failures")
 		#expect(graphCount == configuration.iterations)
@@ -389,17 +425,18 @@ struct SafeDIToolGraphFuzzerTests {
 
 	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x2BA581C96E9D318E
 
-	/// The seeds `graph-fuzzer.yml` runs before every release and weekly, `0..<scheduledSeedCount`, which
-	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=scheduled` selects. `knownIssues` lists every one that fails.
-	static let scheduledSeedCount = 5_000
+	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
+	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
+	static let corpusSeedCount = 5_000
 
-	static let scheduledCorpusFixtureHash: UInt64 = 0x812957047246024D
+	static let corpusFixtureHash: UInt64 = 0x812957047246024D
 
-	/// How many of the scheduled seeds' graphs the tool accepts, and a hash of which ones.
-	static let scheduledAcceptedSeedCount = 2_814
-	static let scheduledAcceptedSeedsHash: UInt64 = 0x289314064BABE7C2
+	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
+	/// shards of the corpus can add up.
+	static let corpusAcceptedSeedCount = 2_814
+	static let corpusAcceptedSeedsSum: UInt64 = 0x05FB74D4688F6B21
 
-	/// Seeds in `0..<scheduledSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
+	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix. Empty
 	/// since PRs 404, 407, and 408 fixed or rejected every shape the corpus found.
 	static let knownIssues: [GraphFuzzerKnownIssue] = []
@@ -437,8 +474,8 @@ struct SafeDIToolGraphFuzzerTests {
 				if !seenSeeds.insert(seed).inserted {
 					problems.append("Seed \(seed) is listed as a known issue more than once.")
 				}
-				if seed >= UInt64(scheduledSeedCount) {
-					problems.append("Seed \(seed) is a known issue outside the scheduled seeds 0..<\(scheduledSeedCount).")
+				if seed >= UInt64(corpusSeedCount) {
+					problems.append("Seed \(seed) is a known issue outside the corpus, seeds 0..<\(corpusSeedCount).")
 				}
 			}
 		}
@@ -504,13 +541,13 @@ struct GraphFuzzerLongRunConfiguration {
 	/// finding; `problem <text>` for anything wrong with the run itself; and `completed …` at the end.
 	let reportPath: String?
 
-	/// `nil` unless `SAFEDI_GRAPH_FUZZER_ITERATIONS` is set: to a count of seeds, or to `scheduled` for
-	/// `scheduledSeedCount` seeds. Anything else becomes zero, which the run reports.
+	/// `nil` unless `SAFEDI_GRAPH_FUZZER_ITERATIONS` is set: to a count of seeds, or to `corpus` for
+	/// `corpusSeedCount` seeds. Anything else becomes zero, which the run reports.
 	static var current: GraphFuzzerLongRunConfiguration? {
 		let environment = ProcessInfo.processInfo.environment
 		guard let iterations = environment["SAFEDI_GRAPH_FUZZER_ITERATIONS"] else { return nil }
 		return GraphFuzzerLongRunConfiguration(
-			iterations: iterations == "scheduled" ? SafeDIToolGraphFuzzerTests.scheduledSeedCount : Int(iterations) ?? 0,
+			iterations: iterations == "corpus" ? SafeDIToolGraphFuzzerTests.corpusSeedCount : Int(iterations) ?? 0,
 			startingSeed: environment["SAFEDI_GRAPH_FUZZER_STARTING_SEED"].flatMap { UInt64($0) } ?? 0,
 			reportPath: environment["SAFEDI_GRAPH_FUZZER_REPORT"],
 		)
@@ -518,17 +555,26 @@ struct GraphFuzzerLongRunConfiguration {
 }
 
 /// An append-only progress log. Each line is written as it happens, so the log survives a crash of the process.
-struct GraphFuzzerReport {
+/// Batches run concurrently, so appends are serialized.
+final class GraphFuzzerReport: Sendable {
+	init(path: String?) {
+		self.path = path
+	}
+
 	let path: String?
 
 	func append(_ line: String) {
 		guard let path else { return }
-		if !FileManager.default.fileExists(atPath: path) {
-			FileManager.default.createFile(atPath: path, contents: nil)
+		lock.withLock {
+			if !FileManager.default.fileExists(atPath: path) {
+				FileManager.default.createFile(atPath: path, contents: nil)
+			}
+			guard let fileHandle = FileHandle(forWritingAtPath: path) else { return }
+			defer { try? fileHandle.close() }
+			_ = try? fileHandle.seekToEnd()
+			try? fileHandle.write(contentsOf: Data((line + "\n").utf8))
 		}
-		guard let fileHandle = FileHandle(forWritingAtPath: path) else { return }
-		defer { try? fileHandle.close() }
-		_ = try? fileHandle.seekToEnd()
-		try? fileHandle.write(contentsOf: Data((line + "\n").utf8))
 	}
+
+	private let lock = NSLock()
 }

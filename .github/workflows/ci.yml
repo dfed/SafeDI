@@ -625,6 +625,23 @@ jobs:
           command: swift package resolve
       - name: Build and Test Framework
         run: swift test -c release --enable-code-coverage -Xswiftc -enable-testing --traits sourceBuild
+      # The graph fuzzer's shards run this job's test bundle rather than
+      # building their own: the bundle, SafeDITool and the macro plugin (which
+      # the fuzzer's compiler runs use), and SafeDI's module.
+      - name: Package Test Bundle for the Graph Fuzzer
+        run: |
+          products=.build/x86_64-unknown-linux-gnu/release
+          tar -czf graph-fuzzer-test-bundle.tar.gz \
+            "$products/SafeDIPackageTests.xctest" \
+            "$products/SafeDITool" \
+            "$products/SafeDIMacros-tool" \
+            "$products/Modules/SafeDI.swiftmodule"
+      - name: Upload Test Bundle for the Graph Fuzzer
+        uses: actions/upload-artifact@v7
+        with:
+          name: graph-fuzzer-test-bundle
+          path: graph-fuzzer-test-bundle.tar.gz
+          retention-days: 1
       - name: Install curl for Codecov
         run: |
           apt-get update
@@ -640,6 +657,87 @@ jobs:
           verbose: true
           os: linux
           flags: linux
+
+  # Fuzzes the graph fuzzer's whole corpus, seeds 0..<corpusSeedCount (see
+  # SafeDIToolGraphFuzzerTests.swift), split across shards that run the test
+  # bundle "Build and Test on Linux" built. A shard fails when a graph fails,
+  # a known issue goes stale, the run reports a problem with itself, the
+  # process crashes, or no graph runs, and names the seeds in its summary.
+  # The fixed seeds make a failure deterministic, so it belongs to the change
+  # that caused it.
+  graph-fuzzer:
+    name: Fuzz Dependency Graphs on Linux (seeds ${{ matrix.starting-seed }}+${{ matrix.iterations }})
+    needs: [changes, linux]
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' && needs.linux.result == 'success' }}
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - starting-seed: 0
+            iterations: 2500
+          - starting-seed: 2500
+            iterations: 2500
+    defaults:
+      run:
+        shell: bash
+    env:
+      REPORT: ${{ github.workspace }}/graph-fuzzer/report.txt
+      SUMMARY: ${{ github.workspace }}/graph-fuzzer/summary.md
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Download Test Bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: graph-fuzzer-test-bundle
+      - name: Unpack Test Bundle
+        run: |
+          tar -xzf graph-fuzzer-test-bundle.tar.gz
+          mkdir -p graph-fuzzer
+      - name: Run Graph Fuzzer
+        env:
+          SAFEDI_GRAPH_FUZZER_ITERATIONS: ${{ matrix.iterations }}
+          SAFEDI_GRAPH_FUZZER_STARTING_SEED: ${{ matrix.starting-seed }}
+          SAFEDI_GRAPH_FUZZER_REPORT: ${{ github.workspace }}/graph-fuzzer/report.txt
+          # The bundle is built for coverage; keep its profiles out of the way.
+          LLVM_PROFILE_FILE: ${{ runner.temp }}/graph-fuzzer-%p.profraw
+        run: .build/x86_64-unknown-linux-gnu/release/SafeDIPackageTests.xctest --testing-library swift-testing --filter 'SafeDIToolGraphFuzzerTests/longRun'
+      - name: Summarize
+        if: ${{ !cancelled() }}
+        run: .github/scripts/summarize-graph-fuzzer-report.sh "$REPORT" "$SUMMARY" ${{ matrix.starting-seed }} ${{ matrix.iterations }}
+      - name: Upload Report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: graph-fuzzer-report-${{ matrix.starting-seed }}
+          path: graph-fuzzer/
+          if-no-files-found: ignore
+
+  # Checks the pins over the whole corpus, which no one shard sees: that the
+  # shards covered it exactly once, and that together they accepted exactly
+  # the pinned set of seeds. This is the one check to require for the fuzzer.
+  graph-fuzzer-corpus:
+    name: Check Graph Fuzzer Corpus on Linux
+    needs: [changes, graph-fuzzer]
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Download Shard Reports
+        uses: actions/download-artifact@v8
+        with:
+          pattern: graph-fuzzer-report-*
+          path: reports
+      - name: Combine Shard Reports
+        run: python3 .github/scripts/combine-graph-fuzzer-reports.py "$RUNNER_TEMP/graph-fuzzer-corpus.md" reports/*/report.txt
 
   linux-latest-swift:
     name: Build and Test on Latest Swift

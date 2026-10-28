@@ -939,6 +939,18 @@ enum GraphFuzzerFinding: Equatable {
 	}
 }
 
+/// A set of seeds as one number that does not depend on the order seeds are added in, so that the parts shards of
+/// the corpus report add up to the whole: the sum, wrapping, of each seed's `GraphFuzzerHash`.
+struct GraphFuzzerSeedSetSum {
+	private(set) var value: UInt64 = 0
+
+	mutating func add(_ seed: UInt64) {
+		var hash = GraphFuzzerHash()
+		hash.combine(String(seed))
+		value &+= hash.value
+	}
+}
+
 /// FNV-1a over strings, so a pinned value names the same content on every platform.
 struct GraphFuzzerHash {
 	private(set) var value: UInt64 = 0xCBF29CE484222325
@@ -987,7 +999,7 @@ enum GraphFuzzerOracle {
 	///   which seed was running if the tool crashes the process.
 	static func results(
 		forSeeds seeds: [UInt64],
-		willRunSeed: (UInt64) -> Void = { _ in },
+		willRunSeed: @Sendable (UInt64) -> Void = { _ in },
 	) async throws -> [GraphFuzzerResult] {
 		var toolRuns = [GraphFuzzerToolRuns]()
 		for seed in seeds {
