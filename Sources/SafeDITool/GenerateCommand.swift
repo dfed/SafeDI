@@ -198,7 +198,7 @@ struct Generate: AsyncParsableCommand {
 			let resolver = NestedTypeResolver(
 				declarations: module.nestedTypeDeclarations,
 				otherModuleDeclarations: dependentModuleInfo.reduce(into: NestedTypeDeclarations()) { $0.formUnion($1.nestedTypeDeclarations) },
-				dependencyFilePaths: parsed.dependencyFilePaths,
+				moduleFilePaths: parsed.moduleFilePaths,
 			)
 			return module.instantiables.map { ($0, resolver) }
 		}()
@@ -762,10 +762,10 @@ struct Generate: AsyncParsableCommand {
 			configuration: parsedModuleFiles.configuration,
 			conditionalCompilationEvaluator: parsedModuleFiles.conditionalCompilationEvaluator,
 			additionalDirectories: additionalDirectoriesToInclude.map(AdditionalDirectory.init(entry:)),
-			// A fresh parse names files as the CSV does.
-			dependencyFilePaths: moduleInfo.nestedTypeDeclarations.isEmpty
-				? []
-				: manifest?.dependencyFilePaths(among: inputFilePaths, in: projectFilePaths) ?? [],
+			// A fresh parse names files as the CSV does, and the files of additional directories as the manifest does.
+			moduleFilePaths: manifest?.moduleFilePaths(among: inputFilePaths, in: projectFilePaths).map { moduleFilePaths in
+				moduleFilePaths.union(additionalFileScans.map(\.fileScan.path))
+			},
 		)
 	}
 
@@ -848,21 +848,27 @@ struct Generate: AsyncParsableCommand {
 				+ cached.additionalModuleInfo.instantiables + additionalFileScans.fileScans.flatMap(\.instantiables)
 			let declarations = [cached.moduleInfo.nestedTypeDeclarations, cached.additionalModuleInfo.nestedTypeDeclarations]
 				.reduce(into: (fileScans.fileScans + additionalFileScans.fileScans).reduce(into: NestedTypeDeclarations()) { $0.formUnion($1.nestedTypeDeclarations) }) { $0.formUnion($1) }
+			let scanDeclarations = [cached.moduleInfo.nestedTypeDeclarations, cached.additionalModuleInfo.nestedTypeDeclarations]
+				.reduce(into: (cached.conditionSensitiveFileScans + cached.additionalConditionSensitiveFileScans).reduce(into: NestedTypeDeclarations()) { $0.formUnion($1.fileScan.nestedTypeDeclarations) }) { $0.formUnion($1) }
 			let scanLookups = NestedTypeLookups(
 				instantiables: cached.moduleInfo.instantiables + cached.conditionSensitiveFileScans.flatMap(\.fileScan.instantiables)
 					+ cached.additionalModuleInfo.instantiables + cached.additionalConditionSensitiveFileScans.flatMap(\.fileScan.instantiables),
-				declarations: [cached.moduleInfo.nestedTypeDeclarations, cached.additionalModuleInfo.nestedTypeDeclarations]
-					.reduce(into: (cached.conditionSensitiveFileScans + cached.additionalConditionSensitiveFileScans).reduce(into: NestedTypeDeclarations()) { $0.formUnion($1.fileScan.nestedTypeDeclarations) }) { $0.formUnion($1) },
+				declarations: scanDeclarations,
 			)
 			var lookups = NestedTypeLookups(instantiables: instantiables, declarations: declarations)
+			var declaredNames = lookups.declaredNames(among: declarations)
 			var discoveredDeclarations = NestedTypeDeclarations()
-			if !lookups.isCovered(by: scanLookups) {
-				// The files that can declare what the new lookups read are found among every file scan read, as scan
-				// finds them.
+			// Scan kept the declarations of the types asked for a name only when some declaration declares it.
+			if !lookups.isCovered(by: scanLookups) || !declaredNames.isSubset(of: scanLookups.declaredNames(among: scanDeclarations)) {
+				// The files that can declare what the new lookups read are found among the module's files scan read, as
+				// scan finds them.
+				let moduleFilePaths = cachedManifest.mockScopedFilePaths.map(Set.init)
 				let discovery = try await discoverNestedTypeDeclarations(
 					lookedUpBy: instantiables,
 					knownDeclarations: declarations,
-					amongFilesWithTypeNames: readTypeNames(inFilesAt: Set(cached.scannedInputs.map(\.path))),
+					amongFilesWithTypeNames: readTypeNames(inFilesAt: Set(cached.scannedInputs.map(\.path).filter { scannedPath in
+						moduleFilePaths?.contains(projectFilePaths.manifestPath(of: projectFilePaths.projectFilePath(of: scannedPath))) != false
+					})),
 					conditionalCompilation: evaluator,
 				)
 				lookups = discovery.lookups
@@ -871,7 +877,9 @@ struct Generate: AsyncParsableCommand {
 						at: projectFilePaths.manifestPath(of: projectFilePaths.projectFilePath(of: fileScan.path)),
 					))
 				}
+				declaredNames = lookups.declaredNames(among: declarations.union(discoveredDeclarations))
 			}
+			lookups = lookups.readingOnly(declaredNames)
 			moduleInfo = cached.moduleInfo
 				.adding(fileScans.fileScans.map { $0.resolvingNestedTypeDeclarations(for: lookups) })
 				.including(cached.additionalModuleInfo.adding(additionalFileScans.fileScans.map { $0.resolvingNestedTypeDeclarations(for: lookups) }))
@@ -886,10 +894,12 @@ struct Generate: AsyncParsableCommand {
 			configuration: configuration,
 			conditionalCompilationEvaluator: evaluator,
 			additionalDirectories: cached.additionalDirectories,
-			// The cached module names files as the manifest does.
-			dependencyFilePaths: moduleInfo.nestedTypeDeclarations.isEmpty
-				? []
-				: cachedManifest.dependencyFilePaths(among: Set(cached.csvInputPaths.map { projectFilePaths.manifestPath(of: projectFilePaths.projectFilePath(of: $0)) }), in: nil),
+			// The cached module names files as the manifest does, the files of additional directories included.
+			moduleFilePaths: cachedManifest.mockScopedFilePaths.map { mockScopedFilePaths in
+				Set(mockScopedFilePaths).union(cached.additionalInputAbsolutePaths.map { additionalInputPath in
+					projectFilePaths.manifestPath(of: projectFilePaths.projectFilePath(of: additionalInputPath))
+				})
+			},
 		)
 	}
 

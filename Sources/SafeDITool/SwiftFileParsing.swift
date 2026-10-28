@@ -34,8 +34,9 @@ import SwiftSyntax
 /// which parallel parsing finished the files or by how `generate` assembled the module, so the module info
 /// `generate` writes for the same files is the same bytes every time.
 struct ModuleInfo: Codable {
-	/// A module with `imports`, `mockImports`, `filesWithUnexpectedNodes`, and `conditionalCompilationDecisions`
-	/// sorted, whatever order they are given in, and all but `filesWithUnexpectedNodes` without duplicates.
+	/// A module with `imports`, `mockImports`, `filesWithUnexpectedNodes`, `conditionalCompilationDecisions`, and
+	/// `nestedTypeDeclarations` sorted, whatever order they are given in, and all but `filesWithUnexpectedNodes`
+	/// without duplicates, as the module reads back from the files that hold it.
 	init(
 		imports: [ImportStatement],
 		mockImports: [ImportStatement],
@@ -45,7 +46,7 @@ struct ModuleInfo: Codable {
 		conditionalCompilationDecisions: [ConditionalCompilationDecision],
 		nestedTypeDeclarations: NestedTypeDeclarations,
 	) {
-		self.nestedTypeDeclarations = nestedTypeDeclarations
+		self.nestedTypeDeclarations = NestedTypeDeclarations(nestedTypeDeclarations.sortedDeclarations)
 		self.imports = imports.sortedWithoutDuplicates()
 		self.mockImports = mockImports.sortedWithoutDuplicates()
 		self.instantiables = instantiables
@@ -87,9 +88,9 @@ struct ParsedModule {
 	let conditionalCompilationEvaluator: ConditionalCompilationEvaluator
 	/// The entries of `configuration.additionalDirectoriesToInclude`, each with the path its files were found at.
 	let additionalDirectories: [AdditionalDirectory]
-	/// The input files, named as `moduleInfo` names them, that belong to the modules this module depends on, which a
-	/// build tool plugin hands `SafeDITool` together with the module's own. Empty when every input is the module's.
-	let dependencyFilePaths: Set<String>
+	/// The module's own files, named as `moduleInfo` names them, when a build tool plugin hands `SafeDITool` the
+	/// files of the modules it depends on together with them, or `nil` when every file is the module's.
+	let moduleFilePaths: Set<String>?
 }
 
 /// An entry of a `#SafeDIConfiguration(additionalDirectoriesToInclude:)`, and the absolute path SafeDI looked for
@@ -293,7 +294,7 @@ func parseModule(
 	}
 	var typeNamesByFileWithoutSafeDIContent = [String: DeclaredTypeNames]()
 	let conventionalConfigurationFiles = try conventionalConfigurationFilePaths.sorted().compactMap { filePath -> (path: String, syntaxTree: SourceFileSyntax)? in
-		switch try readFile(atPath: filePath) {
+		switch try readFile(atPath: filePath, readingTypeNames: true) {
 		case let .declaringSafeDIContent(syntaxTree):
 			return (path: filePath, syntaxTree: syntaxTree)
 		case let .declaringNoSafeDIContent(typeNames):
@@ -311,7 +312,13 @@ func parseModule(
 		activeCompilationConditions: activeCompilationConditions,
 		configuration: conventionalConfigurations.count == 1 ? conventionalConfigurations.first : nil,
 	)
-	let walkedFiles = try await walkFiles(named: filePaths.subtracting(conventionalConfigurationFilePaths), conditionalCompilation: firstPassEvaluator)
+	// Lookup reads only what the module's own files declare where they do not mention SafeDI: what the modules it
+	// depends on declare decides a lookup only where it finds a member type.
+	let walkedFiles = try await walkFiles(
+		named: filePaths.subtracting(conventionalConfigurationFilePaths),
+		readingTypeNamesOf: configurationFilePaths,
+		conditionalCompilation: firstPassEvaluator,
+	)
 	typeNamesByFileWithoutSafeDIContent.merge(walkedFiles.typeNamesByFileWithoutSafeDIContent) { first, _ in first }
 	let fileScans = (firstPassEvaluator == defaultEvaluator
 		? conventionalConfigurationFileScans
@@ -336,7 +343,7 @@ func parseModule(
 		fileScans: evaluator == firstPassEvaluator
 			? fileScans
 			// Only a configuration outside `SafeDIConfiguration.swift` that changes the mock condition gets here.
-			: walkFiles(named: Set(fileScans.map(\.path)), conditionalCompilation: evaluator).fileScans,
+			: walkFiles(named: Set(fileScans.map(\.path)), readingTypeNamesOf: [], conditionalCompilation: evaluator).fileScans,
 		typeNamesByFileWithoutSafeDIContent: typeNamesByFileWithoutSafeDIContent,
 		configuration: configuration,
 		conditionalCompilationEvaluator: evaluator,
@@ -362,12 +369,16 @@ struct ParsedModuleFiles {
 		additionalFileScans: [CachedFileScan],
 	) async throws -> (fileScans: [FileScan], additionalFileScans: [CachedFileScan]) {
 		let knownFileScans = fileScans + additionalFileScans.map(\.fileScan)
-		let (lookups, discoveredFileScans) = try await discoverNestedTypeDeclarations(
+		let knownDeclarations = knownFileScans.reduce(into: NestedTypeDeclarations()) { $0.formUnion($1.nestedTypeDeclarations) }
+		let (discoveredLookups, discoveredFileScans) = try await discoverNestedTypeDeclarations(
 			lookedUpBy: knownFileScans.flatMap(\.instantiables),
-			knownDeclarations: knownFileScans.reduce(into: NestedTypeDeclarations()) { $0.formUnion($1.nestedTypeDeclarations) },
+			knownDeclarations: knownDeclarations,
 			amongFilesWithTypeNames: typeNamesByFileWithoutSafeDIContent,
 			conditionalCompilation: conditionalCompilationEvaluator,
 		)
+		let lookups = discoveredLookups.readingOnly(discoveredLookups.declaredNames(
+			among: discoveredFileScans.reduce(into: knownDeclarations) { $0.formUnion($1.nestedTypeDeclarations) },
+		))
 		return (
 			fileScans.map { $0.resolvingNestedTypeDeclarations(for: lookups) }
 				+ discoveredFileScans
@@ -384,9 +395,10 @@ struct ParsedModuleFiles {
 ///
 /// A file declares something at a path a lookup reads, such as `Feature.Settings.Configuration`, only when its text
 /// names that path's outermost type, `Feature`, right after a declaration keyword or `extension`, and names its last
-/// name, `Configuration`, right after a declaration keyword, among the generic parameters after a declared name, or
-/// in the path after `extension`. Only such files are parsed. The declarations they hold can make lookups follow
-/// more inheritance clauses, so files are parsed until no more can matter. Neither test depends on a condition.
+/// name, `Configuration`, right after a declaration keyword or among the generic parameters after a declared name.
+/// A searched type's superclass is decided by its declaration, whose name follows a declaration keyword. Only such
+/// files are parsed. The declarations they hold can make lookups follow more superclasses, so files are parsed until
+/// no more can matter. Neither test depends on a condition.
 /// - Parameters:
 ///   - knownDeclarations: The declarations of the files already walked.
 ///   - candidateFiles: The type names in the text of each file that may hold more declarations.
@@ -398,7 +410,8 @@ func discoverNestedTypeDeclarations(
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
 ) async throws -> (lookups: NestedTypeLookups, fileScans: [FileScan]) {
 	var declarations = knownDeclarations
-	var lookups = NestedTypeLookups(instantiables: instantiables, declarations: declarations)
+	let searchedNames = NestedTypeLookups.SearchedNames(instantiables: instantiables)
+	var lookups = NestedTypeLookups(searchedNames: searchedNames, declarations: declarations)
 	var unparsedFiles = candidateFiles
 	var discoveredFileScans = [FileScan]()
 	while case let filePaths = Set(unparsedFiles.keys.filter { unparsedFiles[$0]?.canDeclare(lookedUpBy: lookups) == true }), !filePaths.isEmpty {
@@ -410,7 +423,7 @@ func discoverNestedTypeDeclarations(
 		for fileScan in fileScans {
 			declarations.formUnion(fileScan.nestedTypeDeclarations)
 		}
-		lookups = NestedTypeLookups(instantiables: instantiables, declarations: declarations)
+		lookups = NestedTypeLookups(searchedNames: searchedNames, declarations: declarations)
 	}
 	return (lookups, discoveredFileScans)
 }
@@ -423,7 +436,7 @@ func parseSwiftFiles(
 	_ filePaths: Set<String>,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
 ) async throws -> [FileScan] {
-	try await walkFiles(named: filePaths, conditionalCompilation: evaluator).fileScans
+	try await walkFiles(named: filePaths, readingTypeNamesOf: [], conditionalCompilation: evaluator).fileScans
 }
 
 /// The type names in the text of each file at `filePaths`.
@@ -672,10 +685,11 @@ extension [SafeDIConfiguration] {
 }
 
 /// Reads, parses, and walks every file in parallel under its path, keeping what each file that mentions SafeDI
-/// contributes, and the type names in the text of each other file.
+/// contributes, and the type names in the text of each other file among `typeNameFilePaths`.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 private func walkFiles(
 	named filePaths: Set<String>,
+	readingTypeNamesOf typeNameFilePaths: Set<String>,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
 ) async throws -> (fileScans: [FileScan], typeNamesByFileWithoutSafeDIContent: [String: DeclaredTypeNames]) {
 	try await withThrowingTaskGroup(
@@ -684,7 +698,7 @@ private func walkFiles(
 	) { taskGroup in
 		for filePath in filePaths where !filePath.isEmpty {
 			taskGroup.addTask {
-				switch try readFile(atPath: filePath) {
+				switch try readFile(atPath: filePath, readingTypeNames: typeNameFilePaths.contains(filePath)) {
 				case let .declaringSafeDIContent(syntaxTree):
 					(path: filePath, walkedFile: .scanned(walk(syntaxTree, at: filePath, conditionalCompilation: evaluator)))
 				case let .declaringNoSafeDIContent(typeNames):
@@ -703,7 +717,7 @@ private func walkFiles(
 				typeNamesByFileWithoutSafeDIContent[path] = typeNames
 			}
 		}
-		return (fileScans, typeNamesByFileWithoutSafeDIContent)
+		return (fileScans, typeNamesByFileWithoutSafeDIContent.compactMapValues(\.self))
 	}
 }
 
@@ -711,8 +725,8 @@ private func walkFiles(
 private enum WalkedFile {
 	/// The file mentions SafeDI, and this is what walking it found.
 	case scanned(FileScan)
-	/// The file mentions no SafeDI declaration, and these are the type names in its text.
-	case declaringNoSafeDIContent(DeclaredTypeNames)
+	/// The file mentions no SafeDI declaration, and these are the type names in its text, when they were read.
+	case declaringNoSafeDIContent(DeclaredTypeNames?)
 }
 
 /// Parses and walks the files at `filePaths`, which mention no SafeDI declaration, in parallel.
@@ -745,13 +759,14 @@ private func walkNestedTypeDeclarations(
 private enum ReadFile {
 	/// The file's text mentions a SafeDI declaration, and this is its syntax tree.
 	case declaringSafeDIContent(SourceFileSyntax)
-	/// The file's text mentions no SafeDI declaration, and it was not parsed. These are the type names in its text.
-	case declaringNoSafeDIContent(DeclaredTypeNames)
+	/// The file's text mentions no SafeDI declaration, and it was not parsed. These are the type names in its text,
+	/// when they were read.
+	case declaringNoSafeDIContent(DeclaredTypeNames?)
 }
 
-/// Reads the file at `filePath` and parses it, or, without parsing, finds the type names in its text when its
-/// text shows it declares nothing SafeDI scans for.
-private func readFile(atPath filePath: String) throws -> ReadFile {
+/// Reads the file at `filePath` and parses it, or, without parsing, finds the type names in its text, if
+/// `readsTypeNames`, when its text shows it declares nothing SafeDI scans for.
+private func readFile(atPath filePath: String, readingTypeNames readsTypeNames: Bool) throws -> ReadFile {
 	var content = try String(contentsOfFile: filePath, encoding: .utf8)
 	// Searching the bytes rather than the characters is many times faster, and finds the markers wherever a
 	// character search does: no other sequence of characters is equivalent to these ASCII ones. It also finds a
@@ -762,7 +777,7 @@ private func readFile(atPath filePath: String) throws -> ReadFile {
 	return if mentionsSafeDI {
 		.declaringSafeDIContent(Parser.parse(source: content))
 	} else {
-		.declaringNoSafeDIContent(content.withUTF8(DeclaredTypeNames.init(source:)))
+		.declaringNoSafeDIContent(readsTypeNames ? content.withUTF8(DeclaredTypeNames.init(source:)) : nil)
 	}
 }
 
@@ -829,38 +844,45 @@ private func walk(
 ///
 /// A file declares something at a path a lookup reads, such as `Feature.Settings.Configuration`, only inside a
 /// declaration or an extension of `Feature`, so its text names `Feature` right after `struct`, `enum`, `class`,
-/// `actor`, `protocol`, or `extension`, and names `Configuration` right after a declaration keyword, among the
-/// generic parameters that follow a declared name, or in the path after `extension`. Comments and string literals
-/// are not skipped, so the names are a superset of those the file declares or extends, and a file whose names include
-/// no looked-up path's outermost type or no looked-up name declares nothing a lookup reads.
+/// `actor`, `protocol`, or `extension`, and names `Configuration` right after a declaration keyword or among the
+/// generic parameters that follow a declared name. Comments and string literals are not skipped, so the names are a
+/// superset of those the file declares or extends, and a file whose names include no looked-up path's outermost type
+/// or no looked-up name declares nothing a lookup reads.
 struct DeclaredTypeNames: Sendable {
 	init(source: UnsafeBufferPointer<UInt8>) {
 		guard let start = source.baseAddress else { return }
 		// Arrays, which may repeat a name, rather than sets, whose hashing would cost more than all the rest.
-		var names = [String]()
+		var declaredNames = [String]()
+		var extendedNames = [String]()
 		Scanner.identifierByteTable.withUnsafeBufferPointer { identifierBytes in
-			var scanner = Scanner(position: start, end: start + source.count, identifierBytes: identifierBytes)
+			var scanner = Scanner(position: start, start: start, end: start + source.count, identifierBytes: identifierBytes)
 			while let keyword = scanner.nextDeclarationKeyword() {
 				switch keyword {
 				case .declaration:
-					names.append(scanner.nameAfterKeyword())
+					declaredNames.append(scanner.nameAfterKeyword())
 					// Generic parameters follow the declared name.
-					names.append(contentsOf: scanner.genericParameterNames())
+					declaredNames.append(contentsOf: scanner.genericParameterNames())
 				case .extension:
-					names.append(contentsOf: scanner.pathAfterKeyword())
+					extendedNames.append(scanner.nameAfterKeyword())
 				}
 			}
 		}
-		self.names = names
+		self.declaredNames = declaredNames
+		self.extendedNames = extendedNames
 	}
 
 	/// Each name after a `struct`, `enum`, `class`, `actor`, `protocol`, `typealias`, or `associatedtype` keyword,
-	/// each identifier among the generic parameters after such a name, and each name in the path after `extension`.
-	private(set) var names = [String]()
+	/// and each identifier among the generic parameters after such a name.
+	private(set) var declaredNames = [String]()
+	/// The first name after each `extension` keyword.
+	private(set) var extendedNames = [String]()
 
-	/// Whether the file can declare something `lookups` read.
+	/// Whether the file can declare something `lookups` read: a type or generic parameter of a name lookups ask for,
+	/// or a type lookups search, whose declaration decides its superclass, inside a declaration or extension of a
+	/// looked-up path's outermost type. An extension adds no superclass, so only declarations count for the first.
 	func canDeclare(lookedUpBy lookups: NestedTypeLookups) -> Bool {
-		names.contains(where: lookups.declarationNames.contains) && names.contains(where: lookups.outermostTypeNames.contains)
+		declaredNames.contains { lookups.names.contains($0) || lookups.typeNames.contains($0) }
+			&& (declaredNames.contains(where: lookups.outermostTypeNames.contains) || extendedNames.contains(where: lookups.outermostTypeNames.contains))
 	}
 
 	/// A keyword that names a type right after it.
@@ -874,45 +896,123 @@ struct DeclaredTypeNames: Sendable {
 	private struct Scanner {
 		/// The next byte to read.
 		var position: UnsafePointer<UInt8>
+		/// The address of the first byte.
+		let start: UnsafePointer<UInt8>
 		/// The address after the last byte.
 		let end: UnsafePointer<UInt8>
 		/// `identifierByteTable`, read without checking for its initialization at each byte.
 		let identifierBytes: UnsafeBufferPointer<Bool>
 
 		/// The next keyword that names a type right after it, or `nil` at the end of the source.
+		///
+		/// Reads eight bytes at a time, finding in each the lowercase letters from `a` to `t`, with which every keyword
+		/// starts, that follow a byte that is not an ASCII letter, and comparing the bytes from each such letter on
+		/// with the keywords that start with it. A letter after a digit, an underscore, or a non-ASCII byte starts no
+		/// identifier, but treating it as if it did only finds more names, never fewer.
 		mutating func nextDeclarationKeyword() -> DeclarationKeyword? {
 			// Reads and writes locals rather than this scanner's properties, which the compiler would otherwise load
-			// and store at every byte.
+			// and store at every word.
 			var position = position
 			defer { self.position = position }
+			// The high bit of the first byte is set when the byte before `position` is an ASCII letter.
+			var previousByteIsLetter: UInt64 = position > start ? Self.letterMask(of: UInt64(position[-1])) : 0
 			while position < end {
-				while position < end, !isIdentifierByte(at: position) {
-					position += 1
+				let word = word(at: position)
+				let letters = Self.letterMask(of: word)
+				var candidates = Self.byteMask(of: word, from: UInt8(ascii: "a"), through: UInt8(ascii: "t"))
+					& ~(letters << 8 | previousByteIsLetter)
+				while candidates != 0 {
+					let candidate = position + candidates.trailingZeroBitCount / 8
+					candidates &= candidates &- 1
+					if let (keyword, length) = keyword(at: candidate) {
+						position = candidate + length
+						return keyword
+					}
 				}
-				let identifierStart = position
-				while position < end, isIdentifierByte(at: position) {
-					position += 1
-				}
-				// Every keyword is at least four bytes long, and most identifiers are ruled out by their length and first
-				// byte alone.
-				let length = position - identifierStart
-				guard length >= 4 else { continue }
-				let keyword: (spelling: StaticString, keyword: DeclarationKeyword)? = switch (length, identifierStart.pointee) {
-				case (4, UInt8(ascii: "e")): ("enum", .declaration)
-				case (5, UInt8(ascii: "a")): ("actor", .declaration)
-				case (5, UInt8(ascii: "c")): ("class", .declaration)
-				case (6, UInt8(ascii: "s")): ("struct", .declaration)
-				case (8, UInt8(ascii: "p")): ("protocol", .declaration)
-				case (9, UInt8(ascii: "e")): ("extension", .extension)
-				case (9, UInt8(ascii: "t")): ("typealias", .declaration)
-				case (14, UInt8(ascii: "a")): ("associatedtype", .declaration)
-				default: nil
-				}
-				if let keyword, UnsafeBufferPointer(start: identifierStart, count: length).elementsEqual(UnsafeBufferPointer(start: keyword.spelling.utf8Start, count: length)) {
-					return keyword.keyword
-				}
+				previousByteIsLetter = letters >> 56
+				position += min(8, end - position)
 			}
 			return nil
+		}
+
+		/// The keyword that names a type which the identifier at `identifierStart` is, and its length.
+		private func keyword(at identifierStart: UnsafePointer<UInt8>) -> (keyword: DeclarationKeyword, length: Int)? {
+			// The keywords' first bytes as one little-endian word holds them, so each comparison is one instruction.
+			let firstBytes = word(at: identifierStart)
+			let keyword: (keyword: DeclarationKeyword, length: Int)? = switch firstBytes & 0xFF {
+			case UInt64(UInt8(ascii: "a")):
+				if firstBytes & Self.firstBytesMask(5) == 0x726F746361 /* actor */ {
+					(.declaration, 5)
+				} else if firstBytes == 0x746169636F737361 /* associat */,
+				          word(at: identifierStart + 8) & Self.firstBytesMask(6) == 0x657079746465 /* edtype */
+				{
+					(.declaration, 14)
+				} else {
+					nil
+				}
+			case UInt64(UInt8(ascii: "c")):
+				firstBytes & Self.firstBytesMask(5) == 0x7373616C63 /* class */ ? (.declaration, 5) : nil
+			case UInt64(UInt8(ascii: "e")):
+				if firstBytes & Self.firstBytesMask(4) == 0x6D756E65 /* enum */ {
+					(.declaration, 4)
+				} else if firstBytes == 0x6F69736E65747865 /* extensio */, end - identifierStart > 8, identifierStart[8] == UInt8(ascii: "n") {
+					(.extension, 9)
+				} else {
+					nil
+				}
+			case UInt64(UInt8(ascii: "p")):
+				firstBytes == 0x6C6F636F746F7270 /* protocol */ ? (.declaration, 8) : nil
+			case UInt64(UInt8(ascii: "s")):
+				firstBytes & Self.firstBytesMask(6) == 0x746375727473 /* struct */ ? (.declaration, 6) : nil
+			case UInt64(UInt8(ascii: "t")):
+				firstBytes == 0x61696C6165707974 /* typealia */ && end - identifierStart > 8 && identifierStart[8] == UInt8(ascii: "s") ? (.declaration, 9) : nil
+			default:
+				nil
+			}
+			// The keyword is the whole identifier only when no identifier byte follows it.
+			guard let keyword, identifierStart + keyword.length == end || !isIdentifierByte(at: identifierStart + keyword.length) else {
+				return nil
+			}
+			return keyword
+		}
+
+		/// The eight bytes at `position` as a little-endian word, with zeros, which are not identifier bytes, past
+		/// the end. A word that matches a keyword's first eight bytes in full therefore lies within the source.
+		@inline(__always)
+		private func word(at position: UnsafePointer<UInt8>) -> UInt64 {
+			if end - position >= 8 {
+				UInt64(littleEndian: UnsafeRawPointer(position).loadUnaligned(as: UInt64.self))
+			} else {
+				(0..<(end - position)).reduce(0) { word, offset in word | UInt64(position[offset]) << (8 * offset) }
+			}
+		}
+
+		/// The high bit of each byte of `word` that is an ASCII letter.
+		@inline(__always)
+		private static func letterMask(of word: UInt64) -> UInt64 {
+			byteMask(of: word | repeated(0x20), from: UInt8(ascii: "a"), through: UInt8(ascii: "z"))
+		}
+
+		/// The high bit of each byte of `word` from `lowest` through `highest`, which are both ASCII.
+		@inline(__always)
+		private static func byteMask(of word: UInt64, from lowest: UInt8, through highest: UInt8) -> UInt64 {
+			// Adding to each byte's low seven bits sets its high bit exactly when the byte reaches the bound. The high
+			// bit of each byte of `word` is cleared first, so no addition carries into the next byte.
+			let asciiBits = word & ~repeated(0x80)
+			let reachesLowest = asciiBits &+ repeated(0x80 - lowest)
+			let exceedsHighest = asciiBits &+ repeated(0x7F - highest)
+			return reachesLowest & ~exceedsHighest & ~word & repeated(0x80)
+		}
+
+		@inline(__always)
+		private static func repeated(_ byte: UInt8) -> UInt64 {
+			UInt64(byte) &* 0x0101010101010101
+		}
+
+		/// The bits of a little-endian word that hold its first `count` bytes.
+		@inline(__always)
+		private static func firstBytesMask(_ count: Int) -> UInt64 {
+			UInt64.max >> (64 - 8 * count)
 		}
 
 		/// The name right after a keyword, past whitespace and comments, without backticks, which is empty when no
@@ -935,19 +1035,6 @@ struct DeclaredTypeNames: Sendable {
 			}
 		}
 
-		/// Each name in the dotted path right after a keyword, such as `Feature` and `Settings` in
-		/// `extension Feature.Settings`.
-		mutating func pathAfterKeyword() -> [String] {
-			var names = [nameAfterKeyword()]
-			skipTrivia()
-			while position < end, position.pointee == UInt8(ascii: ".") {
-				position += 1
-				names.append(nameAfterKeyword())
-				skipTrivia()
-			}
-			return names
-		}
-
 		/// Every identifier in the generic parameter clause right after a declared name, if there is one.
 		mutating func genericParameterNames() -> [String] {
 			skipTrivia()
@@ -955,7 +1042,8 @@ struct DeclaredTypeNames: Sendable {
 			position += 1
 			var names = [String]()
 			var depth = 1
-			while depth > 0, position < end {
+			// Trivia, such as a non-breaking space before a name, separates names as it does elsewhere.
+			while depth > 0, skippingTriviaFindsMore() {
 				if position.pointee == UInt8(ascii: "<") {
 					depth += 1
 					position += 1
@@ -989,6 +1077,7 @@ struct DeclaredTypeNames: Sendable {
 		/// Whether the byte at `position` is part of an identifier. A non-breaking space is whitespace to Swift's lexer,
 		/// though its bytes are not ASCII. A byte-order mark is too only at the start of a file, which reading the file
 		/// into a string removes, and anywhere else is part of an identifier.
+		@inline(__always)
 		private func isIdentifierByte(at position: UnsafePointer<UInt8>) -> Bool {
 			identifierBytes[Int(position.pointee)] && !(position.pointee == 0xC2 && isNonBreakingSpace(at: position))
 		}
@@ -1000,6 +1089,12 @@ struct DeclaredTypeNames: Sendable {
 		/// Whether the source continues at `position` with `first` and then `second`.
 		private func continues(at position: UnsafePointer<UInt8>, with first: UInt8, _ second: UInt8) -> Bool {
 			end - position >= 2 && position[0] == first && position[1] == second
+		}
+
+		/// Skips trivia, and returns whether any source follows it.
+		private mutating func skippingTriviaFindsMore() -> Bool {
+			skipTrivia()
+			return position < end
 		}
 
 		private mutating func skipIdentifier() {

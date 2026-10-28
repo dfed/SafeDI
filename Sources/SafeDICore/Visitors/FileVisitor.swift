@@ -116,9 +116,7 @@ public final class FileVisitor: SyntaxVisitor {
 			consultedCompilationConditions: scannable.consultedConditions,
 			// A block guarding SafeDI content already reports the decisions its selection rests on, which for mock-only
 			// content leave out the mock condition, as the code that reads them compiles only where it is active.
-			conditionalCompilationDecisions: content == .none
-				? conditionalCompilationEvaluator.scannableClauses(in: node, guarding: .production).decisions
-				: scannable.decisions,
+			conditionalCompilationDecisions: content == .none ? scannable.evaluatedDecisions : scannable.decisions,
 		)
 		let selectedClauses = Set(scannable.clauses.map(\.id))
 		for clause in node.clauses {
@@ -259,6 +257,9 @@ public final class FileVisitor: SyntaxVisitor {
 
 		// Extensions are always top-level.
 		parentType = node.extendedType.typeDescription
+		let extendedTypeNamePath = node.extendedType.typeDescription.namePath
+		parentPath = extendedTypeNamePath?.joined(separator: ".")
+		isParentTypeSpelledAsPath = extendedTypeNamePath != nil
 		// A member's access defaults to the extension's, and the extended type's own access, declared elsewhere,
 		// does not limit it here.
 		let extensionAccess = node.modifiers.access
@@ -272,6 +273,8 @@ public final class FileVisitor: SyntaxVisitor {
 	public override func visitPost(_: ExtensionDeclSyntax) {
 		// Extensions are always top-level.
 		parentType = nil
+		parentPath = nil
+		isParentTypeSpelledAsPath = true
 		unsearchedEnclosingTypeCount = 0
 		accessStack = []
 		defaultMemberAccess = .module
@@ -385,11 +388,8 @@ public final class FileVisitor: SyntaxVisitor {
 	/// The path of a type named `name` declared where the walk is, or `nil` inside an extension of a type that is
 	/// not spelled as a path of names, such as `[Int]`.
 	private func path(ofTypeNamed name: String) -> String? {
-		if let parentType {
-			parentType.namePath.map { ($0 + [name.withoutBackticks]).joined(separator: ".") }
-		} else {
-			name.withoutBackticks
-		}
+		guard isParentTypeSpelledAsPath else { return nil }
+		return parentPath.map { $0 + "." + name.withoutBackticks } ?? name.withoutBackticks
 	}
 
 	/// Records a type declaration and its generic parameters.
@@ -404,7 +404,7 @@ public final class FileVisitor: SyntaxVisitor {
 	) -> NestedTypeDeclaration.Access {
 		let access = min(modifiers.access ?? defaultMemberAccess, accessStack.last ?? .exported)
 		guard let path = path(ofTypeNamed: name) else { return access }
-		let scopePath = parentType?.namePath?.joined(separator: ".")
+		let scopePath = parentPath
 		nestedTypeDeclarations.record(NestedTypeDeclaration(
 			path: path,
 			kind: kind,
@@ -415,7 +415,8 @@ public final class FileVisitor: SyntaxVisitor {
 			consultedCompilationConditions: declarationConditions.sortedConsultedCompilationConditions,
 			conditionalCompilationDecisions: declarationConditions.conditionalCompilationDecisions,
 		))
-		for genericParameter in genericParameterClause?.parameters ?? [] {
+		// Building an empty parameter list for a type without generic parameters would allocate a syntax tree.
+		for genericParameter in genericParameterClause.map({ Array($0.parameters) }) ?? [] {
 			nestedTypeDeclarations.record(NestedTypeDeclaration(
 				path: path + "." + genericParameter.name.text.withoutBackticks,
 				kind: .genericParameter,
@@ -429,6 +430,8 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	private func enterTypeNamed(_ name: String, access: NestedTypeDeclaration.Access) {
+		parentPathStack.append(parentPath)
+		parentPath = path(ofTypeNamed: name)
 		if let parentType {
 			self.parentType = .nested(name: name, parentType: parentType)
 		} else {
@@ -442,12 +445,19 @@ public final class FileVisitor: SyntaxVisitor {
 
 	private func exitType() {
 		parentType = parentType?.popNested
+		parentPath = parentPathStack.removeLast()
 		accessStack.removeLast()
 		defaultMemberAccess = defaultMemberAccessStack.removeLast()
 	}
 
 	/// The default member access outside each type the walk is in, innermost last.
 	private var defaultMemberAccessStack = [NestedTypeDeclaration.Access]()
+	/// `parentType`'s path, joined once rather than for every declaration recorded.
+	private var parentPath: String?
+	private var parentPathStack = [String?]()
+	/// Whether `parentType` is spelled as a path of names, which it is unless the walk is inside an extension of a
+	/// type such as `[Int]`.
+	private var isParentTypeSpelledAsPath = true
 
 	/// Records each decision once, even when both this visitor and an `InstantiableVisitor` walk the block.
 	private func record(_ decisions: [ConditionalCompilationDecision]) {
@@ -504,12 +514,20 @@ extension DeclModifierListSyntax {
 
 /// The conditions and decisions of the `#if` blocks enclosing a declaration, which decided whether it exists.
 private struct DeclarationConditions {
-	var consultedCompilationConditions = Set<String>()
-	var conditionalCompilationDecisions = [ConditionalCompilationDecision]()
-
-	var sortedConsultedCompilationConditions: [String] {
-		consultedCompilationConditions.sorted()
+	init() {
+		consultedCompilationConditions = []
+		conditionalCompilationDecisions = []
 	}
+
+	init(consultedCompilationConditions: Set<String>, conditionalCompilationDecisions: [ConditionalCompilationDecision]) {
+		self.consultedCompilationConditions = consultedCompilationConditions
+		self.conditionalCompilationDecisions = conditionalCompilationDecisions
+	}
+
+	let consultedCompilationConditions: Set<String>
+	let conditionalCompilationDecisions: [ConditionalCompilationDecision]
+	/// `consultedCompilationConditions`, sorted once rather than for every declaration recorded.
+	private(set) lazy var sortedConsultedCompilationConditions = consultedCompilationConditions.sorted()
 
 	func adding(_ other: DeclarationConditions) -> DeclarationConditions {
 		DeclarationConditions(
@@ -597,7 +615,7 @@ private final class AbsentDeclarationRecorder: SyntaxVisitor {
 	}
 
 	private var parentType: TypeDescription?
-	private let conditions: DeclarationConditions
+	private var conditions: DeclarationConditions
 
 	private func path(ofTypeNamed name: String) -> String? {
 		if let parentType {
@@ -610,7 +628,8 @@ private final class AbsentDeclarationRecorder: SyntaxVisitor {
 	private func enterType(named name: String, kind: NestedTypeDeclaration.Kind, genericParameterClause: GenericParameterClauseSyntax?) -> SyntaxVisitorContinueKind {
 		if let path = path(ofTypeNamed: name) {
 			record(path: path, kind: kind)
-			for genericParameter in genericParameterClause?.parameters ?? [] {
+			// Building an empty parameter list for a type without generic parameters would allocate a syntax tree.
+			for genericParameter in genericParameterClause.map({ Array($0.parameters) }) ?? [] {
 				record(path: path + "." + genericParameter.name.text.withoutBackticks, kind: .genericParameter)
 			}
 		}

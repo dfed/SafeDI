@@ -117,6 +117,17 @@ public struct NestedTypeDeclaration: Codable, Hashable, Sendable {
 		return located
 	}
 
+	/// The path of the type this declaration is a member type or generic parameter of, which is empty for a type
+	/// declared at the top level.
+	fileprivate var memberOwnerPath: String {
+		if kind == .genericParameter {
+			// A generic parameter's path is its type's with its name after a dot.
+			path.split(separator: ".").dropLast().joined(separator: ".")
+		} else {
+			scopePath ?? ""
+		}
+	}
+
 	fileprivate var isTypeDeclaration: Bool {
 		kind != .genericParameter && !isAbsent
 	}
@@ -127,23 +138,32 @@ public struct NestedTypeDeclaration: Codable, Hashable, Sendable {
 /// Generated code spells a dependency's type outside the declaration that wrote it, such as in an extension of
 /// another type, where Swift does not search the declaring type's enclosing types. SafeDI therefore spells each name
 /// that resolves to a nested type by its path from the module scope, as Swift resolves the name where it is written.
-public struct NestedTypeDeclarations: Codable, Hashable, Sendable {
+public struct NestedTypeDeclarations: Codable, Equatable, Sendable {
 	// MARK: Initialization
 
 	public init() {}
 
 	public init(_ declarations: some Sequence<NestedTypeDeclaration>) {
-		self.declarations = Set(declarations)
+		self.declarations = Array(declarations)
 	}
 
 	// MARK: Public
 
-	public private(set) var declarations = Set<NestedTypeDeclaration>()
+	/// The declarations, which may repeat one: walking a file records thousands that a lookup never reads, and
+	/// collecting them unhashed costs far less than keeping them unique.
+	public private(set) var declarations = [NestedTypeDeclaration]()
 
-	/// The declarations in an order that depends only on them, so files that hold them are the same bytes whenever
-	/// the declarations are the same.
+	/// The declarations, each once, in an order that depends only on them, so files that hold them are the same
+	/// bytes whenever the declarations are the same.
 	public var sortedDeclarations: [NestedTypeDeclaration] {
-		declarations.sorted { $0.sortKey.lexicographicallyPrecedes($1.sortKey) }
+		Set(declarations).sorted { lhs, rhs in
+			// Comparing the paths first spares building every other key for most pairs.
+			lhs.path != rhs.path ? lhs.path < rhs.path : lhs.sortKey.lexicographicallyPrecedes(rhs.sortKey)
+		}
+	}
+
+	public static func == (lhs: NestedTypeDeclarations, rhs: NestedTypeDeclarations) -> Bool {
+		Set(lhs.declarations) == Set(rhs.declarations)
 	}
 
 	public var isEmpty: Bool {
@@ -164,11 +184,11 @@ public struct NestedTypeDeclarations: Codable, Hashable, Sendable {
 	}
 
 	public mutating func record(_ declaration: NestedTypeDeclaration) {
-		declarations.insert(declaration)
+		declarations.append(declaration)
 	}
 
 	public mutating func formUnion(_ other: NestedTypeDeclarations) {
-		declarations.formUnion(other.declarations)
+		declarations += other.declarations
 	}
 
 	public func union(_ other: NestedTypeDeclarations) -> NestedTypeDeclarations {
@@ -182,11 +202,18 @@ public struct NestedTypeDeclarations: Codable, Hashable, Sendable {
 		NestedTypeDeclarations(declarations.map { $0.located(at: filePath) })
 	}
 
-	/// These declarations without those no lookup in `lookups` reaches, which change no qualification.
+	/// These declarations, each once and in the order `sortedDeclarations` gives, without those no lookup in `lookups`
+	/// reaches, which change no qualification. The order is the one a cache that holds them reads back.
+	///
+	/// Every member type and generic parameter of a kept type is kept too, whatever its name: the modules that depend
+	/// on this one look up their own names in the types they inherit from or extend, and reading a kept type without
+	/// its members would tell them that it has none.
 	public func restricted(to lookups: NestedTypeLookups) -> NestedTypeDeclarations {
-		NestedTypeDeclarations(declarations.filter { declaration in
-			lookups.paths.contains(declaration.path) || lookups.typePaths.contains(declaration.path)
-		})
+		NestedTypeDeclarations(NestedTypeDeclarations(declarations.filter { declaration in
+			lookups.paths.contains(declaration.path)
+				|| lookups.typePaths.contains(declaration.path)
+				|| lookups.typePaths.contains(declaration.memberOwnerPath)
+		}).sortedDeclarations)
 	}
 
 	/// The declarations at each path.
@@ -203,6 +230,11 @@ public struct NestedTypeDeclarations: Codable, Hashable, Sendable {
 	public var conditionalCompilationDecisions: [ConditionalCompilationDecision] {
 		declarations.flatMap(\.conditionalCompilationDecisions)
 	}
+
+	/// The last name of every declaration's path.
+	fileprivate var lastNames: Set<String> {
+		Set(declarations.compactMap { $0.path.split(separator: ".").last.map(String.init) })
+	}
 }
 
 /// Every path that `NestedTypeDeclarations` can be asked about while `generate` qualifies the type names of some
@@ -214,52 +246,83 @@ public struct NestedTypeLookups: Equatable, Sendable {
 	///   - declarations: The declarations known so far. Lookup also searches the types the searched types inherit
 	///     from, so the declarations of those, found by following inheritance clauses, are looked up too.
 	public init(instantiables: some Sequence<Instantiable>, declarations: NestedTypeDeclarations) {
-		var searchedPaths = Set<String>()
-		for instantiable in instantiables {
-			let lexicalScope = LexicalScope(
-				declaringType: instantiable.concreteInstantiable,
-				unsearchedEnclosingTypeCount: instantiable.unsearchedEnclosingTypeCount,
-			)
-			searchedPaths.formUnion(lexicalScope.searchedTypes.map(\.path))
-			for typeDescription in instantiable.typeDescriptionsQualifiedByLexicalLookup {
-				_ = typeDescription.mappingNameReferences { name, generics in
-					names.insert(name.withoutBackticks)
-					return .simple(name: name, generics: generics)
+		self.init(searchedNames: SearchedNames(instantiables: instantiables), declarations: declarations)
+	}
+
+	/// The names each type the instantiables' scopes search is asked for, which do not depend on declarations, so
+	/// lookups computed again as declarations are found reuse them.
+	public struct SearchedNames: Sendable {
+		public init(instantiables: some Sequence<Instantiable>) {
+			for instantiable in instantiables {
+				let lexicalScope = LexicalScope(
+					declaringType: instantiable.concreteInstantiable,
+					unsearchedEnclosingTypeCount: instantiable.unsearchedEnclosingTypeCount,
+				)
+				var instantiableNames = Set<String>()
+				for typeDescription in instantiable.typeDescriptionsQualifiedByLexicalLookup {
+					typeDescription.forEachNameReference { instantiableNames.insert($0.withoutBackticks) }
+				}
+				names.formUnion(instantiableNames)
+				for searchedType in lexicalScope.searchedTypes {
+					namesBySearchedPath[searchedType.path, default: []].formUnion(instantiableNames)
 				}
 			}
 		}
-		// Follow inheritance clauses from the searched types, whatever their visibility: keeping more declarations
-		// than a lookup reads changes no qualification.
-		let declarationsByPath = declarations.declarationsByPath
-		var unvisitedPaths = Array(searchedPaths)
-		typePaths = searchedPaths
-		while let path = unvisitedPaths.popLast() {
-			for declaration in declarationsByPath[path] ?? [] where declaration.isTypeDeclaration {
-				guard let superclassCandidate = declaration.superclassCandidate,
-				      !superclassCandidate.isEmpty,
-				      !NestedTypeResolver.knownProtocols.contains(superclassCandidate)
-				else { continue }
-				if let resolvedPath = resolvedTypePath(
-					of: superclassCandidate,
-					inScopeOf: declaration.scopePath,
-					isDeclared: { declarationsByPath[$0]?.contains(where: \.isTypeDeclaration) == true },
-				) {
-					if typePaths.insert(resolvedPath).inserted {
-						unvisitedPaths.append(resolvedPath)
+
+		fileprivate var names = Set<String>()
+		fileprivate var namesBySearchedPath = [String: Set<String>]()
+	}
+
+	public init(searchedNames: SearchedNames, declarations: NestedTypeDeclarations) {
+		names = searchedNames.names
+		let namesBySearchedPath = searchedNames.namesBySearchedPath
+		// Follow each class's superclass candidate from the searched types, whatever its visibility: keeping more
+		// declarations than a lookup reads changes no qualification.
+		var declaredTypePaths = Set<String>()
+		var superclassCandidatesByPath = [String: [(candidate: String, scopePath: String?)]]()
+		for declaration in declarations.declarations where declaration.isTypeDeclaration {
+			declaredTypePaths.insert(declaration.path)
+			if let superclassCandidate = declaration.superclassCandidate,
+			   !superclassCandidate.isEmpty,
+			   !NestedTypeResolver.knownProtocols.contains(superclassCandidate)
+			{
+				superclassCandidatesByPath[declaration.path, default: []].append((superclassCandidate, declaration.scopePath))
+			}
+		}
+		var superclassPathsByPath = [String: [String]]()
+		var unresolvedTypePaths = Set<String>()
+		/// The superclasses that lookup searches after the type at `path`, nearest first.
+		func superclassPaths(of path: String, visited: Set<String> = []) -> [String] {
+			if let knownPaths = superclassPathsByPath[path] {
+				return knownPaths
+			}
+			var paths = [String]()
+			for (candidate, scopePath) in superclassCandidatesByPath[path] ?? [] {
+				if let resolvedPath = resolvedTypePath(of: candidate, inScopeOf: scopePath, isDeclared: declaredTypePaths.contains) {
+					// Sources that do not compile can make a class inherit from itself.
+					if !visited.contains(resolvedPath) {
+						paths += [resolvedPath] + superclassPaths(of: resolvedPath, visited: visited.union([path]))
 					}
 				} else {
-					unresolvedTypePaths.insert(superclassCandidate)
+					unresolvedTypePaths.insert(candidate)
+				}
+			}
+			superclassPathsByPath[path] = paths
+			return paths
+		}
+		for (searchedPath, searchedNames) in namesBySearchedPath {
+			for typePath in [searchedPath] + superclassPaths(of: searchedPath) {
+				typePaths.insert(typePath)
+				namesByTypePath[typePath, default: []].formUnion(searchedNames)
+				for name in searchedNames {
+					paths.insert(typePath + "." + name)
 				}
 			}
 		}
-		for typePath in typePaths {
-			for name in names {
-				paths.insert(typePath + "." + name)
-			}
-		}
+		self.unresolvedTypePaths = unresolvedTypePaths
 		let allTypePaths = typePaths.union(unresolvedTypePaths)
 		outermostTypeNames = Set(allTypePaths.map { String($0.prefix { $0 != "." }) })
-		declarationNames = names.union(allTypePaths.map { String($0.split(separator: ".").last ?? "") })
+		typeNames = Set(allTypePaths.compactMap { $0.split(separator: ".").last.map(String.init) })
 	}
 
 	/// The path of every type, generic parameter, or member type a lookup can ask about: each name the
@@ -271,9 +334,8 @@ public struct NestedTypeLookups: Equatable, Sendable {
 	public private(set) var names = Set<String>()
 	/// The top-level types whose declarations and extensions can declare something a lookup reads.
 	public private(set) var outermostTypeNames = Set<String>()
-	/// The names a declaration that a lookup reads can have: the names lookups ask for, and the last name of every
-	/// type lookups search, whose declarations and extensions decide what it inherits.
-	public private(set) var declarationNames = Set<String>()
+	/// The last name of every type lookups search, whose declarations decide what it inherits.
+	public private(set) var typeNames = Set<String>()
 
 	/// Whether these lookups read only declarations `other`'s read too.
 	public func isCovered(by other: NestedTypeLookups) -> Bool {
@@ -282,10 +344,31 @@ public struct NestedTypeLookups: Equatable, Sendable {
 			&& unresolvedTypePaths.isSubset(of: other.unresolvedTypePaths)
 	}
 
+	/// The names lookups ask for that some declaration among `declarations` is a member type or generic parameter of.
+	/// A lookup of any other name finds nothing, so the name keeps its spelling whatever the searched types are.
+	public func declaredNames(among declarations: NestedTypeDeclarations) -> Set<String> {
+		Set(declarations.declarations.lazy.filter { paths.contains($0.path) }.compactMap { $0.path.split(separator: ".").last.map(String.init) })
+			.intersection(names)
+	}
+
+	/// These lookups, reading only the declarations at the paths of `declaredNames` and those of the types asked for
+	/// them: every other lookup finds nothing whatever those types' declarations say, so most modules keep none.
+	public func readingOnly(_ declaredNames: Set<String>) -> NestedTypeLookups {
+		var readLookups = self
+		// Every type in `typePaths` is asked for the names `namesByTypePath` holds for it.
+		let readNamesByTypePath = namesByTypePath.mapValues { $0.intersection(declaredNames) }.filter { !$0.value.isEmpty }
+		readLookups.typePaths = Set(readNamesByTypePath.keys)
+		readLookups.paths = Set(readNamesByTypePath.flatMap { typePath, names in names.map { typePath + "." + $0 } })
+		return readLookups
+	}
+
 	// MARK: Private
 
+	/// The names each type in `typePaths` is asked for.
+	private var namesByTypePath = [String: Set<String>]()
+
 	/// The superclasses no known declaration declares.
-	private var unresolvedTypePaths = Set<String>()
+	private var unresolvedTypePaths: Set<String> = []
 }
 
 /// Resolves the type names an instantiable's types spell as Swift does where they are written, among the
@@ -296,22 +379,25 @@ public struct NestedTypeResolver {
 	///     them, of the modules it depends on.
 	///   - otherModuleDeclarations: Declarations of the modules the instantiable's module depends on, which it sees
 	///     only when they are public.
-	///   - dependencyFilePaths: The files among those `declarations` name that belong to the modules the
-	///     instantiable's module depends on, when one input list holds every module's files.
+	///   - moduleFilePaths: The files of the instantiable's module among the files `declarations` name, when one
+	///     input list holds every module's files, or `nil` when every file `declarations` name is the module's.
 	public init(
 		declarations: NestedTypeDeclarations,
 		otherModuleDeclarations: NestedTypeDeclarations = NestedTypeDeclarations(),
-		dependencyFilePaths: Set<String> = [],
+		moduleFilePaths: Set<String>? = nil,
 	) {
 		var declarationsByPath = [String: [(declaration: NestedTypeDeclaration, isInModule: Bool)]]()
-		for declaration in declarations.declarations where !declaration.isAbsent {
-			declarationsByPath[declaration.path, default: []].append((declaration, !dependencyFilePaths.contains(declaration.filePath)))
+		// The same declaration can arrive more than once, as when generate adds what a file walked again declares to
+		// what scan kept, and counts once: two declarations of a type are different modules' types.
+		for declaration in Set(declarations.declarations) where !declaration.isAbsent {
+			declarationsByPath[declaration.path, default: []].append((declaration, moduleFilePaths?.contains(declaration.filePath) ?? true))
 		}
-		for declaration in otherModuleDeclarations.declarations where !declaration.isAbsent {
+		for declaration in Set(otherModuleDeclarations.declarations) where !declaration.isAbsent {
 			declarationsByPath[declaration.path, default: []].append((declaration, false))
 		}
 		self.declarationsByPath = declarationsByPath
-		self.dependencyFilePaths = dependencyFilePaths
+		self.moduleFilePaths = moduleFilePaths
+		memberNames = declarations.lastNames.union(otherModuleDeclarations.lastNames)
 	}
 
 	public var isEmpty: Bool {
@@ -321,11 +407,17 @@ public struct NestedTypeResolver {
 	/// `typeDescription` with each name that names a nested or inherited type spelled from the module scope, as
 	/// Swift resolves it inside the scope of `instantiable`, or `nil` when no name changes.
 	public func qualifying(_ typeDescription: TypeDescription, within instantiable: Instantiable) -> TypeDescription? {
-		// Most modules declare nothing any lookup reads.
+		// Most modules declare nothing any lookup reads, and most names are no declaration's.
 		guard !isEmpty else { return nil }
+		var spellsMemberName = false
+		typeDescription.forEachNameReference { name in
+			spellsMemberName = spellsMemberName || memberNames.contains(name.withoutBackticks)
+		}
+		guard spellsMemberName else { return nil }
 		let observer = Observer(
 			filePath: instantiable.sourceFilePath ?? "",
-			isInModule: !dependencyFilePaths.contains(instantiable.sourceFilePath ?? ""),
+			// An instantiable without a source file is found in no file of the module.
+			isInModule: moduleFilePaths.map { moduleFilePaths in instantiable.sourceFilePath.map(moduleFilePaths.contains) == true } ?? true,
 		)
 		let lexicalScope = LexicalScope(
 			declaringType: instantiable.concreteInstantiable,
@@ -333,7 +425,9 @@ public struct NestedTypeResolver {
 		)
 		var isQualified = false
 		let qualified = typeDescription.mappingNameReferences { name, generics in
-			guard let enclosingType = enclosingType(ofTypeNamed: name.withoutBackticks, searching: lexicalScope, as: observer) else {
+			guard memberNames.contains(name.withoutBackticks),
+			      let enclosingType = enclosingType(ofTypeNamed: name.withoutBackticks, searching: lexicalScope, as: observer)
+			else {
 				return .simple(name: name, generics: generics)
 			}
 			isQualified = true
@@ -369,7 +463,10 @@ public struct NestedTypeResolver {
 	}
 
 	private let declarationsByPath: [String: [(declaration: NestedTypeDeclaration, isInModule: Bool)]]
-	private let dependencyFilePaths: Set<String>
+	private let moduleFilePaths: Set<String>?
+	/// The last name of every declaration's path. Lookup of any other name finds no member type or generic
+	/// parameter anywhere, so the name keeps its spelling.
+	private let memberNames: Set<String>
 
 	/// The type at whose level `name` resolves to a nested or inherited type, searching outward from the innermost
 	/// type of `scope`, or `nil` when the name keeps its spelling.
@@ -414,31 +511,38 @@ public struct NestedTypeResolver {
 		if isLexical, memberDeclarations.contains(where: { $0.kind == .genericParameter }) {
 			return .unqualifiable
 		}
-		// A superclass's generic parameters are not members.
-		let memberTypeDeclarations = memberDeclarations.filter(\.isTypeDeclaration)
-		if !memberTypeDeclarations.isEmpty {
-			return memberTypeDeclarations.contains(where: \.isCompilerDetermined) ? .unqualifiable : .declared(by: type)
-		}
 
-		// A superclass's nested types are members too, found before those of the types enclosing the declaration.
-		// A protocol's associated types and type aliases are found only when no type of the name is in scope at
-		// all, so they never change what a name names where it resolves to a nested type.
-		var typeDeclarations = [NestedTypeDeclaration]()
+		var typeDeclarations = [(declaration: NestedTypeDeclaration, isInModule: Bool)]()
 		for (declaration, isInModule) in declarationsByPath[path] ?? [] where declaration.isTypeDeclaration {
 			switch visibility(of: declaration, isInModule: isInModule, as: observer) {
 			case .visible:
-				typeDeclarations.append(declaration)
+				typeDeclarations.append((declaration, isInModule))
 			case .invisible:
 				break
 			case .unknown:
 				return .unqualifiable
 			}
 		}
-		// With no declaration, the type is declared where SafeDI cannot see whether it has a superclass, and with
-		// more than one, they are different modules' types of the same name.
-		guard typeDeclarations.count == 1, let typeDeclaration = typeDeclarations.first, !typeDeclaration.isCompilerDetermined else {
+		// With no declaration, the type is declared where SafeDI cannot see its generic parameters or whether it has
+		// a superclass, and with more than one, they are different modules' types of the same name.
+		guard typeDeclarations.count == 1, let (typeDeclaration, isTypeInModule) = typeDeclarations.first, !typeDeclaration.isCompilerDetermined else {
 			return .unqualifiable
 		}
+
+		// A superclass's generic parameters are not members.
+		let memberTypeDeclarations = memberDeclarations.filter(\.isTypeDeclaration)
+		if !memberTypeDeclarations.isEmpty {
+			return memberTypeDeclarations.contains(where: \.isCompilerDetermined) ? .unqualifiable : .declared(by: type)
+		}
+		// SafeDI reads every file of the observer's module, but not every file of the modules it depends on, whose
+		// extensions may declare a member of the name.
+		guard observer.isInModule, isTypeInModule else {
+			return .unqualifiable
+		}
+
+		// A superclass's nested types are members too, found before those of the types enclosing the declaration.
+		// A protocol's associated types and type aliases are found only when no type of the name is in scope at
+		// all, so they never change what a name names where it resolves to a nested type.
 		guard let superclassCandidate = typeDeclaration.superclassCandidate else {
 			return .absent
 		}
@@ -609,6 +713,42 @@ extension TypeDescription {
 			parentType.namePath.map { $0 + [name.withoutBackticks] }
 		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .void:
 			nil
+		}
+	}
+
+	/// Calls `body` with the first name of every type this type spells, as `mappingNameReferences` visits them.
+	fileprivate func forEachNameReference(_ body: (String) -> Void) {
+		switch self {
+		case .unknown, .void:
+			break
+		case let .simple(name, generics):
+			body(name)
+			for generic in generics {
+				generic.forEachNameReference(body)
+			}
+		case let .nested(_, parentType, generics):
+			parentType.forEachNameReference(body)
+			for generic in generics {
+				generic.forEachNameReference(body)
+			}
+		case let .composition(types):
+			for type in types {
+				type.forEachNameReference(body)
+			}
+		case let .optional(type), let .implicitlyUnwrappedOptional(type), let .some(type), let .any(type), let .metatype(type, _), let .attributed(type, _, _), let .array(type):
+			type.forEachNameReference(body)
+		case let .dictionary(key, value):
+			key.forEachNameReference(body)
+			value.forEachNameReference(body)
+		case let .tuple(elements):
+			for element in elements {
+				element.typeDescription.forEachNameReference(body)
+			}
+		case let .closure(arguments, _, _, returnType):
+			for argument in arguments {
+				argument.forEachNameReference(body)
+			}
+			returnType.forEachNameReference(body)
 		}
 	}
 
