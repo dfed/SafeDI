@@ -28,7 +28,9 @@
 /// LEB128 variable-length integers; signed integers are zigzag-encoded first. A `Bool`, an `Optional`'s presence,
 /// and an enum's case are each one tag byte. An `Array`'s length precedes its elements, and a `Set` is written
 /// as its elements sorted, so a value always encodes to the same bytes. A `String` is an index into a table of
-/// the distinct strings written, which ``BinaryWriter/encoded`` places before the values.
+/// the distinct strings written, which ``BinaryWriter/encoded`` places before the values. Strings are distinct
+/// when their UTF-8 bytes differ, so canonically equivalent spellings that `String`'s `==` calls equal each
+/// read back as written.
 ///
 /// Readers infer what to read from the type each field has, so changing a field's type changes how it is read
 /// and written alike, and a field whose type cannot be written fails to compile.
@@ -100,11 +102,12 @@ struct BinaryWriter {
 	}
 
 	mutating func writeString(_ string: String) {
-		if let index = stringIndices[string] {
+		let key = StringTableKey(string: string)
+		if let index = stringIndices[key] {
 			writeUnsigned(index)
 		} else {
 			let index = UInt64(strings.count)
-			stringIndices[string] = index
+			stringIndices[key] = index
 			strings.append(string)
 			writeUnsigned(index)
 		}
@@ -115,8 +118,24 @@ struct BinaryWriter {
 
 	// MARK: Private
 
+	/// A string in the string table, compared and hashed by its UTF-8 bytes. `String`'s `==` and hashing
+	/// treat canonically equivalent spellings, such as a precomposed `é` and `e` followed by a combining
+	/// accent, as one string, but Swift compares identifiers byte for byte, so the table keeps each spelling.
+	private struct StringTableKey: Hashable {
+		let string: String
+
+		static func == (lhs: Self, rhs: Self) -> Bool {
+			lhs.string.utf8.elementsEqual(rhs.string.utf8)
+		}
+
+		func hash(into hasher: inout Hasher) {
+			var string = string
+			string.withUTF8 { hasher.combine(bytes: UnsafeRawBufferPointer($0)) }
+		}
+	}
+
 	private var strings = [String]()
-	private var stringIndices = [String: UInt64]()
+	private var stringIndices = [StringTableKey: UInt64]()
 }
 
 /// Reads values in SafeDITool's binary format from bytes that ``BinaryWriter/encoded`` produced.

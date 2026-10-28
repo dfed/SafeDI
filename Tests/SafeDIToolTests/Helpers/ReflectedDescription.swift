@@ -21,15 +21,31 @@
 /// Every stored property of `value` and of everything it holds, private ones included, read through
 /// reflection. Two values with the same description hold the same data, even where `==` would not tell
 /// them apart: `TypeDescription.VoidSpelling` compares both spellings equal, `TypeDescription` ignores
-/// `any`, and `UnorderedEquatingCollection` ignores order. A set's elements are sorted, because a set's iteration
-/// order is not part of its value.
-func reflectedDescription(of value: Any) -> String {
+/// `any`, `UnorderedEquatingCollection` ignores order, and `String` compares canonically equivalent spellings
+/// equal, such as `café` written with a precomposed `é` and with `e` followed by a combining accent.
+/// A set's elements are sorted, because a set's iteration order is not part of its value.
+func reflectedDescription(of value: Any) -> ReflectedDescription {
+	ReflectedDescription(description: reflectedText(of: value))
+}
+
+/// The text ``reflectedDescription(of:)`` describes a value with, which compares equal to another only
+/// when both hold the same UTF-8 bytes. Swift compares identifiers byte for byte, so two spellings of a
+/// label that `String`'s `==` calls equal are different labels in generated code.
+struct ReflectedDescription: Equatable, CustomStringConvertible {
+	let description: String
+
+	static func == (lhs: Self, rhs: Self) -> Bool {
+		lhs.description.utf8.elementsEqual(rhs.description.utf8)
+	}
+}
+
+private func reflectedText(of value: Any) -> String {
 	let mirror = Mirror(reflecting: value)
 	let children = mirror.children.map { child in
-		"\(child.label.map { "\($0): " } ?? "")\(reflectedDescription(of: child.value))"
+		"\(child.label.map { "\($0): " } ?? "")\(reflectedText(of: child.value))"
 	}
 	return if mirror.displayStyle == .set {
-		"\(type(of: value))[\(children.sorted().joined(separator: ", "))]"
+		"\(type(of: value))[\(children.sorted { $0.utf8.lexicographicallyPrecedes($1.utf8) }.joined(separator: ", "))]"
 	} else if children.isEmpty {
 		// A leaf such as a string, a number, or an enum case without a payload.
 		"\(type(of: value))(\(String(reflecting: value)))"
