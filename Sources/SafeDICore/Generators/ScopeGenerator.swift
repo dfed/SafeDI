@@ -1072,24 +1072,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let returnLineSansReturn = "\(instantiationDeclaration)(\(argumentList))"
 
 			let propertyType = property.propertyType
-			if propertyType.isErasedInstantiator,
-			   let firstForwardedProperty = forwardedProperties.first,
-			   let forwardedArgument = property.generics?.first,
-			   !(
-			   	// The forwarded argument is the same type as our only `@Forwarded` property.
-			   	(forwardedProperties.count == 1 && forwardedArgument == firstForwardedProperty.typeDescription)
-			   		// The forwarded argument is the same as `InstantiableName.ForwardedProperties`.
-			   		|| forwardedArgument == .nested(name: "ForwardedProperties", parentType: instantiable.concreteInstantiable)
-			   		// The forwarded argument is the same as the tuple we generated for `InstantiableName.ForwardedProperties`.
-			   		|| forwardedArgument == forwardedProperties.asTupleTypeDescription
-			   )
-			{
-				throw GenerationError.erasedInstantiatorGenericDoesNotMatch(
-					property: property,
-					instantiable: instantiable,
-				)
-			}
-
 			switch propertyType {
 			case .instantiator,
 			     .erasedInstantiator,
@@ -3520,19 +3502,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"#if \(mockConditionalCompilation)\n\(code)\n#endif"
 		} else {
 			code
-		}
-	}
-
-	// MARK: GenerationError
-
-	private enum GenerationError: Error, CustomStringConvertible {
-		case erasedInstantiatorGenericDoesNotMatch(property: Property, instantiable: Instantiable)
-
-		var description: String {
-			switch self {
-			case let .erasedInstantiatorGenericDoesNotMatch(property, instantiable):
-				"Property `\(property.asSource)` on \(instantiable.concreteInstantiable.asSource) incorrectly configured. Property should instead be of type `\(Dependency.erasedInstantiatorType)<\(instantiable.concreteInstantiable.asSource).ForwardedProperties, \(property.typeDescription.asInstantiatedType.asSource)>`."
-			}
 		}
 	}
 }

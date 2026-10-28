@@ -2060,7 +2060,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):7:5: error: Dependency cycle detected: A -> B -> A. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`, `b: LazilyInstantiated<B>` is validated as `b: B`.
+				\(fixtures["B.swift"]):7:5: error: Dependency cycle: `A` -> `B` -> `A`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `a: LazilyInstantiated<A>` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`, `b: LazilyInstantiated<B>` is validated as `b: B`.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				"""
@@ -2111,7 +2111,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):7:5: error: Dependency cycle detected: A -> B -> A. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
+				\(fixtures["B.swift"]):7:5: error: Dependency cycle: `A` -> `B` -> `A`. `B` receives `a: A`, which is still being built when `B` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				"""
@@ -2162,7 +2162,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):7:5: error: Dependency cycle detected: A -> B -> A. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
+				\(fixtures["B.swift"]):7:5: error: Dependency cycle: `A` -> `B` -> `A`. `B` receives `a: LazilyInstantiated<A>`, which is still being built when `B` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				"""
@@ -2213,7 +2213,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated a: A -> @Received b: B -> @Received a: A. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
+				\(fixtures["B.swift"]):7:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `b: B` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
 				"""
 			},
 		) {
@@ -2263,7 +2263,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated a: A -> @Received b: B -> @Received a: A. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`, `b: LazilyInstantiated<B>` is validated as `b: B`.
+				\(fixtures["B.swift"]):7:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `b: B` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`, `b: LazilyInstantiated<B>` is validated as `b: B`.
 				"""
 			},
 		) {
@@ -2313,7 +2313,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["A.swift"]):7:5: error: Dependency cycle detected. Cycles with a mix of constant and lazy (Instantiator) dependencies cannot be resolved. Make all dependencies in the cycle lazy by using Instantiator: B -> Instantiator<A> -> B. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `b: LazilyInstantiated<B>` is validated as `b: B`.
+				\(fixtures["A.swift"]):7:5: error: Dependency cycle: `B` -> `Instantiator<A>` -> `B`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `b: LazilyInstantiated<B>` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `b: LazilyInstantiated<B>` is validated as `b: B`.
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				"""
@@ -2364,7 +2364,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Root.swift"]):7:5: error: Property `child: LazilyInstantiated<Child>` on Root has at least one @Forwarded property. Property should instead be of type `Instantiator<Child>`.
+				\(fixtures["Root.swift"]):7:5: error: `child: LazilyInstantiated<Child>` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `Instantiator<Child>`.
 				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
 				"""
 			},
@@ -2389,6 +2389,218 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 					    }
 
 					    @Forwarded let name: String
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorSuggestingSendableInstantiator_whenSendableLazilyInstantiatedTypeHasForwardedProperty() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: `child: SendableLazilyInstantiated<Child>` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `SendableInstantiator<Child>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: SendableLazilyInstantiated<Child>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let child: SendableLazilyInstantiated<Child>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable, Sendable {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorSuggestingSendableInstantiator_whenOptionalSendableLazilyInstantiatedTypeHasForwardedProperty() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: `child: SendableLazilyInstantiated<Child>?` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `SendableInstantiator<Child>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: SendableLazilyInstantiated<Child>?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let child: SendableLazilyInstantiated<Child>?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable, Sendable {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorSuggestingErasedInstantiator_whenErasedLazilyInstantiatedTypeHasForwardedProperty() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: `child: LazilyInstantiated<AnyChild>` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<String, AnyChild>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: LazilyInstantiated<AnyChild>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Child", erasedToConcreteExistential: true) let child: LazilyInstantiated<AnyChild>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+
+					public final class AnyChild {
+					    public init(_ child: Child) {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorSuggestingErasedInstantiator_whenOptionalErasedLazilyInstantiatedTypeHasForwardedProperty() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: `child: LazilyInstantiated<AnyChild>?` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<String, AnyChild>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: LazilyInstantiated<AnyChild>?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Child", erasedToConcreteExistential: true) let child: LazilyInstantiated<AnyChild>?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+
+					public final class AnyChild {
+					    public init(_ child: Child) {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorSuggestingSendableErasedInstantiator_whenErasedSendableLazilyInstantiatedTypeHasForwardedProperty() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: `child: SendableLazilyInstantiated<AnyChild>` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `SendableErasedInstantiator<String, AnyChild>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: SendableLazilyInstantiated<AnyChild>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Child", erasedToConcreteExistential: true) let child: SendableLazilyInstantiated<AnyChild>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable, Sendable {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+
+					public final class AnyChild: Sendable {
+					    public init(_ child: Child) {}
 					}
 					""",
 				],
@@ -2507,7 +2719,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Service.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated logger: Logger -> @Received service: Service -> @Received logger: Logger. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `service: LazilyInstantiated<Service>` is validated as `service: Service`.
+				\(fixtures["Service.swift"]):7:5: error: Dependency cycle: @Instantiated `logger: Logger` -> @Received `service: Service` -> @Received `logger: Logger`. `logger: Logger` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `service: LazilyInstantiated<Service>` is validated as `service: Service`.
 				"""
 			},
 		) {
@@ -2557,7 +2769,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Logger.swift"]):7:5: error: Dependency cycle detected: Analytics -> Logger -> Analytics?. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `analytics: LazilyInstantiated<Analytics>` is validated as `analytics: Analytics`.
+				\(fixtures["Logger.swift"]):7:5: error: Dependency cycle: `Analytics` -> `Logger` -> `Analytics?`. `Logger` receives `analytics: Analytics?`, which is still being built when `Logger` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `analytics: LazilyInstantiated<Analytics>` is validated as `analytics: Analytics`.
 				\(fixtures["Analytics.swift"]):1:1: note: `Analytics` is part of the cycle
 				\(fixtures["Logger.swift"]):1:1: note: `Logger` is part of the cycle
 				"""
@@ -2608,7 +2820,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["A.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated bBuilder: Instantiator<B> -> @Received a: A -> @Received bBuilder: Instantiator<B>
+				\(fixtures["A.swift"]):7:5: error: Dependency cycle: @Instantiated `bBuilder: Instantiator<B>` -> @Received `a: A` -> @Received `bBuilder: Instantiator<B>`. `bBuilder: Instantiator<B>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -3012,7 +3224,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):7:5: error: Dependency cycle detected: A -> Child -> A. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
+				\(fixtures["Child.swift"]):7:5: error: Dependency cycle: `A` -> `Child` -> `A`. `Child` receives `a: A`, which is still being built when `Child` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["Child.swift"]):1:1: note: `Child` is part of the cycle
 				"""
@@ -3066,7 +3278,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Node.swift"]):7:5: error: Dependency cycle detected: Node -> Node. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `nodeBuilder: LazilyInstantiated<Node>` is validated as `nodeBuilder: Node`.
+				\(fixtures["Node.swift"]):7:5: error: Dependency cycle: `Node` -> `Node`. `Node` receives `child: LazilyInstantiated<Node>`, which is still being built when `Node` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `nodeBuilder: LazilyInstantiated<Node>` is validated as `nodeBuilder: Node`.
 				\(fixtures["Node.swift"]):1:1: note: `Node` is part of the cycle
 				"""
 			},
@@ -3155,7 +3367,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Node.swift"]):7:5: error: Dependency cycle detected: Node -> Node. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `nodeBuilder: LazilyInstantiated<Node>` is validated as `nodeBuilder: Node`.
+				\(fixtures["Node.swift"]):7:5: error: Dependency cycle: `Node` -> `Node`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `nodeBuilder: LazilyInstantiated<Node>` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `nodeBuilder: LazilyInstantiated<Node>` is validated as `nodeBuilder: Node`.
 				\(fixtures["Node.swift"]):1:1: note: `Node` is part of the cycle
 				"""
 			},
@@ -3255,7 +3467,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated a: A -> @Received b: B -> @Received a: A. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
+				\(fixtures["B.swift"]):7:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `b: B` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`.
 				"""
 			},
 		) {

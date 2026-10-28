@@ -196,14 +196,14 @@ private struct DownloadFailedError: Error, CustomStringConvertible {
 	let url: URL
 	let statusCode: Int
 	var description: String {
-		"Failed to download SafeDITool from \(url.absoluteString): HTTP \(statusCode). Verify the SafeDI version matches a published release."
+		"Failed to download SafeDITool from \(url.absoluteString): HTTP \(statusCode). This command downloads the SafeDITool published with the SafeDI release this project depends on; check that the project depends on a published SafeDI release."
 	}
 }
 
 private struct CouldNotMakeExecutableError: Error, CustomStringConvertible {
 	let path: String
 	var description: String {
-		"Could not make downloaded file executable: \(path)"
+		"Could not make the downloaded SafeDITool at \(path) executable, so it was not installed. Run the command again."
 	}
 }
 

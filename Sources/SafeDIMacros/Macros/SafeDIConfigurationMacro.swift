@@ -101,17 +101,17 @@ public struct SafeDIConfigurationMacro: DeclarationMacro {
 		var description: String {
 			switch self {
 			case .additionalImportedModulesNotStringLiteralArray:
-				"The `\(SafeDIConfigurationVisitor.additionalImportedModulesArgumentLabel)` argument must be an array of string literals"
+				"The `\(SafeDIConfigurationVisitor.additionalImportedModulesArgumentLabel)` argument must be an array of string literals."
 			case .additionalDirectoriesToIncludeNotStringLiteralArray:
-				"The `\(SafeDIConfigurationVisitor.additionalDirectoriesToIncludeArgumentLabel)` argument must be an array of string literals"
+				"The `\(SafeDIConfigurationVisitor.additionalDirectoriesToIncludeArgumentLabel)` argument must be an array of string literals."
 			case .additionalMocksToGenerateNotStringLiteralArray:
-				"The `\(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel)` argument must be an array of string literals"
+				"The `\(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel)` argument must be an array of string literals."
 			case .mockConditionalCompilationNotStringLiteralOrNil:
-				"The `\(SafeDIConfigurationVisitor.mockConditionalCompilationArgumentLabel)` argument must be a string literal or `nil`"
+				"The `\(SafeDIConfigurationVisitor.mockConditionalCompilationArgumentLabel)` argument must be a string literal or `nil`."
 			case .unexpectedUnlabeledArgument:
-				"#\(SafeDIConfigurationVisitor.macroName) does not accept unlabeled arguments"
+				"#\(SafeDIConfigurationVisitor.macroName) does not accept unlabeled arguments. Label each argument: `\(SafeDIConfigurationVisitor.additionalImportedModulesArgumentLabel)`, `\(SafeDIConfigurationVisitor.additionalDirectoriesToIncludeArgumentLabel)`, `\(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel)`, or `\(SafeDIConfigurationVisitor.mockConditionalCompilationArgumentLabel)`."
 			case let .unexpectedArgument(label):
-				"#\(SafeDIConfigurationVisitor.macroName) does not accept an argument labeled `\(label)`"
+				"#\(SafeDIConfigurationVisitor.macroName) does not accept an argument labeled `\(label)`. It accepts `\(SafeDIConfigurationVisitor.additionalImportedModulesArgumentLabel)`, `\(SafeDIConfigurationVisitor.additionalDirectoriesToIncludeArgumentLabel)`, `\(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel)`, and `\(SafeDIConfigurationVisitor.mockConditionalCompilationArgumentLabel)`."
 			}
 		}
 	}

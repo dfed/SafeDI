@@ -48,7 +48,7 @@ The `additionalDirectoriesToInclude` parameter specifies folders outside of your
 
 ##### Installing the prebuilt SafeDITool binary
 
-If you see a build warning that starts with **"SafeDI's build-tool plugin is falling back to a regex-based output scanner..."** — installing the prebuilt tool fixes it.
+If you see a build warning that starts with **"SafeDI is planning this target’s generated files with a simpler scanner..."** — installing the prebuilt tool fixes it.
 
 In Xcode, right-click your project in the navigator and choose **SafeDI → Safedi Release Install**. Approve the network-access and write-to-package-directory prompts. Xcode runs the command and downloads the prebuilt SafeDITool release binary for your SafeDI version into `.safedi/<version>/safeditool` next to your `.xcodeproj`. The build plugin picks it up automatically on subsequent builds.
 
@@ -532,7 +532,7 @@ A type under `B` that receives `a` is receiving a property of `Parent`, which is
 - **Both receive each other only if available.** The property declared later is built first and receives `nil`.
 - **Nothing is provided below a `nil`.** A property received only if available that is `nil` provides nothing to the types below the receiver. A type further down that receives the same property without `onlyIfAvailable` needs a type above it to provide the property, and the build fails at that declaration when none does. When the only such property is one the type is built inside — `user: User?` required by a type under `user: User` — the build reports a dependency cycle there, as it does for a receive of `user: User`. When the receiver of `user: User?` is handed a parent’s non-optional `user: User`, a type further down that requires `user: User?` is handed the same instance, and `user` is built before it.
 - **A renamed dependency is unavailable.** A `@Received(fulfilledByDependencyNamed:ofType:onlyIfAvailable: true)` property whose fulfilling dependency is unavailable is `nil`, and so is that property for anything that receives it in turn with `onlyIfAvailable: true`. The exception is when an enclosing type instantiates, forwards, or creates through its own alias a property of the same name and type (or its non-optional form): those receivers then get that property.
-- **A type requires a renamed dependency that is only available sometimes.** A type further down the tree that receives the renamed property without `onlyIfAvailable` gets an enclosing type’s property of that name when there is one, and that property is built before it. Otherwise it needs the renamed property to exist, as it would for a renaming without `onlyIfAvailable`: the fulfilling dependency is built before the property, and anything that receives the property only if available and must itself be built first gets `nil`. The build fails at the receiving declaration when the fulfilling dependency is not `@Instantiated` or `@Forwarded` by the renaming type or above it, or can only be built after the receiver.
+- **A type requires a renamed dependency that is only available sometimes.** A type further down the tree that receives the renamed property without `onlyIfAvailable` gets an enclosing type’s property of that name when there is one, and that property is built before it. Otherwise it needs the renamed property to exist, as it would for a renaming without `onlyIfAvailable`: the fulfilling dependency is built before the property, and anything that receives the property only if available and must itself be built first gets `nil`. The build fails at the receiving declaration when the fulfilling dependency is not `@Instantiated` or `@Forwarded` by the renaming type or above it, or can only be built after the receiver (for example, because the receiver is built inside it). The build then reports a dependency cycle and suggests `onlyIfAvailable: true`, which gives the receiver `nil` instead.
 
 ### #SafeDIConfiguration
 
@@ -1013,7 +1013,7 @@ The reported conditions are taken as complete, so a condition your build defines
 
 ```swift
 #if !(DEBUG)
-#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \"Conditional compilation\" section of the SafeDI manual.")
+#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \"Reporting active conditions\" section of the SafeDI manual describes for your build system.")
 #endif
 ```
 

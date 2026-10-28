@@ -45,7 +45,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["RootViewController.swift"]):5:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `DoesNotExist`
+				\(fixtures["RootViewController.swift"]):5:5: error: No @Instantiable type or extension fulfills `DoesNotExist`, which @Instantiated property `networkService: NetworkService` instantiates. Decorate `DoesNotExist`, or an extension of it, with @Instantiable; list `DoesNotExist` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
 				"""
 			},
 		) {
@@ -165,8 +165,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File_2.swift"]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `Container<Int>`
-				\(fixtures["File_3.swift"]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `Container<Int>`
+				\(fixtures["File_2.swift"]):1:1: error: Found multiple @Instantiable types or extensions that fulfill `Container<Int>`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `Container<Int>` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["File_3.swift"]):1:1: error: Found multiple @Instantiable types or extensions that fulfill `Container<Int>`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `Container<Int>` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
 				"""
 			},
 		) {
@@ -204,8 +204,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File_2.swift"]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `Container<Int>`
-				\(fixtures["File_3.swift"]):1:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `Container<Int>`
+				\(fixtures["File_2.swift"]):1:1: error: Found multiple @Instantiable types or extensions that fulfill `Container<Int>`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `Container<Int>` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["File_3.swift"]):1:1: error: Found multiple @Instantiable types or extensions that fulfill `Container<Int>`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `Container<Int>` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
 				"""
 			},
 		) {
@@ -243,7 +243,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["DefaultNetworkService.swift"]):7:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `URLSession`
+				\(fixtures["DefaultNetworkService.swift"]):7:5: error: No @Instantiable type or extension fulfills `URLSession`, which @Instantiated property `urlSession: URLSession` instantiates. Decorate `URLSession`, or an extension of it, with @Instantiable; list `URLSession` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
 				"""
 			},
 		) {
@@ -962,7 +962,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["RootViewController.swift"]):5:5: error: Property `networkService: NetworkService` on RootViewController has at least one @Forwarded property. Property should instead be of type `Instantiator<DefaultNetworkService>`.
+				\(fixtures["RootViewController.swift"]):5:5: error: `networkService: NetworkService` on `RootViewController` cannot build `DefaultNetworkService`, which has @Forwarded properties that only an instantiator is passed. Declare it as `Instantiator<DefaultNetworkService>`.
 				\(fixtures["DefaultNetworkService.swift"]):7:5: note: @Forwarded property `urlSession: URLSession` is declared here
 				"""
 			},
@@ -985,6 +985,183 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					@Instantiable(isRoot: true)
 					public final class RootViewController: UIViewController, Instantiable {
 					    @Instantiated let networkService: NetworkService
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorSuggestingErasedInstantiator_whenErasedConstantTypeHasForwardedProperty() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: `child: AnyChild` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<String, AnyChild>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: AnyChild) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Child", erasedToConcreteExistential: true) let child: AnyChild
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+
+					public final class AnyChild {
+					    public init(_ child: Child) {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorSuggestingErasedInstantiator_whenOptionalErasedConstantTypeHasForwardedProperty() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: `child: AnyChild?` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<String, AnyChild>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: AnyChild?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Child", erasedToConcreteExistential: true) let child: AnyChild?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+
+					public final class AnyChild {
+					    public init(_ child: Child) {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorSuggestingErasedInstantiator_whenConstantFulfilledByTypeHasForwardedProperty() async {
+		// `fulfilledByType` cannot be used on an `Instantiator`, so the suggestion is an `ErasedInstantiator`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: `child: any ChildProtocol` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<String, any ChildProtocol>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: any ChildProtocol) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Child") let child: any ChildProtocol
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable, ChildProtocol {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+
+					public protocol ChildProtocol {}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorSuggestingErasedInstantiatorOfForwardedPropertiesTuple_whenErasedTypeHasMultipleForwardedProperties() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: `child: AnyChild` on `Root` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `ErasedInstantiator<(name: String, title: String), AnyChild>`.
+				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `title: String` is declared here
+				\(fixtures["Child.swift"]):8:5: note: @Forwarded property `name: String` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: AnyChild) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Child", erasedToConcreteExistential: true) let child: AnyChild
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(title: String, name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let title: String
+					    @Forwarded let name: String
+					}
+
+					public final class AnyChild {
+					    public init(_ child: Child) {}
 					}
 					""",
 				],
@@ -1022,7 +1199,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Parent00.swift"]):7:5: error: Property `child: Child` on Parent00 has at least one @Forwarded property. Property should instead be of type `Instantiator<Child>`.
+				\(fixtures["Parent00.swift"]):7:5: error: `child: Child` on `Parent00` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `Instantiator<Child>`.
 				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
 				"""
 			},
@@ -1164,7 +1341,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["DefaultAuthService.swift"]):13:5: error: Dependency cycle detected: AuthService -> AuthService
+				\(fixtures["DefaultAuthService.swift"]):13:5: error: Dependency cycle: `AuthService` -> `AuthService`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `authService: AuthService` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
 				\(fixtures["DefaultAuthService.swift"]):5:1: note: `AuthService` is part of the cycle
 				"""
 			},
@@ -1227,7 +1404,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["DefaultAuthService.swift"]):13:5: error: Dependency received in same chain it is instantiated: @Instantiated authService: AuthService -> @Received authService: AuthService
+				\(fixtures["DefaultAuthService.swift"]):13:5: error: Dependency cycle: @Instantiated `authService: AuthService` -> @Received `authService: AuthService`. `authService: AuthService` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -1292,7 +1469,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Shared.swift"]):9:5: error: Dependency received in same chain it is instantiated: @Instantiated parent: Parent -> @Received extra: Extra -> @Received shared: Shared -> @Received parent: Parent
+				\(fixtures["Shared.swift"]):9:5: error: Dependency cycle: @Instantiated `parent: Parent` -> @Received `extra: Extra` -> @Received `shared: Shared` -> @Received `parent: Parent`. `parent: Parent` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -1375,7 +1552,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Gate.swift"]):9:5: error: Dependency received in same chain it is instantiated: @Instantiated parent: Parent -> @Received otherLoop: Loop -> @Received gate: Gate -> @Received parent: Parent
+				\(fixtures["Gate.swift"]):9:5: error: Dependency cycle: @Instantiated `parent: Parent` -> @Received `otherLoop: Loop` -> @Received `gate: Gate` -> @Received `parent: Parent`. `parent: Parent` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -1448,7 +1625,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Shared.swift"]):9:5: error: Dependency received in same chain it is instantiated: @Instantiated parent: Parent -> @Received extra: Extra -> @Received relay: Relay -> @Received shared: Shared -> @Received parent: Parent
+				\(fixtures["Shared.swift"]):9:5: error: Dependency cycle: @Instantiated `parent: Parent` -> @Received `extra: Extra` -> @Received `relay: Relay` -> @Received `shared: Shared` -> @Received `parent: Parent`. `parent: Parent` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -1567,7 +1744,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Pong.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated ping: Ping -> @Received pong: Pong -> @Received ping: Ping
+				\(fixtures["Pong.swift"]):7:5: error: Dependency cycle: @Instantiated `ping: Ping` -> @Received `pong: Pong` -> @Received `ping: Ping`. `ping: Ping` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -1641,11 +1818,11 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			}
 		}
 		let rootProperties = ["entry: Entry"] + (0..<layerCount).flatMap { ["left\($0): Left\($0)", "right\($0): Right\($0)"] } + ["ping: Ping"]
-		let receivedChain = (1..<layerCount).map { " -> @Received left\($0): Left\($0)" }.joined()
+		let receivedChain = (1..<layerCount).map { " -> @Received `left\($0): Left\($0)`" }.joined()
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Ping.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated left0: Left0\(receivedChain) -> @Received ping: Ping -> @Received left0: Left0
+				\(fixtures["Ping.swift"]):7:5: error: Dependency cycle: @Instantiated `left0: Left0`\(receivedChain) -> @Received `ping: Ping` -> @Received `left0: Left0`. `left0: Left0` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -1720,7 +1897,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Pong.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated pingBuilder: Instantiator<Ping> -> @Received pongBuilder: Instantiator<Pong> -> @Received pingBuilder: Instantiator<Ping>
+				\(fixtures["Pong.swift"]):7:5: error: Dependency cycle: @Instantiated `pingBuilder: Instantiator<Ping>` -> @Received `pongBuilder: Instantiator<Pong>` -> @Received `pingBuilder: Instantiator<Ping>`. `pingBuilder: Instantiator<Ping>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -1816,7 +1993,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Pong.swift"]):7:5: error: Dependency received in same chain it is instantiated: @Instantiated pingBuilder: Instantiator<Ping> -> @Received pongAlias: Instantiator<Pong> -> @Received pingAlias\(aliasChainLength - 1): Instantiator<Ping> -> @Received pingBuilder: Instantiator<Ping>
+				\(fixtures["Pong.swift"]):7:5: error: Dependency cycle: @Instantiated `pingBuilder: Instantiator<Ping>` -> @Received `pongAlias: Instantiator<Pong>` -> @Received `pingAlias\(aliasChainLength - 1): Instantiator<Ping>` -> @Received `pingBuilder: Instantiator<Ping>`. `pingBuilder: Instantiator<Ping>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -1973,7 +2150,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["DefaultAuthService.swift"]):13:5: error: Dependency received in same chain it is instantiated: @Instantiated authService: AuthService -> @Received authService: AuthService
+				\(fixtures["DefaultAuthService.swift"]):13:5: error: Dependency cycle: @Instantiated `authService: AuthService` -> @Received `authService: AuthService`. `authService: AuthService` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -2072,8 +2249,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["RootViewController.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
-				\(fixtures["RootViewController_2.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(fixtures["RootViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["RootViewController_2.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
 				"""
 			},
 		) {
@@ -2104,8 +2281,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["RootViewController.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
-				\(fixtures["RootViewController_2.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(fixtures["RootViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["RootViewController_2.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
 				"""
 			},
 		) {
@@ -2136,8 +2313,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
-				\(fixtures["RootViewController.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(fixtures["File.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["RootViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
 				"""
 			},
 		) {
@@ -2172,8 +2349,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
-				\(fixtures["RootViewController.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(fixtures["File.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["RootViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
 				"""
 			},
 		) {
@@ -2208,8 +2385,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
-				\(fixtures["RootViewController.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `RootViewController`
+				\(fixtures["File.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["RootViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `RootViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `RootViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
 				"""
 			},
 		) {
@@ -2244,8 +2421,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["File.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UserDefaults`
-				\(fixtures["File_2.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UserDefaults`
+				\(fixtures["File.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `UserDefaults`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `UserDefaults` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["File_2.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `UserDefaults`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `UserDefaults` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
 				"""
 			},
 		) {
@@ -2284,8 +2461,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["RootViewController.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UIViewController`
-				\(fixtures["SplashViewController.swift"]):3:1: error: @Instantiable-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `UIViewController`
+				\(fixtures["RootViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `UIViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `UIViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
+				\(fixtures["SplashViewController.swift"]):3:1: error: Found multiple @Instantiable types or extensions that fulfill `UIViewController`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `UIViewController` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.
 				"""
 			},
 		) {
@@ -2316,7 +2493,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):3:5: error: Dependency cycle detected: A -> B -> C -> A
+				\(fixtures["C.swift"]):3:5: error: Dependency cycle: `A` -> `B` -> `C` -> `A`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `a: A` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
@@ -2358,11 +2535,59 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_reportsNextDependencyThatClosesCycle_whenReportedDependencyIsChangedToInstantiator() async {
+		// The cycle `A -> B -> C -> A` of the test above, with `a` on `C` changed to an `Instantiator` as its error
+		// says: the cycle is entered from `Root`, so it now closes at `b` on `A`, which the error names in turn.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["A.swift"]):3:5: error: Dependency cycle: `B` -> `C` -> `Instantiator<A>` -> `B`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `b: B` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
+				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
+				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
+				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    @Instantiated let a: A
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable {
+					    @Instantiated let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    @Instantiated let c: C
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    @Instantiated let a: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedWithMixOfReceivedAndInstantiated_throwsError() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Root.swift"]):14:2: error: Dependency cycle detected: A -> C -> B -> A
+				\(fixtures["Root.swift"]):14:2: error: Dependency cycle: `A` -> `C` -> `B` -> `A`. `B` receives `a: A`, which is still being built when `B` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				\(fixtures["Root.swift"]):7:1: note: `A` is part of the cycle
 				\(fixtures["Root.swift"]):17:1: note: `C` is part of the cycle
 				\(fixtures["Root.swift"]):12:1: note: `B` is part of the cycle
@@ -2406,7 +2631,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):3:5: error: Dependency cycle detected: A -> B -> C -> A
+				\(fixtures["C.swift"]):3:5: error: Dependency cycle: `A` -> `B` -> `C` -> `A`. `C` receives `a: A`, which is still being built when `C` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
@@ -2452,7 +2677,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):3:5: error: Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>`. Declare @Received `aBuilder: Instantiator<A>` on `C` as @Instantiated to fix. Full cycle: Instantiator<A> -> Instantiator<B> -> Instantiator<C> -> Instantiator<A>
+				\(fixtures["C.swift"]):3:5: error: Dependency cycle: `Instantiator<A>` -> `Instantiator<B>` -> `Instantiator<C>` -> `Instantiator<A>`. `C` receives `aBuilder: Instantiator<A>` inside the tree that `aBuilder` builds. Declare `aBuilder: Instantiator<A>` on `C` as @Instantiated instead of @Received.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
@@ -2500,7 +2725,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>` is @Received as `renamedBuilder: Instantiator<A>` in tree created by @Instantiated `aBuilder: Instantiator<A>`. Declare @Received(fulfilledByDependencyNamed:ofType:) `renamedBuilder: Instantiator<A>` on `B` as @Instantiated to fix. Full cycle: Instantiator<A> -> Instantiator<B> -> Instantiator<A>
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: `Instantiator<A>` -> `Instantiator<B>` -> `Instantiator<A>`. `B` receives `aBuilder: Instantiator<A>` as `renamedBuilder: Instantiator<A>` inside the tree that `aBuilder` builds. Declare `renamedBuilder: Instantiator<A>` on `B` as @Instantiated instead of @Received(fulfilledByDependencyNamed:ofType:).
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				"""
@@ -2542,7 +2767,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):3:5: error: Dependency cycle detected! @Instantiated `aBuilder: Instantiator<A>?` is @Received in tree created by @Instantiated `aBuilder: Instantiator<A>?`. Declare @Received `aBuilder: Instantiator<A>?` on `C` as @Instantiated to fix. Full cycle: Instantiator<A>? -> Instantiator<B> -> Instantiator<C> -> Instantiator<A>?
+				\(fixtures["C.swift"]):3:5: error: Dependency cycle: `Instantiator<A>?` -> `Instantiator<B>` -> `Instantiator<C>` -> `Instantiator<A>?`. `C` receives `aBuilder: Instantiator<A>?` inside the tree that `aBuilder` builds. Declare `aBuilder: Instantiator<A>?` on `C` as @Instantiated instead of @Received.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
@@ -2588,7 +2813,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["A.swift"]):3:5: error: Dependency cycle detected: B -> C -> A -> B
+				\(fixtures["A.swift"]):3:5: error: Dependency cycle: `B` -> `C` -> `A` -> `B`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `b: B` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
@@ -2634,7 +2859,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):3:5: error: Dependency received in same chain it is instantiated: @Instantiated a: A -> @Received b: B -> @Received c: C -> @Received a: A
+				\(fixtures["C.swift"]):3:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `b: B` -> @Received `c: C` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -2679,7 +2904,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):3:5: error: Dependency received in same chain it is instantiated: @Instantiated a: A -> @Received renamedB: B -> @Received c: C -> @Received a: A
+				\(fixtures["C.swift"]):3:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `renamedB: B` -> @Received `c: C` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -2725,7 +2950,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):3:5: error: Dependency received in same chain it is instantiated: @Instantiated c: C -> @Received renamedB: B -> @Received c: C
+				\(fixtures["B.swift"]):3:5: error: Dependency cycle: @Instantiated `c: C` -> @Received `renamedB: B` -> @Received `c: C`. `c: C` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -2771,7 +2996,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -2816,7 +3041,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: SendableInstantiator<A> -> @Received bBuilder: SendableInstantiator<B> -> @Received aBuilder: SendableInstantiator<A>
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: SendableInstantiator<A>` -> @Received `bBuilder: SendableInstantiator<B>` -> @Received `aBuilder: SendableInstantiator<A>`. `aBuilder: SendableInstantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -2861,7 +3086,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received cBuilder: Instantiator<C> -> @Received aBuilder: Instantiator<A>
+				\(fixtures["C.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>` -> @Received `cBuilder: Instantiator<C>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -2915,7 +3140,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -2968,7 +3193,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["D.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				\(fixtures["D.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -3031,7 +3256,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -3076,7 +3301,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A>? -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>?
+				\(fixtures["C.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>?` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>?`. `aBuilder: Instantiator<A>?` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -3130,7 +3355,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["D.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				\(fixtures["D.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -3195,7 +3420,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["D.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received bBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				\(fixtures["D.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -3272,7 +3497,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received renamedBBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `renamedBBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -3321,7 +3546,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received renamedAgainBBuilder: Instantiator<B> -> @Received aBuilder: Instantiator<A>
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `renamedAgainBBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -3368,7 +3593,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Root.swift"]):8:5: error: Dependency cycle detected: each @Received(fulfilledByDependencyNamed:ofType:) dependency is fulfilled by the next: y: X -> x: X -> y: X
+				\(fixtures["Root.swift"]):8:5: error: Dependency cycle: each @Received(fulfilledByDependencyNamed:ofType:) dependency is fulfilled by the next: `y: X` -> `x: X` -> `y: X`. Change one of them to be fulfilled by a property outside this cycle.
 				"""
 			},
 		) {
@@ -3409,7 +3634,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Middle.swift"]):9:5: error: Dependency cycle detected: each @Received(fulfilledByDependencyNamed:ofType:) dependency is fulfilled by the next: y: X -> x: X -> y: X
+				\(fixtures["Middle.swift"]):9:5: error: Dependency cycle: each @Received(fulfilledByDependencyNamed:ofType:) dependency is fulfilled by the next: `y: X` -> `x: X` -> `y: X`. Change one of them to be fulfilled by a property outside this cycle.
 				"""
 			},
 		) {
@@ -3449,7 +3674,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Middle.swift"]):4:5: error: Dependency cycle detected: each @Received(fulfilledByDependencyNamed:ofType:) dependency is fulfilled by the next: x: X -> x: X
+				\(fixtures["Middle.swift"]):4:5: error: Dependency cycle: each @Received(fulfilledByDependencyNamed:ofType:) dependency is fulfilled by the next: `x: X` -> `x: X`. Change one of them to be fulfilled by a property outside this cycle.
 				"""
 			},
 		) {
@@ -3485,7 +3710,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["A.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated aBuilder: Instantiator<A> -> @Received renamedABuilder: Instantiator<A> -> @Received aBuilder: Instantiator<A>
+				\(fixtures["A.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `renamedABuilder: Instantiator<A>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -3523,7 +3748,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated a: A -> @Received renamedA: A -> @Received a: A
+				\(fixtures["C.swift"]):4:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `renamedA: A` -> @Received `a: A`. `a: A` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -3576,7 +3801,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["A.swift"]):8:5: error: Dependency received in same chain it is instantiated: @Instantiated qBuilder: Instantiator<Q> -> @Received bBuilder: Instantiator<B> -> @Received qBuilder: Instantiator<Q>
+				\(fixtures["A.swift"]):8:5: error: Dependency cycle: @Instantiated `qBuilder: Instantiator<Q>` -> @Received `bBuilder: Instantiator<B>` -> @Received `qBuilder: Instantiator<Q>`. `qBuilder: Instantiator<Q>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -3632,7 +3857,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):7:2: error: Dependency cycle detected: C -> B -> C
+				\(fixtures["B.swift"]):7:2: error: Dependency cycle: `C` -> `B` -> `C`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `c: C` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
 				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				"""
@@ -3691,9 +3916,11 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_whenInstantiableHasSingleForwardedProperty_throwsError() async {
 		await assertThrowsError(
-			"""
-			Property `loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>` on LoggedInViewController incorrectly configured. Property should instead be of type `ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>`.
-			""",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["RootViewController.swift"]):17:5: error: The first generic argument of `loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>` on `RootViewController` must be the @Forwarded properties of `LoggedInViewController`, which it builds. Declare it as `ErasedInstantiator<User, UIViewController>`.
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -3773,9 +4000,11 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_whenInstantiableHasMultipleForwardedProperty_throwsError() async {
 		await assertThrowsError(
-			"""
-			Property `loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>` on LoggedInViewController incorrectly configured. Property should instead be of type `ErasedInstantiator<LoggedInViewController.ForwardedProperties, UIViewController>`.
-			""",
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["RootViewController.swift"]):17:5: error: The first generic argument of `loggedInViewControllerBuilder: ErasedInstantiator<String, UIViewController>` on `RootViewController` must be the @Forwarded properties of `LoggedInViewController`, which it builds. Declare it as `ErasedInstantiator<(user: User, userManager: UserManager), UIViewController>`.
+				"""
+			},
 		) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
@@ -3855,6 +4084,96 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithIncorrectErasedInstantiatorFirstGeneric_throwsErrorSuggestingNestedForwardedType_whenInstantiableForwardsNestedType() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: The first generic argument of `childBuilder: ErasedInstantiator<Int, AnyChild>` on `Root` must be the @Forwarded properties of `Child`, which it builds. Declare it as `ErasedInstantiator<Feature.Configuration, AnyChild>`.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(childBuilder: ErasedInstantiator<Int, AnyChild>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Child", erasedToConcreteExistential: true) let childBuilder: ErasedInstantiator<Int, AnyChild>
+					}
+					""",
+					"""
+					public enum Feature {
+					    public struct Configuration {}
+					}
+
+					public final class AnyChild {
+					    public init(_ child: Child) {}
+					}
+
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(configuration: Feature.Configuration) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let configuration: Feature.Configuration
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithIncorrectSendableErasedInstantiatorFirstGeneric_throwsErrorSuggestingSendableErasedInstantiator() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Root.swift"]):7:5: error: The first generic argument of `childBuilder: SendableErasedInstantiator<Int, AnyChild>` on `Root` must be the @Forwarded properties of `Child`, which it builds. Declare it as `SendableErasedInstantiator<String, AnyChild>`.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(childBuilder: SendableErasedInstantiator<Int, AnyChild>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated(fulfilledByType: "Child", erasedToConcreteExistential: true) let childBuilder: SendableErasedInstantiator<Int, AnyChild>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable, Sendable {
+					    public init(name: String) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Forwarded let name: String
+					}
+
+					public final class AnyChild: Sendable {
+					    public init(_ child: Child) {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithManyRootsInCycles_throwsErrorOfFirstRootInTypeOrder() async {
 		// Every one of the 200 roots builds its own cycle. A set of roots iterates in an order
 		// that depends on the process's hash seed, so validating in that order reports
@@ -3882,7 +4201,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Root000.swift"]):14:5: error: Dependency cycle detected: Partner000 -> Other000 -> Partner000
+				\(fixtures["Root000.swift"]):14:5: error: Dependency cycle: `Partner000` -> `Other000` -> `Partner000`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `partner: Partner000` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
 				\(fixtures["Root000.swift"]):6:1: note: `Partner000` is part of the cycle
 				\(fixtures["Root000.swift"]):11:1: note: `Other000` is part of the cycle
 				"""
@@ -3913,7 +4232,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		}
 		let tool = try Generate.parse(["--include", "Fake"])
 		await SafeDITool.$fileFinder.withValue(FailingFileFinder()) {
-			await assertThrowsError("Could not create file enumerator for directory 'Fake'") {
+			await assertThrowsError("Could not list the Swift files in directory 'Fake'. Check that the directory exists and is readable.") {
 				let mutableTool = tool
 				try await mutableTool.run()
 			}
@@ -4097,11 +4416,17 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 			Issue.record("Did not throw error!")
+		} catch let error as MultipleConfigurationsError {
+			// `scan` throws before the harness records the fixture paths, so the diagnostics are compared by file name.
+			let diagnostics = error.sourceDiagnostics.map {
+				"\($0.location.map { "\(($0.filePath as NSString).lastPathComponent):\($0.line):\($0.column)" } ?? "nil"): \($0.severity.rawValue): \($0.message)"
+			}
+			#expect(diagnostics == [
+				"File.swift:1:1: error: This module declares #SafeDIConfiguration 2 times, but a module can declare it at most once. Keep one and remove the others.",
+				"File_2.swift:1:1: error: This module declares #SafeDIConfiguration 2 times, but a module can declare it at most once. Keep one and remove the others.",
+			])
 		} catch {
-			let errorMessage = "\(error)"
-			#expect(errorMessage.hasPrefix("Found 2 #SafeDIConfiguration declarations in this module. Each module must have at most one #SafeDIConfiguration. Found in:"))
-			#expect(errorMessage.contains("File.swift"))
-			#expect(errorMessage.contains("File_2.swift"))
+			Issue.record("Threw an unexpected error: \(error)")
 		}
 	}
 
@@ -4111,7 +4436,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):7:5: error: Dependency cycle detected. Cycles with a mix of constant and lazy (Instantiator) dependencies cannot be resolved. Make all dependencies in the cycle lazy by using Instantiator: A -> B -> Instantiator<C> -> A
+				\(fixtures["C.swift"]):7:5: error: Dependency cycle: `A` -> `B` -> `Instantiator<C>` -> `A`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `a: A` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
@@ -4253,9 +4578,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):7:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `Missing`
-				\(fixtures["Root.swift"]):7:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `Missing`
-				\(fixtures["Root.swift"]):9:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `Missing`
+				\(fixtures["Child.swift"]):7:5: error: No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `missing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable; list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
+				\(fixtures["Root.swift"]):7:5: error: No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `missing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable; list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
+				\(fixtures["Root.swift"]):9:5: error: No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `otherMissing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable; list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
 				"""
 			},
 		) {
@@ -4300,7 +4625,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):7:5: error: Dependency cycle detected: A -> BProtocol -> A
+				\(fixtures["B.swift"]):7:5: error: Dependency cycle: `A` -> `BProtocol` -> `A`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `a: A` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				"""
 			},
@@ -4948,7 +5273,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated cBuilder: Instantiator<C> -> @Received cBuilder: Instantiator<C>?
+				\(fixtures["C.swift"]):4:5: error: Dependency cycle: @Instantiated `cBuilder: Instantiator<C>` -> @Received `cBuilder: Instantiator<C>?`. `cBuilder: Instantiator<C>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
@@ -4983,7 +5308,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["D.swift"]):4:5: error: Dependency cycle detected! @Instantiated `cBuilder: Instantiator<C>` is @Received in tree created by @Instantiated `cBuilder: Instantiator<C>`. Declare @Received `cBuilder: Instantiator<C>` on `D` as @Instantiated to fix. Full cycle: Instantiator<C> -> D -> Instantiator<C>?
+				\(fixtures["D.swift"]):4:5: error: Dependency cycle: `Instantiator<C>` -> `D` -> `Instantiator<C>?`. `D` receives `cBuilder: Instantiator<C>` inside the tree that `cBuilder` builds. Declare `cBuilder: Instantiator<C>` on `D` as @Instantiated instead of @Received.
 				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
 				\(fixtures["D.swift"]):1:1: note: `D` is part of the cycle
 				"""
@@ -5028,7 +5353,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):4:5: error: Dependency cycle detected: User -> Parent -> Child -> User?
+				\(fixtures["Child.swift"]):4:5: error: Dependency cycle: `User` -> `Parent` -> `Child` -> `User?`. `Child` receives `user: User?`, which is still being built when `Child` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				\(fixtures["User.swift"]):1:1: note: `User` is part of the cycle
 				\(fixtures["Parent.swift"]):1:1: note: `Parent` is part of the cycle
 				\(fixtures["Child.swift"]):1:1: note: `Child` is part of the cycle
@@ -5246,7 +5571,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):6:5: error: Dependency received in same chain it is instantiated: @Instantiated child: Child -> @Received maybe: Greeter? -> @Received x: X -> @Received child: Child
+				\(fixtures["X.swift"]):6:5: error: Dependency cycle: @Instantiated `child: Child` -> @Received `maybe: Greeter?` -> @Received `x: X` -> @Received `child: Child`. `child: Child` is received while it is still being instantiated. `maybe: Greeter?` renames `x: X` only if available, so a type that receives `maybe` without `onlyIfAvailable` must be built after `x: X`. Receive `maybe` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X` cannot be built first.
 				"""
 			},
 		) {
@@ -5299,7 +5624,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["DefaultGreeter.swift"]):6:5: error: Dependency received in same chain it is instantiated: @Instantiated missing: DefaultGreeter -> @Received maybe: Greeter? -> @Received missing: DefaultGreeter
+				\(fixtures["DefaultGreeter.swift"]):6:5: error: Dependency cycle: @Instantiated `missing: DefaultGreeter` -> @Received `maybe: Greeter?` -> @Received `missing: DefaultGreeter`. `missing: DefaultGreeter` is received while it is still being instantiated. `maybe: Greeter?` renames `missing: DefaultGreeter` only if available, so a type that receives `maybe` without `onlyIfAvailable` must be built after `missing: DefaultGreeter`. Receive `maybe` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `missing: DefaultGreeter` cannot be built first.
 				"""
 			},
 		) {
@@ -5344,7 +5669,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Grand.swift"]):4:5: error: Dependency received in same chain it is instantiated: @Instantiated greeterBuilder: Instantiator<DefaultGreeter> -> @Received maybeBuilder: Instantiator<DefaultGreeter>? -> @Received greeterBuilder: Instantiator<DefaultGreeter>
+				\(fixtures["Grand.swift"]):4:5: error: Dependency cycle: @Instantiated `greeterBuilder: Instantiator<DefaultGreeter>` -> @Received `maybeBuilder: Instantiator<DefaultGreeter>?` -> @Received `greeterBuilder: Instantiator<DefaultGreeter>`. `greeterBuilder: Instantiator<DefaultGreeter>` is received while it is still being instantiated. `maybeBuilder: Instantiator<DefaultGreeter>?` renames `greeterBuilder: Instantiator<DefaultGreeter>` only if available, so a type that receives `maybeBuilder` without `onlyIfAvailable` must be built after `greeterBuilder: Instantiator<DefaultGreeter>`. Receive `maybeBuilder` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `greeterBuilder: Instantiator<DefaultGreeter>` cannot be built first.
 				"""
 			},
 		) {
@@ -5388,12 +5713,218 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfRootsOnlyIfAvailableAliasInsideItsFulfillingProperty_throwsError() async {
+		// T requires `tProtocol`, which Root can create only once `t`, the T being built, exists.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["T.swift"]):4:5: error: Dependency cycle: @Instantiated `t: T` -> @Received `tProtocol: TProtocol?` -> @Received `t: T`. `t: T` is received while it is still being instantiated. `tProtocol: TProtocol?` renames `t: T` only if available, so a type that receives `tProtocol` without `onlyIfAvailable` must be built after `t: T`. Receive `tProtocol` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `t: T` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol TProtocol: AnyObject {}
+
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(tProtocol: TProtocol?, t: T) { self.tProtocol = tProtocol; self.t = t }
+					    @Received(fulfilledByDependencyNamed: "t", ofType: T.self, onlyIfAvailable: true) let tProtocol: TProtocol?
+					    @Instantiated let t: T
+					}
+					""",
+					"""
+					@Instantiable
+					public final class T: Instantiable, TProtocol {
+					    public init(tProtocol: TProtocol?) { self.tProtocol = tProtocol }
+					    @Received let tProtocol: TProtocol?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfRootsOnlyIfAvailableAliasInsideItsInstantiatorFulfillingProperty_throwsError() async {
+		// T requires `maybeBuilder`, which Root can create only once `tBuilder`, the Instantiator T is built by, exists.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["T.swift"]):4:5: error: Dependency cycle: @Instantiated `tBuilder: Instantiator<T>` -> @Received `maybeBuilder: Instantiator<T>?` -> @Received `tBuilder: Instantiator<T>`. `tBuilder: Instantiator<T>` is received while it is still being instantiated. `maybeBuilder: Instantiator<T>?` renames `tBuilder: Instantiator<T>` only if available, so a type that receives `maybeBuilder` without `onlyIfAvailable` must be built after `tBuilder: Instantiator<T>`. Receive `maybeBuilder` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tBuilder: Instantiator<T>` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(maybeBuilder: Instantiator<T>?, tBuilder: Instantiator<T>) { self.maybeBuilder = maybeBuilder; self.tBuilder = tBuilder }
+					    @Received(fulfilledByDependencyNamed: "tBuilder", ofType: Instantiator<T>.self, onlyIfAvailable: true) let maybeBuilder: Instantiator<T>?
+					    @Instantiated let tBuilder: Instantiator<T>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class T: Instantiable {
+					    public init(maybeBuilder: Instantiator<T>?) { self.maybeBuilder = maybeBuilder }
+					    @Received let maybeBuilder: Instantiator<T>?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfRootsOnlyIfAvailableAliasOfSiblingThatReceivesTheReceiver_throwsError() async {
+		// B requires `maybe`, which Root can create only once `a` is built, but A requires `b`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `b: B` -> @Received `maybe: Greeter?` -> @Received `a: A`. `a: A` is received while it is still being instantiated. `maybe: Greeter?` renames `a: A` only if available, so a type that receives `maybe` without `onlyIfAvailable` must be built after `a: A`. Receive `maybe` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `a: A` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol Greeter: AnyObject {}
+
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(maybe: Greeter?, a: A, b: B) { self.maybe = maybe; self.a = a; self.b = b }
+					    @Received(fulfilledByDependencyNamed: "a", ofType: A.self, onlyIfAvailable: true) let maybe: Greeter?
+					    @Instantiated let a: A
+					    @Instantiated let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable, Greeter {
+					    public init(b: B) { self.b = b }
+					    @Received let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(maybe: Greeter?) { self.maybe = maybe }
+					    @Received let maybe: Greeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasOfSiblingThatReceivesTheReceiver_throwsError() async {
+		// B requires `maybe`, which Child can create only once `a` is built, but A requires `b`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `a: A` -> @Received `b: B` -> @Received `maybe: Greeter?` -> @Received `a: A`. `a: A` is received while it is still being instantiated. `maybe: Greeter?` renames `a: A` only if available, so a type that receives `maybe` without `onlyIfAvailable` must be built after `a: A`. Receive `maybe` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `a: A` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					public protocol Greeter: AnyObject {}
+
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(maybe: Greeter?, a: A, b: B) { self.maybe = maybe; self.a = a; self.b = b }
+					    @Received(fulfilledByDependencyNamed: "a", ofType: A.self, onlyIfAvailable: true) let maybe: Greeter?
+					    @Instantiated let a: A
+					    @Instantiated let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable, Greeter {
+					    public init(b: B) { self.b = b }
+					    @Received let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(maybe: Greeter?) { self.maybe = maybe }
+					    @Received let maybe: Greeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfRootsAliasInsideItsFulfillingProperty_throwsError() async {
+		// T requires `tProtocol`, which Root creates from `t`, the T being built.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["T.swift"]):4:5: error: Dependency cycle: @Instantiated `t: T` -> @Received `tProtocol: TProtocol?` -> @Received `t: T`. `t: T` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol TProtocol: AnyObject {}
+
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(tProtocol: TProtocol?, t: T) { self.tProtocol = tProtocol; self.t = t }
+					    @Received(fulfilledByDependencyNamed: "t", ofType: T.self) let tProtocol: TProtocol?
+					    @Instantiated let t: T
+					}
+					""",
+					"""
+					@Instantiable
+					public final class T: Instantiable, TProtocol {
+					    public init(tProtocol: TProtocol?) { self.tProtocol = tProtocol }
+					    @Received let tProtocol: TProtocol?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithReceiveOfAliasInsideItsFulfillingProperty_throwsError() async {
 		// DefaultGreeter requires `maybe`, which Child creates from `missing`, the DefaultGreeter being built.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["DefaultGreeter.swift"]):6:5: error: Dependency received in same chain it is instantiated: @Instantiated missing: DefaultGreeter -> @Received maybe: Greeter -> @Received missing: DefaultGreeter
+				\(fixtures["DefaultGreeter.swift"]):6:5: error: Dependency cycle: @Instantiated `missing: DefaultGreeter` -> @Received `maybe: Greeter` -> @Received `missing: DefaultGreeter`. `missing: DefaultGreeter` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {
