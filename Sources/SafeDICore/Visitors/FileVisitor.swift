@@ -46,8 +46,12 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_: MacroExpansionDeclSyntax) -> SyntaxVisitorContinueKind {
-		// A type declared in a trailing closure of a freestanding macro is local to the closure.
-		.skipChildren
+		// A freestanding macro among a type's members may declare member types SafeDI cannot see, whichever clause holds
+		// it. A type declared in a trailing closure of a freestanding macro is local to the closure.
+		if let parentPath, isParentTypeSpelledAsPath {
+			nestedTypeDeclarations.record(.unseenMembers(ofTypeAt: parentPath))
+		}
+		return .skipChildren
 	}
 
 	public override func visit(_: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -88,7 +92,7 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
-		recordType(named: node.name.text, kind: .otherType, modifiers: node.modifiers, attributes: node.attributes)
+		recordType(named: node.name.text, kind: .typeAlias, modifiers: node.modifiers, attributes: node.attributes)
 		return .skipChildren
 	}
 
@@ -260,7 +264,12 @@ public final class FileVisitor: SyntaxVisitor {
 		parentType = node.extendedType.typeDescription
 		let extendedTypeNamePath = node.extendedType.typeDescription.namePath
 		parentPath = extendedTypeNamePath?.joined(separator: ".")
+		extendedTypePath = parentPath
 		isParentTypeSpelledAsPath = extendedTypeNamePath != nil
+		if let parentPath, node.attributes.hasUnrecognizedAttribute {
+			// An attached macro may add members to the type the extension extends.
+			nestedTypeDeclarations.record(.unseenMembers(ofTypeAt: parentPath))
+		}
 		// A member's access defaults to the extension's, and the extended type's own access, declared elsewhere,
 		// does not limit it here.
 		let extensionAccess = node.modifiers.access
@@ -275,6 +284,7 @@ public final class FileVisitor: SyntaxVisitor {
 		// Extensions are always top-level.
 		parentType = nil
 		parentPath = nil
+		extendedTypePath = nil
 		isParentTypeSpelledAsPath = true
 		unsearchedEnclosingTypeCount = 0
 		accessStack = []
@@ -412,10 +422,8 @@ public final class FileVisitor: SyntaxVisitor {
 			kind: kind,
 			access: access,
 			superclassCandidate: superclassCandidate,
-			hasUnrecognizedAttribute: attributes.contains { element in
-				// An attribute in an `#if` clause is not recognized either.
-				element.as(AttributeSyntax.self).map { !NestedTypeDeclaration.recognizedAttributeNames.contains($0.attributeName.trimmedDescription) } ?? true
-			},
+			hasUnrecognizedAttribute: attributes.hasUnrecognizedAttribute,
+			extendedTypePath: extendedTypePath,
 			isCompilerDetermined: compilerDeterminedClauseDepth > 0,
 			consultedCompilationConditions: declarationConditions.sortedConsultedCompilationConditions,
 			conditionalCompilationDecisions: declarationConditions.conditionalCompilationDecisions,
@@ -426,6 +434,7 @@ public final class FileVisitor: SyntaxVisitor {
 				path: path + "." + genericParameter.name.text.withoutBackticks,
 				kind: .genericParameter,
 				access: access,
+				extendedTypePath: extendedTypePath,
 				isCompilerDetermined: compilerDeterminedClauseDepth > 0,
 				consultedCompilationConditions: declarationConditions.sortedConsultedCompilationConditions,
 				conditionalCompilationDecisions: declarationConditions.conditionalCompilationDecisions,
@@ -459,6 +468,8 @@ public final class FileVisitor: SyntaxVisitor {
 	private var defaultMemberAccessStack = [NestedTypeDeclaration.Access]()
 	/// `parentType`'s path, joined once rather than for every declaration recorded.
 	private var parentPath: String?
+	/// The path the extension the walk is in spells its extended type with, or `nil` outside an extension.
+	private var extendedTypePath: String?
 	private var parentPathStack = [String?]()
 	/// Whether `parentType` is spelled as a path of names, which it is unless the walk is inside an extension of a
 	/// type such as `[Int]`.
@@ -500,6 +511,16 @@ extension TypeSyntax {
 		      !type.tokens(viewMode: .sourceAccurate).contains(where: { $0.tokenKind == .leftAngle })
 		else { return "" }
 		return namePath.joined(separator: ".")
+	}
+}
+
+extension AttributeListSyntax {
+	/// Whether any of these attributes is not one of `NestedTypeDeclaration.recognizedAttributeNames`, which an
+	/// attribute in an `#if` clause is not either.
+	fileprivate var hasUnrecognizedAttribute: Bool {
+		contains { element in
+			element.as(AttributeSyntax.self).map { !NestedTypeDeclaration.recognizedAttributeNames.contains($0.attributeName.trimmedDescription) } ?? true
+		}
 	}
 }
 
@@ -599,18 +620,30 @@ private final class AbsentDeclarationRecorder: SyntaxVisitor {
 
 	override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
 		if let path = path(ofTypeNamed: node.name.text) {
-			record(path: path, kind: .otherType)
+			record(path: path, kind: .typeAlias)
 		}
 		return .skipChildren
 	}
 
 	override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
 		parentType = node.extendedType.typeDescription
+		extendedTypePath = parentType?.namePath?.joined(separator: ".")
+		if let extendedTypePath, node.attributes.hasUnrecognizedAttribute {
+			declarations.record(.unseenMembers(ofTypeAt: extendedTypePath))
+		}
 		return .visitChildren
 	}
 
 	override func visitPost(_: ExtensionDeclSyntax) {
 		parentType = nil
+		extendedTypePath = nil
+	}
+
+	override func visit(_: MacroExpansionDeclSyntax) -> SyntaxVisitorContinueKind {
+		if let parentPath = parentType?.namePath?.joined(separator: ".") {
+			declarations.record(.unseenMembers(ofTypeAt: parentPath))
+		}
+		return .skipChildren
 	}
 
 	override func visit(_: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -626,6 +659,7 @@ private final class AbsentDeclarationRecorder: SyntaxVisitor {
 	}
 
 	private var parentType: TypeDescription?
+	private var extendedTypePath: String?
 	private var conditions: DeclarationConditions
 
 	private func path(ofTypeNamed name: String) -> String? {
@@ -653,6 +687,7 @@ private final class AbsentDeclarationRecorder: SyntaxVisitor {
 			path: path,
 			kind: kind,
 			access: .module,
+			extendedTypePath: extendedTypePath,
 			isAbsent: true,
 			consultedCompilationConditions: conditions.sortedConsultedCompilationConditions,
 			conditionalCompilationDecisions: conditions.conditionalCompilationDecisions,
