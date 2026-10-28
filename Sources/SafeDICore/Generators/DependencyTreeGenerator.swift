@@ -680,7 +680,7 @@ public actor DependencyTreeGenerator {
 			/// when that alias is not created because its fulfilling property is unavailable. `nil` otherwise.
 			let uncreatedAlias: UncreatedAlias?
 			/// How the declarations spell the types where this was found, for the message, which may be built later.
-			let writtenTypeDescriptionsByQualifiedType = WrittenTypeDescriptions.writtenTypeDescriptionsByQualifiedType
+			let writtenTypeDescriptionsByQualifiedType: [TypeDescription: TypeDescription]
 
 			/// An `@Received(onlyIfAvailable: true)` alias that is not created because its fulfilling property is unavailable.
 			struct UncreatedAlias: Hashable {
@@ -2556,6 +2556,7 @@ public actor DependencyTreeGenerator {
 								declaringType: alias.declaringType,
 								fulfillingProperty: fulfillingProperty,
 							),
+							writtenTypeDescriptionsByQualifiedType: WrittenTypeDescriptions.writtenTypeDescriptionsByQualifiedType,
 						))
 					}
 				} else if alias.onlyIfAvailable,
@@ -2618,6 +2619,7 @@ public actor DependencyTreeGenerator {
 								|| receivedProperty.label == $0.label
 						}.sorted(),
 						uncreatedAlias: nil,
+						writtenTypeDescriptionsByQualifiedType: WrittenTypeDescriptions.writtenTypeDescriptionsByQualifiedType,
 					))
 				}
 			}
