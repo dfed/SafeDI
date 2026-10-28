@@ -224,7 +224,10 @@ public actor DependencyTreeGenerator {
 			// has a protocol-returning mock but the MyService key does not).
 			// Always use the concrete-type key entry so mock root generation
 			// uses the correct mock info for the concrete type.
-			let instantiable = typeDescriptionToFulfillingInstantiableMap[instantiable.concreteInstantiable] ?? instantiable
+			// The mock root declares the dependencies its scope builds, which leaves out those its hand-written
+			// mock is not passed (see `createMockTypeDescriptionToScopeMapping`).
+			let instantiable = (typeDescriptionToFulfillingInstantiableMap[instantiable.concreteInstantiable] ?? instantiable)
+				.keepingDependencies { !scope.dependenciesLeftOut.contains($0) }
 			// Without module scoping, every type belongs to the current module.
 			let isDeclaredInCurrentModule = currentModuleSourceFilePaths.map { currentModuleSourceFilePaths in
 				instantiable.sourceFilePath.map(currentModuleSourceFilePaths.contains) ?? false
@@ -1765,7 +1768,46 @@ public actor DependencyTreeGenerator {
 	/// Builds a scope mapping for mock generation. Similar to `createTypeDescriptionToScopeMapping`
 	/// but includes ALL types (not just reachable from roots). Received dependencies are NOT
 	/// promoted here — they're promoted at the root level in `createMockRootScopeGenerator`.
+	///
+	/// A type that a mock builds by calling its hand-written mock is built from what that method is passed.
+	/// The dependencies it is not passed are left out of the mock tree: nothing reads them, so a mock that
+	/// built one would declare a value it never uses. One of them is still built when a dependency the method
+	/// is passed receives it, which is known only once the scopes exist, so the scopes are built again until
+	/// no type's tree receives a dependency the type left out.
 	private func createMockTypeDescriptionToScopeMapping() -> [TypeDescription: Scope] {
+		var dependenciesBuiltForOtherDependencies = [TypeDescription: Set<Dependency>]()
+		var typeDescriptionToScopeMap: [TypeDescription: Scope]
+		var foundDependencyToBuild: Bool
+		repeat {
+			typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping(
+				dependenciesBuiltForOtherDependencies: dependenciesBuiltForOtherDependencies,
+			)
+			var receivedPropertiesCache = ReceivedPropertiesCache()
+			foundDependencyToBuild = false
+			// Each match only joins a set, so neither the order of the scopes nor a scope mapped from
+			// several types changes the outcome.
+			for scope in typeDescriptionToScopeMap.values where !scope.dependenciesLeftOut.isEmpty {
+				let receivedLabels = Set(Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received.map(\.label))
+				for dependency in scope.dependenciesLeftOut where receivedLabels.contains(dependency.property.label) {
+					switch dependency.source {
+					case .instantiated, .aliased:
+						dependenciesBuiltForOtherDependencies[scope.instantiable.concreteInstantiable, default: []].insert(dependency)
+						foundDependencyToBuild = true
+					case .received, .forwarded:
+						// The type does not provide this dependency, so its tree receives it from an ancestor either way.
+						continue
+					}
+				}
+			}
+		} while foundDependencyToBuild
+		return typeDescriptionToScopeMap
+	}
+
+	/// - Parameter dependenciesBuiltForOtherDependencies: For each concrete type, the dependencies its
+	///   hand-written mock is not passed that a mock builds all the same.
+	private func createMockTypeDescriptionToScopeMapping(
+		dependenciesBuiltForOtherDependencies: [TypeDescription: Set<Dependency>],
+	) -> [TypeDescription: Scope] {
 		// Create scopes for all types. Process non-mockOnly types first so they
 		// claim additional-type slots. mockOnly types then overwrite slots whose
 		// existing scope lacks a compatible hand-written mock.
@@ -1774,7 +1816,7 @@ public actor DependencyTreeGenerator {
 		// Reuse the same scope for all entries sharing a concreteInstantiable so
 		// every instantiableType is mapped.
 		var visitedConcreteTypeToScope = [TypeDescription: Scope]()
-		let typeDescriptionToScopeMap: [TypeDescription: Scope] = typeDescriptionToFulfillingInstantiableMap.values
+		let typeDescriptionToCompleteScopeMap: [TypeDescription: Scope] = typeDescriptionToFulfillingInstantiableMap.values
 			.sorted { lhs, rhs in
 				// Non-mockOnly before mockOnly (production claims slots first).
 				if lhs.mockOnly != rhs.mockOnly {
@@ -1838,6 +1880,38 @@ public actor DependencyTreeGenerator {
 					}
 				}
 			}
+
+		// A property is built with its type's hand-written mock when that method returns a type the property
+		// accepts, so a type whose mock returns one of the additional types it fulfills is built with the mock
+		// for properties of that type and with `init` for the others. Each kind of property gets a scope that
+		// declares what builds it.
+		var scopesBuiltByHandWrittenMock = [ObjectIdentifier: Scope]()
+		let typeDescriptionToScopeMap = typeDescriptionToCompleteScopeMap.reduce(into: [TypeDescription: Scope]()) { partialResult, entry in
+			let (instantiableType, scope) = entry
+			let instantiable = scope.instantiable
+			guard let mockInitializer = instantiable.mockInitializer,
+			      instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiableType)
+			else {
+				partialResult[instantiableType] = scope
+				return
+			}
+			if let scopeBuiltByHandWrittenMock = scopesBuiltByHandWrittenMock[ObjectIdentifier(scope)] {
+				partialResult[instantiableType] = scopeBuiltByHandWrittenMock
+			} else {
+				let dependenciesToBuild = dependenciesBuiltForOtherDependencies[instantiable.concreteInstantiable, default: []]
+				let dependenciesLeftOut = instantiable.dependenciesNotPassed(to: mockInitializer).filter { !dependenciesToBuild.contains($0) }
+				let scopeBuiltByHandWrittenMock = if dependenciesLeftOut.isEmpty {
+					scope
+				} else {
+					Scope(
+						instantiable: instantiable.keepingDependencies { !dependenciesLeftOut.contains($0) },
+						dependenciesLeftOut: dependenciesLeftOut,
+					)
+				}
+				scopesBuiltByHandWrittenMock[ObjectIdentifier(scope)] = scopeBuiltByHandWrittenMock
+				partialResult[instantiableType] = scopeBuiltByHandWrittenMock
+			}
+		}
 
 		// Populate propertiesToGenerate on each scope.
 		for scope in Set(typeDescriptionToScopeMap.values) {

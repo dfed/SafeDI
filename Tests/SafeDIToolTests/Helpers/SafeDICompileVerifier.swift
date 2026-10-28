@@ -31,6 +31,11 @@ import Testing
 /// compiles the inputs alone as a fallback so the diagnostic can attribute
 /// the failure to the fixture vs. the generated code.
 ///
+/// A warning the compiler reports in a generated file also records an `Issue`:
+/// a build that treats warnings as errors fails on it, and its author cannot
+/// edit generated code. A warning the fixture draws too is not SafeDI's to
+/// avoid, as when generated code repeats an import the fixture wrote.
+///
 /// See `compileSwift` for why the compile emits an object file rather than
 /// stopping after type checking.
 ///
@@ -85,7 +90,23 @@ func verifyGeneratedCodeCompiles(
 		artifacts: artifacts,
 		activeCompilationConditions: compilationConditions,
 	)
-	guard combinedResult.exitCode != 0 else { return }
+	guard combinedResult.exitCode != 0 else {
+		let warnings = warningsOnlyGeneratedCodeDraws(
+			inCompilerOutput: combinedResult.stderr,
+			generatedFiles: staged.generatedFiles,
+			inputFiles: staged.inputFiles,
+		)
+		if !warnings.isEmpty {
+			Issue.record(
+				"""
+				\(generatedCodeWarningMessage)
+				\(warnings.joined(separator: "\n"))
+				""",
+				sourceLocation: sourceLocation,
+			)
+		}
+		return
+	}
 
 	// Combined pass failed. Re-run inputs alone to attribute the failure.
 	// The extra subprocess is only paid when something is broken.
@@ -124,6 +145,30 @@ func verifyGeneratedCodeCompiles(
 }
 
 private let generatedCodeCompilationFailureMessage = "Generated code failed to compile alongside test inputs."
+private let generatedCodeWarningMessage = "Generated code compiled with a warning."
+
+/// The warning lines of `compilerOutput` located in `generatedFiles` whose message the compiler does not
+/// also report in one of `inputFiles`.
+private func warningsOnlyGeneratedCodeDraws(
+	inCompilerOutput compilerOutput: String,
+	generatedFiles: [URL],
+	inputFiles: [URL],
+) -> [String] {
+	let warningMarker = ": warning: "
+	/// The warning messages reported in `files`, each paired with the line that reports it.
+	func warnings(in files: [URL]) -> [(line: String, message: String)] {
+		compilerOutput.split(separator: "\n").compactMap { line in
+			guard files.contains(where: { line.hasPrefix("\($0.path):") }),
+			      let markerRange = line.range(of: warningMarker)
+			else { return nil }
+			return (line: String(line), message: String(line[markerRange.upperBound...]))
+		}
+	}
+	let messagesInputsDraw = Set(warnings(in: inputFiles).map(\.message))
+	return warnings(in: generatedFiles)
+		.filter { !messagesInputsDraw.contains($0.message) }
+		.map(\.line)
+}
 
 extension Issue {
 	/// Whether this is the issue `verifyGeneratedCodeCompiles` records when the fixture compiles on its own but
