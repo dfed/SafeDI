@@ -177,7 +177,47 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	}
 
 	public static func < (lhs: TypeDescription, rhs: TypeDescription) -> Bool {
-		lhs.asSource < rhs.asSource
+		let lhsSpellingWithoutAny = lhs.withoutAny.asSource
+		let rhsSpellingWithoutAny = rhs.withoutAny.asSource
+		return if lhsSpellingWithoutAny != rhsSpellingWithoutAny {
+			lhsSpellingWithoutAny < rhsSpellingWithoutAny
+		} else {
+			lhs.asSource < rhs.asSource
+		}
+	}
+
+	/// The receiver with `any` removed wherever it appears, as `==` compares it.
+	private var withoutAny: TypeDescription {
+		switch self {
+		case .void, .unknown:
+			self
+		case let .any(constraint):
+			constraint.withoutAny
+		case let .simple(name, generics):
+			.simple(name: name, generics: generics.map(\.withoutAny))
+		case let .nested(name, parentType, generics):
+			.nested(name: name, parentType: parentType.withoutAny, generics: generics.map(\.withoutAny))
+		case let .composition(types):
+			.composition(UnorderedEquatingCollection(types.map(\.withoutAny)))
+		case let .optional(type):
+			.optional(type.withoutAny)
+		case let .implicitlyUnwrappedOptional(type):
+			.implicitlyUnwrappedOptional(type.withoutAny)
+		case let .some(type):
+			.some(type.withoutAny)
+		case let .metatype(type, isType):
+			.metatype(type.withoutAny, isType: Self.isExistentialMetatype(ofInstanceType: type, isType: isType))
+		case let .attributed(type, specifiers, attributes):
+			.attributed(type.withoutAny, specifiers: specifiers, attributes: attributes)
+		case let .array(element):
+			.array(element: element.withoutAny)
+		case let .dictionary(key, value):
+			.dictionary(key: key.withoutAny, value: value.withoutAny)
+		case let .tuple(elements):
+			.tuple(elements.map { TupleElement(label: $0.label, $0.typeDescription.withoutAny) })
+		case let .closure(arguments, isAsync, doesThrow, returnType):
+			.closure(arguments: arguments.map(\.withoutAny), isAsync: isAsync, doesThrow: doesThrow, returnType: returnType.withoutAny)
+		}
 	}
 
 	// MARK: Equatable
