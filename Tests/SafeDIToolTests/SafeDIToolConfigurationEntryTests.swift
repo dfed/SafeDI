@@ -107,6 +107,52 @@ struct SafeDIToolConfigurationEntryTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_warns_whenAdditionalDirectoryEntryIsSwiftFileThatDoesNotExist() async throws {
+		let missingSwiftFile = "\(Self.missingPath())/Missing.swift"
+
+		// Scan reads the entry too, and must not fail on it.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.serviceContent],
+			swiftFileContentByFilePath: [
+				"SafeDIConfiguration.swift": """
+				#SafeDIConfiguration(additionalDirectoriesToInclude: ["\(missingSwiftFile)"])
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.warnings.map(\.formatted) == [
+			"\(output.fixtures["SafeDIConfiguration.swift"]):1:1: warning: This #SafeDIConfiguration lists `\(missingSwiftFile)` in additionalDirectoriesToInclude, but nothing exists at `\(missingSwiftFile)`, so SafeDI reads no Swift files from it. Correct the path, or remove it from additionalDirectoriesToInclude.",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_doesNotWarn_whenOnlyInactiveConfigurationListsSwiftFileThatDoesNotExist() async throws {
+		let missingSwiftFile = "\(Self.missingPath())/Missing.swift"
+
+		// Scan reads the directories of every configuration, and must not fail on an inactive one's entry.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.serviceContent],
+			swiftFileContentByFilePath: [
+				"SafeDIConfiguration.swift": """
+				#if INACTIVE_CONDITION
+				#SafeDIConfiguration(additionalDirectoriesToInclude: ["\(missingSwiftFile)"])
+				#else
+				#SafeDIConfiguration()
+				#endif
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.warnings == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_doesNotWarn_whenAdditionalDirectoryIsEmpty() async throws {
 		let emptyDirectory = try makeTemporaryDirectory()
 

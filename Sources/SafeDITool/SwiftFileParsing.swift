@@ -191,7 +191,8 @@ func conditionalCompilationEvaluator(
 	)
 }
 
-/// The normalized paths of the Swift files in `directories`, each absolute or relative to the working directory.
+/// The normalized paths of the Swift files in `directories`, each absolute or relative to the working directory. An
+/// entry may also name a single Swift file. An entry that names nothing contributes no files.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<NormalizedFilePath> {
 	try await withThrowingTaskGroup(
@@ -218,7 +219,10 @@ func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<Nor
 					}
 					throw CouldNotEnumerateDirectoryError(directory: included)
 				}
-				return (files + [includedURL]).compactMap {
+				// An entry may name a single Swift file. One that names nothing contributes no files, as a missing
+				// directory does, rather than failing when the file is read: `generate` warns about it.
+				let includedFile = FileManager.default.fileExists(atPath: includedURL.path) ? [includedURL] : []
+				return (files + includedFile).compactMap {
 					if $0.pathExtension == "swift" {
 						NormalizedFilePath($0.path)
 					} else {
