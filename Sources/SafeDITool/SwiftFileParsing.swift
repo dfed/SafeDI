@@ -85,6 +85,51 @@ struct ParsedModule {
 	/// The evaluator the files were scanned with. Files parsed later for the same module, such as
 	/// those in `configuration.additionalDirectoriesToInclude`, must be scanned with it too.
 	let conditionalCompilationEvaluator: ConditionalCompilationEvaluator
+	/// The entries of `configuration.additionalDirectoriesToInclude`, each with the path its files were found at.
+	let additionalDirectories: [AdditionalDirectory]
+}
+
+/// An entry of a `#SafeDIConfiguration(additionalDirectoriesToInclude:)`, and the absolute path SafeDI looked for
+/// Swift files at: the entry itself when absolute, and otherwise the entry relative to the working directory of the
+/// SafeDITool that looked, exactly as `findSwiftFiles(inDirectories:)` resolves it.
+struct AdditionalDirectory: Codable, Hashable {
+	/// The entry resolved against this SafeDITool's working directory.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	init(entry: String) {
+		self.entry = entry
+		path = entry.asFileURL.path
+	}
+
+	/// An entry as another SafeDITool, whose working directory may differ, resolved it.
+	init(entry: String, path: String) {
+		self.entry = entry
+		self.path = path
+	}
+
+	/// The entry as the configuration writes it.
+	let entry: String
+	/// The absolute path the entry names.
+	let path: String
+
+	/// A warning when SafeDI can read no Swift file from `path`: nothing exists there, or a file other than a Swift
+	/// file does. A directory, even an empty one, and a Swift file are what an entry is for.
+	func unreadableWarning(at location: Dependency.DeclarationLocation?) -> SourceDiagnostic? {
+		let unreadableDescription: String
+		var isDirectory: ObjCBool = false
+		if !FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) {
+			let relativePathExplanation = (entry as NSString).isAbsolutePath ? "" : " SafeDI resolves a relative path against the directory SafeDITool runs in."
+			unreadableDescription = "nothing exists at `\(path)`, so SafeDI reads no Swift files from it.\(relativePathExplanation) Correct the path"
+		} else if !isDirectory.boolValue, URL(fileURLWithPath: path).pathExtension != "swift" {
+			unreadableDescription = "`\(path)` is neither a directory nor a Swift file, so SafeDI reads no Swift files from it. List a directory or a Swift file"
+		} else {
+			return nil
+		}
+		return SourceDiagnostic(
+			severity: .warning,
+			location: location,
+			message: "This #\(SafeDIConfigurationVisitor.macroName) lists `\(entry)` in \(SafeDIConfigurationVisitor.additionalDirectoriesToIncludeArgumentLabel), but \(unreadableDescription), or remove it from \(SafeDIConfigurationVisitor.additionalDirectoriesToIncludeArgumentLabel).",
+		)
+	}
 }
 
 /// More than one `#SafeDIConfiguration` was declared among a module's own files.
@@ -117,6 +162,16 @@ extension SafeDIConfiguration {
 			location: declarationLocation,
 			message: "This #\(SafeDIConfigurationVisitor.macroName) sets `\(SafeDIConfigurationVisitor.mockConditionalCompilationArgumentLabel)` and is not in a file named `\(Self.conventionalFileName)`, so SafeDI had to scan this module’s files twice. Move it to a file named `\(Self.conventionalFileName)` so SafeDI can read it first.",
 		)
+	}
+
+	/// A warning for each of `additionalDirectories`, this configuration's entries as SafeDI resolved them, from which
+	/// SafeDI can read no Swift file, once per entry, in the order the configuration lists them.
+	func unreadableAdditionalDirectoryWarnings(for additionalDirectories: [AdditionalDirectory]) -> [SourceDiagnostic] {
+		var judgedAdditionalDirectories = Set<AdditionalDirectory>()
+		return additionalDirectories.compactMap { additionalDirectory in
+			guard judgedAdditionalDirectories.insert(additionalDirectory).inserted else { return nil }
+			return additionalDirectory.unreadableWarning(at: declarationLocation)
+		}
 	}
 }
 
