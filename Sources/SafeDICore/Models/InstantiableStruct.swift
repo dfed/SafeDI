@@ -67,7 +67,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// If `nil`, the Instantiable type is incorrectly configured.
 	public let initializer: Initializer?
 	/// The ordered dependencies of this Instantiable.
-	public let dependencies: [Dependency]
+	public private(set) var dependencies: [Dependency]
 	/// The declaration type of the Instantiable’s concrete type.
 	public let declarationType: DeclarationType
 	/// Attributes to add to the generated `mock()` method (e.g. `"@MainActor"`).
@@ -100,6 +100,23 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		merged.customMockName = mockProvider.customMockName
 		merged.mockDeclarationLocation = mockProvider.mockDeclarationLocation
 		return merged
+	}
+
+	/// The dependencies `handWrittenMock`, this type's hand-written mock, is not passed. A generated mock passes
+	/// a dependency to the argument that shares its label, so these are the dependencies whose label no argument
+	/// has. A mock method declared with the type takes every dependency, so only one merged in from a `mockOnly`
+	/// declaration leaves any out. A `@Forwarded` dependency is never left out: it is an argument of the type's
+	/// `Instantiator` whatever the mock method does with it.
+	public func dependenciesNotPassed(to handWrittenMock: Initializer) -> [Dependency] {
+		let argumentLabels = Set(handWrittenMock.arguments.map(\.innerLabel))
+		return dependencies.filter { $0.source != .forwarded && !argumentLabels.contains($0.property.label) }
+	}
+
+	/// Returns a copy of this Instantiable that declares only the dependencies `isKept` accepts.
+	public func keepingDependencies(where isKept: (Dependency) -> Bool) -> Instantiable {
+		var instantiable = self
+		instantiable.dependencies = dependencies.filter(isKept)
+		return instantiable
 	}
 
 	/// Whether the user-defined mock() method's return type is compatible with the given property type.
