@@ -1087,6 +1087,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				throw GenerationError.erasedInstantiatorGenericDoesNotMatch(
 					property: property,
 					instantiable: instantiable,
+					forwardedProperties: forwardedProperties,
 				)
 			}
 
@@ -3526,12 +3527,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	// MARK: GenerationError
 
 	private enum GenerationError: Error, CustomStringConvertible {
-		case erasedInstantiatorGenericDoesNotMatch(property: Property, instantiable: Instantiable)
+		case erasedInstantiatorGenericDoesNotMatch(property: Property, instantiable: Instantiable, forwardedProperties: Set<Property>)
 
 		var description: String {
 			switch self {
-			case let .erasedInstantiatorGenericDoesNotMatch(property, instantiable):
-				"Property `\(property.asSource)` on \(instantiable.concreteInstantiable.asSource) incorrectly configured. Property should instead be of type `\(Dependency.erasedInstantiatorType)<\(instantiable.concreteInstantiable.asSource).ForwardedProperties, \(property.typeDescription.asInstantiatedType.asSource)>`."
+			case let .erasedInstantiatorGenericDoesNotMatch(property, instantiable, forwardedProperties):
+				// The forwarded properties are spelled out rather than as `ForwardedProperties` on the instantiated
+				// type, which the module that declares the property may not be able to see.
+				"Property `\(property.asSource)` on \(instantiable.concreteInstantiable.asSource) incorrectly configured. Property should instead be of type `\(property.propertyType.isSendable ? Dependency.sendableErasedInstantiatorType : Dependency.erasedInstantiatorType)<\(forwardedProperties.asForwardedPropertiesType.typeDescription.asSource), \(property.typeDescription.asInstantiatedType.asSource)>`."
 			}
 		}
 	}
