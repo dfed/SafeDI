@@ -46,6 +46,8 @@ public enum FixableInstantiableError: DiagnosticError {
 	case mockOnlyMissingMockMethod(typeName: String, methodName: String)
 	case unlabeledDefaultBeforeUnlabeledParameter(defaultedParameter: Property, followingParameter: Property)
 	case calleeScopeReferenceInDefaultExpression(parameterLabel: String)
+	/// A name SafeDI binds, or refers to, in generated code collides with a name generated code introduces.
+	case reservedName(name: String, reservation: ReservedName)
 
 	public enum MissingInitializer: Sendable {
 		case hasOnlyInjectableProperties
@@ -118,6 +120,17 @@ public enum FixableInstantiableError: DiagnosticError {
 			"Unlabeled parameter `\(defaultedParameter.asSource)` has a default value but is followed by unlabeled required parameter `\(followingParameter.asSource)`. SafeDI cannot generate a mock for this signature: the default cannot be elided from the mock's override surface (Swift requires the earlier positional slot to be passed when a later unlabeled parameter is required), and an unlabeled parameter cannot be exposed as a labeled field on `SafeDIMockConfiguration`. Either add an external label to the defaulted parameter, reorder so unlabeled defaults come last, or remove the default."
 		case let .calleeScopeReferenceInDefaultExpression(parameterLabel):
 			"Default expression for parameter `\(parameterLabel)` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default."
+		case let .reservedName(name, reservation):
+			switch reservation {
+			case .builderFunctionName:
+				"`\(name)` begins with `\(ReservedName.builderFunctionNamePrefix)`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `\(ReservedName.builderFunctionNamePrefix)`."
+			case .mockOverridesParameter:
+				"`\(name)` is reserved: it is the name of the parameter through which a generated `mock()` takes its overrides, and a name spelled the same would collide with it in generated code. Rename it."
+			case .configurationBuilderProperty:
+				"`\(name)` is reserved: it is the name of the property of a generated `SafeDIMockConfiguration` that overrides how its type is built, and a name spelled the same would collide with it in generated code. Rename it."
+			case let .constructedType(typeName):
+				"`\(name)` is reserved: generated code constructs the `\(typeName)` type by that name, and a name spelled the same would hide the type from it. Rename it."
+			}
 		}
 	}
 
@@ -159,7 +172,8 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .mockOnlyWithIsRoot,
 			     .mockOnlyMissingMockMethod,
 			     .unlabeledDefaultBeforeUnlabeledParameter,
-			     .calleeScopeReferenceInDefaultExpression:
+			     .calleeScopeReferenceInDefaultExpression,
+			     .reservedName:
 				.error
 			}
 			message = error.description
@@ -234,6 +248,13 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Promote `\(defaultedParameter.label)` to an external label (rewrite `_ \(defaultedParameter.label):` as `\(defaultedParameter.label):`)"
 			case let .calleeScopeReferenceInDefaultExpression(parameterLabel):
 				"Remove the default from `\(parameterLabel)` or move the referenced value to a file-scoped or module-scoped symbol"
+			case let .reservedName(name, reservation):
+				switch reservation {
+				case .builderFunctionName:
+					"Rename `\(name)` to `\(ReservedName.removingBuilderFunctionNamePrefix(from: name))`"
+				case .mockOverridesParameter, .configurationBuilderProperty, .constructedType:
+					"Rename `\(name)`"
+				}
 			}
 			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
 		}

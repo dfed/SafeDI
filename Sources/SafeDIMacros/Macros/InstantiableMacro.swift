@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 import SwiftDiagnostics
+import SwiftParser
 import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
@@ -233,6 +234,11 @@ public struct InstantiableMacro: MemberMacro {
 					dependencies: visitor.dependencies,
 					context: context,
 				)
+				Self.validateReservedParameterLabels(
+					functionSyntax: selectedInitializerSyntax.signature,
+					dependencies: visitor.dependencies,
+					context: context,
+				)
 			}
 			if let mockInitializer = visitor.mockInitializer,
 			   let mockSyntax = visitor.mockFunctionSyntax
@@ -245,6 +251,11 @@ public struct InstantiableMacro: MemberMacro {
 					context: context,
 				)
 				Self.validateDefaultExpressions(
+					functionSyntax: mockSyntax.signature,
+					dependencies: visitor.dependencies,
+					context: context,
+				)
+				Self.validateReservedParameterLabels(
 					functionSyntax: mockSyntax.signature,
 					dependencies: visitor.dependencies,
 					context: context,
@@ -940,6 +951,11 @@ public struct InstantiableMacro: MemberMacro {
 					dependencies: dependenciesForMock,
 					context: context,
 				)
+				Self.validateReservedParameterLabels(
+					functionSyntax: mockFunction.signature,
+					dependencies: dependenciesForMock,
+					context: context,
+				)
 				let nonDependenciesWithoutDefaults = mockFunctionInitializer.arguments
 					.filter { !dependencyLabels.contains($0.innerLabel) && !$0.hasDefaultValue }
 					.map(\.asProperty)
@@ -1293,6 +1309,97 @@ public struct InstantiableMacro: MemberMacro {
 					parameterLabel: innerLabel,
 				).diagnostic,
 			))
+		}
+	}
+
+	/// Diagnoses each parameter that SafeDI binds by a reserved argument label (`ReservedName`):
+	/// a default-valued parameter with an argument label that fulfills no dependency. A generated
+	/// `mock()` of the type takes such a parameter under that label and passes it on by name,
+	/// beside the names generated code introduces. The parameters `validateDefaultExpressions`
+	/// checks are exactly these.
+	private static func validateReservedParameterLabels(
+		functionSyntax: FunctionSignatureSyntax,
+		dependencies: [Dependency],
+		context: some MacroExpansionContext,
+	) {
+		let dependencyLabels = Set(dependencies.map(\.property.label))
+		let parameters = functionSyntax.parameterClause.parameters
+		for parameter in parameters where parameter.defaultValue != nil
+			&& !dependencyLabels.contains((parameter.secondName ?? parameter.firstName).text)
+		{
+			let label = parameter.firstName
+			if let reservation = ReservedName(reserving: label.text) {
+				let error = FixableInstantiableError.reservedName(name: label.text, reservation: reservation)
+				let labelsInUse = dependencyLabels.union(
+					parameters.lazy
+						.filter { $0.id != parameter.id }
+						.map(\.firstName.text),
+				)
+				if let fixedParameter = renamingReservedLabel(of: parameter, reservedAs: reservation, labelsInUse: labelsInUse) {
+					context.diagnose(Diagnostic(
+						node: label,
+						error: error,
+						changes: [
+							.replace(
+								oldNode: Syntax(parameter),
+								newNode: Syntax(fixedParameter),
+							),
+						],
+					))
+				} else {
+					context.diagnose(Diagnostic(
+						node: label,
+						message: error.diagnostic,
+					))
+				}
+			}
+		}
+	}
+
+	/// `parameter` with its reserved argument label renamed, or `nil` when no rename is sound.
+	///
+	/// Only a label that begins with `ReservedName.builderFunctionNamePrefix` has an evident new
+	/// label: the label without the prefix. An exactly reserved label has none, and any label the
+	/// macro chose for it would be arbitrary.
+	///
+	/// The rename changes the argument label alone. The parameter keeps its name inside the
+	/// function, so the function body still compiles and the parameter still fulfills no
+	/// dependency; only a call that spells the old label must change, and the compiler reports it.
+	/// It is not offered when the new label is not a valid variable name, is itself reserved, or is
+	/// in `labelsInUse`, the labels of the dependencies and of the function's other parameters,
+	/// which a generated `mock()` would then declare twice.
+	private static func renamingReservedLabel(
+		of parameter: FunctionParameterSyntax,
+		reservedAs reservation: ReservedName,
+		labelsInUse: Set<String>,
+	) -> FunctionParameterSyntax? {
+		switch reservation {
+		case .mockOverridesParameter, .configurationBuilderProperty, .constructedType:
+			return nil
+		case .builderFunctionName:
+			let label = parameter.firstName
+			let newLabel = ReservedName.removingBuilderFunctionNamePrefix(from: label.text)
+			guard newLabel.isValidSwiftIdentifier(for: .variableName),
+			      ReservedName(reserving: newLabel) == nil,
+			      !labelsInUse.contains(newLabel)
+			else {
+				return nil
+			}
+			var fixedParameter = parameter
+			if let name = parameter.secondName {
+				if name.text == newLabel {
+					// `__safeDI_count count` becomes `count`, not the redundant `count count`.
+					fixedParameter.firstName = .identifier(newLabel, leadingTrivia: label.leadingTrivia, trailingTrivia: name.trailingTrivia)
+					fixedParameter.secondName = nil
+				} else {
+					fixedParameter.firstName = label.with(\.tokenKind, .identifier(newLabel))
+				}
+			} else {
+				// `__safeDI_count` becomes `count __safeDI_count`, so the body's uses still resolve.
+				fixedParameter.firstName = .identifier(newLabel, leadingTrivia: label.leadingTrivia, trailingTrivia: .space)
+				fixedParameter.secondName = .identifier(label.text, trailingTrivia: label.trailingTrivia)
+			}
+			return fixedParameter
 		}
 	}
 
