@@ -44,6 +44,8 @@ for path in report_paths:
 
 if not report_paths:
     problems.append("No shard reports were found. The shards fail, or are skipped when \"Build and Test on Linux\" fails.")
+if report_paths and not corpora:
+    problems.append("No report names the corpus and its pins, so nothing can be checked against them.")
 if len(corpora) > 1:
     problems.append(f"The shards disagree about the corpus and its pins: {sorted(corpora)}.")
 if len(corpora) == 1 and not problems:
