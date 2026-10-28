@@ -291,6 +291,7 @@ struct ParsedModuleFiles {
 	var fileScans: [FileScan] {
 		walkedFileScans.map(\.fileScan)
 	}
+
 	/// The type names in the text of each file that mentions no SafeDI declaration.
 	let typeNamesByFileWithoutSafeDIContent: [String: DeclaredTypeNames]
 	/// The module's `#SafeDIConfiguration`, found among the configuration file paths it was parsed with.
