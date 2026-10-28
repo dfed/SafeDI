@@ -28,10 +28,35 @@ import Foundation
 /// `Feature_Root` – the file whose path sorts first keeps the name, and each other file, in path order, takes the
 /// name followed by the smallest `_2`, `_3`, … that no other file's name uses. The result depends only on the set of
 /// input paths, not their order.
-public func outputFileNames(
+public func outputFileNames(forFilesAt inputFilePaths: [String]) -> [String] {
+	uniqueOutputFileNameStems(forFilesAt: inputFilePaths).map { "\($0)+SafeDI.swift" }
+}
+
+/// Compute output file names for mock generation output files: one for each input file, named as
+/// `outputFileNames(forFilesAt:)` names it, and one for each type `additionalMocksToGenerate` lists.
+///
+/// A listed type's mock is named after the type unless that name is a file's: then, in type name order, it takes
+/// the type name followed by the smallest `_2`, `_3`, … that no other mock's name uses, so `Service` beside
+/// `Service.swift` gets `Service_2+SafeDIMock.swift`. Listing a type therefore never renames a file's mock, and the
+/// result depends only on the set of input paths and the set of type names, not their order.
+public func mockOutputFileNames(
 	forFilesAt inputFilePaths: [String],
-	suffix: String = "+SafeDI.swift",
-) -> [String] {
+	additionalMocksToGenerate: [String],
+) -> (mockFiles: [String], additionalMocks: [String]) {
+	let fileNameStems = uniqueOutputFileNameStems(forFilesAt: inputFilePaths)
+	var usedNames = Set(fileNameStems).union(additionalMocksToGenerate)
+	var nameStemsByTypeName = [String: String]()
+	for typeName in Set(additionalMocksToGenerate).intersection(fileNameStems).sorted() {
+		nameStemsByTypeName[typeName] = claimSuffixedName(for: typeName, avoiding: &usedNames)
+	}
+	return (
+		mockFiles: fileNameStems.map { "\($0)+SafeDIMock.swift" },
+		additionalMocks: additionalMocksToGenerate.map { "\(nameStemsByTypeName[$0] ?? $0)+SafeDIMock.swift" },
+	)
+}
+
+/// The output file name of each input file, without an extension, unique across the input files.
+private func uniqueOutputFileNameStems(forFilesAt inputFilePaths: [String]) -> [String] {
 	struct FileInfo {
 		let baseName: String
 		let parentComponents: [String]
@@ -90,20 +115,21 @@ public func outputFileNames(
 	var usedNames = Set(names)
 	let indicesByName = Dictionary(grouping: names.indices, by: { names[$0] })
 	for (name, indices) in indicesByName.sorted(by: { $0.key < $1.key }) {
-		var nameSuffixNumber = 2
 		for index in indices.sorted(by: { inputFilePaths[$0] < inputFilePaths[$1] }).dropFirst() {
-			while usedNames.contains("\(name)_\(nameSuffixNumber)") {
-				nameSuffixNumber += 1
-			}
-			names[index] = "\(name)_\(nameSuffixNumber)"
-			usedNames.insert(names[index])
+			names[index] = claimSuffixedName(for: name, avoiding: &usedNames)
 		}
 	}
 
-	return names.map { "\($0)\(suffix)" }
+	return names
 }
 
-/// Compute output file names for mock generation output files.
-public func mockOutputFileNames(forFilesAt inputFilePaths: [String]) -> [String] {
-	outputFileNames(forFilesAt: inputFilePaths, suffix: "+SafeDIMock.swift")
+/// `name` followed by the smallest `_2`, `_3`, … that `usedNames` does not contain, which is added to `usedNames`.
+private func claimSuffixedName(for name: String, avoiding usedNames: inout Set<String>) -> String {
+	var nameSuffixNumber = 2
+	while usedNames.contains("\(name)_\(nameSuffixNumber)") {
+		nameSuffixNumber += 1
+	}
+	let suffixedName = "\(name)_\(nameSuffixNumber)"
+	usedNames.insert(suffixedName)
+	return suffixedName
 }

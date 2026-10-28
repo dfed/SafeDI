@@ -528,12 +528,21 @@ struct Generate: AsyncParsableCommand {
 						}
 						typeNameToMockExtensions[mock.typeDescription.asSource, default: []].append(mock.code)
 					}
+					// A type declared here with `generateMock: true` and also listed in
+					// `additionalMocksToGenerate` gets its mock only once, where its source file's
+					// mock goes: emitting it twice fails to compile.
+					let currentModuleMockSourceFileSet = Set(currentModuleMockSourceFiles)
+					let typeNamesEmittedBySource = Set(
+						mockResult.generatedRoots
+							.filter { $0.sourceFilePath.map(currentModuleMockSourceFileSet.contains) ?? false }
+							.map(\.typeDescription.asSource),
+					)
 
 					if let manifest {
 						let additionalMockTypeNames = Set(manifest.additionalMocksToGenerate)
 						for entry in manifest.mockGeneration {
 							let extensions: [String]? = if additionalMockTypeNames.contains(entry.inputFilePath) {
-								typeNameToMockExtensions[entry.inputFilePath]
+								typeNamesEmittedBySource.contains(entry.inputFilePath) ? nil : typeNameToMockExtensions[entry.inputFilePath]
 							} else {
 								sourceFileToMockExtensions[entry.inputFilePath]
 							}
@@ -556,12 +565,6 @@ struct Generate: AsyncParsableCommand {
 					} else {
 						// Combined mode: per-source mocks sorted, then
 						// per-type-name additional mocks sorted.
-						let currentModuleMockSourceFileSet = Set(currentModuleMockSourceFiles)
-						let typeNamesEmittedBySource = Set(
-							mockResult.generatedRoots
-								.filter { $0.sourceFilePath.map(currentModuleMockSourceFileSet.contains) ?? false }
-								.map(\.typeDescription.asSource),
-						)
 						for sourceFile in currentModuleMockSourceFiles {
 							writes.append((
 								destination: nil,
@@ -569,11 +572,7 @@ struct Generate: AsyncParsableCommand {
 								body: sourceFileToMockExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? "",
 							))
 						}
-						// Skip types already emitted via the per-source
-						// loop — a type declared locally with
-						// `generateMock: true` AND listed in
-						// `additionalMocksToGenerate` otherwise emits
-						// twice and fails to compile.
+						// Skip types already emitted via the per-source loop.
 						for typeName in Set(additionalMocksToGenerate).sorted()
 							where !typeNamesEmittedBySource.contains(typeName)
 						{

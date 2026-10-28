@@ -62,10 +62,54 @@ struct OutputFileNamingTests {
 
 	@Test
 	func mockOutputFileNames_suffixesTheLaterPath_whenADirectoryPrefixedNameMatchesAnotherFileName() {
-		#expect(mockOutputFileNames(forFilesAt: ["Feature/Service.swift", "Service.swift", "Feature_Service.swift"]) == [
+		let names = mockOutputFileNames(forFilesAt: ["Feature/Service.swift", "Service.swift", "Feature_Service.swift"], additionalMocksToGenerate: [])
+		#expect(names.mockFiles == [
 			"Feature_Service+SafeDIMock.swift",
 			"Service+SafeDIMock.swift",
 			"Feature_Service_2+SafeDIMock.swift",
 		])
+		#expect(names.additionalMocks == [])
+	}
+
+	@Test
+	func mockOutputFileNames_suffixesAnAdditionalMock_whenItsTypeNameMatchesAFileMockName() {
+		let names = mockOutputFileNames(forFilesAt: ["Service.swift"], additionalMocksToGenerate: ["Service", "Other"])
+		#expect(names.mockFiles == ["Service+SafeDIMock.swift"])
+		#expect(names.additionalMocks == ["Service_2+SafeDIMock.swift", "Other+SafeDIMock.swift"])
+	}
+
+	@Test
+	func mockOutputFileNames_skipsASuffixAnotherAdditionalMockUses_whenResolvingACollision() {
+		let names = mockOutputFileNames(forFilesAt: ["Service.swift"], additionalMocksToGenerate: ["Service", "Service_2"])
+		#expect(names.mockFiles == ["Service+SafeDIMock.swift"])
+		#expect(names.additionalMocks == ["Service_3+SafeDIMock.swift", "Service_2+SafeDIMock.swift"])
+	}
+
+	@Test
+	func mockOutputFileNames_namesEachPathAndTypeTheSame_whenInputOrderChanges() {
+		let inputFilePaths = ["Feature/Service.swift", "Service.swift", "Feature_Service.swift"]
+		let additionalMocksToGenerate = ["Service_2", "Service", "Feature_Service"]
+		let expectedNames = mockOutputFileNames(forFilesAt: inputFilePaths, additionalMocksToGenerate: additionalMocksToGenerate)
+		#expect(expectedNames.mockFiles == [
+			"Feature_Service+SafeDIMock.swift",
+			"Service+SafeDIMock.swift",
+			"Feature_Service_2+SafeDIMock.swift",
+		])
+		#expect(expectedNames.additionalMocks == [
+			"Service_2+SafeDIMock.swift",
+			"Service_3+SafeDIMock.swift",
+			"Feature_Service_3+SafeDIMock.swift",
+		])
+		let expectedFileNamesByPath = Dictionary(uniqueKeysWithValues: zip(inputFilePaths, expectedNames.mockFiles))
+		let expectedNamesByTypeName = Dictionary(uniqueKeysWithValues: zip(additionalMocksToGenerate, expectedNames.additionalMocks))
+		for (reorderedInputFilePaths, reorderedAdditionalMocksToGenerate) in [
+			(inputFilePaths.reversed(), additionalMocksToGenerate.reversed()),
+			(inputFilePaths.sorted(), additionalMocksToGenerate.sorted()),
+			(inputFilePaths.sorted().reversed(), additionalMocksToGenerate.sorted().reversed()),
+		] as [([String], [String])] {
+			let names = mockOutputFileNames(forFilesAt: reorderedInputFilePaths, additionalMocksToGenerate: reorderedAdditionalMocksToGenerate)
+			#expect(Dictionary(uniqueKeysWithValues: zip(reorderedInputFilePaths, names.mockFiles)) == expectedFileNamesByPath)
+			#expect(Dictionary(uniqueKeysWithValues: zip(reorderedAdditionalMocksToGenerate, names.additionalMocks)) == expectedNamesByTypeName)
+		}
 	}
 }
