@@ -48,6 +48,17 @@ extension Collection<Property> {
 		TypeSyntax(asTuple).typeDescription
 	}
 
+	/// The type of the `ForwardedProperties` typealias that the `@Instantiable` macro generates for a type whose
+	/// `@Forwarded` properties are these: the type of the only one, or a tuple of all of them, in order. Generated
+	/// code and diagnostics spell the forwarded properties with this, so neither can disagree with the typealias.
+	public var asForwardedPropertiesType: TypeSyntax {
+		if count == 1, let forwardedProperty = first {
+			TypeSyntax(IdentifierTypeSyntax(name: .identifier(forwardedProperty.typeDescription.asSource)))
+		} else {
+			TypeSyntax(asTuple)
+		}
+	}
+
 	var initializerFunctionParameters: [FunctionParameterSyntax] {
 		map(\.asFunctionParamterSyntax)
 			.transformUntilLast {

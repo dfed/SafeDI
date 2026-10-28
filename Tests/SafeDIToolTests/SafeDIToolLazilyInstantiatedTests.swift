@@ -2484,7 +2484,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Root.swift"]):7:5: error: Property `child: LazilyInstantiated<AnyChild>` on Root has at least one @Forwarded property. Property should instead be of type `ErasedInstantiator<Child.ForwardedProperties, AnyChild>`.
+				\(fixtures["Root.swift"]):7:5: error: Property `child: LazilyInstantiated<AnyChild>` on Root has at least one @Forwarded property. Property should instead be of type `ErasedInstantiator<String, AnyChild>`.
 				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
 				"""
 			},
@@ -2528,7 +2528,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Root.swift"]):7:5: error: Property `child: LazilyInstantiated<AnyChild>?` on Root has at least one @Forwarded property. Property should instead be of type `ErasedInstantiator<Child.ForwardedProperties, AnyChild>`.
+				\(fixtures["Root.swift"]):7:5: error: Property `child: LazilyInstantiated<AnyChild>?` on Root has at least one @Forwarded property. Property should instead be of type `ErasedInstantiator<String, AnyChild>`.
 				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
 				"""
 			},
@@ -2572,7 +2572,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Root.swift"]):7:5: error: Property `child: SendableLazilyInstantiated<AnyChild>` on Root has at least one @Forwarded property. Property should instead be of type `SendableErasedInstantiator<Child.ForwardedProperties, AnyChild>`.
+				\(fixtures["Root.swift"]):7:5: error: Property `child: SendableLazilyInstantiated<AnyChild>` on Root has at least one @Forwarded property. Property should instead be of type `SendableErasedInstantiator<String, AnyChild>`.
 				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
 				"""
 			},

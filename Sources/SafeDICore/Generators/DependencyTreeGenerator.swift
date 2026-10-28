@@ -2230,7 +2230,11 @@ public actor DependencyTreeGenerator {
 			property: dependency.property,
 			declarationLocation: dependency.declarationLocation,
 			instantiableWithForwardedProperty: instantiable,
-			suggestedPropertyType: Self.instantiatorType(building: instantiable, for: dependency),
+			suggestedPropertyType: Self.instantiatorType(
+				building: instantiable,
+				forwarding: forwardedDependencies.map(\.property),
+				for: dependency,
+			),
 			forwardedDeclarations: forwardedDependencies.map {
 				DependencyTreeGeneratorError.LocatedProperty(property: $0.property, declarationLocation: $0.declarationLocation)
 			},
@@ -2242,10 +2246,13 @@ public actor DependencyTreeGenerator {
 	/// build `instantiable` when it is asked for, which `instantiable`’s `@Forwarded` properties require:
 	/// `Instantiator<Child>` for `child: Child` or `child: LazilyInstantiated<Child>`. `fulfilledByType` cannot
 	/// be used on an `Instantiator`, so a property with that argument gets an `ErasedInstantiator` of the type the
-	/// property declares, such as `ErasedInstantiator<Child.ForwardedProperties, AnyChild>` for `child: AnyChild`.
-	/// The suggestion is `Sendable` when the property is, and the type an erased instantiator builds is not optional.
+	/// property declares, such as `ErasedInstantiator<String, AnyChild>` for `child: AnyChild` when `Child`
+	/// forwards a `String`. The forwarded properties are spelled out rather than as `Child.ForwardedProperties`,
+	/// which the module that declares the property may not be able to see. The suggestion is `Sendable` when the
+	/// property is, and the type an erased instantiator builds is not optional.
 	private static func instantiatorType(
 		building instantiable: Instantiable,
+		forwarding forwardedProperties: [Property],
 		for dependency: Dependency,
 	) -> TypeDescription {
 		let propertyType = dependency.property.propertyType
@@ -2255,7 +2262,7 @@ public actor DependencyTreeGenerator {
 			return .simple(
 				name: propertyType.isSendable ? Dependency.sendableErasedInstantiatorType : Dependency.erasedInstantiatorType,
 				generics: [
-					.nested(name: "ForwardedProperties", parentType: instantiable.concreteInstantiable),
+					forwardedProperties.asForwardedPropertiesType.typeDescription,
 					builtType,
 				],
 			)

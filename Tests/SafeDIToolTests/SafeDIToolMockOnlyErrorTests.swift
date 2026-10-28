@@ -186,7 +186,7 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Root.swift"]):6:5: error: Property `service: AnyService` on Root has at least one @Forwarded property. Property should instead be of type `ErasedInstantiator<MockService.ForwardedProperties, AnyService>`.
+				\(fixtures["Root.swift"]):6:5: error: Property `service: AnyService` on Root has at least one @Forwarded property. Property should instead be of type `ErasedInstantiator<String, AnyService>`.
 				\(fixtures["MockService.swift"]):6:5: note: @Forwarded property `name: String` is declared here
 				"""
 			},
