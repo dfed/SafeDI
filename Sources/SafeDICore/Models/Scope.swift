@@ -311,12 +311,11 @@ final class Scope: Hashable {
 				switch $0 {
 				case let .instantiated(property, scope, erasedToConcreteExistential):
 					if let error = ErasedInstantiatorForwardedPropertiesMismatchError(
-					   	property: property,
-					   	declarationLocation: instantiable.dependencies.first(where: { $0.property == property })?.declarationLocation,
-					   	parent: instantiable.concreteInstantiable,
-					   	builtInstantiable: scope.instantiable,
-					   )
-					{
+						property: property,
+						declarationLocation: instantiable.dependencies.first(where: { $0.property == property })?.declarationLocation,
+						parent: instantiable.concreteInstantiable,
+						builtInstantiable: scope.instantiable,
+					) {
 						throw error
 					}
 					return try scope.createScopeGenerator(
