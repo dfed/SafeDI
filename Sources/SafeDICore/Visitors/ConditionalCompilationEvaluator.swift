@@ -129,6 +129,7 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 		var decisions = [ConditionalCompilationDecision]()
 		var consultedConditions = Set<String>()
 		var isSettled = false
+		var isCompilerDetermined = false
 		for clause in node.clauses where !isSettled {
 			if let condition = clause.condition {
 				let mentionedConditions = mentionedCompilationConditions(in: condition)
@@ -149,6 +150,7 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 				case .compilerDetermined:
 					// The compiler may pick this clause or a later one, so scan both.
 					selectedClauses.append(clause)
+					isCompilerDetermined = true
 				}
 			} else {
 				// `#else` is active whenever no earlier clause was.
@@ -159,6 +161,7 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 			clauses: selectedClauses,
 			decisions: decisions,
 			consultedConditions: consultedConditions,
+			isCompilerDetermined: isCompilerDetermined,
 		)
 	}
 
@@ -251,9 +254,11 @@ struct ScannableClauses {
 	/// any set of supplied conditions selects the same clauses. A superset of the conditions
 	/// `decisions` mention, which omits those no compile-time assertion can check.
 	let consultedConditions: Set<String>
+	/// Whether the compiler and destination decide which of `clauses` compiles, so that SafeDI cannot know.
+	let isCompilerDetermined: Bool
 
 	/// These clauses, reporting no decision to assert.
 	var withoutDecisions: Self {
-		ScannableClauses(clauses: clauses, decisions: [], consultedConditions: consultedConditions)
+		ScannableClauses(clauses: clauses, decisions: [], consultedConditions: consultedConditions, isCompilerDetermined: isCompilerDetermined)
 	}
 }

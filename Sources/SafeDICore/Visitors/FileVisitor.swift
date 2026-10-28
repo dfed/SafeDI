@@ -39,8 +39,15 @@ public final class FileVisitor: SyntaxVisitor {
 	// MARK: SyntaxVisitor
 
 	public override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
-		recordType(named: node.name.text)
+		// A protocol is no superclass, and a conforming type's lookup finds its associated types and type aliases only
+		// when no type of the name is in scope at all.
+		recordType(named: node.name.text, kind: .protocolType, modifiers: node.modifiers)
 		return .skipChildren
+	}
+
+	public override func visit(_: MacroExpansionDeclSyntax) -> SyntaxVisitorContinueKind {
+		// A type declared in a trailing closure of a freestanding macro is local to the closure.
+		.skipChildren
 	}
 
 	public override func visit(_: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -81,24 +88,50 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
-		recordType(named: node.name.text)
+		recordType(named: node.name.text, kind: .otherType, modifiers: node.modifiers)
 		return .skipChildren
 	}
 
 	public override func visit(_ node: IfConfigDeclSyntax) -> SyntaxVisitorContinueKind {
 		// The block's declarations in every clause, including those of nested blocks, which this visitor
 		// reaches again only in the clauses it scans.
-		let (content, blockOutputFileDeclarations, declaredTypeNames) = node.safeDIContentAmongDeclarations()
+		let (content, blockOutputFileDeclarations) = node.safeDIContentAmongDeclarations()
 		outputFileDeclarations.formUnion(blockOutputFileDeclarations)
 		let scannable = conditionalCompilationEvaluator.scannableClauses(in: node, guarding: content)
 		activeIfConfigClauses.formUnion(scannable.clauses.map(\.id))
 		record(scannable.decisions)
-		if !declaredTypeNames.isEmpty, !scannable.consultedConditions.isEmpty {
-			// The selection decides which of these names `nestedTypeDeclarations` records.
-			conditionallyDeclaredTypes.append(ConditionallyDeclaredTypes(
-				names: declaredTypeNames,
-				consultedCompilationConditions: scannable.consultedConditions,
-			))
+		if scannable.isCompilerDetermined {
+			// The compiler may compile any of these clauses, so what they declare may not exist.
+			compilerDeterminedClauses.formUnion(scannable.clauses.map(\.id))
+		} else if content == .mockOnly {
+			// A clause selected only because the mock condition is assumed active may not exist where production
+			// code compiles.
+			let productionClauses = Set(conditionalCompilationEvaluator.scannableClauses(in: node, guarding: .production).clauses.map(\.id))
+			compilerDeterminedClauses.formUnion(scannable.clauses.map(\.id).filter { !productionClauses.contains($0) })
+		}
+		// The selection decides which declarations `nestedTypeDeclarations` records as existing, which may decide
+		// generated code. Each declaration records the conditions and decisions of the blocks enclosing it, and
+		// those in the clauses not selected are recorded as absent, with the same conditions and decisions.
+		let blockConditions = DeclarationConditions(
+			consultedCompilationConditions: scannable.consultedConditions,
+			// A block guarding SafeDI content already reports the decisions its selection rests on, which for mock-only
+			// content leave out the mock condition, as the code that reads them compiles only where it is active.
+			conditionalCompilationDecisions: content == .none
+				? conditionalCompilationEvaluator.scannableClauses(in: node, guarding: .production).decisions
+				: scannable.decisions,
+		)
+		let selectedClauses = Set(scannable.clauses.map(\.id))
+		for clause in node.clauses {
+			if selectedClauses.contains(clause.id) {
+				clauseConditions[clause.id] = blockConditions
+			} else if let elements = clause.elements {
+				let absentDeclarationRecorder = AbsentDeclarationRecorder(
+					parentType: parentType,
+					conditions: declarationConditions.adding(blockConditions),
+				)
+				absentDeclarationRecorder.walk(elements)
+				nestedTypeDeclarations.formUnion(absentDeclarationRecorder.declarations)
+			}
 		}
 		if importOnlyBlockDepth > 0 {
 			// The enclosing block's source, which `importSegments` holds, contains this block too.
@@ -135,7 +168,21 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: IfConfigClauseSyntax) -> SyntaxVisitorContinueKind {
-		activeIfConfigClauses.contains(node.id) ? .visitChildren : .skipChildren
+		guard activeIfConfigClauses.contains(node.id) else { return .skipChildren }
+		if compilerDeterminedClauses.contains(node.id) {
+			compilerDeterminedClauseDepth += 1
+		}
+		declarationConditionsStack.append(declarationConditions)
+		declarationConditions = declarationConditions.adding(clauseConditions[node.id] ?? DeclarationConditions())
+		return .visitChildren
+	}
+
+	public override func visitPost(_ node: IfConfigClauseSyntax) {
+		guard activeIfConfigClauses.contains(node.id) else { return }
+		if compilerDeterminedClauses.contains(node.id) {
+			compilerDeterminedClauseDepth -= 1
+		}
+		declarationConditions = declarationConditionsStack.removeLast()
 	}
 
 	public override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -175,8 +222,13 @@ public final class FileVisitor: SyntaxVisitor {
 	public override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
 		// Enums can't be instantiable because they can't have `let` properties.
 		// However, they can have nested types within them that are instantiable.
-		recordType(named: node.name.text, genericParameterClause: node.genericParameterClause)
-		enterTypeNamed(node.name.text)
+		let access = recordType(
+			named: node.name.text,
+			kind: .otherType,
+			modifiers: node.modifiers,
+			genericParameterClause: node.genericParameterClause,
+		)
+		enterTypeNamed(node.name.text, access: access)
 		return .visitChildren
 	}
 
@@ -207,6 +259,11 @@ public final class FileVisitor: SyntaxVisitor {
 
 		// Extensions are always top-level.
 		parentType = node.extendedType.typeDescription
+		// A member's access defaults to the extension's, and the extended type's own access, declared elsewhere,
+		// does not limit it here.
+		let extensionAccess = node.modifiers.access
+		accessStack = [extensionAccess ?? .exported]
+		defaultMemberAccess = extensionAccess ?? .module
 
 		// Continue to find child types.
 		return .visitChildren
@@ -216,6 +273,8 @@ public final class FileVisitor: SyntaxVisitor {
 		// Extensions are always top-level.
 		parentType = nil
 		unsearchedEnclosingTypeCount = 0
+		accessStack = []
+		defaultMemberAccess = .module
 	}
 
 	// SwiftSyntax 602 and prior could not recover from certain parse errors, causing the remainder
@@ -257,11 +316,6 @@ public final class FileVisitor: SyntaxVisitor {
 	/// The types declared inside other types or extensions, in the clauses the evaluator selects. Types declared in
 	/// function, initializer, accessor, or subscript bodies are local, not nested, and are not recorded.
 	public private(set) var nestedTypeDeclarations = NestedTypeDeclarations()
-	/// The types and generic parameters that `#if` blocks declare in any clause, with the conditions that decided
-	/// which of them `nestedTypeDeclarations` records. Once the lookups SafeDI makes are known, the conditions of
-	/// a block that declares a name a lookup asks for are consulted conditions, and those of other blocks decide
-	/// nothing SafeDI keeps.
-	public private(set) var conditionallyDeclaredTypes = [ConditionallyDeclaredTypes]()
 
 	/// A run of a file's imports.
 	public enum ImportSegment: Codable, Hashable, Sendable {
@@ -274,6 +328,19 @@ public final class FileVisitor: SyntaxVisitor {
 	// MARK: Private
 
 	private var parentType: TypeDescription?
+	/// The effective access of each type enclosing the walk, innermost last.
+	private var accessStack = [NestedTypeDeclaration.Access]()
+	/// The access a declaration without an access modifier has where the walk is.
+	private var defaultMemberAccess = NestedTypeDeclaration.Access.module
+	/// The selected `#if` clauses that only the compiler and destination decide between.
+	private var compilerDeterminedClauses = Set<SyntaxIdentifier>()
+	/// How many of those clauses enclose the walk.
+	private var compilerDeterminedClauseDepth = 0
+	/// The conditions and decisions of each selected clause's block.
+	private var clauseConditions = [SyntaxIdentifier: DeclarationConditions]()
+	/// The conditions and decisions of the blocks enclosing the walk.
+	private var declarationConditions = DeclarationConditions()
+	private var declarationConditionsStack = [DeclarationConditions]()
 	/// How many of `parentType`'s outermost types unqualified lookup does not search, which is nonzero inside an
 	/// extension of a nested type.
 	private var unsearchedEnclosingTypeCount = 0
@@ -300,34 +367,87 @@ public final class FileVisitor: SyntaxVisitor {
 		consultedCompilationConditions.formUnion(instantiableVisitor.consultedCompilationConditions)
 		outputFileDeclarations.recordInstantiable(isRoot: instantiableVisitor.isRoot, generatesMock: instantiableVisitor.generateMock)
 
-		recordType(named: node.name.text, genericParameterClause: node.genericParameterClause)
+		let access = recordType(
+			named: node.name.text,
+			kind: node.declType == .classType ? .classType : .otherType,
+			modifiers: node.modifiers,
+			// Only a class has a superclass, which its inheritance clause names first.
+			superclassCandidate: node.declType == .classType ? node.inheritanceClause.map { $0.superclassCandidate } : nil,
+			genericParameterClause: node.genericParameterClause,
+		)
 		// Keep track of how nested we are.
-		enterTypeNamed(node.name.text)
+		enterTypeNamed(node.name.text, access: access)
 
 		// Continue to find child types.
 		return .visitChildren
 	}
 
-	/// Records a type declaration, which is nested when it is inside a type or an extension.
-	private func recordType(named name: String, genericParameterClause: GenericParameterClauseSyntax? = nil) {
-		nestedTypeDeclarations.recordType(
-			named: name,
-			genericParameterNames: genericParameterClause?.parameters.map(\.name.text) ?? [],
-			within: parentType,
-		)
+	/// The path of a type named `name` declared where the walk is, or `nil` inside an extension of a type that is
+	/// not spelled as a path of names, such as `[Int]`.
+	private func path(ofTypeNamed name: String) -> String? {
+		if let parentType {
+			parentType.namePath.map { ($0 + [name.withoutBackticks]).joined(separator: ".") }
+		} else {
+			name.withoutBackticks
+		}
 	}
 
-	private func enterTypeNamed(_ name: String) {
+	/// Records a type declaration and its generic parameters.
+	/// - Returns: The declaration's effective access.
+	@discardableResult
+	private func recordType(
+		named name: String,
+		kind: NestedTypeDeclaration.Kind,
+		modifiers: DeclModifierListSyntax,
+		superclassCandidate: String? = nil,
+		genericParameterClause: GenericParameterClauseSyntax? = nil,
+	) -> NestedTypeDeclaration.Access {
+		let access = min(modifiers.access ?? defaultMemberAccess, accessStack.last ?? .exported)
+		guard let path = path(ofTypeNamed: name) else { return access }
+		let scopePath = parentType?.namePath?.joined(separator: ".")
+		nestedTypeDeclarations.record(NestedTypeDeclaration(
+			path: path,
+			kind: kind,
+			access: access,
+			superclassCandidate: superclassCandidate,
+			scopePath: scopePath,
+			isCompilerDetermined: compilerDeterminedClauseDepth > 0,
+			consultedCompilationConditions: declarationConditions.sortedConsultedCompilationConditions,
+			conditionalCompilationDecisions: declarationConditions.conditionalCompilationDecisions,
+		))
+		for genericParameter in genericParameterClause?.parameters ?? [] {
+			nestedTypeDeclarations.record(NestedTypeDeclaration(
+				path: path + "." + genericParameter.name.text.withoutBackticks,
+				kind: .genericParameter,
+				access: access,
+				isCompilerDetermined: compilerDeterminedClauseDepth > 0,
+				consultedCompilationConditions: declarationConditions.sortedConsultedCompilationConditions,
+				conditionalCompilationDecisions: declarationConditions.conditionalCompilationDecisions,
+			))
+		}
+		return access
+	}
+
+	private func enterTypeNamed(_ name: String, access: NestedTypeDeclaration.Access) {
 		if let parentType {
 			self.parentType = .nested(name: name, parentType: parentType)
 		} else {
 			parentType = .simple(name: name)
 		}
+		accessStack.append(access)
+		// A member of a type is `internal` unless it says otherwise, whatever an enclosing extension says.
+		defaultMemberAccessStack.append(defaultMemberAccess)
+		defaultMemberAccess = .module
 	}
 
 	private func exitType() {
 		parentType = parentType?.popNested
+		accessStack.removeLast()
+		defaultMemberAccess = defaultMemberAccessStack.removeLast()
 	}
+
+	/// The default member access outside each type the walk is in, innermost last.
+	private var defaultMemberAccessStack = [NestedTypeDeclaration.Access]()
 
 	/// Records each decision once, even when both this visitor and an `InstantiableVisitor` walk the block.
 	private func record(_ decisions: [ConditionalCompilationDecision]) {
@@ -341,5 +461,171 @@ extension IfConfigDeclSyntax {
 	/// Whether any clause holds an import, which `FileVisitor` reports even when nothing SafeDI scans for is inside.
 	fileprivate var containsImport: Bool {
 		tokens(viewMode: .sourceAccurate).contains { $0.tokenKind == .keyword(.import) }
+	}
+}
+
+extension InheritanceClauseSyntax {
+	/// The first type this clause names, spelled as a path without backticks, or an empty string for one SafeDI cannot
+	/// follow, such as a generic class with arguments.
+	fileprivate var superclassCandidate: String {
+		guard let firstType = inheritedTypes.first?.type else { return "" }
+		// `@unchecked Sendable` and the like name protocols, whatever their attributes.
+		let type = firstType.as(AttributedTypeSyntax.self)?.baseType ?? firstType
+		guard type.is(IdentifierTypeSyntax.self) || type.is(MemberTypeSyntax.self),
+		      let namePath = type.typeDescription.namePath,
+		      // A generic class's arguments, on any name in the path.
+		      !type.tokens(viewMode: .sourceAccurate).contains(where: { $0.tokenKind == .leftAngle })
+		else { return "" }
+		return namePath.joined(separator: ".")
+	}
+}
+
+extension DeclModifierListSyntax {
+	/// The access level these modifiers give a declaration, or `nil` when they name none.
+	fileprivate var access: NestedTypeDeclaration.Access? {
+		lazy.compactMap { modifier -> NestedTypeDeclaration.Access? in
+			// `private(set)` and the like only restrict setters, which types do not have.
+			guard modifier.detail == nil else { return nil }
+			switch modifier.name.tokenKind {
+			case .keyword(.private), .keyword(.fileprivate):
+				return .file
+			case .keyword(.internal):
+				return .module
+			case .keyword(.package):
+				return .package
+			case .keyword(.public), .keyword(.open):
+				return .exported
+			default:
+				return nil
+			}
+		}.first
+	}
+}
+
+/// The conditions and decisions of the `#if` blocks enclosing a declaration, which decided whether it exists.
+private struct DeclarationConditions {
+	var consultedCompilationConditions = Set<String>()
+	var conditionalCompilationDecisions = [ConditionalCompilationDecision]()
+
+	var sortedConsultedCompilationConditions: [String] {
+		consultedCompilationConditions.sorted()
+	}
+
+	func adding(_ other: DeclarationConditions) -> DeclarationConditions {
+		DeclarationConditions(
+			consultedCompilationConditions: consultedCompilationConditions.union(other.consultedCompilationConditions),
+			conditionalCompilationDecisions: conditionalCompilationDecisions + other.conditionalCompilationDecisions.filter { !conditionalCompilationDecisions.contains($0) },
+		)
+	}
+}
+
+/// Records the types an `#if` clause the conditions did not select declares, as absent declarations.
+private final class AbsentDeclarationRecorder: SyntaxVisitor {
+	init(parentType: TypeDescription?, conditions: DeclarationConditions) {
+		self.parentType = parentType
+		self.conditions = conditions
+		super.init(viewMode: .sourceAccurate)
+	}
+
+	private(set) var declarations = NestedTypeDeclarations()
+
+	override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
+		enterType(named: node.name.text, kind: .classType, genericParameterClause: node.genericParameterClause)
+	}
+
+	override func visitPost(_: ClassDeclSyntax) {
+		parentType = parentType?.popNested
+	}
+
+	override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
+		enterType(named: node.name.text, kind: .otherType, genericParameterClause: node.genericParameterClause)
+	}
+
+	override func visitPost(_: StructDeclSyntax) {
+		parentType = parentType?.popNested
+	}
+
+	override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+		enterType(named: node.name.text, kind: .otherType, genericParameterClause: node.genericParameterClause)
+	}
+
+	override func visitPost(_: EnumDeclSyntax) {
+		parentType = parentType?.popNested
+	}
+
+	override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
+		enterType(named: node.name.text, kind: .otherType, genericParameterClause: node.genericParameterClause)
+	}
+
+	override func visitPost(_: ActorDeclSyntax) {
+		parentType = parentType?.popNested
+	}
+
+	override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
+		if let path = path(ofTypeNamed: node.name.text) {
+			record(path: path, kind: .protocolType)
+		}
+		return .skipChildren
+	}
+
+	override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
+		if let path = path(ofTypeNamed: node.name.text) {
+			record(path: path, kind: .otherType)
+		}
+		return .skipChildren
+	}
+
+	override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
+		parentType = node.extendedType.typeDescription
+		return .visitChildren
+	}
+
+	override func visitPost(_: ExtensionDeclSyntax) {
+		parentType = nil
+	}
+
+	override func visit(_: FunctionDeclSyntax) -> SyntaxVisitorContinueKind {
+		.skipChildren
+	}
+
+	override func visit(_: InitializerDeclSyntax) -> SyntaxVisitorContinueKind {
+		.skipChildren
+	}
+
+	override func visit(_: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
+		.skipChildren
+	}
+
+	private var parentType: TypeDescription?
+	private let conditions: DeclarationConditions
+
+	private func path(ofTypeNamed name: String) -> String? {
+		if let parentType {
+			parentType.namePath.map { ($0 + [name.withoutBackticks]).joined(separator: ".") }
+		} else {
+			name.withoutBackticks
+		}
+	}
+
+	private func enterType(named name: String, kind: NestedTypeDeclaration.Kind, genericParameterClause: GenericParameterClauseSyntax?) -> SyntaxVisitorContinueKind {
+		if let path = path(ofTypeNamed: name) {
+			record(path: path, kind: kind)
+			for genericParameter in genericParameterClause?.parameters ?? [] {
+				record(path: path + "." + genericParameter.name.text.withoutBackticks, kind: .genericParameter)
+			}
+		}
+		parentType = parentType.map { .nested(name: name, parentType: $0) } ?? .simple(name: name)
+		return .visitChildren
+	}
+
+	private func record(path: String, kind: NestedTypeDeclaration.Kind) {
+		declarations.record(NestedTypeDeclaration(
+			path: path,
+			kind: kind,
+			access: .module,
+			isAbsent: true,
+			consultedCompilationConditions: conditions.sortedConsultedCompilationConditions,
+			conditionalCompilationDecisions: conditions.conditionalCompilationDecisions,
+		))
 	}
 }
