@@ -543,7 +543,7 @@ struct SafeDIToolConfigurationEntryTests: ~Copyable {
 			// Please refrain from editing this file directly.
 
 			#if INACTIVE_CONDITION
-			#error("SafeDI scanned this module assuming `#if INACTIVE_CONDITION` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+			#error("SafeDI scanned this module assuming `#if INACTIVE_CONDITION` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 			#endif
 
 
