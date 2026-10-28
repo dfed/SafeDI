@@ -966,7 +966,7 @@ public struct SettingsView: View, Instantiable {
 SettingsView.mock(userService: AnyUserService(StubUserService()))
 ```
 
-The same matching applies to a received erased instantiator: a received `childViewBuilder: ErasedInstantiator<(), AnyView>` is built from a property of that type, such as `ParentView`’s in [ErasedInstantiator](#erasedinstantiator). It is a required flat `mock()` parameter instead when that property’s first generic is not the `@Forwarded` properties of the type it builds, since such an instantiator cannot be built. SafeDI reports that property as an error wherever a dependency tree or a generated mock builds it.
+The same matching applies to a received erased instantiator: a mock builds a received `childViewBuilder: ErasedInstantiator<(), AnyView>` from a property of that type, such as `ParentView`’s in [ErasedInstantiator](#erasedinstantiator). It is a required flat `mock()` parameter instead when that property’s first generic is not the `@Forwarded` properties of the type it builds, since such an instantiator cannot be built. SafeDI reports that property as an error wherever a dependency tree or a generated mock builds it.
 
 ### Mock visibility
 
