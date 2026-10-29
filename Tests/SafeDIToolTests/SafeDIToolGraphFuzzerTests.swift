@@ -330,6 +330,69 @@ struct SafeDIToolGraphFuzzerTests {
 		])
 	}
 
+	// MARK: Sibling alias chains
+
+	@Test
+	func fixture_declaresChainOfAliasesThroughOnlyIfAvailableAliasOfSiblingsOptionalFormBeneathOtherSibling_forSeed731() {
+		// `Root0` instantiates `t1: T1` and `lazyT0`, which builds `T0`; `T0` renames `t1` by its optional form only if
+		// available, renames that alias only if available, and renames the second alias as required, so `t1` must be
+		// built before `lazyT0`. Nothing receives `lazyT0`, so the tool accepts the graph and the smoke batch compiles it.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 731)
+		let propertiesByTypeName = fixture.swiftFileContent.reduce(into: [String: [(attribute: String, label: String, type: String)]]()) { properties, content in
+			var typeName = ""
+			for line in GraphFuzzerSourceLine.lines(of: content) {
+				switch line {
+				case let .typeDeclaration(name):
+					typeName = name
+				case let .property(attribute, label, type):
+					properties[typeName, default: []].append((attribute, label, type))
+				case .instantiableAttribute, .instantiateMethod, .other:
+					break
+				}
+			}
+		}
+
+		#expect(propertiesByTypeName["S731_Root0"]?.map(\.label) == ["t1", "lazyT0", "t2Builder", "ext"])
+		#expect(propertiesByTypeName["S731_Root0"]?.first { $0.label == "t1" }?.type == "S731_T1")
+		#expect(propertiesByTypeName["S731_T0"]?.suffix(3).map { "\($0.attribute) let \($0.label): \($0.type)" } == [
+			"@Received(fulfilledByDependencyNamed: \"t1\", ofType: S731_T1?.self, onlyIfAvailable: true) let t1Alias: S731_T1?",
+			"@Received(fulfilledByDependencyNamed: \"t1Alias\", ofType: S731_T1?.self, onlyIfAvailable: true) let t1AliasAlias: S731_T1?",
+			"@Received(fulfilledByDependencyNamed: \"t1AliasAlias\", ofType: S731_T1?.self) let t1AliasAliasAlias: S731_T1?",
+		])
+		#expect(propertiesByTypeName["S731_T1"] == nil)
+		#expect(GraphFuzzerFeature.features(of: fixture).isSuperset(of: [.aliasOfOptionalFormOfProperty, .aliasOfOnlyIfAvailableAlias, .onlyIfAvailableAlias, .requiredAlias]))
+	}
+
+	@Test
+	func fixture_makesSiblingsTypeReceiveTheOtherSibling_forSeed2037() {
+		// Each root instantiates `t1: T1` and `t3: T3`; `T1` renames `t3` by its optional form only if available and `T0`,
+		// which it instantiates, requires the alias, so `t3` must be built before `t1`; and `T3` receives `t1`, so it
+		// cannot be. The tool rejects the graph as a dependency cycle at `T0`'s receive; `T1` is also mocked.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 2_037)
+		let lines = fixture.swiftFileContent.flatMap(GraphFuzzerSourceLine.lines(of:))
+		func properties(of typeName: String) -> [String] {
+			var currentTypeName = ""
+			return lines.compactMap { line in
+				switch line {
+				case let .typeDeclaration(name):
+					currentTypeName = name
+					return nil
+				case let .property(attribute, label, type):
+					return currentTypeName == typeName ? "\(attribute) let \(label): \(type)" : nil
+				case .instantiableAttribute, .instantiateMethod, .other:
+					return nil
+				}
+			}
+		}
+
+		#expect(properties(of: "S2037_Root0").contains("@Instantiated let t3: S2037_T3"))
+		#expect(properties(of: "S2037_Root0").contains("@Instantiated let t1: S2037_T1"))
+		#expect(properties(of: "S2037_T1").contains("@Received(fulfilledByDependencyNamed: \"t3\", ofType: S2037_T3?.self, onlyIfAvailable: true) let t3Alias: S2037_T3?"))
+		#expect(properties(of: "S2037_T1").contains("@Instantiated let t0Builder: Instantiator<S2037_T0>"))
+		#expect(properties(of: "S2037_T0").contains("@Received let t3Alias: S2037_T3?"))
+		#expect(properties(of: "S2037_T3").contains("@Received let t1: S2037_T1"))
+	}
+
 	@Test
 	func renaming_restoresTypeNamesItMovesAcrossWrapperNames_whenItAlsoReversesEveryOrder() throws {
 		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
@@ -598,25 +661,27 @@ struct SafeDIToolGraphFuzzerTests {
 
 	// MARK: Seeds
 
-	/// The ordinary suite's batch: seeds 25, 62, 582, 691, 705, and 930, whose graphs the tool accepts, with the same
-	/// results under every `GraphFuzzerRenaming`, and which between them exercise every feature (seed 25's graph has
-	/// a chain of aliases through an `onlyIfAvailable` alias), and seed 14, whose graph it rejects. It is small because
-	/// compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on every pull request.
+	/// The ordinary suite's batch: seeds 25, 62, 582, 691, 705, 731, and 930, whose graphs the tool accepts, with the
+	/// same results under every `GraphFuzzerRenaming`, and which between them exercise every feature (seed 25's graph
+	/// has a chain of aliases through an `onlyIfAvailable` alias; seed 731's has a chain through an `onlyIfAvailable`
+	/// alias of a sibling's optional form), and seeds 14 and 2037, whose graphs it rejects (seed 2037's with the
+	/// dependency cycle through such an alias, because the sibling's type receives the other sibling). It is small
+	/// because compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on every pull request.
 	/// Compiling the batch is one `swiftc` invocation when nothing fails.
-	static let smokeSeeds: [UInt64] = [14, 25, 62, 582, 691, 705, 930]
+	static let smokeSeeds: [UInt64] = [14, 25, 62, 582, 691, 705, 731, 930, 2_037]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xFFCABC4A20115CE8
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x2C35C2D900935F43
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0x0948CE4CC17AC78E
+	static let corpusFixtureHash: UInt64 = 0xDF28FD2CD7BAC8B5
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
-	static let corpusAcceptedSeedCount = 2_414
-	static let corpusAcceptedSeedsSum: UInt64 = 0xB138A3396F7C2BC3
+	static let corpusAcceptedSeedCount = 2_356
+	static let corpusAcceptedSeedsSum: UInt64 = 0xB56801F0F68744E5
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
@@ -629,21 +694,21 @@ struct SafeDIToolGraphFuzzerTests {
 				309, 311, 364, 371, 381, 383, 390, 431, 434, 448, 450, 473, 515, 545, 567, 593,
 				595, 617, 630, 632, 680, 688, 714, 728, 732, 751, 768, 774, 785, 786, 808, 833,
 				836, 847, 903, 912, 940, 948, 956, 975, 987, 1_004, 1_029, 1_035, 1_042, 1_044, 1_061, 1_064,
-				1_072, 1_075, 1_084, 1_092, 1_139, 1_145, 1_147, 1_185, 1_215, 1_236, 1_280, 1_289, 1_300, 1_329, 1_352, 1_362,
+				1_072, 1_075, 1_084, 1_092, 1_139, 1_145, 1_147, 1_185, 1_215, 1_236, 1_289, 1_300, 1_329, 1_352, 1_362,
 				1_372, 1_432, 1_433, 1_441, 1_453, 1_464, 1_492, 1_496, 1_502, 1_504, 1_524, 1_525, 1_531, 1_567, 1_602, 1_633,
-				1_646, 1_664, 1_675, 1_695, 1_742, 1_752, 1_781, 1_784, 1_795, 1_804, 1_853, 1_857, 1_867, 1_896, 1_898, 1_919,
-				1_920, 1_938, 1_970, 1_972, 2_005, 2_017, 2_051, 2_083, 2_084, 2_117, 2_123, 2_149, 2_152, 2_165, 2_201, 2_211,
-				2_234, 2_245, 2_249, 2_270, 2_277, 2_287, 2_296, 2_316, 2_325, 2_335, 2_337, 2_348, 2_389, 2_403, 2_430, 2_432,
+				1_646, 1_664, 1_675, 1_695, 1_742, 1_752, 1_781, 1_784, 1_804, 1_853, 1_857, 1_867, 1_896, 1_898, 1_919,
+				1_938, 1_970, 1_972, 2_005, 2_017, 2_051, 2_083, 2_084, 2_117, 2_123, 2_149, 2_152, 2_165, 2_201, 2_211,
+				2_234, 2_249, 2_270, 2_277, 2_287, 2_296, 2_316, 2_325, 2_335, 2_337, 2_348, 2_389, 2_403, 2_430, 2_432,
 				2_437, 2_444, 2_456, 2_485, 2_515, 2_518, 2_553, 2_555, 2_577, 2_630, 2_637, 2_667, 2_704, 2_731, 2_741,
-				2_752, 2_791, 2_808, 2_835, 2_841, 2_845, 2_874, 2_902, 2_914, 2_916, 2_940, 2_968, 3_004, 3_023, 3_064,
+				2_752, 2_791, 2_808, 2_835, 2_841, 2_845, 2_874, 2_902, 2_914, 2_916, 3_004, 3_023, 3_064,
 				3_074, 3_075, 3_091, 3_132, 3_134, 3_149, 3_180, 3_183, 3_214, 3_215, 3_221, 3_225, 3_241, 3_252, 3_298, 3_306,
-				3_329, 3_344, 3_361, 3_397, 3_430, 3_439, 3_460, 3_491, 3_504, 3_506, 3_513, 3_526, 3_533, 3_534, 3_537, 3_577,
+				3_329, 3_344, 3_361, 3_397, 3_430, 3_439, 3_491, 3_504, 3_506, 3_513, 3_526, 3_533, 3_534, 3_537, 3_577,
 				3_582, 3_588, 3_596, 3_602, 3_604, 3_620, 3_645, 3_648, 3_661, 3_699, 3_707, 3_715, 3_723, 3_741, 3_750, 3_775,
 				3_776, 3_805, 3_823, 3_843, 3_894, 3_915, 3_942, 4_044, 4_068, 4_102, 4_107, 4_110, 4_117, 4_122, 4_125, 4_156,
 				4_177, 4_191, 4_192, 4_196, 4_206, 4_213, 4_215, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_360, 4_371,
 				4_378, 4_393, 4_404, 4_420, 4_428, 4_496, 4_504, 4_515, 4_534, 4_541, 4_545, 4_567, 4_613, 4_619, 4_634, 4_637, 4_640,
 				4_642, 4_648, 4_664, 4_666, 4_707, 4_716, 4_717, 4_729, 4_775, 4_776, 4_781, 4_783, 4_786, 4_795, 4_834, 4_859,
-				4_861, 4_865, 4_889, 4_904, 4_918, 4_922, 4_944, 4_947, 4_955, 4_963, 4_996,
+				4_904, 4_918, 4_922, 4_944, 4_947, 4_955, 4_963, 4_996,
 			],
 		),
 		GraphFuzzerKnownIssue(
@@ -655,9 +720,17 @@ struct SafeDIToolGraphFuzzerTests {
 		),
 		GraphFuzzerKnownIssue(
 			reason: "A type's construction passes an `onlyIfAvailable` alias of its own `onlyIfAvailable` alias by name where neither is created and nothing requires the chain",
-			signatures: [.compilerError(containing: "cannot find 't0AliasAliasAlias' in scope")],
+			// The alias of an alias is labeled `<label>AliasAlias`, or `<label>AliasAliasAlias` one chain further.
+			signatures: [.compilerError(containing: "AliasAlias' in scope")],
 			seeds: [
-				4_547,
+				1_795, 3_365, 4_096, 4_547,
+			],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "A required alias of an `onlyIfAvailable` alias of an `onlyIfAvailable` alias of the property being built is accepted, and names the uncreated alias",
+			signatures: [.compilerError(containing: "AliasAlias' in scope")],
+			seeds: [
+				3_470,
 			],
 		),
 	]

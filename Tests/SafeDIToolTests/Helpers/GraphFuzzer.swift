@@ -374,6 +374,7 @@ enum GraphFuzzerGenerator {
 			generatedNameRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.generatedNameRandomSeedMask)
 			unbuildableDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencyRandomSeedMask)
 			aliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.aliasChainRandomSeedMask)
+			siblingAliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.siblingAliasChainRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
 			let sendabilityRoll = random.integer(in: 0...99)
@@ -434,7 +435,7 @@ enum GraphFuzzerGenerator {
 			appendMotif(to: &declarations)
 			// Decided last, so that the rest of a seed's graph does not depend on whether it has the extension.
 			let extensionSource = random.percentChance(25) ? extensionDeclarationSource(addingPropertyToOneOf: &declarations) : nil
-			return addingAliasChains(to: addingDependenciesMocksCannotBuild(to: addingPropertiesLabeledAsGeneratedNames(to: declarations))).map(source(of:))
+			return addingSiblingAliasChains(to: addingAliasChains(to: addingDependenciesMocksCannotBuild(to: addingPropertiesLabeledAsGeneratedNames(to: declarations)))).map(source(of:))
 				+ [extensionSource].compactMap(\.self)
 		}
 
@@ -498,6 +499,8 @@ enum GraphFuzzerGenerator {
 		private var unbuildableDependencyRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingAliasChains`, as `generatedNameRandom` does for its pass.
 		private var aliasChainRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only the choices of `addingSiblingAliasChains`, as `generatedNameRandom` does for its pass.
+		private var siblingAliasChainRandom: GraphFuzzerRandomNumberGenerator
 		/// How many types that are not `@Instantiable` `addingDependenciesMocksCannotBuild` instantiates.
 		private var unbuildableTypeCount = 0
 		private let prefix: String
@@ -1077,6 +1080,174 @@ enum GraphFuzzerGenerator {
 
 		private static let aliasChainRandomSeedMask: UInt64 = 0x616C696173436861
 
+		/// Now and then adds a chain of aliases through an `onlyIfAvailable` alias of one sibling property beneath the
+		/// other, and usually makes the first sibling's type receive the other. A scope – a root, or a type on every
+		/// path to the chain – instantiates `x: X`, a constant of a type of the graph, and another type `B` without an
+		/// instantiator. `B`, or a type a few such steps beneath it that each step dominates, declares an
+		/// `onlyIfAvailable` alias of `x`, mostly spelled with its optional form (`ofType: X?.self`) and otherwise with
+		/// `X.self`; now and then one or two aliases of that alias follow, each required or `onlyIfAvailable`, on the
+		/// same type or on a child it dominates; usually a child the last alias's type dominates receives the alias,
+		/// mostly required, or, where there is none, a required alias of it on the same type; and usually `X` receives
+		/// `b`. Each step takes only a child the previous type dominates, so that no receiver is rejected merely because
+		/// another path reaches it without the alias. A receiver that requires the chain needs every alias created, so
+		/// `x` built before `b`, while `X` receiving `b` needs `b` built first: SafeDI must reject the graph through the
+		/// chain. Without the receive of `b`, the chain must be built after `x`, which the compiled output shows.
+		/// `addingAliasChains` never draws a source built around its host, so no other pass draws the cycle, and
+		/// `siblingAliasChainRandom` draws only for this one, so every other graph is drawn as before.
+		private mutating func addingSiblingAliasChains(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard siblingAliasChainRandom.percentChance(30) else { return declarations }
+			var declarations = declarations
+			let graphTypeIndexByName = Dictionary(uniqueKeysWithValues: (0..<typeCount).map { (typeName($0), $0) })
+			let declarationIndexByName = Dictionary(uniqueKeysWithValues: declarations.enumerated().map { ($1.name, $0) })
+			let rootDeclarations = declarations.filter { $0.instantiableArguments.contains("isRoot: true") }
+			/// The index in `declarations` of the type of the graph `property` instantiates, or `nil` when it instantiates
+			/// another type or `onlyWithoutInstantiator` and it instantiates through an instantiator.
+			func instantiatedDeclarationIndex(of property: PropertyDeclaration, onlyWithoutInstantiator: Bool) -> Int? {
+				guard property.attribute.hasPrefix("@Instantiated"),
+				      !(onlyWithoutInstantiator && property.type.contains("Instantiator<")),
+				      let index = graphTypeIndexByName[Self.builtTypeName(of: property)]
+				else { return nil }
+				return declarationIndexByName[typeName(index)]
+			}
+			/// Whether the declaration at `start` instantiates, through any chain of properties, the one at `destination`.
+			func instantiates(_ destination: Int, from start: Int) -> Bool {
+				var visited = Set<Int>()
+				var stack = declarations[start].properties.compactMap { instantiatedDeclarationIndex(of: $0, onlyWithoutInstantiator: false) }
+				while let current = stack.popLast() {
+					guard current != destination else { return true }
+					guard visited.insert(current).inserted else { continue }
+					stack += declarations[current].properties.compactMap { instantiatedDeclarationIndex(of: $0, onlyWithoutInstantiator: false) }
+				}
+				return false
+			}
+			func declaresProperty(labeled label: String, at index: Int) -> Bool {
+				declarations[index].properties.contains { $0.label == label }
+			}
+			/// Whether the declaration at `providerIndex` is on every path from a root to the type at `index`, so that
+			/// what it provides is available wherever the type is built: it is a root, whose properties every root
+			/// declares here, or it dominates the type.
+			func isOnEveryPath(from providerIndex: Int, to index: Int) -> Bool {
+				guard let providerTypeIndex = graphTypeIndexByName[declarations[providerIndex].name] else {
+					return declarations[providerIndex].instantiableArguments.contains("isRoot: true")
+				}
+				return graphTypeIndexByName[declarations[index].name].map { dominators[$0].contains(providerTypeIndex) } ?? false
+			}
+			/// The types of the graph the declaration at `index` instantiates, other than itself, that it is on every
+			/// path to, so that a receiver among them is handed what the declaration provides wherever it is built.
+			func dominatedChildren(of index: Int, onlyWithoutInstantiator: Bool) -> [Int] {
+				declarations[index].properties
+					.compactMap { instantiatedDeclarationIndex(of: $0, onlyWithoutInstantiator: onlyWithoutInstantiator) }
+					.filter { $0 != index && isOnEveryPath(from: index, to: $0) }
+			}
+			// The siblings: `x`, a constant whose label names its type, or its optional form, throughout the graph, as
+			// `aliasProperty` requires of a label it aliases, so that the compiler agrees with `ofType:`; and `b`, built
+			// without an instantiator, on every path to which the scope lies, and whose tree does not instantiate `X`.
+			// A root's are the ones every root declares.
+			struct Siblings {
+				let scopeIndex: Int
+				let x: PropertyDeclaration
+				let b: PropertyDeclaration
+			}
+			var candidates = [Siblings]()
+			for (scopeIndex, scope) in declarations.enumerated() where scope.instantiableArguments.contains("isRoot: true") || graphTypeIndexByName[scope.name] != nil {
+				func isDeclaredByEveryRoot(_ property: PropertyDeclaration) -> Bool {
+					rootDeclarations.allSatisfy { root in root.properties.contains { $0.label == property.label && $0.type == property.type } }
+				}
+				let isRoot = scope.instantiableArguments.contains("isRoot: true")
+				for x in scope.properties where x.attribute == "@Instantiated" && graphTypeIndexByName[x.type] != nil && (!isRoot || isDeclaredByEveryRoot(x)) {
+					guard declarations.allSatisfy({ $0.properties.allSatisfy { $0.label != x.label || $0.type == x.type || $0.type == x.type + "?" } }),
+					      let xDeclarationIndex = declarationIndexByName[x.type]
+					else { continue }
+					for b in scope.properties where b.label != x.label && (!isRoot || isDeclaredByEveryRoot(b)) {
+						guard let bDeclarationIndex = instantiatedDeclarationIndex(of: b, onlyWithoutInstantiator: true),
+						      bDeclarationIndex != xDeclarationIndex,
+						      isOnEveryPath(from: scopeIndex, to: bDeclarationIndex),
+						      !instantiates(xDeclarationIndex, from: bDeclarationIndex)
+						else { continue }
+						candidates.append(Siblings(scopeIndex: scopeIndex, x: x, b: b))
+					}
+				}
+			}
+			guard !candidates.isEmpty else { return declarations }
+			let siblings = siblingAliasChainRandom.element(of: candidates)
+			// The host of the first alias: `B`, or a type a few steps beneath it that each step is on every path to,
+			// none of which declares `x`, so that the alias is fulfilled by the scope's `x` wherever the host is built.
+			var hostIndex = declarationIndexByName[Self.builtTypeName(of: siblings.b)]!
+			var hostPath = [hostIndex]
+			for _ in 0..<siblingAliasChainRandom.integer(in: 0...2) {
+				let children = dominatedChildren(of: hostIndex, onlyWithoutInstantiator: true)
+				guard !children.isEmpty else { break }
+				hostIndex = siblingAliasChainRandom.element(of: children)
+				hostPath.append(hostIndex)
+			}
+			let firstAliasLabel = siblings.x.label + "Alias"
+			guard !hostPath.contains(where: { declaresProperty(labeled: siblings.x.label, at: $0) }),
+			      !declaresProperty(labeled: firstAliasLabel, at: hostIndex)
+			else { return declarations }
+			let spellsOptionalForm = siblingAliasChainRandom.percentChance(60)
+			var alias = PropertyDeclaration(
+				attribute: "@Received(fulfilledByDependencyNamed: \"\(siblings.x.label)\", ofType: \(siblings.x.type)\(spellsOptionalForm ? "?" : "").self, onlyIfAvailable: true)",
+				label: firstAliasLabel,
+				type: siblings.x.type + "?",
+			)
+			declarations[hostIndex].properties.append(alias)
+			var aliasDeclarationIndex = hostIndex
+			// Then, now and then, one or two aliases of it, each on the type declaring what it renames or on a type that
+			// type instantiates and is on every path to, as `addingAliasChains` draws them.
+			for _ in 0..<siblingAliasChainRandom.integer(in: 0...2) {
+				let children = dominatedChildren(of: aliasDeclarationIndex, onlyWithoutInstantiator: false)
+				let declaringIndex = if !children.isEmpty, siblingAliasChainRandom.percentChance(50) {
+					siblingAliasChainRandom.element(of: children)
+				} else {
+					aliasDeclarationIndex
+				}
+				let isOnlyIfAvailable = siblingAliasChainRandom.percentChance(50)
+				let label = alias.label + "Alias"
+				guard !declaresProperty(labeled: label, at: declaringIndex) else { break }
+				let nextAlias = PropertyDeclaration(
+					attribute: "@Received(fulfilledByDependencyNamed: \"\(alias.label)\", ofType: \(alias.type).self\(isOnlyIfAvailable ? ", onlyIfAvailable: true" : ""))",
+					label: label,
+					type: alias.type,
+				)
+				declarations[declaringIndex].properties.append(nextAlias)
+				aliasDeclarationIndex = declaringIndex
+				alias = nextAlias
+			}
+			// Usually, a receive of the last alias on a type the alias's type instantiates and is on every path to,
+			// mostly required; where it instantiates no such type, a required alias of the last alias on the same type
+			// instead, which is created whether or not anything receives it.
+			let receivers = dominatedChildren(of: aliasDeclarationIndex, onlyWithoutInstantiator: false)
+				.filter { !declaresProperty(labeled: alias.label, at: $0) }
+			let requiredAliasLabel = alias.label + "Alias"
+			if siblingAliasChainRandom.percentChance(85) {
+				if !receivers.isEmpty {
+					let receiverIndex = siblingAliasChainRandom.element(of: receivers)
+					declarations[receiverIndex].properties.append(PropertyDeclaration(
+						attribute: siblingAliasChainRandom.percentChance(80) ? "@Received" : "@Received(onlyIfAvailable: true)",
+						label: alias.label,
+						type: alias.type,
+					))
+				} else if alias.attribute.contains("onlyIfAvailable: true"), !declaresProperty(labeled: requiredAliasLabel, at: aliasDeclarationIndex) {
+					declarations[aliasDeclarationIndex].properties.append(PropertyDeclaration(
+						attribute: "@Received(fulfilledByDependencyNamed: \"\(alias.label)\", ofType: \(alias.type).self)",
+						label: requiredAliasLabel,
+						type: alias.type,
+					))
+				}
+			}
+			// Usually, `X` receives `b`, so that `b` must be built before `x`, where the scope is on every path to `X`.
+			let xDeclarationIndex = declarationIndexByName[siblings.x.type]!
+			if siblingAliasChainRandom.percentChance(70),
+			   isOnEveryPath(from: siblings.scopeIndex, to: xDeclarationIndex),
+			   !declaresProperty(labeled: siblings.b.label, at: xDeclarationIndex)
+			{
+				declarations[xDeclarationIndex].properties.append(PropertyDeclaration(attribute: "@Received", label: siblings.b.label, type: siblings.b.type))
+			}
+			return declarations
+		}
+
+		private static let siblingAliasChainRandomSeedMask: UInt64 = 0x7369626C696E6741
+
 		/// The name of the type `property` builds: its `fulfilledByType:`, the generic of its wrapper, or its type.
 		private static func builtTypeName(of property: PropertyDeclaration) -> String {
 			if let fulfilledByTypeRange = property.attribute.range(of: "fulfilledByType: \"") {
@@ -1294,6 +1465,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// An alias, required or `onlyIfAvailable`, of an `onlyIfAvailable` alias, which a receiver that requires it needs
 	/// created in turn.
 	case aliasOfOnlyIfAvailableAlias
+	/// An alias whose `ofType:` is the optional form of a property declared with the label it names (`ofType: X?.self`
+	/// of `x: X`), which validation resolves to that property by its unwrapped form.
+	case aliasOfOptionalFormOfProperty
 	case erasedAlias
 	case multipleRoots
 	case generateMock
@@ -1338,6 +1512,10 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		var onlyIfAvailableReceivedTypesByTypeName = [String: Set<String>]()
 		var onlyIfAvailableAliasLabels = Set<String>()
 		var aliasFulfillingLabels = Set<String>()
+		/// The non-optional types of the instantiated and forwarded properties under each label.
+		var nonOptionalTypesByLabel = [String: Set<String>]()
+		/// The types whose optional form an alias names as its `ofType:`, by the label the alias is fulfilled by.
+		var aliasedOptionalFormTypesByLabel = [String: Set<String>]()
 		for content in fixture.swiftFileContent {
 			var currentTypeName: String?
 			var nextTypeIsMocked = false
@@ -1372,10 +1550,21 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					if attribute == "@Received(onlyIfAvailable: true)", let currentTypeName {
 						onlyIfAvailableReceivedTypesByTypeName[currentTypeName, default: []].insert(nonOptionalType)
 					}
+					if attribute.hasPrefix("@Instantiated") || attribute == "@Forwarded", !type.hasSuffix("?") {
+						nonOptionalTypesByLabel[label, default: []].insert(type)
+					}
 					if let fulfillingLabelRange = attribute.range(of: "fulfilledByDependencyNamed: \"") {
-						aliasFulfillingLabels.insert(String(attribute[fulfillingLabelRange.upperBound...].prefix { $0 != "\"" }))
+						let fulfillingLabel = String(attribute[fulfillingLabelRange.upperBound...].prefix { $0 != "\"" })
+						aliasFulfillingLabels.insert(fulfillingLabel)
 						if attribute.contains("onlyIfAvailable: true") {
 							onlyIfAvailableAliasLabels.insert(label)
+						}
+						// The `ofType:` argument is spelled `Type.self`, and no type the generator emits contains a period.
+						if let fulfillingTypeRange = attribute.range(of: "ofType: ") {
+							let fulfillingType = attribute[fulfillingTypeRange.upperBound...].prefix { $0 != "." }
+							if fulfillingType.hasSuffix("?") {
+								aliasedOptionalFormTypesByLabel[fulfillingLabel, default: []].insert(String(fulfillingType.dropLast()))
+							}
 						}
 					}
 					if attribute == "@Received" || attribute == "@Received(onlyIfAvailable: true)" {
@@ -1444,6 +1633,11 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		if !aliasFulfillingLabels.isDisjoint(with: onlyIfAvailableAliasLabels) {
 			features.insert(.aliasOfOnlyIfAvailableAlias)
+		}
+		if aliasedOptionalFormTypesByLabel.contains(where: { label, types in
+			!types.isDisjoint(with: nonOptionalTypesByLabel[label] ?? [])
+		}) {
+			features.insert(.aliasOfOptionalFormOfProperty)
 		}
 		return features
 	}
