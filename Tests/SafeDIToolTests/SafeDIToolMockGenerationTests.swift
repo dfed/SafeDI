@@ -4977,26 +4977,26 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
+		            userVendor: (() -> UserVendor)? = nil,
 		            userManager: (() -> UserManager)? = nil,
-		            userNetworkService: (() -> NetworkService)? = nil,
-		            userVendor: (() -> UserVendor)? = nil
+		            userNetworkService: (() -> NetworkService)? = nil
 		        ) {
+		            self.userVendor = userVendor
 		            self.userManager = userManager
 		            self.userNetworkService = userNetworkService
-		            self.userVendor = userVendor
 		        }
 
+		        let userVendor: (() -> UserVendor)?
 		        let userManager: (() -> UserManager)?
 		        let userNetworkService: (() -> NetworkService)?
-		        let userVendor: (() -> UserVendor)?
 		    }
 
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> EditProfileViewController {
+		        let userVendor: UserVendor = if let safeDIBuilder = safeDIOverrides.userVendor { safeDIBuilder() } else { UserManager() }
 		        let userManager = if let safeDIBuilder = safeDIOverrides.userManager { safeDIBuilder() } else { UserManager() }
 		        let userNetworkService: NetworkService = if let safeDIBuilder = safeDIOverrides.userNetworkService { safeDIBuilder() } else { DefaultNetworkService() }
-		        let userVendor: UserVendor = if let safeDIBuilder = safeDIOverrides.userVendor { safeDIBuilder() } else { UserManager() }
 		        return EditProfileViewController(userVendor: userVendor, userManager: userManager, userNetworkService: userNetworkService)
 		    }
 		}
@@ -10986,23 +10986,24 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            fileLogger: (() -> FileLogger)? = nil,
-		            footer: ((Logger?) -> Footer)? = nil,
-		            header: ((FileLogger) -> Header)? = nil
+		            header: ((FileLogger) -> Header)? = nil,
+		            footer: ((Logger?) -> Footer)? = nil
 		        ) {
 		            self.fileLogger = fileLogger
-		            self.footer = footer
 		            self.header = header
+		            self.footer = footer
 		        }
 
 		        let fileLogger: (() -> FileLogger)?
-		        let footer: ((Logger?) -> Footer)?
 		        let header: ((FileLogger) -> Header)?
+		        let footer: ((Logger?) -> Footer)?
 		    }
 
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let fileLogger = if let safeDIBuilder = safeDIOverrides.fileLogger { safeDIBuilder() } else { FileLogger() }
+		        let header = if let safeDIBuilder = safeDIOverrides.header { safeDIBuilder(fileLogger) } else { Header(fileLogger: fileLogger) }
 		        func __safeDI_footer() -> Footer {
 		            #sourceLocation(file: "\(output.fixtures["Footer.swift"])", line: 5)
 		            let logger: Logger? = fileLogger
@@ -11010,7 +11011,6 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		            return if let safeDIBuilder = safeDIOverrides.footer { safeDIBuilder(logger) } else { Footer(logger: logger) }
 		        }
 		        let footer: Footer = __safeDI_footer()
-		        let header = if let safeDIBuilder = safeDIOverrides.header { safeDIBuilder(fileLogger) } else { Header(fileLogger: fileLogger) }
 		        return Screen(header: header, footer: footer)
 		    }
 		}
@@ -16176,6 +16176,275 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        }
 		        let childB: ChildB = __safeDI_childB()
 		        return Root(childA: childA, childB: childB)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+
+		#expect(output.mockConfigurationFile == emptyMockConfigurationFileOutput, "Unexpected output \(output.mockConfigurationFile ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesNilToThePromotedSiblingReceivedLater_whenPromotedSiblingsReceiveEachOtherOnlyIfAvailable() async throws {
+		// Root receives `zeta` before `beta`, and each receives the other only if available. One of them must be built
+		// first and passed `nil`. As in production, where the property declared later is built first, it is `beta`,
+		// which the tree receives later, although its label sorts first.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(zeta: Zeta, beta: Beta) {
+				        self.zeta = zeta
+				        self.beta = beta
+				    }
+
+				    @Received let zeta: Zeta
+				    @Received let beta: Beta
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Zeta: Instantiable {
+				    public init(beta: Beta?) {
+				        self.beta = beta
+				    }
+
+				    @Received(onlyIfAvailable: true) let beta: Beta?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Beta: Instantiable {
+				    public init(zeta: Zeta?) {
+				        self.zeta = zeta
+				    }
+
+				    @Received(onlyIfAvailable: true) let zeta: Zeta?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            beta: ((Zeta?) -> Beta)? = nil,
+		            zeta: ((Beta?) -> Zeta)? = nil
+		        ) {
+		            self.beta = beta
+		            self.zeta = zeta
+		        }
+
+		        let beta: ((Zeta?) -> Beta)?
+		        let zeta: ((Beta?) -> Zeta)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let beta = if let safeDIBuilder = safeDIOverrides.beta { safeDIBuilder(nil) } else { Beta(zeta: nil) }
+		        let zeta = if let safeDIBuilder = safeDIOverrides.zeta { safeDIBuilder(beta) } else { Zeta(beta: beta) }
+		        return Root(zeta: zeta, beta: beta)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+
+		#expect(output.mockConfigurationFile == emptyMockConfigurationFileOutput, "Unexpected output \(output.mockConfigurationFile ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesNilToThePromotedSiblingReceivedLater_whenTheLabelsOfPromotedSiblingsThatReceiveEachOtherOnlyIfAvailableAreSwapped() async throws {
+		// The graph of `mock_passesNilToThePromotedSiblingReceivedLater_whenPromotedSiblingsReceiveEachOtherOnlyIfAvailable`
+		// with the labels `zeta` and `beta` swapped. The `Beta` that Root receives second is still the one passed `nil`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(beta: Zeta, zeta: Beta) {
+				        self.beta = beta
+				        self.zeta = zeta
+				    }
+
+				    @Received let beta: Zeta
+				    @Received let zeta: Beta
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Zeta: Instantiable {
+				    public init(zeta: Beta?) {
+				        self.zeta = zeta
+				    }
+
+				    @Received(onlyIfAvailable: true) let zeta: Beta?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Beta: Instantiable {
+				    public init(beta: Zeta?) {
+				        self.beta = beta
+				    }
+
+				    @Received(onlyIfAvailable: true) let beta: Zeta?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            zeta: ((Zeta?) -> Beta)? = nil,
+		            beta: ((Beta?) -> Zeta)? = nil
+		        ) {
+		            self.zeta = zeta
+		            self.beta = beta
+		        }
+
+		        let zeta: ((Zeta?) -> Beta)?
+		        let beta: ((Beta?) -> Zeta)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let zeta = if let safeDIBuilder = safeDIOverrides.zeta { safeDIBuilder(nil) } else { Beta(beta: nil) }
+		        let beta = if let safeDIBuilder = safeDIOverrides.beta { safeDIBuilder(zeta) } else { Zeta(zeta: zeta) }
+		        return Root(beta: beta, zeta: zeta)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Root+SafeDIMock.swift"] ?? "")")
+
+		#expect(output.mockConfigurationFile == emptyMockConfigurationFileOutput, "Unexpected output \(output.mockConfigurationFile ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_ordersOverridesOfPromotedDependenciesByWhereTheTreeFirstReceivesThem_whenTheirLabelsSortTheOtherWay() async throws {
+		// Root receives `zulu` and then `mike`, and the `Child` it instantiates receives `yankee` and then `alpha`. The
+		// tree receives them in that order, Root's own first, so their overrides follow it: `yankee` and `alpha` come
+		// first only because `child`, which Root declares before any of them, is built from them.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Root: Instantiable {
+				    public init(zulu: Zulu, mike: Mike, child: Child) {
+				        self.zulu = zulu
+				        self.mike = mike
+				        self.child = child
+				    }
+
+				    @Received let zulu: Zulu
+				    @Received let mike: Mike
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(yankee: Yankee, alpha: Alpha) {
+				        self.yankee = yankee
+				        self.alpha = alpha
+				    }
+
+				    @Received let yankee: Yankee
+				    @Received let alpha: Alpha
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Zulu: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Mike: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Yankee: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Alpha: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Root+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            yankee: (() -> Yankee)? = nil,
+		            alpha: (() -> Alpha)? = nil,
+		            child: ((Yankee, Alpha) -> Child)? = nil,
+		            zulu: (() -> Zulu)? = nil,
+		            mike: (() -> Mike)? = nil
+		        ) {
+		            self.yankee = yankee
+		            self.alpha = alpha
+		            self.child = child
+		            self.zulu = zulu
+		            self.mike = mike
+		        }
+
+		        let yankee: (() -> Yankee)?
+		        let alpha: (() -> Alpha)?
+		        let child: ((Yankee, Alpha) -> Child)?
+		        let zulu: (() -> Zulu)?
+		        let mike: (() -> Mike)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let yankee = if let safeDIBuilder = safeDIOverrides.yankee { safeDIBuilder() } else { Yankee() }
+		        let alpha = if let safeDIBuilder = safeDIOverrides.alpha { safeDIBuilder() } else { Alpha() }
+		        let child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(yankee, alpha) } else { Child(yankee: yankee, alpha: alpha) }
+		        let zulu = if let safeDIBuilder = safeDIOverrides.zulu { safeDIBuilder() } else { Zulu() }
+		        let mike = if let safeDIBuilder = safeDIOverrides.mike { safeDIBuilder() } else { Mike() }
+		        return Root(zulu: zulu, mike: mike, child: child)
 		    }
 		}
 		#endif

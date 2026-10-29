@@ -1879,11 +1879,12 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsReceivedCycleError_whenPromotedInstantiatorsReceiveEachOther() async {
-		// `A`'s mock promotes the `bBuilder` it receives, and then the `aBuilder` that `B` receives.
+		// `A`'s mock promotes the `bBuilder` it receives, and then the `aBuilder` that `B` receives, so the chain starts
+		// at `bBuilder`, which the mock's tree receives first.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):4:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["A.swift"]):4:5: error: Dependency cycle: @Instantiated `bBuilder: Instantiator<B>` -> @Received `aBuilder: Instantiator<A>` -> @Received `bBuilder: Instantiator<B>`. `bBuilder: Instantiator<B>` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
 			},
 		) {

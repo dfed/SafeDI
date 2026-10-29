@@ -452,9 +452,9 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_reportsTheCycleThroughTheFirstDeclaredPromotedChild_whenTheLabelsOfPromotedChildrenSortEitherWay() async {
-		// The mock root promotes `a`, `b`, `c`, and `d`. One cycle runs through `a`, another through `c`, and the
-		// type of `a` is declared first.
+	mutating func run_reportsTheCycleThroughThePromotedChildReceivedFirst_whenTheLabelsOfPromotedChildrenSortEitherWay() async {
+		// The mock root promotes `a`, `b`, `c`, and `d`. One cycle runs through `a`, another through `c`, and the mock's
+		// tree receives `a` first: `B`, which Root receives before `D`, receives it, and `D` receives `c`.
 		for (cycleType, otherType) in [("A", "B"), ("Y", "Z")] {
 			let cycleLabel = cycleType.lowercased()
 			let otherLabel = otherType.lowercased()
@@ -514,9 +514,9 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_reportsPromotedChildrenRequiringEachOtherFromTheFirstDeclaredType_whenTheirTypeNamesSortEitherWay() async {
+	mutating func run_reportsPromotedChildrenRequiringEachOtherFromTheChildReceivedFirst_whenTheirTypeNamesSortEitherWay() async {
 		// The mock root promotes `service: Instantiator<ServiceA>` and `service: Instantiator<ServiceB>`, which share a
-		// label, so their type names order them.
+		// label, so only their type names could order them by name. The mock's tree receives the first one first.
 		for firstServiceName in ["ServiceA", "ServiceZ"] {
 			await assertThrowsError(
 				diagnostics: { fixtures in
@@ -559,12 +559,13 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_reportsPromotedChildrenReceivingEachOtherFromTheFirstDeclaredType_whenTheirLabelsSortEitherWay() async {
-		for (firstType, firstLabel) in [("Beta", "beta"), ("Zeta", "zeta")] {
+	mutating func run_reportsPromotedChildrenReceivingEachOtherFromTheChildReceivedFirst_whenTheirLabelsSortEitherWay() async {
+		// `Host` receives `gamma` first, so the chain starts there, although the other child's type is declared first.
+		for (secondType, secondLabel) in [("Beta", "beta"), ("Zeta", "zeta")] {
 			await assertThrowsError(
 				diagnostics: { fixtures in
 					"""
-					\(fixtures["Module.swift"]):19:5: error: Dependency cycle: @Instantiated `\(firstLabel): \(firstType)` -> @Received `gamma: Gamma` -> @Received `\(firstLabel): \(firstType)`. `\(firstLabel): \(firstType)` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+					\(fixtures["Module.swift"]):13:5: error: Dependency cycle: @Instantiated `gamma: Gamma` -> @Received `\(secondLabel): \(secondType)` -> @Received `gamma: Gamma`. `gamma: Gamma` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 					"""
 				},
 			) {
@@ -576,21 +577,21 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 
 						@Instantiable(generateMock: true)
 						public final class Host: Instantiable {
-						    public init(gamma: Gamma, \(firstLabel): \(firstType)) { fatalError("SafeDI doesn't inspect the initializer body") }
+						    public init(gamma: Gamma, \(secondLabel): \(secondType)) { fatalError("SafeDI doesn't inspect the initializer body") }
 						    @Received let gamma: Gamma
-						    @Received let \(firstLabel): \(firstType)
+						    @Received let \(secondLabel): \(secondType)
 						}
 
 						@Instantiable
-						public final class \(firstType): Instantiable {
+						public final class \(secondType): Instantiable {
 						    public init(gamma: Gamma) { fatalError("SafeDI doesn't inspect the initializer body") }
 						    @Received let gamma: Gamma
 						}
 
 						@Instantiable
 						public final class Gamma: Instantiable {
-						    public init(\(firstLabel): \(firstType)) { fatalError("SafeDI doesn't inspect the initializer body") }
-						    @Received let \(firstLabel): \(firstType)
+						    public init(\(secondLabel): \(secondType)) { fatalError("SafeDI doesn't inspect the initializer body") }
+						    @Received let \(secondLabel): \(secondType)
 						}
 						""",
 					],
