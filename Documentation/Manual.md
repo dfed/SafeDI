@@ -1260,7 +1260,7 @@ You can find instructions for how to install the `dot` command [here](https://gr
 
 ### Querying what a type needs
 
-> `query needs` is in beta. It was built ahead of a live use, so as real projects adopt it its options, its text, and its JSON may change in any release, not only a major one. A change to the JSON’s shape still raises its `formatVersion`, so a script can tell.
+> `query needs` is in beta. Its options, text, and JSON may change in any release; a change to the JSON’s shape raises its `formatVersion`, so a script can tell.
 
 A focused app – one that builds a single feature with mock data instead of the whole product – needs only the modules that feature needs. `SafeDITool query needs` names them. Give it one or more `@Instantiable` types and the directories of the project’s modules, as `generate --include` takes them:
 
