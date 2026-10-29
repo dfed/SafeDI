@@ -356,11 +356,20 @@ struct FrozenScopeMap: @unchecked Sendable {
 	/// `propertiesToGenerate` is set, and nothing sets it again.
 	init(_ typeDescriptionToScopeMap: [TypeDescription: Scope]) {
 		self.typeDescriptionToScopeMap = typeDescriptionToScopeMap
-		// Several types can map to one scope, and a type whose hand-written mock is not passed some of its
-		// dependencies has two, which only identity tells apart: the full one first, then the one its mock builds.
-		let scopes = Set(typeDescriptionToScopeMap.values).sorted {
-			($0.instantiable.concreteInstantiable, $0.dependenciesLeftOut.count) < ($1.instantiable.concreteInstantiable, $1.dependenciesLeftOut.count)
+		// Several types can map to one scope, and a type can have several scopes, which only identity tells apart:
+		// a type whose hand-written mock is not passed some of its dependencies has the full one first, then the one
+		// its mock builds, and a `mockOnly` declaration can give each type it fulfills a scope of its own beside the
+		// scope of its concrete type. No two scopes share a type that maps to them, so the first of those orders them.
+		var firstTypeDescriptionByScope = [Scope: TypeDescription]()
+		for (typeDescription, scope) in typeDescriptionToScopeMap {
+			firstTypeDescriptionByScope[scope] = firstTypeDescriptionByScope[scope].map { min($0, typeDescription) } ?? typeDescription
 		}
+		let scopes = firstTypeDescriptionByScope
+			.sorted {
+				($0.key.instantiable.concreteInstantiable, $0.key.dependenciesLeftOut.count, $0.value)
+					< ($1.key.instantiable.concreteInstantiable, $1.key.dependenciesLeftOut.count, $1.value)
+			}
+			.map(\.key)
 		for scope in scopes {
 			scope.freeze()
 		}
@@ -374,7 +383,8 @@ struct FrozenScopeMap: @unchecked Sendable {
 	}
 
 	let typeDescriptionToScopeMap: [TypeDescription: Scope]
-	/// Every scope of the map once, in the order of its concrete type and then of how many dependencies it leaves out.
+	/// Every scope of the map once, in the order of its concrete type, then of how many dependencies it leaves out, then
+	/// of the first type that maps to it.
 	let scopes: [Scope]
 	/// The index in `scopes` of the scope each type maps to.
 	let typeDescriptionToScopeIndex: [TypeDescription: Int]
