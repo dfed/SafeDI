@@ -2718,6 +2718,98 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedAndOptionalReceived_throwsError() async {
+		// B, built inside `a: A?`, requires that exact property. Unlike a receive only if available, which is passed
+		// `nil`, it needs `a` before `a` exists, so the cycle is still rejected.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: `A?` -> `B` -> `A?`. `B` receives `a: A?`, which is still being built when `B` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
+				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(a: A?) { self.a = a }
+					    @Instantiated let a: A?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable {
+					    public init(b: B) { self.b = b }
+					    @Instantiated let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(a: A?) { self.a = a }
+					    @Received let a: A?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithCircularPropertyDependenciesLazyInitializedAndReceivedThroughAliasOfAlias_throwsErrorNamingInnerAlias() async {
+		// B, built inside `aBuilder`, aliases `aBuilder` as `renamedBuilder` and aliases that as `otherBuilder`. The
+		// inner alias needs `aBuilder` before it exists, so the cycle is rejected at it.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):7:5: error: Dependency cycle: `Instantiator<A>` -> `Instantiator<B>` -> `Instantiator<A>`. `B` receives `aBuilder: Instantiator<A>` as `renamedBuilder: Instantiator<A>` inside the tree that `aBuilder` builds. Declare `renamedBuilder: Instantiator<A>` on `B` as @Instantiated instead of @Received(fulfilledByDependencyNamed:ofType:).
+				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
+				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(aBuilder: Instantiator<A>) { self.aBuilder = aBuilder }
+					    @Instantiated let aBuilder: Instantiator<A>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable {
+					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
+					    @Instantiated let bBuilder: Instantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(renamedBuilder: Instantiator<A>, otherBuilder: Instantiator<A>) {
+					        self.renamedBuilder = renamedBuilder
+					        self.otherBuilder = otherBuilder
+					    }
+					    @Received(fulfilledByDependencyNamed: "aBuilder", ofType: Instantiator<A>.self) let renamedBuilder: Instantiator<A>
+					    @Received(fulfilledByDependencyNamed: "renamedBuilder", ofType: Instantiator<A>.self) let otherBuilder: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedWithVaryingNames_throwsError() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in

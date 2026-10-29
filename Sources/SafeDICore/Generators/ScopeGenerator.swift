@@ -130,6 +130,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			}
 		}
+		// A scope that closes a property cycle generates none of its type's dependencies. An alias of another alias
+		// its type declares must not be received from the siblings around it: one of those siblings is the alias's
+		// own fulfilling alias's fulfilling property, so the scope would be ordered after a sibling ordered after it.
+		let cycleClosingAliasProperties: Set<Property> = isPropertyCycle
+			? Set(instantiable.dependencies.compactMap {
+				switch $0.source {
+				case .aliased:
+					$0.property
+				case .instantiated, .forwarded, .received:
+					nil
+				}
+			})
+			: []
 		for dependency in instantiable.dependencies {
 			let receivedProperty: Property
 			let onlyIfAvailable: Bool
@@ -144,7 +157,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// (e.g., as an @Instantiated sibling) or forwarded, the alias
 				// binds against that local — it doesn't need to be received.
 				guard !propertiesToDeclare.contains(fulfillingProperty),
-				      !forwardedProperties.contains(fulfillingProperty)
+				      !forwardedProperties.contains(fulfillingProperty),
+				      !cycleClosingAliasProperties.contains(fulfillingProperty)
 				else { continue }
 				receivedProperty = fulfillingProperty
 				onlyIfAvailable = isOnlyIfAvailable
