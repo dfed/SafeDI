@@ -577,24 +577,25 @@ struct SafeDIToolGraphFuzzerTests {
 
 	// MARK: Seeds
 
-	/// The ordinary suite's batch: seeds 62, 582, 691, 705, and 930, whose graphs the tool accepts, with the same
-	/// results under every `GraphFuzzerRenaming`, and which between them exercise every feature, and seed 14, whose
-	/// graph it rejects. It is small because compiling generated code is what the fuzzer costs; ci.yml fuzzes the
-	/// whole corpus on every pull request. Compiling the batch is one `swiftc` invocation when nothing fails.
-	static let smokeSeeds: [UInt64] = [14, 62, 582, 691, 705, 930]
+	/// The ordinary suite's batch: seeds 25, 62, 582, 691, 705, and 930, whose graphs the tool accepts, with the same
+	/// results under every `GraphFuzzerRenaming`, and which between them exercise every feature (seed 25's graph has
+	/// a chain of aliases through an `onlyIfAvailable` alias), and seed 14, whose graph it rejects. It is small because
+	/// compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on every pull request.
+	/// Compiling the batch is one `swiftc` invocation when nothing fails.
+	static let smokeSeeds: [UInt64] = [14, 25, 62, 582, 691, 705, 930]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xC89C9908E3933AD9
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x27236E4AE9D0300F
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0xFE5D9C52BB9D7A05
+	static let corpusFixtureHash: UInt64 = 0x0948CE4CC17AC78E
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
-	static let corpusAcceptedSeedCount = 2_445
-	static let corpusAcceptedSeedsSum: UInt64 = 0xCCB739ABF9AC704A
+	static let corpusAcceptedSeedCount = 2_414
+	static let corpusAcceptedSeedsSum: UInt64 = 0xB138A3396F7C2BC3
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
@@ -603,7 +604,7 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "A mock's API follows the order of type names or labels: which back-edge of a lazy cycle loses its override, which promoted sibling is passed nil, and the order of overrides",
 			signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")],
 			seeds: [
-				3, 35, 37, 45, 53, 55, 77, 107, 114, 131, 157, 168, 223, 233, 241, 281,
+				3, 35, 37, 45, 55, 77, 107, 114, 131, 157, 168, 223, 233, 241, 281,
 				309, 311, 364, 371, 381, 383, 390, 431, 434, 448, 450, 473, 515, 545, 567, 593,
 				595, 617, 630, 632, 680, 688, 714, 728, 732, 751, 768, 774, 785, 786, 808, 833,
 				836, 847, 903, 912, 940, 948, 956, 975, 987, 1_004, 1_029, 1_035, 1_042, 1_044, 1_061, 1_064,
@@ -612,14 +613,14 @@ struct SafeDIToolGraphFuzzerTests {
 				1_646, 1_664, 1_675, 1_695, 1_742, 1_752, 1_781, 1_784, 1_795, 1_804, 1_853, 1_857, 1_867, 1_896, 1_898, 1_919,
 				1_920, 1_938, 1_970, 1_972, 2_005, 2_017, 2_051, 2_083, 2_084, 2_117, 2_123, 2_149, 2_152, 2_165, 2_201, 2_211,
 				2_234, 2_245, 2_249, 2_270, 2_277, 2_287, 2_296, 2_316, 2_325, 2_335, 2_337, 2_348, 2_389, 2_403, 2_430, 2_432,
-				2_437, 2_444, 2_456, 2_485, 2_515, 2_518, 2_553, 2_555, 2_577, 2_630, 2_637, 2_667, 2_704, 2_731, 2_732, 2_741,
-				2_752, 2_791, 2_808, 2_835, 2_841, 2_845, 2_874, 2_902, 2_914, 2_916, 2_940, 2_968, 2_998, 3_004, 3_023, 3_064,
+				2_437, 2_444, 2_456, 2_485, 2_515, 2_518, 2_553, 2_555, 2_577, 2_630, 2_637, 2_667, 2_704, 2_731, 2_741,
+				2_752, 2_791, 2_808, 2_835, 2_841, 2_845, 2_874, 2_902, 2_914, 2_916, 2_940, 2_968, 3_004, 3_023, 3_064,
 				3_074, 3_075, 3_091, 3_132, 3_134, 3_149, 3_180, 3_183, 3_214, 3_215, 3_221, 3_225, 3_241, 3_252, 3_298, 3_306,
-				3_329, 3_344, 3_361, 3_362, 3_397, 3_430, 3_439, 3_460, 3_491, 3_504, 3_506, 3_526, 3_533, 3_534, 3_537, 3_577,
+				3_329, 3_344, 3_361, 3_397, 3_430, 3_439, 3_460, 3_491, 3_504, 3_506, 3_513, 3_526, 3_533, 3_534, 3_537, 3_577,
 				3_582, 3_588, 3_596, 3_602, 3_604, 3_620, 3_645, 3_648, 3_661, 3_699, 3_707, 3_715, 3_723, 3_741, 3_750, 3_775,
 				3_776, 3_805, 3_823, 3_843, 3_894, 3_915, 3_942, 4_044, 4_068, 4_102, 4_107, 4_110, 4_117, 4_122, 4_125, 4_156,
-				4_177, 4_192, 4_196, 4_206, 4_213, 4_215, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_360, 4_371,
-				4_393, 4_404, 4_420, 4_428, 4_496, 4_504, 4_515, 4_534, 4_541, 4_545, 4_567, 4_613, 4_619, 4_634, 4_637, 4_640,
+				4_177, 4_191, 4_192, 4_196, 4_206, 4_213, 4_215, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_360, 4_371,
+				4_378, 4_393, 4_404, 4_420, 4_428, 4_496, 4_504, 4_515, 4_534, 4_541, 4_545, 4_567, 4_613, 4_619, 4_634, 4_637, 4_640,
 				4_642, 4_648, 4_664, 4_666, 4_707, 4_716, 4_717, 4_729, 4_775, 4_776, 4_781, 4_783, 4_786, 4_795, 4_834, 4_859,
 				4_861, 4_865, 4_889, 4_904, 4_918, 4_922, 4_944, 4_947, 4_955, 4_963, 4_996,
 			],
@@ -636,6 +637,13 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(containing: "changes its generated mock configuration code")],
 			seeds: [
 				69, 1_992, 2_186, 2_254, 3_931, 4_643, 4_747, 4_974,
+			],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "A type's construction passes an `onlyIfAvailable` alias of its own `onlyIfAvailable` alias by name where neither is created and nothing requires the chain",
+			signatures: [.compilerError(containing: "cannot find 't0AliasAliasAlias' in scope")],
+			seeds: [
+				4_547,
 			],
 		),
 	]

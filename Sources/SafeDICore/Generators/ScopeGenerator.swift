@@ -207,25 +207,36 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		var requiredOnlyIfAvailableAliasProperties = Set<Property>()
 		var requiredOnlyIfAvailableAliasFulfillingProperties = Set<Property>()
-		for case let (aliasProperty?, fulfillingProperty?) in propertiesToGenerate.lazy.map({ ($0.property, $0.onlyIfAvailableAliasFulfillingProperty) })
-			where isRequiredByChild(aliasProperty)
-		{
-			requiredOnlyIfAvailableAliasProperties.insert(aliasProperty)
-			requiredOnlyIfAvailableAliasFulfillingProperties.insert(fulfillingProperty)
+		// An `onlyIfAvailable` alias of another `onlyIfAvailable` alias this scope declares is created from it, so
+		// one that is required requires the alias it renames in turn, which its own generator does not say: an
+		// `onlyIfAvailable` alias's generator requires nothing. The aliases are found until a pass finds no more.
+		var foundRequiredAlias = true
+		while foundRequiredAlias {
+			foundRequiredAlias = false
+			for case let (aliasProperty?, fulfillingProperty?) in propertiesToGenerate.lazy.map({ ($0.property, $0.onlyIfAvailableAliasFulfillingProperty) })
+				where !requiredOnlyIfAvailableAliasProperties.contains(aliasProperty)
+				&& (isRequiredByChild(aliasProperty) || requiredOnlyIfAvailableAliasFulfillingProperties.contains(aliasProperty))
+			{
+				requiredOnlyIfAvailableAliasProperties.insert(aliasProperty)
+				requiredOnlyIfAvailableAliasFulfillingProperties.insert(fulfillingProperty)
+				foundRequiredAlias = true
+			}
 		}
 		self.requiredOnlyIfAvailableAliasProperties = requiredOnlyIfAvailableAliasProperties
 		requiredAliasFulfillingProperties = Set(propertiesToGenerate.flatMap(\.requiredAliasFulfillingProperties))
 			.union(requiredOnlyIfAvailableAliasFulfillingProperties)
 			.filter(isReceivedFromAncestors)
-			// A receiver of an alias that is never created and that an enclosing scope provides
-			// resolves to the enclosing scope's property, so it requires that property instead.
+			// A receiver of an alias that may not be created and whose property an enclosing scope
+			// provides is handed the enclosing scope's property where the alias is not created, so it
+			// requires that property instead. A required `onlyIfAvailable` alias of such an alias
+			// requires it the same way.
 			.union(
 				propertiesToGenerate
-					.compactMap(\.uncreatedAliasPropertyProvidedByEnclosingScope)
-					.filter(isRequiredByChild),
+					.compactMap(\.onlyIfAvailableAliasPropertyProvidedByEnclosingScope)
+					.filter { isRequiredByChild($0) || requiredOnlyIfAvailableAliasFulfillingProperties.contains($0) },
 			)
 		onlyIfAvailableAliasFulfillingProperty = nil
-		uncreatedAliasPropertyProvidedByEnclosingScope = nil
+		onlyIfAvailableAliasPropertyProvidedByEnclosingScope = nil
 		let onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired = Set(
 			propertiesToGenerate.flatMap { propertyToGenerate in
 				propertyToGenerate.onlyIfAvailableUnwrappedReceivedProperties
@@ -273,6 +284,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		erasedToConcreteExistential: Bool,
 		onlyIfAvailable: Bool,
 		isProvidedByEnclosingScope: Bool,
+		fulfillingPropertyIsAlwaysAvailable: Bool,
 		declarationReference: AliasDeclarationReferences.Reference?,
 	) {
 		scopeData = .alias(
@@ -295,9 +307,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			onlyIfAvailableDependencies = []
 		}
 		onlyIfAvailableAliasFulfillingProperty = onlyIfAvailable && !isProvidedByEnclosingScope ? fulfillingProperty : nil
-		uncreatedAliasPropertyProvidedByEnclosingScope = onlyIfAvailable
+		onlyIfAvailableAliasPropertyProvidedByEnclosingScope = onlyIfAvailable
 			&& isProvidedByEnclosingScope
-			&& unavailableOptionalProperties.contains(fulfillingProperty)
+			&& !fulfillingPropertyIsAlwaysAvailable
 			? property
 			: nil
 		requiredOnlyIfAvailableAliasProperties = []
@@ -764,11 +776,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// the alias's fulfilling property; `nil` for every other scope. A receiver that requires such
 	/// an alias can be handed it only if the alias is created.
 	private let onlyIfAvailableAliasFulfillingProperty: Property?
-	/// For an `@Received(onlyIfAvailable: true)` alias that is never created, because its fulfilling
-	/// property is unavailable wherever the alias is built, and whose property an enclosing scope
-	/// provides, the alias's property; `nil` for every other scope. A receiver of the property
-	/// resolves to the enclosing scope's property, which must be built before the receiver.
-	private let uncreatedAliasPropertyProvidedByEnclosingScope: Property?
+	/// For an `@Received(onlyIfAvailable: true)` alias whose property an enclosing scope provides, and
+	/// whose fulfilling property can be unavailable where the alias is built – it is not forwarded by the
+	/// alias's scope or one enclosing it, nor passed to a mock – the alias's property; `nil` for every
+	/// other scope. Where the alias is not created, a receiver of the property resolves to the enclosing
+	/// scope's property, so a receiver that requires it requires that property, which is built before it.
+	private let onlyIfAvailableAliasPropertyProvidedByEnclosingScope: Property?
 	/// The `onlyIfAvailable` aliases among this scope's children that a receiver in this scope's
 	/// subtree requires. Each is built after its fulfilling property, as a required alias would be.
 	private let requiredOnlyIfAvailableAliasProperties: Set<Property>
