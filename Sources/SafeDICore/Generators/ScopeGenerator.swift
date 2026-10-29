@@ -1709,11 +1709,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// to the root and the `onlyIfAvailable` override bindings. Bind an alias whose label
 		// one of those already binds under a name of its own, and pass that name to the root
 		// and to the alias's receivers in the tree.
-		let rootBindingNames = Set(treePropertyNodes.map { node in
+		let treePropertyNodeBindingNames = Set(treePropertyNodes.map { node in
 			siblingDisambiguationMap[node.propertyLabel]?[node.typeDescription] ?? node.propertyLabel
 		})
-		.union(onlyIfAvailableOverrides.map(\.name))
-		.union(lazilyInstantiatedBindingNameMap.values.flatMap(\.values))
+		let rootBindingNames = treePropertyNodeBindingNames
+			.union(onlyIfAvailableOverrides.map(\.name))
+			.union(lazilyInstantiatedBindingNameMap.values.flatMap(\.values))
 		let (rootItems, aliasBindingNames) = Self.renamingAliases(
 			in: parameterTree,
 			thatRedeclare: rootBindingNames,
@@ -1745,15 +1746,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A root's own received dependency whose label the root scope already binds – to a node
 		// the mock builds for another receiver – cannot be rebound to its label without
 		// redeclaring that binding, so the root is passed the dependency's binding by name.
+		// So is one whose binding is a node the tree builds under a name of its own: the
+		// rebinds precede the tree, so a rebind would reference the node before its declaration.
 		var rootDependenciesToRebind = [Dependency]()
 		for dependency in instantiable.dependencies {
-			if rootBindingNames.contains(dependency.property.label),
-			   let binding = Self.disambiguatedBinding(
+			if let binding = Self.disambiguatedBinding(
 			   	ofReceived: dependency,
 			   	unavailableProperties: [],
 			   	lazilyInstantiatedInstanceProperties: [],
 			   	flatParameterDisambiguationMap: rootDisambiguationMap,
-			   )
+			   ),
+			   rootBindingNames.contains(dependency.property.label) || treePropertyNodeBindingNames.contains(binding.name)
 			{
 				returnDisambiguationMap[dependency.property.label, default: [:]][dependency.property.typeDescription] = binding.name
 			} else {
