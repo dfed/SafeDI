@@ -613,6 +613,66 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_reportsInstanceOfSendableLazilyInstantiatedReceiveAsRequiredMockParameter_whenMockedTypeForwardsLazilyInstantiatedPropertyOfSameInstance() async throws {
+		// The forwarded `session` is not the source of the `SendableLazilyInstantiated` Feed requires, so the mock takes its instance, as production needs it.
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Screen",
+			modules: [
+				QueryTestModule("ScreenModule", [
+					"""
+					public final class Session: Sendable {}
+					@Instantiable
+					public final class Screen: Instantiable {
+					    public init(session: LazilyInstantiated<Session>, feed: Feed) {
+					        self.session = session
+					        self.feed = feed
+					    }
+					    @Forwarded private let session: LazilyInstantiated<Session>
+					    @Received private let feed: Feed
+					}
+					@Instantiable
+					public final class Feed: Instantiable {
+					    public init(session: SendableLazilyInstantiated<Session>) {
+					        self.session = session
+					    }
+					    @Received private let session: SendableLazilyInstantiated<Session>
+					}
+					""",
+				]),
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.formatted == """
+		`Screen` is built from declarations in 1 module:
+
+		ScreenModule
+		  @Instantiable Feed
+		  @Instantiable Screen
+
+		@Forwarded parameters of `Screen`:
+		  session: LazilyInstantiated<Session>
+
+		Dependencies of `Screen` no @Instantiable declaration fulfills:
+		  session: Session
+		    No @Instantiable declaration fulfills `Session`.
+
+		No module generates `Screen.mock()`; a #SafeDIConfiguration that lists `Screen` in `additionalMocksToGenerate` would generate it from the same declarations.
+
+		Required @Forwarded parameters of `Screen.mock()`:
+		  session: LazilyInstantiated<Session>
+
+		Defaulted @Forwarded parameters of `Screen.mock()`:
+		  (none)
+
+		Required parameters of `Screen.mock()` that no @Instantiable declaration removes:
+		  session: Session
+		    No @Instantiable declaration fulfills `Session`.
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func query_attributesErasureToModuleAlreadyNeeded_whenSeveralModulesDeclareIt() async throws {
 		let output = try await executeSafeDIToolQuery(
 			typeName: "Feature",
