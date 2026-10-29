@@ -423,7 +423,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one `swiftc` invocation when nothing fails.
 	static let smokeSeeds: [UInt64] = [5, 157, 348, 582, 705]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xCD23351EF7A6636F
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xACE651A1D042D60C
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -437,24 +437,9 @@ struct SafeDIToolGraphFuzzerTests {
 	static let corpusAcceptedSeedsSum: UInt64 = 0xB03DAD9B15C99DD7
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
-	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
-	static let knownIssues: [GraphFuzzerKnownIssue] = [
-		GraphFuzzerKnownIssue(
-			reason: "A mock wraps the instance it takes for an optional LazilyInstantiated by its label, which an Instantiator of the same label renamed",
-			signatures: [
-				.compilerError(containing: "has no member 'map'"),
-				.compilerError(containing: "to closure result type"),
-				.compilerError(containing: "cannot find 'items' in scope"),
-			],
-			seeds: [2_606, 3_004, 3_719],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "A mock promotes a received optional Instantiator whose tree reads it through an onlyIfAvailable alias of its non-optional form",
-			// Swift 6.2 crashes on this mock where later compilers report the capture.
-			signatures: [.compilerError(containing: "before it is declared"), .compilerCrashInGeneratedMock],
-			seeds: [3_077],
-		),
-	]
+	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix. Empty
+	/// since every shape the corpus found is fixed or rejected.
+	static let knownIssues: [GraphFuzzerKnownIssue] = []
 
 	/// Known issues for the tests of `GraphFuzzerFinding`, which must not depend on what `knownIssues` lists today.
 	private static let compilerErrorKnownIssue = GraphFuzzerKnownIssue(
