@@ -1803,6 +1803,7 @@ struct TypeDescriptionTests {
 			("(any Service).Type", "Service.Protocol"),
 			("Instantiator<any Service>", "Instantiator<Service>"),
 			("Feature<any Service>.Nested<any Other>", "Feature<Service>.Nested<Other>"),
+			("(any Service, ~Copyable)", "(Service, ~Copyable)"),
 		] {
 			let anyType = TypeSyntax(stringLiteral: anySpelling).typeDescription
 			let plainType = TypeSyntax(stringLiteral: plainSpelling).typeDescription
@@ -1821,6 +1822,7 @@ struct TypeDescriptionTests {
 			("any Service.Type", "Service.Protocol"),
 			("any Service", "Other"),
 			("(any Service)?", "any Service"),
+			("(any Service, ~Copyable)", "(Service, ~Escapable)"),
 		] {
 			let lhs = TypeSyntax(stringLiteral: lhsSpelling).typeDescription
 			let rhs = TypeSyntax(stringLiteral: rhsSpelling).typeDescription
