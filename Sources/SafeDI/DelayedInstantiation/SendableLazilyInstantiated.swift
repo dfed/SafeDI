@@ -34,9 +34,9 @@ import Synchronization
 /// read, from any concurrency domain, returns that same instance.
 ///
 /// SafeDI rejects a dependency tree in which creating the instance would require the instance. It does not
-/// inspect what initializers do. Do not read `instance` from the initializer of the type that holds this
-/// dependency, or from any initializer that runs while the instance is being created, whether directly or
-/// through a callback. Doing so violates this type’s contract and produces undefined behavior.
+/// inspect what initializers do. Do not read `instance` from the initializer of the type that declares the
+/// `SendableLazilyInstantiated` property, or from any initializer that runs while the instance is being created,
+/// whether directly or through a callback. Doing so violates this type’s contract and produces undefined behavior.
 ///
 /// - SeeAlso: `LazilyInstantiated`
 /// - SeeAlso: `SendableInstantiator`
