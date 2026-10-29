@@ -1593,30 +1593,47 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	// MARK: Mock Root Code Generation
 
-	/// Generates the full mock extension code for a `.root` node in mock mode.
-	private func generateMockRootCode(
-		instantiable: Instantiable,
-		context: MockContext,
-	) async throws -> String {
-		let typeName = instantiable.concreteInstantiable.asSource
-		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
-		let indent = Self.standardIndent
-		let bodyIndent = "\(indent)\(indent)"
+	/// The parameters a mock root's `mock()` takes, before the labels of flat parameters that collide are
+	/// named apart. `generateMockRootCode` emits them; `DependencyTreeGenerator.mockRequirements(forTypeNamed:)`
+	/// reports them.
+	struct MockRootParameters {
+		/// The mock root's parameter tree: the dependencies the mock builds, which `SafeDIOverrides` can override.
+		let parameterTree: [MockTreeItem]
+		/// The mocked type's `@Forwarded` dependencies, in the order they are parameters of `mock()`.
+		let forwardedDependencies: [Dependency]
+		/// The initializer the mock constructs the mocked type with: its hand-written mock when it has one.
+		let rootConstructionInitializer: Initializer?
+		/// The non-dependency parameters of `rootConstructionInitializer` that have defaults.
+		let rootDefaultParameters: [RootDefaultParameter]
+		/// The received properties the mock cannot build, as the caller of `mock()` provides them: by value.
+		let flatReceivedProperties: [Property]
+		/// The received properties every receiver receives only if available and nothing in the mock provides.
+		let onlyIfAvailableReceivedProperties: [Property]
+		/// The `@Instantiated` dependencies, of the mocked type and of the types in its tree, that no node builds.
+		let flatUncoveredParameters: [UncoveredParameter]
+		/// The lazily instantiated dependencies the tree receives and the mock cannot build.
+		let lazilyInstantiatedReceivedProperties: [Property]
 
-		// The generated `mock()` method's return type matches the construction
-		// call site: if `customMock` returns an additional type (e.g. the type
-		// fulfills a protocol and `customMock` returns that protocol), returning
-		// `typeName` here would be a type error because `customMock`'s result
-		// cannot be downcast implicitly. Use `mockReturnType` for those cases,
-		// and fall back to `typeName` when there is no custom mock or the custom
-		// mock already returns the concrete type / `Self`.
-		let mockMethodReturnType: String = {
-			guard let mockReturnType = instantiable.mockReturnType,
-			      !instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiable.concreteInstantiable)
-			else { return typeName }
-			return mockReturnType.asSource
-		}()
+		struct RootDefaultParameter {
+			let label: String
+			let typeSource: String
+			let defaultExpression: String
+		}
 
+		struct UncoveredParameter {
+			/// The dependency's property.
+			let property: Property
+			/// The parameter's name, the dependency's label unless it is named apart from another name in scope.
+			let label: String
+			/// The parameter's type as `mock()` spells it.
+			let typeSource: String
+			/// The type the dependency instantiates, which no `@Instantiable` declaration fulfills.
+			let instantiatedType: TypeDescription
+		}
+	}
+
+	/// The parameters this scope's `mock()` takes as a mock root. See `MockRootParameters`.
+	func mockRootParameters(instantiable: Instantiable) async -> MockRootParameters {
 		// 1. Build the parameter tree.
 		let parameterTree = await rootMockParameterTree
 
@@ -1635,7 +1652,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			instantiable.initializer
 		}
 		let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
-		var rootDefaultParameters = [(label: String, typeSource: String, defaultExpression: String)]()
+		var rootDefaultParameters = [MockRootParameters.RootDefaultParameter]()
 		if let rootConstructionInitializer {
 			for argument in rootConstructionInitializer.arguments {
 				guard argument.hasDefaultValue,
@@ -1643,7 +1660,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				      argument.label != "_",
 				      let defaultExpression = argument.defaultValueExpression
 				else { continue }
-				rootDefaultParameters.append((
+				rootDefaultParameters.append(MockRootParameters.RootDefaultParameter(
 					label: argument.label,
 					typeSource: argument.typeDescription.asFunctionParameter.asSource,
 					defaultExpression: defaultExpression,
@@ -1733,7 +1750,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			case .instantiated:
 				// A dependency promoted to the root under the label, of another type, does not build it.
 				guard !treePropertyNodes.contains(where: { $0.property == dependency.property }) else { continue }
-				uncoveredDependencies.add(dependency.property, isHiddenWhereReferenced: false)
+				uncoveredDependencies.add(dependency, isHiddenWhereReferenced: false)
 			case .received, .aliased, .forwarded:
 				break
 			}
@@ -1783,12 +1800,73 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				.union(onlyIfAvailableReceivedProperties.map(\.label)),
 			hiddenEntries: uncoveredDependencies.indicesHiddenWhereReferenced,
 		)
-		var uncoveredDependencyNameMap = [String: [TypeDescription: String]]()
-		for (property, name) in zip(uncoveredDependencies.properties, uncoveredDependencyNames) where name != property.label {
-			uncoveredDependencyNameMap[property.label, default: [:]][property.typeDescription] = name
-		}
 		let flatUncoveredParameters = uncoveredDependencies.properties.indices.map { index in
-			(label: uncoveredDependencyNames[index], typeSource: uncoveredDependencies.typeSources[index])
+			MockRootParameters.UncoveredParameter(
+				property: uncoveredDependencies.properties[index],
+				label: uncoveredDependencyNames[index],
+				typeSource: uncoveredDependencies.typeSources[index],
+				instantiatedType: uncoveredDependencies.instantiatedTypes[index],
+			)
+		}
+
+		return MockRootParameters(
+			parameterTree: parameterTree,
+			forwardedDependencies: forwardedDependencies,
+			rootConstructionInitializer: rootConstructionInitializer,
+			rootDefaultParameters: rootDefaultParameters,
+			flatReceivedProperties: flatReceivedProperties,
+			onlyIfAvailableReceivedProperties: onlyIfAvailableReceivedProperties,
+			flatUncoveredParameters: flatUncoveredParameters,
+			lazilyInstantiatedReceivedProperties: lazilyInstantiatedReceivedProperties,
+		)
+	}
+
+	/// Generates the full mock extension code for a `.root` node in mock mode.
+	private func generateMockRootCode(
+		instantiable: Instantiable,
+		context: MockContext,
+	) async throws -> String {
+		let typeName = instantiable.concreteInstantiable.asSource
+		let mockAttributesPrefix = instantiable.mockAttributes.isEmpty ? "" : "\(instantiable.mockAttributes) "
+		let indent = Self.standardIndent
+		let bodyIndent = "\(indent)\(indent)"
+
+		// The generated `mock()` method's return type matches the construction
+		// call site: if `customMock` returns an additional type (e.g. the type
+		// fulfills a protocol and `customMock` returns that protocol), returning
+		// `typeName` here would be a type error because `customMock`'s result
+		// cannot be downcast implicitly. Use `mockReturnType` for those cases,
+		// and fall back to `typeName` when there is no custom mock or the custom
+		// mock already returns the concrete type / `Self`.
+		let mockMethodReturnType: String = {
+			guard let mockReturnType = instantiable.mockReturnType,
+			      !instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiable.concreteInstantiable)
+			else { return typeName }
+			return mockReturnType.asSource
+		}()
+
+		// 1. Build the parameter tree and identify the flat parameters.
+		let parameters = await mockRootParameters(instantiable: instantiable)
+		let parameterTree = parameters.parameterTree
+		let forwardedDependencies = parameters.forwardedDependencies
+		let rootConstructionInitializer = parameters.rootConstructionInitializer
+		let rootDefaultParameters = parameters.rootDefaultParameters
+		let treePropertyNodes = parameterTree.propertyNodes
+		let treePropertyLabels = Set(treePropertyNodes.map(\.propertyLabel))
+		let flatReceivedProperties = parameters.flatReceivedProperties
+		let onlyIfAvailableReceivedProperties = parameters.onlyIfAvailableReceivedProperties
+		let flatUncoveredParameters = parameters.flatUncoveredParameters
+		let lazilyInstantiatedReceivedProperties = parameters.lazilyInstantiatedReceivedProperties
+
+		// The names `mockRootParameters` named the uncovered dependencies apart from, which the rest of the mock
+		// is named apart from too.
+		let namesDeclaredInBuilderFunctions = Self.namesDeclaredInBuilderFunctions(of: treePropertyNodes)
+		let rootLabelMap = Self.disambiguatePropertyLabels(for: treePropertyNodes, reservedNames: namesDeclaredInBuilderFunctions)
+		let treeBindingNames = Self.bindingNames(of: treePropertyNodes, labels: treePropertyLabels, labelMap: rootLabelMap)
+		let uncoveredDependencyNames = flatUncoveredParameters.map(\.label)
+		var uncoveredDependencyNameMap = [String: [TypeDescription: String]]()
+		for uncoveredParameter in flatUncoveredParameters where uncoveredParameter.label != uncoveredParameter.property.label {
+			uncoveredDependencyNameMap[uncoveredParameter.property.label, default: [:]][uncoveredParameter.property.typeDescription] = uncoveredParameter.label
 		}
 
 		// Disambiguate flat received parameter labels when collisions exist.
@@ -2345,6 +2423,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The concrete type (e.g., `ConcreteService`), which may differ from `instantiatedTypeDescription`
 		/// when the property uses an existential wrapper (e.g., `AnyService` fulfilled by `ConcreteService`).
 		let concreteType: TypeDescription
+		/// The file that declares `concreteType`, as `Instantiable.sourceFilePath` records it.
+		let sourceFilePath: String?
+		/// Where the hand-written mock `useMockInitializer` selects is declared, when the type has one.
+		let mockDeclarationLocation: Dependency.DeclarationLocation?
 		/// Forwarded properties on this type (relevant for Instantiator edges).
 		let forwardedProperties: Set<Property>
 		/// Set when this property's label repeats in the ancestor stack during
@@ -2981,6 +3063,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					useMockInitializer: useMockInitializer,
 					customMockName: childInstantiable.customMockName,
 					concreteType: childInstantiable.concreteInstantiable,
+					sourceFilePath: childInstantiable.sourceFilePath,
+					mockDeclarationLocation: childInstantiable.mockDeclarationLocation,
 					forwardedProperties: forwardedProperties,
 					isPropertyCycle: isPropertyCycle,
 					cycleClosingProperties: childGenerator.cycleClosingProperties,
@@ -3000,10 +3084,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		private(set) var properties = [Property]()
 		/// The type each parameter is spelled with.
 		private(set) var typeSources = [String]()
+		/// The type each dependency instantiates, which no `@Instantiable` declaration fulfills.
+		private(set) var instantiatedTypes = [TypeDescription]()
 		/// The indices of the dependencies whose label a builder function around a type passed them declares.
 		private(set) var indicesHiddenWhereReferenced = Set<Int>()
 
-		mutating func add(_ property: Property, isHiddenWhereReferenced: Bool) {
+		mutating func add(_ dependency: Dependency, isHiddenWhereReferenced: Bool) {
+			let property = dependency.property
 			let index: Int
 			if let existingIndex = properties.firstIndex(of: property) {
 				index = existingIndex
@@ -3016,6 +3103,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				typeSources.append(property.propertyType.isConstant
 					? property.typeDescription.asInstantiatedType.asFunctionParameter.asSource
 					: property.typeDescription.asFunctionParameter.asSource)
+				instantiatedTypes.append(dependency.asInstantiatedType)
 			}
 			if isHiddenWhereReferenced {
 				indicesHiddenWhereReferenced.insert(index)
@@ -3047,7 +3135,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				guard !childLabels.contains(dependency.property.label) else { continue }
 				uncoveredLabels.insert(dependency.property.label)
 				uncoveredDependencies.add(
-					dependency.property,
+					dependency,
 					isHiddenWhereReferenced: namesDeclaredByEnclosingBuilderFunctions.contains(dependency.property.label),
 				)
 			}

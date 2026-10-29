@@ -62,6 +62,19 @@ public struct NormalizedFilePath: Hashable, Comparable, Sendable {
 		path(relativeToDirectoryPrefix: directory.directoryPrefix)
 	}
 
+	/// This path spelled under `directory` as the caller spelled it – `directorySpelling`, which named `directory` –
+	/// when the file lies inside `directory`, and otherwise the normalized path. `query` reports a declaration's
+	/// file under the `--include` argument that named its module, so the path opens from where the tool ran and
+	/// does not change with the working directory's own spelling.
+	public func path(under directory: NormalizedFilePath, spelled directorySpelling: String) -> String {
+		let relativePath = path(relativeTo: directory)
+		return if relativePath == path {
+			path
+		} else {
+			(directorySpelling as NSString).appendingPathComponent(relativePath)
+		}
+	}
+
 	public static func < (lhs: NormalizedFilePath, rhs: NormalizedFilePath) -> Bool {
 		lhs.path < rhs.path
 	}

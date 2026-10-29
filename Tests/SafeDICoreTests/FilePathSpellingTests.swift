@@ -69,6 +69,19 @@ struct FilePathSpellingTests: ~Copyable {
 	}
 
 	@Test
+	func pathUnder_spellsPathUnderDirectoryAsSpelled_whenPathIsInsideDirectory() {
+		// The caller's spelling of the directory is kept, with or without a trailing `/`, and the file follows it.
+		#expect(NormalizedFilePath("/Project/Sources/File.swift").path(under: NormalizedFilePath("/Project/Sources"), spelled: "Sources/") == "Sources/File.swift")
+		#expect(NormalizedFilePath("/Project/Sources/Nested/File.swift").path(under: NormalizedFilePath("/Project/Sources"), spelled: "../Project/Sources") == "../Project/Sources/Nested/File.swift")
+	}
+
+	@Test
+	func pathUnder_returnsNormalizedPath_whenPathIsOutsideDirectory() {
+		// A file the directory does not contain cannot be spelled under it.
+		#expect(NormalizedFilePath("/ProjectSibling/File.swift").path(under: NormalizedFilePath("/Project"), spelled: "Project") == "/ProjectSibling/File.swift")
+	}
+
+	@Test
 	func reportsResolvedProjectRoot_isTrue_whenRootIsSpelledAsResolved() throws {
 		#expect(try ProjectFilePaths(projectRoot: resolvedProjectRoot).reportsResolvedProjectRoot)
 	}

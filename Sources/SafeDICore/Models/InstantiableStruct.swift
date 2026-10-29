@@ -102,6 +102,16 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		return merged
 	}
 
+	/// This declaration without its hand-written mock, as production builds the type: with `init` or `instantiate()`.
+	public var withoutHandWrittenMock: Instantiable {
+		var instantiable = self
+		instantiable.mockInitializer = nil
+		instantiable.mockReturnType = nil
+		instantiable.customMockName = nil
+		instantiable.mockDeclarationLocation = nil
+		return instantiable
+	}
+
 	/// The dependencies `handWrittenMock`, this type's hand-written mock, is not passed. A generated mock passes
 	/// a dependency to the argument that shares its label, so these are the dependencies whose label no argument
 	/// has. A mock method declared with the type takes every dependency, so only one merged in from a `mockOnly`
