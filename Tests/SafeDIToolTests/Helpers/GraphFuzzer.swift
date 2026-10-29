@@ -296,6 +296,16 @@ enum GraphFuzzerGenerator {
 						label: "lazyT\(labelIndex)",
 						type: "\(wrapper)<\(typeName(target))>",
 					))
+				} else if roll >= 45, roll < 52 {
+					// A forwarded erased instantiator, which the type passes through to the types below it. It draws
+					// nothing, as the forwarded constant it replaces draws nothing, so the rest of the graph is drawn
+					// as before.
+					let wrapper = forwardedErasedInstantiatorIsSendable(labelIndex: labelIndex) ? "SendableErasedInstantiator" : "ErasedInstantiator"
+					forwardedProperties.append(PropertyDeclaration(
+						attribute: "@Forwarded",
+						label: "anyT\(labelIndex)Builder",
+						type: "\(wrapper)<(), \(erasedTypeName(target))>",
+					))
 				} else {
 					forwardedProperties.append(PropertyDeclaration(
 						attribute: "@Forwarded",
@@ -409,6 +419,19 @@ enum GraphFuzzerGenerator {
 			}
 		}
 
+		/// Whether a forwarded erased instantiator is `Sendable`. A mixed graph decides by the label, rather than by a
+		/// draw, so that adding forwarded erased instantiators left every other graph drawn as before.
+		private func forwardedErasedInstantiatorIsSendable(labelIndex: Int) -> Bool {
+			switch sendability {
+			case .nonSendable:
+				false
+			case .sendable:
+				true
+			case .mixed:
+				labelIndex.isMultiple(of: 2)
+			}
+		}
+
 		/// The target's own index, or now and then another type's, whose label the property then borrows.
 		private mutating func borrowedLabelIndex(for target: Int) -> Int {
 			guard random.percentChance(8) else { return target }
@@ -440,10 +463,9 @@ enum GraphFuzzerGenerator {
 
 		// MARK: Second pass
 
-		/// Makes `property` receivable below `providerIndex`. The macro rejects a received erased instantiator,
-		/// which only `@Instantiated(fulfilledByType:)` can declare, so such a property is never received.
+		/// Makes `property` receivable below `providerIndex`. An erased instantiator is received with exactly the
+		/// type its provider declares, including the forwarded properties its first generic names.
 		private mutating func provide(_ property: PropertyDeclaration, providerIndex: Int?, builtIndex: Int?) {
-			guard !property.type.contains("ErasedInstantiator<") else { return }
 			provided.append(ProvidedProperty(label: property.label, type: property.type, providerIndex: providerIndex, builtIndex: builtIndex))
 			// A `LazilyInstantiated` property also provides its instance under its label. An optional one does not.
 			for wrapper in ["SendableLazilyInstantiated<", "LazilyInstantiated<"] where property.type.hasPrefix(wrapper) && property.type.hasSuffix(">") {
@@ -525,6 +547,7 @@ enum GraphFuzzerGenerator {
 			let candidates = receivableProperties(receiverIndex: receiverIndex).filter { candidate in
 				!candidate.isOptional
 					&& !candidate.type.contains("(")
+					&& !candidate.type.contains("ErasedInstantiator<")
 					&& provided.allSatisfy { $0.label != candidate.label || $0.type == candidate.type }
 			}
 			guard !candidates.isEmpty else { return nil }
@@ -808,8 +831,17 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case sendableAndNonSendableWrappers
 	/// One label received as two different wrappers of a type that is not `@Instantiable`.
 	case sameLabelReceivedAsDifferentUnbuildableWrappers
+	/// A received `ErasedInstantiator` or `SendableErasedInstantiator`.
+	case receivedErasedInstantiator
+	/// A forwarded `ErasedInstantiator` or `SendableErasedInstantiator`.
+	case forwardedErasedInstantiator
 	/// A default-valued parameter of an extension's `instantiate(…)` method.
 	case defaultValuedInstantiateParameter
+
+	/// The features the macro rejects until it accepts received and forwarded erased instantiators (PR 438), so
+	/// that no graph the oracle passes can exercise them. Every graph that has one fails as the known issue that
+	/// says so, which goes stale once the macro accepts them; remove this then.
+	static let awaitingMacroSupport: Set<GraphFuzzerFeature> = [.receivedErasedInstantiator, .forwardedErasedInstantiator]
 
 	static func < (lhs: GraphFuzzerFeature, rhs: GraphFuzzerFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -915,6 +947,13 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				features.insert(isErased ? .erasedLazilyInstantiatedProperty : type.hasPrefix("Sendable") ? .sendableLazilyInstantiatedProperty : .lazilyInstantiatedProperty)
 			} else if attribute == "@Forwarded" {
 				features.insert(.forwardedLazilyInstantiatedProperty)
+			}
+		}
+		if type.hasPrefix("ErasedInstantiator<") || type.hasPrefix("SendableErasedInstantiator<") {
+			if attribute.hasPrefix("@Received") {
+				features.insert(.receivedErasedInstantiator)
+			} else if attribute == "@Forwarded" {
+				features.insert(.forwardedErasedInstantiator)
 			}
 		}
 		if attribute.hasPrefix("@Instantiated"), !type.contains("<") {
@@ -1109,6 +1148,9 @@ struct GraphFuzzerKnownIssue: Equatable {
 		case compilerError(containing: String)
 		/// The Swift compiler crashes while compiling a generated mock.
 		case compilerCrashInGeneratedMock
+		/// The fixture itself fails to compile, with an error whose message contains this text: the macro rejects
+		/// a shape the generator emits before the macro accepts it.
+		case macroRejectsFixture(containing: String)
 	}
 
 	let reason: String
@@ -1124,6 +1166,8 @@ struct GraphFuzzerKnownIssue: Equatable {
 				failure.kind == .generatedCodeDoesNotCompile && failure.details.contains(text)
 			case .compilerCrashInGeneratedMock:
 				failure.kind == .compilerCrashedOnGeneratedCode && failure.details.contains("+SafeDIMock.swift")
+			case let .macroRejectsFixture(text):
+				failure.kind == .fixtureDoesNotCompile && failure.details.contains(text)
 			}
 		}
 	}
