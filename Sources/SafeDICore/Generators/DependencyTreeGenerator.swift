@@ -3997,8 +3997,18 @@ public actor DependencyTreeGenerator {
 	private struct ReceivableAlias {
 		let fulfillingProperty: Property
 		let onlyIfAvailable: Bool
-		/// Whether the fulfilling property is provided where the alias is declared, or is an ancestor still being
-		/// built there. Only an `onlyIfAvailable` alias can lack it, and it is then not created.
+		/// The `onlyIfAvailable` aliases, declared with this one, from which an `onlyIfAvailable` alias is created in
+		/// turn, in order: the alias of `fulfillingProperty` that a receive of it resolves to, when it is
+		/// `onlyIfAvailable` too, then the alias of that alias's fulfilling property, and so on. An `onlyIfAvailable`
+		/// alias is created only where the alias it renames is, so a receive that requires this alias requires each
+		/// of them. Empty for a required alias, whose declaring scope requires its fulfilling property itself
+		/// (`Scope.requiredReceivedProperties`), and for an alias of aliases that fulfill one another, which are never
+		/// created and which `aliasesFulfillingOneAnother` reports.
+		let fulfillingOnlyIfAvailableAliases: [DependencyTreeGeneratorError.RequiredOnlyIfAvailableAlias]
+		/// Whether the property the alias is ultimately created from – the fulfilling property of the last of
+		/// `fulfillingOnlyIfAvailableAliases`, or `fulfillingProperty` when there are none – is provided where the
+		/// alias is declared, or is an ancestor still being built there. Only an `onlyIfAvailable` alias can lack it,
+		/// and it is then not created.
 		let isFulfillingPropertyAvailable: Bool
 		/// The type that declares the alias.
 		let declaringType: TypeDescription
@@ -4296,6 +4306,7 @@ public actor DependencyTreeGenerator {
 					let alias = ReceivableAlias(
 						fulfillingProperty: fulfillingProperty,
 						onlyIfAvailable: onlyIfAvailable,
+						fulfillingOnlyIfAvailableAliases: [],
 						// An ancestor still being built counts as available: a receive inside it is a cycle, reported below.
 						isFulfillingPropertyAvailable: isFulfillingPropertyProvided
 							|| formsOnStack(of: validatedFulfillingProperty).contains(where: instantiationStack.contains),
@@ -4311,28 +4322,73 @@ public actor DependencyTreeGenerator {
 					uncreatedAliasPropertiesProvidedByEnclosingScope.insert(aliasProperty)
 				}
 			}
+			// An `onlyIfAvailable` alias of another `onlyIfAvailable` alias this scope declares is created from it, so
+			// only where it is created: a receive that requires the first requires the second, and so on along any
+			// chain of them, as `ScopeGenerator`'s `requiredOnlyIfAvailableAliasProperties` orders them and
+			// `ScopeDeclarations.requirements(childRequiredReceived:childRequirements:)` finds them. A chain needs two
+			// aliases, which few scopes declare.
+			if declaredAliases.count > 1 {
+				let unchainedDeclaredAliases = declaredAliases
+				for (aliasProperty, alias) in unchainedDeclaredAliases where alias.onlyIfAvailable {
+					var fulfillingOnlyIfAvailableAliases = [DependencyTreeGeneratorError.RequiredOnlyIfAvailableAlias]()
+					var aliasPropertiesInChain: Set<Property> = [aliasProperty]
+					var lastAlias = alias
+					while let fulfillingAlias = unchainedDeclaredAliases[lastAlias.fulfillingProperty],
+					      fulfillingAlias.onlyIfAvailable,
+					      aliasPropertiesInChain.insert(lastAlias.fulfillingProperty).inserted
+					{
+						fulfillingOnlyIfAvailableAliases.append(.init(property: lastAlias.fulfillingProperty, fulfillingProperty: fulfillingAlias.fulfillingProperty))
+						lastAlias = fulfillingAlias
+					}
+					// A chain that comes back to an alias already on it is of aliases that fulfill one another, which are
+					// never created and which `aliasesFulfillingOneAnother` reports once this walk passes, so the alias
+					// is left as it is.
+					if !aliasPropertiesInChain.contains(lastAlias.fulfillingProperty) {
+						declaredAliases[aliasProperty] = ReceivableAlias(
+							fulfillingProperty: alias.fulfillingProperty,
+							onlyIfAvailable: true,
+							fulfillingOnlyIfAvailableAliases: fulfillingOnlyIfAvailableAliases,
+							isFulfillingPropertyAvailable: lastAlias.isFulfillingPropertyAvailable,
+							declaringType: alias.declaringType,
+							declaringInstantiationStack: alias.declaringInstantiationStack,
+						)
+					}
+				}
+			}
 			// A required receive of an alias needs the alias created, so it needs the alias's fulfilling property,
-			// as the scope that declares the alias would if the alias were not `onlyIfAvailable`.
+			// as the scope that declares the alias would if the alias were not `onlyIfAvailable`. An `onlyIfAvailable`
+			// alias needs the aliases it is created from in turn, so it needs the property the last is created from.
 			for case let (requiredReceivedProperty, alias?) in scope.requiredReceivedProperties.lazy.map({
 				($0, declaredAliases[$0.property] ?? receivableAliases[$0.property])
 			}) where validatesCycles {
 				let receivedProperty = requiredReceivedProperty.property
-				let fulfillingProperty = alias.fulfillingProperty
-				// The instantiation stack holds a lazily instantiated property as the constant it stands for.
-				let validatedFulfillingProperty = fulfillingProperty.asValidatedForDependencyCycles
-				if let fulfillingPropertyBeingBuilt = formsOnStack(of: validatedFulfillingProperty).first(where: instantiationStack.contains) {
-					// This scope is built inside the alias's fulfilling property, so the alias cannot be created before it.
+				// The aliases the receive requires be created, nearest the receive first, each fulfilled by the next's
+				// property.
+				let requiredAliases = [DependencyTreeGeneratorError.RequiredOnlyIfAvailableAlias(property: receivedProperty, fulfillingProperty: alias.fulfillingProperty)]
+					+ alias.fulfillingOnlyIfAvailableAliases
+				let lastRequiredAlias = requiredAliases[requiredAliases.count - 1]
+				let fulfillingProperty = lastRequiredAlias.fulfillingProperty
+				// The required aliases up to the first whose fulfilling property is still being built, and that property
+				// as the instantiation stack holds it: a lazily instantiated property as the constant it stands for.
+				let aliasesClosingCycle = requiredAliases.indices.lazy.compactMap { index in
+					formsOnStack(of: requiredAliases[index].fulfillingProperty.asValidatedForDependencyCycles)
+						.first(where: instantiationStack.contains)
+						.map { (aliases: requiredAliases[...index], fulfillingPropertyBeingBuilt: $0) }
+				}.first
+				if case let (aliasesInCycle, fulfillingPropertyBeingBuilt)? = aliasesClosingCycle {
+					// This scope is built inside the property an alias the receive requires is created from, so that
+					// alias cannot be created before it.
 					throw DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(
 						instantiated: fulfillingPropertyBeingBuilt,
-						receivedPropertyChain: [receivedProperty.asValidatedForDependencyCycles, fulfillingPropertyBeingBuilt],
+						receivedPropertyChain: aliasesInCycle.map(\.property.asValidatedForDependencyCycles) + [fulfillingPropertyBeingBuilt],
 						declarationLocation: requiredReceivedProperty.declarationLocation,
 						lazilyInstantiatedProperties: Self.lazilyInstantiatedProperties(
-							closingCycleWith: fulfillingProperty,
+							closingCycleWith: aliasesInCycle[aliasesInCycle.endIndex - 1].fulfillingProperty,
 							validatedPropertiesInCycle: [fulfillingPropertyBeingBuilt],
 							lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations,
-							receivedProperties: [receivedProperty],
+							receivedProperties: aliasesInCycle.map(\.property),
 						),
-						requiredOnlyIfAvailableAliases: alias.onlyIfAvailable ? [.init(property: receivedProperty, fulfillingProperty: fulfillingProperty)] : [],
+						requiredOnlyIfAvailableAliases: alias.onlyIfAvailable ? Array(aliasesInCycle) : [],
 					)
 				} else if alias.onlyIfAvailable, !alias.isFulfillingPropertyAvailable {
 					if !cyclesOnly, property != nil {
@@ -4357,34 +4413,34 @@ public actor DependencyTreeGenerator {
 				          case let walkedAliasFulfillingProperty = [fulfillingProperty] + alias.declaringInstantiationStack,
 				          walkedAliasFulfillingProperties.insert(walkedAliasFulfillingProperty).inserted
 				{
-					// A required alias's fulfilling property is walked where the alias is declared. Walk this
-					// one there too, since the receive requires it.
+					// A required alias's fulfilling property is walked where the alias is declared. Walk the property
+					// the last required alias is created from there too, since the receive requires it.
 					do {
 						do {
 							try validateNoCycleInReceivedProperties(
 								[Scope.RequiredReceivedProperty(
 									property: fulfillingProperty,
-									aliasProperty: receivedProperty,
+									aliasProperty: lastRequiredAlias.property,
 									declarationLocation: requiredReceivedProperty.declarationLocation,
 									identifierRange: nil,
 									typeAnnotationRange: nil,
 									bareAttributeRange: nil,
 								)],
 								directParent: alias.declaringType,
-								receivedPropertyStack: [receivedProperty.asValidatedForDependencyCycles],
-								declaredReceivedPropertyStack: receivedProperty.propertyType.isLazilyInstantiated ? [receivedProperty] : [],
+								receivedPropertyStack: requiredAliases.map(\.property.asValidatedForDependencyCycles),
+								declaredReceivedPropertyStack: requiredAliases.map(\.property).filter(\.propertyType.isLazilyInstantiated),
 								property: declaringProperty,
 								instantiationStack: alias.declaringInstantiationStack,
 								lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations,
 							)
 						} catch let DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(instantiated, receivedPropertyChain, declarationLocation, lazilyInstantiatedProperties, _) {
-							// The chain starts with this receive, which closes it only because it requires the alias.
+							// The chain starts with this receive, which closes it only because it requires the aliases.
 							throw DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(
 								instantiated: instantiated,
 								receivedPropertyChain: receivedPropertyChain,
 								declarationLocation: declarationLocation,
 								lazilyInstantiatedProperties: lazilyInstantiatedProperties,
-								requiredOnlyIfAvailableAliases: [.init(property: receivedProperty, fulfillingProperty: fulfillingProperty)],
+								requiredOnlyIfAvailableAliases: requiredAliases,
 							)
 						}
 					} catch {
