@@ -333,64 +333,128 @@ struct SafeDIToolGraphFuzzerTests {
 	// MARK: Sibling alias chains
 
 	@Test
-	func fixture_declaresChainOfAliasesThroughOnlyIfAvailableAliasOfSiblingsOptionalFormBeneathOtherSibling_forSeed731() {
-		// `Root0` instantiates `t1: T1` and `lazyT0`, which builds `T0`; `T0` renames `t1` by its optional form only if
-		// available, renames that alias only if available, and renames the second alias as required, so `t1` must be
-		// built before `lazyT0`. Nothing receives `lazyT0`, so the tool accepts the graph and the smoke batch compiles it.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func fixture_declaresChainOfAliasesThroughOnlyIfAvailableAliasOfSiblingsOptionalFormBeneathOtherSibling_forSeed731() async throws {
+		// `Root0` instantiates `t1: T1` and `lazyT0`, which builds `T0`. `T0` renames `t1` by its optional form only if
+		// available and renames that alias as required; `Link0`, which only `T0` instantiates, renames the second alias
+		// as required; and `Link1`, which only `Link0` instantiates, receives the third. So `t1` must be built before
+		// `lazyT0`. `S731_Ext.instantiate` receives `lazyT0`'s instance, but nothing `t1` builds receives `lazyT0`, so
+		// the tool accepts the graph, creates the whole chain from `t1`, and the smoke batch compiles it.
 		let fixture = GraphFuzzerGenerator.fixture(forSeed: 731)
-		let propertiesByTypeName = fixture.swiftFileContent.reduce(into: [String: [(attribute: String, label: String, type: String)]]()) { properties, content in
-			var typeName = ""
-			for line in GraphFuzzerSourceLine.lines(of: content) {
-				switch line {
-				case let .typeDeclaration(name):
-					typeName = name
-				case let .property(attribute, label, type):
-					properties[typeName, default: []].append((attribute, label, type))
-				case .instantiableAttribute, .instantiateMethod, .other:
-					break
-				}
-			}
-		}
 
-		#expect(propertiesByTypeName["S731_Root0"]?.map(\.label) == ["t1", "lazyT0", "t2Builder", "ext"])
-		#expect(propertiesByTypeName["S731_Root0"]?.first { $0.label == "t1" }?.type == "S731_T1")
-		#expect(propertiesByTypeName["S731_T0"]?.suffix(3).map { "\($0.attribute) let \($0.label): \($0.type)" } == [
-			"@Received(fulfilledByDependencyNamed: \"t1\", ofType: S731_T1?.self, onlyIfAvailable: true) let t1Alias: S731_T1?",
-			"@Received(fulfilledByDependencyNamed: \"t1Alias\", ofType: S731_T1?.self, onlyIfAvailable: true) let t1AliasAlias: S731_T1?",
-			"@Received(fulfilledByDependencyNamed: \"t1AliasAlias\", ofType: S731_T1?.self) let t1AliasAliasAlias: S731_T1?",
+		#expect(Self.propertyDeclarations(of: "S731_Root0", in: fixture).prefix(2) == [
+			"@Instantiated let t1: S731_T1",
+			"@Instantiated let lazyT0: SendableLazilyInstantiated<S731_T0>",
 		])
-		#expect(propertiesByTypeName["S731_T1"] == nil)
+		#expect(Self.propertyDeclarations(of: "S731_T0", in: fixture).suffix(3) == [
+			"@Received(fulfilledByDependencyNamed: \"t1\", ofType: S731_T1?.self, onlyIfAvailable: true) let t1Alias: S731_T1?",
+			"@Received(fulfilledByDependencyNamed: \"t1Alias\", ofType: S731_T1?.self) let t1AliasAlias: S731_T1?",
+			"@Instantiated let link0: S731_Link0",
+		])
+		#expect(Self.propertyDeclarations(of: "S731_Link0", in: fixture) == [
+			"@Received(fulfilledByDependencyNamed: \"t1AliasAlias\", ofType: S731_T1?.self) let t1AliasAliasAlias: S731_T1?",
+			"@Instantiated let link1: S731_Link1",
+		])
+		#expect(Self.propertyDeclarations(of: "S731_Link1", in: fixture) == ["@Received let t1AliasAliasAlias: S731_T1?"])
+		#expect(Self.propertyDeclarations(of: "S731_T1", in: fixture) == [])
 		#expect(GraphFuzzerFeature.features(of: fixture).isSuperset(of: [.aliasOfOptionalFormOfProperty, .aliasOfOnlyIfAvailableAlias, .onlyIfAvailableAlias, .requiredAlias]))
+		let result = try #require(try await smokeResults.value.first { $0.fixture.seed == 731 })
+		#expect(result.failure == nil)
+		#expect(Self.generatedFiles(of: result.outcome)["S731_Root0+SafeDI.swift"]?.contains("let t1AliasAliasAlias: S731_T1? = t1AliasAlias") == true)
 	}
 
 	@Test
-	func fixture_makesSiblingsTypeReceiveTheOtherSibling_forSeed2037() {
-		// Each root instantiates `t1: T1` and `t3: T3`; `T1` renames `t3` by its optional form only if available and `T0`,
-		// which it instantiates, requires the alias, so `t3` must be built before `t1`; and `T3` receives `t1`, so it
-		// cannot be. The tool rejects the graph as a dependency cycle at `T0`'s receive; `T1` is also mocked.
-		let fixture = GraphFuzzerGenerator.fixture(forSeed: 2_037)
-		let lines = fixture.swiftFileContent.flatMap(GraphFuzzerSourceLine.lines(of:))
-		func properties(of typeName: String) -> [String] {
-			var currentTypeName = ""
-			return lines.compactMap { line in
-				switch line {
-				case let .typeDeclaration(name):
-					currentTypeName = name
-					return nil
-				case let .property(attribute, label, type):
-					return currentTypeName == typeName ? "\(attribute) let \(label): \(type)" : nil
-				case .instantiableAttribute, .instantiateMethod, .other:
-					return nil
-				}
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func fixture_declaresChainOfAliasesThroughChildScopeBeneathOtherSibling_forSeed2420() async throws {
+		// `T0`, which no root reaches, so that only its mock builds it, instantiates `t6: T6` and `t2: T2`. `T2` renames
+		// `t6` only if available and renames that alias only if available; `Link0`, which only `T2` instantiates,
+		// renames the second alias only if available – a chain through a child scope – and renames the third as
+		// required, which is created whether or not anything receives it. So `t6` must be built before `t2`, and
+		// nothing stops it: the tool accepts the graph, `T0`'s mock creates the whole chain from `t6`, and the smoke
+		// batch compiles it.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 2_420)
+
+		#expect(Self.propertyDeclarations(of: "S2420_T0", in: fixture).prefix(2) == [
+			"@Instantiated let t6: S2420_T6",
+			"@Instantiated let t2: S2420_T2",
+		])
+		#expect(Self.propertyDeclarations(of: "S2420_T2", in: fixture).suffix(3) == [
+			"@Received(fulfilledByDependencyNamed: \"t6\", ofType: S2420_T6.self, onlyIfAvailable: true) let t6Alias: S2420_T6?",
+			"@Received(fulfilledByDependencyNamed: \"t6Alias\", ofType: S2420_T6?.self, onlyIfAvailable: true) let t6AliasAlias: S2420_T6?",
+			"@Instantiated let link0: S2420_Link0",
+		])
+		#expect(Self.propertyDeclarations(of: "S2420_Link0", in: fixture) == [
+			"@Received(fulfilledByDependencyNamed: \"t6AliasAlias\", ofType: S2420_T6?.self, onlyIfAvailable: true) let t6AliasAliasAlias: S2420_T6?",
+			"@Received(fulfilledByDependencyNamed: \"t6AliasAliasAlias\", ofType: S2420_T6?.self) let t6AliasAliasAliasAlias: S2420_T6?",
+		])
+		let result = try #require(try await smokeResults.value.first { $0.fixture.seed == 2_420 })
+		#expect(result.failure == nil)
+		#expect(Self.generatedFiles(of: result.outcome)["S2420_T0+SafeDIMock.swift"]?.contains("let t6AliasAliasAliasAlias: S2420_T6? = t6AliasAliasAlias") == true)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func fixture_makesSiblingsTypeReceiveTheOtherSibling_forSeed4224() async throws {
+		// `Root0` instantiates `t1: T1` and `t2: T2`. `T1` renames `t2` by its optional form only if available;
+		// `Link0`, which only `T1` instantiates, renames that alias only if available – a chain through a child scope –
+		// renames the second alias only if available, and renames the third as required. So `t2` must be built before
+		// `t1`, and `T2` receives `t1`, so it cannot be: the tool rejects the graph with the dependency cycle at that
+		// receive.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 4_224)
+
+		#expect(Self.propertyDeclarations(of: "S4224_Root0", in: fixture).prefix(2) == [
+			"@Instantiated let t1: S4224_T1",
+			"@Instantiated let t2: S4224_T2",
+		])
+		#expect(Self.propertyDeclarations(of: "S4224_T1", in: fixture).suffix(2) == [
+			"@Received(fulfilledByDependencyNamed: \"t2\", ofType: S4224_T2?.self, onlyIfAvailable: true) let t2Alias: S4224_T2?",
+			"@Instantiated let link0: S4224_Link0",
+		])
+		#expect(Self.propertyDeclarations(of: "S4224_Link0", in: fixture) == [
+			"@Received(fulfilledByDependencyNamed: \"t2Alias\", ofType: S4224_T2?.self, onlyIfAvailable: true) let t2AliasAlias: S4224_T2?",
+			"@Received(fulfilledByDependencyNamed: \"t2AliasAlias\", ofType: S4224_T2?.self, onlyIfAvailable: true) let t2AliasAliasAlias: S4224_T2?",
+			"@Received(fulfilledByDependencyNamed: \"t2AliasAliasAlias\", ofType: S4224_T2?.self) let t2AliasAliasAliasAlias: S4224_T2?",
+		])
+		#expect(Self.propertyDeclarations(of: "S4224_T2", in: fixture).last == "@Received let t1: S4224_T1")
+		let result = try #require(try await smokeResults.value.first { $0.fixture.seed == 4_224 })
+		#expect(result.failure == nil)
+		#expect(Self.diagnostics(of: result.outcome)?.contains(
+			"S4224_T2.swift:10:2: error: Dependency cycle: @Instantiated `t1: S4224_T1` -> @Received `t2: S4224_T2?` -> @Received `t1: S4224_T1`. `t1: S4224_T1` is received while it is still being instantiated.",
+		) == true)
+	}
+
+	/// The properties the type named `typeName` declares in `fixture`, each as `<attribute> let <label>: <type>`.
+	private static func propertyDeclarations(of typeName: String, in fixture: GraphFuzzerFixture) -> [String] {
+		var currentTypeName = ""
+		return fixture.swiftFileContent.flatMap(GraphFuzzerSourceLine.lines(of:)).compactMap { line in
+			switch line {
+			case let .typeDeclaration(name):
+				currentTypeName = name
+				return nil
+			case let .property(attribute, label, type):
+				return currentTypeName == typeName ? "\(attribute) let \(label): \(type)" : nil
+			case .instantiableAttribute, .instantiateMethod, .other:
+				return nil
 			}
 		}
+	}
 
-		#expect(properties(of: "S2037_Root0").contains("@Instantiated let t3: S2037_T3"))
-		#expect(properties(of: "S2037_Root0").contains("@Instantiated let t1: S2037_T1"))
-		#expect(properties(of: "S2037_T1").contains("@Received(fulfilledByDependencyNamed: \"t3\", ofType: S2037_T3?.self, onlyIfAvailable: true) let t3Alias: S2037_T3?"))
-		#expect(properties(of: "S2037_T1").contains("@Instantiated let t0Builder: Instantiator<S2037_T0>"))
-		#expect(properties(of: "S2037_T0").contains("@Received let t3Alias: S2037_T3?"))
-		#expect(properties(of: "S2037_T3").contains("@Received let t1: S2037_T1"))
+	private static func generatedFiles(of outcome: GraphFuzzerToolOutcome) -> [String: String] {
+		switch outcome {
+		case let .accepted(generatedFiles, _):
+			generatedFiles
+		case .rejected:
+			[:]
+		}
+	}
+
+	private static func diagnostics(of outcome: GraphFuzzerToolOutcome) -> String? {
+		switch outcome {
+		case .accepted:
+			nil
+		case let .rejected(diagnostics):
+			diagnostics
+		}
 	}
 
 	@Test
@@ -661,27 +725,28 @@ struct SafeDIToolGraphFuzzerTests {
 
 	// MARK: Seeds
 
-	/// The ordinary suite's batch: seeds 25, 62, 582, 691, 705, 731, and 930, whose graphs the tool accepts, with the
-	/// same results under every `GraphFuzzerRenaming`, and which between them exercise every feature (seed 25's graph
-	/// has a chain of aliases through an `onlyIfAvailable` alias; seed 731's has a chain through an `onlyIfAvailable`
-	/// alias of a sibling's optional form), and seeds 14 and 2037, whose graphs it rejects (seed 2037's with the
-	/// dependency cycle through such an alias, because the sibling's type receives the other sibling). It is small
-	/// because compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on every pull request.
-	/// Compiling the batch is one `swiftc` invocation when nothing fails.
-	static let smokeSeeds: [UInt64] = [14, 25, 62, 582, 691, 705, 731, 930, 2_037]
+	/// The ordinary suite's batch: seeds 25, 62, 582, 691, 705, 731, 930, and 2420, whose graphs the tool accepts, with
+	/// the same results under every `GraphFuzzerRenaming`, and which between them exercise every feature (seed 25's
+	/// graph has a chain of aliases through an `onlyIfAvailable` alias; seed 731's has a chain through an
+	/// `onlyIfAvailable` alias of a sibling's optional form; seed 2420's has such a chain through a child scope), and
+	/// seeds 14 and 4224, whose graphs it rejects (seed 4224's with the dependency cycle through a chain through a child
+	/// scope, because the sibling's type receives the other sibling). It is small because compiling generated code is
+	/// what the fuzzer costs; ci.yml fuzzes the whole corpus on every pull request. Compiling the batch is one `swiftc`
+	/// invocation when nothing fails.
+	static let smokeSeeds: [UInt64] = [14, 25, 62, 582, 691, 705, 731, 930, 2_420, 4_224]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x2C35C2D900935F43
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x8143853CAEA92642
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0xDF28FD2CD7BAC8B5
+	static let corpusFixtureHash: UInt64 = 0xA2B8E535A9D878F8
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
-	static let corpusAcceptedSeedCount = 2_356
-	static let corpusAcceptedSeedsSum: UInt64 = 0xB56801F0F68744E5
+	static let corpusAcceptedSeedCount = 2_355
+	static let corpusAcceptedSeedsSum: UInt64 = 0xB1190C232CB07B3F
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
@@ -705,7 +770,7 @@ struct SafeDIToolGraphFuzzerTests {
 				3_329, 3_344, 3_361, 3_397, 3_430, 3_439, 3_491, 3_504, 3_506, 3_513, 3_526, 3_533, 3_534, 3_537, 3_577,
 				3_582, 3_588, 3_596, 3_602, 3_604, 3_620, 3_645, 3_648, 3_661, 3_699, 3_707, 3_715, 3_723, 3_741, 3_750, 3_775,
 				3_776, 3_805, 3_823, 3_843, 3_894, 3_915, 3_942, 4_044, 4_068, 4_102, 4_107, 4_110, 4_117, 4_122, 4_125, 4_156,
-				4_177, 4_191, 4_192, 4_196, 4_206, 4_213, 4_215, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_360, 4_371,
+				4_177, 4_191, 4_192, 4_196, 4_206, 4_213, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_360, 4_371,
 				4_378, 4_393, 4_404, 4_420, 4_428, 4_496, 4_504, 4_515, 4_534, 4_541, 4_545, 4_567, 4_613, 4_619, 4_634, 4_637, 4_640,
 				4_642, 4_648, 4_664, 4_666, 4_707, 4_716, 4_717, 4_729, 4_775, 4_776, 4_781, 4_783, 4_786, 4_795, 4_834, 4_859,
 				4_904, 4_918, 4_922, 4_944, 4_947, 4_955, 4_963, 4_996,
@@ -723,14 +788,14 @@ struct SafeDIToolGraphFuzzerTests {
 			// The alias of an alias is labeled `<label>AliasAlias`, or `<label>AliasAliasAlias` one chain further.
 			signatures: [.compilerError(containing: "AliasAlias' in scope")],
 			seeds: [
-				1_795, 3_365, 4_096, 4_547,
+				1_753, 2_546, 3_470, 4_547, 4_698,
 			],
 		),
 		GraphFuzzerKnownIssue(
-			reason: "A required alias of an `onlyIfAvailable` alias of an `onlyIfAvailable` alias of the property being built is accepted, and names the uncreated alias",
+			reason: "A requirement of an `onlyIfAvailable` alias of an `onlyIfAvailable` alias of the property being built – a required alias of it, or a required receive beneath – is accepted, and names the uncreated alias",
 			signatures: [.compilerError(containing: "AliasAlias' in scope")],
 			seeds: [
-				3_470,
+				4_445,
 			],
 		),
 	]
