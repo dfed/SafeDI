@@ -577,11 +577,12 @@ struct SafeDIToolGraphFuzzerTests {
 
 	// MARK: Seeds
 
-	/// The ordinary suite's batch: seeds 62, 582, 691, 705, and 930, whose graphs the tool accepts, with the same
-	/// results under every `GraphFuzzerRenaming`, and which between them exercise every feature, and seed 14, whose
-	/// graph it rejects. It is small because compiling generated code is what the fuzzer costs; ci.yml fuzzes the
-	/// whole corpus on every pull request. Compiling the batch is one `swiftc` invocation when nothing fails.
-	static let smokeSeeds: [UInt64] = [14, 62, 582, 691, 705, 930]
+	/// The ordinary suite's batch: seeds 25, 62, 582, 691, 705, and 930, whose graphs the tool accepts, with the same
+	/// results under every `GraphFuzzerRenaming`, and which between them exercise every feature (seed 25's graph has
+	/// a chain of aliases through an `onlyIfAvailable` alias), and seed 14, whose graph it rejects. It is small because
+	/// compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on every pull request.
+	/// Compiling the batch is one `swiftc` invocation when nothing fails.
+	static let smokeSeeds: [UInt64] = [14, 25, 62, 582, 691, 705, 930]
 
 	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xC89C9908E3933AD9
 
@@ -589,12 +590,12 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0xFE5D9C52BB9D7A05
+	static let corpusFixtureHash: UInt64 = 0x0948CE4CC17AC78E
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
-	static let corpusAcceptedSeedCount = 2_445
-	static let corpusAcceptedSeedsSum: UInt64 = 0xCCB739ABF9AC704A
+	static let corpusAcceptedSeedCount = 2_414
+	static let corpusAcceptedSeedsSum: UInt64 = 0xB138A3396F7C2BC3
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
@@ -636,6 +637,13 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(containing: "changes its generated mock configuration code")],
 			seeds: [
 				69, 1_992, 2_186, 2_254, 3_931, 4_643, 4_747, 4_974,
+			],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "A type's construction passes an `onlyIfAvailable` alias of its own `onlyIfAvailable` alias by name where neither is created and nothing requires the chain",
+			signatures: [.compilerError(containing: "cannot find 't0AliasAliasAlias' in scope")],
+			seeds: [
+				4_547,
 			],
 		),
 	]
