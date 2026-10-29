@@ -2272,6 +2272,126 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTypeInTreeOfPromotedOptionalInstantiatorRequiresOnlyIfAvailableAliasOfIt() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["C.swift"]):7:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>?` -> @Received `aBuilderAlias: Instantiator<A>?` -> @Received `aBuilder: Instantiator<A>?`. `aBuilder: Instantiator<A>?` is received while it is still being instantiated. `aBuilderAlias: Instantiator<A>?` renames `aBuilder: Instantiator<A>` only if available, so a type that receives `aBuilderAlias` without `onlyIfAvailable` must be built after `aBuilder: Instantiator<A>`. Receive `aBuilderAlias` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `aBuilder: Instantiator<A>` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(aBuilder: Instantiator<A>?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let aBuilder: Instantiator<A>?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable {
+					    public init(b: B) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(aBuilderAlias: Instantiator<A>?, c: C) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(fulfilledByDependencyNamed: "aBuilder", ofType: Instantiator<A>.self, onlyIfAvailable: true) let aBuilderAlias: Instantiator<A>?
+					    @Instantiated let c: C
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(aBuilderAlias: Instantiator<A>?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let aBuilderAlias: Instantiator<A>?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTypeInTreeOfPromotedInstantiatorRequiresOnlyIfAvailableAliasOfIt() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["C.swift"]):7:5: error: Dependency cycle: @Instantiated `aBuilder: Instantiator<A>` -> @Received `aBuilderAlias: Instantiator<A>?` -> @Received `aBuilder: Instantiator<A>`. `aBuilder: Instantiator<A>` is received while it is still being instantiated. `aBuilderAlias: Instantiator<A>?` renames `aBuilder: Instantiator<A>` only if available, so a type that receives `aBuilderAlias` without `onlyIfAvailable` must be built after `aBuilder: Instantiator<A>`. Receive `aBuilderAlias` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `aBuilder: Instantiator<A>` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(aBuilder: Instantiator<A>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let aBuilder: Instantiator<A>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable {
+					    public init(b: B) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(aBuilderAlias: Instantiator<A>?, c: C) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(fulfilledByDependencyNamed: "aBuilder", ofType: Instantiator<A>.self, onlyIfAvailable: true) let aBuilderAlias: Instantiator<A>?
+					    @Instantiated let c: C
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(aBuilderAlias: Instantiator<A>?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let aBuilderAlias: Instantiator<A>?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()

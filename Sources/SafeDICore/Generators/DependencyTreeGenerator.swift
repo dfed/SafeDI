@@ -1364,7 +1364,7 @@ public actor DependencyTreeGenerator {
 		// This catches cycles that only become visible after @Received dependencies
 		// are promoted to the mock root (e.g., B @Receives Instantiator<A> where A
 		// instantiates B — the promotion creates a cycle in the mock root scope).
-		try validateMockRootScopeForCycles(
+		let declaresOnlyIfAvailableAliasOfPropertyBeingBuilt = try validateMockRootScopeForCycles(
 			mockRootScope,
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 		)
@@ -1373,7 +1373,10 @@ public actor DependencyTreeGenerator {
 		// first), which no ancestor stack shows. Detecting that is cheap; production's
 		// walk, which follows received dependencies between scopes, then reports the
 		// cycle. Running that walk on every mock root instead would add a
-		// received-dependency walk for every node of every mock tree.
+		// received-dependency walk for every node of every mock tree. The walk also
+		// reports a required receive of an `onlyIfAvailable` alias that is not created
+		// because its fulfilling property is still being built, so it runs when the
+		// walk above found such an alias too.
 		// The mock root binds every received property it does not promote, which encloses its whole tree.
 		let mockRootEnclosingProvidedProperties = childrenRequiringEachOtherValidation.enclosingProvidedProperties(
 			ofMockRoot: mockRootScope,
@@ -1385,7 +1388,9 @@ public actor DependencyTreeGenerator {
 			cache: &cache,
 		)
 		try validatePropertiesAreFulfillable(
-			onRootScopes: mockRootChildrenRequiringEachOther != nil ? [ValidatedRootScope(scope: mockRootScope, boundProperties: allReceived)] : [],
+			onRootScopes: mockRootChildrenRequiringEachOther != nil || declaresOnlyIfAvailableAliasOfPropertyBeingBuilt
+				? [ValidatedRootScope(scope: mockRootScope, boundProperties: allReceived)]
+				: [],
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 			cyclesOnly: true,
 		)
@@ -1444,17 +1449,35 @@ public actor DependencyTreeGenerator {
 	/// Walks a post-promotion mock root scope for dependency cycles.
 	/// The mock root scope has @Received dependencies promoted as children,
 	/// which can create cycles not visible in the pre-promotion scope.
+	/// - Returns: Whether a scope in the tree declares an `onlyIfAvailable` alias whose fulfilling property is still
+	///   being built there, so that the alias is not created.
 	private func validateMockRootScopeForCycles(
 		_ scope: Scope,
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
 		propertyStack: [Property] = [],
 		lazilyInstantiatedDeclarations: [Property: Property] = [:],
-	) throws {
+	) throws -> Bool {
+		var declaresOnlyIfAvailableAliasOfPropertyBeingBuilt = false
 		// Check dependencies for cycles (catches @Received references back to ancestors).
-		for dependency in scope.instantiable.dependencies where dependency.canCloseDependencyCycle {
+		for dependency in scope.instantiable.dependencies where !dependency.isForwarded {
 			let declaredPropertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
 			let propertyForDependency = declaredPropertyForDependency.asValidatedForDependencyCycles
-			guard let cycleIndex = propertyStack.firstIndex(of: propertyForDependency) else {
+			// A mock promotes a received optional property as the non-optional value it builds, so a receive of the
+			// non-optional form inside the tree it builds reaches it too.
+			let receivedForms: [Property] = if dependency.isInstantiated {
+				[propertyForDependency]
+			} else {
+				[propertyForDependency, Property(label: propertyForDependency.label, typeDescription: .optional(propertyForDependency.typeDescription))]
+			}
+			guard let cycleIndex = propertyStack.firstIndex(where: receivedForms.contains) else {
+				continue
+			}
+			guard dependency.canCloseDependencyCycle else {
+				// An `onlyIfAvailable` dependency is passed `nil` instead (`Dependency.canCloseDependencyCycle`). An
+				// alias passed `nil` is not created; a required receive of it is reported by the walk that follows.
+				if case .aliased(_, _, onlyIfAvailable: true) = dependency.source {
+					declaresOnlyIfAvailableAliasOfPropertyBeingBuilt = true
+				}
 				continue
 			}
 			let propertiesInCycle = [propertyForDependency] + propertyStack[0...cycleIndex]
@@ -1482,16 +1505,19 @@ public actor DependencyTreeGenerator {
 				let childProperty = declaredChildProperty.asValidatedForDependencyCycles
 				guard !propertyStack.contains(childProperty) else { continue }
 				let nextStack = [childProperty] + propertyStack
-				try validateMockRootScopeForCycles(
+				if try validateMockRootScopeForCycles(
 					childScope,
 					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 					propertyStack: nextStack,
 					lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations.recordingLazilyInstantiated(declaredChildProperty),
-				)
+				) {
+					declaresOnlyIfAvailableAliasOfPropertyBeingBuilt = true
+				}
 			case .aliased:
 				break
 			}
 		}
+		return declaresOnlyIfAvailableAliasOfPropertyBeingBuilt
 	}
 
 	/// Instantiated children of one scope that require one another in a cycle: each child's tree requires
@@ -2852,6 +2878,17 @@ public actor DependencyTreeGenerator {
 			}
 			return stackPropertiesReliedOn
 		}
+		/// The forms in which an alias's fulfilling property, as cycle validation sees it, can be on an instantiation
+		/// stack: as itself, unwrapped, and – in a mock, which promotes a received optional property as the
+		/// non-optional value it builds – as the optional property promoted to build it.
+		func formsOnStack(of validatedFulfillingProperty: Property) -> [Property] {
+			let unwrappedProperty = validatedFulfillingProperty.asUnwrappedProperty
+			return if cyclesOnly {
+				[validatedFulfillingProperty, unwrappedProperty, Property(label: unwrappedProperty.label, typeDescription: .optional(unwrappedProperty.typeDescription))]
+			} else {
+				[validatedFulfillingProperty, unwrappedProperty]
+			}
+		}
 		/// The fulfilling properties of the `onlyIfAvailable` aliases already walked by
 		/// `validateNoCycleInReceivedProperties`, each followed by its declaring scope's instantiation stack.
 		var walkedAliasFulfillingProperties = Set<[Property]>()
@@ -2918,7 +2955,7 @@ public actor DependencyTreeGenerator {
 						onlyIfAvailable: onlyIfAvailable,
 						// An ancestor still being built counts as available: a receive inside it is a cycle, reported below.
 						isFulfillingPropertyAvailable: isFulfillingPropertyProvided
-							|| [validatedFulfillingProperty, validatedFulfillingProperty.asUnwrappedProperty].contains(where: instantiationStack.contains),
+							|| formsOnStack(of: validatedFulfillingProperty).contains(where: instantiationStack.contains),
 						declaringType: scope.instantiable.concreteInstantiable,
 						declaringInstantiationStack: instantiationStack,
 					)
@@ -2940,7 +2977,7 @@ public actor DependencyTreeGenerator {
 				let fulfillingProperty = alias.fulfillingProperty
 				// The instantiation stack holds a lazily instantiated property as the constant it stands for.
 				let validatedFulfillingProperty = fulfillingProperty.asValidatedForDependencyCycles
-				if let fulfillingPropertyBeingBuilt = [validatedFulfillingProperty, validatedFulfillingProperty.asUnwrappedProperty].first(where: instantiationStack.contains) {
+				if let fulfillingPropertyBeingBuilt = formsOnStack(of: validatedFulfillingProperty).first(where: instantiationStack.contains) {
 					// This scope is built inside the alias's fulfilling property, so the alias cannot be created before it.
 					throw DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(
 						instantiated: fulfillingPropertyBeingBuilt,
