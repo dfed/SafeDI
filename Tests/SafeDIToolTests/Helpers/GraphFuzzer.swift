@@ -313,6 +313,7 @@ enum GraphFuzzerGenerator {
 			random = GraphFuzzerRandomNumberGenerator(seed: seed)
 			generatedNameRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.generatedNameRandomSeedMask)
 			unbuildableDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencyRandomSeedMask)
+			aliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.aliasChainRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
 			let sendabilityRoll = random.integer(in: 0...99)
@@ -373,7 +374,7 @@ enum GraphFuzzerGenerator {
 			appendMotif(to: &declarations)
 			// Decided last, so that the rest of a seed's graph does not depend on whether it has the extension.
 			let extensionSource = random.percentChance(25) ? extensionDeclarationSource(addingPropertyToOneOf: &declarations) : nil
-			return addingDependenciesMocksCannotBuild(to: addingPropertiesLabeledAsGeneratedNames(to: declarations)).map(source(of:))
+			return addingAliasChains(to: addingDependenciesMocksCannotBuild(to: addingPropertiesLabeledAsGeneratedNames(to: declarations))).map(source(of:))
 				+ [extensionSource].compactMap(\.self)
 		}
 
@@ -435,6 +436,8 @@ enum GraphFuzzerGenerator {
 		private var generatedNameRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingDependenciesMocksCannotBuild`, as `generatedNameRandom` does for its pass.
 		private var unbuildableDependencyRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only the choices of `addingAliasChains`, as `generatedNameRandom` does for its pass.
+		private var aliasChainRandom: GraphFuzzerRandomNumberGenerator
 		/// How many types that are not `@Instantiable` `addingDependenciesMocksCannotBuild` instantiates.
 		private var unbuildableTypeCount = 0
 		private let prefix: String
@@ -696,6 +699,12 @@ enum GraphFuzzerGenerator {
 		/// other than its own and those whose subtree holds it. Now and then, any provided property.
 		private mutating func receivableProperties(receiverIndex: Int) -> [ProvidedProperty] {
 			guard random.percentChance(90) else { return provided }
+			return propertiesProvidedAboveEveryPath(to: receiverIndex)
+		}
+
+		/// The provided properties that are provided above every path to the type at `receiverIndex`, other than
+		/// its own and those whose subtree holds it.
+		private func propertiesProvidedAboveEveryPath(to receiverIndex: Int) -> [ProvidedProperty] {
 			// A label that names a property built only after the receiver resolves, along some path, to that
 			// property, and SafeDI rejects the receive as a cycle.
 			let labelsBuiltAround = Set(provided.filter { property in
@@ -923,6 +932,91 @@ enum GraphFuzzerGenerator {
 
 		private static let unbuildableDependencyRandomSeedMask: UInt64 = 0x756E6275696C6461
 
+		/// Now and then adds a chain of aliases through an `onlyIfAvailable` alias to a type of the graph: a second
+		/// alias, required or `onlyIfAvailable`, of an `onlyIfAvailable` alias the type declares (or is given here, of a
+		/// property provided above it), on the same type or on a type it instantiates; now and then a third alias of
+		/// the second; and, usually, a receive of the last alias, required or `onlyIfAvailable`, on a type the alias's
+		/// type instantiates. A receiver that requires the last alias needs every alias in the chain created, so the
+		/// first alias's fulfilling property must be built before the receiver, which the rest of the graph can make
+		/// impossible. `aliasProperty` never aliases an optional property, so no other pass draws such a chain, and
+		/// `aliasChainRandom` draws only for this one, so every other graph is drawn as before.
+		private mutating func addingAliasChains(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard aliasChainRandom.percentChance(10) else { return declarations }
+			var declarations = declarations
+			let graphTypeNames = Set((0..<typeCount).map(typeName))
+			/// The index in `declarations` of a type of the graph that the declaration at `index` instantiates, other
+			/// than itself, chosen at random; `nil` when it instantiates none.
+			func instantiatedDeclarationIndex(of index: Int) -> Int? {
+				let candidates = declarations[index].properties
+					.filter { $0.attribute.hasPrefix("@Instantiated") }
+					.map(Self.builtTypeName(of:))
+					.filter { $0 != declarations[index].name && graphTypeNames.contains($0) }
+					.compactMap { name in declarations.firstIndex { $0.name == name } }
+				guard !candidates.isEmpty else { return nil }
+				return aliasChainRandom.element(of: candidates)
+			}
+			let hostTypeIndex = aliasChainRandom.integer(in: 0...(typeCount - 1))
+			guard let hostIndex = declarations.firstIndex(where: { $0.name == typeName(hostTypeIndex) }) else { return declarations }
+			// The first alias: an `onlyIfAvailable` alias the host declares, or one it is given of a property it can
+			// receive, chosen as `aliasProperty` chooses.
+			let firstAlias: PropertyDeclaration
+			if let declaredAlias = declarations[hostIndex].properties.first(where: {
+				$0.attribute.hasPrefix("@Received(fulfilledByDependencyNamed:") && $0.attribute.contains("onlyIfAvailable: true")
+			}) {
+				firstAlias = declaredAlias
+			} else {
+				let candidates = propertiesProvidedAboveEveryPath(to: hostTypeIndex).filter { candidate in
+					!candidate.isOptional
+						&& !candidate.type.contains("(")
+						&& !candidate.type.contains("ErasedInstantiator<")
+						&& provided.allSatisfy { $0.label != candidate.label || $0.type == candidate.type }
+						&& !declarations[hostIndex].properties.contains { $0.label == candidate.label + "Alias" }
+				}
+				guard !candidates.isEmpty else { return declarations }
+				let source = aliasChainRandom.element(of: candidates)
+				firstAlias = PropertyDeclaration(
+					attribute: "@Received(fulfilledByDependencyNamed: \"\(source.label)\", ofType: \(source.type).self, onlyIfAvailable: true)",
+					label: source.label + "Alias",
+					type: source.type + "?",
+				)
+				declarations[hostIndex].properties.append(firstAlias)
+			}
+			// Then one alias of it, and now and then one of that, each on the type declaring what it renames or on a
+			// type that type instantiates.
+			var aliasDeclarationIndex = hostIndex
+			var alias = firstAlias
+			for _ in 0..<(aliasChainRandom.percentChance(25) ? 2 : 1) {
+				let declaringIndex = aliasChainRandom.percentChance(50)
+					? aliasDeclarationIndex
+					: instantiatedDeclarationIndex(of: aliasDeclarationIndex) ?? aliasDeclarationIndex
+				let isOnlyIfAvailable = aliasChainRandom.percentChance(50)
+				let label = alias.label + "Alias"
+				guard !declarations[declaringIndex].properties.contains(where: { $0.label == label }) else { break }
+				let nextAlias = PropertyDeclaration(
+					attribute: "@Received(fulfilledByDependencyNamed: \"\(alias.label)\", ofType: \(alias.type).self\(isOnlyIfAvailable ? ", onlyIfAvailable: true" : ""))",
+					label: label,
+					type: alias.type,
+				)
+				declarations[declaringIndex].properties.append(nextAlias)
+				aliasDeclarationIndex = declaringIndex
+				alias = nextAlias
+			}
+			// Usually, a receive of the last alias on a type the alias's type instantiates.
+			if aliasChainRandom.percentChance(80),
+			   let receiverIndex = instantiatedDeclarationIndex(of: aliasDeclarationIndex),
+			   !declarations[receiverIndex].properties.contains(where: { $0.label == alias.label })
+			{
+				declarations[receiverIndex].properties.append(PropertyDeclaration(
+					attribute: aliasChainRandom.percentChance(70) ? "@Received" : "@Received(onlyIfAvailable: true)",
+					label: alias.label,
+					type: alias.type,
+				))
+			}
+			return declarations
+		}
+
+		private static let aliasChainRandomSeedMask: UInt64 = 0x616C696173436861
+
 		/// The name of the type `property` builds: its `fulfilledByType:`, the generic of its wrapper, or its type.
 		private static func builtTypeName(of property: PropertyDeclaration) -> String {
 			if let fulfilledByTypeRange = property.attribute.range(of: "fulfilledByType: \"") {
@@ -1137,6 +1231,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case onlyIfAvailableReceive
 	case requiredAlias
 	case onlyIfAvailableAlias
+	/// An alias, required or `onlyIfAvailable`, of an `onlyIfAvailable` alias, which a receiver that requires it needs
+	/// created in turn.
+	case aliasOfOnlyIfAvailableAlias
 	case erasedAlias
 	case multipleRoots
 	case generateMock
@@ -1179,6 +1276,8 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		var usesNonSendableWrapper = false
 		var mockedTypeNames = Set<String>()
 		var onlyIfAvailableReceivedTypesByTypeName = [String: Set<String>]()
+		var onlyIfAvailableAliasLabels = Set<String>()
+		var aliasFulfillingLabels = Set<String>()
 		for content in fixture.swiftFileContent {
 			var currentTypeName: String?
 			var nextTypeIsMocked = false
@@ -1212,6 +1311,12 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					}
 					if attribute == "@Received(onlyIfAvailable: true)", let currentTypeName {
 						onlyIfAvailableReceivedTypesByTypeName[currentTypeName, default: []].insert(nonOptionalType)
+					}
+					if let fulfillingLabelRange = attribute.range(of: "fulfilledByDependencyNamed: \"") {
+						aliasFulfillingLabels.insert(String(attribute[fulfillingLabelRange.upperBound...].prefix { $0 != "\"" }))
+						if attribute.contains("onlyIfAvailable: true") {
+							onlyIfAvailableAliasLabels.insert(label)
+						}
 					}
 					if attribute == "@Received" || attribute == "@Received(onlyIfAvailable: true)" {
 						receivedTypesByLabel[label, default: []].insert(nonOptionalType)
@@ -1276,6 +1381,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			types.contains { types.contains("Instantiator<\($0)>") || types.contains("SendableInstantiator<\($0)>") }
 		}) {
 			features.insert(.labelReceivedAsInstanceAndAsInstantiator)
+		}
+		if !aliasFulfillingLabels.isDisjoint(with: onlyIfAvailableAliasLabels) {
+			features.insert(.aliasOfOnlyIfAvailableAlias)
 		}
 		return features
 	}

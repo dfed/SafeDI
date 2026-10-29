@@ -2445,6 +2445,9 @@ public actor DependencyTreeGenerator {
 			// The property searched for in this scope: `property`, or the property of an `onlyIfAvailable` alias of
 			// it that the scope declares and that is required, which the receiver then receives instead. A required
 			// alias of the scope's own alias is its receiver, although it refers to a property the scope declares.
+			// The chain follows each of the scope's aliases at most once: a type's properties have distinct labels,
+			// so no alias renames one to another's property, and aliases that fulfill one another are never required
+			// from above, since each is fulfilled by a property the scope declares.
 			var searchedProperty = property
 			var searchedPropertyIsOwnAlias = false
 			var requiredOnlyIfAvailableAliases = requiredOnlyIfAvailableAliases
@@ -2472,8 +2475,6 @@ public actor DependencyTreeGenerator {
 						// An alias of a property the scope provides, exactly or by its unwrapped form, is created from it.
 						fulfillingProperty == searchedProperty
 							&& (searchedPropertyIsOwnAlias || !provides(fulfillingProperty))
-							// Aliases that fulfill one another are reported before any search, so the chain ends.
-							&& !requiredOnlyIfAvailableAliases.contains { $0.property == dependency.property }
 							&& requirements().contains { $0.alias.property == dependency.property }
 					} else {
 						false
