@@ -297,6 +297,55 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func renaming_movesTypeNamesAcrossWrapperNamesWhereverTheyAppear_andRestoresThem() {
+		let prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: 12)
+		let text = "S12_T1 S12_T2 S12_T2Protocol S12_AnyT2 S12_Root0 S12_Missing1 S12_Value S12_Leaf S12_Ext S12_Unbuildable0 t1_S12_T1 lazyAnyT2 Instantiator<S12_T1> x_SendableInstantiator__S12_T2 S12_T0+SafeDIMock.swift"
+		let renaming = GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: false, reversesFileNames: false, movesTypeNamesAcrossWrapperNames: true)
+
+		// A type and its protocol move together, and so does a name a generated name or a file name embeds; labels keep their indices.
+		#expect(renaming.rename(text, typeNamePrefix: prefix) == "A12_T1 Z12_T2 Z12_T2Protocol Z12_AnyT2 A12_Root0 A12_Missing1 Z12_Value A12_Leaf Z12_Ext Z12_Unbuildable0 t1_A12_T1 lazyAnyT2 Instantiator<A12_T1> x_SendableInstantiator__Z12_T2 A12_T0+SafeDIMock.swift")
+		#expect(renaming.restore(renaming.rename(text, typeNamePrefix: prefix), typeNamePrefix: prefix) == text)
+	}
+
+	@Test
+	func renamedFixture_declaresTypesSortingBeforeAndAfterEveryWrapperName_whenRenamingMovesTypeNamesAcrossWrapperNames() throws {
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 2)
+		let renaming = try #require(GraphFuzzerRenaming.all.first { $0.movesTypeNamesAcrossWrapperNames })
+		let wrapperNames = ["ErasedInstantiator<", "Instantiator<", "LazilyInstantiated<", "SendableErasedInstantiator<", "SendableInstantiator<", "SendableLazilyInstantiated<"]
+		func declaredTypeNamesAmongWrapperNames(of fixture: GraphFuzzerFixture) -> [String] {
+			(fixture.swiftFileContent.flatMap(GraphFuzzerSourceLine.lines(of:)).compactMap(\.declaredTypeName) + wrapperNames).sorted()
+		}
+
+		// Every type name begins with `S2_`, which reversing indices keeps, so each sorts between the same two wrapper names.
+		#expect(declaredTypeNamesAmongWrapperNames(of: fixture) == [
+			"ErasedInstantiator<", "Instantiator<", "LazilyInstantiated<",
+			"S2_Leaf", "S2_Root0", "S2_Root1", "S2_Root2", "S2_T0", "S2_T1", "S2_T2", "S2_T3",
+			"SendableErasedInstantiator<", "SendableInstantiator<", "SendableLazilyInstantiated<",
+		])
+		// Moved, some sort before every wrapper name and the rest after every one, and `T0` and `T1` now sort after `T2` and `T3`.
+		#expect(declaredTypeNamesAmongWrapperNames(of: fixture.renamed(by: renaming)) == [
+			"A2_Root0", "A2_Root1", "A2_T2", "A2_T3",
+			"ErasedInstantiator<", "Instantiator<", "LazilyInstantiated<", "SendableErasedInstantiator<", "SendableInstantiator<", "SendableLazilyInstantiated<",
+			"Z2_Leaf", "Z2_Root2", "Z2_T0", "Z2_T1",
+		])
+	}
+
+	@Test
+	func renaming_restoresTypeNamesItMovesAcrossWrapperNames_whenItAlsoReversesEveryOrder() throws {
+		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
+			"@Instantiable\npublic final class S12_T1: Instantiable {\n\tpublic init(t2: S12_T2) {\n\t\tself.t2 = t2\n\t}\n\n\t@Instantiated let t2: S12_T2\n}\n",
+			"@Instantiable\npublic final class S12_T2: Instantiable {\n\tpublic init() {}\n}\n",
+		])
+		let renaming = GraphFuzzerRenaming(reversesTypeNames: true, reversesLabels: true, reversesFileNames: true, movesTypeNamesAcrossWrapperNames: true)
+
+		let fileNames = try #require(renaming.fileNames(of: fixture.renamed(by: renaming)))
+
+		// `S12_T1` and `S12_T2` become `S12_T8` and `S12_T7`, which move to `A12_T8` and `Z12_T7`.
+		#expect(fileNames == ["F98_Z12_T7.swift", "F99_A12_T8.swift"])
+		#expect(renaming.restore("/tmp/<fixture-directory>/F99_A12_T8.swift:7:2: error: `t7: Z12_T7`", typeNamePrefix: fixture.typeNamePrefix) == "/tmp/<fixture-directory>/S12_T1.swift:7:2: error: `t2: S12_T2`")
+	}
+
+	@Test
 	func renaming_reversesFileOrder_andRestoresFileNames() throws {
 		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
 			"@Instantiable\npublic final class S12_T1: Instantiable {\n\tpublic init() {}\n}\n",
@@ -534,7 +583,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// whole corpus on every pull request. Compiling the batch is one `swiftc` invocation when nothing fails.
 	static let smokeSeeds: [UInt64] = [14, 62, 582, 691, 705, 930]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x57D51AF932C09962
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xC89C9908E3933AD9
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -554,28 +603,29 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "A mock's API follows the order of type names or labels: which back-edge of a lazy cycle loses its override, which promoted sibling is passed nil, and the order of overrides",
 			signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")],
 			seeds: [
-				3, 35, 37, 45, 53, 55, 77, 107, 114, 131, 157, 168, 233, 241, 281, 309,
-				364, 371, 381, 383, 390, 431, 434, 448, 450, 473, 515, 545, 567, 593, 617, 630,
-				632, 680, 688, 714, 728, 732, 751, 774, 785, 786, 808, 836, 903, 912, 940, 948,
-				956, 975, 987, 1_029, 1_035, 1_042, 1_044, 1_061, 1_064, 1_072, 1_075, 1_084, 1_092, 1_139, 1_145, 1_147,
-				1_185, 1_215, 1_236, 1_280, 1_289, 1_300, 1_329, 1_352, 1_362, 1_372, 1_432, 1_433, 1_441, 1_453, 1_464, 1_492,
-				1_496, 1_502, 1_504, 1_524, 1_525, 1_531, 1_567, 1_602, 1_633, 1_646, 1_664, 1_675, 1_695, 1_742, 1_752, 1_781,
-				1_784, 1_795, 1_804, 1_853, 1_857, 1_867, 1_896, 1_898, 1_920, 1_938, 1_970, 1_972, 2_005, 2_017, 2_051, 2_083,
-				2_084, 2_117, 2_123, 2_149, 2_152, 2_165, 2_201, 2_211, 2_234, 2_245, 2_249, 2_277, 2_287, 2_296, 2_316, 2_325,
-				2_335, 2_337, 2_348, 2_389, 2_403, 2_430, 2_432, 2_437, 2_444, 2_456, 2_485, 2_515, 2_518, 2_553, 2_555, 2_577,
-				2_630, 2_637, 2_667, 2_704, 2_731, 2_732, 2_741, 2_752, 2_791, 2_808, 2_835, 2_841, 2_845, 2_874, 2_914, 2_916,
-				2_940, 2_968, 2_998, 3_004, 3_023, 3_064, 3_074, 3_075, 3_091, 3_132, 3_134, 3_149, 3_180, 3_183, 3_214, 3_215,
-				3_221, 3_225, 3_241, 3_252, 3_298, 3_306, 3_329, 3_344, 3_361, 3_362, 3_397, 3_430, 3_439, 3_460, 3_491, 3_504,
-				3_506, 3_533, 3_534, 3_537, 3_582, 3_588, 3_596, 3_602, 3_620, 3_645, 3_648, 3_661, 3_699, 3_707, 3_715, 3_723,
-				3_741, 3_750, 3_775, 3_776, 3_805, 3_823, 3_843, 3_894, 3_915, 3_942, 4_044, 4_068, 4_102, 4_107, 4_110, 4_117,
-				4_125, 4_156, 4_177, 4_192, 4_196, 4_213, 4_215, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_360,
-				4_371, 4_393, 4_404, 4_420, 4_428, 4_496, 4_504, 4_515, 4_534, 4_541, 4_545, 4_567, 4_613, 4_619, 4_634, 4_637,
-				4_640, 4_642, 4_648, 4_664, 4_666, 4_707, 4_716, 4_717, 4_729, 4_775, 4_776, 4_781, 4_795, 4_834, 4_859, 4_861,
-				4_865, 4_889, 4_904, 4_918, 4_922, 4_944, 4_947, 4_955, 4_963, 4_996,
+				3, 35, 37, 45, 53, 55, 77, 107, 114, 131, 157, 168, 223, 233, 241, 281,
+				309, 311, 364, 371, 381, 383, 390, 431, 434, 448, 450, 473, 515, 545, 567, 593,
+				595, 617, 630, 632, 680, 688, 714, 728, 732, 751, 768, 774, 785, 786, 808, 833,
+				836, 847, 903, 912, 940, 948, 956, 975, 987, 1_004, 1_029, 1_035, 1_042, 1_044, 1_061, 1_064,
+				1_072, 1_075, 1_084, 1_092, 1_139, 1_145, 1_147, 1_185, 1_215, 1_236, 1_280, 1_289, 1_300, 1_329, 1_352, 1_362,
+				1_372, 1_432, 1_433, 1_441, 1_453, 1_464, 1_492, 1_496, 1_502, 1_504, 1_524, 1_525, 1_531, 1_567, 1_602, 1_633,
+				1_646, 1_664, 1_675, 1_695, 1_742, 1_752, 1_781, 1_784, 1_795, 1_804, 1_853, 1_857, 1_867, 1_896, 1_898, 1_919,
+				1_920, 1_938, 1_970, 1_972, 2_005, 2_017, 2_051, 2_083, 2_084, 2_117, 2_123, 2_149, 2_152, 2_165, 2_201, 2_211,
+				2_234, 2_245, 2_249, 2_270, 2_277, 2_287, 2_296, 2_316, 2_325, 2_335, 2_337, 2_348, 2_389, 2_403, 2_430, 2_432,
+				2_437, 2_444, 2_456, 2_485, 2_515, 2_518, 2_553, 2_555, 2_577, 2_630, 2_637, 2_667, 2_704, 2_731, 2_732, 2_741,
+				2_752, 2_791, 2_808, 2_835, 2_841, 2_845, 2_874, 2_902, 2_914, 2_916, 2_940, 2_968, 2_998, 3_004, 3_023, 3_064,
+				3_074, 3_075, 3_091, 3_132, 3_134, 3_149, 3_180, 3_183, 3_214, 3_215, 3_221, 3_225, 3_241, 3_252, 3_298, 3_306,
+				3_329, 3_344, 3_361, 3_362, 3_397, 3_430, 3_439, 3_460, 3_491, 3_504, 3_506, 3_526, 3_533, 3_534, 3_537, 3_577,
+				3_582, 3_588, 3_596, 3_602, 3_604, 3_620, 3_645, 3_648, 3_661, 3_699, 3_707, 3_715, 3_723, 3_741, 3_750, 3_775,
+				3_776, 3_805, 3_823, 3_843, 3_894, 3_915, 3_942, 4_044, 4_068, 4_102, 4_107, 4_110, 4_117, 4_122, 4_125, 4_156,
+				4_177, 4_192, 4_196, 4_206, 4_213, 4_215, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_360, 4_371,
+				4_393, 4_404, 4_420, 4_428, 4_496, 4_504, 4_515, 4_534, 4_541, 4_545, 4_567, 4_613, 4_619, 4_634, 4_637, 4_640,
+				4_642, 4_648, 4_664, 4_666, 4_707, 4_716, 4_717, 4_729, 4_775, 4_776, 4_781, 4_783, 4_786, 4_795, 4_834, 4_859,
+				4_861, 4_865, 4_889, 4_904, 4_918, 4_922, 4_944, 4_947, 4_955, 4_963, 4_996,
 			],
 		),
 		GraphFuzzerKnownIssue(
-			reason: "Which errors SafeDI reports, and the root and chain each names, follow the order of type names or labels",
+			reason: "A diagnostic that suggests several properties lists them in the order of their labels and type names",
 			signatures: [.renamedGraphDiffers(containing: "changes its diagnostics")],
 			seeds: [
 				417, 557, 1_013, 1_353, 1_638, 1_864, 2_423, 3_020, 3_036, 3_081, 3_111, 3_659, 4_097, 4_449, 4_506, 4_790,
