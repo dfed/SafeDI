@@ -1139,6 +1139,7 @@ public struct InstantiableMacro: MemberMacro {
 					Self.validateDefaultExpressions(
 						functionSyntax: instantiateFunction.syntax.signature,
 						dependencies: instantiateFunction.dependencies,
+						typeName: extendedTypeName,
 						context: context,
 					)
 					Self.validateReservedParameterLabels(

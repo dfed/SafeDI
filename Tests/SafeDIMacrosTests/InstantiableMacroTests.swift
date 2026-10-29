@@ -143,11 +143,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type’s `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						message: "This `mock()` method’s parameter `title: String` does not correspond to a dependency, so it must have a default value.",
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Add default values to mock() non-dependency parameters for title: String"),
+							FixItSpec(message: "Add default values to `mock()` non-dependency parameters for title: String"),
 						],
 					),
 				],
@@ -189,7 +189,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "Default expression for parameter `title` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						message: "The default value of `title` refers to `Self`. A generated `mock()` repeats this default outside `Service`, where `Self` names a different type. Write `Service` instead of `Self`, or remove the default.",
 						line: 3,
 						column: 36,
 					),
@@ -214,11 +214,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "Unlabeled parameter `enabled: Bool` has a default value but is followed by unlabeled required parameter `leaf: Leaf`. SafeDI cannot generate a mock for this signature: the default cannot be elided from the mock's override surface (Swift requires the earlier positional slot to be passed when a later unlabeled parameter is required), and an unlabeled parameter cannot be exposed as a labeled field on `SafeDIMockConfiguration`. Either add an external label to the defaulted parameter, reorder so unlabeled defaults come last, or remove the default.",
+						message: "Unlabeled parameter `enabled: Bool` has a default value but is followed by unlabeled required parameter `leaf: Leaf`, so a generated `mock()` cannot leave `enabled` out of its call. Add an argument label to `enabled`, move unlabeled parameters with defaults after the required ones, or remove the default.",
 						line: 3,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Promote `enabled` to an external label (rewrite `_ enabled:` as `enabled:`)"),
+							FixItSpec(message: "Add argument label `enabled`"),
 						],
 					),
 				],
