@@ -294,7 +294,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable must decorate an extension on a type or a class, struct, or actor declaration",
+						message: "@Instantiable must decorate a class, struct, or actor declaration, or an extension of a type. To fulfill a protocol, decorate a type that conforms to it and list the protocol in `fulfillingAdditionalTypes`.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -316,7 +316,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable must decorate an extension on a type or a class, struct, or actor declaration",
+						message: "@Instantiable must decorate a class, struct, or actor declaration, or an extension of a type.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -338,7 +338,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `fulfillingAdditionalTypes` must not include optionals",
+						message: "The argument `fulfillingAdditionalTypes` must not include optional types, but it includes `AnyObject?.self`. List the non-optional type instead.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -362,7 +362,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `fulfillingAdditionalTypes` must be an inlined array",
+						message: "The argument `fulfillingAdditionalTypes` must be an array literal of types, such as `[MyProtocol.self]`.",
 						line: 2,
 						column: 1,
 						severity: .error,
@@ -384,7 +384,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `fulfillingAdditionalTypes` must be an inlined array",
+						message: "The argument `fulfillingAdditionalTypes` must be an array literal of types, such as `[MyProtocol.self]`.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -449,10 +449,7 @@ import Testing
 				diagnostics: [
 					DiagnosticSpec(
 						message: """
-						Types decorated with `@Instantiable(isRoot: true)` must only have dependencies that are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
-
-						The following dependencies were found on Foo that violated this contract:
-						dependency: Dependency
+						`Foo` is declared with `isRoot: true`, so no other type passes it dependencies, but it needs `dependency: Dependency` from outside it. Declare each as @Instantiated, or as `@Received(fulfilledByDependencyNamed:ofType:)` naming an @Instantiated property of `Foo`, or remove `isRoot: true` and instantiate `Foo` from another type.
 						""",
 						line: 1,
 						column: 1,
@@ -488,10 +485,7 @@ import Testing
 				diagnostics: [
 					DiagnosticSpec(
 						message: """
-						Types decorated with `@Instantiable(isRoot: true)` must only have dependencies that are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
-
-						The following dependencies were found on Foo that violated this contract:
-						dependency: Dependency
+						`Foo` is declared with `isRoot: true`, so no other type passes it dependencies, but it needs `dependency: Dependency` from outside it. Declare each as @Instantiated, or as `@Received(fulfilledByDependencyNamed:ofType:)` naming an @Instantiated property of `Foo`, or remove `isRoot: true` and instantiate `Foo` from another type.
 						""",
 						line: 1,
 						column: 1,
@@ -520,7 +514,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `fulfillingAdditionalTypes` must be an inlined array",
+						message: "The argument `fulfillingAdditionalTypes` must be an array literal of types, such as `[MyProtocol.self]`.",
 						line: 2,
 						column: 1,
 						severity: .error,
@@ -546,7 +540,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `fulfillingAdditionalTypes` must be an inlined array",
+						message: "The argument `fulfillingAdditionalTypes` must be an array literal of types, such as `[MyProtocol.self]`.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -574,7 +568,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated extension must have a single `instantiate(…)` method that returns `ExampleService`",
+						message: "@Instantiable-decorated extension must have a single `instantiate(…)` method that returns `ExampleService`, but it has 2. Remove all but one.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -619,10 +613,7 @@ import Testing
 				diagnostics: [
 					DiagnosticSpec(
 						message: """
-						Types decorated with `@Instantiable(isRoot: true)` must only have dependencies that are all `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@Instantiated` or `@Received(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
-
-						The following dependencies were found on Foo that violated this contract:
-						bar: Bar
+						`Foo` is declared with `isRoot: true`, so no other type passes it dependencies, but its `instantiate(…)` method takes `bar: Bar`. Remove the parameters, or remove `isRoot: true` and instantiate `Foo` from another type.
 						""",
 						line: 1,
 						column: 1,
@@ -1539,7 +1530,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedA: ReceivedA`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -1594,7 +1585,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -1658,7 +1649,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -1720,7 +1711,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `forwardedA: ForwardedA`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -1780,7 +1771,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedA: ReceivedA`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -1842,7 +1833,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedA: ReceivedA`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -1908,7 +1899,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
 						line: 3,
 						column: 5,
 						severity: .error,
@@ -1972,7 +1963,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `forwardedA: ForwardedA`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -2040,7 +2031,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedA: ReceivedA`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -2105,7 +2096,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -2168,7 +2159,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -2232,7 +2223,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -2290,7 +2281,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `received: Received`, `instantiated: Instantiated`, `forwarded: Forwarded`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -2503,7 +2494,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `forwardedA: ForwardedA`.",
 						line: 18,
 						column: 2,
 						severity: .error,
@@ -2578,7 +2569,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `forwardedA: ForwardedA`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -3325,7 +3316,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type or extension must declare conformance to `Instantiable`",
+						message: "@Instantiable-decorated type or extension must declare conformance to `Instantiable`.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -3365,7 +3356,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type or extension must declare conformance to `Instantiable`",
+						message: "@Instantiable-decorated type or extension must declare conformance to `Instantiable`.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -3406,7 +3397,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type or extension must declare conformance to `Instantiable`",
+						message: "@Instantiable-decorated type or extension must declare conformance to `Instantiable`.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -3473,7 +3464,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "Dependency can have at most one of @Instantiated, @Received, or @Forwarded attached macro",
+						message: "A property can be decorated with only one of @Instantiated, @Received, or @Forwarded.",
 						line: 7,
 						column: 5,
 						severity: .error,
@@ -3523,18 +3514,18 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "Dependency must not have hand-written initializer",
+						message: "`receivedA` must not have a default value: SafeDI passes every @Instantiated, @Received, and @Forwarded property in through the initializer. Remove `= .init()`.",
 						line: 7,
 						column: 5,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Remove initializer"),
+							FixItSpec(message: "Remove `= .init()`"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Remove initializer",
+					"Remove `= .init()`",
 				],
 				fixedSource: """
 				@Instantiable
@@ -3573,7 +3564,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must be `public` or `open`",
+						message: "@Instantiable-decorated type must be `public` or `open`.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -3623,7 +3614,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must be `public` or `open`",
+						message: "@Instantiable-decorated type must be `public` or `open`.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -3673,7 +3664,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must be `public` or `open`",
+						message: "@Instantiable-decorated type must be `public` or `open`.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -3723,7 +3714,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must be `public` or `open`",
+						message: "@Instantiable-decorated type must be `public` or `open`.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -3773,7 +3764,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must be `public` or `open`",
+						message: "@Instantiable-decorated type must be `public` or `open`.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -3823,7 +3814,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must be `public` or `open`",
+						message: "@Instantiable-decorated type must be `public` or `open`.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -3873,7 +3864,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must be `public` or `open`",
+						message: "@Instantiable-decorated type must be `public` or `open`.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -4069,7 +4060,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type or extension must declare conformance to `Instantiable`",
+						message: "@Instantiable-decorated type or extension must declare conformance to `Instantiable`.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -4111,7 +4102,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type or extension must declare conformance to `Instantiable`",
+						message: "@Instantiable-decorated type or extension must declare conformance to `Instantiable`.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -4155,7 +4146,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type or extension must declare conformance to `Instantiable`",
+						message: "@Instantiable-decorated type or extension must declare conformance to `Instantiable`.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -4193,7 +4184,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated extension of ExampleService must have a `public static func instantiate() -> ExampleService` method",
+						message: "@Instantiable-decorated extension of `ExampleService` must have a `public static func instantiate() -> ExampleService` method.",
 						line: 2,
 						column: 41,
 						severity: .error,
@@ -4234,7 +4225,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`",
+						message: "@Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`.",
 						line: 3,
 						column: 5,
 						severity: .error,
@@ -4272,7 +4263,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`",
+						message: "@Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`.",
 						line: 3,
 						column: 5,
 						severity: .error,
@@ -4310,7 +4301,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`",
+						message: "@Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`.",
 						line: 3,
 						column: 5,
 						severity: .error,
@@ -4348,18 +4339,18 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated extension’s `instantiate()` method must return the same base type as the extended type",
+						message: "@Instantiable-decorated extension’s `instantiate()` method must return the extended type, `ExampleService`.",
 						line: 3,
 						column: 5,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Make `instantiate()`’s return type the same base type as the extended type"),
+							FixItSpec(message: "Make `instantiate()` return `ExampleService`"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Make `instantiate()`’s return type the same base type as the extended type",
+					"Make `instantiate()` return `ExampleService`",
 				],
 				fixedSource: """
 				@Instantiable
@@ -4386,18 +4377,18 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated extension’s `instantiate()` method must return the same base type as the extended type",
+						message: "@Instantiable-decorated extension’s `instantiate()` method must return the extended type, `ExampleService`.",
 						line: 3,
 						column: 5,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Make `instantiate()`’s return type the same base type as the extended type"),
+							FixItSpec(message: "Make `instantiate()` return `ExampleService`"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Make `instantiate()`’s return type the same base type as the extended type",
+					"Make `instantiate()` return `ExampleService`",
 				],
 				fixedSource: """
 				@Instantiable
@@ -4424,7 +4415,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated extension’s `instantiate()` method must not throw or be async",
+						message: "@Instantiable-decorated extension’s `instantiate()` method must not throw or be async.",
 						line: 3,
 						column: 5,
 						severity: .error,
@@ -4462,7 +4453,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated extension’s `instantiate()` method must not throw or be async",
+						message: "@Instantiable-decorated extension’s `instantiate()` method must not throw or be async.",
 						line: 3,
 						column: 5,
 						severity: .error,
@@ -4500,7 +4491,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated extension’s `instantiate()` method must not throw or be async",
+						message: "@Instantiable-decorated extension’s `instantiate()` method must not throw or be async.",
 						line: 3,
 						column: 5,
 						severity: .error,
@@ -4538,7 +4529,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated extension’s `instantiate()` method must not have a generic parameter",
+						message: "@Instantiable-decorated extension’s `instantiate()` method must not have a generic parameter.",
 						line: 3,
 						column: 5,
 						severity: .error,
@@ -4576,7 +4567,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated extension must not have a generic `where` clause",
+						message: "@Instantiable-decorated extension must not have a generic `where` clause. To build a specialization of a generic type, return that specialization from an `instantiate()` method instead.",
 						line: 3,
 						column: 5,
 						severity: .error,
@@ -4614,7 +4605,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated extension must not have a generic `where` clause",
+						message: "@Instantiable-decorated extension must not have a generic `where` clause. To build a specialization of a generic type, return that specialization from an `instantiate()` method instead.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -4672,7 +4663,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `mockAttributes` must be a string literal",
+						message: "The argument `mockAttributes` must be a string literal.",
 						line: 1,
 						column: 1,
 					),
@@ -4735,7 +4726,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `generateMock` must be a Bool literal (`true` or `false`)",
+						message: "The argument `generateMock` must be a Bool literal (`true` or `false`).",
 						line: 1,
 						column: 1,
 					),
@@ -4760,7 +4751,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `customMockName` must be a string literal or `nil`",
+						message: "The argument `customMockName` must be a string literal or `nil`.",
 						line: 1,
 						column: 1,
 					),
@@ -4978,7 +4969,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "No method named `customMock` found. Add a `public static func customMock(…)` method.",
+						message: "`customMockName` names `customMock`, but this declaration has no method named `customMock`. Add a `public static func customMock(…)` method.",
 						line: 1,
 						column: 1,
 						fixIts: [
@@ -5012,7 +5003,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "No method named `customMock` found. Add a `public static func customMock(…)` method.",
+						message: "`customMockName` names `customMock`, but this declaration has no method named `customMock`. Add a `public static func customMock(…)` method.",
 						line: 1,
 						column: 1,
 						fixIts: [
@@ -5050,7 +5041,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "No method named `customMock` found. Add a `public static func customMock(…)` method.",
+						message: "`customMockName` names `customMock`, but this declaration has no method named `customMock`. Add a `public static func customMock(…)` method.",
 						line: 1,
 						column: 1,
 						fixIts: [
@@ -5196,7 +5187,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "No method named `customMock` found. Add a `public static func customMock(…)` method.",
+						message: "`customMockName` names `customMock`, but this declaration has no method named `customMock`. Add a `public static func customMock(…)` method.",
 						line: 1,
 						column: 1,
 						fixIts: [
@@ -5266,7 +5257,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: #"@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method. The generated `mock()` would conflict with this method. Remove it or rename it."#,
+						message: #"This `mock()` method conflicts with the `mock()` that `generateMock: true` generates. This type’s hand-written mock is `customMock`, which `customMockName` names; remove this method or rename it."#,
 						line: 9,
 						column: 5,
 						fixIts: [
@@ -5302,11 +5293,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type’s `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						message: "This `mock()` method’s parameter `notADependency: NotADependency` does not correspond to a dependency, so it must have a default value.",
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Add default values to mock() non-dependency parameters for notADependency: NotADependency"),
+							FixItSpec(message: "Add default values to `mock()` non-dependency parameters for notADependency: NotADependency"),
 						],
 					),
 				],
@@ -5340,11 +5331,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "Unlabeled parameter `enabled: Bool` has a default value but is followed by unlabeled required parameter `leaf: Leaf`. SafeDI cannot generate a mock for this signature: the default cannot be elided from the mock's override surface (Swift requires the earlier positional slot to be passed when a later unlabeled parameter is required), and an unlabeled parameter cannot be exposed as a labeled field on `SafeDIMockConfiguration`. Either add an external label to the defaulted parameter, reorder so unlabeled defaults come last, or remove the default.",
+						message: "Unlabeled parameter `enabled: Bool` has a default value but is followed by unlabeled required parameter `leaf: Leaf`, so a generated `mock()` cannot leave `enabled` out of its call. Add an argument label to `enabled`, move unlabeled parameters with defaults after the required ones, or remove the default.",
 						line: 3,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Promote `enabled` to an external label (rewrite `_ enabled:` as `enabled:`)"),
+							FixItSpec(message: "Add argument label `enabled`"),
 						],
 					),
 				],
@@ -5380,7 +5371,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "Default expression for parameter `name` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						message: "The default value of `name` refers to `Self`. A generated `mock()` repeats this default outside `MyType`, where `Self` names a different type. Write `MyType` instead of `Self`, or remove the default.",
 						line: 3,
 						column: 17,
 					),
@@ -5413,7 +5404,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "Default expression for parameter `name` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						message: "The default value of `name` refers to `Self`. A generated `mock()` repeats this default outside `MyType`, where `Self` names a different type. Write `MyType` instead of `Self`, or remove the default.",
 						line: 5,
 						column: 35,
 					),
@@ -5570,7 +5561,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "Default expression for parameter `fallback` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						message: "The default value of `fallback` refers to `Self`. A generated `mock()` repeats this default outside `MyType`, where `Self` names a different type. Write `MyType` instead of `Self`, or remove the default.",
 						line: 4,
 						column: 35,
 					),
@@ -5640,7 +5631,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "Default expression for parameter `fallback` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						message: "The default value of `fallback` refers to `Self`. A generated `mock()` repeats this default outside `MyType`, where `Self` names a different type. Write `MyType` instead of `Self`, or remove the default.",
 						line: 4,
 						column: 35,
 					),
@@ -5673,7 +5664,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "Default expression for parameter `metatype` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						message: "The default value of `metatype` refers to `Self`. A generated `mock()` repeats this default outside `MyType`, where `Self` names a different type. Write `MyType` instead of `Self`, or remove the default.",
 						line: 4,
 						column: 35,
 					),
@@ -5710,7 +5701,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "Default expression for parameter `fallback` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						message: "The default value of `fallback` refers to `Self`. A generated `mock()` repeats this default outside `MyType`, where `Self` names a different type. Write `MyType` instead of `Self`, or remove the default.",
 						line: 4,
 						column: 35,
 					),
@@ -5749,7 +5740,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "Default expression for parameter `fallback` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.",
+						message: "The default value of `fallback` refers to `Self`. A generated `mock()` repeats this default outside `MyType`, where `Self` names a different type. Write `MyType` instead of `Self`, or remove the default.",
 						line: 6,
 						column: 35,
 					),
@@ -5952,11 +5943,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type’s `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						message: "This `mock()` method’s parameter `extra: Bool` does not correspond to a dependency, so it must have a default value.",
 						line: 8,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Add default values to mock() non-dependency parameters for extra: Bool"),
+							FixItSpec(message: "Add default values to `mock()` non-dependency parameters for extra: Bool"),
 						],
 					),
 				],
@@ -6086,11 +6077,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type’s `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						message: "This `mock()` method’s parameter `extra: Bool` does not correspond to a dependency, so it must have a default value.",
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Add default values to mock() non-dependency parameters for extra: Bool"),
+							FixItSpec(message: "Add default values to `mock()` non-dependency parameters for extra: Bool"),
 						],
 					),
 				],
@@ -6130,7 +6121,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: #"@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method. The generated `mock()` would conflict with this method. Remove it or rename it."#,
+						message: #"This `mock()` method conflicts with the `mock()` that `generateMock: true` generates. This type’s hand-written mock is `customMock`, which `customMockName` names; remove this method or rename it."#,
 						line: 9,
 						column: 5,
 						fixIts: [
@@ -6174,11 +6165,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type’s `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.",
+						message: "This `mock()` method’s parameter `extra: Bool` does not correspond to a dependency, so it must have a default value.",
 						line: 9,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Add default values to mock() non-dependency parameters for extra: Bool"),
+							FixItSpec(message: "Add default values to `mock()` non-dependency parameters for extra: Bool"),
 						],
 					),
 				],
@@ -6218,17 +6209,17 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type’s `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						message: "This `mock()` method has no parameter for `dep: Dep`. A hand-written mock must take a parameter for each @Instantiated, @Received, or @Forwarded-decorated property; extra parameters with default values are allowed.",
 						line: 8,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Add mock() arguments for dep: Dep"),
+							FixItSpec(message: "Add `mock()` arguments for dep: Dep"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add mock() arguments for dep: Dep",
+					"Add `mock()` arguments for dep: Dep",
 				],
 				fixedSource: """
 				@Instantiable
@@ -6280,17 +6271,17 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type’s `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						message: "This `mock()` method has no parameter for `depA: DepA`, `depB: DepB`. A hand-written mock must take a parameter for each @Instantiated, @Received, or @Forwarded-decorated property; extra parameters with default values are allowed.",
 						line: 10,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Add mock() arguments for depA: DepA, depB: DepB"),
+							FixItSpec(message: "Add `mock()` arguments for depA: DepA, depB: DepB"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add mock() arguments for depA: DepA, depB: DepB",
+					"Add `mock()` arguments for depA: DepA, depB: DepB",
 				],
 				fixedSource: """
 				@Instantiable
@@ -6309,6 +6300,90 @@ import Testing
 				    }
 				}
 				""",
+			)
+		}
+
+		@Test
+		func mockMethodMissingDependency_namesCustomMockMethod_whenCustomMockNameIsSet() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "preview")
+				public struct MyService: Instantiable {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    @Received let dep: Dep
+
+				    public static func preview() -> MyService {
+				        MyService(dep: Dep())
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    let dep: Dep
+
+				    public static func preview() -> MyService {
+				        MyService(dep: Dep())
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This `preview()` method has no parameter for `dep: Dep`. A hand-written mock must take a parameter for each @Instantiated, @Received, or @Forwarded-decorated property; extra parameters with default values are allowed.",
+						line: 8,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add `preview()` arguments for dep: Dep"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func mockMethodWithSeveralNonDependencyParametersWithoutDefaults_producesDiagnosticNamingEachParameter() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    @Received let dep: Dep
+
+				    public static func mock(dep: Dep, extra: Bool, count: Int) -> MyService {
+				        MyService(dep: dep)
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init(dep: Dep) {
+				        self.dep = dep
+				    }
+				    let dep: Dep
+
+				    public static func mock(dep: Dep, extra: Bool, count: Int) -> MyService {
+				        MyService(dep: dep)
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This `mock()` method’s parameters `extra: Bool`, `count: Int` do not correspond to a dependency, so they must have default values.",
+						line: 8,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add default values to `mock()` non-dependency parameters for extra: Bool, count: Int"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -6348,11 +6423,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type’s `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						message: "This `mock()` method has no parameter for `depB: DepB`. A hand-written mock must take a parameter for each @Instantiated, @Received, or @Forwarded-decorated property; extra parameters with default values are allowed.",
 						line: 10,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Add mock() arguments for depB: DepB"),
+							FixItSpec(message: "Add `mock()` arguments for depB: DepB"),
 						],
 					),
 				],
@@ -6392,17 +6467,17 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type’s `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						message: "This `mock()` method has no parameter for `dependency: Dependency`. A hand-written mock must take a parameter for each @Instantiated, @Received, or @Forwarded-decorated property; extra parameters with default values are allowed.",
 						line: 8,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Add mock() arguments for dependency: Dependency"),
+							FixItSpec(message: "Add `mock()` arguments for dependency: Dependency"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add mock() arguments for dependency: Dependency",
+					"Add `mock()` arguments for dependency: Dependency",
 				],
 				fixedSource: """
 				@Instantiable
@@ -6448,7 +6523,7 @@ import Testing
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Add `public` modifier to mock() method"),
+							FixItSpec(message: "Add `public` modifier to `mock()` method"),
 						],
 					),
 				],
@@ -6484,13 +6559,13 @@ import Testing
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Change mock() return type to `MyService`"),
+							FixItSpec(message: "Change `mock()` return type to `MyService`"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Change mock() return type to `MyService`",
+					"Change `mock()` return type to `MyService`",
 				],
 				fixedSource: """
 				@Instantiable
@@ -6538,13 +6613,13 @@ import Testing
 						line: 6,
 						column: 9,
 						fixIts: [
-							FixItSpec(message: "Change mock() return type to `Consumer`"),
+							FixItSpec(message: "Change `mock()` return type to `Consumer`"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Change mock() return type to `Consumer`",
+					"Change `mock()` return type to `Consumer`",
 				],
 				fixedSource: """
 				public enum Feature {
@@ -6594,13 +6669,13 @@ import Testing
 						line: 7,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Change mock() return type to `Consumer`"),
+							FixItSpec(message: "Change `mock()` return type to `Consumer`"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Change mock() return type to `Consumer`",
+					"Change `mock()` return type to `Consumer`",
 				],
 				fixedSource: """
 				@Instantiable
@@ -6643,13 +6718,13 @@ import Testing
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Change mock() return type to `MyService`"),
+							FixItSpec(message: "Change `mock()` return type to `MyService`"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Change mock() return type to `MyService`",
+					"Change `mock()` return type to `MyService`",
 				],
 				fixedSource: """
 				@Instantiable
@@ -6743,7 +6818,7 @@ import Testing
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Change mock() return type to `MyService`"),
+							FixItSpec(message: "Change `mock()` return type to `MyService`"),
 						],
 					),
 				],
@@ -6805,13 +6880,13 @@ import Testing
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Add `public` modifier to mock() method"),
+							FixItSpec(message: "Add `public` modifier to `mock()` method"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add `public` modifier to mock() method",
+					"Add `public` modifier to `mock()` method",
 				],
 				fixedSource: """
 				@Instantiable
@@ -6850,17 +6925,17 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `ExampleService`.",
+						message: "@Instantiable-decorated extension’s `mock()` method must return `ExampleService` or a type listed in `fulfillingAdditionalTypes`.",
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Change mock() return type to `ExampleService`"),
+							FixItSpec(message: "Change `mock()` return type to `ExampleService`"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Change mock() return type to `ExampleService`",
+					"Change `mock()` return type to `ExampleService`",
 				],
 				fixedSource: """
 				@Instantiable
@@ -6897,17 +6972,17 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `ExampleService`.",
+						message: "@Instantiable-decorated extension’s `mock()` method must return `ExampleService` or a type listed in `fulfillingAdditionalTypes`.",
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Change mock() return type to `ExampleService`"),
+							FixItSpec(message: "Change `mock()` return type to `ExampleService`"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Change mock() return type to `ExampleService`",
+					"Change `mock()` return type to `ExampleService`",
 				],
 				fixedSource: """
 				@Instantiable
@@ -6945,17 +7020,17 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `ExampleService`.",
+						message: "@Instantiable-decorated extension’s `mock()` method must return `ExampleService` or a type listed in `fulfillingAdditionalTypes`.",
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Change mock() return type to `ExampleService`"),
+							FixItSpec(message: "Change `mock()` return type to `ExampleService`"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Change mock() return type to `ExampleService`",
+					"Change `mock()` return type to `ExampleService`",
 				],
 				fixedSource: """
 				@Instantiable
@@ -7036,7 +7111,7 @@ import Testing
 						line: 11,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Remove duplicate mock() method"),
+							FixItSpec(message: "Remove duplicate `mock()` method"),
 						],
 					),
 				],
@@ -7110,17 +7185,17 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type’s `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						message: "This `mock()` method has no parameter for `dependency: Dependency`. A hand-written mock must take a parameter for each @Instantiated, @Received, or @Forwarded-decorated property; extra parameters with default values are allowed.",
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Add mock() arguments for dependency: Dependency"),
+							FixItSpec(message: "Add `mock()` arguments for dependency: Dependency"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add mock() arguments for dependency: Dependency",
+					"Add `mock()` arguments for dependency: Dependency",
 				],
 				fixedSource: """
 				@Instantiable
@@ -7215,17 +7290,17 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `ExampleService`.",
+						message: "@Instantiable-decorated extension’s `mock()` method must return `ExampleService` or a type listed in `fulfillingAdditionalTypes`.",
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Change mock() return type to `ExampleService`"),
+							FixItSpec(message: "Change `mock()` return type to `ExampleService`"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Change mock() return type to `ExampleService`",
+					"Change `mock()` return type to `ExampleService`",
 				],
 				fixedSource: """
 				@Instantiable
@@ -7272,11 +7347,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type’s `mock()` method must return `Self` or `ExampleService`.",
+						message: "@Instantiable-decorated extension’s `mock()` method must return `ExampleService` or a type listed in `fulfillingAdditionalTypes`.",
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Change mock() return type to `ExampleService`"),
+							FixItSpec(message: "Change `mock()` return type to `ExampleService`"),
 						],
 					),
 				],
@@ -7348,13 +7423,13 @@ import Testing
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Change mock() return type to `MyService`"),
+							FixItSpec(message: "Change `mock()` return type to `MyService`"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Change mock() return type to `MyService`",
+					"Change `mock()` return type to `MyService`",
 				],
 				fixedSource: """
 				@Instantiable
@@ -7411,7 +7486,7 @@ import Testing
 						line: 12,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Remove duplicate mock() method"),
+							FixItSpec(message: "Remove duplicate `mock()` method"),
 						],
 					),
 				],
@@ -7475,7 +7550,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`mockOnly` and `generateMock` cannot both be `true`.",
+						message: "`mockOnly` and `generateMock` cannot both be `true`: a `mockOnly` declaration provides a hand-written mock. To generate a mock, set `generateMock: true` on the production `@Instantiable` declaration instead.",
 						line: 1,
 						column: 1,
 						fixIts: [
@@ -7644,11 +7719,11 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type’s `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.",
+						message: "This `mock()` method has no parameter for `database: Database`, `cache: CacheService`. A hand-written mock must take a parameter for each @Instantiated, @Received, or @Forwarded-decorated property; extra parameters with default values are allowed.",
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Add mock() arguments for database: Database, cache: CacheService"),
+							FixItSpec(message: "Add `mock()` arguments for database: Database, cache: CacheService"),
 						],
 					),
 				],
@@ -7672,7 +7747,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`mockOnly` and `generateMock` cannot both be `true`.",
+						message: "`mockOnly` and `generateMock` cannot both be `true`: a `mockOnly` declaration provides a hand-written mock. To generate a mock, set `generateMock: true` on the production `@Instantiable` declaration instead.",
 						line: 1,
 						column: 1,
 						fixIts: [
@@ -7748,7 +7823,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `mockOnly` must be a Bool literal (`true` or `false`)",
+						message: "The argument `mockOnly` must be a Bool literal (`true` or `false`).",
 						line: 1,
 						column: 1,
 					),
@@ -7846,7 +7921,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`mockOnly` and `generateMock` cannot both be `true`.",
+						message: "`mockOnly` and `generateMock` cannot both be `true`: a `mockOnly` declaration provides a hand-written mock. To generate a mock, set `generateMock: true` on the production `@Instantiable` declaration instead.",
 						line: 1,
 						column: 1,
 						fixIts: [

@@ -24,18 +24,19 @@ import SwiftSyntaxMacros
 
 public struct InjectableMacro: PeerMacro {
 	public static func expansion(
-		of _: AttributeSyntax,
+		of node: AttributeSyntax,
 		providingPeersOf declaration: some DeclSyntaxProtocol,
 		in context: some MacroExpansionContext,
 	)
 		throws -> [DeclSyntax]
 	{
+		let attributeName = node.attributeName.trimmedDescription
 		guard let variableDecl = VariableDeclSyntax(declaration) else {
-			throw InjectableError.notDecoratingBinding
+			throw InjectableError.notDecoratingBinding(attributeName: attributeName)
 		}
 
 		guard variableDecl.modifiers.staticModifier == nil else {
-			throw InjectableError.decoratingStatic
+			throw InjectableError.decoratingStatic(attributeName: attributeName)
 		}
 
 		let macroWithParameters = variableDecl.attributes.instantiatedMacro ?? variableDecl.attributes.receivedMacro
@@ -144,8 +145,8 @@ public struct InjectableMacro: PeerMacro {
 	// MARK: - InjectableError
 
 	private enum InjectableError: Error, CustomStringConvertible {
-		case notDecoratingBinding
-		case decoratingStatic
+		case notDecoratingBinding(attributeName: String)
+		case decoratingStatic(attributeName: String)
 		case fulfilledByTypeArgumentInvalidType
 		case fulfilledByTypeArgumentInvalidTypeDescription
 		case fulfilledByDependencyNamedInvalidType
@@ -157,26 +158,26 @@ public struct InjectableMacro: PeerMacro {
 
 		var description: String {
 			switch self {
-			case .notDecoratingBinding:
-				"This macro must decorate a instance variable"
-			case .decoratingStatic:
-				"This macro can not decorate `static` variables"
+			case let .notDecoratingBinding(attributeName):
+				"@\(attributeName) must decorate an instance property."
+			case let .decoratingStatic(attributeName):
+				"@\(attributeName) cannot decorate a `static` property. Make it an instance property."
 			case .fulfilledByTypeArgumentInvalidType:
-				"The argument `fulfilledByType` must be a string literal"
+				"The argument `fulfilledByType` must be a string literal."
 			case .fulfilledByTypeArgumentInvalidTypeDescription:
-				"The argument `fulfilledByType` must refer to a simple type"
+				"The argument `fulfilledByType` must name a type, such as \"DefaultService\" or \"Module.DefaultService\", not an optional, existential, composition, metatype, collection, tuple, or closure type."
 			case .fulfilledByDependencyNamedInvalidType:
-				"The argument `fulfilledByDependencyNamed` must be a string literal"
+				"The argument `fulfilledByDependencyNamed` must be a string literal."
 			case .fulfilledByTypeUseOnInstantiator:
-				"The argument `fulfilledByType` can not be used on an `Instantiator` or `SendableInstantiator`. Use an `ErasedInstantiator` or `SendableErasedInstantiator` instead"
+				"The argument `fulfilledByType` cannot be used on an `Instantiator` or `SendableInstantiator`. Use an `ErasedInstantiator` or `SendableErasedInstantiator` instead."
 			case .ofTypeArgumentInvalidType:
-				"The argument `ofType` must be a type literal"
+				"The argument `ofType` must be a type literal, such as `Service.self`."
 			case .erasedToConcreteExistentialInvalidType:
-				"The argument `erasedToConcreteExistential` must be a bool literal"
+				"The argument `erasedToConcreteExistential` must be a Bool literal (`true` or `false`)."
 			case .erasedInstantiatorUsedWithoutFulfilledByType:
-				"`ErasedInstantiator` and `SendableErasedInstantiator` require use of the argument `fulfilledByType`"
+				"An `ErasedInstantiator` or `SendableErasedInstantiator` property must name the type it builds with the argument `fulfilledByType`, such as `@Instantiated(fulfilledByType: \"DefaultService\")`. Use an `Instantiator` or `SendableInstantiator` when the property’s type is the type it builds."
 			case .onlyIfAvailableInvalidType:
-				"The argument `onlyIfAvailable` must be a type literal"
+				"The argument `onlyIfAvailable` must be a Bool literal (`true` or `false`)."
 			}
 		}
 	}

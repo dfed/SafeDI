@@ -326,7 +326,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(SWIFT_PACKAGE && DEBUG && SWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE && Xcode && MyTrait)
-		#error("SafeDI scanned this module assuming `#if SWIFT_PACKAGE && DEBUG && SWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE && Xcode && MyTrait` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if SWIFT_PACKAGE && DEBUG && SWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE && Xcode && MyTrait` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -497,7 +497,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(STAGING)
-		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -881,7 +881,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if UNDEFINED
-		#error("SafeDI scanned this module assuming `#if UNDEFINED` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if UNDEFINED` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -927,7 +927,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#error(\"""
-		Compiler errors prevented the generation of the dependency tree. Files with errors:
+		SafeDI could not generate code because these files have syntax errors. Fix them and build again:
 			\(output.fixtures["Root.swift"])
 		\""")
 		"""])
@@ -982,7 +982,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 		#endif
 
 		#if !(STAGING)
-		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -1013,7 +1013,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(STAGING)
-		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension StagingRoot {
@@ -1057,7 +1057,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(STAGING)
-		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		#if DEBUG
@@ -1111,7 +1111,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 		#endif
 
 		#if !(STAGING)
-		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -1142,7 +1142,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if STAGING
-		#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -1172,7 +1172,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(STAGING)
-		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		#if DEBUG
@@ -1225,7 +1225,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(STAGING)
-		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension StagingRoot {
@@ -1256,7 +1256,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 	// Please refrain from editing this file directly.
 
 	#if STAGING
-	#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+	#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 	#endif
 
 	""" + "\n"
@@ -1268,7 +1268,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 	// Please refrain from editing this file directly.
 
 	#if !(STAGING)
-	#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+	#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 	#endif
 
 	""" + "\n"
@@ -1475,7 +1475,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 	// Please refrain from editing this file directly.
 
 	#if !(STAGING)
-	#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+	#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 	#endif
 
 	extension Root {
@@ -1492,7 +1492,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 	// Please refrain from editing this file directly.
 
 	#if !(STAGING)
-	#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+	#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 	#endif
 
 	extension Root {
@@ -1509,7 +1509,7 @@ struct SafeDIToolBuildSettingConditionsTests: ~Copyable {
 	// Please refrain from editing this file directly.
 
 	#if STAGING
-	#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+	#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 	#endif
 
 	extension Root {

@@ -167,7 +167,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "Dependency can not be mutable unless it is decorated with a property wrapper. Mutations to a dependency are not propagated through the dependency tree.",
+						message: "A dependency cannot be a `var` unless a property wrapper decorates it: SafeDI does not pass changes to a dependency on to the types that receive it. Declare it with `let`.",
 						line: 6,
 						column: 19,
 						severity: .error,
@@ -244,7 +244,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `fulfilledByType` can not be used on an `Instantiator` or `SendableInstantiator`. Use an `ErasedInstantiator` or `SendableErasedInstantiator` instead",
+						message: "The argument `fulfilledByType` cannot be used on an `Instantiator` or `SendableInstantiator`. Use an `ErasedInstantiator` or `SendableErasedInstantiator` instead.",
 						line: 2,
 						column: 5,
 						severity: .error,
@@ -269,7 +269,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`ErasedInstantiator` and `SendableErasedInstantiator` require use of the argument `fulfilledByType`",
+						message: "An `ErasedInstantiator` or `SendableErasedInstantiator` property must name the type it builds with the argument `fulfilledByType`, such as `@Instantiated(fulfilledByType: \"DefaultService\")`. Use an `Instantiator` or `SendableInstantiator` when the property’s type is the type it builds.",
 						line: 2,
 						column: 5,
 						severity: .error,
@@ -302,7 +302,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "This macro can not decorate `static` variables",
+						message: "@Received cannot decorate a `static` property. Make it an instance property.",
 						line: 6,
 						column: 5,
 						severity: .error,
@@ -324,7 +324,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "This macro must decorate a instance variable",
+						message: "@Instantiated must decorate an instance property.",
 						line: 1,
 						column: 1,
 						severity: .error,
@@ -359,7 +359,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `fulfilledByType` must be a string literal",
+						message: "The argument `fulfilledByType` must be a string literal.",
 						line: 7,
 						column: 5,
 						severity: .error,
@@ -394,7 +394,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `fulfilledByType` must be a string literal",
+						message: "The argument `fulfilledByType` must be a string literal.",
 						line: 7,
 						column: 5,
 						severity: .error,
@@ -427,7 +427,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `fulfilledByType` must refer to a simple type",
+						message: "The argument `fulfilledByType` must name a type, such as \"DefaultService\" or \"Module.DefaultService\", not an optional, existential, composition, metatype, collection, tuple, or closure type.",
 						line: 6,
 						column: 5,
 						severity: .error,
@@ -460,7 +460,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `fulfilledByType` must refer to a simple type",
+						message: "The argument `fulfilledByType` must name a type, such as \"DefaultService\" or \"Module.DefaultService\", not an optional, existential, composition, metatype, collection, tuple, or closure type.",
 						line: 6,
 						column: 5,
 						severity: .error,
@@ -489,7 +489,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `fulfilledByDependencyNamed` must be a string literal",
+						message: "The argument `fulfilledByDependencyNamed` must be a string literal.",
 						line: 4,
 						column: 5,
 						severity: .error,
@@ -516,7 +516,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `ofType` must be a type literal",
+						message: "The argument `ofType` must be a type literal, such as `Service.self`.",
 						line: 3,
 						column: 5,
 						severity: .error,
@@ -545,7 +545,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `erasedToConcreteExistential` must be a bool literal",
+						message: "The argument `erasedToConcreteExistential` must be a Bool literal (`true` or `false`).",
 						line: 4,
 						column: 5,
 						severity: .error,
@@ -574,7 +574,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `onlyIfAvailable` must be a type literal",
+						message: "The argument `onlyIfAvailable` must be a Bool literal (`true` or `false`).",
 						line: 4,
 						column: 2,
 						severity: .error,
@@ -601,7 +601,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The type of a dependency decorated with `onlyIfAvailable: true` must be marked as optional utilizing the `?` spelling",
+						message: "The type of a property received with `onlyIfAvailable: true` must be optional, spelled with `?`.",
 						line: 3,
 						column: 39,
 						severity: .error,
