@@ -1949,27 +1949,35 @@ public actor DependencyTreeGenerator {
 		/// which the last child's tree receives the first: the next child's property, or an alias of it that
 		/// the scope declares.
 		let receivedPropertyChain: [Property]
-		/// The scope of the last child in the cycle, whose tree receives the first child.
-		let lastChildScope: Scope
+		/// The receiver in the last child's tree through which that tree requires the first child, found by
+		/// `requiredReceiver` for the last property in `receivedPropertyChain`.
+		let closingReceiver: RequiredReceiver?
 		/// The `onlyIfAvailable` aliases the scope declares that `receivedPropertyChain` holds, in chain order.
 		let requiredOnlyIfAvailableAliases: [DependencyTreeGeneratorError.RequiredOnlyIfAvailableAlias]
 
-		/// The error reporting these children, at the receiver found by `requiredReceiver`. When the last
-		/// child's tree receives the first child through an alias or unwrapped, the chain ends with the
-		/// first child's own property, so it reads back to where it started.
+		/// The error reporting these children, at `closingReceiver`. When the last child's tree receives the
+		/// first child through an alias or unwrapped, the chain ends with the first child's own property, so
+		/// it reads back to where it started. The `onlyIfAvailable` aliases in the last child's tree through
+		/// which the closing receive requires the first child follow the scope's own, in chain order.
 		var error: DependencyTreeGeneratorError {
 			DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(
 				instantiated: instantiated,
 				receivedPropertyChain: receivedPropertyChain + (receivedPropertyChain[receivedPropertyChain.count - 1] == instantiated ? [] : [instantiated]),
-				declarationLocation: DependencyTreeGenerator.requiredReceiver(
-					of: receivedPropertyChain[receivedPropertyChain.count - 1],
-					inTreeOf: lastChildScope,
-				)?.declarationLocation,
+				declarationLocation: closingReceiver?.dependency.declarationLocation,
 				// The chain names every property as it is declared, so there is nothing to explain.
 				lazilyInstantiatedProperties: [],
-				requiredOnlyIfAvailableAliases: requiredOnlyIfAvailableAliases,
+				requiredOnlyIfAvailableAliases: requiredOnlyIfAvailableAliases + (closingReceiver?.requiredOnlyIfAvailableAliases ?? []),
 			)
 		}
+	}
+
+	/// A dependency through which a tree requires a property from outside the tree, found by `requiredReceiver`.
+	private struct RequiredReceiver {
+		let dependency: Dependency
+		/// The `onlyIfAvailable` aliases the tree declares through which `dependency` requires the property, outermost
+		/// first: each renames the property that the next, or `dependency`, requires. Empty when `dependency` receives
+		/// the property itself.
+		let requiredOnlyIfAvailableAliases: [DependencyTreeGeneratorError.RequiredOnlyIfAvailableAlias]
 	}
 
 	/// A child of a scope that a property names, with how directly it names the child: the lower `directness`, the
@@ -2093,14 +2101,18 @@ public actor DependencyTreeGenerator {
 		}
 		/// The child declaring the unwrapped form of `property`, which fulfills a required receive of `property`, and
 		/// which `property` names less directly than any property the scope declares does.
-		/// A tree can list an optional property it receives only if available as neither, beneath a scope that
-		/// forwards its unwrapped form, so a receiver that requires it is looked for.
-		func namedChild(declaringUnwrapped property: Property, requiredInTreeOf childScope: Scope) -> NamedChild? {
-			guard let namedChild = namedChild(declaring: property.asUnwrappedProperty),
-			      requiredReceiver(of: property, inTreeOf: childScope) != nil
-			else { return nil }
-			return NamedChild(index: namedChild.index, directness: namedChild.directness + 2 + aliases.count)
+		func namedChild(declaringUnwrapped property: Property) -> NamedChild? {
+			namedChild(declaring: property.asUnwrappedProperty).map {
+				NamedChild(index: $0.index, directness: $0.directness + 2 + aliases.count)
+			}
 		}
+		// The properties the scopes enclosing each child provide to it: those its enclosing scopes provide to this
+		// scope and those this scope creates, except the child's own, which is still being built inside it, and the
+		// instance of a lazily instantiated property, which is read from that property (see
+		// `ChildrenRequiringEachOtherValidation.enclosingProvidedProperties(ofChild:of:enclosingProvidedProperties:)`).
+		let providedProperties = enclosingProvidedProperties
+			.union(scope.createdProperties)
+			.subtracting(scope.instantiable.dependencies.compactMap(\.lazilyInstantiatedInstanceProperty))
 		// The siblings each child requires, in sibling order, each with the property through which it is received that
 		// names it most directly. A child that receives its own property is reported by the received walk or the ancestor
 		// check, but one that receives it through an alias or unwrapped requires itself here. Only the received properties
@@ -2108,14 +2120,26 @@ public actor DependencyTreeGenerator {
 		let requiredSiblings = children.map { child in
 			let receivedProperties = collectReceivedProperties(from: child.scope, cache: &cache)
 			var mostDirectReceivedPropertyBySiblingIndex = [Int: (property: Property, directness: Int)]()
-			// A property received only if available is still required when it fulfills an `onlyIfAvailable` alias that a receiver requires.
+			/// Whether an `onlyIfAvailable` alias in the child's tree that a receiver requires is created for that
+			/// receiver, which is then built after the alias's fulfilling property: no scope enclosing the alias
+			/// provides its property or unwrapped form. Otherwise the receiver is handed the enclosing scope's property.
+			func isCreated(_ alias: DependencyTreeGeneratorError.RequiredOnlyIfAvailableAlias) -> Bool {
+				![alias.property, alias.property.asUnwrappedProperty].contains { property in
+					property != child.property && providedProperties.contains(property)
+				}
+			}
+			// A property received only if available is still required when it fulfills an `onlyIfAvailable` alias that a
+			// receiver requires and that is created.
 			for property in receivedProperties.received
 				where property != child.property
 				&& property != child.property.asLazilyInstantiatedInstanceProperty
-				&& (!receivedProperties.onlyIfAvailable.contains(property) || receivedProperties.requiredAliasFulfilling.contains(property))
+				&& (
+					!receivedProperties.onlyIfAvailable.contains(property)
+						|| receivedProperties.requiredOnlyIfAvailableAliases.contains { $0.fulfillingProperty == property && isCreated($0) }
+				)
 			{
 				// Two optional properties can name a child by one unwrapped form, so the property breaks the tie.
-				if let namedChild = namedChild(declaring: property) ?? namedChild(declaringUnwrapped: property, requiredInTreeOf: child.scope),
+				if let namedChild = namedChild(declaring: property) ?? namedChild(declaringUnwrapped: property),
 				   mostDirectReceivedPropertyBySiblingIndex[namedChild.index].map({ (namedChild.directness, property) < ($0.directness, $0.property) }) ?? true
 				{
 					mostDirectReceivedPropertyBySiblingIndex[namedChild.index] = (property, namedChild.directness)
@@ -2143,7 +2167,12 @@ public actor DependencyTreeGenerator {
 						return ChildrenRequiringEachOther(
 							instantiated: children[requiredSibling.index].property,
 							receivedPropertyChain: receivedPropertyChain,
-							lastChildScope: children[index].scope,
+							closingReceiver: requiredReceiver(
+								of: requiredSibling.receivedProperty,
+								inTreeOf: children[index].scope,
+								enclosingProvidedProperties: providedProperties.subtracting([children[index].property]),
+								cache: &cache,
+							),
 							requiredOnlyIfAvailableAliases: receivedPropertyChain.compactMap { property in
 								onlyIfAvailableAliasFulfillingPropertyByProperty[property].map {
 									.init(property: property, fulfillingProperty: $0)
@@ -2301,48 +2330,122 @@ public actor DependencyTreeGenerator {
 		return nil
 	}
 
+	/// A scope whose tree `requiredReceiver` has searched for a receiver of a property, given the properties the
+	/// scopes enclosing it provide.
+	private struct SearchedScope: Hashable {
+		let scope: ObjectIdentifier
+		let property: Property
+		let enclosingProvidedProperties: Set<Property>
+	}
+
 	/// The first dependency, in declaration order and then child order, in the tree that
 	/// `scope` creates that requires `property` from outside the tree — a dependency
-	/// through which `collectReceivedProperties` finds the tree requires `property`.
-	/// The tree is searched depth first with a stack of the scopes left to search, since
-	/// it can be as deep as the module has types.
+	/// through which `collectReceivedProperties` finds the tree requires `property`,
+	/// which lists `property` in `received` and not in `onlyIfAvailable`, or as the fulfilling
+	/// property of one of its `requiredOnlyIfAvailableAliases` that `childrenRequiringEachOther`
+	/// finds is created. Such an alias counts: it is created for the receiver that requires
+	/// it, so the tree is built after `property` (see `ScopeGenerator.orderedPropertiesToGenerate`),
+	/// and the search goes on beneath the alias for the receiver, which receives the alias's
+	/// property. An `onlyIfAvailable` alias whose property an enclosing scope provides is not
+	/// created, so it is passed over, as the walk leaves it out: `enclosingProvidedProperties`
+	/// holds what the scopes enclosing `scope` provide, and what each scope searched provides
+	/// is added for its children, except the child being built. The tree is searched depth
+	/// first with a stack of the scopes left to search, since it can be as deep as the module
+	/// has types. `nil` when no dependency in the tree requires `property`, which
+	/// `childrenRequiringEachOther` never asks about: the walk and the search decide what a
+	/// scope provides by the same rules.
 	private static func requiredReceiver(
 		of property: Property,
 		inTreeOf scope: Scope,
-	) -> Dependency? {
-		var visitedScopes = Set<ObjectIdentifier>()
-		var scopesToSearch = [scope]
-		while let scope = scopesToSearch.popLast() {
-			guard visitedScopes.insert(ObjectIdentifier(scope)).inserted else { continue }
+		enclosingProvidedProperties: Set<Property>,
+		cache: inout ReceivedPropertiesCache,
+	) -> RequiredReceiver? {
+		var searchedScopes = Set<SearchedScope>()
+		var scopesToSearch = [(
+			scope: scope,
+			property: property,
+			enclosingProvidedProperties: enclosingProvidedProperties,
+			requiredOnlyIfAvailableAliases: [DependencyTreeGeneratorError.RequiredOnlyIfAvailableAlias](),
+		)]
+		var receiver: RequiredReceiver?
+		while receiver == nil, let (scope, property, enclosingProvidedProperties, requiredOnlyIfAvailableAliases) = scopesToSearch.popLast() {
+			guard searchedScopes.insert(SearchedScope(
+				scope: ObjectIdentifier(scope),
+				property: property,
+				enclosingProvidedProperties: enclosingProvidedProperties,
+			)).inserted else { continue }
 			let propertiesToDeclare = propertiesToDeclare(in: scope)
 			let forwardedProperties = scope.instantiable.forwardedReceivableProperties
-			if let receiver = scope.instantiable.dependencies.first(where: { dependency in
+			/// Whether the scope provides `property` to the scopes beneath it, as `ScopeGenerator.provides` has it.
+			func provides(_ property: Property) -> Bool {
+				propertiesToDeclare.contains(property)
+					|| forwardedProperties.contains(property)
+					|| (property.typeDescription.isOptional
+						&& (propertiesToDeclare.contains(property.asUnwrappedProperty) || forwardedProperties.contains(property.asUnwrappedProperty)))
+			}
+			// An alias of a property the scope declares or forwards refers to that property, as
+			// `collectReceivedProperties` has it.
+			func receivesFromOutside(_ fulfillingProperty: Property) -> Bool {
+				fulfillingProperty == property
+					&& !propertiesToDeclare.contains(fulfillingProperty)
+					&& !forwardedProperties.contains(fulfillingProperty)
+			}
+			/// Whether an instantiated child's tree requires `aliasProperty`, as `collectReceivedProperties` finds.
+			func isRequiredByChild(_ aliasProperty: Property) -> Bool {
+				scope.propertiesToGenerate.contains { propertyToGenerate in
+					guard case let .instantiated(_, childScope, _) = propertyToGenerate else { return false }
+					let childReceivedProperties = collectReceivedProperties(from: childScope, cache: &cache)
+					return childReceivedProperties.received.contains(aliasProperty) && !childReceivedProperties.onlyIfAvailable.contains(aliasProperty)
+				}
+			}
+			if let dependency = scope.instantiable.dependencies.first(where: { dependency in
 				switch dependency.source {
 				case let .received(onlyIfAvailable):
 					!onlyIfAvailable && dependency.property == property
 				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-					!onlyIfAvailable && fulfillingProperty == property && !propertiesToDeclare.contains(fulfillingProperty)
+					!onlyIfAvailable && receivesFromOutside(fulfillingProperty)
 				case .instantiated, .forwarded:
 					false
 				}
 			}) {
-				return receiver
-			} else if !(
-				propertiesToDeclare.contains(property)
-					|| (property.typeDescription.isOptional && propertiesToDeclare.contains(property.asUnwrappedProperty))
-					|| forwardedProperties.contains(property)
-					|| (property.typeDescription.isOptional && forwardedProperties.contains(property.asUnwrappedProperty))
-			) {
-				// A scope that declares `property` is not searched beneath: the trees of its children receive its own.
+				receiver = RequiredReceiver(dependency: dependency, requiredOnlyIfAvailableAliases: requiredOnlyIfAvailableAliases)
+			} else {
 				// The scope searched next is the last one on the stack, so the first child goes last.
 				let firstChildIndex = scopesToSearch.endIndex
-				for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
-					scopesToSearch.append(childScope)
+				let lazilyInstantiatedInstanceProperties = scope.instantiable.dependencies.compactMap(\.lazilyInstantiatedInstanceProperty)
+				/// The properties the scopes enclosing the child `childProperty` provide to it.
+				func propertiesProvided(toChild childProperty: Property) -> Set<Property> {
+					enclosingProvidedProperties
+						.union(scope.createdProperties)
+						.subtracting(lazilyInstantiatedInstanceProperties)
+						.subtracting([childProperty])
+				}
+				if let requiredAlias = scope.instantiable.dependencies.first(where: { dependency in
+					if case let .aliased(fulfillingProperty, _, onlyIfAvailable: true) = dependency.source {
+						// An alias of a property the scope provides, exactly or by its unwrapped form, is created from it.
+						fulfillingProperty == property
+							&& !provides(fulfillingProperty)
+							&& enclosingProvidedProperties.isDisjoint(with: [dependency.property, dependency.property.asUnwrappedProperty])
+							&& isRequiredByChild(dependency.property)
+					} else {
+						false
+					}
+				}) {
+					// The receiver that requires the alias receives the alias's property, which the scope declares.
+					let requiredOnlyIfAvailableAliases = requiredOnlyIfAvailableAliases + [.init(property: requiredAlias.property, fulfillingProperty: property)]
+					for case let .instantiated(childProperty, childScope, _) in scope.propertiesToGenerate {
+						scopesToSearch.append((childScope, requiredAlias.property, propertiesProvided(toChild: childProperty), requiredOnlyIfAvailableAliases))
+					}
+				} else if !provides(property) {
+					// A scope that declares `property` is not searched beneath: the trees of its children receive its own.
+					for case let .instantiated(childProperty, childScope, _) in scope.propertiesToGenerate {
+						scopesToSearch.append((childScope, property, propertiesProvided(toChild: childProperty), requiredOnlyIfAvailableAliases))
+					}
 				}
 				scopesToSearch[firstChildIndex...].reverse()
 			}
 		}
-		return nil
+		return receiver
 	}
 
 	/// The properties `scope` declares for its children: those it instantiates and the aliases it assigns.
@@ -2474,9 +2577,11 @@ public actor DependencyTreeGenerator {
 		/// Those of `received` that every receiver in the subtree receives only if available.
 		/// A property some receiver requires is not in `onlyIfAvailable`.
 		let onlyIfAvailable: Set<Property>
-		/// The properties the subtree receives only if available to fulfill an `onlyIfAvailable` alias
-		/// that a receiver in the subtree requires.
-		let requiredAliasFulfilling: Set<Property>
+		/// The `onlyIfAvailable` aliases declared in the subtree that a receiver beneath each requires, each with its
+		/// fulfilling property, which the subtree receives only if available to create the alias. An alias whose
+		/// property (or unwrapped form) a scope in the subtree above it provides is left out: the receiver is handed
+		/// that property instead, and the alias is not created.
+		let requiredOnlyIfAvailableAliases: Set<DependencyTreeGeneratorError.RequiredOnlyIfAvailableAlias>
 	}
 
 	/// Memoizes `collectReceivedProperties` across the mock roots of one mock scope map.
@@ -2507,9 +2612,10 @@ public actor DependencyTreeGenerator {
 	/// Mirrors ScopeGenerator's `receivedProperties` and `onlyIfAvailableUnwrappedReceivedProperties`
 	/// computation but operates on Scope objects directly, with memoization for O(1) revisits.
 	///
-	/// - Returns: The subtree's received properties. Its `requiredAliasFulfilling` mirrors
-	///   ScopeGenerator's `requiredAliasFulfillingProperties`, except that it does not leave out an
-	///   alias an enclosing scope's property stands in for.
+	/// - Returns: The subtree's received properties. The fulfilling properties of its
+	///   `requiredOnlyIfAvailableAliases` mirror ScopeGenerator's `requiredAliasFulfillingProperties`,
+	///   except that they do not leave out an alias whose property a scope enclosing the subtree
+	///   provides, which the walk cannot see: `childrenRequiringEachOther` leaves those out.
 	private static func collectReceivedProperties(
 		from scope: Scope,
 		cache: inout ReceivedPropertiesCache,
@@ -2573,7 +2679,7 @@ public actor DependencyTreeGenerator {
 		} else if let unfinishedWalkDepth = cache.unfinishedWalkDepths[id] {
 			// A cycle re-entered this scope. Its unfinished walk accounts for what it receives.
 			return .walked(WalkedReceivedProperties(
-				receivedProperties: ReceivedProperties(received: [], onlyIfAvailable: [], requiredAliasFulfilling: []),
+				receivedProperties: ReceivedProperties(received: [], onlyIfAvailable: [], requiredOnlyIfAvailableAliases: []),
 				shallowestUnfinishedWalkDepth: unfinishedWalkDepth,
 			))
 		} else if let incomplete = cache.incomplete[id] {
@@ -2617,8 +2723,17 @@ public actor DependencyTreeGenerator {
 		var required = Set<Property>()
 		// Properties the instantiated children's subtrees require, including those this scope declares.
 		var childRequiredReceived = Set<Property>()
-		var requiredAliasFulfilling = Set<Property>()
+		var requiredOnlyIfAvailableAliases = Set<DependencyTreeGeneratorError.RequiredOnlyIfAvailableAlias>()
 		var shallowestUnfinishedWalkDepth: Int?
+
+		/// Whether this scope provides `property` to the scopes beneath it, as `ScopeGenerator.provides` has it:
+		/// it declares or forwards the property or, for an optional property, its unwrapped form.
+		func provides(_ property: Property) -> Bool {
+			propertiesToDeclare.contains(property)
+				|| forwardedProperties.contains(property)
+				|| (property.typeDescription.isOptional
+					&& (propertiesToDeclare.contains(property.asUnwrappedProperty) || forwardedProperties.contains(property.asUnwrappedProperty)))
+		}
 
 		/// Collects from an instantiated child — mirrors ScopeGenerator's receivedProperties aggregation.
 		/// Aliases are handled in `finished(cache:)`'s own-dependency loop: alias children's receivedProperties
@@ -2629,7 +2744,25 @@ public actor DependencyTreeGenerator {
 			let childReceived = walkedChild.receivedProperties.received
 			let childOnlyIfAvailable = walkedChild.receivedProperties.onlyIfAvailable
 			childRequiredReceived.formUnion(childReceived.subtracting(childOnlyIfAvailable))
-			requiredAliasFulfilling.formUnion(walkedChild.receivedProperties.requiredAliasFulfilling)
+			if !walkedChild.receivedProperties.requiredOnlyIfAvailableAliases.isEmpty {
+				// An alias whose property this scope provides is not created: its receiver is handed this scope's
+				// property, as `isProvidedByEnclosingScope` has generation do. The child's own property is still
+				// being built inside the child, and the instance of a lazily instantiated property is read from
+				// that property, which a declaration with its label hides, so neither counts. The child whose
+				// tree was walked is the one before `nextPropertyIndex`.
+				let childProperty = propertiesToGenerate[nextPropertyIndex - 1].property
+				let lazilyInstantiatedInstanceProperties = scope.instantiable.dependencies.compactMap(\.lazilyInstantiatedInstanceProperty)
+				func isProvidedToChild(_ property: Property) -> Bool {
+					property != childProperty
+						&& !lazilyInstantiatedInstanceProperties.contains(property)
+						&& (propertiesToDeclare.contains(property) || forwardedProperties.contains(property))
+				}
+				requiredOnlyIfAvailableAliases.formUnion(
+					walkedChild.receivedProperties.requiredOnlyIfAvailableAliases.filter { alias in
+						!isProvidedToChild(alias.property) && !isProvidedToChild(alias.property.asUnwrappedProperty)
+					},
+				)
+			}
 			// A forwarded `x: X` fulfills an `x: X?` beneath it, as a declared one does.
 			let childReceivedFromAncestors = childReceived
 				.subtracting(propertiesToDeclare)
@@ -2676,7 +2809,7 @@ public actor DependencyTreeGenerator {
 					if isOnlyIfAvailable {
 						onlyIfAvailable.insert(fulfillingProperty)
 						if childRequiredReceived.contains(dependency.property) {
-							requiredAliasFulfilling.insert(fulfillingProperty)
+							requiredOnlyIfAvailableAliases.insert(.init(property: dependency.property, fulfillingProperty: fulfillingProperty))
 						}
 					} else {
 						required.insert(fulfillingProperty)
@@ -2696,9 +2829,11 @@ public actor DependencyTreeGenerator {
 			let receivedProperties = ReceivedProperties(
 				received: received,
 				onlyIfAvailable: onlyIfAvailable.subtracting(required),
-				requiredAliasFulfilling: requiredAliasFulfilling
-					.subtracting(propertiesToDeclare)
-					.subtracting(forwardedProperties),
+				// An alias fulfilled by a property this scope provides is created from it, as `record` and
+				// ScopeGenerator's `isReceivedFromAncestors` have a received property that this scope provides.
+				requiredOnlyIfAvailableAliases: requiredOnlyIfAvailableAliases.isEmpty
+					? requiredOnlyIfAvailableAliases
+					: requiredOnlyIfAvailableAliases.filter { !provides($0.fulfillingProperty) },
 			)
 			if let shallowestUnfinishedWalkDepth, shallowestUnfinishedWalkDepth < walkDepth {
 				let walkedReceivedProperties = WalkedReceivedProperties(
