@@ -1691,8 +1691,6 @@ public actor DependencyTreeGenerator {
 		// subtract them. We filter them here instead.
 		// A forwarded lazily instantiated property also provides the by-value property that reads its instance.
 		let forwardedProperties = instantiable.forwardedReceivableProperties
-		let mockRootScope = Scope(instantiable: instantiable)
-		mockRootScope.propertiesToGenerate = scope.propertiesToGenerate
 
 		// A dependency the tree receives both as `LazilyInstantiated` and by value is one dependency. It is
 		// promoted once, as the lazily instantiated property, whenever any receiver requires it in either form;
@@ -1738,10 +1736,14 @@ public actor DependencyTreeGenerator {
 		// own children, so which promoted sibling is passed `nil` when two receive each other only if available, the
 		// order of their overrides, and which error the mock root reports depend on where properties are declared,
 		// never on their labels or type names.
-		mockRootScope.propertiesToGenerate += Self.inOrderTheMockTreeFirstReceives(
-			promotedPropertiesToGenerate,
-			walkingFrom: scope,
-			scopesBuiltForRequiredProperties: scopesBuiltForRequiredProperties,
+		// The mock root's scope is created with every property it instantiates, and only this call reads it.
+		let mockRootScope = Scope(
+			instantiable: instantiable,
+			propertiesToGenerate: scope.propertiesToGenerate + Self.inOrderTheMockTreeFirstReceives(
+				promotedPropertiesToGenerate,
+				walkingFrom: scope,
+				scopesBuiltForRequiredProperties: scopesBuiltForRequiredProperties,
+			),
 		)
 
 		// Validate the promoted mock scope for cycles before generating code.
@@ -3078,7 +3080,7 @@ public actor DependencyTreeGenerator {
 						typeDescriptionToScopeMap[instantiatedType]
 					}
 					if let instantiatedScope {
-						scope.propertiesToGenerate.append(.instantiated(
+						scope.addPropertyToGenerate(.instantiated(
 							dependency.property,
 							instantiatedScope,
 							erasedToConcreteExistential: erasedToConcreteExistential,
@@ -3090,7 +3092,7 @@ public actor DependencyTreeGenerator {
 					// where they're promoted as root-level children.
 					continue
 				case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
-					scope.propertiesToGenerate.append(.aliased(
+					scope.addPropertyToGenerate(.aliased(
 						dependency.property,
 						fulfilledBy: fulfillingProperty,
 						erasedToConcreteExistential: erasedToConcreteExistential,
@@ -3170,14 +3172,14 @@ public actor DependencyTreeGenerator {
 						) {
 							forwardedPropertyErrors.append(error)
 						}
-						scope.propertiesToGenerate.append(.instantiated(
+						scope.addPropertyToGenerate(.instantiated(
 							dependency.property,
 							instantiatedScope,
 							erasedToConcreteExistential: erasedToConcreteExistential,
 						))
 					}
 				case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
-					scope.propertiesToGenerate.append(.aliased(
+					scope.addPropertyToGenerate(.aliased(
 						dependency.property,
 						fulfilledBy: fulfillingProperty,
 						erasedToConcreteExistential: erasedToConcreteExistential,

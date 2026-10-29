@@ -22,11 +22,16 @@
 final class Scope: Hashable {
 	// MARK: Initialization
 
-	/// - Parameter dependenciesLeftOut: The dependencies `instantiable` declared before a mock scope
-	///   left them out because the type's hand-written mock is not passed them.
-	init(instantiable: Instantiable, dependenciesLeftOut: [Dependency] = []) {
+	/// - Parameters:
+	///   - dependenciesLeftOut: The dependencies `instantiable` declared before a mock scope left them out because
+	///     the type's hand-written mock is not passed them.
+	///   - propertiesToGenerate: The properties the scope instantiates, when they are known before the scope is
+	///     created. A scope of a map, which the scopes it instantiates can instantiate in turn, is created without
+	///     them, and they are added with `addPropertyToGenerate(_:)` once every scope of the map exists.
+	init(instantiable: Instantiable, dependenciesLeftOut: [Dependency] = [], propertiesToGenerate: [PropertyToGenerate] = []) {
 		self.instantiable = instantiable
 		self.dependenciesLeftOut = dependenciesLeftOut
+		self.propertiesToGenerate = propertiesToGenerate
 	}
 
 	deinit {
@@ -58,8 +63,17 @@ final class Scope: Hashable {
 	/// with a hand-written mock that is not passed them. Always empty in a scope of the dependency tree.
 	let dependenciesLeftOut: [Dependency]
 
-	/// The properties that this scope is responsible for instantiating.
-	var propertiesToGenerate = [PropertyToGenerate]()
+	/// The properties that this scope is responsible for instantiating. Set when the scope is created or, for a scope
+	/// of a map, by `addPropertyToGenerate(_:)` while the map is built; see `FrozenScopeMap`.
+	private(set) var propertiesToGenerate: [PropertyToGenerate]
+
+	/// Adds `propertyToGenerate` to `propertiesToGenerate`. Called only by the functions that build a scope map,
+	/// `DependencyTreeGenerator`'s `createTypeDescriptionToScopeMapping()` and
+	/// `createMockTypeDescriptionToScopeMapping(dependenciesBuiltForOtherDependencies:)`, on the scopes of the map
+	/// they are building, before they return it.
+	func addPropertyToGenerate(_ propertyToGenerate: PropertyToGenerate) {
+		propertiesToGenerate.append(propertyToGenerate)
+	}
 
 	enum PropertyToGenerate {
 		case instantiated(Property, Scope, erasedToConcreteExistential: Bool)
@@ -249,7 +263,8 @@ final class Scope: Hashable {
 		}
 
 	/// Computes every property derived from `instantiable` and `propertiesToGenerate`, so that reading one afterwards
-	/// writes nothing to the scope. Called by `FrozenScopeMap` once the scope's map is complete.
+	/// writes nothing to the scope. Called by `FrozenScopeMap` once the scope's map is complete, so every `lazy var`
+	/// of `Scope` must be read here.
 	fileprivate func freeze() {
 		_ = properties
 		_ = createdProperties
@@ -320,12 +335,22 @@ final class Scope: Hashable {
 
 /// The scopes of a complete scope map, which concurrent tasks read.
 ///
-/// `Scope` is a class whose derived properties are computed when they are first read, so it is not `Sendable`: two
-/// tasks reading one first would each compute and store it. A map of scopes is sendable once its scopes are frozen,
-/// which only this type's initializer does: it computes every derived property of every scope of the map, and the map
-/// is complete, so nothing writes to a scope afterwards and the tasks that share the map only read. A scope's
-/// `propertiesToGenerate` refers to scopes of its own map alone, so a task that holds the map holds every scope the
-/// trees it walks reach. A scope made for one task, such as a mock root's, is read by that task alone.
+/// `Scope` is a mutable class, so it is not `Sendable`, and this conformance is unchecked: it holds because nothing
+/// writes to a scope of the map once this type's initializer has frozen it. These are every write to a scope:
+/// - `Scope.addPropertyToGenerate(_:)`, the one write to the `propertiesToGenerate` of a scope that exists, which
+///   only `DependencyTreeGenerator`'s `createMockTypeDescriptionToScopeMapping(dependenciesBuiltForOtherDependencies:)`
+///   and `createTypeDescriptionToScopeMapping()` call, on the scopes of the map each is building, before it returns
+///   the map. Only a map that `createMockTypeDescriptionToScopeMapping()` returns is frozen, once it is built; a map of
+///   the dependency tree is never frozen.
+/// - The derived properties of a scope, such as `createdProperties`, which are `lazy var`s, computed and stored when
+///   first read. This initializer reads every one of every scope of the map (`Scope.freeze()`), so that every later
+///   read only reads.
+/// - A scope created with its `propertiesToGenerate`, such as the one `createMockRootScopeGenerator` creates for a mock
+///   root, whose derived properties are computed by the task that created it, which no other task can reach.
+/// - `Scope.deinit`, once nothing else holds the scope.
+///
+/// A scope's `propertiesToGenerate` refers to scopes of its own map alone, so a task that holds the map holds every
+/// scope the trees it walks reach.
 struct FrozenScopeMap: @unchecked Sendable {
 	/// Freezes every scope of `typeDescriptionToScopeMap`, which must be complete: every scope's
 	/// `propertiesToGenerate` is set, and nothing sets it again.
