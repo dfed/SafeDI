@@ -1155,6 +1155,93 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenRequiredAliasOfOnlyIfAvailableAliasOfOnlyIfAvailableAliasIsDeclaredInsideItsFulfillingProperty() async {
+		// Parent.mock() builds `x`, inside which C requires `z`, which it creates only from `y`, which it creates
+		// only once `x` exists. Parent is no root, so only its mock's validation sees the tree.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["C.swift"]):6:5: error: Dependency cycle: @Instantiated `x: X` -> @Received `z: X?` -> @Received `y: X?` -> @Received `x: X`. `x: X` is received while it is still being instantiated. `z: X?` renames `y: X?` only if available, so a type that receives `z` without `onlyIfAvailable` must be built after `y: X?`. Receive `z` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `y: X?` cannot be built first. `y: X?` renames `x: X` only if available, so a type that receives `y` without `onlyIfAvailable` must be built after `x: X`. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Parent: Instantiable {
+					    public init(x: X) { self.x = x }
+					    @Instantiated let x: X
+					}
+					""",
+					"""
+					@Instantiable
+					public final class X: Instantiable {
+					    public init(c: C) { self.c = c }
+					    @Instantiated let c: C
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(y: X?, z: X?, w: X?) { self.y = y; self.z = z; self.w = w }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let y: X?
+					    @Received(fulfilledByDependencyNamed: "y", ofType: X?.self, onlyIfAvailable: true) let z: X?
+					    @Received(fulfilledByDependencyNamed: "z", ofType: X?.self) let w: X?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenRequiredAliasOfOnlyIfAvailableAliasOfOnlyIfAvailableAliasOfOptionalFormIsDeclaredInsideInstantiatorBuiltByItsFulfillingProperty() async {
+		// As above, with X building C through an Instantiator and C's first alias renaming `x: X?`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["C.swift"]):6:5: error: Dependency cycle: @Instantiated `x: X` -> @Received `z: X?` -> @Received `y: X?` -> @Received `x: X`. `x: X` is received while it is still being instantiated. `z: X?` renames `y: X?` only if available, so a type that receives `z` without `onlyIfAvailable` must be built after `y: X?`. Receive `z` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `y: X?` cannot be built first. `y: X?` renames `x: X?` only if available, so a type that receives `y` without `onlyIfAvailable` must be built after `x: X?`. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X?` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Parent: Instantiable {
+					    public init(x: X) { self.x = x }
+					    @Instantiated let x: X
+					}
+					""",
+					"""
+					@Instantiable
+					public final class X: Instantiable {
+					    public init(cBuilder: Instantiator<C>) { self.cBuilder = cBuilder }
+					    @Instantiated let cBuilder: Instantiator<C>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(y: X?, z: X?, w: X?) { self.y = y; self.z = z; self.w = w }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X?.self, onlyIfAvailable: true) let y: X?
+					    @Received(fulfilledByDependencyNamed: "y", ofType: X?.self, onlyIfAvailable: true) let z: X?
+					    @Received(fulfilledByDependencyNamed: "z", ofType: X?.self) let w: X?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenPromotedDependencyFulfillsAliasRequiredByItsOwnTree() async {
 		// Mocked.mock() promotes `t`. T requires Mocked's alias of `t`, which is built from the T being built.
 		await assertThrowsError(

@@ -3758,6 +3758,48 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsAliasCycleError_whenRequiredAliasRenamesOnlyIfAvailableAliasesThatFulfillEachOther() async {
+		// `w` requires `y`, which is assigned from `x` only if available, which is assigned from `y` only if available,
+		// so neither is ever created.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Middle.swift"]):9:5: error: Dependency cycle: each @Received(fulfilledByDependencyNamed:ofType:) dependency is fulfilled by the next: `y: X?` -> `x: X?` -> `y: X?`. Change one of them to be fulfilled by a property outside this cycle.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(middle: Middle) { self.middle = middle }
+					    @Instantiated private let middle: Middle
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Middle: Instantiable {
+					    public init(w: X?, y: X?, x: X?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(fulfilledByDependencyNamed: "y", ofType: X?.self) private let w: X?
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X?.self, onlyIfAvailable: true) private let y: X?
+					    @Received(fulfilledByDependencyNamed: "y", ofType: X?.self, onlyIfAvailable: true) private let x: X?
+					}
+
+					public final class X {}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_throwsAliasCycleError_whenAliasIsFulfilledByItself() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
@@ -6133,6 +6175,314 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public final class T: Instantiable {
 					    public init(maybeBuilder: Instantiator<T>?) { self.maybeBuilder = maybeBuilder }
 					    @Received let maybeBuilder: Instantiator<T>?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredAliasOfOnlyIfAvailableAliasOfOnlyIfAvailableAliasInsideItsFulfillingProperty_throwsError() async {
+		// C requires `z`, which it creates only from `y`, which it creates only once `x`, the X being built, exists.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["C.swift"]):6:5: error: Dependency cycle: @Instantiated `x: X` -> @Received `z: X?` -> @Received `y: X?` -> @Received `x: X`. `x: X` is received while it is still being instantiated. `z: X?` renames `y: X?` only if available, so a type that receives `z` without `onlyIfAvailable` must be built after `y: X?`. Receive `z` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `y: X?` cannot be built first. `y: X?` renames `x: X` only if available, so a type that receives `y` without `onlyIfAvailable` must be built after `x: X`. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(x: X) { self.x = x }
+					    @Instantiated let x: X
+					}
+					""",
+					"""
+					@Instantiable
+					public final class X: Instantiable {
+					    public init(c: C) { self.c = c }
+					    @Instantiated let c: C
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(y: X?, z: X?, w: X?) { self.y = y; self.z = z; self.w = w }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let y: X?
+					    @Received(fulfilledByDependencyNamed: "y", ofType: X?.self, onlyIfAvailable: true) let z: X?
+					    @Received(fulfilledByDependencyNamed: "z", ofType: X?.self) let w: X?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredAliasOfOnlyIfAvailableAliasOfOnlyIfAvailableAliasOfOptionalFormInsideItsFulfillingProperty_throwsError() async {
+		// As above, with C's first alias renaming `x: X?`, which the X being built fulfills.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["C.swift"]):6:5: error: Dependency cycle: @Instantiated `x: X` -> @Received `z: X?` -> @Received `y: X?` -> @Received `x: X`. `x: X` is received while it is still being instantiated. `z: X?` renames `y: X?` only if available, so a type that receives `z` without `onlyIfAvailable` must be built after `y: X?`. Receive `z` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `y: X?` cannot be built first. `y: X?` renames `x: X?` only if available, so a type that receives `y` without `onlyIfAvailable` must be built after `x: X?`. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X?` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(x: X) { self.x = x }
+					    @Instantiated let x: X
+					}
+					""",
+					"""
+					@Instantiable
+					public final class X: Instantiable {
+					    public init(c: C) { self.c = c }
+					    @Instantiated let c: C
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(y: X?, z: X?, w: X?) { self.y = y; self.z = z; self.w = w }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X?.self, onlyIfAvailable: true) let y: X?
+					    @Received(fulfilledByDependencyNamed: "y", ofType: X?.self, onlyIfAvailable: true) let z: X?
+					    @Received(fulfilledByDependencyNamed: "z", ofType: X?.self) let w: X?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredAliasOfOnlyIfAvailableAliasOfOnlyIfAvailableAliasInsideInstantiatorBuiltByItsFulfillingProperty_throwsError() async {
+		// As the first, with X building C through an Instantiator, which C is built inside while `x` is still being built.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["C.swift"]):6:5: error: Dependency cycle: @Instantiated `x: X` -> @Received `z: X?` -> @Received `y: X?` -> @Received `x: X`. `x: X` is received while it is still being instantiated. `z: X?` renames `y: X?` only if available, so a type that receives `z` without `onlyIfAvailable` must be built after `y: X?`. Receive `z` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `y: X?` cannot be built first. `y: X?` renames `x: X` only if available, so a type that receives `y` without `onlyIfAvailable` must be built after `x: X`. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(x: X) { self.x = x }
+					    @Instantiated let x: X
+					}
+					""",
+					"""
+					@Instantiable
+					public final class X: Instantiable {
+					    public init(cBuilder: Instantiator<C>) { self.cBuilder = cBuilder }
+					    @Instantiated let cBuilder: Instantiator<C>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(y: X?, z: X?, w: X?) { self.y = y; self.z = z; self.w = w }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let y: X?
+					    @Received(fulfilledByDependencyNamed: "y", ofType: X?.self, onlyIfAvailable: true) let z: X?
+					    @Received(fulfilledByDependencyNamed: "z", ofType: X?.self) let w: X?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredAliasOfOnlyIfAvailableAliasOfOnlyIfAvailableAliasOfOptionalFormInsideInstantiatorBuiltByItsFulfillingProperty_throwsError() async {
+		// As above, with C's first alias renaming `x: X?`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["C.swift"]):6:5: error: Dependency cycle: @Instantiated `x: X` -> @Received `z: X?` -> @Received `y: X?` -> @Received `x: X`. `x: X` is received while it is still being instantiated. `z: X?` renames `y: X?` only if available, so a type that receives `z` without `onlyIfAvailable` must be built after `y: X?`. Receive `z` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `y: X?` cannot be built first. `y: X?` renames `x: X?` only if available, so a type that receives `y` without `onlyIfAvailable` must be built after `x: X?`. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X?` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(x: X) { self.x = x }
+					    @Instantiated let x: X
+					}
+					""",
+					"""
+					@Instantiable
+					public final class X: Instantiable {
+					    public init(cBuilder: Instantiator<C>) { self.cBuilder = cBuilder }
+					    @Instantiated let cBuilder: Instantiator<C>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(y: X?, z: X?, w: X?) { self.y = y; self.z = z; self.w = w }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X?.self, onlyIfAvailable: true) let y: X?
+					    @Received(fulfilledByDependencyNamed: "y", ofType: X?.self, onlyIfAvailable: true) let z: X?
+					    @Received(fulfilledByDependencyNamed: "z", ofType: X?.self) let w: X?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredAliasOfOnlyIfAvailableAliasOfOnlyIfAvailableAliasOfOnlyIfAvailableAliasInsideItsFulfillingProperty_throwsErrorWithHintForEachAlias() async {
+		// As the first, with one more alias in the chain: C requires `v`, created from `z`, from `y`, from `x`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["C.swift"]):7:5: error: Dependency cycle: @Instantiated `x: X` -> @Received `v: X?` -> @Received `z: X?` -> @Received `y: X?` -> @Received `x: X`. `x: X` is received while it is still being instantiated. `v: X?` renames `z: X?` only if available, so a type that receives `v` without `onlyIfAvailable` must be built after `z: X?`. Receive `v` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `z: X?` cannot be built first. `z: X?` renames `y: X?` only if available, so a type that receives `z` without `onlyIfAvailable` must be built after `y: X?`. Receive `z` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `y: X?` cannot be built first. `y: X?` renames `x: X` only if available, so a type that receives `y` without `onlyIfAvailable` must be built after `x: X`. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(x: X) { self.x = x }
+					    @Instantiated let x: X
+					}
+					""",
+					"""
+					@Instantiable
+					public final class X: Instantiable {
+					    public init(c: C) { self.c = c }
+					    @Instantiated let c: C
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(y: X?, z: X?, v: X?, w: X?) { self.y = y; self.z = z; self.v = v; self.w = w }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let y: X?
+					    @Received(fulfilledByDependencyNamed: "y", ofType: X?.self, onlyIfAvailable: true) let z: X?
+					    @Received(fulfilledByDependencyNamed: "z", ofType: X?.self, onlyIfAvailable: true) let v: X?
+					    @Received(fulfilledByDependencyNamed: "v", ofType: X?.self) let w: X?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasOfOnlyIfAvailableAliasInsideItsFulfillingProperty_throwsError() async {
+		// D requires C's `z`, which C creates only from `y`, which it creates only once `x`, the X being built, exists.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["D.swift"]):4:5: error: Dependency cycle: @Instantiated `x: X` -> @Received `z: X?` -> @Received `y: X?` -> @Received `x: X`. `x: X` is received while it is still being instantiated. `z: X?` renames `y: X?` only if available, so a type that receives `z` without `onlyIfAvailable` must be built after `y: X?`. Receive `z` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `y: X?` cannot be built first. `y: X?` renames `x: X` only if available, so a type that receives `y` without `onlyIfAvailable` must be built after `x: X`. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(x: X) { self.x = x }
+					    @Instantiated let x: X
+					}
+					""",
+					"""
+					@Instantiable
+					public final class X: Instantiable {
+					    public init(c: C) { self.c = c }
+					    @Instantiated let c: C
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(y: X?, z: X?, d: D) { self.y = y; self.z = z; self.d = d }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let y: X?
+					    @Received(fulfilledByDependencyNamed: "y", ofType: X?.self, onlyIfAvailable: true) let z: X?
+					    @Instantiated let d: D
+					}
+					""",
+					"""
+					@Instantiable
+					public final class D: Instantiable {
+					    public init(z: X?) { self.z = z }
+					    @Received let z: X?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredAliasOfOnlyIfAvailableAliasOfOnlyIfAvailableAliasWhoseFulfillingPropertyIsUnavailable_throwsError() async {
+		// Nothing provides `x`, so C creates neither `y` nor `z`, which `w` requires.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["C.swift"]):6:5: error: @Received property `z: X?` is not @Instantiated or @Forwarded in chain: Root -> C. `z: X?` is created by `C` only if `x: X` is available, and `x: X` is not @Instantiated or @Forwarded in chain. Did you mean to receive this property with `onlyIfAvailable: true`?
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(c: C) { self.c = c }
+					    @Instantiated let c: C
+					}
+					""",
+					"""
+					@Instantiable
+					public final class X: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(y: X?, z: X?, w: X?) { self.y = y; self.z = z; self.w = w }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let y: X?
+					    @Received(fulfilledByDependencyNamed: "y", ofType: X?.self, onlyIfAvailable: true) let z: X?
+					    @Received(fulfilledByDependencyNamed: "z", ofType: X?.self) let w: X?
 					}
 					""",
 				],
