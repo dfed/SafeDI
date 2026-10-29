@@ -251,15 +251,19 @@ final class Scope: Hashable {
 	/// Creates the generator of the tree this scope creates. The generators of the scopes in the tree are
 	/// created depth first, each after the generators of the scopes it creates, with a stack of the scopes
 	/// whose generator is under construction, since a tree can be as deep as the module has types.
-	/// - Parameter boundProperties: The received properties a mock root binds, which enclose its whole tree.
-	///   Kept apart from `receivableProperties`, which grows at every scope, so that the scopes of a mock
-	///   tree do not each copy them.
+	/// - Parameters:
+	///   - boundProperties: The received properties a mock root binds, which enclose its whole tree. Kept apart
+	///     from `receivableProperties`, which grows at every scope, so that the scopes of a mock tree do not each
+	///     copy them.
+	///   - alwaysAvailableProperties: The properties in scope wherever the tree is built: those a mock is passed.
+	///     The properties each scope forwards are added for the scopes beneath it.
 	func createScopeGenerator(
 		for property: Property?,
 		propertyStack: [Property],
 		receivableProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		boundProperties: Set<Property> = [],
+		alwaysAvailableProperties: Set<Property> = [],
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool = false,
 	) throws -> ScopeGenerator {
@@ -269,6 +273,7 @@ final class Scope: Hashable {
 			propertyStack: propertyStack,
 			receivableProperties: receivableProperties,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			alwaysAvailableProperties: alwaysAvailableProperties,
 			boundProperties: boundProperties,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
@@ -313,6 +318,7 @@ private struct ScopeGeneratorUnderConstruction {
 		propertyStack: [Property],
 		receivableProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
+		alwaysAvailableProperties: Set<Property>,
 		boundProperties: Set<Property>,
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool,
@@ -394,6 +400,12 @@ private struct ScopeGeneratorUnderConstruction {
 		self.receivableProperties = receivableProperties
 		self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
 		self.childLazilyInstantiatedInstanceProperties = childLazilyInstantiatedInstanceProperties
+		// A forwarded property is a parameter of the function that builds the scope, so it is in scope wherever
+		// the scope's tree is built. Nearly every scope forwards nothing, so most share the set they were given.
+		let forwardedProperties = scope.instantiable.forwardedReceivableProperties
+		self.alwaysAvailableProperties = forwardedProperties.isEmpty
+			? alwaysAvailableProperties
+			: alwaysAvailableProperties.union(forwardedProperties)
 		self.boundProperties = boundProperties
 		self.erasedToConcreteExistential = erasedToConcreteExistential
 		self.isPropertyCycle = isPropertyCycle
@@ -432,6 +444,7 @@ private struct ScopeGeneratorUnderConstruction {
 				propertyStack: childPropertyStack,
 				receivableProperties: receivableProperties,
 				lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
+				alwaysAvailableProperties: alwaysAvailableProperties,
 				boundProperties: boundProperties,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				forMockGeneration: forMockGeneration,
@@ -461,6 +474,10 @@ private struct ScopeGeneratorUnderConstruction {
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			onlyIfAvailable: onlyIfAvailable,
 			isProvidedByEnclosingScope: isProvidedByEnclosingScope(property),
+			// A forwarded or bound fulfilling property is in scope wherever the alias is built, so the alias is
+			// always created from it. Any other is built by a scope, which can build it after the alias.
+			fulfillingPropertyIsAlwaysAvailable: alwaysAvailableProperties.contains(fulfillingProperty)
+				|| alwaysAvailableProperties.contains(fulfillingProperty.asUnwrappedProperty),
 			declarationReference: declarationReference,
 		))
 	}
@@ -499,6 +516,9 @@ private struct ScopeGeneratorUnderConstruction {
 	private let lazilyInstantiatedInstanceProperties: Set<Property>
 	private let childLazilyInstantiatedInstanceProperties: Set<Property>
 	private let unavailableOptionalProperties: Set<Property>
+	/// The properties in scope wherever this scope's tree is built: those this scope and the scopes enclosing it
+	/// forward, and those a mock is passed.
+	private let alwaysAvailableProperties: Set<Property>
 	private let boundProperties: Set<Property>
 	private let erasedToConcreteExistential: Bool
 	private let isPropertyCycle: Bool
