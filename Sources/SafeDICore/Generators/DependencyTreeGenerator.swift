@@ -911,6 +911,10 @@ public actor DependencyTreeGenerator {
 		/// Reported at each `@Received` declaration whose dependency a closer ancestor hides, with a note at the
 		/// hiding declaration. See `HiddenReceivedProperty`.
 		case hiddenReceivedProperties([HiddenReceivedProperty])
+		/// Reported at a `@Received` declaration in the tree of a dependency a mock builds beside the mocked type, which
+		/// the mocked type's forwarded property fulfills but another receive of its label hides, with a note at that
+		/// receive. See `ForwardedPropertyHiddenInPromotedTree`.
+		case forwardedPropertyHiddenInPromotedTree(ForwardedPropertyHiddenInPromotedTree)
 		case instantiableHasForwardedProperty(ForwardedPropertyViolation)
 		/// Reported at the dependency declaration that closes the cycle – the `@Instantiated` or `@Received`
 		/// property whose type is already on the instantiation stack, and which is not an `@Instantiated`
@@ -1009,6 +1013,8 @@ public actor DependencyTreeGenerator {
 					.map(\.sourceDiagnostics)
 					.sorted { SourceDiagnostic.precedesInSourceOrder($0[0], $1[0]) }
 					.flatMap(\.self)
+			case let .forwardedPropertyHiddenInPromotedTree(forwardedPropertyHiddenInPromotedTree):
+				forwardedPropertyHiddenInPromotedTree.sourceDiagnostics
 			case let .instantiableHasForwardedProperty(violation):
 				violation.sourceDiagnostics
 			case let .constantDependencyCycleDetected(cycle, closingDependency):
@@ -1387,6 +1393,43 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
+		/// A receive of a property the mocked type forwards, in the tree of a dependency the mock builds beside the
+		/// mocked type, that a closer receive of the property's label in another form hides. The mock binds that form
+		/// under a name of its own, since the forwarded parameter keeps the label, and passes it to its receiver under
+		/// the label, inside the function that also builds the types beneath the receiver.
+		struct ForwardedPropertyHiddenInPromotedTree {
+			/// The property received: the fulfilling property for an aliased dependency, the declared property otherwise.
+			let property: Property
+			let declarationLocation: Dependency.DeclarationLocation?
+			let mockedType: TypeDescription
+			let forwardedProperty: Property
+			/// The other form of the label, which a type above the receiver receives.
+			let hidingProperty: Property
+			let hidingDeclarationLocation: Dependency.DeclarationLocation?
+			/// The types from the one that receives `hidingProperty` to the one that receives `property`.
+			let chain: [TypeDescription]
+
+			/// An `error:` line that names the hiding receive, as `HiddenReceivedProperty`'s does, and a `note:` at it.
+			var sourceDiagnostics: [SourceDiagnostic] {
+				let hidingProperty = hidingProperty.asSource
+				let hidingType = chain[0].asSource
+				let forwardedProperty = forwardedProperty.asSource
+				let mockedType = mockedType.asSource
+				return [
+					SourceDiagnostic(
+						severity: .error,
+						location: declarationLocation,
+						message: "@\(Dependency.Source.receivedRawValue) property `\(property.asSource)` is hidden in chain: \(chain.map(\.asSource).joined(separator: " -> ")). In the mock of `\(mockedType)`, `\(chain[chain.count - 1].asSource)` is passed the `\(forwardedProperty)` that `\(mockedType)` forwards, but `\(hidingType)` receives `\(hidingProperty)` with the same label, so the types below `\(hidingType)` receive `\(hidingProperty)` instead. Give `\(forwardedProperty)` on `\(mockedType)` a different label to fix.",
+					),
+					SourceDiagnostic(
+						severity: .note,
+						location: hidingDeclarationLocation,
+						message: "`\(hidingProperty)` is received here",
+					),
+				]
+			}
+		}
+
 		/// The dependency declaration that closes a constant dependency cycle, at which the cycle is reported.
 		enum ClosingDependency {
 			/// A dependency the declaring type instantiates, as declared.
@@ -1594,16 +1637,11 @@ public actor DependencyTreeGenerator {
 		// tree of its type. `collectReceivedProperties` subtracts the mock root's forwarded properties only from the trees
 		// of the mock root's own children, so the tree of a promoted scope can still receive one; the worklist and the
 		// promotion below skip it instead. A forwarded lazily instantiated property also provides the by-value property
-		// that reads its instance. A forwarded `x: X` is, in turn, the instance of an `x: LazilyInstantiated<X>` the
-		// tree receives, or of an `x: SendableLazilyInstantiated<X>`, which is one dependency with it: the mock wraps
-		// the forwarded value for its receivers rather than building another `X`.
+		// that reads its instance.
 		let forwardedProperties = instantiable.forwardedReceivableProperties
-		let declaredForwardedProperties = Set(instantiable.dependencies.filter(\.isForwarded).map(\.property))
 		func isForwarded(_ property: Property) -> Bool {
 			// A forwarded `x: X` fulfills an `x: X?` too.
-			forwardedProperties.contains(property)
-				|| forwardedProperties.contains(property.asUnwrappedProperty)
-				|| property.asLazilyInstantiatedInstanceProperty.map(declaredForwardedProperties.contains) == true
+			forwardedProperties.contains(property) || forwardedProperties.contains(property.asUnwrappedProperty)
 		}
 
 		/// The scope that builds a received property promoted to the mock root, when the mock can build one.
@@ -1650,19 +1688,33 @@ public actor DependencyTreeGenerator {
 		// onlyIfAvailable dependencies are NOT promoted — they become optional
 		// mock parameters with no default. Nor are forwarded properties.
 		let mockRootScope = Scope(instantiable: instantiable)
-		mockRootScope.propertiesToGenerate = scope.propertiesToGenerate
+		// A dependency created in the tree is one instance in every form: the mocked type's own `x: X` is the instance
+		// of an `x: LazilyInstantiated<X>` its tree receives, as production would create both in one tree. The mock
+		// builds that child as the `LazilyInstantiated` the tree receives, which the mocked type reads the instance of.
+		// A forwarded `x: X` comes from outside the tree, so it is never the instance of one.
+		let lazilyInstantiatedPropertiesReceived = allReceived.lazy
+			.map(\.asUnwrappedProperty)
+			.filter { $0.typeDescription.lazilyInstantiatedInstanceType != nil }
+		mockRootScope.propertiesToGenerate = scope.propertiesToGenerate.map { propertyToGenerate in
+			guard case let .instantiated(property, childScope, erasedToConcreteExistential) = propertyToGenerate,
+			      let lazilyInstantiatedProperty = lazilyInstantiatedPropertiesReceived
+			      .filter({ $0.asLazilyInstantiatedInstanceProperty == property })
+			      .min(by: { $0.precedesInMockOrder($1) })
+			else { return propertyToGenerate }
+			return .instantiated(lazilyInstantiatedProperty, childScope, erasedToConcreteExistential: erasedToConcreteExistential)
+		}
 
 		// A dependency the tree receives both as `LazilyInstantiated` and by value is one dependency. It is
 		// promoted once, as the lazily instantiated property, whenever any receiver requires it in either form;
 		// receivers of its instance read it from that property. The same holds for a lazily instantiated
-		// property the mock root declares itself, which needs no promotion. One whose instance the mocked type
-		// forwards is forwarded, so it is not promoted below.
+		// property the mock root declares itself, which needs no promotion. A receive of the instance that a
+		// forwarded property fulfills does not count: the forwarded value comes from outside the tree.
 		var lazilyInstantiatedPropertiesToPromote = Set<Property>()
-		var instancePropertiesOfLazilyInstantiatedProperties = Set(scope.propertiesToGenerate.compactMap(\.lazilyInstantiatedInstanceProperty))
+		var instancePropertiesOfLazilyInstantiatedProperties = Set(mockRootScope.propertiesToGenerate.compactMap(\.lazilyInstantiatedInstanceProperty))
 		for receivedProperty in allReceived {
 			guard let instanceProperty = receivedProperty.asLazilyInstantiatedInstanceProperty else { continue }
 			let lazilyInstantiatedProperty = receivedProperty.asUnwrappedProperty
-			guard allRequired.contains(lazilyInstantiatedProperty) || allRequired.contains(instanceProperty),
+			guard allRequired.contains(lazilyInstantiatedProperty) || (allRequired.contains(instanceProperty) && !isForwarded(instanceProperty)),
 			      scopeToPromote(for: lazilyInstantiatedProperty) != nil
 			else { continue }
 			lazilyInstantiatedPropertiesToPromote.insert(lazilyInstantiatedProperty)
@@ -1777,6 +1829,30 @@ public actor DependencyTreeGenerator {
 			)
 		}
 
+		// A forwarded parameter keeps its label, so the mock binds every other property of that label under a name of its
+		// own, and a type that receives one is passed it under the label inside the function that builds it. A type built
+		// in that function that receives the forwarded property would read that binding instead. Only a promoted
+		// dependency's tree can hold such a pair, and only when some type in it receives a forwarded label in another
+		// form, which is rare, so the trees are walked only then. A `LazilyInstantiated` the mock does not build is passed
+		// by name, never under its label.
+		let promotedProperties = Set(promotedPropertiesToGenerate.map(\.property))
+		func isReceivedUnderItsLabel(_ property: Property) -> Bool {
+			property.typeDescription.lazilyInstantiatedInstanceType == nil || promotedProperties.contains(property.asUnwrappedProperty)
+		}
+		let forwardedDependencies = instantiable.dependencies.filter { dependency in
+			dependency.isForwarded && allReceived.contains { receivedProperty in
+				receivedProperty.label == dependency.property.label && !isForwarded(receivedProperty) && isReceivedUnderItsLabel(receivedProperty)
+			}
+		}
+		if let forwardedPropertyHiddenInPromotedTree = Self.forwardedPropertyHiddenInPromotedTree(
+			forwardedDependencies: forwardedDependencies,
+			of: instantiable,
+			promotedChildren: mockRootScope.propertiesToGenerate[scope.propertiesToGenerate.count...],
+			isReceivedUnderItsLabel: isReceivedUnderItsLabel,
+		) {
+			throw DependencyTreeGeneratorError.forwardedPropertyHiddenInPromotedTree(forwardedPropertyHiddenInPromotedTree)
+		}
+
 		// Build the final ScopeGenerator once. The mock root binds every received
 		// property it does not promote — as a `mock()` parameter or a `SafeDIOverrides`
 		// entry — so each is receivable throughout the tree.
@@ -1811,6 +1887,110 @@ public actor DependencyTreeGenerator {
 		guard property.firstGenericMatchesForwardedProperties(of: scope.instantiable) else { return false }
 		return !(property.propertyType.isConstant || property.propertyType.isLazilyInstantiated)
 			|| !scope.instantiable.dependencies.contains(where: \.isForwarded)
+	}
+
+	/// A scope that `forwardedPropertyHiddenInPromotedTree` has yet to walk.
+	private struct ScopeToWalkForHiddenForwardedProperty {
+		let scope: Scope
+		/// The receive of the forwarded label in another form that hides the forwarded property in `scope`, with the
+		/// types from the one that declares it to `scope`, or `nil` when none does.
+		let hidingReceive: (dependency: Dependency, chain: [TypeDescription])?
+	}
+
+	/// The first receive, walking the trees of a mock root's promoted children depth first in declaration order, of a
+	/// property in `forwardedDependencies` beneath a type that receives its label in another form. The mock binds that
+	/// form under a name of its own and passes it to the type under the label, inside the function that builds the type
+	/// and the types it builds, where the label then names that form rather than the forwarded parameter. `nil` when
+	/// there is none. Production rejects the same pair of receives under any root, since the closer of the two
+	/// declarations they need hides the other.
+	/// - Parameters:
+	///   - forwardedDependencies: The mocked type's `@Forwarded` dependencies to look for.
+	///   - instantiable: The mocked type.
+	///   - promotedChildren: The mock root's promoted children, in the order the mock declares them.
+	///   - isReceivedUnderItsLabel: Whether the mock passes a receive of a property under its label, rather than by name.
+	private static func forwardedPropertyHiddenInPromotedTree(
+		forwardedDependencies: [Dependency],
+		of instantiable: Instantiable,
+		promotedChildren: ArraySlice<Scope.PropertyToGenerate>,
+		isReceivedUnderItsLabel: (Property) -> Bool,
+	) -> DependencyTreeGeneratorError.ForwardedPropertyHiddenInPromotedTree? {
+		let forwardedProperties = instantiable.forwardedReceivableProperties
+		for forwardedDependency in forwardedDependencies {
+			let label = forwardedDependency.property.label
+			/// Whether a receive of `property` is passed the forwarded property: its label's, of its type or of the
+			/// optional form of its type, or the instance of a forwarded lazily instantiated property.
+			func isForwardedProperty(_ property: Property) -> Bool {
+				property.label == label && (forwardedProperties.contains(property) || forwardedProperties.contains(property.asUnwrappedProperty))
+			}
+			// Each scope is walked once beneath a hiding receive and once beneath none, which also ends a walk around a
+			// cycle of `Instantiator`s.
+			var walkedScopes = Set<ScopeVisit>()
+			var promotedScopesToWalk = [ScopeToWalkForHiddenForwardedProperty]()
+			for case let .instantiated(_, promotedScope, _) in promotedChildren
+				where walkedScopes.insert(ScopeVisit(scope: ObjectIdentifier(promotedScope), isBeneathHidingReceive: false)).inserted
+			{
+				promotedScopesToWalk.append(ScopeToWalkForHiddenForwardedProperty(scope: promotedScope, hidingReceive: nil))
+			}
+			// The scope walked next is the last one on the stack, so the first goes last.
+			var scopesToWalk = Array(promotedScopesToWalk.reversed())
+			while let scopeToWalk = scopesToWalk.popLast() {
+				let scope = scopeToWalk.scope
+				var hidingReceive = scopeToWalk.hidingReceive
+				for dependency in scope.instantiable.dependencies {
+					switch dependency.source {
+					case .received:
+						if let hiding = hidingReceive, isForwardedProperty(dependency.property) {
+							return .init(
+								property: dependency.property,
+								declarationLocation: dependency.declarationLocation,
+								mockedType: instantiable.concreteInstantiable,
+								forwardedProperty: forwardedDependency.property,
+								hidingProperty: hiding.dependency.property,
+								hidingDeclarationLocation: hiding.dependency.declarationLocation,
+								chain: hiding.chain,
+							)
+						} else if dependency.property.label == label, !isForwardedProperty(dependency.property), isReceivedUnderItsLabel(dependency.property) {
+							hidingReceive = (dependency, [scope.instantiable.concreteInstantiable])
+						}
+					case let .aliased(fulfillingProperty, _, _):
+						if let hiding = hidingReceive, isForwardedProperty(fulfillingProperty) {
+							return .init(
+								property: fulfillingProperty,
+								declarationLocation: dependency.declarationLocation,
+								mockedType: instantiable.concreteInstantiable,
+								forwardedProperty: forwardedDependency.property,
+								hidingProperty: hiding.dependency.property,
+								hidingDeclarationLocation: hiding.dependency.declarationLocation,
+								chain: hiding.chain,
+							)
+						}
+					case .instantiated, .forwarded:
+						break
+					}
+				}
+				// A type that declares the label itself is what the types it builds receive under it, as in production.
+				let declaresLabel = scope.instantiable.dependencies.contains { !$0.source.isReceived && $0.property.label == label }
+				let firstChildIndex = scopesToWalk.endIndex
+				for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate
+					where !declaresLabel
+					&& walkedScopes.insert(ScopeVisit(scope: ObjectIdentifier(childScope), isBeneathHidingReceive: hidingReceive != nil)).inserted
+				{
+					scopesToWalk.append(ScopeToWalkForHiddenForwardedProperty(
+						scope: childScope,
+						hidingReceive: hidingReceive.map { ($0.dependency, $0.chain + [childScope.instantiable.concreteInstantiable]) },
+					))
+				}
+				// The scope walked next is the last one on the stack, so the first child goes last.
+				scopesToWalk[firstChildIndex...].reverse()
+			}
+		}
+		return nil
+	}
+
+	/// A visit of a scope by `forwardedPropertyHiddenInPromotedTree`.
+	private struct ScopeVisit: Hashable {
+		let scope: ObjectIdentifier
+		let isBeneathHidingReceive: Bool
 	}
 
 	/// A scope that `validateMockRootScopeForCycles` has yet to walk.

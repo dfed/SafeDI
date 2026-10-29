@@ -1652,6 +1652,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let flatUncoveredParameters: [UncoveredParameter]
 		/// The lazily instantiated dependencies the tree receives and the mock cannot build.
 		let lazilyInstantiatedReceivedProperties: [Property]
+		/// The `LazilyInstantiated`, among `lazilyInstantiatedReceivedProperties`, that each entry of
+		/// `flatReceivedProperties` or `onlyIfAvailableReceivedProperties` is the instance of, for the entries whose label
+		/// and type a forwarded property of the mocked type has. Such an entry is named after its `LazilyInstantiated`,
+		/// and no receive of the forwarded property is passed it.
+		let lazilyInstantiatedPropertyByInstanceBesideForwardedProperty: [Property: Property]
 
 		struct RootDefaultParameter {
 			let label: String
@@ -1739,9 +1744,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// mock wraps it for the types that receive it as `LazilyInstantiated`. A node of another form under
 		// the dependency's label, such as an `Instantiator` the mock builds, does not provide it. A node the
 		// mock builds for the instance itself does, though the wrapper cannot be made from it: the node is
-		// declared among the tree's bindings, after the wrappers. The mock does not build a `LazilyInstantiated`
-		// whose instance the mocked type forwards either: it wraps the forwarded parameter, which `mock()` takes in
-		// place of the instance.
+		// declared among the tree's bindings, after the wrappers.
 		let lazilyInstantiatedReceivedProperties = receivedProperties
 			.filter {
 				$0.typeDescription.lazilyInstantiatedInstanceType != nil
@@ -1750,6 +1753,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					&& !isFulfilledByForwardedProperty($0)
 			}
 			.sorted()
+		// The instance of such a dependency can have the label and type of a property the mocked type forwards. The
+		// forwarded value comes from outside the tree, so it is not that instance: `mock()` takes the instance as well,
+		// under a name of its own, and a receive of the forwarded property is still passed the forwarded value. Each
+		// such instance is keyed to the `LazilyInstantiated` it is named after.
+		var lazilyInstantiatedPropertyByInstanceBesideForwardedProperty = [Property: Property]()
+		for lazilyInstantiatedProperty in lazilyInstantiatedReceivedProperties.reversed()
+			where isFulfilledByForwardedProperty(lazilyInstantiatedProperty.asValidatedForDependencyCycles)
+		{
+			lazilyInstantiatedPropertyByInstanceBesideForwardedProperty[lazilyInstantiatedProperty.asValidatedForDependencyCycles] = lazilyInstantiatedProperty.asUnwrappedProperty
+		}
+		let lazilyInstantiatedPropertiesBesideForwardedProperties = Set(lazilyInstantiatedPropertyByInstanceBesideForwardedProperty.values)
 		// Received properties as the caller of `mock()` provides them: by value.
 		let receivedParameterProperties: Set<Property>
 		let onlyIfAvailableUnwrappedReceivedParameterProperties: Set<Property>
@@ -1757,15 +1771,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			receivedParameterProperties = receivedProperties
 			onlyIfAvailableUnwrappedReceivedParameterProperties = onlyIfAvailableUnwrappedReceivedProperties
 		} else {
-			// A `LazilyInstantiated` the mocked type forwards is passed on as it is, so it is not a parameter.
+			// A `LazilyInstantiated` the mocked type forwards is passed on as it is, so it is not a parameter. The instance
+			// of one beside a forwarded property is classified by its own receives, which may require it when every
+			// receive of the forwarded property is only if available, or the other way around.
+			func isBesideForwardedProperty(_ property: Property) -> Bool {
+				lazilyInstantiatedPropertiesBesideForwardedProperties.contains(property.asUnwrappedProperty)
+			}
 			receivedParameterProperties = Set(
 				receivedProperties.lazy
-					.filter { !isFulfilledByForwardedProperty($0) }
+					.filter { !isFulfilledByForwardedProperty($0) || isBesideForwardedProperty($0) }
 					.map(\.asValidatedForDependencyCycles),
 			)
 			// A dependency some receiver requires, as `LazilyInstantiated` or by value, is required.
 			onlyIfAvailableUnwrappedReceivedParameterProperties = Set(onlyIfAvailableUnwrappedReceivedProperties.map(\.asValidatedForDependencyCycles))
-				.subtracting(requiredReceivedProperties.map(\.asValidatedForDependencyCycles.asUnwrappedProperty))
+				.subtracting(
+					requiredReceivedProperties.lazy
+						.filter { !isFulfilledByForwardedProperty($0) || isBesideForwardedProperty($0) }
+						.map(\.asValidatedForDependencyCycles.asUnwrappedProperty),
+				)
 		}
 
 		let receivedNonOptionalProperties = Set(
@@ -1775,9 +1798,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var flatReceivedProperties = [Property]()
 		var onlyIfAvailableReceivedProperties = [Property]()
 		for receivedProperty in receivedParameterProperties.sorted(by: { $0.precedesInMockOrder($1) }) {
-			// A forwarded `x: X` fulfills an `x: X?` too.
-			guard !forwardedPropertySet.contains(receivedProperty), !receivedProperty.typeDescription.isOptional
-				|| (!receivedNonOptionalProperties.contains(receivedProperty.asUnwrappedProperty) && !forwardedPropertySet.contains(receivedProperty.asUnwrappedProperty))
+			// A forwarded `x: X` fulfills an `x: X?` too, though not the instance of a `LazilyInstantiated` beside it.
+			guard lazilyInstantiatedPropertyByInstanceBesideForwardedProperty[receivedProperty] != nil
+				|| !forwardedPropertySet.contains(receivedProperty),
+				!receivedProperty.typeDescription.isOptional
+				|| (
+					!receivedNonOptionalProperties.contains(receivedProperty.asUnwrappedProperty)
+						&& (lazilyInstantiatedPropertyByInstanceBesideForwardedProperty[receivedProperty] != nil || !forwardedPropertySet.contains(receivedProperty.asUnwrappedProperty))
+				)
 			else { continue }
 			// Optional, defaulting to `nil`, only when every receiver — directly or
 			// through an alias, whose fulfilling property is non-optional — receives it
@@ -1799,8 +1827,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for dependency in instantiable.dependencies {
 			switch dependency.source {
 			case .instantiated:
-				// A dependency promoted to the root under the label, of another type, does not build it.
-				guard !treePropertyNodes.contains(where: { $0.property == dependency.property }) else { continue }
+				// A dependency promoted to the root under the label, of another type, does not build it. The
+				// `LazilyInstantiated` the mock builds the dependency as, when the tree receives that, does.
+				guard !treePropertyNodes.contains(where: {
+					$0.property == dependency.property || $0.property.asLazilyInstantiatedInstanceProperty == dependency.property
+				}) else { continue }
 				uncoveredDependencies.add(dependency, isHiddenWhereReferenced: false)
 			case .received, .aliased, .forwarded:
 				break
@@ -1876,6 +1907,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			onlyIfAvailableReceivedProperties: onlyIfAvailableReceivedProperties,
 			flatUncoveredParameters: flatUncoveredParameters,
 			lazilyInstantiatedReceivedProperties: lazilyInstantiatedReceivedProperties,
+			lazilyInstantiatedPropertyByInstanceBesideForwardedProperty: lazilyInstantiatedPropertyByInstanceBesideForwardedProperty,
 		)
 	}
 
@@ -1915,6 +1947,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let onlyIfAvailableReceivedProperties = parameters.onlyIfAvailableReceivedProperties
 		let flatUncoveredParameters = parameters.flatUncoveredParameters
 		let lazilyInstantiatedReceivedProperties = parameters.lazilyInstantiatedReceivedProperties
+		let lazilyInstantiatedPropertyByInstanceBesideForwardedProperty = parameters.lazilyInstantiatedPropertyByInstanceBesideForwardedProperty
 
 		// The names `mockRootParameters` named the uncovered dependencies apart from, which the rest of the mock
 		// is named apart from too.
@@ -1943,19 +1976,27 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// parameters whose label collided with another flat parameter. Builder calls
 		// for child nodes that would reference the original label must substitute
 		// the disambiguated name so the generated code references a real binding.
+		// The instance of a `LazilyInstantiated` beside a forwarded property is named after
+		// its `LazilyInstantiated`, and is only ever read by the wrapper bound below, so a
+		// receive of the forwarded property is not passed it.
 		let flatReceivedNames = Self.namesApart(
 			preferredNames: flatReceivedProperties.map(\.label),
-			typeDescriptions: flatReceivedProperties.map(\.typeDescription),
+			typeDescriptions: flatReceivedProperties.map { property in
+				lazilyInstantiatedPropertyByInstanceBesideForwardedProperty[property]?.typeDescription ?? property.typeDescription
+			},
 			namesInScope: Set(otherFlatLabels).union(treeBindingNames),
 			reservedNames: namesDeclaredInBuilderFunctions,
 		)
 		var flatParameterDisambiguationMap = [String: [TypeDescription: String]]()
-		for (property, name) in zip(flatReceivedProperties, flatReceivedNames) where name != property.label {
+		for (property, name) in zip(flatReceivedProperties, flatReceivedNames)
+			where name != property.label && lazilyInstantiatedPropertyByInstanceBesideForwardedProperty[property] == nil
+		{
 			flatParameterDisambiguationMap[property.label, default: [:]][property.typeDescription] = name
 		}
-		let flatReceivedParameters = flatReceivedProperties.map { property in
+		let flatReceivedNameByProperty = Dictionary(uniqueKeysWithValues: zip(flatReceivedProperties, flatReceivedNames))
+		let flatReceivedParameters = zip(flatReceivedProperties, flatReceivedNames).map { property, name in
 			(
-				label: flatParameterDisambiguationMap[property.label]?[property.typeDescription] ?? property.label,
+				label: name,
 				typeSource: property.typeDescription.asFunctionParameter.asSource,
 			)
 		}
@@ -1964,6 +2005,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		} else {
 			Self.onlyIfAvailableOverrides(
 				for: onlyIfAvailableReceivedProperties,
+				namedAfter: lazilyInstantiatedPropertyByInstanceBesideForwardedProperty,
 				namesInMockScope: Set(forwardedDependencies.map(\.property.label))
 					.union(rootDefaultParameters.map(\.label))
 					.union(uncoveredDependencyNames)
@@ -1980,9 +2022,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// label are named apart by their instance types, as flat parameters sharing a label are, and so is a
 		// wrapper whose name the mock's scope already holds: a parameter, an override, or a binding of the
 		// tree, or that a builder function beneath it declares. Renaming the generated binding leaves every
-		// label the declarations wrote as it is. The instance is a parameter of `mock()` – the one the mocked type
-		// forwards under its label, when the mocked type forwards it – or an `onlyIfAvailable` override.
-		let forwardedProperties = Set(forwardedDependencies.map(\.property))
+		// label the declarations wrote as it is.
 		var lazilyInstantiatedPropertiesToBind = [Property]()
 		var lazilyInstantiatedPropertiesSeen = Set<Property>()
 		for receivedProperty in lazilyInstantiatedReceivedProperties
@@ -2013,15 +2053,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let wrapperTypeSource = lazilyInstantiatedProperty.typeDescription.asSource
 			// A required receive of an optional `LazilyInstantiated` is handed an optional instance.
 			let optionalInstanceProperty = Property(label: instanceProperty.label, typeDescription: .optional(instanceProperty.typeDescription))
-			if forwardedProperties.contains(instanceProperty) {
-				// A forwarded parameter keeps its label.
-				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(wrapperTypeSource) { \(instanceProperty.label) }")
-			} else if flatReceivedProperties.contains(instanceProperty) {
-				let instanceName = flatParameterDisambiguationMap[instanceProperty.label]?[instanceProperty.typeDescription] ?? instanceProperty.label
+			// The parameter may be named apart from its label.
+			if let instanceName = flatReceivedNameByProperty[instanceProperty] {
 				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(wrapperTypeSource) { \(instanceName) }")
-			} else if flatReceivedProperties.contains(optionalInstanceProperty) {
-				// The parameter may be named apart from its label.
-				let instanceName = flatParameterDisambiguationMap[optionalInstanceProperty.label]?[optionalInstanceProperty.typeDescription] ?? optionalInstanceProperty.label
+			} else if let instanceName = flatReceivedNameByProperty[optionalInstanceProperty] {
 				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(instanceName).map { instance in \(wrapperTypeSource) { instance } }")
 			} else {
 				// The instance is an `onlyIfAvailable` override, which may be named apart from its label.
@@ -2138,9 +2173,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// dep must reference its own parameter — not the renamed flat-received.
 		// An `onlyIfAvailable` override named apart from its label is rebound to the label
 		// by its receivers, as a renamed flat parameter is, at the root and in the tree.
+		// The override of the instance of a `LazilyInstantiated` beside a forwarded property is read only by the
+		// wrapper bound for it, so a receive of the forwarded property is not passed it.
 		var renamedFlatParameterAndOverrideMap = flatParameterDisambiguationMap
 		for onlyIfAvailableOverride in onlyIfAvailableOverrides
 			where onlyIfAvailableOverride.name != onlyIfAvailableOverride.receivedProperty.label
+			&& lazilyInstantiatedPropertyByInstanceBesideForwardedProperty[onlyIfAvailableOverride.receivedProperty] == nil
 		{
 			renamedFlatParameterAndOverrideMap[onlyIfAvailableOverride.receivedProperty.label, default: [:]][onlyIfAvailableOverride.receivedProperty.typeDescription] = onlyIfAvailableOverride.name
 		}
@@ -2305,6 +2343,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 		// A mock root that receives a dependency by value is passed the instance of the
 		// `LazilyInstantiated` property promoted to its children, when the tree also receives that.
+		// So is one that instantiates a dependency the mock builds as the `LazilyInstantiated` its tree receives.
 		let lazilyInstantiatedInstanceProperties = Set(propertiesToGenerate.compactMap(\.declaredLazilyInstantiatedInstanceProperty))
 		var parts = [String]()
 		for argument in constructionInitializer.arguments {
@@ -2313,9 +2352,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// (e.g. root's `service: TypeA` when a promoted sibling is also
 				// labeled `service`), the bound `let` uses the disambiguated
 				// name. Rewrite the reference so the Root init call finds it.
-				if dependency.source.isReceived,
-				   lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty)
-				{
+				let readsInstanceOfLazilyInstantiatedProperty = switch dependency.source {
+				case .received, .instantiated:
+					lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty)
+				case .aliased, .forwarded:
+					false
+				}
+				if readsInstanceOfLazilyInstantiatedProperty {
 					let resolved = Self.disambiguatedLazilyInstantiatedBinding(
 						named: dependency.property.label,
 						withInstanceOfType: dependency.property.typeDescription.unwrapped,
@@ -2893,7 +2936,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let receivedProperty: Property
 		/// The type of the field and the binding: `receivedProperty`'s type, made optional.
 		let typeDescription: TypeDescription
-		/// The name of the field and the binding (see `onlyIfAvailableOverrides(for:namesInMockScope:reservedNames:)`).
+		/// The name of the field and the binding (see `onlyIfAvailableOverrides(for:namedAfter:namesInMockScope:reservedNames:)`).
 		let name: String
 	}
 
@@ -3349,8 +3392,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `namesInMockScope`, in `reservedNames`, or that another override is named by. Every input is a label
 	/// or a type of the mock root's scope, in an order fixed by them, so the names depend only on what the
 	/// declarations say.
+	/// - Parameter lazilyInstantiatedPropertyByInstance: The `LazilyInstantiated` a property is the instance of, when
+	///   the override is named after it rather than after its own type.
 	private static func onlyIfAvailableOverrides(
 		for receivedProperties: [Property],
+		namedAfter lazilyInstantiatedPropertyByInstance: [Property: Property],
 		namesInMockScope: Set<String>,
 		reservedNames: Set<String>,
 	) -> [OnlyIfAvailableOverride] {
@@ -3359,7 +3405,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		let names = namesApart(
 			preferredNames: receivedProperties.map(\.label),
-			typeDescriptions: typeDescriptions,
+			typeDescriptions: receivedProperties.indices.map { index in
+				lazilyInstantiatedPropertyByInstance[receivedProperties[index]].map { .optional($0.typeDescription) } ?? typeDescriptions[index]
+			},
 			namesInScope: namesInMockScope,
 			reservedNames: reservedNames,
 		)

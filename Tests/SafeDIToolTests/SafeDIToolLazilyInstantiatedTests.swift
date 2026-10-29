@@ -5661,8 +5661,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_namesEachPropertyApart_whenMockedTypeInstantiatesPropertyThatPromotedDependencyReceivesLazilyInstantiated() async throws {
-		// Screen’s own `analytics` is a constant, which cannot serve Logger. The mock builds a second, lazily instantiated one.
+	mutating func mock_buildsMockedTypesOwnPropertyAsLazilyInstantiated_whenPromotedDependencyReceivesItLazilyInstantiated() async throws {
+		// `Screen` creates `analytics` in the tree, so it is the instance of the `LazilyInstantiated<Analytics>` that `Logger`
+		// receives: the mock builds it as that, and passes `Screen` its instance.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -5707,34 +5708,26 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            analytics_Analytics: (() -> Analytics)? = nil,
-		            analytics_LazilyInstantiated__Analytics: (() -> Analytics)? = nil,
+		            analytics: (() -> Analytics)? = nil,
 		            logger: ((LazilyInstantiated<Analytics>) -> Logger)? = nil
 		        ) {
-		            self.analytics_Analytics = analytics_Analytics
-		            self.analytics_LazilyInstantiated__Analytics = analytics_LazilyInstantiated__Analytics
+		            self.analytics = analytics
 		            self.logger = logger
 		        }
 
-		        let analytics_Analytics: (() -> Analytics)?
-		        let analytics_LazilyInstantiated__Analytics: (() -> Analytics)?
+		        let analytics: (() -> Analytics)?
 		        let logger: ((LazilyInstantiated<Analytics>) -> Logger)?
 		    }
 
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        let analytics_Analytics = if let safeDIBuilder = safeDIOverrides.analytics_Analytics { safeDIBuilder() } else { Analytics() }
-		        func __safeDI_analytics_LazilyInstantiated__Analytics() -> Analytics {
-		            if let safeDIBuilder = safeDIOverrides.analytics_LazilyInstantiated__Analytics { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        }
-		        let analytics_LazilyInstantiated__Analytics = LazilyInstantiated<Analytics>(__safeDI_analytics_LazilyInstantiated__Analytics)
-		        func __safeDI_logger() -> Logger {
-		            let analytics: LazilyInstantiated<Analytics> = analytics_LazilyInstantiated__Analytics
-		            return if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder(analytics) } else { Logger(analytics: analytics) }
-		        }
-		        let logger: Logger = __safeDI_logger()
-		        return Screen(analytics: analytics_Analytics, logger: logger)
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder(analytics) } else { Logger(analytics: analytics) }
+		        return Screen(analytics: analytics.instance, logger: logger)
 		    }
 		}
 		#endif
@@ -8500,9 +8493,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_wrapsForwardedProperty_whenPromotedDependencyReceivesItLazilyInstantiated() async throws {
-		// The forwarded `session: Session` is the instance of the `session: LazilyInstantiated<Session>` that the promoted
-		// `Feed` receives, so the mock wraps it rather than building another `Session`.
+	mutating func mock_buildsLazilyInstantiatedPropertyUnderNameOfItsOwn_whenPromotedDependencyReceivesForwardedLabelLazilyInstantiated() async throws {
+		// `Screen` forwards `session: Session`, which comes from outside the tree, so it is not the instance of the
+		// `LazilyInstantiated<Session>` that the promoted `Feed` receives. The mock builds that under a name of its own.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -8516,7 +8509,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 				"""
 				@Instantiable
 				public final class Feed: Instantiable {
-				    public init(session: LazilyInstantiated<Session>) { self.session = session }
+				    public init(session: LazilyInstantiated<Session>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 				    @Received let session: LazilyInstantiated<Session>
 				}
 				""",
@@ -8541,11 +8536,14 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
+		            session_LazilyInstantiated__Session: (() -> Session)? = nil,
 		            feed: ((LazilyInstantiated<Session>) -> Feed)? = nil
 		        ) {
+		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
 		            self.feed = feed
 		        }
 
+		        let session_LazilyInstantiated__Session: (() -> Session)?
 		        let feed: ((LazilyInstantiated<Session>) -> Feed)?
 		    }
 
@@ -8553,152 +8551,13 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        session: Session,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        let session_lazilyInstantiated = LazilyInstantiated<Session> { session }
-		        let feed = if let safeDIBuilder = safeDIOverrides.feed { safeDIBuilder(session_lazilyInstantiated) } else { Feed(session: session_lazilyInstantiated) }
-		        return Screen(session: session, feed: feed)
-		    }
-		}
-		#endif
-		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_doesNotBuildDependenciesOfForwardedProperty_whenPromotedDependencyReceivesItLazilyInstantiated() async throws {
-		// The mock wraps the forwarded `session` for `Feed`, so it does not build the `Logger` that `Session` receives.
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@Instantiable(generateMock: true)
-				public final class Screen: Instantiable {
-				    public init(session: Session, feed: Feed) { self.session = session; self.feed = feed }
-				    @Forwarded let session: Session
-				    @Received let feed: Feed
-				}
-				""",
-				"""
-				@Instantiable
-				public final class Feed: Instantiable {
-				    public init(session: LazilyInstantiated<Session>) { self.session = session }
-				    @Received let session: LazilyInstantiated<Session>
-				}
-				""",
-				"""
-				@Instantiable
-				public final class Logger: Instantiable {
-				    public init() {}
-				}
-				""",
-				"""
-				@Instantiable
-				public final class Session: Instantiable {
-				    public init(logger: Logger) { self.logger = logger }
-				    @Received let logger: Logger
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
-		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-		// Any modifications made to this file will be overwritten on subsequent builds.
-		// Please refrain from editing this file directly.
-
-		#if DEBUG
-		extension Screen {
-		    /// Overrides for the mock dependency tree.
-		    struct SafeDIOverrides {
-		        init(
-		            feed: ((LazilyInstantiated<Session>) -> Feed)? = nil
-		        ) {
-		            self.feed = feed
+		        func __safeDI_session_LazilyInstantiated__Session() -> Session {
+		            if let safeDIBuilder = safeDIOverrides.session_LazilyInstantiated__Session { safeDIBuilder() } else { Session() }
 		        }
-
-		        let feed: ((LazilyInstantiated<Session>) -> Feed)?
-		    }
-
-		    static func mock(
-		        session: Session,
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Screen {
-		        let session_lazilyInstantiated = LazilyInstantiated<Session> { session }
-		        let feed = if let safeDIBuilder = safeDIOverrides.feed { safeDIBuilder(session_lazilyInstantiated) } else { Feed(session: session_lazilyInstantiated) }
-		        return Screen(session: session, feed: feed)
-		    }
-		}
-		#endif
-		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_passesForwardedPropertyToTypeBuiltInsidePromotedDependency_whenPromotedDependencyReceivesItLazilyInstantiated() async throws {
-		// `Feed` receives `session` lazily instantiated and builds a `Row` that receives its instance. `Feed` is passed the
-		// wrapped forwarded `session` by name, so `Row`, built in `Feed`'s builder function, is passed that same `session`.
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@Instantiable(generateMock: true)
-				public final class Screen: Instantiable {
-				    public init(session: Session, feed: Feed) { self.session = session; self.feed = feed }
-				    @Forwarded let session: Session
-				    @Received let feed: Feed
-				}
-				""",
-				"""
-				@Instantiable
-				public final class Feed: Instantiable {
-				    public init(session: LazilyInstantiated<Session>, row: Row) { self.session = session; self.row = row }
-				    @Received let session: LazilyInstantiated<Session>
-				    @Instantiated let row: Row
-				}
-				""",
-				"""
-				@Instantiable
-				public final class Row: Instantiable {
-				    public init(session: Session) { self.session = session }
-				    @Received let session: Session
-				}
-				""",
-				"""
-				@Instantiable
-				public final class Session: Instantiable {
-				    public init() {}
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
-		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-		// Any modifications made to this file will be overwritten on subsequent builds.
-		// Please refrain from editing this file directly.
-
-		#if DEBUG
-		extension Screen {
-		    /// Overrides for the mock dependency tree.
-		    struct SafeDIOverrides {
-		        init(
-		            feed: Feed.SafeDIMockConfiguration = .init()
-		        ) {
-		            self.feed = feed
-		        }
-
-		        let feed: Feed.SafeDIMockConfiguration
-		    }
-
-		    static func mock(
-		        session: Session,
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Screen {
-		        let session_lazilyInstantiated = LazilyInstantiated<Session> { session }
+		        let session_LazilyInstantiated__Session = LazilyInstantiated<Session>(__safeDI_session_LazilyInstantiated__Session)
 		        func __safeDI_feed() -> Feed {
-		            let row = if let safeDIBuilder = safeDIOverrides.feed.row { safeDIBuilder(session) } else { Row(session: session) }
-		            return if let safeDIBuilder = safeDIOverrides.feed.safeDIBuilder { safeDIBuilder(session_lazilyInstantiated, row) } else { Feed(session: session_lazilyInstantiated, row: row) }
+		            let session: LazilyInstantiated<Session> = session_LazilyInstantiated__Session
+		            return if let safeDIBuilder = safeDIOverrides.feed { safeDIBuilder(session) } else { Feed(session: session) }
 		        }
 		        let feed: Feed = __safeDI_feed()
 		        return Screen(session: session, feed: feed)
@@ -8710,9 +8569,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_wrapsForwardedProperty_whenPromotedDependencyReceivesItLazilyInstantiatedOnlyIfAvailable() async throws {
-		// The forwarded `session: Session` is available, so `Feed`'s only-if-available `LazilyInstantiated<Session>?` is
-		// passed it wrapped, and gets no `SafeDIOverrides` entry.
+	mutating func mock_takesOverrideForInstanceOfLazilyInstantiatedProperty_whenPromotedDependencyReceivesForwardedLabelLazilyInstantiatedOnlyIfAvailable() async throws {
+		// The forwarded `session` is not the instance of `Feed`'s only-if-available `LazilyInstantiated<Session>?`, which
+		// gets an override of its own, `nil` unless set.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -8726,7 +8585,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 				"""
 				@Instantiable
 				public final class Feed: Instantiable {
-				    public init(session: LazilyInstantiated<Session>?) { self.session = session }
+				    public init(session: LazilyInstantiated<Session>?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 				    @Received(onlyIfAvailable: true) let session: LazilyInstantiated<Session>?
 				}
 				""",
@@ -8751,19 +8612,23 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            feed: ((LazilyInstantiated<Session>?) -> Feed)? = nil
+		            feed: ((LazilyInstantiated<Session>?) -> Feed)? = nil,
+		            session_LazilyInstantiated__Session: Session? = nil
 		        ) {
 		            self.feed = feed
+		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
 		        }
 
 		        let feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		        let session_LazilyInstantiated__Session: Session?
 		    }
 
 		    static func mock(
 		        session: Session,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        let session_lazilyInstantiated = LazilyInstantiated<Session> { session }
+		        let session_LazilyInstantiated__Session: Session? = safeDIOverrides.session_LazilyInstantiated__Session
+		        let session_lazilyInstantiated = session_LazilyInstantiated__Session.map { instance in LazilyInstantiated<Session> { instance } }
 		        let feed = if let safeDIBuilder = safeDIOverrides.feed { safeDIBuilder(session_lazilyInstantiated) } else { Feed(session: session_lazilyInstantiated) }
 		        return Screen(session: session, feed: feed)
 		    }
@@ -8774,15 +8639,17 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_wrapsForwardedProperty_whenPromotedDependencyReceivesItLazilyInstantiatedOnlyIfAvailableAndAnotherRequiresIt() async throws {
-		// `Uploader` requires `session: Session`, which the forwarded `session` fulfills, so the mock builds no
-		// `LazilyInstantiated<Session>` for `Feed`, and no `Logger` for its `Session`: it wraps the forwarded `session`.
+	mutating func mock_takesOverrideForInstanceOfLazilyInstantiatedProperty_whenAnotherPromotedDependencyRequiresForwardedProperty() async throws {
+		// `Uploader` requires `session: Session`, which the forwarded `session` fulfills. That does not make the mock build
+		// `Feed`'s only-if-available `LazilyInstantiated<Session>?`, or the `Logger` its `Session` receives.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
 				@Instantiable(generateMock: true)
 				public final class Screen: Instantiable {
-				    public init(session: Session, feed: Feed, uploader: Uploader) { self.session = session; self.feed = feed; self.uploader = uploader }
+				    public init(session: Session, feed: Feed, uploader: Uploader) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 				    @Forwarded let session: Session
 				    @Received let feed: Feed
 				    @Received let uploader: Uploader
@@ -8791,7 +8658,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 				"""
 				@Instantiable
 				public final class Feed: Instantiable {
-				    public init(session: LazilyInstantiated<Session>?) { self.session = session }
+				    public init(session: LazilyInstantiated<Session>?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 				    @Received(onlyIfAvailable: true) let session: LazilyInstantiated<Session>?
 				}
 				""",
@@ -8831,21 +8700,25 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            feed: ((LazilyInstantiated<Session>?) -> Feed)? = nil,
-		            uploader: ((Session) -> Uploader)? = nil
+		            uploader: ((Session) -> Uploader)? = nil,
+		            session_LazilyInstantiated__Session: Session? = nil
 		        ) {
 		            self.feed = feed
 		            self.uploader = uploader
+		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
 		        }
 
 		        let feed: ((LazilyInstantiated<Session>?) -> Feed)?
 		        let uploader: ((Session) -> Uploader)?
+		        let session_LazilyInstantiated__Session: Session?
 		    }
 
 		    static func mock(
 		        session: Session,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        let session_lazilyInstantiated = LazilyInstantiated<Session> { session }
+		        let session_LazilyInstantiated__Session: Session? = safeDIOverrides.session_LazilyInstantiated__Session
+		        let session_lazilyInstantiated = session_LazilyInstantiated__Session.map { instance in LazilyInstantiated<Session> { instance } }
 		        let feed = if let safeDIBuilder = safeDIOverrides.feed { safeDIBuilder(session_lazilyInstantiated) } else { Feed(session: session_lazilyInstantiated) }
 		        let uploader = if let safeDIBuilder = safeDIOverrides.uploader { safeDIBuilder(session) } else { Uploader(session: session) }
 		        return Screen(session: session, feed: feed, uploader: uploader)
@@ -8857,9 +8730,93 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_wrapsForwardedProperty_whenPromotedDependencyReceivesLazilyInstantiatedPropertyMockCannotBuild() async throws {
+	mutating func mock_passesForwardedPropertyToReceiverOfItsOptionalForm_whenOverrideForInstanceOfLazilyInstantiatedPropertySharesItsLabel() async throws {
+		// `Cache` receives `session: Session?`, which the forwarded `session` fulfills, while the override for the instance of
+		// `Feed`'s `LazilyInstantiated<Session>?` is typed `Session?` too. `Cache` is passed the forwarded `session`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(session: Session, feed: Feed, cache: Cache) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				    @Forwarded let session: Session
+				    @Received let feed: Feed
+				    @Received let cache: Cache
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Feed: Instantiable {
+				    public init(session: LazilyInstantiated<Session>?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				    @Received(onlyIfAvailable: true) let session: LazilyInstantiated<Session>?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Cache: Instantiable {
+				    public init(session: Session?) { self.session = session }
+				    @Received let session: Session?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Session: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            feed: ((LazilyInstantiated<Session>?) -> Feed)? = nil,
+		            cache: ((Session?) -> Cache)? = nil,
+		            session_LazilyInstantiated__Session: Session? = nil
+		        ) {
+		            self.feed = feed
+		            self.cache = cache
+		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
+		        }
+
+		        let feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		        let cache: ((Session?) -> Cache)?
+		        let session_LazilyInstantiated__Session: Session?
+		    }
+
+		    static func mock(
+		        session: Session,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let session_LazilyInstantiated__Session: Session? = safeDIOverrides.session_LazilyInstantiated__Session
+		        let session_lazilyInstantiated = session_LazilyInstantiated__Session.map { instance in LazilyInstantiated<Session> { instance } }
+		        let feed = if let safeDIBuilder = safeDIOverrides.feed { safeDIBuilder(session_lazilyInstantiated) } else { Feed(session: session_lazilyInstantiated) }
+		        let cache = if let safeDIBuilder = safeDIOverrides.cache { safeDIBuilder(session) } else { Cache(session: session) }
+		        return Screen(session: session, feed: feed, cache: cache)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesParameterForInstanceOfLazilyInstantiatedProperty_whenPromotedDependencyReceivesForwardedLabelLazilyInstantiatedMockCannotBuild() async throws {
 		// No `@Instantiable` declaration fulfills `User`, so `mock()` takes the instance of `Feed`'s
-		// `LazilyInstantiated<User>`, which is the forwarded `user`, and wraps it.
+		// `LazilyInstantiated<User>`, beside the forwarded `user`, under a name of its own.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -8905,11 +8862,414 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 
 		    static func mock(
 		        user: User,
+		        user_LazilyInstantiated__User: User,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        let user_lazilyInstantiated = LazilyInstantiated<User> { user }
+		        let user_lazilyInstantiated = LazilyInstantiated<User> { user_LazilyInstantiated__User }
 		        let feed = if let safeDIBuilder = safeDIOverrides.feed { safeDIBuilder(user_lazilyInstantiated) } else { Feed(user: user_lazilyInstantiated) }
 		        return Screen(user: user, feed: feed)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesOverrideForInstanceOfLazilyInstantiatedProperty_whenMockedTypeForwardsOptionalInstance() async throws {
+		// The forwarded `session: Session?` is not the instance of `Feed`'s `LazilyInstantiated<Session>?` either.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(session: Session?, feed: Feed) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				    @Forwarded let session: Session?
+				    @Received let feed: Feed
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Feed: Instantiable {
+				    public init(session: LazilyInstantiated<Session>?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				    @Received(onlyIfAvailable: true) let session: LazilyInstantiated<Session>?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Session: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            feed: ((LazilyInstantiated<Session>?) -> Feed)? = nil,
+		            session_LazilyInstantiated__Session: Session? = nil
+		        ) {
+		            self.feed = feed
+		            self.session_LazilyInstantiated__Session = session_LazilyInstantiated__Session
+		        }
+
+		        let feed: ((LazilyInstantiated<Session>?) -> Feed)?
+		        let session_LazilyInstantiated__Session: Session?
+		    }
+
+		    static func mock(
+		        session: Session?,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let session_LazilyInstantiated__Session: Session? = safeDIOverrides.session_LazilyInstantiated__Session
+		        let session_lazilyInstantiated = session_LazilyInstantiated__Session.map { instance in LazilyInstantiated<Session> { instance } }
+		        let feed = if let safeDIBuilder = safeDIOverrides.feed { safeDIBuilder(session_lazilyInstantiated) } else { Feed(session: session_lazilyInstantiated) }
+		        return Screen(session: session, feed: feed)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_takesOverrideForInstanceOfSendableLazilyInstantiatedProperty_whenMockedTypeForwardsLazilyInstantiatedPropertyOfSameLabel() async throws {
+		// `Screen` forwards `session: LazilyInstantiated<Session>`, whose instance is not the instance of `Feed`'s
+		// `SendableLazilyInstantiated<Session>?`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(session: LazilyInstantiated<Session>, feed: Feed) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				    @Forwarded let session: LazilyInstantiated<Session>
+				    @Received let feed: Feed
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Feed: Instantiable {
+				    public init(session: SendableLazilyInstantiated<Session>?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				    @Received(onlyIfAvailable: true) let session: SendableLazilyInstantiated<Session>?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Session: Instantiable, Sendable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            feed: ((SendableLazilyInstantiated<Session>?) -> Feed)? = nil,
+		            session_SendableLazilyInstantiated__Session: Session? = nil
+		        ) {
+		            self.feed = feed
+		            self.session_SendableLazilyInstantiated__Session = session_SendableLazilyInstantiated__Session
+		        }
+
+		        let feed: ((SendableLazilyInstantiated<Session>?) -> Feed)?
+		        let session_SendableLazilyInstantiated__Session: Session?
+		    }
+
+		    static func mock(
+		        session: LazilyInstantiated<Session>,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let session_SendableLazilyInstantiated__Session: Session? = safeDIOverrides.session_SendableLazilyInstantiated__Session
+		        let session_sendableLazilyInstantiated = session_SendableLazilyInstantiated__Session.map { instance in SendableLazilyInstantiated<Session> { instance } }
+		        let feed = if let safeDIBuilder = safeDIOverrides.feed { safeDIBuilder(session_sendableLazilyInstantiated) } else { Feed(session: session_sendableLazilyInstantiated) }
+		        return Screen(session: session, feed: feed)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsMockedTypesOwnPropertyAsLazilyInstantiated_whenPromotedDependencyReceivesItLazilyInstantiatedOnlyIfAvailable() async throws {
+		// `Screen` creates `analytics` in the tree, so it is the instance of the `LazilyInstantiated<Analytics>?` that
+		// `Logger` receives only if available, which is passed it.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(analytics: Analytics, logger: Logger) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				    @Instantiated let analytics: Analytics
+				    @Received let logger: Logger
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Logger: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				    @Received(onlyIfAvailable: true) let analytics: LazilyInstantiated<Analytics>?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            logger: ((LazilyInstantiated<Analytics>?) -> Logger)? = nil
+		        ) {
+		            self.analytics = analytics
+		            self.logger = logger
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let logger: ((LazilyInstantiated<Analytics>?) -> Logger)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder(analytics) } else { Logger(analytics: analytics) }
+		        return Screen(analytics: analytics.instance, logger: logger)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesInstanceOfMockedTypesOwnPropertyToReceiverByValue_whenPromotedDependencyReceivesItLazilyInstantiated() async throws {
+		// `Logger` receives `analytics` lazily instantiated and `Uploader` by value. Both are passed the `Analytics` that
+		// `Screen` creates, which the mock builds as the `LazilyInstantiated`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(analytics: Analytics, logger: Logger, uploader: Uploader) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				    @Instantiated let analytics: Analytics
+				    @Received let logger: Logger
+				    @Received let uploader: Uploader
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init(config: Config) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				    @Received let config: Config
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Config: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Logger: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				    @Received let analytics: LazilyInstantiated<Analytics>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Uploader: Instantiable {
+				    public init(analytics: Analytics) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				    @Received let analytics: Analytics
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            config: (() -> Config)? = nil,
+		            analytics: ((Config) -> Analytics)? = nil,
+		            logger: ((LazilyInstantiated<Analytics>) -> Logger)? = nil,
+		            uploader: ((Analytics) -> Uploader)? = nil
+		        ) {
+		            self.config = config
+		            self.analytics = analytics
+		            self.logger = logger
+		            self.uploader = uploader
+		        }
+
+		        let config: (() -> Config)?
+		        let analytics: ((Config) -> Analytics)?
+		        let logger: ((LazilyInstantiated<Analytics>) -> Logger)?
+		        let uploader: ((Analytics) -> Uploader)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let config = if let safeDIBuilder = safeDIOverrides.config { safeDIBuilder() } else { Config() }
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder(config) } else { Analytics(config: config) }
+		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder(analytics) } else { Logger(analytics: analytics) }
+		        let uploader = if let safeDIBuilder = safeDIOverrides.uploader { safeDIBuilder(analytics.instance) } else { Uploader(analytics: analytics.instance) }
+		        return Screen(analytics: analytics.instance, logger: logger, uploader: uploader)
+		    }
+		}
+		#endif
+		""", "Unexpected output \(output.mockFiles["Screen+SafeDIMock.swift"] ?? "")")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsMockedTypesOwnPropertyBeforeItsReceivers_whenOwnChildReceivesPromotedDependencyThatReceivesItLazilyInstantiated() async throws {
+		// `First` receives `logger`, which receives `analytics` lazily instantiated, so the mock builds `analytics`, then
+		// `logger`, then `first`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(first: First, analytics: Analytics) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				    @Instantiated let first: First
+				    @Instantiated let analytics: Analytics
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class First: Instantiable {
+				    public init(logger: Logger) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				    @Received let logger: Logger
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Logger: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+				    @Received let analytics: LazilyInstantiated<Analytics>
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles["Screen+SafeDIMock.swift"] == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            logger: ((LazilyInstantiated<Analytics>) -> Logger)? = nil,
+		            first: ((Logger) -> First)? = nil
+		        ) {
+		            self.analytics = analytics
+		            self.logger = logger
+		            self.first = first
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let logger: ((LazilyInstantiated<Analytics>) -> Logger)?
+		        let first: ((Logger) -> First)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        let logger = if let safeDIBuilder = safeDIOverrides.logger { safeDIBuilder(analytics) } else { Logger(analytics: analytics) }
+		        let first = if let safeDIBuilder = safeDIOverrides.first { safeDIBuilder(logger) } else { First(logger: logger) }
+		        return Screen(first: first, analytics: analytics.instance)
 		    }
 		}
 		#endif
