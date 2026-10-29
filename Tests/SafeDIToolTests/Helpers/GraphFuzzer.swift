@@ -100,8 +100,8 @@ struct GraphFuzzerFixture: Equatable {
 /// A renaming of a graph that changes no declaration's meaning but changes an order SafeDI could depend on: the order
 /// of its type names, of its property labels, of its file names, or all three at once, or where its type names sort
 /// among the names of the wrappers SafeDI provides. The rename-invariance oracle runs each graph under every renaming
-/// and requires the same results once the renaming is undone: the same verdict, the same diagnostics in any order,
-/// and byte-identical generated files.
+/// and requires the same results once the renaming is undone: the same verdict, the same diagnostics in any order
+/// (each list of suggestions in a diagnostic in any order, too), and byte-identical generated files.
 ///
 /// Type names `<prefix>T<i>`, `<prefix>AnyT<i>`, `<prefix>Root<i>`, and `<prefix>Missing<i>` – with any suffix, such
 /// as `Protocol` – and labels `t<i>`, `anyT<i>`, `lazyT<i>`, `lazyAnyT<i>`, and `missing<i>` – with any suffix, such
@@ -1608,7 +1608,8 @@ enum GraphFuzzerToolOutcome: Equatable {
 
 	/// The first aspect in which two outcomes differ, or `nil` when they agree: their verdict, their diagnostics
 	/// or warnings in any order, the names of their generated files, or one file's code, byte for byte. Paths to
-	/// fixture files are compared by file name.
+	/// fixture files are compared by file name, and the suggestions a diagnostic lists ("Did you mean one of …") in
+	/// any order: the order inside a message is presentation and changes nothing a user does.
 	static func difference(between outcome: GraphFuzzerToolOutcome, and otherOutcome: GraphFuzzerToolOutcome) -> String? {
 		let reduce = GraphFuzzerRenaming.reducingFixturePathsToFileNames(in:)
 		switch (outcome, otherOutcome) {
@@ -1638,7 +1639,7 @@ enum GraphFuzzerToolOutcome: Equatable {
 		}
 	}
 
-	/// The diagnostics, each with the notes after it, sorted.
+	/// The diagnostics, each with the notes after it and with its suggestions sorted, sorted.
 	private static func diagnosticEntries(of diagnostics: String) -> [String] {
 		var entries = [[Substring]]()
 		for line in diagnostics.split(separator: "\n", omittingEmptySubsequences: false) {
@@ -1648,7 +1649,26 @@ enum GraphFuzzerToolOutcome: Equatable {
 				entries[entries.count - 1].append(line)
 			}
 		}
-		return entries.map { $0.joined(separator: "\n") }.sorted()
+		return entries.map { sortingSuggestions(in: $0.joined(separator: "\n")) }.sorted()
+	}
+
+	/// `diagnostic` with the items of each list of suggestions it makes – "Did you mean one of `a: A`, `b: B`?",
+	/// which SafeDI sorts by `Property.<` – sorted as text, so two diagnostics that suggest the same properties in
+	/// another order compare equal, and any other difference, including a suggestion added, removed or changed,
+	/// still tells them apart.
+	private static func sortingSuggestions(in diagnostic: String) -> String {
+		// Each suggestion is a property's source between backticks, and no fuzzer label or type contains one.
+		let expression = try! NSRegularExpression(pattern: "(?<=Did you mean one of )`[^`]*`(?:, `[^`]*`)+(?=\\?)")
+		let source = diagnostic as NSString
+		var result = ""
+		var location = 0
+		for match in expression.matches(in: diagnostic, range: NSRange(location: 0, length: source.length)) {
+			let suggestions = source.substring(with: match.range).dropFirst().dropLast().components(separatedBy: "`, `")
+			result += source.substring(with: NSRange(location: location, length: match.range.location - location))
+			result += "`" + suggestions.sorted().joined(separator: "`, `") + "`"
+			location = match.range.location + match.range.length
+		}
+		return result + source.substring(from: location)
 	}
 
 	/// `code` with each run of consecutive top-level extensions sorted, which says whether two files differ only
@@ -1912,8 +1932,9 @@ struct GraphFuzzerToolRuns {
 	let renamedOutcomes: [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)]
 
 	/// The failure of each renamed graph that, with its renaming undone, gives another verdict, other
-	/// diagnostics or warnings in any order (the tool sorts them by file, and the files are renamed), other
-	/// generated file names, or generated code that is not byte-identical.
+	/// diagnostics or warnings in any order (the tool sorts them by file, and the files are renamed), each
+	/// diagnostic's suggestions in any order, other generated file names, or generated code that is not
+	/// byte-identical.
 	var renamedGraphFailures: [GraphFuzzerFailure] {
 		renamedOutcomes.compactMap { renaming, outcome in
 			guard let difference = GraphFuzzerToolOutcome.difference(between: firstOutcome, and: outcome) else { return nil }

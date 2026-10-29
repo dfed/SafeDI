@@ -376,6 +376,27 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func difference_isNil_whenDiagnosticsSuggestTheSamePropertiesInAnotherOrder() {
+		let diagnostics = GraphFuzzerToolOutcome.rejected(diagnostics: "/a/<fixture-directory>/S12_T1.swift:7:2: error: @Received property `t4: S12_T3` is not @Instantiated or @Forwarded in chain: S12_Root0 -> S12_T1. Did you mean one of `t3: S12_T3`, `t4: Instantiator<S12_T3>`, `t6: S12_T3`?")
+		let reorderedSuggestions = GraphFuzzerToolOutcome.rejected(diagnostics: "/b/<fixture-directory>/S12_T1.swift:7:2: error: @Received property `t4: S12_T3` is not @Instantiated or @Forwarded in chain: S12_Root0 -> S12_T1. Did you mean one of `t6: S12_T3`, `t4: Instantiator<S12_T3>`, `t3: S12_T3`?")
+
+		#expect(GraphFuzzerToolOutcome.difference(between: diagnostics, and: reorderedSuggestions) == nil)
+	}
+
+	@Test
+	func difference_reportsDiagnostics_whenDiagnosticsDifferInMoreThanTheOrderOfTheirSuggestions() {
+		func diagnostics(chain: String, suggestions: String) -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: "/a/<fixture-directory>/S12_T1.swift:7:2: error: @Received property `t4: S12_T3` is not @Instantiated or @Forwarded in chain: \(chain). Did you mean one of \(suggestions)?")
+		}
+		let original = diagnostics(chain: "S12_Root0 -> S12_T1", suggestions: "`t3: S12_T3`, `t6: S12_T3`")
+
+		// Another suggestion, one more suggestion, and the same suggestions in another order in another message.
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(chain: "S12_Root0 -> S12_T1", suggestions: "`t3: S12_T3`, `t5: S12_T3`")) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(chain: "S12_Root0 -> S12_T1", suggestions: "`t3: S12_T3`, `t4: Instantiator<S12_T3>`, `t6: S12_T3`")) == "its diagnostics")
+		#expect(GraphFuzzerToolOutcome.difference(between: original, and: diagnostics(chain: "S12_Root1 -> S12_T1", suggestions: "`t6: S12_T3`, `t3: S12_T3`")) == "its diagnostics")
+	}
+
+	@Test
 	func finding_isKnownIssue_whenRenamedGraphDiffersAsDocumented() {
 		let knownIssue = GraphFuzzerKnownIssue(
 			reason: "A shape whose mock follows the order of names",
@@ -584,7 +605,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Compiling the batch is one `swiftc` invocation when nothing fails.
 	static let smokeSeeds: [UInt64] = [14, 25, 62, 582, 691, 705, 930]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x27236E4AE9D0300F
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xFFCABC4A20115CE8
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -623,13 +644,6 @@ struct SafeDIToolGraphFuzzerTests {
 				4_378, 4_393, 4_404, 4_420, 4_428, 4_496, 4_504, 4_515, 4_534, 4_541, 4_545, 4_567, 4_613, 4_619, 4_634, 4_637, 4_640,
 				4_642, 4_648, 4_664, 4_666, 4_707, 4_716, 4_717, 4_729, 4_775, 4_776, 4_781, 4_783, 4_786, 4_795, 4_834, 4_859,
 				4_861, 4_865, 4_889, 4_904, 4_918, 4_922, 4_944, 4_947, 4_955, 4_963, 4_996,
-			],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "A diagnostic that suggests several properties lists them in the order of their labels and type names",
-			signatures: [.renamedGraphDiffers(containing: "changes its diagnostics")],
-			seeds: [
-				417, 557, 1_013, 1_353, 1_638, 1_864, 2_423, 3_020, 3_036, 3_081, 3_111, 3_659, 4_097, 4_449, 4_506, 4_790,
 			],
 		),
 		GraphFuzzerKnownIssue(
