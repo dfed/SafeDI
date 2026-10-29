@@ -789,7 +789,7 @@ public actor DependencyTreeGenerator {
 	///
 	/// Not isolated to the actor, which reads only its immutable map of instantiables, so that the mock roots of a
 	/// module can be created in concurrent tasks.
-	private nonisolated func createMockRoot(
+	nonisolated private func createMockRoot(
 		for instantiable: Instantiable,
 		scope: Scope,
 		generatedMockReason: GeneratedMockReason?,
@@ -1668,7 +1668,7 @@ public actor DependencyTreeGenerator {
 	///   root, so only its children's results are collected.
 	/// - Parameter childrenRequiringEachOtherValidation: The scopes whose children are already known not to
 	///   require one another; see `validateChildrenDoNotRequireEachOther`.
-	private nonisolated func createMockRootScopeGenerator(
+	nonisolated private func createMockRootScopeGenerator(
 		for instantiable: Instantiable,
 		scope: Scope,
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
@@ -1994,7 +1994,7 @@ public actor DependencyTreeGenerator {
 	/// the scopes left to walk, since a tree can be as deep as the module has types.
 	/// - Returns: Whether a scope in the tree declares an `onlyIfAvailable` alias whose fulfilling property is still
 	///   being built there, so that the alias is not created.
-	private nonisolated func validateMockRootScopeForCycles(_ mockRootScope: Scope) throws -> Bool {
+	nonisolated private func validateMockRootScopeForCycles(_ mockRootScope: Scope) throws -> Bool {
 		var declaresOnlyIfAvailableAliasOfPropertyBeingBuilt = false
 		var scopesToWalk = [ScopeToWalkForCycles(scope: mockRootScope, propertyStack: [], lazilyInstantiatedDeclarations: [:])]
 		while let scopeToWalk = scopesToWalk.popLast() {
@@ -2623,7 +2623,7 @@ public actor DependencyTreeGenerator {
 	/// Pitfalls" for how this interacts with erased properties.
 	/// - Parameter declaredProperty: The property of the dependency that closes the cycle, as declared at
 	///   `declarationLocation`: the property instantiated, or the property received – the alias for an alias.
-	private nonisolated func throwIfInvalidCycle(
+	nonisolated private func throwIfInvalidCycle(
 		typesInCycle: [TypeDescription],
 		property: Property,
 		declaredProperty: Property,
@@ -2650,7 +2650,7 @@ public actor DependencyTreeGenerator {
 	/// a constant cycle when `property` is constant, and a received-`Instantiator` cycle otherwise.
 	/// - Parameter declaredProperty: See `throwIfInvalidCycle`.
 	/// - Parameter closingReceive: The receive that closes the cycle, or `nil` when an instantiation closes it.
-	private nonisolated func invalidCycleError(
+	nonisolated private func invalidCycleError(
 		typesInCycle: [TypeDescription],
 		property: Property,
 		declaredProperty: Property,
@@ -3504,7 +3504,7 @@ public actor DependencyTreeGenerator {
 
 	/// The error for a constant or lazily instantiated `@Instantiated` dependency on `parent` whose `instantiable`
 	/// has `@Forwarded` properties, or `nil` when the dependency is valid.
-	private nonisolated func forwardedPropertyError(
+	nonisolated private func forwardedPropertyError(
 		for dependency: Dependency,
 		instantiable: Instantiable,
 		parent: Instantiable,
@@ -3606,7 +3606,7 @@ public actor DependencyTreeGenerator {
 		// Every tree is validated, and the errors are reported in source order, so neither depends on the order of the
 		// trees; they are validated in type order regardless. A root receives nothing, so its tree binds nothing above
 		// its own properties.
-		let rootInstantiables = self.rootInstantiables
+		let rootInstantiables = rootInstantiables
 		let productionRootScopeIndices = rootInstantiables.sorted().compactMap { scopes.typeDescriptionToScopeIndex[$0] }
 		// Each non-root type's mock binds every property its tree receives from above it. `scopes` orders the two
 		// scopes of a type whose hand-written mock is not passed some of its dependencies, which only identity tells
@@ -3714,7 +3714,7 @@ public actor DependencyTreeGenerator {
 	/// after another, and throws what they found. See
 	/// `validatePropertiesAreFulfillable(inTreeRootedAt:validatesCycles:validatesHiddenProperties:typeDescriptionToScopeMap:cyclesOnly:)`
 	/// and `throwIfInvalid(rootTreeValidations:additionalTreeValidations:)`.
-	private nonisolated func validatePropertiesAreFulfillable(
+	nonisolated private func validatePropertiesAreFulfillable(
 		onRootScopes rootScopes: [ValidatedRootScope],
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
 		cyclesOnly: Bool,
@@ -3806,7 +3806,7 @@ public actor DependencyTreeGenerator {
 	///   - cyclesOnly: Whether unfulfillable property collection is skipped — for the trees of mocks, whose
 	///     unfulfillable received properties are expected (they become required mock parameters).
 	/// - Returns: The first error the walk threw, with the unfulfillable and hidden received properties it recorded.
-	private nonisolated func validatePropertiesAreFulfillable(
+	nonisolated private func validatePropertiesAreFulfillable(
 		inTreeRootedAt rootScope: ValidatedRootScope,
 		validatesCycles: Bool,
 		validatesHiddenProperties: Bool,
