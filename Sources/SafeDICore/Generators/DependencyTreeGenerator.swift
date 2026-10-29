@@ -3855,7 +3855,13 @@ public actor DependencyTreeGenerator {
 			}
 		}
 		/// The fulfilling properties of the `onlyIfAvailable` aliases already walked by
-		/// `validateNoCycleInReceivedProperties`, each followed by its declaring scope's instantiation stack.
+		/// `validateNoCycleInReceivedProperties`, each followed by the property received through the alias and by the
+		/// alias's declaring scope's instantiation stack. Those decide whether the walk throws: it starts from the
+		/// fulfilling property with the received property on its stack, bails out on a chain that reaches a property on
+		/// that stack, and throws on one that reaches the declaring stack; the rest it is passed only names what an error
+		/// reports, and the tree stops at the first walk that throws. So a walk in the set returned without throwing, and
+		/// walking it again would too. A receive of another alias of the same fulfilling property is walked again: a chain
+		/// that bails out at one received property can reach the declaring stack from another.
 		var walkedAliasFulfillingProperties = Set<[Property]>()
 		/// Validates one scope of the tree, and adds the children to validate after it to `scopesToValidate`, the
 		/// first child last.
@@ -3978,7 +3984,7 @@ public actor DependencyTreeGenerator {
 					}
 				} else if alias.onlyIfAvailable,
 				          let declaringProperty = alias.declaringInstantiationStack.first,
-				          case let walkedAliasFulfillingProperty = [fulfillingProperty] + alias.declaringInstantiationStack,
+				          case let walkedAliasFulfillingProperty = [fulfillingProperty, receivedProperty] + alias.declaringInstantiationStack,
 				          walkedAliasFulfillingProperties.insert(walkedAliasFulfillingProperty).inserted
 				{
 					// A required alias's fulfilling property is walked where the alias is declared. Walk this
