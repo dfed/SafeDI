@@ -196,7 +196,7 @@ public struct LoggedInView: Instantiable, View {
 
 The exact semantics of each dependency kind — including `@Instantiated`’s configuration parameters for dependency inversion, and `@Received`’s `onlyIfAvailable` option — are covered in [@Instantiated](#instantiated), [@Received](#received), and [@Forwarded](#forwarded).
 
-SafeDI reserves the names its generated code introduces, so the `@Instantiable` macro reports an error for a name SafeDI uses in that code – a decorated property’s name, the name of an `instantiate(…)` parameter, a `fulfilledByDependencyNamed:` name, or the argument label of a default-valued initializer or mock parameter that a generated `mock()` takes and passes on – that begins with `__safeDI_`, or that is exactly `safeDIOverrides`, `safeDIBuilder`, or the name of a type generated code constructs (`Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, `SendableErasedInstantiator`, `LazilyInstantiated`, or `SendableLazilyInstantiated`).
+SafeDI reserves the names its generated code introduces, so the `@Instantiable` macro reports an error for a name SafeDI uses in that code – a decorated property’s name, the name of an `instantiate(…)` parameter without a default value, a `fulfilledByDependencyNamed:` name, or the argument label of a default-valued initializer, `instantiate(…)`, or mock parameter that a generated `mock()` takes and passes on – that begins with `__safeDI_`, or that is exactly `safeDIOverrides`, `safeDIBuilder`, or the name of a type generated code constructs (`Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, `SendableErasedInstantiator`, `LazilyInstantiated`, or `SendableLazilyInstantiated`).
 
 SafeDI recognizes its wrapper types by name alone. A property type spelled `Instantiator<…>`, `SendableInstantiator<…>`, `ErasedInstantiator<…>`, `SendableErasedInstantiator<…>`, `LazilyInstantiated<…>`, or `SendableLazilyInstantiated<…>` is treated as SafeDI’s wrapper of that name, even when the name refers to a type your project declares. Do not declare types with these names in a project that uses SafeDI.
 
@@ -291,7 +291,7 @@ public struct NotesApp: App, Instantiable {
 
 #### Making external types `@Instantiable`
 
-Types that are declared outside of your project can be instantiated by SafeDI if there is an extension on the type decorated with the `@Instantiable` macro. Extensions decorated with this macro define how to instantiate the extended type via a `public static func instantiate(…) -> ExtendedType` function. This `instantiate(…)` function can receive dependencies instantiated or forwarded by objects further up the dependency tree by declaring these dependencies as parameters to the `instantiate(…)` function.
+Types that are declared outside of your project can be instantiated by SafeDI if there is an extension on the type decorated with the `@Instantiable` macro. Extensions decorated with this macro define how to instantiate the extended type via a `public static func instantiate(…) -> ExtendedType` function. This `instantiate(…)` function can receive dependencies instantiated or forwarded by objects further up the dependency tree by declaring these dependencies as parameters to the `instantiate(…)` function. A parameter with a default value is not a dependency, as for an initializer: SafeDI calls `instantiate(…)` without it, so its default applies even when an object further up the tree has a property with the same label and type, and a generated mock offers it as an override.
 
 Here we have a sample `@Instantiable` extension on `UserDefaults` that adopts a first-party `StringStorage` protocol so SafeDI can instantiate it in place of a hand-rolled storage type:
 
@@ -895,7 +895,7 @@ LoggedInView.mock(safeDIOverrides: .init(
 ))
 ```
 
-`SafeDIMockConfiguration` exposes an optional override for each of the child’s own `@Instantiated` dependencies and each default-valued init parameter, plus a trailing builder closure. The builder’s parameters match the type’s hand-written `mock` method signature if one is defined, or its `init` parameters otherwise. When no builder is provided, the generated mock calls the type’s hand-written `mock` method or `init` directly.
+`SafeDIMockConfiguration` exposes an optional override for each of the child’s own `@Instantiated` dependencies and each default-valued parameter of its `init` (or of its `instantiate(…)` method, for an extension), plus a trailing builder closure. The builder’s parameters match the type’s hand-written `mock` method signature if one is defined, or its `init` parameters otherwise. When no builder is provided, the generated mock calls the type’s hand-written `mock` method or `init` directly.
 
 Closure fields on `SafeDIMockConfiguration` are plain (non-`@Sendable`) by default, so overrides can capture mutable non-`Sendable` test state. When a type is reached through a `SendableInstantiator`, `SendableErasedInstantiator`, or `SendableLazilyInstantiated` anywhere in the dependency graph, its `SafeDIMockConfiguration` is emitted with `@Sendable` closure fields instead so the overrides remain safe to invoke across isolation boundaries.
 

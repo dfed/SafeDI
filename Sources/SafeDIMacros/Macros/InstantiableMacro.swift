@@ -1121,11 +1121,30 @@ public struct InstantiableMacro: MemberMacro {
 				}
 			}
 
-			// Every argument on an extension's `instantiate()` method is
-			// treated as a dependency, so the "unmockable unlabeled default"
-			// shape can't occur there — it requires a non-dependency
-			// defaulted parameter. We only validate the extension's mock
-			// methods (below), not `instantiate`.
+			// A default-valued parameter of `instantiate(…)` is not a dependency, as for an initializer, so the
+			// method gets the checks an initializer gets. As for an initializer, its defaults reach a generated
+			// mock only when the type has no hand-written mock.
+			for instantiateFunction in visitor.instantiateFunctions {
+				Self.validateUnlabeledDefaultShape(
+					functionSyntax: instantiateFunction.syntax.signature,
+					arguments: instantiateFunction.initializer.arguments,
+					dependencies: instantiateFunction.dependencies,
+					diagnosticNode: Syntax(instantiateFunction.syntax),
+					context: context,
+				)
+				if visitor.mockInitializer == nil {
+					Self.validateDefaultExpressions(
+						functionSyntax: instantiateFunction.syntax.signature,
+						dependencies: instantiateFunction.dependencies,
+						context: context,
+					)
+					Self.validateReservedParameterLabels(
+						functionSyntax: instantiateFunction.syntax.signature,
+						dependencies: instantiateFunction.dependencies,
+						context: context,
+					)
+				}
+			}
 
 			let instantiables = visitor.instantiables
 			if instantiables.count > 1 {
