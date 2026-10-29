@@ -300,8 +300,13 @@ final class Scope: Hashable {
 			} else if forMockGeneration {
 				// A mock builds, or is handed, every property an ancestor does not
 				// create — onlyIfAvailable dependencies become optional mock parameters.
-				// Only a property that is still being built is unavailable, as in production.
-				return childPropertyStack.contains(property) || childPropertyStack.contains(property.asUnwrappedProperty)
+				// Only a property that is still being built is unavailable, as in production. A mock promotes a
+				// received optional property as the non-optional value it builds, so a receive of either form of
+				// it is unavailable inside the tree it builds.
+				let unwrappedProperty = property.asUnwrappedProperty
+				return childPropertyStack.contains {
+					$0.label == unwrappedProperty.label && $0.typeDescription.unwrapped == unwrappedProperty.typeDescription
+				}
 			} else {
 				let propertyIsAvailableInParentStack = receivableProperties.contains(property) && !childPropertyStack.contains(property)
 				let unwrappedPropertyIsAvailableInParentStack = receivableProperties.contains(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty)

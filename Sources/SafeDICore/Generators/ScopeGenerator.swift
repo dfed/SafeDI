@@ -1832,9 +1832,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let instanceProperty = lazilyInstantiatedInstanceProperties[index]
 			let bindingName = lazilyInstantiatedBindingNames[index]
 			let wrapperTypeSource = lazilyInstantiatedProperty.typeDescription.asSource
+			// A required receive of an optional `LazilyInstantiated` is handed an optional instance.
+			let optionalInstanceProperty = Property(label: instanceProperty.label, typeDescription: .optional(instanceProperty.typeDescription))
 			if flatReceivedProperties.contains(instanceProperty) {
 				let instanceName = flatParameterDisambiguationMap[instanceProperty.label]?[instanceProperty.typeDescription] ?? instanceProperty.label
 				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(wrapperTypeSource) { \(instanceName) }")
+			} else if flatReceivedProperties.contains(optionalInstanceProperty) {
+				// The parameter may be named apart from its label.
+				let instanceName = flatParameterDisambiguationMap[optionalInstanceProperty.label]?[optionalInstanceProperty.typeDescription] ?? optionalInstanceProperty.label
+				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(instanceName).map { instance in \(wrapperTypeSource) { instance } }")
 			} else {
 				// The instance is an `onlyIfAvailable` override, which may be named apart from its label.
 				let instanceName = onlyIfAvailableOverrides.first { $0.receivedProperty.asUnwrappedProperty == instanceProperty }?.name ?? instanceProperty.label
