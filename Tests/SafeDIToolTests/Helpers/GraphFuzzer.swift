@@ -1086,11 +1086,12 @@ enum GraphFuzzerGenerator {
 		/// instantiator. `B`, or a type a few such steps beneath it that each step dominates, declares an
 		/// `onlyIfAvailable` alias of `x`, mostly spelled with its optional form (`ofType: X?.self`) and otherwise with
 		/// `X.self`; now and then one or two aliases of that alias follow, each required or `onlyIfAvailable`, on the
-		/// same type or on a child it dominates; usually a child the last alias's type dominates receives the alias,
-		/// mostly required, or, where there is none, a required alias of it on the same type; and usually `X` receives
-		/// `b`. Each step takes only a child the previous type dominates – counting every root's properties, including
-		/// one the other roots lack – so that no receiver is rejected merely because another path from a root reaches it
-		/// without the alias. A receiver that requires the chain needs every alias created, so
+		/// same type or on a type beneath it, so that the chain crosses scopes; usually a type beneath the last alias's
+		/// type receives the alias, mostly required, or a required alias of it on the same type does instead; and
+		/// usually `X` receives `b`. A type beneath another is a child it dominates – counting every root's properties,
+		/// including one the other roots lack – or, where it has none, which is most often, a new type that only it
+		/// instantiates (`Link0`, `Link1`, …), so that no receiver is rejected merely because another path from a root
+		/// reaches it without the alias. A receiver that requires the chain needs every alias created, so
 		/// `x` built before `b`, while `X` receiving `b` needs `b` built first: SafeDI must reject the graph through the
 		/// chain. Without the receive of `b`, the chain must be built after `x`, which the compiled output shows.
 		/// `addingAliasChains` never draws a source built around its host, so no other pass draws the cycle, and
@@ -1125,7 +1126,7 @@ enum GraphFuzzerGenerator {
 			}
 			// Which declaration is on every path to which, read from the declarations rather than from `dominators`:
 			// a root may declare a property the other roots do not, which is not among the graph's `edges`. No pass
-			// before this one instantiates a type of the graph, and this one adds only received properties.
+			// before this one instantiates a type of the graph, and the links this one adds are not types of the graph.
 			let rootIndices = declarations.indices.filter { declarations[$0].instantiableArguments.contains("isRoot: true") }
 			let childIndicesByDeclaration = declarations.map { declaration in
 				declaration.properties.compactMap { instantiatedDeclarationIndex(of: $0, onlyWithoutInstantiator: false) }
@@ -1208,14 +1209,26 @@ enum GraphFuzzerGenerator {
 			)
 			declarations[hostIndex].properties.append(alias)
 			var aliasDeclarationIndex = hostIndex
-			// Then, now and then, one or two aliases of it, each on the type declaring what it renames or on a type that
-			// type instantiates and is on every path to, as `addingAliasChains` draws them.
+			/// Most types of these graphs dominate none of the types they instantiate, so a step beneath a type that has
+			/// no such child takes a new type, `Link<n>`, that only the type at `parentIndex` instantiates.
+			var linkCount = 0
+			func appendLink(beneath parentIndex: Int) -> Int {
+				let linkTypeName = "\(prefix)Link\(linkCount)"
+				declarations[parentIndex].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "link\(linkCount)", type: linkTypeName))
+				declarations.append(TypeDeclaration(name: linkTypeName, instantiableArguments: [], properties: [], declaresHelperTypes: false))
+				linkCount += 1
+				return declarations.count - 1
+			}
+			// Then, now and then, one or two aliases of it, each on the type declaring what it renames or on a type beneath
+			// it: one of its dominated children or, where it has none, a new link, so that a chain crosses scopes as often
+			// as it stays on one.
 			for _ in 0..<siblingAliasChainRandom.integer(in: 0...2) {
-				let children = dominatedChildren(of: aliasDeclarationIndex, onlyWithoutInstantiator: false)
-				let declaringIndex = if !children.isEmpty, siblingAliasChainRandom.percentChance(50) {
-					siblingAliasChainRandom.element(of: children)
+				let declaringIndex: Int
+				if siblingAliasChainRandom.percentChance(50) {
+					declaringIndex = aliasDeclarationIndex
 				} else {
-					aliasDeclarationIndex
+					let children = dominatedChildren(of: aliasDeclarationIndex, onlyWithoutInstantiator: false)
+					declaringIndex = children.isEmpty ? appendLink(beneath: aliasDeclarationIndex) : siblingAliasChainRandom.element(of: children)
 				}
 				let isOnlyIfAvailable = siblingAliasChainRandom.percentChance(50)
 				let label = alias.label + "Alias"
@@ -1229,15 +1242,21 @@ enum GraphFuzzerGenerator {
 				aliasDeclarationIndex = declaringIndex
 				alias = nextAlias
 			}
-			// Usually, a receive of the last alias on a type the alias's type instantiates and is on every path to,
-			// mostly required; where it instantiates no such type, a required alias of the last alias on the same type
-			// instead, which is created whether or not anything receives it.
-			let receivers = dominatedChildren(of: aliasDeclarationIndex, onlyWithoutInstantiator: false)
-				.filter { !declaresProperty(labeled: alias.label, at: $0) }
-			let requiredAliasLabel = alias.label + "Alias"
+			// Usually, a receive of the last alias, mostly required, on one of its type's dominated children or, where it
+			// has none, half the time on a new link; otherwise a required alias of the last alias on the same type, which
+			// is created whether or not anything receives it.
 			if siblingAliasChainRandom.percentChance(85) {
-				if !receivers.isEmpty {
-					let receiverIndex = siblingAliasChainRandom.element(of: receivers)
+				let receivers = dominatedChildren(of: aliasDeclarationIndex, onlyWithoutInstantiator: false)
+					.filter { !declaresProperty(labeled: alias.label, at: $0) }
+				let requiredAliasLabel = alias.label + "Alias"
+				let receiverIndex: Int? = if !receivers.isEmpty {
+					siblingAliasChainRandom.element(of: receivers)
+				} else if siblingAliasChainRandom.percentChance(50) {
+					appendLink(beneath: aliasDeclarationIndex)
+				} else {
+					nil
+				}
+				if let receiverIndex {
 					declarations[receiverIndex].properties.append(PropertyDeclaration(
 						attribute: siblingAliasChainRandom.percentChance(80) ? "@Received" : "@Received(onlyIfAvailable: true)",
 						label: alias.label,
