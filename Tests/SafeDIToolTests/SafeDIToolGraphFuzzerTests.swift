@@ -274,6 +274,80 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(results.map(\.failure?.kind) == [.runsDiffer])
 	}
 
+	// MARK: Rename invariance
+
+	@Test
+	func renaming_reversesTypeNamesAndLabelsWhereverTheyAppear_andRestoresThem() {
+		let prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: 12)
+		let text = "S12_T1 S12_T3Protocol S12_AnyT2 S12_Root0 S12_Missing1 S12_Value t1Builder __safeDI_t3Builder lazyAnyT2 anyT4 missing0 items t4_S12_T4"
+		let renaming = GraphFuzzerRenaming(reversesTypeNames: true, reversesLabels: true, reversesFileNames: false)
+
+		#expect(renaming.rename(text, typeNamePrefix: prefix) == "S12_T8 S12_T6Protocol S12_AnyT7 S12_Root9 S12_Missing8 S12_Value t8Builder __safeDI_t6Builder lazyAnyT7 anyT5 missing9 items t5_S12_T5")
+		#expect(renaming.restore(renaming.rename(text, typeNamePrefix: prefix), typeNamePrefix: prefix) == text)
+	}
+
+	@Test
+	func renaming_renamesOnlyTheOrderItReverses() {
+		let prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: 12)
+		let text = "S12_T1 t1Builder"
+
+		#expect(GraphFuzzerRenaming(reversesTypeNames: true, reversesLabels: false, reversesFileNames: false).rename(text, typeNamePrefix: prefix) == "S12_T8 t1Builder")
+		#expect(GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: true, reversesFileNames: false).rename(text, typeNamePrefix: prefix) == "S12_T1 t8Builder")
+		#expect(GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: false, reversesFileNames: true).rename(text, typeNamePrefix: prefix) == text)
+	}
+
+	@Test
+	func renaming_reversesFileOrder_andRestoresFileNames() throws {
+		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
+			"@Instantiable\npublic final class S12_T1: Instantiable {\n\tpublic init() {}\n}\n",
+			"@Instantiable\npublic final class S12_T0: Instantiable {\n\tpublic init() {}\n}\n",
+		])
+		let renaming = GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: false, reversesFileNames: true)
+
+		let fileNames = try #require(renaming.fileNames(of: fixture))
+
+		#expect(fileNames == ["F98_S12_T1.swift", "F99_S12_T0.swift"])
+		#expect(renaming.restore("/tmp/<fixture-directory>/F98_S12_T1.swift:1:1: error", typeNamePrefix: fixture.typeNamePrefix) == "/tmp/<fixture-directory>/S12_T1.swift:1:1: error")
+	}
+
+	@Test
+	func renamedGraphFailures_reportCodeThatDiffers_butNotDiagnosticsInAnotherOrder() {
+		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [])
+		let renaming = GraphFuzzerRenaming.all[0]
+		let diagnostics = GraphFuzzerToolOutcome.rejected(diagnostics: "/a/<fixture-directory>/S12_T0.swift:1:1: error: first\n/a/<fixture-directory>/S12_T1.swift:1:1: error: second")
+		let reorderedDiagnostics = GraphFuzzerToolOutcome.rejected(diagnostics: "/b/<fixture-directory>/S12_T1.swift:1:1: error: second\n/b/<fixture-directory>/S12_T0.swift:1:1: error: first")
+		let code = GraphFuzzerToolOutcome.accepted(generatedFiles: ["S12_T0+SafeDIMock.swift": "let a = 1\nlet b = 2\n"], warnings: [])
+		let reorderedCode = GraphFuzzerToolOutcome.accepted(generatedFiles: ["S12_T0+SafeDIMock.swift": "let b = 2\nlet a = 1\n"], warnings: [])
+
+		let diagnosticFailures = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: diagnostics, secondOutcome: diagnostics, renamedOutcomes: [(renaming, reorderedDiagnostics)]).renamedGraphFailures
+		let codeFailures = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: code, secondOutcome: code, renamedOutcomes: [(renaming, reorderedCode)]).renamedGraphFailures
+
+		#expect(diagnosticFailures == [])
+		#expect(codeFailures.map { $0.details.prefix { $0 != "\n" } } == ["Reversing its type names changes its generated mock code, in S12_T0+SafeDIMock.swift."])
+	}
+
+	@Test
+	func finding_isKnownIssue_whenRenamedGraphDiffersAsDocumented() {
+		let knownIssue = GraphFuzzerKnownIssue(
+			reason: "A shape whose mock follows the order of names",
+			signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")],
+			seeds: [12],
+		)
+		let failure = GraphFuzzerFailure(
+			seed: 12,
+			kind: .renamedGraphDiffers,
+			details: "Reversing its labels changes its generated mock code, in S12_T0+SafeDIMock.swift.\nThis graph:\n…",
+		)
+		let diagnosticsFailure = GraphFuzzerFailure(
+			seed: 12,
+			kind: .renamedGraphDiffers,
+			details: "Reversing its labels changes its diagnostics.\nThis graph:\nchanges its generated mock code",
+		)
+
+		#expect(GraphFuzzerFinding(failure: failure, knownIssue: knownIssue) == .knownIssue(knownIssue, failure))
+		#expect(GraphFuzzerFinding(failure: diagnosticsFailure, knownIssue: knownIssue) == .failure(diagnosticsFailure))
+	}
+
 	// MARK: Reproducibility
 
 	@Test
@@ -386,6 +460,7 @@ struct SafeDIToolGraphFuzzerTests {
 								fixture: results[index].fixture,
 								outcome: results[index].outcome,
 								failure: GraphFuzzerOracle.crossProcessFailure(of: results[index].fixture),
+								renamedGraphFailures: results[index].renamedGraphFailures,
 							)
 						}
 						for result in results {
@@ -410,6 +485,10 @@ struct SafeDIToolGraphFuzzerTests {
 							if result.isAccepted {
 								acceptedCount += 1
 								acceptedSeedsSum.add(seed)
+							}
+							// Counted whether or not the graph also fails another way.
+							for renamedGraphFailure in result.renamedGraphFailures {
+								report.append("renamed \(seed) \(renamedGraphFailure.details.prefix { $0 != "\n" })")
 							}
 							let finding = GraphFuzzerFinding(failure: result.failure, knownIssue: knownIssuesBySeed[seed])
 							if let reportLine = finding.reportLine(seed: seed) {
@@ -449,25 +528,25 @@ struct SafeDIToolGraphFuzzerTests {
 
 	// MARK: Seeds
 
-	/// The ordinary suite's batch: seeds 33, 348, 582, and 705, whose graphs the tool accepts and which between them
-	/// exercise every feature but those in `GraphFuzzerFeature.awaitingMacroSupport`, and seed 14, whose graph it
-	/// rejects. It is small because compiling generated code is what
+	/// The ordinary suite's batch: seeds 62, 348, 582, and 1286, whose graphs the tool accepts, with the same
+	/// results under every `GraphFuzzerRenaming`, and which between them exercise every feature but those in
+	/// `GraphFuzzerFeature.awaitingMacroSupport`, and seed 14, whose graph it rejects. It is small because compiling generated code is what
 	/// the fuzzer costs; ci.yml fuzzes the whole corpus on every pull request. Compiling the batch is one `swiftc`
 	/// invocation when nothing fails.
-	static let smokeSeeds: [UInt64] = [14, 33, 348, 582, 705]
+	static let smokeSeeds: [UInt64] = [14, 62, 348, 582, 1_286]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x2DE98543A7189B22
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x16B50F7C001A9624
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0x680234B9097413A5
+	static let corpusFixtureHash: UInt64 = 0x513FF4952CCF4FFF
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
-	static let corpusAcceptedSeedCount = 2_667
-	static let corpusAcceptedSeedsSum: UInt64 = 0x9C8AE9C71B12F659
+	static let corpusAcceptedSeedCount = 2_458
+	static let corpusAcceptedSeedsSum: UInt64 = 0xC844F7103D2A569C
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
@@ -558,6 +637,55 @@ struct SafeDIToolGraphFuzzerTests {
 				4_838, 4_840, 4_845, 4_847, 4_849, 4_850, 4_855, 4_859, 4_862, 4_863, 4_864, 4_869, 4_882, 4_883, 4_884, 4_889,
 				4_892, 4_902, 4_905, 4_907, 4_908, 4_909, 4_911, 4_913, 4_930, 4_938, 4_942, 4_944, 4_947, 4_966, 4_974, 4_975,
 				4_977, 4_985, 4_987, 4_991, 4_992, 4_997,
+			],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "A mock's API follows the order of type names or labels: which back-edge of a lazy cycle loses its override, which promoted sibling is passed nil, and the order of overrides",
+			signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")],
+			seeds: [
+				9, 35, 37, 53, 74, 77, 83, 107, 131, 139, 156, 157, 163, 164, 168, 241,
+				245, 262, 281, 309, 311, 364, 371, 381, 418, 420, 434, 437, 439, 448, 450, 473,
+				515, 545, 548, 550, 579, 593, 632, 642, 652, 688, 712, 714, 732, 743, 751, 759,
+				768, 808, 836, 883, 903, 912, 927, 940, 948, 975, 987, 1_022, 1_029, 1_035, 1_042, 1_044,
+				1_064, 1_066, 1_072, 1_075, 1_084, 1_085, 1_090, 1_092, 1_096, 1_107, 1_108, 1_118, 1_121, 1_125, 1_126, 1_139,
+				1_145, 1_147, 1_185, 1_199, 1_200, 1_204, 1_215, 1_236, 1_289, 1_302, 1_329, 1_343, 1_358, 1_362, 1_412, 1_425,
+				1_433, 1_441, 1_453, 1_464, 1_492, 1_496, 1_502, 1_524, 1_525, 1_531, 1_567, 1_573, 1_602, 1_633, 1_646, 1_664,
+				1_675, 1_692, 1_711, 1_742, 1_745, 1_752, 1_781, 1_782, 1_795, 1_804, 1_815, 1_843, 1_851, 1_883, 1_896, 1_898,
+				1_925, 1_967, 1_970, 1_972, 1_981, 1_996, 2_005, 2_017, 2_029, 2_045, 2_047, 2_051, 2_062, 2_083, 2_084, 2_117,
+				2_123, 2_144, 2_149, 2_152, 2_165, 2_201, 2_211, 2_234, 2_245, 2_248, 2_270, 2_277, 2_284, 2_286, 2_287, 2_316,
+				2_323, 2_335, 2_337, 2_348, 2_377, 2_430, 2_432, 2_444, 2_452, 2_456, 2_488, 2_515, 2_518, 2_536, 2_553, 2_555,
+				2_577, 2_610, 2_637, 2_667, 2_727, 2_731, 2_732, 2_741, 2_752, 2_791, 2_801, 2_808, 2_835, 2_839, 2_841, 2_845,
+				2_870, 2_916, 2_940, 2_968, 2_980, 2_996, 3_004, 3_023, 3_054, 3_064, 3_071, 3_073, 3_075, 3_076, 3_091, 3_106,
+				3_132, 3_149, 3_180, 3_183, 3_184, 3_214, 3_215, 3_241, 3_252, 3_298, 3_306, 3_344, 3_361, 3_362, 3_378, 3_391,
+				3_397, 3_409, 3_424, 3_436, 3_460, 3_491, 3_506, 3_528, 3_533, 3_534, 3_537, 3_588, 3_596, 3_600, 3_602, 3_651,
+				3_655, 3_661, 3_664, 3_677, 3_707, 3_713, 3_741, 3_750, 3_761, 3_776, 3_805, 3_821, 3_823, 3_845, 3_886, 3_908,
+				3_942, 3_964, 3_972, 3_996, 4_044, 4_055, 4_068, 4_094, 4_102, 4_107, 4_110, 4_117, 4_125, 4_133, 4_156, 4_192,
+				4_213, 4_215, 4_217, 4_227, 4_260, 4_266, 4_281, 4_296, 4_304, 4_344, 4_352, 4_371, 4_378, 4_404, 4_420, 4_428,
+				4_458, 4_504, 4_514, 4_515, 4_516, 4_534, 4_541, 4_543, 4_545, 4_618, 4_619, 4_629, 4_634, 4_637, 4_640, 4_642,
+				4_646, 4_648, 4_664, 4_666, 4_707, 4_716, 4_717, 4_729, 4_775, 4_776, 4_781, 4_795, 4_821, 4_822, 4_834, 4_861,
+				4_865, 4_872, 4_904, 4_918, 4_922, 4_932, 4_934, 4_945, 4_955, 4_963, 4_996,
+			],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "Which errors SafeDI reports, and the root and chain each names, follow the order of type names or labels",
+			signatures: [.renamedGraphDiffers(containing: "changes its diagnostics")],
+			seeds: [
+				46, 79, 106, 127, 293, 335, 377, 411, 417, 463, 485, 557, 603, 607, 615, 661,
+				679, 862, 896, 943, 972, 979, 1_101, 1_122, 1_131, 1_222, 1_230, 1_342, 1_345, 1_353, 1_354, 1_404,
+				1_419, 1_438, 1_460, 1_498, 1_562, 1_611, 1_638, 1_749, 1_765, 1_774, 1_808, 1_846, 1_864, 1_923, 1_928, 1_960,
+				2_012, 2_050, 2_092, 2_190, 2_191, 2_200, 2_260, 2_263, 2_293, 2_342, 2_359, 2_379, 2_423, 2_466, 2_495, 2_523,
+				2_569, 2_574, 2_673, 2_675, 2_676, 2_695, 2_713, 2_718, 2_757, 2_768, 2_777, 2_778, 2_811, 2_822, 2_823, 2_915,
+				2_944, 2_958, 3_009, 3_020, 3_036, 3_072, 3_111, 3_126, 3_161, 3_202, 3_209, 3_237, 3_253, 3_321, 3_332, 3_374,
+				3_377, 3_389, 3_395, 3_538, 3_542, 3_581, 3_652, 3_659, 3_809, 3_812, 3_816, 3_911, 3_960, 3_965, 4_028, 4_031,
+				4_092, 4_097, 4_140, 4_148, 4_238, 4_264, 4_271, 4_374, 4_406, 4_483, 4_494, 4_506, 4_528, 4_559, 4_614, 4_621,
+				4_622, 4_638, 4_693, 4_700, 4_726, 4_810, 4_820, 4_888, 4_941, 4_948,
+			],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "SafeDIMockConfiguration.swift declares its extensions in the order of the roots that reach them",
+			signatures: [.renamedGraphDiffers(containing: "changes its generated mock configuration code")],
+			seeds: [
+				1_992, 2_186, 2_254, 4_643, 4_747,
 			],
 		),
 	]
