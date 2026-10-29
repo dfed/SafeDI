@@ -1688,10 +1688,10 @@ public actor DependencyTreeGenerator {
 		// onlyIfAvailable dependencies are NOT promoted — they become optional
 		// mock parameters with no default. Nor are forwarded properties.
 		let mockRootScope = Scope(instantiable: instantiable)
-		// A dependency created in the tree is one instance in every form: the mocked type's own `x: X` is the instance
-		// of an `x: LazilyInstantiated<X>` its tree receives, as production would create both in one tree. The mock
-		// builds that child as the `LazilyInstantiated` the tree receives, which the mocked type reads the instance of.
-		// A forwarded `x: X` comes from outside the tree, so it is never the instance of one.
+		// A property the tree creates is the instance of a `LazilyInstantiated` of its label that the tree receives, as in
+		// production: the mocked type's own `x: X` and an `x: LazilyInstantiated<X>` its tree receives are one instance. The
+		// mock builds that child as the `LazilyInstantiated`, whose instance it passes the mocked type. A forwarded `x: X`
+		// comes from outside the tree, so it is never the instance of one.
 		let lazilyInstantiatedPropertiesReceived = allReceived.lazy
 			.map(\.asUnwrappedProperty)
 			.filter { $0.typeDescription.lazilyInstantiatedInstanceType != nil }
@@ -1915,6 +1915,18 @@ public actor DependencyTreeGenerator {
 		isReceivedUnderItsLabel: (Property) -> Bool,
 	) -> DependencyTreeGeneratorError.ForwardedPropertyHiddenInPromotedTree? {
 		let forwardedProperties = instantiable.forwardedReceivableProperties
+		/// The property a dependency receives from the scopes above it: the fulfilling property of an alias, the declared
+		/// property of a receive, and `nil` for a property the type declares.
+		func receivedProperty(of dependency: Dependency) -> Property? {
+			switch dependency.source {
+			case .received:
+				dependency.property
+			case let .aliased(fulfillingProperty, _, _):
+				fulfillingProperty
+			case .instantiated, .forwarded:
+				nil
+			}
+		}
 		for forwardedDependency in forwardedDependencies {
 			let label = forwardedDependency.property.label
 			/// Whether a receive of `property` is passed the forwarded property: its label's, of its type or of the
@@ -1935,53 +1947,46 @@ public actor DependencyTreeGenerator {
 			var scopesToWalk = Array(promotedScopesToWalk.reversed())
 			while let scopeToWalk = scopesToWalk.popLast() {
 				let scope = scopeToWalk.scope
-				var hidingReceive = scopeToWalk.hidingReceive
-				for dependency in scope.instantiable.dependencies {
-					switch dependency.source {
-					case .received:
-						if let hiding = hidingReceive, isForwardedProperty(dependency.property) {
-							return .init(
-								property: dependency.property,
-								declarationLocation: dependency.declarationLocation,
-								mockedType: instantiable.concreteInstantiable,
-								forwardedProperty: forwardedDependency.property,
-								hidingProperty: hiding.dependency.property,
-								hidingDeclarationLocation: hiding.dependency.declarationLocation,
-								chain: hiding.chain,
-							)
-						} else if dependency.property.label == label, !isForwardedProperty(dependency.property), isReceivedUnderItsLabel(dependency.property) {
-							hidingReceive = (dependency, [scope.instantiable.concreteInstantiable])
-						}
-					case let .aliased(fulfillingProperty, _, _):
-						if let hiding = hidingReceive, isForwardedProperty(fulfillingProperty) {
-							return .init(
-								property: fulfillingProperty,
-								declarationLocation: dependency.declarationLocation,
-								mockedType: instantiable.concreteInstantiable,
-								forwardedProperty: forwardedDependency.property,
-								hidingProperty: hiding.dependency.property,
-								hidingDeclarationLocation: hiding.dependency.declarationLocation,
-								chain: hiding.chain,
-							)
-						}
-					case .instantiated, .forwarded:
-						break
-					}
-				}
-				// A type that declares the label itself is what the types it builds receive under it, as in production.
-				let declaresLabel = scope.instantiable.dependencies.contains { !$0.source.isReceived && $0.property.label == label }
-				let firstChildIndex = scopesToWalk.endIndex
-				for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate
-					where !declaresLabel
-					&& walkedScopes.insert(ScopeVisit(scope: ObjectIdentifier(childScope), isBeneathHidingReceive: hidingReceive != nil)).inserted
+				if let hidingReceive = scopeToWalk.hidingReceive,
+				   let hiddenReceive = scope.instantiable.dependencies.lazy
+				   .compactMap({ dependency in receivedProperty(of: dependency).map { (dependency: dependency, property: $0) } })
+				   .first(where: { isForwardedProperty($0.property) })
 				{
-					scopesToWalk.append(ScopeToWalkForHiddenForwardedProperty(
-						scope: childScope,
-						hidingReceive: hidingReceive.map { ($0.dependency, $0.chain + [childScope.instantiable.concreteInstantiable]) },
-					))
+					return .init(
+						property: hiddenReceive.property,
+						declarationLocation: hiddenReceive.dependency.declarationLocation,
+						mockedType: instantiable.concreteInstantiable,
+						forwardedProperty: forwardedDependency.property,
+						hidingProperty: hidingReceive.dependency.property,
+						hidingDeclarationLocation: hidingReceive.dependency.declarationLocation,
+						chain: hidingReceive.chain,
+					)
+				} else {
+					// The closest receive of the label in another form is what the types this scope builds read under it.
+					let hidingReceive = scope.instantiable.dependencies
+						.first { dependency in
+							dependency.source.isReceived
+								&& dependency.property.label == label
+								&& !isForwardedProperty(dependency.property)
+								&& isReceivedUnderItsLabel(dependency.property)
+						}
+						.map { (dependency: $0, chain: [scope.instantiable.concreteInstantiable]) }
+						?? scopeToWalk.hidingReceive
+					// A type that declares the label itself is what the types it builds receive under it, as in production.
+					let declaresLabel = scope.instantiable.dependencies.contains { !$0.source.isReceived && $0.property.label == label }
+					let firstChildIndex = scopesToWalk.endIndex
+					for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate
+						where !declaresLabel
+						&& walkedScopes.insert(ScopeVisit(scope: ObjectIdentifier(childScope), isBeneathHidingReceive: hidingReceive != nil)).inserted
+					{
+						scopesToWalk.append(ScopeToWalkForHiddenForwardedProperty(
+							scope: childScope,
+							hidingReceive: hidingReceive.map { ($0.dependency, $0.chain + [childScope.instantiable.concreteInstantiable]) },
+						))
+					}
+					// The scope walked next is the last one on the stack, so the first child goes last.
+					scopesToWalk[firstChildIndex...].reverse()
 				}
-				// The scope walked next is the last one on the stack, so the first child goes last.
-				scopesToWalk[firstChildIndex...].reverse()
 			}
 		}
 		return nil
