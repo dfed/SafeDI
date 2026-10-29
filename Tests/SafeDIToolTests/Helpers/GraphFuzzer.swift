@@ -260,6 +260,8 @@ enum GraphFuzzerGenerator {
 		/// `dominators[index]` holds the types on every path from a root to the type at `index`, or every type
 		/// when no root reaches it.
 		private var dominators = [Set<Int>]()
+		/// The types a root reaches.
+		private var reachableFromRoots = Set<Int>()
 		/// `dependencyEdges[index]` holds the types that must be built before the type at `index` can be: those it
 		/// instantiates, and those whose property it requires.
 		private var dependencyEdges = [[Int]]()
@@ -424,7 +426,7 @@ enum GraphFuzzerGenerator {
 				}
 				return visited
 			}
-			let reachableFromRoots = reachable(from: rootTargets, excluding: nil)
+			reachableFromRoots = reachable(from: rootTargets, excluding: nil)
 			dependencyEdges = (0..<typeCount).map { index in
 				edges.filter { $0.sourceIndex == index }.map(\.targetIndex)
 			}
@@ -560,7 +562,13 @@ enum GraphFuzzerGenerator {
 		private mutating func receivedProperty(receiverIndex: Int) -> PropertyDeclaration? {
 			let candidates = receivableProperties(receiverIndex: receiverIndex)
 			let source: ProvidedProperty
-			if !candidates.isEmpty, random.percentChance(98) {
+			if !reachableFromRoots.contains(receiverIndex), random.percentChance(25) {
+				// A wrapper of a type that is not `@Instantiable`, which nothing in the graph provides, under one label
+				// every type shares, with a wrapper chosen for each receive. Only a type no root reaches receives one, so
+				// only mocks build its tree: a mock cannot build the wrapper, so it takes each wrapper the label is
+				// received as as a parameter of its own. Graphs whose every type a root reaches draw nothing for it.
+				source = ProvidedProperty(label: Self.unbuildableWrapperLabel, type: "\(random.element(of: unbuildableWrappers))<\(valueTypeName)>", providerIndex: nil, builtIndex: nil)
+			} else if !candidates.isEmpty, random.percentChance(98) {
 				source = random.element(of: candidates)
 			} else if random.percentChance(70) {
 				return nil
@@ -680,9 +688,27 @@ enum GraphFuzzerGenerator {
 			}
 		}
 
-		/// A type of the graph's that is not `@Instantiable`, which only a forwarded property can provide.
+		/// A type of the graph's that is not `@Instantiable`, which only a forwarded property can provide. It conforms
+		/// to `Instantiable`, so that an `Instantiator` of it compiles.
 		private var valueTypeName: String {
 			"\(prefix)Value"
+		}
+
+		/// The label of the unprovided wrappers of `valueTypeName` that types receive.
+		static let unbuildableWrapperLabel = "items"
+
+		/// The wrappers a type can receive `valueTypeName` in under `unbuildableWrapperLabel`. A
+		/// `SendableLazilyInstantiated` requires a `Sendable` instance, which only a graph with `Sendable` helper
+		/// types declares, and a `Sendable` graph's types store only `Sendable` wrappers.
+		private var unbuildableWrappers: [String] {
+			switch sendability {
+			case .nonSendable:
+				["Instantiator", "LazilyInstantiated"]
+			case .sendable:
+				["SendableInstantiator", "SendableLazilyInstantiated"]
+			case .mixed:
+				["Instantiator", "LazilyInstantiated", "SendableInstantiator", "SendableLazilyInstantiated"]
+			}
 		}
 
 		private func lazilyInstantiatedWrapper(isSendable: Bool) -> String {
@@ -742,7 +768,7 @@ enum GraphFuzzerGenerator {
 					"}",
 				]
 			} else if declaration.name == "\(prefix)Root0" {
-				lines += ["", "public final class \(valueTypeName)\(helperTypesAreSendable ? ": Sendable" : "") {}"]
+				lines += ["", "public final class \(valueTypeName): Instantiable\(helperTypesAreSendable ? ", Sendable" : "") {}"]
 			}
 			return lines.joined(separator: "\n") + "\n"
 		}
@@ -780,6 +806,8 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case sameLabelWithDifferentTypes
 	/// A graph whose properties use both `Sendable` wrappers and wrappers that are not `Sendable`.
 	case sendableAndNonSendableWrappers
+	/// One label received as two different wrappers of a type that is not `@Instantiable`.
+	case sameLabelReceivedAsDifferentUnbuildableWrappers
 	/// A default-valued parameter of an extension's `instantiate(…)` method.
 	case defaultValuedInstantiateParameter
 
@@ -794,6 +822,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		var lazilyInstantiatedInstanceTypesByLabel = [String: Set<String>]()
 		var receivedTypesByLabel = [String: Set<String>]()
 		var instantiationEdges = [GraphFuzzerInstantiationEdge]()
+		var unbuildableWrapperTypesByLabel = [String: Set<String>]()
 		var usesSendableWrapper = false
 		var usesNonSendableWrapper = false
 		for content in fixture.swiftFileContent {
@@ -824,6 +853,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					}
 					if attribute == "@Received" || attribute == "@Received(onlyIfAvailable: true)" {
 						receivedTypesByLabel[label, default: []].insert(nonOptionalType)
+						if nonOptionalType.hasSuffix("<\(fixture.typeNamePrefix)Value>") {
+							unbuildableWrapperTypesByLabel[label, default: []].insert(nonOptionalType)
+						}
 					}
 					features.formUnion(Self.features(ofPropertyWithAttribute: attribute, type: type))
 					if ["SendableInstantiator<", "SendableErasedInstantiator<", "SendableLazilyInstantiated<"].contains(where: type.hasPrefix) {
@@ -857,6 +889,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		if GraphFuzzerInstantiationEdge.containsLazyCycle(instantiationEdges) {
 			features.insert(.lazyCycle)
+		}
+		if unbuildableWrapperTypesByLabel.values.contains(where: { $0.count > 1 }) {
+			features.insert(.sameLabelReceivedAsDifferentUnbuildableWrappers)
 		}
 		if usesSendableWrapper, usesNonSendableWrapper {
 			features.insert(.sendableAndNonSendableWrappers)
