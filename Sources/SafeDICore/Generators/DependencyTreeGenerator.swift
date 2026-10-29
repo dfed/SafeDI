@@ -1636,23 +1636,21 @@ public actor DependencyTreeGenerator {
 			instancePropertiesOfLazilyInstantiatedProperties.insert(instanceProperty)
 		}
 
-		// Track promoted (label, type) pairs to prevent duplicate promotions when
-		// both required and onlyIfAvailable versions of the same dep exist.
-		// Property.< sorts non-optional before optional, so the required version
-		// wins and the optional version is skipped.
-		var promotedPropertiesToGenerate = [Scope.PropertyToGenerate]()
-		var promotedLabelAndTypes = Set<String>()
-		for receivedProperty in allReceived.union(lazilyInstantiatedPropertiesToPromote).sorted() {
+		// Each form of a dependency the tree receives under one label is promoted on its own: `x: X`,
+		// `x: Instantiator<X>` and `x: ErasedInstantiator<(), AnyX>` are each built, under a name of its own, for
+		// the receivers of that form. Only an optional form is not promoted beside its non-optional form: the
+		// mock binds what it builds to a non-optional value, which a receive of the optional form is handed too.
+		let propertiesToPromote = allReceived.union(lazilyInstantiatedPropertiesToPromote).filter { receivedProperty in
 			// A forwarded `x: X` fulfills an `x: X?` too.
-			guard lazilyInstantiatedPropertiesToPromote.contains(receivedProperty) || !allOnlyIfAvailable.contains(receivedProperty),
-			      !forwardedProperties.contains(receivedProperty),
-			      !forwardedProperties.contains(receivedProperty.asUnwrappedProperty),
-			      !instancePropertiesOfLazilyInstantiatedProperties.contains(receivedProperty)
-			else { continue }
-
-			let labelAndType = "\(receivedProperty.label):\(receivedProperty.typeDescription.asInstantiatedType.asSource)"
-			guard promotedLabelAndTypes.insert(labelAndType).inserted else { continue }
-
+			(lazilyInstantiatedPropertiesToPromote.contains(receivedProperty) || !allOnlyIfAvailable.contains(receivedProperty))
+				&& !forwardedProperties.contains(receivedProperty)
+				&& !forwardedProperties.contains(receivedProperty.asUnwrappedProperty)
+				&& !instancePropertiesOfLazilyInstantiatedProperties.contains(receivedProperty)
+		}
+		var promotedPropertiesToGenerate = [Scope.PropertyToGenerate]()
+		for receivedProperty in propertiesToPromote.sorted()
+			where receivedProperty.asUnwrappedProperty == receivedProperty || !propertiesToPromote.contains(receivedProperty.asUnwrappedProperty)
+		{
 			guard let (receivedScope, erasedToConcreteExistential) = scopeToPromote(for: receivedProperty) else {
 				continue
 			}

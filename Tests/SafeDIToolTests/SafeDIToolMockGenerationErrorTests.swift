@@ -2500,6 +2500,108 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTreeOfTypeReceivedByValueReceivesItsInstantiator_andTypeSortsBeforeInstantiator() async {
+		// Consumer receives `x: Abc`, and the Inner that Abc instantiates receives `x: Instantiator<Abc>`. The mock
+		// builds both forms, and the Abc that the Instantiator builds needs that Instantiator.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Inner.swift"]):4:5: error: Dependency cycle: `Instantiator<Abc>` -> `Inner` -> `Instantiator<Abc>`. `Inner` receives `x: Instantiator<Abc>` inside the tree that `x` builds. Declare `x: Instantiator<Abc>` on `Inner` as @Instantiated instead of @Received.
+				\(fixtures["Abc.swift"]):1:1: note: `Abc` is part of the cycle
+				\(fixtures["Inner.swift"]):1:1: note: `Inner` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct Root: Instantiable {
+					    public init(consumer: Consumer) { self.consumer = consumer }
+					    @Instantiated let consumer: Consumer
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Consumer: Instantiable {
+					    public init(x: Abc) { self.x = x }
+					    @Received let x: Abc
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Abc: Instantiable {
+					    public init(inner: Inner) { self.inner = inner }
+					    @Instantiated let inner: Inner
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Inner: Instantiable {
+					    public init(x: Instantiator<Abc>) { self.x = x }
+					    @Received let x: Instantiator<Abc>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTreeOfTypeReceivedByValueReceivesItsInstantiator_andTypeSortsAfterInstantiator() async {
+		// The graph of the test above with `Abc` renamed to `Xyz`, which sorts after `Instantiator<Xyz>`. The
+		// error is the same, with the type renamed.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Inner.swift"]):4:5: error: Dependency cycle: `Instantiator<Xyz>` -> `Inner` -> `Instantiator<Xyz>`. `Inner` receives `x: Instantiator<Xyz>` inside the tree that `x` builds. Declare `x: Instantiator<Xyz>` on `Inner` as @Instantiated instead of @Received.
+				\(fixtures["Xyz.swift"]):1:1: note: `Xyz` is part of the cycle
+				\(fixtures["Inner.swift"]):1:1: note: `Inner` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct Root: Instantiable {
+					    public init(consumer: Consumer) { self.consumer = consumer }
+					    @Instantiated let consumer: Consumer
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Consumer: Instantiable {
+					    public init(x: Xyz) { self.x = x }
+					    @Received let x: Xyz
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Xyz: Instantiable {
+					    public init(inner: Inner) { self.inner = inner }
+					    @Instantiated let inner: Inner
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Inner: Instantiable {
+					    public init(x: Instantiator<Xyz>) { self.x = x }
+					    @Received let x: Instantiator<Xyz>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()
