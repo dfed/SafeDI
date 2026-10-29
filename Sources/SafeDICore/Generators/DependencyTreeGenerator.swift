@@ -349,6 +349,8 @@ public actor DependencyTreeGenerator {
 			return results
 		}
 
+		let nodesReadingConfiguration = try await validateConfigurationsAreBuiltOneWay(mockRoots: mockRoots, cycleEdges: cycleEdges)
+
 		let rootedTypeNames = Set(generatedRoots.map(\.root.typeDescription.asSource))
 		// Deduplicate configuration types by type name across all roots.
 		// With cycleEdges applied uniformly, every root produces the same struct
@@ -363,8 +365,13 @@ public actor DependencyTreeGenerator {
 			for configurationType in result.configurationTypes {
 				let typeName = configurationType.concreteType.asSource
 				if seenTypeNames.insert(typeName).inserted {
+					// The first node can be one that reads nothing from the struct, beneath a cycle edge, built
+					// the other way from the nodes that read it. The struct must describe those that read it.
+					let structNode = nodesReadingConfiguration[configurationType.concreteType].flatMap { nodeReadingConfiguration in
+						nodeReadingConfiguration.configurationRequirements == configurationType.configurationRequirements ? nil : nodeReadingConfiguration
+					} ?? configurationType
 					let structCode = ScopeGenerator.generateConfigurationStruct(
-						for: configurationType,
+						for: structNode,
 						cycleEdges: cycleEdges,
 						sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 					)
@@ -409,6 +416,67 @@ public actor DependencyTreeGenerator {
 			generatedRoots: mergedGeneratedRoots,
 			mockConfigurationCode: mockConfigurationCode,
 		)
+	}
+
+	/// Rejects a type that generated mocks build both with its hand-written mock and without it, when the two
+	/// constructions need different `SafeDIMockConfiguration` structs. Mocks generate one struct per type, so the
+	/// construction the struct does not describe would not compile.
+	///
+	/// A property is built with its type's hand-written mock only when the mock returns a type the property accepts
+	/// (see `createMockTypeDescriptionToScopeMapping`), so a mock that returns one of the type's additional types
+	/// builds some of its properties and not others. A construction that needs no struct is built from a closure
+	/// typed by its property, so it never conflicts.
+	///
+	/// A node beneath an edge in `cycleEdges` reads nothing from its struct, so it is not compared.
+	///
+	/// - Parameter mockRoots: The mock roots in concrete type order, so the properties a diagnostic names are
+	///   the same on every run.
+	/// - Returns: For each type with a hand-written mock, the first node that reads its struct. When the type
+	///   is built both ways, the two kinds of node read the same struct, so either describes it.
+	private func validateConfigurationsAreBuiltOneWay(
+		mockRoots: [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)],
+		cycleEdges: Set<ScopeGenerator.CycleEdge>,
+	) async throws -> [TypeDescription: ScopeGenerator.MockParameterNode] {
+		var mockDeclarationLocations = [TypeDescription: Set<Dependency.DeclarationLocation?>]()
+		for instantiable in typeDescriptionToFulfillingInstantiableMap.values where instantiable.mockInitializer != nil {
+			mockDeclarationLocations[instantiable.concreteInstantiable, default: []].insert(instantiable.mockDeclarationLocation)
+		}
+		guard !mockDeclarationLocations.isEmpty else { return [:] }
+
+		var firstNodes = [ScopeGenerator.ConstructedType: ScopeGenerator.BuiltMockParameterNode]()
+		for (instantiable, mockRoot) in mockRoots {
+			for builtNode in await mockRoot.collectConfigurationNodesByConstruction(
+				of: Set(mockDeclarationLocations.keys),
+				mockRoot: instantiable.concreteInstantiable,
+				cycleEdges: cycleEdges,
+			) {
+				let constructedType = ScopeGenerator.ConstructedType(concreteType: builtNode.node.concreteType, usesMockInitializer: builtNode.node.useMockInitializer)
+				firstNodes[constructedType] = firstNodes[constructedType] ?? builtNode
+			}
+		}
+
+		let conflicts = mockDeclarationLocations.keys.compactMap { concreteType -> DependencyTreeGeneratorError.ConfigurationBuiltTwoWays? in
+			guard let builtByMock = firstNodes[ScopeGenerator.ConstructedType(concreteType: concreteType, usesMockInitializer: true)],
+			      let builtWithoutMock = firstNodes[ScopeGenerator.ConstructedType(concreteType: concreteType, usesMockInitializer: false)],
+			      builtByMock.node.configurationRequirements != builtWithoutMock.node.configurationRequirements
+			else { return nil }
+			return DependencyTreeGeneratorError.ConfigurationBuiltTwoWays(
+				concreteType: concreteType,
+				mockDeclarationLocations: Array(mockDeclarationLocations[concreteType, default: []]),
+				builtByMock: builtByMock,
+				builtWithoutMock: builtWithoutMock,
+			)
+		}
+		guard conflicts.isEmpty else {
+			throw DependencyTreeGeneratorError.configurationBuiltTwoWays(conflicts)
+		}
+		// Without a conflict, a type built both ways reads one struct either way; prefer the `init`-built node so the
+		// choice does not depend on dictionary order.
+		return mockDeclarationLocations.keys.reduce(into: [TypeDescription: ScopeGenerator.MockParameterNode]()) { result, concreteType in
+			let builtWithoutMock = firstNodes[ScopeGenerator.ConstructedType(concreteType: concreteType, usesMockInitializer: false)]
+			let builtByMock = firstNodes[ScopeGenerator.ConstructedType(concreteType: concreteType, usesMockInitializer: true)]
+			result[concreteType] = (builtWithoutMock ?? builtByMock)?.node
+		}
 	}
 
 	/// A mock root's generated code, with the nodes of the types whose `SafeDIMockConfiguration`
@@ -543,9 +611,17 @@ public actor DependencyTreeGenerator {
 		case aliasedDependenciesFulfillOneAnother(aliasChain: [Property], declarationLocation: Dependency.DeclarationLocation?)
 		/// Reported at the hand-written `mock` method of a type whose `mock()` this module also generates.
 		case handWrittenMockSharesGeneratedMockName(TypeDescription, declaredAt: [Dependency.DeclarationLocation?], isGeneratedForAdditionalMocksToGenerate: Bool)
+		/// Reported at the hand-written mock of each type that generated mocks build both with that mock and
+		/// without it, in ways one `SafeDIMockConfiguration` struct cannot describe. See `ConfigurationBuiltTwoWays`.
+		case configurationBuiltTwoWays([ConfigurationBuiltTwoWays])
 
 		var sourceDiagnostics: [SourceDiagnostic] {
 			switch self {
+			case let .configurationBuiltTwoWays(configurationsBuiltTwoWays):
+				// Sorted by location so the order never depends on map iteration.
+				configurationsBuiltTwoWays
+					.flatMap(\.sourceDiagnostics)
+					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 			case let .handWrittenMockSharesGeneratedMockName(typeDescription, declaredAt, isGeneratedForAdditionalMocksToGenerate):
 				// Sorted by location so the order never depends on map iteration.
 				declaredAt
@@ -663,6 +739,42 @@ public actor DependencyTreeGenerator {
 				"`\(typeName)` cannot have a hand-written `mock()` method because this module generates a `mock()` method for it (it is listed in `additionalMocksToGenerate`), and the generated and hand-written methods would have ambiguous signatures. Give the hand-written method a different name and pass that name as `customMockName` on the `@\(InstantiableVisitor.macroName)` that declares it, or remove `\(typeName)` from `additionalMocksToGenerate`."
 			} else {
 				"`\(typeName)` cannot have a hand-written `mock()` method because it is decorated with `@\(InstantiableVisitor.macroName)(generateMock: true)`, and the generated and hand-written methods would have ambiguous signatures. Give the hand-written method a different name and pass that name as `customMockName` on the `@\(InstantiableVisitor.macroName)` that declares it."
+			}
+		}
+
+		/// A type that generated mocks build with its hand-written mock for one property and without it for another,
+		/// where the two constructions read different `SafeDIMockConfiguration` structs.
+		struct ConfigurationBuiltTwoWays {
+			let concreteType: TypeDescription
+			/// Where the hand-written mock is declared. Several map entries can carry the same mock.
+			let mockDeclarationLocations: [Dependency.DeclarationLocation?]
+			/// The first node, in mock root order, that the hand-written mock builds.
+			let builtByMock: ScopeGenerator.BuiltMockParameterNode
+			/// The first node, in mock root order, built without the hand-written mock.
+			let builtWithoutMock: ScopeGenerator.BuiltMockParameterNode
+
+			var sourceDiagnostics: [SourceDiagnostic] {
+				let typeName = "`\(concreteType.asSource)`"
+				let mockName = "`\(builtByMock.node.customMockName ?? InstantiableVisitor.mockMethodName)`"
+				// Built without its mock, a type declared by an extension calls its `instantiate(…)` method, whose
+				// default-valued parameters are fields of the struct, as an initializer's are.
+				let construction = if builtWithoutMock.node.isExtensionBased {
+					"`\(InstantiableVisitor.instantiateMethodName)(…)` method"
+				} else {
+					"initializer"
+				}
+				let message = "Generated mocks build \(typeName) with its hand-written \(mockName) method for \(Self.describe(builtByMock)),"
+					+ " and with its \(construction) for \(Self.describe(builtWithoutMock))."
+					+ " The two take different parameters, but both properties are configured with one `\(concreteType.asSource).\(ScopeGenerator.MockParameterNode.configurationStructName)`."
+					+ " Make \(mockName) return \(typeName), so that it builds both properties, or give \(mockName) exactly the parameters of \(typeName)’s \(construction), in the same order."
+				return mockDeclarationLocations.map {
+					SourceDiagnostic(severity: .error, location: $0, message: message)
+				}
+			}
+
+			/// The property a node builds, the type that declares it, and the generated mock that builds it.
+			private static func describe(_ builtNode: ScopeGenerator.BuiltMockParameterNode) -> String {
+				"`\(builtNode.node.property.asSource)` on `\(builtNode.parent.asSource)` in `\(builtNode.mockRoot.asSource).\(InstantiableVisitor.mockMethodName)()`"
 			}
 		}
 

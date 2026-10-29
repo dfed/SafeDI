@@ -801,6 +801,370 @@ struct SafeDIToolMockOnlyErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTypeIsBuiltByHandWrittenMockAndByInitializerThatTakeDifferentDependencies() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["File.swift"]):3:5: error: Generated mocks build `MyService` with its hand-written `mock` method for `service: ServiceProtocol` on `Parent` in `Parent.mock()`, and with its initializer for `concreteService: MyService` on `Parent` in `Parent.mock()`. The two take different parameters, but both properties are configured with one `MyService.SafeDIMockConfiguration`. Make `mock` return `MyService`, so that it builds both properties, or give `mock` exactly the parameters of `MyService`’s initializer, in the same order.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct Parent: Instantiable {
+					    public init(service: ServiceProtocol, concreteService: MyService) {
+					        self.service = service
+					        self.concreteService = concreteService
+					    }
+					    @Instantiated let service: ServiceProtocol
+					    @Instantiated let concreteService: MyService
+					}
+					""",
+					"""
+					public protocol ServiceProtocol {}
+					""",
+					"""
+					@Instantiable
+					public struct Database: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Logger: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self])
+					public struct MyService: ServiceProtocol, Instantiable {
+					    public init(database: Database, logger: Logger) {
+					        self.database = database
+					        self.logger = logger
+					    }
+					    @Instantiated let database: Database
+					    @Instantiated let logger: Logger
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
+					extension MyService {
+					    public static func mock(database: Database = Database()) -> ServiceProtocol { MyService(database: database, logger: Logger()) }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTypeIsBuiltByHandWrittenMockWithDefaultParameterAndByInitializer() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["File.swift"]):3:5: error: Generated mocks build `MyService` with its hand-written `mock` method for `service: ServiceProtocol` on `Parent` in `Parent.mock()`, and with its initializer for `concreteService: MyService` on `Parent` in `Parent.mock()`. The two take different parameters, but both properties are configured with one `MyService.SafeDIMockConfiguration`. Make `mock` return `MyService`, so that it builds both properties, or give `mock` exactly the parameters of `MyService`’s initializer, in the same order.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct Parent: Instantiable {
+					    public init(service: ServiceProtocol, concreteService: MyService) {
+					        self.service = service
+					        self.concreteService = concreteService
+					    }
+					    @Instantiated let service: ServiceProtocol
+					    @Instantiated let concreteService: MyService
+					}
+					""",
+					"""
+					public protocol ServiceProtocol {}
+					""",
+					"""
+					@Instantiable
+					public struct Database: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self])
+					public struct MyService: ServiceProtocol, Instantiable {
+					    public init(database: Database) {
+					        self.database = database
+					    }
+					    @Instantiated let database: Database
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
+					extension MyService {
+					    public static func mock(database: Database = Database(), name: String = "mock") -> ServiceProtocol { MyService(database: database) }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTypeIsBuiltByHandWrittenMockAndByInitializerThatTakeDependenciesInDifferentOrder() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["File.swift"]):3:5: error: Generated mocks build `MyService` with its hand-written `preview` method for `service: ServiceProtocol` on `Parent` in `Parent.mock()`, and with its initializer for `concreteService: MyService` on `Parent` in `Parent.mock()`. The two take different parameters, but both properties are configured with one `MyService.SafeDIMockConfiguration`. Make `preview` return `MyService`, so that it builds both properties, or give `preview` exactly the parameters of `MyService`’s initializer, in the same order.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct Parent: Instantiable {
+					    public init(service: ServiceProtocol, concreteService: MyService) {
+					        self.service = service
+					        self.concreteService = concreteService
+					    }
+					    @Instantiated let service: ServiceProtocol
+					    @Instantiated let concreteService: MyService
+					}
+					""",
+					"""
+					public protocol ServiceProtocol {}
+					""",
+					"""
+					@Instantiable
+					public struct Database: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Logger: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self])
+					public struct MyService: ServiceProtocol, Instantiable {
+					    public init(database: Database, logger: Logger) {
+					        self.database = database
+					        self.logger = logger
+					    }
+					    @Instantiated let database: Database
+					    @Instantiated let logger: Logger
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true, customMockName: "preview")
+					extension MyService {
+					    public static func preview(logger: Logger = Logger(), database: Database = Database()) -> ServiceProtocol { MyService(database: database, logger: logger) }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTypeIsBuiltByInitializerInRootThatSortsFirstAndByHandWrittenMockInRootThatSortsLast() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["File.swift"]):3:5: error: Generated mocks build `MyService` with its hand-written `mock` method for `service: ServiceProtocol` on `ZParent` in `ZParent.mock()`, and with its initializer for `concreteService: MyService` on `AParent` in `AParent.mock()`. The two take different parameters, but both properties are configured with one `MyService.SafeDIMockConfiguration`. Make `mock` return `MyService`, so that it builds both properties, or give `mock` exactly the parameters of `MyService`’s initializer, in the same order.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct AParent: Instantiable {
+					    public init(concreteService: MyService) {
+					        self.concreteService = concreteService
+					    }
+					    @Instantiated let concreteService: MyService
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public struct ZParent: Instantiable {
+					    public init(service: ServiceProtocol) {
+					        self.service = service
+					    }
+					    @Instantiated let service: ServiceProtocol
+					}
+					""",
+					"""
+					public protocol ServiceProtocol {}
+					""",
+					"""
+					@Instantiable
+					public struct Database: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Logger: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self])
+					public struct MyService: ServiceProtocol, Instantiable {
+					    public init(database: Database, logger: Logger) {
+					        self.database = database
+					        self.logger = logger
+					    }
+					    @Instantiated let database: Database
+					    @Instantiated let logger: Logger
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
+					extension MyService {
+					    public static func mock(database: Database = Database()) -> ServiceProtocol { MyService(database: database, logger: Logger()) }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTypeIsBuiltByHandWrittenMockInRootThatSortsFirstAndByInitializerInRootThatSortsLast() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["File.swift"]):3:5: error: Generated mocks build `MyService` with its hand-written `mock` method for `service: ServiceProtocol` on `AParent` in `AParent.mock()`, and with its initializer for `concreteService: MyService` on `ZParent` in `ZParent.mock()`. The two take different parameters, but both properties are configured with one `MyService.SafeDIMockConfiguration`. Make `mock` return `MyService`, so that it builds both properties, or give `mock` exactly the parameters of `MyService`’s initializer, in the same order.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct AParent: Instantiable {
+					    public init(service: ServiceProtocol) {
+					        self.service = service
+					    }
+					    @Instantiated let service: ServiceProtocol
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public struct ZParent: Instantiable {
+					    public init(concreteService: MyService) {
+					        self.concreteService = concreteService
+					    }
+					    @Instantiated let concreteService: MyService
+					}
+					""",
+					"""
+					public protocol ServiceProtocol {}
+					""",
+					"""
+					@Instantiable
+					public struct Database: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Logger: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self])
+					public struct MyService: ServiceProtocol, Instantiable {
+					    public init(database: Database, logger: Logger) {
+					        self.database = database
+					        self.logger = logger
+					    }
+					    @Instantiated let database: Database
+					    @Instantiated let logger: Logger
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self], mockOnly: true)
+					extension MyService {
+					    public static func mock(database: Database = Database()) -> ServiceProtocol { MyService(database: database, logger: Logger()) }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsErrorNamingInstantiateMethod_whenExtensionTypeIsBuiltByHandWrittenMockAndByInstantiateWithDifferentDefaultParameters() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["File.swift"]):4:5: error: Generated mocks build `MyService` with its hand-written `mock` method for `service: ServiceProtocol` on `Parent` in `Parent.mock()`, and with its `instantiate(…)` method for `concreteService: MyService` on `Parent` in `Parent.mock()`. The two take different parameters, but both properties are configured with one `MyService.SafeDIMockConfiguration`. Make `mock` return `MyService`, so that it builds both properties, or give `mock` exactly the parameters of `MyService`’s `instantiate(…)` method, in the same order.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public struct Parent: Instantiable {
+					    public init(service: ServiceProtocol, concreteService: MyService) {
+					        self.service = service
+					        self.concreteService = concreteService
+					    }
+					    @Instantiated let service: ServiceProtocol
+					    @Instantiated let concreteService: MyService
+					}
+					""",
+					"""
+					public protocol ServiceProtocol {}
+					""",
+					"""
+					public struct MyService: ServiceProtocol {
+					    public init(title: String) {
+					        self.title = title
+					    }
+					    public let title: String
+					}
+					""",
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self])
+					extension MyService: Instantiable {
+					    public static func instantiate(title: String = "production") -> MyService { MyService(title: title) }
+					    public static func mock(name: String = "mock") -> ServiceProtocol { MyService(title: name) }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private static let generateMockNameCollisionMessage = "`MyService` cannot have a hand-written `mock()` method because it is decorated with `@Instantiable(generateMock: true)`, and the generated and hand-written methods would have ambiguous signatures. Give the hand-written method a different name and pass that name as `customMockName` on the `@Instantiable` that declares it."

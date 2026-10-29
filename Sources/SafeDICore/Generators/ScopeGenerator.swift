@@ -2129,6 +2129,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return "(\(parameterTypes)) -> \(instantiatedTypeDescription.asSource)"
 		}
 
+		/// What this node's construction reads from its `SafeDIMockConfiguration` struct. Every node of
+		/// a type shares the struct `generateMockCode` generates from the first of them, so a node
+		/// whose requirements differ from that node's cannot be built from it. `@Sendable` is left
+		/// out: it is decided once for every root (`collectSendableConfigurationTypeNames`).
+		var configurationRequirements: ConfigurationRequirements {
+			ConfigurationRequirements(
+				childProperties: propertyChildren.map(\.property),
+				defaultParameters: defaultParameters.map { Property(label: $0.label, typeDescription: $0.typeDescription) },
+				builderParameterTypes: callSiteArguments.map(\.typeDescription.asFunctionParameter),
+			)
+		}
+
+		/// See `configurationRequirements`.
+		struct ConfigurationRequirements: Equatable {
+			/// The properties the node builds itself, each read from the struct's field of the same label.
+			let childProperties: [Property]
+			/// The non-dependency default-valued parameters, each read from the struct's field of the same label.
+			let defaultParameters: [Property]
+			/// The parameter types of the struct's builder closure, which the node calls with its arguments.
+			let builderParameterTypes: [TypeDescription]
+		}
+
 		/// The builder closure type using the concrete type for the return.
 		/// Used in `SafeDIMockConfiguration` structs which are deduplicated by
 		/// concrete type and must have a single consistent builder signature.
@@ -2369,6 +2391,59 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	func collectConfigurationTypes() async -> [MockParameterNode] {
 		let parameterTree = await rootMockParameterTree
 		return Self.collectUniqueConfigurationTypes(from: parameterTree.propertyNodes)
+	}
+
+	/// A node of a mock root's parameter tree, with the type that builds the node's property.
+	struct BuiltMockParameterNode: Sendable {
+		let node: MockParameterNode
+		/// The type whose scope declares the node's property: the mock root for a node at the top of the tree.
+		let parent: TypeDescription
+		/// The mock root whose tree holds the node.
+		let mockRoot: TypeDescription
+	}
+
+	/// For each of `concreteTypes`, the first node this mock root's tree builds with the type's hand-written
+	/// mock and the first it builds without it, among the nodes that read a `SafeDIMockConfiguration` struct,
+	/// in the order this root reaches them. `generateMockCode` compares the two kinds of node across every root,
+	/// and generates the type's struct from one that reads it.
+	///
+	/// A node beneath an edge in `cycleEdges` reads nothing from its struct: its parent's struct has no field
+	/// for that edge, so the generated mock builds the node and its subtree without overrides
+	/// (`generateMockBodyBindings`). Such nodes are left out.
+	func collectConfigurationNodesByConstruction(
+		of concreteTypes: Set<TypeDescription>,
+		mockRoot: TypeDescription,
+		cycleEdges: Set<CycleEdge>,
+	) async -> [BuiltMockParameterNode] {
+		let parameterTree = await rootMockParameterTree
+		var seen = Set<ConstructedType>()
+		var result = [BuiltMockParameterNode]()
+
+		func walk(_ node: MockParameterNode, parent: TypeDescription?) {
+			let isPrunedByCycleEdge = parent.map { cycleEdges.contains(CycleEdge(parent: $0.asSource, child: node.concreteType.asSource)) } ?? false
+			guard !isPrunedByCycleEdge else { return }
+			if node.needsConfigurationStruct,
+			   concreteTypes.contains(node.concreteType),
+			   seen.insert(ConstructedType(concreteType: node.concreteType, usesMockInitializer: node.useMockInitializer)).inserted
+			{
+				result.append(BuiltMockParameterNode(node: node, parent: parent ?? mockRoot, mockRoot: mockRoot))
+			}
+			for child in node.propertyChildren {
+				walk(child, parent: node.concreteType)
+			}
+		}
+
+		for node in parameterTree.propertyNodes {
+			// A node at the top of the tree is a field of `SafeDIOverrides`, which no cycle edge prunes.
+			walk(node, parent: nil)
+		}
+		return result
+	}
+
+	/// A concrete type, and whether it is built with its hand-written mock.
+	struct ConstructedType: Hashable {
+		let concreteType: TypeDescription
+		let usesMockInitializer: Bool
 	}
 
 	/// The `SafeDIMockConfiguration` struct of a node `collectConfigurationTypes` returned.
