@@ -487,6 +487,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// per-root syntactic flag and differs between roots for the same
 		/// underlying cycle.
 		let cycleEdges: Set<CycleEdge>
+		/// For each concrete type with a hand-written mock, the mock's default-valued parameters. A type's
+		/// `SafeDIMockConfiguration` takes its defaults from them (`generateConfigurationStruct`), and a property
+		/// built with `init` beneath a pruned edge passes the struct's default for each of them
+		/// (`MockParameterNode.callSiteArgumentsForPrunedOverride(handWrittenMockDefaultParameters:)`).
+		let handWrittenMockDefaultParameters: [TypeDescription: [MockParameterNode.DefaultParameter]]
 	}
 
 	private let scopeData: ScopeData
@@ -1792,6 +1797,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				parentConcreteType: nil,
 				cycleEdges: context.cycleEdges,
 				overridePathReachable: true,
+				handWrittenMockDefaultParameters: context.handWrittenMockDefaultParameters,
 			)
 			lines.append(contentsOf: bodyBindings)
 		} else {
@@ -2167,10 +2173,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// defaults preserve correct resolution of `Self.*`, private members,
 		/// and file-scoped helpers in the default expression, which would
 		/// otherwise resolve in the wrong context if inlined at the caller.
-		var callSiteArgumentsForPrunedOverride: [Initializer.Argument] {
+		///
+		/// A node built with `init` keeps each default that its type's hand-written mock also declares, with the
+		/// same label and type, in `handWrittenMockDefaultParameters`: every other property of the type is
+		/// configured with the mock's default (`generateConfigurationStruct`), so this one is passed the default
+		/// its `SafeDIMockConfiguration` declares (`resolveBuilderArguments`), which is evaluated in the struct, as
+		/// it is for those properties. The mock's default expression is not inlined at the call site: the type's
+		/// static members and nested types it may name resolve in the struct, nested in the type's extension, but
+		/// not in the mock root's extension.
+		func callSiteArgumentsForPrunedOverride(handWrittenMockDefaultParameters: [DefaultParameter]) -> [Initializer.Argument] {
 			let dependencyInnerLabels = Set(dependencies.map(\.property.label))
 			return callSiteArguments.filter { argument in
-				dependencyInnerLabels.contains(argument.innerLabel) || !argument.hasDefaultValue
+				dependencyInnerLabels.contains(argument.innerLabel)
+					|| !argument.hasDefaultValue
+					|| (!useMockInitializer && handWrittenMockDefaultParameters.contains(where: {
+						$0.isDefault(forParameterLabeled: argument.label, ofType: argument.typeDescription.strippingEscaping)
+					}))
+			}
+		}
+
+		/// The arguments the call site passes: `callSiteArguments` when the node's override path is reachable,
+		/// `callSiteArgumentsForPrunedOverride(handWrittenMockDefaultParameters:)` otherwise.
+		func surfacedCallSiteArguments(
+			overrideReachable: Bool,
+			handWrittenMockDefaultParameters: [DefaultParameter],
+		) -> [Initializer.Argument] {
+			if overrideReachable {
+				callSiteArguments
+			} else {
+				callSiteArgumentsForPrunedOverride(handWrittenMockDefaultParameters: handWrittenMockDefaultParameters)
 			}
 		}
 
@@ -2263,8 +2294,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			overrideExpression: String?,
 			arguments: [String],
 			overrideReachable: Bool,
+			handWrittenMockDefaultParameters: [DefaultParameter],
 		) -> String {
-			let defaultCall = defaultBuilderCall(arguments: arguments, overrideReachable: overrideReachable)
+			let defaultCall = defaultBuilderCall(
+				arguments: arguments,
+				overrideReachable: overrideReachable,
+				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+			)
 			let defaultConstruction = if erasedToConcreteExistential {
 				"\(concreteExistentialType.asSource)(\(defaultCall))"
 			} else {
@@ -2291,11 +2327,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		///
 		/// Pass `overrideReachable: false` when the call lives on a pruned
 		/// back-edge path where `resolveBuilderArguments` returned values for
-		/// `callSiteArgumentsForPrunedOverride` rather than `callSiteArguments`.
+		/// `callSiteArgumentsForPrunedOverride` rather than `callSiteArguments`,
+		/// and the same `handWrittenMockDefaultParameters` it was given.
 		/// Zipping against the wrong signature would shift labels for arguments
 		/// that follow an elided default (e.g. `init(a: A, b: B = ..., c: C)`
 		/// with `b` elided would emit `C`'s value under label `b`).
-		private func defaultBuilderCall(arguments: [String], overrideReachable: Bool) -> String {
+		private func defaultBuilderCall(
+			arguments: [String],
+			overrideReachable: Bool,
+			handWrittenMockDefaultParameters: [DefaultParameter],
+		) -> String {
 			let methodName: String = if useMockInitializer {
 				customMockName ?? InstantiableVisitor.mockMethodName
 			} else if isExtensionBased {
@@ -2303,7 +2344,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				"init"
 			}
-			let surfacedArguments = overrideReachable ? callSiteArguments : callSiteArgumentsForPrunedOverride
+			let surfacedArguments = surfacedCallSiteArguments(
+				overrideReachable: overrideReachable,
+				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+			)
 			let labeledArguments = zip(surfacedArguments, arguments)
 				.map { $0.0.label == "_" ? $0.1 : "\($0.0.label): \($0.1)" }
 				.joined(separator: ", ")
@@ -2324,6 +2368,30 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let defaultExpression: String
 			/// Whether the parameter type is a closure/function type.
 			let isClosureType: Bool
+
+			/// Whether this is the default of a parameter with `label` and `typeDescription`. The type check is
+			/// load-bearing: a hand-written mock's `count: Double = 0.5` is no default for `init`'s `count: Int`.
+			func isDefault(forParameterLabeled label: String, ofType typeDescription: TypeDescription) -> Bool {
+				self.label == label && self.typeDescription == typeDescription
+			}
+
+			/// The labeled, default-valued parameters of `initializer` that fulfill none of `dependencies`, which a
+			/// generated mock offers as overrides.
+			static func defaultParameters(of initializer: Initializer, dependencies: [Dependency]) -> [DefaultParameter] {
+				let dependencyLabels = Set(dependencies.map(\.property.label))
+				return initializer.arguments.compactMap { argument in
+					guard !dependencyLabels.contains(argument.innerLabel),
+					      argument.label != "_",
+					      let defaultExpression = argument.defaultValueExpression
+					else { return nil }
+					return DefaultParameter(
+						label: argument.label,
+						typeDescription: argument.typeDescription.strippingEscaping,
+						defaultExpression: defaultExpression,
+						isClosureType: argument.typeDescription.strippingEscaping.isClosure,
+					)
+				}
+			}
 		}
 	}
 
@@ -2407,9 +2475,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// in the order this root reaches them. `generateMockCode` compares the two kinds of node across every root,
 	/// and generates the type's struct from one that reads it.
 	///
-	/// A node beneath an edge in `cycleEdges` reads nothing from its struct: its parent's struct has no field
+	/// A node beneath an edge in `cycleEdges` reads no overrides from its struct: its parent's struct has no field
 	/// for that edge, so the generated mock builds the node and its subtree without overrides
-	/// (`generateMockBodyBindings`). Such nodes are left out.
+	/// (`generateMockBodyBindings`). Such nodes are left out. One built with `init` reads the defaults of a struct
+	/// it builds afresh, but only for parameters the hand-written mock also defaults, with the same label and type,
+	/// which the struct declares whichever kind of node it is generated from.
 	func collectConfigurationNodesByConstruction(
 		of concreteTypes: Set<TypeDescription>,
 		mockRoot: TypeDescription,
@@ -2455,16 +2525,27 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// struct must be `@Sendable`-typed because some root references them from a
 	/// `SendableInstantiator` scope. The set is computed once across all roots so
 	/// struct-per-type dedup remains consistent.
+	///
+	/// `handWrittenMockDefaultParameters` are the default-valued parameters of the type's hand-written mock, if it
+	/// has one. A field for a parameter of the same label and type takes its default from there, whether `node` is
+	/// built with the mock or with `init`, so every property of the type is configured with the defaults the mock
+	/// declares, whichever node the struct is generated from.
 	static func generateConfigurationStruct(
 		for node: MockParameterNode,
 		cycleEdges: Set<CycleEdge>,
 		sendableConfigurationTypeNames: Set<String>,
+		handWrittenMockDefaultParameters: [MockParameterNode.DefaultParameter],
 	) -> String {
 		generateConfigurationStruct(
 			for: node,
 			indent: standardIndent,
 			cycleEdges: cycleEdges,
 			requiresSendable: sendableConfigurationTypeNames.contains(node.concreteType.asSource),
+			defaultExpression: { defaultParameter in
+				handWrittenMockDefaultParameters.first(where: {
+					$0.isDefault(forParameterLabeled: defaultParameter.label, ofType: defaultParameter.typeDescription)
+				})?.defaultExpression ?? defaultParameter.defaultExpression
+			},
 		)
 	}
 
@@ -2558,19 +2639,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				var constructionArguments = [Initializer.Argument]()
 				if let constructionInitializer {
 					constructionArguments = constructionInitializer.arguments
-					let dependencyLabels = Set(childInstantiable.dependencies.map(\.property.label))
-					for argument in constructionInitializer.arguments where argument.hasDefaultValue {
-						guard !dependencyLabels.contains(argument.innerLabel),
-						      argument.label != "_",
-						      let defaultExpression = argument.defaultValueExpression
-						else { continue }
-						defaultParameters.append(MockParameterNode.DefaultParameter(
-							label: argument.label,
-							typeDescription: argument.typeDescription.strippingEscaping,
-							defaultExpression: defaultExpression,
-							isClosureType: argument.typeDescription.strippingEscaping.isClosure,
-						))
-					}
+					defaultParameters = MockParameterNode.DefaultParameter.defaultParameters(
+						of: constructionInitializer,
+						dependencies: childInstantiable.dependencies,
+					)
 				}
 
 				// Collect forwarded properties for Instantiator edges.
@@ -2942,6 +3014,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		indent: String,
 		cycleEdges: Set<CycleEdge>,
 		requiresSendable: Bool,
+		defaultExpression: (MockParameterNode.DefaultParameter) -> String,
 	) -> String {
 		let innerIndent = "\(indent)\(standardIndent)"
 		let sendableAnnotation = requiresSendable ? "@Sendable " : ""
@@ -2996,10 +3069,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// Only add @Sendable if this struct requires it AND the type doesn't already have it.
 			let closureSendable = (requiresSendable && !typeSource.contains("@Sendable")) ? "@Sendable " : ""
 			if defaultParameter.isClosureType {
-				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(closureSendable)@escaping \(typeSource) = \(defaultParameter.defaultExpression)")
+				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(closureSendable)@escaping \(typeSource) = \(defaultExpression(defaultParameter))")
 				storedProperties.append("\(innerIndent)let \(defaultParameter.label): \(closureSendable)\(typeSource)")
 			} else {
-				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(typeSource) = \(defaultParameter.defaultExpression)")
+				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(typeSource) = \(defaultExpression(defaultParameter))")
 				storedProperties.append("\(innerIndent)let \(defaultParameter.label): \(typeSource)")
 			}
 			assignments.append("\(innerIndent)\(standardIndent)self.\(defaultParameter.label) = \(defaultParameter.label)")
@@ -3091,6 +3164,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		parentConcreteType: String?,
 		cycleEdges: Set<CycleEdge>,
 		overridePathReachable: Bool,
+		handWrittenMockDefaultParameters: [TypeDescription: [MockParameterNode.DefaultParameter]],
 	) -> [String] {
 		var lines = [String]()
 
@@ -3187,17 +3261,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					node.overridePath(nodePath: nodePath)
 				}
 
+				let nodeHandWrittenMockDefaultParameters = handWrittenMockDefaultParameters[node.concreteType, default: []]
 				let arguments = resolveBuilderArguments(
 					for: node,
 					nodePath: nodePath,
 					lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
 					sendableOverrideExtractor: sendableOverrideExtractor,
 					overrideReachable: thisOverrideReachable,
+					handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
 				)
 				let constructionExpression = node.constructionExpression(
 					overrideExpression: overrideExpression,
 					arguments: arguments,
 					overrideReachable: thisOverrideReachable,
+					handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
 				)
 
 				if node.isInstantiator {
@@ -3222,6 +3299,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
 						cycleEdges: cycleEdges,
 						overridePathReachable: thisOverrideReachable,
+						handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 					))
 				} else if node.requiresFunctionWrapper || hasDisambiguatedReceiver(node, flatParameterDisambiguationMap: combinedDisambiguationMap) {
 					// Constant node that needs a dedicated Swift scope — either for its
@@ -3264,6 +3342,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						parentConcreteType: node.concreteType.asSource,
 						cycleEdges: cycleEdges,
 						overridePathReachable: thisOverrideReachable,
+						handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 					)
 
 					// The function's return type gives both branches of the `if`
@@ -3404,12 +3483,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `unavailableProperties` are passed `nil` instead. Non-dependency
 	/// arguments come from `SafeDIOverrides` storage. Unlabeled defaults are
 	/// omitted entirely so Swift's default-argument thunk fires in the callee.
+	/// Beneath a pruned edge, where the node has no `SafeDIOverrides` storage,
+	/// a non-dependency argument is the default its `SafeDIMockConfiguration`
+	/// declares (see `callSiteArgumentsForPrunedOverride(handWrittenMockDefaultParameters:)`).
 	private static func resolveBuilderArguments(
 		for node: MockParameterNode,
 		nodePath: String,
 		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
 		sendableOverrideExtractor: SendableOverrideExtractor?,
 		overrideReachable: Bool,
+		handWrittenMockDefaultParameters: [MockParameterNode.DefaultParameter],
 	) -> [String] {
 		let dependenciesByLabel = Dictionary(
 			uniqueKeysWithValues: node.dependencies.map { ($0.property.label, $0) },
@@ -3417,9 +3500,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let relativePath = nodePath
 			.replacingOccurrences(of: "\(ReservedName.mockOverridesParameterName).", with: "")
 			.replacingOccurrences(of: ".", with: "_")
-		let argumentsToSurface = overrideReachable
-			? node.callSiteArguments
-			: node.callSiteArgumentsForPrunedOverride
+		let argumentsToSurface = node.surfacedCallSiteArguments(
+			overrideReachable: overrideReachable,
+			handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+		)
 		return argumentsToSurface.map { argument in
 			if let dependency = dependenciesByLabel[argument.innerLabel] {
 				if node.unavailableProperties.contains(dependency.property) {
@@ -3436,6 +3520,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				} else {
 					argument.innerLabel
 				}
+			} else if !overrideReachable {
+				// The struct is built afresh, so nothing is read from `SafeDIOverrides`, even inside a `@Sendable` function.
+				"\(node.configurationTypeName)().\(argument.label)"
 			} else if let sendableOverrideExtractor {
 				sendableOverrideExtractor.extract(
 					"\(nodePath).\(argument.label)",
@@ -3473,6 +3560,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
 		cycleEdges: Set<CycleEdge>,
 		overridePathReachable: Bool,
+		handWrittenMockDefaultParameters: [TypeDescription: [MockParameterNode.DefaultParameter]],
 	) -> [String] {
 		let forwardedProperties = node.forwardedProperties.sorted()
 		let propertyType = node.typeDescription.propertyType
@@ -3562,8 +3650,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				parentConcreteType: node.concreteType.asSource,
 				cycleEdges: cycleEdges,
 				overridePathReachable: overridePathReachable,
+				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 			)
 
+			let nodeHandWrittenMockDefaultParameters = handWrittenMockDefaultParameters[node.concreteType, default: []]
 			let functionOverrideExpression: String?
 			let functionConstructionArguments: [String]
 			if let startedSendableOverrideExtractor {
@@ -3579,6 +3669,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
 					sendableOverrideExtractor: startedSendableOverrideExtractor,
 					overrideReachable: overridePathReachable,
+					handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
 				)
 				functionOverrideExpression = overrideExpression.map {
 					startedSendableOverrideExtractor.extract($0, localNameSuffix: ReservedName.configurationBuilderPropertyName)
@@ -3606,6 +3697,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				overrideExpression: functionOverrideExpression,
 				arguments: functionConstructionArguments,
 				overrideReachable: overridePathReachable,
+				handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
 			)
 			lines.append("\(innerIndent)\(returnKeyword)\(constructionExpression)")
 			lines.append("\(indent)}")
