@@ -171,10 +171,11 @@ func performScan(
 	let uniqueMockFilePaths = sortedUniqueManifestPaths(mockScopedFileScans.filter(\.outputFileDeclarations.declaresMockGeneratingType))
 
 	// Extract additional mocks to generate from every configuration, those the active configuration
-	// lists first and in its order.
-	let configuredAdditionalMocksToGenerate = configuration?.additionalMocksToGenerate ?? []
-	let additionalMocksToGenerate = configuredAdditionalMocksToGenerate
-		+ moduleOutputFileDeclarations.additionalMocksToGenerate.filter { !configuredAdditionalMocksToGenerate.contains($0) }
+	// lists first and in its order. Each is listed once, even when a configuration lists it twice, so
+	// that no two entries write its mock's file.
+	var listedAdditionalMocksToGenerate = Set<String>()
+	let additionalMocksToGenerate = ((configuration?.additionalMocksToGenerate ?? []) + moduleOutputFileDeclarations.additionalMocksToGenerate)
+		.filter { listedAdditionalMocksToGenerate.insert($0).inserted }
 
 	// Name the mock files and the additional mocks together, so that no two share an output file.
 	let mockOutputNames = mockOutputFileNames(forFilesAt: uniqueMockFilePaths, additionalMocksToGenerate: additionalMocksToGenerate)
