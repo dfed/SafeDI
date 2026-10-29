@@ -4048,6 +4048,22 @@ public actor DependencyTreeGenerator {
 		let lazilyInstantiatedDeclarations: [Property: Property]
 	}
 
+	/// The property that `validateNoCycleInReceivedProperties` walked for a required receive of an `onlyIfAvailable`
+	/// alias – the one the last alias the receive requires is created from, walked where that alias is declared – with
+	/// everything that decides whether the walk throws.
+	private struct WalkedAliasFulfillingProperty: Hashable {
+		/// The property the last alias the receive requires is created from.
+		let fulfillingProperty: Property
+		/// The properties received through the aliases the receive requires, the receive's own first, as cycle
+		/// validation sees them: the walk's received-property stack starts with them. Two aliases of one fulfilling
+		/// property, or two chains of aliases that end in the same alias, walk differently.
+		let receivedPropertyStack: [Property]
+		/// The instantiation stack of the scope that declares the last alias the receive requires.
+		let lastAliasDeclaringInstantiationStack: [Property]
+		/// The properties the mock root forwards, which the walk does not follow unless a scope builds them.
+		let mockRootForwardedProperties: Set<Property>
+	}
+
 	/// A scope whose required received properties `validateNoCycleInReceivedProperties` is walking.
 	private struct ReceivedPropertyWalk {
 		let requiredReceivedProperties: [Scope.RequiredReceivedProperty]
@@ -4077,10 +4093,42 @@ public actor DependencyTreeGenerator {
 	) throws {
 		var unfulfillableProperties = Set<DependencyTreeGeneratorError.UnfulfillableProperty>()
 		var hiddenReceivedProperties = Set<DependencyTreeGeneratorError.HiddenReceivedProperty>()
+		/// The properties a scope of `typeDescriptionToScopeMap` builds – instantiates, or renames another property to –
+		/// as cycle validation sees them. Most walks never ask, so the set is built the first time one does.
+		lazy var propertiesBuiltByAScope: Set<Property> = {
+			var propertiesBuiltByAScope = Set<Property>()
+			for scope in typeDescriptionToScopeMap.values {
+				for dependency in scope.instantiable.dependencies {
+					switch dependency.source {
+					case .instantiated, .aliased:
+						propertiesBuiltByAScope.insert(dependency.property.asValidatedForDependencyCycles)
+					case .received, .forwarded:
+						continue
+					}
+				}
+			}
+			return propertiesBuiltByAScope
+		}()
+		/// Whether a tree is handed `receivedProperty`, which the tree receives from above, rather than building it from
+		/// `receivedPropertyScope`. A handed value comes from outside the tree – a `@Forwarded` value, or one a mock
+		/// takes as a `mock()` parameter – so the dependencies of its type are no part of the tree: a cycle through them
+		/// is reported where a tree builds that type. A property is built when a scope instantiates it or renames
+		/// another property to it, wherever that scope is, since a receive of it may resolve there. A mock also builds
+		/// what it promotes: a property its root does not forward and that the mock can build. A property that nothing
+		/// builds or forwards is provided by nothing at all, which validation reports where it is received.
+		/// - Parameter mockRootForwardedProperties: The properties the mock root forwards, or none outside a mock.
+		func isHanded(_ receivedProperty: Property, from receivedPropertyScope: Scope, mockRootForwardedProperties: Set<Property>) -> Bool {
+			if cyclesOnly, !mockRootForwardedProperties.contains(receivedProperty), Self.mockCanBuild(receivedProperty, from: receivedPropertyScope) {
+				false
+			} else {
+				!propertiesBuiltByAScope.contains(receivedProperty)
+			}
+		}
 		/// Walks `requiredReceivedProperties`, which `directParent` requires, and, transitively, the required received
 		/// properties of the scopes that fulfill them, throwing when one is `property` or is on `instantiationStack`.
 		/// The walk descends depth first, in declaration order, and keeps its own stack of the scopes it is part way
-		/// through, since a chain of received properties can be as long as the module has types.
+		/// through, since a chain of received properties can be as long as the module has types. It does not descend
+		/// into a property the tree is handed: see `isHanded`.
 		///
 		/// `stackPropertiesReliedOnByWalkedProperty` holds the received properties whose walk returned without
 		/// throwing, each with the properties already on the received-property stack that the walk relied on: those
@@ -4096,6 +4144,7 @@ public actor DependencyTreeGenerator {
 		///     they are declared. The walk sees each as the constant it stands for; the diagnostic names them.
 		///   - lazilyInstantiatedDeclarations: The lazily instantiated properties on `instantiationStack`, keyed
 		///     by the constant each is validated as.
+		///   - mockRootForwardedProperties: See `isHanded`.
 		func validateNoCycleInReceivedProperties(
 			_ requiredReceivedProperties: [Scope.RequiredReceivedProperty],
 			directParent: TypeDescription,
@@ -4104,6 +4153,7 @@ public actor DependencyTreeGenerator {
 			property: Property,
 			instantiationStack: [Property],
 			lazilyInstantiatedDeclarations: [Property: Property],
+			mockRootForwardedProperties: Set<Property>,
 		) throws {
 			// Most scopes require no received property.
 			guard !requiredReceivedProperties.isEmpty else { return }
@@ -4184,7 +4234,9 @@ public actor DependencyTreeGenerator {
 					)
 				} else if let memoizedStackPropertiesReliedOn, memoizedStackPropertiesReliedOn.isSubset(of: receivedPropertyStack) {
 					walks[walkIndex].stackPropertiesReliedOn.formUnion(memoizedStackPropertiesReliedOn)
-				} else if let receivedPropertyScope = typeDescriptionToScopeMap[childProperty.typeDescription] {
+				} else if let receivedPropertyScope = typeDescriptionToScopeMap[childProperty.typeDescription],
+				          !isHanded(childProperty, from: receivedPropertyScope, mockRootForwardedProperties: mockRootForwardedProperties)
+				{
 					// A cycle back to `childProperty` itself lies within its walk, wherever that walk starts.
 					receivedPropertyStack.append(childProperty)
 					// Only the lazily instantiated receives are named by the diagnostic.
@@ -4213,14 +4265,15 @@ public actor DependencyTreeGenerator {
 			}
 		}
 		/// The fulfilling properties of the `onlyIfAvailable` aliases already walked by
-		/// `validateNoCycleInReceivedProperties` – the property the last alias a receive requires is created from – each
-		/// followed by the property received through the first alias and by that last alias's declaring scope's
-		/// instantiation stack. Those decide whether the walk throws: it starts from the fulfilling property with the
-		/// received property on its stack, bails out on a chain that reaches a property on that stack, and throws on one
-		/// that reaches the declaring stack; the rest it is passed only names what an error reports. A walk that throws leaves the set, so a walk in the set returned without throwing, in whichever tree
-		/// walked it, and walking it again would too. A receive of another alias of the same fulfilling property is walked
-		/// again: a chain that bails out at one received property can reach the declaring stack from another.
-		var walkedAliasFulfillingProperties = Set<[Property]>()
+		/// `validateNoCycleInReceivedProperties` – each the property the last alias a receive requires is created from –
+		/// with what decides whether the walk throws (see `WalkedAliasFulfillingProperty`): it starts from that property
+		/// with the properties received through the aliases on its stack, bails out on a chain that reaches a property on
+		/// that stack, stops at a property the tree is handed, which depends on what the mock root forwards, and throws on
+		/// a chain that reaches the last alias's declaring stack; the rest it is passed only names what an error reports.
+		/// A walk that throws leaves the set, so a walk in the set returned without throwing, in whichever tree walked it,
+		/// and walking it again would too. A receive of another alias of the same fulfilling property is walked again: a
+		/// chain that bails out at one received property can reach the declaring stack from another.
+		var walkedAliasFulfillingProperties = Set<WalkedAliasFulfillingProperty>()
 		/// Validates the tree rooted at `rootScope`, scope by scope, depth first in the order each scope declares its
 		/// children. It keeps its own stack of the scopes left to validate, since a tree can be as deep as the module
 		/// has types.
@@ -4242,10 +4295,12 @@ public actor DependencyTreeGenerator {
 				propertyStack: [],
 				lazilyInstantiatedDeclarations: [:],
 			)]
+			let mockRootForwardedProperties: Set<Property> = cyclesOnly ? rootScope.scope.instantiable.forwardedReceivableProperties : []
 			while let scopeToValidate = scopesToValidate.popLast() {
 				try validatePropertiesAreFulfillable(
 					on: scopeToValidate,
 					boundProperties: rootScope.boundProperties,
+					mockRootForwardedProperties: mockRootForwardedProperties,
 					validatesCycles: validatesCycles,
 					validatesHiddenProperties: validatesHiddenProperties,
 					root: rootScope.scope.instantiable.concreteInstantiable,
@@ -4258,12 +4313,15 @@ public actor DependencyTreeGenerator {
 		/// - Parameters:
 		///   - scopeToValidate: The scope, with what the scopes it is built inside give it.
 		///   - boundProperties: The received properties the tree's mock binds. See `ValidatedRootScope`.
+		///   - mockRootForwardedProperties: The properties the tree's mock root forwards, or none outside a mock. See
+		///     `isHanded`.
 		///   - validatesCycles: See `validatePropertiesAreFulfillable(inTreeRootedAt:validatesCycles:validatesHiddenProperties:)`.
 		///   - validatesHiddenProperties: See `validatePropertiesAreFulfillable(inTreeRootedAt:validatesCycles:validatesHiddenProperties:)`.
 		///   - root: The type at the root of the tree.
 		func validatePropertiesAreFulfillable(
 			on scopeToValidate: ScopeToValidate,
 			boundProperties: Set<Property>,
+			mockRootForwardedProperties: Set<Property>,
 			validatesCycles: Bool,
 			validatesHiddenProperties: Bool,
 			root: TypeDescription,
@@ -4290,6 +4348,7 @@ public actor DependencyTreeGenerator {
 					property: property,
 					instantiationStack: instantiationStack,
 					lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations,
+					mockRootForwardedProperties: mockRootForwardedProperties,
 				)
 			}
 
@@ -4432,7 +4491,12 @@ public actor DependencyTreeGenerator {
 					}
 				} else if alias.onlyIfAvailable,
 				          let declaringProperty = alias.lastAliasDeclaringInstantiationStack.first,
-				          case let walkedAliasFulfillingProperty = [fulfillingProperty, receivedProperty] + alias.lastAliasDeclaringInstantiationStack,
+				          case let walkedAliasFulfillingProperty = WalkedAliasFulfillingProperty(
+				          	fulfillingProperty: fulfillingProperty,
+				          	receivedPropertyStack: requiredAliases.map(\.property.asValidatedForDependencyCycles),
+				          	lastAliasDeclaringInstantiationStack: alias.lastAliasDeclaringInstantiationStack,
+				          	mockRootForwardedProperties: mockRootForwardedProperties,
+				          ),
 				          walkedAliasFulfillingProperties.insert(walkedAliasFulfillingProperty).inserted
 				{
 					// A required alias's fulfilling property is walked where the alias is declared. Walk the property
@@ -4454,6 +4518,7 @@ public actor DependencyTreeGenerator {
 								property: declaringProperty,
 								instantiationStack: alias.lastAliasDeclaringInstantiationStack,
 								lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations,
+								mockRootForwardedProperties: mockRootForwardedProperties,
 							)
 						} catch let DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(instantiated, receivedPropertyChain, declarationLocation, lazilyInstantiatedProperties, _) {
 							// The chain starts with this receive, which closes it only because it requires the aliases.

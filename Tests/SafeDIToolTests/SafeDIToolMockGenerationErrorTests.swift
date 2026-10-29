@@ -1042,10 +1042,10 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenOnlyIfAvailableAliasRequiredByReceiverSharesItsFulfillingPropertyWithAliasRequiredEarlier() async {
-		// SecondReceiver requires Child's `onlyIfAvailable` alias `second` of `source`, and Source's tree receives `child`
-		// through Session and X. FirstReceiver's alias `first` of `source` is walked first, and that walk stops at Session's
-		// receive of `first`, so the cycle is found only by walking `second` too.
+	mutating func mock_throwsError_whenTreeBuildsPropertyMockRootForwardsAndAliasItsTypeReceivesIsRequiredFirst() async {
+		// Parent forwards `session`, but Holder builds the `session` that Source receives, so validation follows Session's
+		// receives: SecondReceiver requires Child's `onlyIfAvailable` alias `second` of `source`, so `source`, and so
+		// `session`, must be built before `child`, but Session requires `x`, which requires `child`.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
@@ -1058,7 +1058,17 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 					"""
 					@Instantiable(generateMock: true)
 					public final class Parent: Instantiable {
-					    public init(child: Child, source: Source) { self.child = child; self.source = source }
+					    public init(session: Session, holder: Holder) { self.session = session; self.holder = holder }
+					    @Forwarded let session: Session
+					    @Instantiated let holder: Holder
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Holder: Instantiable {
+					    public init(session: Session, x: X, child: Child, source: Source) { self.session = session; self.x = x; self.child = child; self.source = source }
+					    @Instantiated let session: Session
+					    @Instantiated let x: X
 					    @Instantiated let child: Child
 					    @Instantiated let source: Source
 					}
@@ -1076,8 +1086,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 					"""
 					@Instantiable
 					public final class Session: Instantiable {
-					    public init(id: String, first: FirstGreeter?, x: X) { self.id = id; self.first = first; self.x = x }
-					    @Forwarded let id: String
+					    public init(first: FirstGreeter?, x: X) { self.first = first; self.x = x }
 					    @Received let first: FirstGreeter?
 					    @Received let x: X
 					}
@@ -1122,8 +1131,8 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenOnlyIfAvailableAliasRequiredByReceiverSharesItsFulfillingPropertyWithAliasRequiredLater() async {
-		// As above, with SecondReceiver declared before FirstReceiver, so `second` is walked first and finds the cycle.
+	mutating func mock_throwsError_whenTreeBuildsPropertyMockRootForwardsAndAliasItsTypeReceivesIsRequiredLast() async {
+		// As above, with SecondReceiver declared before FirstReceiver.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
@@ -1136,7 +1145,17 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 					"""
 					@Instantiable(generateMock: true)
 					public final class Parent: Instantiable {
-					    public init(child: Child, source: Source) { self.child = child; self.source = source }
+					    public init(session: Session, holder: Holder) { self.session = session; self.holder = holder }
+					    @Forwarded let session: Session
+					    @Instantiated let holder: Holder
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Holder: Instantiable {
+					    public init(session: Session, x: X, child: Child, source: Source) { self.session = session; self.x = x; self.child = child; self.source = source }
+					    @Instantiated let session: Session
+					    @Instantiated let x: X
 					    @Instantiated let child: Child
 					    @Instantiated let source: Source
 					}
@@ -1154,8 +1173,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 					"""
 					@Instantiable
 					public final class Session: Instantiable {
-					    public init(id: String, first: FirstGreeter?, x: X) { self.id = id; self.first = first; self.x = x }
-					    @Forwarded let id: String
+					    public init(first: FirstGreeter?, x: X) { self.first = first; self.x = x }
 					    @Received let first: FirstGreeter?
 					    @Received let x: X
 					}
