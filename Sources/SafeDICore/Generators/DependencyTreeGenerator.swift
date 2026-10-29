@@ -1251,8 +1251,7 @@ public actor DependencyTreeGenerator {
 		lazilyInstantiatedDeclarations: [Property: Property] = [:],
 	) throws {
 		// Check dependencies for cycles (catches @Received references back to ancestors).
-		// Skip forwarded dependencies — they're runtime Instantiator closure parameters.
-		for dependency in scope.instantiable.dependencies where dependency.source != .forwarded {
+		for dependency in scope.instantiable.dependencies where dependency.canCloseDependencyCycle {
 			let declaredPropertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
 			let propertyForDependency = declaredPropertyForDependency.asValidatedForDependencyCycles
 			guard let cycleIndex = propertyStack.firstIndex(of: propertyForDependency) else {
@@ -1753,14 +1752,8 @@ public actor DependencyTreeGenerator {
 	/// instantiates or is forwarded it.
 	private static func closingReceive(of dependency: Dependency, in scope: Scope) -> CycleClosingReceive? {
 		switch dependency.source {
-		case let .received(onlyIfAvailable):
-			// Generation passes `nil` to an `onlyIfAvailable` receive of a property still being built, as it does to an
-			// `onlyIfAvailable` alias.
-			if onlyIfAvailable {
-				nil
-			} else {
-				CycleClosingReceive(aliasProperty: nil)
-			}
+		case .received:
+			CycleClosingReceive(aliasProperty: nil)
 		case let .aliased(fulfillingProperty, _, onlyIfAvailable):
 			// An alias receives its fulfilling property, unless it is `onlyIfAvailable` – generation does not create it
 			// while that property is still being built, and passes `nil` in its place – or `scope` creates the property,
@@ -2894,13 +2887,11 @@ public actor DependencyTreeGenerator {
 			}
 
 			// Check children for cycles.
-			// Skip forwarded dependencies — they're runtime parameters passed through
-			// the Instantiator closure, not scope-level dependencies that create cycles.
 			var childPropertyStack = propertyStack
 			if let property {
 				childPropertyStack.insert(property, at: 0)
 			}
-			for dependency in scope.instantiable.dependencies where validatesCycles && dependency.source != .forwarded {
+			for dependency in scope.instantiable.dependencies where validatesCycles && dependency.canCloseDependencyCycle {
 				let declaredPropertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
 				let propertyForDependency = declaredPropertyForDependency.asValidatedForDependencyCycles
 				guard let cycleIndex = childPropertyStack.firstIndex(of: propertyForDependency) else {
@@ -3127,6 +3118,22 @@ extension Dependency {
 		case .forwarded:
 			true
 		case .aliased, .instantiated, .received:
+			false
+		}
+	}
+
+	/// Whether the dependency can close a dependency cycle through the property it is fulfilled by. A forwarded
+	/// dependency cannot: it is an argument of the `Instantiator` that builds its type. Nor can a
+	/// `@Received(onlyIfAvailable: true)` dependency: generation passes it `nil` while the property is still being
+	/// built, whatever kind of property that is, as it does when the property is the non-optional form of the one
+	/// received.
+	fileprivate var canCloseDependencyCycle: Bool {
+		switch source {
+		case let .received(onlyIfAvailable):
+			!onlyIfAvailable
+		case .instantiated, .aliased:
+			true
+		case .forwarded:
 			false
 		}
 	}

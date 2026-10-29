@@ -182,24 +182,28 @@ final class Scope: Hashable {
 		let bareAttributeRange: Dependency.SourceRange?
 	}
 
-	/// The properties this scope’s `@Instantiated` and `@Forwarded` dependencies put in scope.
-	private lazy var instantiatedOrForwardedProperties = Set(
+	/// The properties this scope always creates: those it instantiates, is forwarded, or assigns to a required
+	/// alias. An `onlyIfAvailable` alias is left out, since it is not created while what it renames is unavailable.
+	private lazy var unconditionallyCreatedProperties = Set(
 		instantiable
 			.dependencies
 			.filter {
 				switch $0.source {
 				case .instantiated, .forwarded:
 					true
-				case .aliased, .received:
+				case let .aliased(_, _, onlyIfAvailable):
+					!onlyIfAvailable
+				case .received:
 					false
 				}
 			}
 			.flatMap(\.receivableProperties),
 	)
 
-	/// The received properties this scope requires an ancestor to provide. An alias of a property this scope
-	/// instantiates or is forwarded refers to that property, so it requires nothing of an ancestor. An alias of
-	/// another alias this scope declares is listed, so that validation can check the alias it refers to is created.
+	/// The received properties this scope requires an ancestor to provide. An alias of a property this scope always
+	/// creates refers to that property, so it requires nothing of an ancestor: what that property needs, its own
+	/// declaration requires. An alias of an `onlyIfAvailable` alias this scope declares is listed, so that validation
+	/// can check the alias it refers to is created.
 	private(set) lazy var requiredReceivedProperties: [RequiredReceivedProperty] = instantiable
 		.dependencies
 		.compactMap {
@@ -218,7 +222,7 @@ final class Scope: Hashable {
 					)
 				}
 			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-				if onlyIfAvailable || instantiatedOrForwardedProperties.contains(fulfillingProperty) {
+				if onlyIfAvailable || unconditionallyCreatedProperties.contains(fulfillingProperty) {
 					nil
 				} else {
 					RequiredReceivedProperty(
