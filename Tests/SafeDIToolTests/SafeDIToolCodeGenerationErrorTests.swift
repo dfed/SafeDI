@@ -2718,6 +2718,50 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedAndReceivedThroughAlias_throwsError() async {
+		// B, built inside `a`, requires `a` under the name `renamedA`. Unlike an alias only if available, which is
+		// passed `nil`, it needs `a` before `a` exists, so the constant cycle is still rejected.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["B.swift"]):4:5: error: Dependency cycle: `A` -> `B` -> `A`. `B` receives `renamedA: A`, which is still being built when `B` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
+				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(a: A) { self.a = a }
+					    @Instantiated let a: A
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable {
+					    public init(b: B) { self.b = b }
+					    @Instantiated let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(renamedA: A) { self.renamedA = renamedA }
+					    @Received(fulfilledByDependencyNamed: "a", ofType: A.self) let renamedA: A
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithCircularPropertyDependenciesImmediatelyInitializedAndOptionalReceived_throwsError() async {
 		// B, built inside `a: A?`, requires that exact property. Unlike a receive only if available, which is passed
 		// `nil`, it needs `a` before `a` exists, so the cycle is still rejected.
@@ -3843,67 +3887,6 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					public struct Q: Instantiable {
 					    public init(bBuilder: Instantiator<B>) { self.bBuilder = bBuilder }
 					    @Received private let bBuilder: Instantiator<B>
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithOptionalPropertyAliasAndMarkedOnlyIfAvailableAndItIsOnlyAvailableViaCircularDependency_throwsError() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["B.swift"]):7:2: error: Dependency cycle: `C` -> `B` -> `C`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `c: C` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
-				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
-				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public final class Root: Instantiable {
-						public init(aBuilder: Instantiator<A>) {
-							fatalError("SafeDI doesn't inspect the initializer body")
-						}
-
-						@Instantiated let aBuilder: Instantiator<A>
-					}
-					""",
-					"""
-					@Instantiable
-					public final class A: Instantiable {
-						public init(c: C) {
-							fatalError("SafeDI doesn't inspect the initializer body")
-						}
-
-						@Instantiated let c: C
-					}
-					""",
-					"""
-					@Instantiable
-					public final class B: Instantiable {
-						public init(cRenamed: CRenamed?) {
-							fatalError("SafeDI doesn't inspect the initializer body")
-						}
-
-						@Received(fulfilledByDependencyNamed: "c", ofType: C.self, onlyIfAvailable: true) let cRenamed: CRenamed?
-					}
-					""",
-					"""
-					@Instantiable
-					public final class C: Instantiable {
-						public init(b: B) {
-							fatalError("SafeDI doesn't inspect the initializer body")
-						}
-
-						@Instantiated let b: B
 					}
 					""",
 				],

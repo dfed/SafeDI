@@ -434,8 +434,8 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
-	static let corpusAcceptedSeedCount = 2_774
-	static let corpusAcceptedSeedsSum: UInt64 = 0x182114EAB66E9F41
+	static let corpusAcceptedSeedCount = 2_781
+	static let corpusAcceptedSeedsSum: UInt64 = 0x7CDBD921B864C18F
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix. Empty

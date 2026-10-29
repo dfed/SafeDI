@@ -1754,11 +1754,11 @@ public actor DependencyTreeGenerator {
 		switch dependency.source {
 		case .received:
 			CycleClosingReceive(aliasProperty: nil)
-		case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-			// An alias receives its fulfilling property, unless it is `onlyIfAvailable` – generation does not create it
-			// while that property is still being built, and passes `nil` in its place – or `scope` creates the property,
-			// which the alias then refers to, so the dependency that creates it is what closes the cycle.
-			if onlyIfAvailable || scope.createdProperties.contains(fulfillingProperty) {
+		case let .aliased(fulfillingProperty, _, _):
+			// An alias receives its fulfilling property, unless `scope` creates the property, which the alias then
+			// refers to, so the dependency that creates it is what closes the cycle. An `onlyIfAvailable` alias closes
+			// no cycle (`Dependency.canCloseDependencyCycle`).
+			if scope.createdProperties.contains(fulfillingProperty) {
 				nil
 			} else {
 				CycleClosingReceive(aliasProperty: dependency.property)
@@ -3123,15 +3123,15 @@ extension Dependency {
 	}
 
 	/// Whether the dependency can close a dependency cycle through the property it is fulfilled by. A forwarded
-	/// dependency cannot: it is an argument of the `Instantiator` that builds its type. Nor can a
-	/// `@Received(onlyIfAvailable: true)` dependency: generation passes it `nil` while the property is still being
-	/// built, whatever kind of property that is, as it does when the property is the non-optional form of the one
-	/// received.
+	/// dependency cannot: it is an argument of the `Instantiator` that builds its type. Nor can an `onlyIfAvailable`
+	/// receive or alias: generation passes it `nil` while the property it receives is still being built, whatever
+	/// kind of property that is, as it does when the property is the non-optional form of the one received.
 	fileprivate var canCloseDependencyCycle: Bool {
 		switch source {
-		case let .received(onlyIfAvailable):
+		case let .received(onlyIfAvailable),
+		     let .aliased(_, _, onlyIfAvailable):
 			!onlyIfAvailable
-		case .instantiated, .aliased:
+		case .instantiated:
 			true
 		case .forwarded:
 			false
