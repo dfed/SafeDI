@@ -311,6 +311,7 @@ enum GraphFuzzerGenerator {
 	private struct Builder {
 		init(seed: UInt64) {
 			random = GraphFuzzerRandomNumberGenerator(seed: seed)
+			generatedNameRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.generatedNameRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
 			let sendabilityRoll = random.integer(in: 0...99)
@@ -371,7 +372,7 @@ enum GraphFuzzerGenerator {
 			appendMotif(to: &declarations)
 			// Decided last, so that the rest of a seed's graph does not depend on whether it has the extension.
 			let extensionSource = random.percentChance(25) ? extensionDeclarationSource(addingPropertyToOneOf: &declarations) : nil
-			return declarations.map(source(of:)) + [extensionSource].compactMap(\.self)
+			return addingPropertiesLabeledAsGeneratedNames(to: declarations).map(source(of:)) + [extensionSource].compactMap(\.self)
 		}
 
 		/// A quarter of graphs end with a motif: a few more types, in a shape whose generated code or diagnostics
@@ -427,6 +428,9 @@ enum GraphFuzzerGenerator {
 		}
 
 		private var random: GraphFuzzerRandomNumberGenerator
+		/// Draws only the choices of `addingPropertiesLabeledAsGeneratedNames`, so that every other choice is the
+		/// one `random` makes for the seed without them.
+		private var generatedNameRandom: GraphFuzzerRandomNumberGenerator
 		private let prefix: String
 		private let sendability: Sendability
 		private let typeCount: Int
@@ -804,6 +808,88 @@ enum GraphFuzzerGenerator {
 			return property
 		}
 
+		/// Now and then, before a property a type instantiates, gives the type properties labeled with the names a
+		/// generated mock binds under names of its own for what the types beneath that property receive: a flat
+		/// parameter, an override, or a promoted sibling named apart by its type (`t1_S0_T1`), or the wrapper around
+		/// the instance of a lazily instantiated dependency the mock cannot build (`lazyValue_lazilyInstantiated`). A
+		/// mock root above the type may bind such a name for a receiver built inside the type's builder function, where
+		/// the type's property of that name is declared first. No other label holds an underscore, so without these
+		/// properties no graph declares a name a mock generates. They build `leafTypeName`, a type with no dependencies
+		/// that the graph then declares.
+		private mutating func addingPropertiesLabeledAsGeneratedNames(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			let declarationsByName = Dictionary(uniqueKeysWithValues: declarations.map { ($0.name, $0) })
+			/// The name of the type `property` builds, when it is a type of the graph.
+			func builtTypeName(of property: PropertyDeclaration) -> String? {
+				let name = if let fulfilledByTypeRange = property.attribute.range(of: "fulfilledByType: \"") {
+					String(property.attribute[fulfilledByTypeRange.upperBound...].prefix { $0 != "\"" })
+				} else if let genericStart = property.type.firstIndex(of: "<"), let genericEnd = property.type.lastIndex(of: ">") {
+					String(property.type[property.type.index(after: genericStart)..<genericEnd])
+				} else {
+					property.type
+				}
+				return declarationsByName[name] == nil ? nil : name
+			}
+			/// The properties received in the subtree of the type named `typeName`, to `depth` types deep.
+			func receivedProperties(beneath typeName: String, depth: Int) -> [PropertyDeclaration] {
+				guard depth > 0, let declaration = declarationsByName[typeName] else { return [] }
+				return declaration.properties.flatMap { property -> [PropertyDeclaration] in
+					if property.attribute == "@Received" || property.attribute == "@Received(onlyIfAvailable: true)" {
+						[property]
+					} else if property.attribute.hasPrefix("@Instantiated"), let builtTypeName = builtTypeName(of: property) {
+						receivedProperties(beneath: builtTypeName, depth: depth - 1)
+					} else {
+						[]
+					}
+				}
+			}
+			var declaresLeafType = false
+			var declarations = declarations.map { declaration in
+				var properties = declaration.properties
+				for property in declaration.properties where property.attribute.hasPrefix("@Instantiated") {
+					guard let builtTypeName = builtTypeName(of: property) else { continue }
+					// Only a property the type does not declare itself reaches the receiver from above the type. The name of
+					// a binding named apart by its type is spelled with that type, so the type must be an identifier.
+					let receivedProperties = receivedProperties(beneath: builtTypeName, depth: 3).filter { receivedProperty in
+						!declaration.properties.contains { $0.label == receivedProperty.label }
+							&& (receivedProperty.type.contains("LazilyInstantiated<") || !receivedProperty.type.contains("<"))
+					}
+					guard !receivedProperties.isEmpty, generatedNameRandom.percentChance(50) else { continue }
+					for receivedProperty in receivedProperties {
+						let receivedType = receivedProperty.type.hasSuffix("?") ? String(receivedProperty.type.dropLast()) : receivedProperty.type
+						let suffix = if receivedType.hasPrefix("SendableLazilyInstantiated<") {
+							"sendableLazilyInstantiated"
+						} else if receivedType.hasPrefix("LazilyInstantiated<") {
+							"lazilyInstantiated"
+						} else {
+							receivedType
+						}
+						let label = "\(receivedProperty.label)_\(suffix)"
+						guard !properties.contains(where: { $0.label == label }) else { continue }
+						// Declared before the property that builds the receiver, so that it is bound before the receiver is built.
+						properties.insert(
+							PropertyDeclaration(attribute: "@Instantiated", label: label, type: leafTypeName),
+							at: properties.firstIndex { $0.label == property.label } ?? properties.endIndex,
+						)
+						declaresLeafType = true
+					}
+				}
+				var declaration = declaration
+				declaration.properties = properties
+				return declaration
+			}
+			if declaresLeafType {
+				declarations.append(TypeDeclaration(name: leafTypeName, instantiableArguments: [], properties: [], declaresHelperTypes: false))
+			}
+			return declarations
+		}
+
+		/// A type with no dependencies, which `addingPropertiesLabeledAsGeneratedNames` instantiates.
+		private var leafTypeName: String {
+			"\(prefix)Leaf"
+		}
+
+		private static let generatedNameRandomSeedMask: UInt64 = 0x6E616D6573417061
+
 		// MARK: Extension
 
 		/// An `@Instantiable` extension of a type that is not itself `@Instantiable`, whose `instantiate(…)` has
@@ -1009,6 +1095,8 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case generateMock
 	case lazyCycle
 	case sameLabelWithDifferentTypes
+	/// An instantiated property labeled as a name a generated mock gives a binding of its own, such as `t1_S0_T1`.
+	case labelSpelledAsGeneratedName
 	/// A graph whose properties use both `Sendable` wrappers and wrappers that are not `Sendable`.
 	case sendableAndNonSendableWrappers
 	/// A type with `generateMock: true` on a cycle that an instantiator makes lazy.
@@ -1092,6 +1180,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 						usesSendableWrapper = true
 					} else if ["Instantiator<", "ErasedInstantiator<", "LazilyInstantiated<"].contains(where: type.hasPrefix) {
 						usesNonSendableWrapper = true
+					}
+					if attribute.hasPrefix("@Instantiated"), label.contains("_") {
+						features.insert(.labelSpelledAsGeneratedName)
 					}
 					if attribute.hasPrefix("@Instantiated"), let currentTypeName {
 						instantiationEdges.append(GraphFuzzerInstantiationEdge(

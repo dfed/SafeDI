@@ -535,18 +535,18 @@ struct SafeDIToolGraphFuzzerTests {
 	/// invocation when nothing fails.
 	static let smokeSeeds: [UInt64] = [14, 62, 348, 582, 1_286]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x16B50F7C001A9624
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x3C27A20BC949DB25
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0x513FF4952CCF4FFF
+	static let corpusFixtureHash: UInt64 = 0xEC5DE08A3009FC34
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
-	static let corpusAcceptedSeedCount = 2_458
-	static let corpusAcceptedSeedsSum: UInt64 = 0xC844F7103D2A569C
+	static let corpusAcceptedSeedCount = 2_468
+	static let corpusAcceptedSeedsSum: UInt64 = 0xC2CBDE4A1475F13A
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
