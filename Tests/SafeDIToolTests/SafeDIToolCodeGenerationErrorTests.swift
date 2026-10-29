@@ -6935,12 +6935,17 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasOfOnlyIfAvailableAliasOfSiblingThatReceivesTheReceiversAncestor_throwsError() async {
-		// As above, with C's alias renaming the non-optional `x: X`, which the sibling declares exactly.
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasOfOnlyIfAvailableAliasOfSiblingThatReceivesTheReceiversAncestor_throwsErrorFromReceivedWalk() async {
+		// As above, with C's alias renaming the non-optional `x: X`, which the sibling declares exactly: the received
+		// walk follows D's required receive of `z` through E's alias and C's, and `y`'s non-optional fulfilling
+		// property into X's scope, so it reports the cycle first.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: `B` -> `C` -> `X?` -> `X?` -> `X` -> `B`. `X` receives `b: B`, which is still being built when `X` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
+				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
+				\(fixtures["X.swift"]):1:1: note: `X` is part of the cycle
 				"""
 			},
 		) {
