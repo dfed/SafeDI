@@ -175,6 +175,10 @@ public actor DependencyTreeGenerator {
 		if let error = DependencyTreeGeneratorError.reportingAll(of: mockRootErrors) {
 			throw error
 		}
+		// From here on, the module's mock roots are handled together. These passes gate emitting the module's
+		// mocks and read nothing a single root's report needs, so `requirements(forTypeNamed:generatesMock:)`
+		// deliberately does not run them. A check that decides whether one root can be generated belongs in
+		// `createMockRoot`, which that method and the loop above share.
 		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: mockRoots)
 
 		// Compute the global cycle edges across all mock-reachable types. Per-tree
@@ -254,6 +258,8 @@ public actor DependencyTreeGenerator {
 			return results
 		}
 
+		// The second whole-module gate, not run by `requirements(forTypeNamed:generatesMock:)`; see the note above
+		// `validateSendableBuildersCaptureNoNonSendableWrapper`.
 		let nodesReadingConfiguration = try await validateConfigurationsAreBuiltOneWay(mockRoots: mockRoots, cycleEdges: cycleEdges)
 
 		let rootedTypeNames = Set(generatedRoots.map(\.root.typeDescription.asSource))
@@ -330,7 +336,12 @@ public actor DependencyTreeGenerator {
 	/// every declaration this generator knows, so over every declaration the result is what the type's mock needs
 	/// (or would need, were it generated), and over the declarations with every hand-written mock removed it is
 	/// what the type needs in production; see `TypeRequirements`. The type's tree is validated as
-	/// `generateMockCode` validates a listed type's, and the result throws what generating the mock would throw.
+	/// `generateMockCode` validates a listed type's root, through the same `mockScopes` and `createMockRoot`, so
+	/// the result throws what building that root throws. The passes `generateMockCode` runs over every mock root
+	/// together once its loop is done – that no `@Sendable` builder captures a non-`Sendable` wrapper, and that
+	/// each `SafeDIMockConfiguration` is built one way – gate emitting the module's mocks and change nothing in
+	/// the report, so they are deliberately not run here: a module they reject has no generated mock for the
+	/// report to disagree with, and `generate` reports them with their fix-its.
 	/// - Parameter generatesMock: Whether `mock()` is generated for the type, so that a hand-written method named
 	///   `mock` is rejected as `generateMockCode` rejects it. Otherwise such a method is the type's mock, which
 	///   the root is built with.
@@ -656,7 +667,9 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// The mock root of `instantiable`, the instantiable `mockRootInstantiable(for:scope:)` returned for `scope`,
-	/// once the type is known to be one a mock can be generated for.
+	/// once the type is known to be one a mock can be generated for. Every check that decides whether one mock
+	/// root can be generated belongs here, so that `generateMockCode` and `requirements(forTypeNamed:generatesMock:)`
+	/// run the same ones; a pass that needs every mock root at once goes after `generateMockCode`'s loop instead.
 	/// - Parameter generatedMockReason: Why the project generates `mock()` for the type, or `nil` when it does
 	///   not, so that a hand-written method named `mock` is the type's mock rather than a collision.
 	private func createMockRoot(
