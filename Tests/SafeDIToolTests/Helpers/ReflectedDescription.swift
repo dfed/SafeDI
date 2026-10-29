@@ -20,8 +20,8 @@
 
 /// Every stored property of `value` and of everything it holds, private ones included, read through
 /// reflection. Two values with the same description hold the same data, even where `==` would not tell
-/// them apart: `TypeDescription.VoidSpelling` compares both spellings equal,
-/// `UnorderedEquatingCollection` ignores order, and `String` compares canonically equivalent spellings
+/// them apart: `TypeDescription.VoidSpelling` compares both spellings equal, `TypeDescription` ignores
+/// `any`, `UnorderedEquatingCollection` ignores order, and `String` compares canonically equivalent spellings
 /// equal, such as `café` written with a precomposed `é` and with `e` followed by a combining accent.
 /// A set's elements are sorted, because a set's iteration order is not part of its value.
 func reflectedDescription(of value: Any) -> ReflectedDescription {
