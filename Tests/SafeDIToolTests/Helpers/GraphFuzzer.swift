@@ -153,6 +153,21 @@ enum GraphFuzzerGenerator {
 		var kind: InstantiationKind
 		/// The type whose label the property borrows, so that one label names properties of different types.
 		let labelIndex: Int
+		/// Whether the property is a `SendableInstantiator`, `SendableErasedInstantiator`, or
+		/// `SendableLazilyInstantiated` when its kind wraps its target. A constant ignores it.
+		let isSendable: Bool
+	}
+
+	/// Which wrappers a graph's properties use.
+	private enum Sendability {
+		/// Every wrapper is `Instantiator`, `ErasedInstantiator`, or `LazilyInstantiated`.
+		case nonSendable
+		/// Every wrapper is `Sendable`, and so is every type.
+		case sendable
+		/// Each wrapper is `Sendable` or not at random, so a `Sendable` builder's subtree can receive a
+		/// `LazilyInstantiated` declared outside it. Every type is `@unchecked Sendable`, so that receiving one of
+		/// them by value inside a `@Sendable` builder function is never what fails to compile.
+		case mixed
 	}
 
 	/// A property that a type below its provider can receive.
@@ -173,7 +188,15 @@ enum GraphFuzzerGenerator {
 		init(seed: UInt64) {
 			random = GraphFuzzerRandomNumberGenerator(seed: seed)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
-			isSendable = random.percentChance(15)
+			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
+			let sendabilityRoll = random.integer(in: 0...99)
+			sendability = if sendabilityRoll < 15 {
+				.sendable
+			} else if sendabilityRoll < 40 {
+				.mixed
+			} else {
+				.nonSendable
+			}
 			typeCount = random.integer(in: 3...7)
 			lazyPercent = random.element(of: [25, 50, 75])
 		}
@@ -198,7 +221,9 @@ enum GraphFuzzerGenerator {
 				}
 				// Now and then a root declares a property the others do not, which a shared type may then miss.
 				if random.percentChance(20) {
-					add(property(for: InstantiationEdge(sourceIndex: nil, targetIndex: random.integer(in: 0...(typeCount - 1)), kind: .instantiator, labelIndex: random.integer(in: 0...(typeCount - 1)))))
+					let targetIndex = random.integer(in: 0...(typeCount - 1))
+					let labelIndex = random.integer(in: 0...(typeCount - 1))
+					add(property(for: InstantiationEdge(sourceIndex: nil, targetIndex: targetIndex, kind: .instantiator, labelIndex: labelIndex, isSendable: wrapperIsSendable())))
 				}
 				declarations.append(TypeDeclaration(
 					name: "\(prefix)Root\(rootIndex)",
@@ -226,7 +251,7 @@ enum GraphFuzzerGenerator {
 
 		private var random: GraphFuzzerRandomNumberGenerator
 		private let prefix: String
-		private let isSendable: Bool
+		private let sendability: Sendability
 		private let typeCount: Int
 		private let lazyPercent: Int
 		private var rootCount = 0
@@ -255,17 +280,19 @@ enum GraphFuzzerGenerator {
 					// A forwarded `LazilyInstantiated` of a type that is not `@Instantiable`, under one label every
 					// type shares: a mock that receives it cannot build the instance, so it takes the instance and
 					// wraps it, while types below it forward their own.
+					let wrapper = lazilyInstantiatedWrapper(isSendable: wrapperIsSendable())
 					forwardedProperties.append(PropertyDeclaration(
 						attribute: "@Forwarded",
 						label: "lazyValue",
-						type: "\(lazilyInstantiatedWrapper)<\(valueTypeName)>",
+						type: "\(wrapper)<\(valueTypeName)>",
 					))
 				} else if roll < 15 {
 					// A forwarded `LazilyInstantiated`, whose instance receivers can also receive.
+					let wrapper = lazilyInstantiatedWrapper(isSendable: wrapperIsSendable())
 					forwardedProperties.append(PropertyDeclaration(
 						attribute: "@Forwarded",
 						label: "lazyT\(labelIndex)",
-						type: "\(lazilyInstantiatedWrapper)<\(typeName(target))>",
+						type: "\(wrapper)<\(typeName(target))>",
 					))
 				} else {
 					forwardedProperties.append(PropertyDeclaration(
@@ -279,7 +306,9 @@ enum GraphFuzzerGenerator {
 			rootCount = random.integer(in: 1...3)
 			for _ in 0..<random.integer(in: 1...4) {
 				let target = random.integer(in: 0...(typeCount - 1))
-				appendEdgeUnlessLabelIsTaken(InstantiationEdge(sourceIndex: nil, targetIndex: target, kind: instantiationKind(target: target, isLazy: nil), labelIndex: borrowedLabelIndex(for: target)))
+				let kind = instantiationKind(target: target, isLazy: nil)
+				let labelIndex = borrowedLabelIndex(for: target)
+				appendEdgeUnlessLabelIsTaken(InstantiationEdge(sourceIndex: nil, targetIndex: target, kind: kind, labelIndex: labelIndex, isSendable: wrapperIsSendable()))
 			}
 			for index in 0..<typeCount {
 				for _ in 0..<random.integer(in: 0...2) {
@@ -287,11 +316,14 @@ enum GraphFuzzerGenerator {
 					// Only an instantiator can build an earlier type, or this type, without a constant cycle.
 					let isBackward = target <= index
 					guard !isBackward || random.percentChance(40) else { continue }
+					let kind = instantiationKind(target: target, isLazy: isBackward ? true : nil)
+					let labelIndex = borrowedLabelIndex(for: target)
 					appendEdgeUnlessLabelIsTaken(InstantiationEdge(
 						sourceIndex: index,
 						targetIndex: target,
-						kind: instantiationKind(target: target, isLazy: isBackward ? true : nil),
-						labelIndex: borrowedLabelIndex(for: target),
+						kind: kind,
+						labelIndex: labelIndex,
+						isSendable: wrapperIsSendable(),
 					))
 				}
 			}
@@ -359,6 +391,19 @@ enum GraphFuzzerGenerator {
 				} else {
 					return .constant
 				}
+			}
+		}
+
+		/// Whether a wrapper is `Sendable`: always in a `Sendable` graph, never in a non-`Sendable` one, and at
+		/// random in a mixed one, which alone draws for it.
+		private mutating func wrapperIsSendable() -> Bool {
+			switch sendability {
+			case .nonSendable:
+				false
+			case .sendable:
+				true
+			case .mixed:
+				random.percentChance(50)
 			}
 		}
 
@@ -588,7 +633,7 @@ enum GraphFuzzerGenerator {
 				"\t}",
 				"}",
 				"",
-				"public final class \(extensionTypeName)\(isSendable ? ": Sendable" : "") {",
+				"public final class \(extensionTypeName)\(helperTypesAreSendable ? ": Sendable" : "") {",
 				"\tpublic init() {}",
 				"}",
 			].joined(separator: "\n") + "\n"
@@ -622,16 +667,16 @@ enum GraphFuzzerGenerator {
 			case .erasedConstant:
 				return PropertyDeclaration(attribute: erasedAttribute, label: "anyT\(label)", type: erasedTypeName(target))
 			case .instantiator:
-				let wrapper = isSendable ? "SendableInstantiator" : "Instantiator"
+				let wrapper = edge.isSendable ? "SendableInstantiator" : "Instantiator"
 				return PropertyDeclaration(attribute: "@Instantiated", label: "t\(label)Builder", type: "\(wrapper)<\(typeName(target))>")
 			case .erasedInstantiator:
-				let wrapper = isSendable ? "SendableErasedInstantiator" : "ErasedInstantiator"
+				let wrapper = edge.isSendable ? "SendableErasedInstantiator" : "ErasedInstantiator"
 				let forwardedPropertiesType = forwardedProperties[target]?.type ?? "()"
 				return PropertyDeclaration(attribute: erasedAttribute, label: "anyT\(label)Builder", type: "\(wrapper)<\(forwardedPropertiesType), \(erasedTypeName(target))>")
 			case .lazilyInstantiated:
-				return PropertyDeclaration(attribute: "@Instantiated", label: "lazyT\(label)", type: "\(lazilyInstantiatedWrapper)<\(typeName(target))>")
+				return PropertyDeclaration(attribute: "@Instantiated", label: "lazyT\(label)", type: "\(lazilyInstantiatedWrapper(isSendable: edge.isSendable))<\(typeName(target))>")
 			case .erasedLazilyInstantiated:
-				return PropertyDeclaration(attribute: erasedAttribute, label: "lazyAnyT\(label)", type: "\(lazilyInstantiatedWrapper)<\(erasedTypeName(target))>")
+				return PropertyDeclaration(attribute: erasedAttribute, label: "lazyAnyT\(label)", type: "\(lazilyInstantiatedWrapper(isSendable: edge.isSendable))<\(erasedTypeName(target))>")
 			}
 		}
 
@@ -640,8 +685,18 @@ enum GraphFuzzerGenerator {
 			"\(prefix)Value"
 		}
 
-		private var lazilyInstantiatedWrapper: String {
+		private func lazilyInstantiatedWrapper(isSendable: Bool) -> String {
 			isSendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+		}
+
+		/// Whether the graph's helper types are `Sendable`, as a `SendableLazilyInstantiated` of them requires.
+		private var helperTypesAreSendable: Bool {
+			switch sendability {
+			case .nonSendable:
+				false
+			case .sendable, .mixed:
+				true
+			}
 		}
 
 		private func source(of declaration: TypeDeclaration) -> String {
@@ -649,10 +704,16 @@ enum GraphFuzzerGenerator {
 				? "@Instantiable"
 				: "@Instantiable(\(declaration.instantiableArguments.joined(separator: ", ")))"
 			let protocolName = declaration.name + "Protocol"
-			let conformances = if declaration.declaresHelperTypes {
+			let conformances = switch (sendability, declaration.declaresHelperTypes) {
+			case (.nonSendable, true), (.sendable, true):
 				"Instantiable, \(protocolName)"
-			} else {
-				isSendable ? "Instantiable, Sendable" : "Instantiable"
+			case (.mixed, true):
+				// The type stores wrappers that are not `Sendable`.
+				"Instantiable, \(protocolName), @unchecked Sendable"
+			case (.sendable, false):
+				"Instantiable, Sendable"
+			case (.nonSendable, false), (.mixed, false):
+				"Instantiable"
 			}
 			var lines = [instantiableAttribute, "public final class \(declaration.name): \(conformances) {"]
 			if declaration.properties.isEmpty {
@@ -670,9 +731,9 @@ enum GraphFuzzerGenerator {
 				let erasedName = declaration.name.replacingOccurrences(of: "\(prefix)T", with: "\(prefix)AnyT")
 				lines += [
 					"",
-					"public protocol \(protocolName): AnyObject\(isSendable ? ", Sendable" : "") {}",
+					"public protocol \(protocolName): AnyObject\(helperTypesAreSendable ? ", Sendable" : "") {}",
 					"",
-					"public final class \(erasedName)\(isSendable ? ": Sendable" : "") {",
+					"public final class \(erasedName)\(helperTypesAreSendable ? ": Sendable" : "") {",
 					"\tpublic init(_ value: \(declaration.name)) {",
 					"\t\tself.value = value",
 					"\t}",
@@ -681,7 +742,7 @@ enum GraphFuzzerGenerator {
 					"}",
 				]
 			} else if declaration.name == "\(prefix)Root0" {
-				lines += ["", "public final class \(valueTypeName)\(isSendable ? ": Sendable" : "") {}"]
+				lines += ["", "public final class \(valueTypeName)\(helperTypesAreSendable ? ": Sendable" : "") {}"]
 			}
 			return lines.joined(separator: "\n") + "\n"
 		}
@@ -717,6 +778,8 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case generateMock
 	case lazyCycle
 	case sameLabelWithDifferentTypes
+	/// A graph whose properties use both `Sendable` wrappers and wrappers that are not `Sendable`.
+	case sendableAndNonSendableWrappers
 	/// A default-valued parameter of an extension's `instantiate(…)` method.
 	case defaultValuedInstantiateParameter
 
@@ -731,6 +794,8 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		var lazilyInstantiatedInstanceTypesByLabel = [String: Set<String>]()
 		var receivedTypesByLabel = [String: Set<String>]()
 		var instantiationEdges = [GraphFuzzerInstantiationEdge]()
+		var usesSendableWrapper = false
+		var usesNonSendableWrapper = false
 		for content in fixture.swiftFileContent {
 			var currentTypeName: String?
 			for line in GraphFuzzerSourceLine.lines(of: content) {
@@ -761,6 +826,11 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 						receivedTypesByLabel[label, default: []].insert(nonOptionalType)
 					}
 					features.formUnion(Self.features(ofPropertyWithAttribute: attribute, type: type))
+					if ["SendableInstantiator<", "SendableErasedInstantiator<", "SendableLazilyInstantiated<"].contains(where: type.hasPrefix) {
+						usesSendableWrapper = true
+					} else if ["Instantiator<", "ErasedInstantiator<", "LazilyInstantiated<"].contains(where: type.hasPrefix) {
+						usesNonSendableWrapper = true
+					}
 					if attribute.hasPrefix("@Instantiated"), let currentTypeName {
 						instantiationEdges.append(GraphFuzzerInstantiationEdge(
 							source: currentTypeName,
@@ -787,6 +857,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		if GraphFuzzerInstantiationEdge.containsLazyCycle(instantiationEdges) {
 			features.insert(.lazyCycle)
+		}
+		if usesSendableWrapper, usesNonSendableWrapper {
+			features.insert(.sendableAndNonSendableWrappers)
 		}
 		return features
 	}
