@@ -1594,11 +1594,16 @@ public actor DependencyTreeGenerator {
 		// tree of its type. `collectReceivedProperties` subtracts the mock root's forwarded properties only from the trees
 		// of the mock root's own children, so the tree of a promoted scope can still receive one; the worklist and the
 		// promotion below skip it instead. A forwarded lazily instantiated property also provides the by-value property
-		// that reads its instance.
+		// that reads its instance. A forwarded `x: X` is, in turn, the instance of an `x: LazilyInstantiated<X>` the
+		// tree receives, or of an `x: SendableLazilyInstantiated<X>`, which is one dependency with it: the mock wraps
+		// the forwarded value for its receivers rather than building another `X`.
 		let forwardedProperties = instantiable.forwardedReceivableProperties
+		let declaredForwardedProperties = Set(instantiable.dependencies.filter(\.isForwarded).map(\.property))
 		func isForwarded(_ property: Property) -> Bool {
 			// A forwarded `x: X` fulfills an `x: X?` too.
-			forwardedProperties.contains(property) || forwardedProperties.contains(property.asUnwrappedProperty)
+			forwardedProperties.contains(property)
+				|| forwardedProperties.contains(property.asUnwrappedProperty)
+				|| property.asLazilyInstantiatedInstanceProperty.map(declaredForwardedProperties.contains) == true
 		}
 
 		/// The scope that builds a received property promoted to the mock root, when the mock can build one.
@@ -1650,7 +1655,8 @@ public actor DependencyTreeGenerator {
 		// A dependency the tree receives both as `LazilyInstantiated` and by value is one dependency. It is
 		// promoted once, as the lazily instantiated property, whenever any receiver requires it in either form;
 		// receivers of its instance read it from that property. The same holds for a lazily instantiated
-		// property the mock root declares itself, which needs no promotion.
+		// property the mock root declares itself, which needs no promotion. One whose instance the mocked type
+		// forwards is forwarded, so it is not promoted below.
 		var lazilyInstantiatedPropertiesToPromote = Set<Property>()
 		var instancePropertiesOfLazilyInstantiatedProperties = Set(scope.propertiesToGenerate.compactMap(\.lazilyInstantiatedInstanceProperty))
 		for receivedProperty in allReceived {

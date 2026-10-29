@@ -1634,6 +1634,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	struct MockRootParameters {
 		/// The mock root's parameter tree: the dependencies the mock builds, which `SafeDIOverrides` can override.
 		let parameterTree: [MockTreeItem]
+		/// The name of each property node of `parameterTree`'s root level, by label and property type: its label,
+		/// unless a sibling or a `@Forwarded` or default-valued parameter of `mock()` shares the label. See
+		/// `disambiguatePropertyLabels`.
+		let rootLabelMap: [String: [TypeDescription: String]]
 		/// The mocked type's `@Forwarded` dependencies, in the order they are parameters of `mock()`.
 		let forwardedDependencies: [Dependency]
 		/// The initializer the mock constructs the mocked type with: its hand-written mock when it has one.
@@ -1688,6 +1692,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		let dependencyLabels = Set(instantiable.dependencies.map(\.property.label))
 		var rootDefaultParameters = [MockRootParameters.RootDefaultParameter]()
+		// The parameters of `mock()` that keep their labels, which a binding of the root's tree would hide: the
+		// forwarded parameters, which are passed on under their labels, and the default-valued ones, whose labels
+		// are those of the construction initializer.
+		var parametersKeepingTheirLabels = forwardedDependencies.map(\.property)
 		if let rootConstructionInitializer {
 			for argument in rootConstructionInitializer.arguments {
 				guard argument.hasDefaultValue,
@@ -1700,6 +1708,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					typeSource: argument.typeDescription.asFunctionParameter.asSource,
 					defaultExpression: defaultExpression,
 				))
+				parametersKeepingTheirLabels.append(Property(label: argument.label, typeDescription: argument.typeDescription))
 			}
 		}
 
@@ -1730,7 +1739,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// mock wraps it for the types that receive it as `LazilyInstantiated`. A node of another form under
 		// the dependency's label, such as an `Instantiator` the mock builds, does not provide it. A node the
 		// mock builds for the instance itself does, though the wrapper cannot be made from it: the node is
-		// declared among the tree's bindings, after the wrappers.
+		// declared among the tree's bindings, after the wrappers. The mock does not build a `LazilyInstantiated`
+		// whose instance the mocked type forwards either: it wraps the forwarded parameter, which `mock()` takes in
+		// place of the instance.
 		let lazilyInstantiatedReceivedProperties = receivedProperties
 			.filter {
 				$0.typeDescription.lazilyInstantiatedInstanceType != nil
@@ -1811,7 +1822,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// declaration there of a name the root's scope generates would hide the root's binding from the code
 		// in that function, which would then read the declaration instead.
 		let namesDeclaredInBuilderFunctions = Self.namesDeclaredInBuilderFunctions(of: treePropertyNodes)
-		let rootLabelMap = Self.disambiguatePropertyLabels(for: treePropertyNodes, reservedNames: namesDeclaredInBuilderFunctions)
+		// A promoted dependency whose label a parameter that keeps its label has is named apart from it, since
+		// its binding would hide the parameter from the mocked type and from the receivers of the parameter.
+		let rootLabelMap = Self.disambiguatePropertyLabels(
+			for: treePropertyNodes,
+			besideParametersKeepingTheirLabels: parametersKeepingTheirLabels,
+			reservedNames: namesDeclaredInBuilderFunctions,
+		)
 		let treeBindingNames = Self.bindingNames(of: treePropertyNodes, labels: treePropertyLabels, labelMap: rootLabelMap)
 
 		// An uncovered dependency is a `mock()` parameter under its label, unless another uncovered dependency
@@ -1851,6 +1868,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		return MockRootParameters(
 			parameterTree: parameterTree,
+			rootLabelMap: rootLabelMap,
 			forwardedDependencies: forwardedDependencies,
 			rootConstructionInitializer: rootConstructionInitializer,
 			rootDefaultParameters: rootDefaultParameters,
@@ -1901,7 +1919,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// The names `mockRootParameters` named the uncovered dependencies apart from, which the rest of the mock
 		// is named apart from too.
 		let namesDeclaredInBuilderFunctions = Self.namesDeclaredInBuilderFunctions(of: treePropertyNodes)
-		let rootLabelMap = Self.disambiguatePropertyLabels(for: treePropertyNodes, reservedNames: namesDeclaredInBuilderFunctions)
+		let rootLabelMap = parameters.rootLabelMap
 		let treeBindingNames = Self.bindingNames(of: treePropertyNodes, labels: treePropertyLabels, labelMap: rootLabelMap)
 		let uncoveredDependencyNames = flatUncoveredParameters.map(\.label)
 		var uncoveredDependencyNameMap = [String: [TypeDescription: String]]()
@@ -1962,7 +1980,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// label are named apart by their instance types, as flat parameters sharing a label are, and so is a
 		// wrapper whose name the mock's scope already holds: a parameter, an override, or a binding of the
 		// tree, or that a builder function beneath it declares. Renaming the generated binding leaves every
-		// label the declarations wrote as it is.
+		// label the declarations wrote as it is. The instance is a parameter of `mock()` – the one the mocked type
+		// forwards under its label, when the mocked type forwards it – or an `onlyIfAvailable` override.
+		let forwardedProperties = Set(forwardedDependencies.map(\.property))
 		var lazilyInstantiatedPropertiesToBind = [Property]()
 		var lazilyInstantiatedPropertiesSeen = Set<Property>()
 		for receivedProperty in lazilyInstantiatedReceivedProperties
@@ -1993,7 +2013,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let wrapperTypeSource = lazilyInstantiatedProperty.typeDescription.asSource
 			// A required receive of an optional `LazilyInstantiated` is handed an optional instance.
 			let optionalInstanceProperty = Property(label: instanceProperty.label, typeDescription: .optional(instanceProperty.typeDescription))
-			if flatReceivedProperties.contains(instanceProperty) {
+			if forwardedProperties.contains(instanceProperty) {
+				// A forwarded parameter keeps its label.
+				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(wrapperTypeSource) { \(instanceProperty.label) }")
+			} else if flatReceivedProperties.contains(instanceProperty) {
 				let instanceName = flatParameterDisambiguationMap[instanceProperty.label]?[instanceProperty.typeDescription] ?? instanceProperty.label
 				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(wrapperTypeSource) { \(instanceName) }")
 			} else if flatReceivedProperties.contains(optionalInstanceProperty) {
@@ -3240,13 +3263,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// type each node builds and falling back to its property type: a mock root that declares
 	/// `x: X` itself can also be given a promoted `x: Instantiator<X>` or `x: LazilyInstantiated<X>`,
 	/// and each needs its own name. A disambiguated label is never one of `reservedNames`.
+	/// - Parameter parametersKeepingTheirLabels: The parameters of the function whose body binds `nodes` that
+	///   keep their labels, which a node's binding would hide: a mock root's `@Forwarded` and default-valued
+	///   parameters. A node that shares a label with one is named apart from it, as from a sibling: a mocked
+	///   type that forwards `x: X` while a dependency it receives requires `x: Instantiator<X>` gets the entry
+	///   `x_Instantiator__X`.
 	/// Returns a dictionary mapping each node's label and property type to its disambiguated label.
 	private static func disambiguatePropertyLabels(
 		for nodes: [MockParameterNode],
+		besideParametersKeepingTheirLabels parametersKeepingTheirLabels: [Property] = [],
 		reservedNames: Set<String> = [],
 	) -> [String: [TypeDescription: String]] {
 		let labels = nodes.map(\.propertyLabel)
-		let collidingLabels = collidingLabels(in: labels)
+		let parameterLabels = Set(parametersKeepingTheirLabels.map(\.label))
+		let collidingLabels = collidingLabels(in: labels).union(parameterLabels.intersection(labels))
 		let collidingNodes = nodes.filter { collidingLabels.contains($0.propertyLabel) }
 		let collidingNames = identifierSafeNames(
 			for: collidingNodes.map {
@@ -3255,8 +3285,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					suffixTypes: [$0.instantiatedTypeDescription.simplified, $0.instantiatedTypeDescription, $0.typeDescription],
 				)
 			},
-			// Labels that don't need disambiguation stay as they are.
-			reservedNames: Set(labels).subtracting(collidingLabels).union(reservedNames),
+			besideEntriesKeepingTheirNames: parametersKeepingTheirLabels.compactMap { parameter in
+				guard collidingLabels.contains(parameter.label) else { return nil }
+				let instantiatedTypeDescription = parameter.typeDescription.asInstantiatedType
+				return (
+					label: parameter.label,
+					suffixTypes: [instantiatedTypeDescription.simplified, instantiatedTypeDescription, parameter.typeDescription],
+				)
+			},
+			// Labels that don't need disambiguation stay as they are, and so do the parameters' labels.
+			reservedNames: Set(labels).subtracting(collidingLabels).union(parameterLabels).union(reservedNames),
 		)
 		var result = [String: [TypeDescription: String]]()
 		for node in nodes where !collidingLabels.contains(node.propertyLabel) {
@@ -3270,14 +3308,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// The names `nodes`, the property children of one scope whose labels are `labels`, are bound to:
 	/// each node's label, disambiguated as `labelMap`, from `disambiguatePropertyLabels`, names it when
-	/// siblings share it.
+	/// siblings or a parameter that keeps its label share it.
 	private static func bindingNames(
 		of nodes: [MockParameterNode],
 		labels: Set<String>,
 		labelMap: [String: [TypeDescription: String]],
 	) -> Set<String> {
-		// Most scopes have no two children with one label, which leaves every label as it is.
-		guard labels.count < nodes.count else { return labels }
+		// Most scopes have no two children with one label and no parameter with a child's label, which leaves
+		// every label as it is.
+		guard labels.count < nodes.count
+			|| labelMap.contains(where: { label, namesByTypeDescription in namesByTypeDescription.values.contains { $0 != label } })
+		else { return labels }
 		return Set(nodes.map { disambiguatedLabel(for: $0, labelMap: labelMap) })
 	}
 
@@ -3382,14 +3423,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///
 	/// Each entry lists suffix types in order of preference. An entry is named
 	/// `<label>_<suffix type’s asIdentifier>` with the first suffix type whose `asIdentifier`
-	/// no other entry with its label shares at the same position, or with its last suffix type
-	/// when every position is shared. Then, in entry order, underscores are appended until the
-	/// name is neither reserved nor already given to an earlier entry.
+	/// no other entry with its label shares at the same position, nor any of
+	/// `entriesKeepingTheirNames` with its label, or with its last suffix type when every position
+	/// is shared. Then, in entry order, underscores are appended until the name is neither reserved
+	/// nor already given to an earlier entry. `entriesKeepingTheirNames` are not named: they list
+	/// their suffix types only so that an entry is named apart from them as from a sibling, and
+	/// list as many as each entry.
 	private static func identifierSafeNames(
 		for entries: [(label: String, suffixTypes: [TypeDescription])],
+		besideEntriesKeepingTheirNames entriesKeepingTheirNames: [(label: String, suffixTypes: [TypeDescription])] = [],
 		reservedNames: Set<String>,
 	) -> [String] {
 		let suffixesPerEntry = entries.map { $0.suffixTypes.map(\.asIdentifier) }
+		let suffixesPerEntryKeepingItsName = entriesKeepingTheirNames.map { $0.suffixTypes.map(\.asIdentifier) }
 		var takenNames = reservedNames
 		return entries.indices.map { index in
 			let suffixes = suffixesPerEntry[index]
@@ -3399,6 +3445,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						&& entries[otherIndex].label == entries[index].label
 						&& suffixesPerEntry[otherIndex][position] == suffixes[position]
 				}
+					&& !entriesKeepingTheirNames.indices.contains { otherIndex in
+						entriesKeepingTheirNames[otherIndex].label == entries[index].label
+							&& suffixesPerEntryKeepingItsName[otherIndex][position] == suffixes[position]
+					}
 			}.map { suffixes[$0] } ?? suffixes[suffixes.count - 1]
 			var name = "\(entries[index].label)_\(suffix)"
 			while takenNames.contains(name) {
