@@ -420,7 +420,228 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		} + childDOTs).joined(separator: "\n")
 	}
 
+	/// A dependency that a type receives inside a `@Sendable` builder function from an `Instantiator`,
+	/// `ErasedInstantiator`, or `LazilyInstantiated` declared outside that function. The generated function
+	/// would capture the wrapper, which is not `Sendable`.
+	struct NonSendableWrapperCapture: Hashable, Sendable {
+		/// The property received: the fulfilling property for an aliased dependency, the declared property otherwise.
+		let receivedProperty: Property
+		/// Where the receiving dependency is declared.
+		let declarationLocation: Dependency.DeclarationLocation?
+		/// The types from the root of the tree to the receiver, outermost first.
+		let chain: [TypeDescription]
+		/// The outermost `@Sendable` builder function that encloses the receiver but not the wrapper.
+		let sendableBuilder: Property
+		/// The type that declares `sendableBuilder`.
+		let sendableBuilderDeclaringType: TypeDescription
+		/// The wrapper property the builder function would capture.
+		let wrapperProperty: Property
+		/// The type that declares `wrapperProperty`, or `nil` when a mock root's tree receives it
+		/// from outside the tree.
+		let wrapperDeclaringType: TypeDescription?
+		/// Where `wrapperProperty` is declared, when a type in the tree declares it.
+		let wrapperDeclarationLocation: Dependency.DeclarationLocation?
+	}
+
+	/// The dependencies in the tree rooted at this scope that a `@Sendable` builder function would capture an
+	/// `Instantiator`, `ErasedInstantiator`, or `LazilyInstantiated` declared outside it to pass, in the order
+	/// the tree's code is generated.
+	///
+	/// SafeDI builds a `SendableInstantiator`, `SendableErasedInstantiator`, or `SendableLazilyInstantiated`
+	/// in a `@Sendable` function, and passes a dependency by its label, which resolves to the closest
+	/// declaration of that label in the generated code: a property an enclosing scope declares or forwards,
+	/// or, in a mock, a property the mock root is handed or promotes. This walks the tree as code generation
+	/// does, so a dependency passed `nil` captures nothing.
+	///
+	/// - Parameter instantiable: The type this root scope builds.
+	func nonSendableWrapperCaptures(ofTreeRootedAt instantiable: Instantiable) async -> [NonSendableWrapperCapture] {
+		await nonSendableWrapperCaptures(
+			of: instantiable,
+			unavailableProperties: unavailableProperties(
+				isGeneratedBefore: { _ in false },
+				propertiesGeneratedLater: [],
+			),
+			propertiesGeneratedLater: [],
+			declarationsByLabel: [:],
+			enclosingSendableBuilders: [],
+			chain: [],
+		)
+	}
+
 	// MARK: Private
+
+	/// A property that generated code declares, as `nonSendableWrapperCaptures` sees it.
+	private struct VisibleDeclaration {
+		let property: Property
+		/// The by-value property with which receivers read the instance of `property`, when it is lazily instantiated.
+		let instanceProperty: Property?
+		/// The type that declares the property, or `nil` for a property a mock root is handed or promotes because
+		/// its tree receives it from outside the tree.
+		let declaringType: TypeDescription?
+		let declarationLocation: Dependency.DeclarationLocation?
+		/// How many `@Sendable` builder functions enclose the declaration.
+		let sendableBuilderDepth: Int
+	}
+
+	/// A `@Sendable` builder function: the property it builds, and the type that declares that property.
+	private struct SendableBuilder {
+		let property: Property
+		let declaringType: TypeDescription
+	}
+
+	/// - Parameters:
+	///   - instantiable: The type this scope builds. Never a scope that closes a cycle, which constructs nothing:
+	///     it refers to an enclosing builder function.
+	///   - unavailableProperties: This scope's `unavailableProperties`, as `generateCode` takes them.
+	///   - propertiesGeneratedLater: This scope's `propertiesGeneratedLater`, as `generateCode` takes them.
+	///   - declarationsByLabel: The declarations each label names where this scope is constructed, all of them
+	///     made by the closest scope that declares the label.
+	///   - enclosingSendableBuilders: The `@Sendable` builder functions this scope is constructed in, outermost first.
+	///   - chain: The types that enclose this scope, outermost first.
+	private func nonSendableWrapperCaptures(
+		of instantiable: Instantiable,
+		unavailableProperties: Set<Property>,
+		propertiesGeneratedLater: Set<Property>,
+		declarationsByLabel: [String: [VisibleDeclaration]],
+		enclosingSendableBuilders: [SendableBuilder],
+		chain: [TypeDescription],
+	) async -> [NonSendableWrapperCapture] {
+		let chain = chain + [instantiable.concreteInstantiable]
+		let sendableBuilderDepth = enclosingSendableBuilders.count
+
+		/// The capture a read of `receivedProperty` here makes, if any, when the label resolves among `declarationsByLabel`.
+		func capture(
+			of receivedProperty: Property,
+			declaredAt declarationLocation: Dependency.DeclarationLocation?,
+			among declarationsByLabel: [String: [VisibleDeclaration]],
+		) -> NonSendableWrapperCapture? {
+			let wrapperProperty: Property
+			let wrapperDeclaration: VisibleDeclaration?
+			let capturingBuilder: SendableBuilder
+			if let declarations = declarationsByLabel[receivedProperty.label] {
+				let unwrappedReceivedProperty = receivedProperty.asUnwrappedProperty
+				guard let declaration = declarations.first(where: {
+				      	$0.property.asUnwrappedProperty == unwrappedReceivedProperty || $0.instanceProperty == unwrappedReceivedProperty
+				      }),
+				      declaration.property.propertyType.isNonSendableWrapper,
+				      declaration.sendableBuilderDepth < sendableBuilderDepth
+				else { return nil }
+				wrapperProperty = declaration.property
+				wrapperDeclaration = declaration
+				capturingBuilder = enclosingSendableBuilders[declaration.sendableBuilderDepth]
+			} else if receivedProperty.propertyType.isNonSendableWrapper {
+				// No scope in the tree declares the label, so this is a mock, which declares the property at its root.
+				wrapperProperty = receivedProperty
+				wrapperDeclaration = nil
+				capturingBuilder = enclosingSendableBuilders[0]
+			} else {
+				return nil
+			}
+			return NonSendableWrapperCapture(
+				receivedProperty: receivedProperty,
+				declarationLocation: declarationLocation,
+				chain: chain,
+				sendableBuilder: capturingBuilder.property,
+				sendableBuilderDeclaringType: capturingBuilder.declaringType,
+				wrapperProperty: wrapperProperty,
+				wrapperDeclaringType: wrapperDeclaration?.declaringType,
+				wrapperDeclarationLocation: wrapperDeclaration?.declarationLocation,
+			)
+		}
+
+		var captures = [NonSendableWrapperCapture]()
+		// Outside every `@Sendable` builder function, nothing is captured.
+		if sendableBuilderDepth > 0 {
+			for dependency in instantiable.dependencies where dependency.source.isReceived && !unavailableProperties.contains(dependency.property) {
+				if let capture = capture(of: dependency.property, declaredAt: dependency.declarationLocation, among: declarationsByLabel) {
+					captures.append(capture)
+				}
+			}
+		}
+
+		// The properties this scope declares for the scopes it builds: those it forwards, and its children. A
+		// received property a mock root promotes is not among its type's declarations.
+		let declaringType = instantiable.concreteInstantiable
+		var declarationLocationByProperty = [Property: Dependency.DeclarationLocation?]()
+		for dependency in instantiable.dependencies where !dependency.source.isReceived {
+			declarationLocationByProperty[dependency.property] = dependency.declarationLocation
+		}
+		func visibleDeclaration(of property: Property, instanceProperty: Property?) -> VisibleDeclaration {
+			if let declarationLocation = declarationLocationByProperty[property] {
+				VisibleDeclaration(
+					property: property,
+					instanceProperty: instanceProperty,
+					declaringType: declaringType,
+					declarationLocation: declarationLocation,
+					sendableBuilderDepth: sendableBuilderDepth,
+				)
+			} else {
+				VisibleDeclaration(
+					property: property,
+					instanceProperty: instanceProperty,
+					declaringType: nil,
+					declarationLocation: nil,
+					sendableBuilderDepth: sendableBuilderDepth,
+				)
+			}
+		}
+		var scopeDeclarationsByLabel = [String: [VisibleDeclaration]]()
+		for dependency in instantiable.dependencies where dependency.source == .forwarded {
+			scopeDeclarationsByLabel[dependency.property.label, default: []].append(visibleDeclaration(
+				of: dependency.property,
+				instanceProperty: dependency.lazilyInstantiatedInstanceProperty,
+			))
+		}
+		let orderedChildren = orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater)
+		// An `onlyIfAvailable` alias that is not created declares nothing.
+		for child in orderedChildren where child.generator.uncreatedAliasProperty(unavailableProperties: child.unavailableProperties) == nil {
+			if let property = child.generator.property {
+				scopeDeclarationsByLabel[property.label, default: []].append(visibleDeclaration(
+					of: property,
+					instanceProperty: child.generator.declaredLazilyInstantiatedInstanceProperty,
+				))
+			}
+		}
+		var childDeclarationsByLabel = declarationsByLabel
+		childDeclarationsByLabel.merge(scopeDeclarationsByLabel) { _, scopeDeclarations in scopeDeclarations }
+
+		for child in orderedChildren {
+			if case let .alias(property, fulfillingProperty, _, _, _) = child.generator.scopeData {
+				// The alias is bound in this scope's code, where its fulfilling property is read. An alias that keeps
+				// its fulfilling property's label is not in scope where that property is read.
+				guard sendableBuilderDepth > 0,
+				      child.generator.uncreatedAliasProperty(unavailableProperties: child.unavailableProperties) == nil
+				else { continue }
+				var fulfillingDeclarationsByLabel = childDeclarationsByLabel
+				if fulfillingProperty.label == property.label {
+					fulfillingDeclarationsByLabel[property.label] = declarationsByLabel[property.label]
+				}
+				if let capture = capture(
+					of: fulfillingProperty,
+					declaredAt: declarationLocationByProperty[property] ?? nil,
+					among: fulfillingDeclarationsByLabel,
+				) {
+					captures.append(capture)
+				}
+			} else if case let .property(childInstantiable, childProperty, _, _, isPropertyCycle) = child.generator.scopeData,
+			          // A scope that closes a cycle constructs nothing: it refers to an enclosing builder function.
+			          !isPropertyCycle
+			{
+				let childSendableBuilders = childProperty.propertyType.isSendable
+					? enclosingSendableBuilders + [SendableBuilder(property: childProperty, declaringType: declaringType)]
+					: enclosingSendableBuilders
+				await captures.append(contentsOf: child.generator.nonSendableWrapperCaptures(
+					of: childInstantiable,
+					unavailableProperties: child.unavailableProperties,
+					propertiesGeneratedLater: child.propertiesGeneratedLater,
+					declarationsByLabel: childDeclarationsByLabel,
+					enclosingSendableBuilders: childSendableBuilders,
+					chain: chain,
+				))
+			}
+		}
+		return captures
+	}
 
 	private enum ScopeData {
 		case root(instantiable: Instantiable)
@@ -3787,5 +4008,15 @@ extension Instantiable {
 					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 				) ?? Self.incorrectlyConfiguredComment
 		}
+	}
+}
+
+// MARK: - Property.PropertyType
+
+extension Property.PropertyType {
+	/// Whether the property is an `Instantiator`, `ErasedInstantiator`, or `LazilyInstantiated`, which a
+	/// `@Sendable` function cannot capture.
+	fileprivate var isNonSendableWrapper: Bool {
+		!isConstant && !isSendable
 	}
 }

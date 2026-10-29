@@ -67,6 +67,7 @@ public actor DependencyTreeGenerator {
 
 	public func generatePerRootCodeTrees() async throws -> [GeneratedRoot] {
 		let rootScopeGenerators = try rootScopeGenerators
+		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: rootScopeGenerators.map { ($0.instantiable, $0.scopeGenerator) })
 
 		return try await withThrowingTaskGroup(
 			of: GeneratedRoot?.self,
@@ -287,6 +288,7 @@ public actor DependencyTreeGenerator {
 			)
 			mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
 		}
+		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: mockRoots)
 
 		// Compute the global cycle edges across all mock-reachable types. Per-tree
 		// cycle detection (`isPropertyCycle`) breaks at a different edge depending
@@ -629,12 +631,23 @@ public actor DependencyTreeGenerator {
 		case aliasedDependenciesFulfillOneAnother(aliasChain: [Property], declarationLocation: Dependency.DeclarationLocation?)
 		/// Reported at the hand-written `mock` method of a type whose `mock()` this module also generates.
 		case handWrittenMockSharesGeneratedMockName(TypeDescription, declaredAt: [Dependency.DeclarationLocation?], isGeneratedForAdditionalMocksToGenerate: Bool)
+		/// Reported at each dependency that a `@Sendable` builder function would read from an `Instantiator`,
+		/// `ErasedInstantiator`, or `LazilyInstantiated` declared outside it, with a note at that wrapper when a type
+		/// in the tree declares it.
+		case nonSendableWrapperCapturedBySendableBuilder([ScopeGenerator.NonSendableWrapperCapture])
 		/// Reported at the hand-written mock of each type that generated mocks build both with that mock and
 		/// without it, in ways one `SafeDIMockConfiguration` struct cannot describe. See `ConfigurationBuiltTwoWays`.
 		case configurationBuiltTwoWays([ConfigurationBuiltTwoWays])
 
 		var sourceDiagnostics: [SourceDiagnostic] {
 			switch self {
+			case let .nonSendableWrapperCapturedBySendableBuilder(captures):
+				// The captures arrive in set order. Two whose errors read the same name the same wrapper on the same
+				// type, so their notes, at that declaration, read the same too, and the diagnostics come out the same.
+				captures
+					.map(Self.sourceDiagnostics(of:))
+					.sorted { SourceDiagnostic.precedesInSourceOrder($0[0], $1[0]) }
+					.flatMap(\.self)
 			case let .configurationBuiltTwoWays(configurationsBuiltTwoWays):
 				// Sorted by location so the order never depends on map iteration.
 				configurationsBuiltTwoWays
@@ -745,6 +758,54 @@ public actor DependencyTreeGenerator {
 				"No production @\(InstantiableVisitor.macroName) declaration fulfills \(reference). A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @\(InstantiableVisitor.macroName) declaration that fulfills `\(typeName)`."
 			} else {
 				"No @\(InstantiableVisitor.macroName) type or extension fulfills \(reference). Decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName); list `\(typeName)` in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target."
+			}
+		}
+
+		/// An `error:` line that names the type declaring the wrapper, since Xcode drops notes from build-tool
+		/// output, and a `note:` at that declaration so command-line builds can navigate to it.
+		private static func sourceDiagnostics(of capture: ScopeGenerator.NonSendableWrapperCapture) -> [SourceDiagnostic] {
+			let wrapperProperty = capture.wrapperProperty
+			let label = wrapperProperty.label
+			let wrapperType = wrapperProperty.typeDescription.unwrapped
+			// Each wrapper's `Sendable` twin is spelled with `Sendable` before its name.
+			let sendableWrapperType = "Sendable\(wrapperType.asSource)"
+			// A lazily instantiated property can also be received as its instance; the others only as themselves.
+			let receivesWrapper = !capture.receivedProperty.propertyType.isConstant
+			let capturedProperty: String
+			let fix: String
+			if let declaringType = capture.wrapperDeclaringType {
+				capturedProperty = "`\(wrapperProperty.asSource)` on `\(declaringType.asSource)`"
+				fix = receivesWrapper
+					? "Declare `\(label)` on `\(declaringType.asSource)`, and this property, as `\(sendableWrapperType)` to fix."
+					: "Declare `\(label)` on `\(declaringType.asSource)` as `\(sendableWrapperType)` to fix."
+			} else {
+				capturedProperty = "`\(wrapperProperty.asSource)`, which the tree of `\(capture.chain[0].asSource)` receives from outside it"
+				fix = "Declare `\(label)` as `\(sendableWrapperType)` where it is declared and where it is received as `\(wrapperType.asSource)` to fix."
+			}
+			let requirement = if wrapperProperty.propertyType.isLazilyInstantiated {
+				// The constant a lazily instantiated property stands for has the type of its instance.
+				"A `\(Dependency.sendableLazilyInstantiatedType)` requires its instance type, `\(wrapperProperty.asUnwrappedProperty.asValidatedForDependencyCycles.typeDescription.asSource)`, to be `Sendable`."
+			} else {
+				"`\(sendableWrapperType)` builds `\(wrapperType.asInstantiatedType.asSource)` in a `@Sendable` function, so what the tree of `\(wrapperType.asInstantiatedType.asSource)` receives from outside that function must be `Sendable` too."
+			}
+			let error = SourceDiagnostic(
+				severity: .error,
+				location: capture.declarationLocation,
+				message: "@\(Dependency.Source.receivedRawValue) property `\(capture.receivedProperty.asSource)` cannot be received inside a `@Sendable` function in chain: \(capture.chain.map(\.asSource).joined(separator: " -> ")). "
+					+ "SafeDI builds `\(capture.sendableBuilder.asSource)` on `\(capture.sendableBuilderDeclaringType.asSource)` in a `@Sendable` function, which cannot capture \(capturedProperty), because `\(wrapperType.asSource)` is not `Sendable`. "
+					+ "\(fix) \(requirement)",
+			)
+			return if capture.wrapperDeclaringType != nil {
+				[
+					error,
+					SourceDiagnostic(
+						severity: .note,
+						location: capture.wrapperDeclarationLocation,
+						message: "`\(wrapperProperty.asSource)` is declared here",
+					),
+				]
+			} else {
+				[error]
 			}
 		}
 
@@ -1058,6 +1119,7 @@ public actor DependencyTreeGenerator {
 	private let aliasDeclarationReferences: AliasDeclarationReferences
 	private struct RootScopeInfo {
 		let typeDescription: TypeDescription
+		let instantiable: Instantiable
 		let sourceFilePath: String?
 		let scopeGenerator: ScopeGenerator
 	}
@@ -1094,6 +1156,7 @@ public actor DependencyTreeGenerator {
 						try typeDescriptionToScopeMap[typeDescription].map { scope in
 							try RootScopeInfo(
 								typeDescription: typeDescription,
+								instantiable: scope.instantiable,
 								sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
 								scopeGenerator: scope.createScopeGenerator(
 									for: nil,
@@ -3202,6 +3265,32 @@ public actor DependencyTreeGenerator {
 		}
 		if !hiddenReceivedProperties.isEmpty {
 			throw DependencyTreeGeneratorError.hiddenReceivedProperties(Array(hiddenReceivedProperties))
+		}
+	}
+
+	/// Validates that no `@Sendable` builder function in the trees rooted at `roots` would capture an
+	/// `Instantiator`, `ErasedInstantiator`, or `LazilyInstantiated` declared outside it, none of which is
+	/// `Sendable`. See `ScopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt:)`.
+	///
+	/// A receiver that several roots, or several paths through one tree, reach is reported once for each chain, as
+	/// an unfulfillable dependency is, rather than once with the chain of whichever root sorts first: which root a
+	/// diagnostic names must not depend on the order of names.
+	private func validateSendableBuildersCaptureNoNonSendableWrapper(
+		inTreesRootedAt roots: [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)],
+	) async throws {
+		// Walking the trees costs a pass over every scope, so only a module whose types name both a wrapper
+		// that is not `Sendable` and a `Sendable` builder pays for it.
+		let dependencies = typeDescriptionToFulfillingInstantiableMap.values.lazy.flatMap(\.dependencies)
+		guard dependencies.contains(where: { !$0.property.propertyType.isConstant && !$0.property.propertyType.isSendable }),
+		      dependencies.contains(where: \.property.propertyType.isSendable)
+		else { return }
+		// Two paths can reach one receiver through the same chain of types, so identical captures are reported once.
+		var captures = Set<ScopeGenerator.NonSendableWrapperCapture>()
+		for root in roots {
+			await captures.formUnion(root.scopeGenerator.nonSendableWrapperCaptures(ofTreeRootedAt: root.instantiable))
+		}
+		if !captures.isEmpty {
+			throw DependencyTreeGeneratorError.nonSendableWrapperCapturedBySendableBuilder(Array(captures))
 		}
 	}
 

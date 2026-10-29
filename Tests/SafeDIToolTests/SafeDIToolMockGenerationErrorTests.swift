@@ -2185,6 +2185,93 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenSendableInstantiatorSubtreeReceivesInstantiatorMockCannotBuild() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Settings.swift"]):7:5: error: @Received property `childBuilder: Instantiator<Child>` cannot be received inside a `@Sendable` function in chain: Screen -> Settings. SafeDI builds `settingsBuilder: SendableInstantiator<Settings>` on `Screen` in a `@Sendable` function, which cannot capture `childBuilder: Instantiator<Child>`, which the tree of `Screen` receives from outside it, because `Instantiator<Child>` is not `Sendable`. Declare `childBuilder` as `SendableInstantiator<Child>` where it is declared and where it is received as `Instantiator<Child>` to fix. `SendableInstantiator<Child>` builds `Child` in a `@Sendable` function, so what the tree of `Child` receives from outside that function must be `Sendable` too.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(settingsBuilder: SendableInstantiator<Settings>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let settingsBuilder: SendableInstantiator<Settings>
+					}
+
+					public final class Child: Instantiable {}
+					""",
+					"""
+					@Instantiable
+					public final class Settings: Instantiable {
+					    public init(childBuilder: Instantiator<Child>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let childBuilder: Instantiator<Child>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenSendableInstantiatorSubtreeReceivesInstantiatorPromotedToMockRoot() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Settings.swift"]):7:5: error: @Received property `childBuilder: Instantiator<Child>` cannot be received inside a `@Sendable` function in chain: Screen -> Settings. SafeDI builds `settingsBuilder: SendableInstantiator<Settings>` on `Screen` in a `@Sendable` function, which cannot capture `childBuilder: Instantiator<Child>`, which the tree of `Screen` receives from outside it, because `Instantiator<Child>` is not `Sendable`. Declare `childBuilder` as `SendableInstantiator<Child>` where it is declared and where it is received as `Instantiator<Child>` to fix. `SendableInstantiator<Child>` builds `Child` in a `@Sendable` function, so what the tree of `Child` receives from outside that function must be `Sendable` too.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(childBuilder: Instantiator<Child>, settingsBuilder: SendableInstantiator<Settings>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let childBuilder: Instantiator<Child>
+					    @Instantiated let settingsBuilder: SendableInstantiator<Settings>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Settings: Instantiable {
+					    public init(childBuilder: Instantiator<Child>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let childBuilder: Instantiator<Child>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()

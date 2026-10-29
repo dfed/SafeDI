@@ -417,30 +417,38 @@ struct SafeDIToolGraphFuzzerTests {
 
 	// MARK: Seeds
 
-	/// The ordinary suite's batch: seeds 33, 476, and 797, whose graphs the tool accepts and which between them
-	/// exercise every feature (no two do: the sendable features need a sendable graph, the others a graph that is
-	/// not), and seed 5, whose graph it rejects. It is small because compiling generated code is what the fuzzer
-	/// costs; ci.yml fuzzes the whole corpus on every pull request. Compiling the batch is one `swiftc` invocation
-	/// when nothing fails.
-	static let smokeSeeds: [UInt64] = [5, 33, 476, 797]
+	/// The ordinary suite's batch: seeds 0, 8, 29, 68, and 81, whose graphs the tool accepts and which between
+	/// them exercise every feature, and seed 580, whose graph it rejects because a `Sendable` builder's subtree
+	/// receives a `LazilyInstantiated` declared outside it. It is small because compiling generated code is what
+	/// the fuzzer costs; ci.yml fuzzes the whole corpus on every pull request. Compiling the batch is one `swiftc`
+	/// invocation when nothing fails.
+	static let smokeSeeds: [UInt64] = [0, 8, 29, 68, 81, 580]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x6A3F2E4276FCD1D8
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x6C8583F571A8B44E
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0x09F7D6E697EA4ACF
+	static let corpusFixtureHash: UInt64 = 0x18CD3D146B6A3885
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
-	static let corpusAcceptedSeedCount = 2_781
-	static let corpusAcceptedSeedsSum: UInt64 = 0x7CDBD921B864C18F
+	static let corpusAcceptedSeedCount = 2_661
+	static let corpusAcceptedSeedsSum: UInt64 = 0xA0242A268AD6B685
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
-	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix. Empty
-	/// since PRs 404, 407, and 408 fixed or rejected every shape the corpus found.
-	static let knownIssues: [GraphFuzzerKnownIssue] = []
+	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
+	static let knownIssues: [GraphFuzzerKnownIssue] = [
+		GraphFuzzerKnownIssue(
+			reason: "A cycle through a Sendable builder and an Instantiator refers to the enclosing non-Sendable builder function from the @Sendable one",
+			signatures: [.compilerError(containing: "must be marked as '@Sendable'")],
+			seeds: [
+				33, 114, 656, 752, 931, 1_052, 1_078, 1_258, 1_279, 1_363, 1_420, 1_594, 1_693, 1_752, 1_756, 2_102,
+				2_254, 2_270, 2_403, 2_436, 2_552, 2_625, 3_194, 3_355, 3_596, 3_604, 3_728, 3_883, 3_915, 4_117, 4_379, 4_428,
+			],
+		),
+	]
 
 	/// Known issues for the tests of `GraphFuzzerFinding`, which must not depend on what `knownIssues` lists today.
 	private static let compilerErrorKnownIssue = GraphFuzzerKnownIssue(
