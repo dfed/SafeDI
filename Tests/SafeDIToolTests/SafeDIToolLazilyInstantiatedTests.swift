@@ -8337,8 +8337,8 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        items_Instantiator__Value: Instantiator<Value>,
 		        items_Value: Value?,
+		        items_Instantiator__Value: Instantiator<Value>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let items_lazilyInstantiated = items_Value.map { instance in LazilyInstantiated<Value> { instance } }

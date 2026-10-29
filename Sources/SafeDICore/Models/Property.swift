@@ -193,6 +193,21 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		)
 	}
 
+	/// Whether this property precedes `other` where a mock lists the received dependencies it takes rather than
+	/// builds – its flat `mock()` parameters and its `onlyIfAvailable` overrides: by label, then by kind of
+	/// property – a constant, then an `Instantiator`, and so on in the order `PropertyType` lists the kinds,
+	/// whether or not the property is optional – then as `<` orders them. A mock lists the forms of one dependency
+	/// under one label, such as `x: X` and `x: Instantiator<X>`, in an order no type name decides.
+	func precedesInMockOrder(_ other: Property) -> Bool {
+		if label != other.label {
+			label < other.label
+		} else if propertyType != other.propertyType {
+			PropertyType.allCases.first { $0 == propertyType || $0 == other.propertyType } == propertyType
+		} else {
+			self < other
+		}
+	}
+
 	var propertyType: PropertyType {
 		typeDescription.propertyType
 	}

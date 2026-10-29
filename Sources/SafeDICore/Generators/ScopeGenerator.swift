@@ -1700,13 +1700,29 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			forwardedPropertySet.contains(property) || forwardedPropertySet.contains(property.asUnwrappedProperty)
 		}
 
+		// A tree node binds a non-optional value, even when it is promoted for a required `x: X?`.
+		/// Whether the tree provides a received property, as a scope provides one to the scopes beneath it
+		/// (`provides`). A promoted node also provides the non-optional form of its optional property: a
+		/// mock builds it, so it binds a non-optional value even when it is promoted for a required `x: X?`.
+		/// An `onlyIfAvailable` alias of an optional property binds an optional value, so it does not.
+		func isProvidedByTree(_ property: Property) -> Bool {
+			Self.provides(property, declaredProperties: propertiesToDeclare, forwardedProperties: [])
+				|| (!property.typeDescription.isOptional
+					&& treePropertyLabels.contains(property.label)
+					&& treePropertyNodes.contains { $0.propertyLabel == property.label && $0.typeDescription == .optional(property.typeDescription) })
+		}
+
 		// The lazily instantiated dependencies the tree receives and the mock cannot build. The caller of
 		// `mock()` passes the instance of such a dependency, exactly as for one received by value, and the
-		// mock wraps it for the types that receive it as `LazilyInstantiated`.
+		// mock wraps it for the types that receive it as `LazilyInstantiated`. A node of another form under
+		// the dependency's label, such as an `Instantiator` the mock builds, does not provide it. A node the
+		// mock builds for the instance itself does, though the wrapper cannot be made from it: the node is
+		// declared among the tree's bindings, after the wrappers.
 		let lazilyInstantiatedReceivedProperties = receivedProperties
 			.filter {
 				$0.typeDescription.lazilyInstantiatedInstanceType != nil
-					&& !treePropertyLabels.contains($0.label)
+					&& !isProvidedByTree($0)
+					&& !isProvidedByTree($0.asValidatedForDependencyCycles)
 					&& !isFulfilledByForwardedProperty($0)
 			}
 			.sorted()
@@ -1727,17 +1743,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			onlyIfAvailableUnwrappedReceivedParameterProperties = Set(onlyIfAvailableUnwrappedReceivedProperties.map(\.asValidatedForDependencyCycles))
 				.subtracting(requiredReceivedProperties.map(\.asValidatedForDependencyCycles.asUnwrappedProperty))
 		}
-		// A tree node binds a non-optional value, even when it is promoted for a required `x: X?`.
-		/// Whether the tree provides a received property, as a scope provides one to the scopes beneath it
-		/// (`provides`). A promoted node also provides the non-optional form of its optional property: a
-		/// mock builds it, so it binds a non-optional value even when it is promoted for a required `x: X?`.
-		/// An `onlyIfAvailable` alias of an optional property binds an optional value, so it does not.
-		func isProvidedByTree(_ property: Property) -> Bool {
-			Self.provides(property, declaredProperties: propertiesToDeclare, forwardedProperties: [])
-				|| (!property.typeDescription.isOptional
-					&& treePropertyLabels.contains(property.label)
-					&& treePropertyNodes.contains { $0.propertyLabel == property.label && $0.typeDescription == .optional(property.typeDescription) })
-		}
 
 		let receivedNonOptionalProperties = Set(
 			receivedParameterProperties
@@ -1745,7 +1750,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 		var flatReceivedProperties = [Property]()
 		var onlyIfAvailableReceivedProperties = [Property]()
-		for receivedProperty in receivedParameterProperties.sorted() {
+		for receivedProperty in receivedParameterProperties.sorted(by: { $0.precedesInMockOrder($1) }) {
 			// A forwarded `x: X` fulfills an `x: X?` too.
 			guard !forwardedPropertySet.contains(receivedProperty), !receivedProperty.typeDescription.isOptional
 				|| (!receivedNonOptionalProperties.contains(receivedProperty.asUnwrappedProperty) && !forwardedPropertySet.contains(receivedProperty.asUnwrappedProperty))
