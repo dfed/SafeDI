@@ -1042,6 +1042,86 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenOnlyIfAvailableAliasRequiredByReceiverSharesItsFulfillingPropertyWithAliasRequiredEarlier() async {
+		// SecondReceiver requires Child's `onlyIfAvailable` alias `second` of `source`, and Source's tree receives `child`
+		// through Session and X. FirstReceiver's alias `first` of `source` is walked first, and that walk stops at Session's
+		// receive of `first`, so the cycle is found only by walking `second` too.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `child: Child` -> @Received `second: SecondGreeter?` -> @Received `source: Source` -> @Received `session: Session` -> @Received `x: X` -> @Received `child: Child`. `child: Child` is received while it is still being instantiated. `second: SecondGreeter?` renames `source: Source` only if available, so a type that receives `second` without `onlyIfAvailable` must be built after `source: Source`. Receive `second` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `source: Source` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Parent: Instantiable {
+					    public init(child: Child, source: Source) { self.child = child; self.source = source }
+					    @Instantiated let child: Child
+					    @Instantiated let source: Source
+					}
+					""",
+					"""
+					public protocol FirstGreeter: AnyObject {}
+					public protocol SecondGreeter: AnyObject {}
+
+					@Instantiable
+					public final class Source: Instantiable, FirstGreeter, SecondGreeter {
+					    public init(session: Session) { self.session = session }
+					    @Received let session: Session
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Session: Instantiable {
+					    public init(id: String, first: FirstGreeter?, x: X) { self.id = id; self.first = first; self.x = x }
+					    @Forwarded let id: String
+					    @Received let first: FirstGreeter?
+					    @Received let x: X
+					}
+					""",
+					"""
+					@Instantiable
+					public final class X: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Received let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(first: FirstGreeter?, second: SecondGreeter?, firstReceiver: FirstReceiver, secondReceiver: SecondReceiver) { self.first = first; self.second = second; self.firstReceiver = firstReceiver; self.secondReceiver = secondReceiver }
+					    @Received(fulfilledByDependencyNamed: "source", ofType: Source.self, onlyIfAvailable: true) let first: FirstGreeter?
+					    @Received(fulfilledByDependencyNamed: "source", ofType: Source.self, onlyIfAvailable: true) let second: SecondGreeter?
+					    @Instantiated let firstReceiver: FirstReceiver
+					    @Instantiated let secondReceiver: SecondReceiver
+					}
+					""",
+					"""
+					@Instantiable
+					public final class FirstReceiver: Instantiable {
+					    public init(first: FirstGreeter?) { self.first = first }
+					    @Received let first: FirstGreeter?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class SecondReceiver: Instantiable {
+					    public init(second: SecondGreeter?) { self.second = second }
+					    @Received let second: SecondGreeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenPromotedDependencyFulfillsOnlyIfAvailableAliasRequiredByItsOwnTree() async {
 		// Mocked.mock() promotes `t`. T requires Mocked's `onlyIfAvailable` alias of `t`, so `t`
 		// must be built before T is.

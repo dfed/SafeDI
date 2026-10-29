@@ -4213,7 +4213,13 @@ public actor DependencyTreeGenerator {
 			}
 		}
 		/// The fulfilling properties of the `onlyIfAvailable` aliases already walked by
-		/// `validateNoCycleInReceivedProperties`, each followed by its declaring scope's instantiation stack.
+		/// `validateNoCycleInReceivedProperties` – the property the last alias a receive requires is created from – each
+		/// followed by the property received through the first alias and by that last alias's declaring scope's
+		/// instantiation stack. Those decide whether the walk throws: it starts from the fulfilling property with the
+		/// received property on its stack, bails out on a chain that reaches a property on that stack, and throws on one
+		/// that reaches the declaring stack; the rest it is passed only names what an error reports. A walk that throws leaves the set, so a walk in the set returned without throwing, in whichever tree
+		/// walked it, and walking it again would too. A receive of another alias of the same fulfilling property is walked
+		/// again: a chain that bails out at one received property can reach the declaring stack from another.
 		var walkedAliasFulfillingProperties = Set<[Property]>()
 		/// Validates the tree rooted at `rootScope`, scope by scope, depth first in the order each scope declares its
 		/// children. It keeps its own stack of the scopes left to validate, since a tree can be as deep as the module
@@ -4426,7 +4432,7 @@ public actor DependencyTreeGenerator {
 					}
 				} else if alias.onlyIfAvailable,
 				          let declaringProperty = alias.lastAliasDeclaringInstantiationStack.first,
-				          case let walkedAliasFulfillingProperty = [fulfillingProperty] + alias.lastAliasDeclaringInstantiationStack,
+				          case let walkedAliasFulfillingProperty = [fulfillingProperty, receivedProperty] + alias.lastAliasDeclaringInstantiationStack,
 				          walkedAliasFulfillingProperties.insert(walkedAliasFulfillingProperty).inserted
 				{
 					// A required alias's fulfilling property is walked where the alias is declared. Walk the property
