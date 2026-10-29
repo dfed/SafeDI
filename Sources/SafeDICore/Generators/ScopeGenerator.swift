@@ -4087,7 +4087,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		handWrittenMockDefaultParameters: [TypeDescription: [MockParameterNode.DefaultParameter]],
 	) async -> [String] {
 		let forwardedProperties = node.forwardedProperties.sorted()
-		let propertyType = node.typeDescription.propertyType
 		let innerIndent = "\(indent)\(standardIndent)"
 		// The builder function's parameters and bindings hide the renames of their properties.
 		let builderDisambiguationMap = removingRenames(

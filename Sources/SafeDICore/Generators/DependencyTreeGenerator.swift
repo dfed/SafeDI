@@ -1582,6 +1582,17 @@ public actor DependencyTreeGenerator {
 			Self.concreteTypeErased(to: property, in: erasedToConcreteTypeMap)
 		}
 
+		// A forwarded property is a bare mock parameter: the mock is passed it, so it neither promotes it nor walks the
+		// tree of its type. `collectReceivedProperties` subtracts the mock root's forwarded properties only from the trees
+		// of the mock root's own children, so the tree of a promoted scope can still receive one; the worklist and the
+		// promotion below skip it instead. A forwarded lazily instantiated property also provides the by-value property
+		// that reads its instance.
+		let forwardedProperties = instantiable.forwardedReceivableProperties
+		func isForwarded(_ property: Property) -> Bool {
+			// A forwarded `x: X` fulfills an `x: X?` too.
+			forwardedProperties.contains(property) || forwardedProperties.contains(property.asUnwrappedProperty)
+		}
+
 		/// The scope that builds a received property promoted to the mock root, when the mock can build one.
 		/// A received dependency the mock cannot build stays received: the root's `mock()` takes it as a parameter.
 		func scopeToPromote(for receivedProperty: Property) -> (scope: Scope, erasedToConcreteExistential: Bool)? {
@@ -1604,7 +1615,7 @@ public actor DependencyTreeGenerator {
 		// The scope the mock builds for each required property, which `inOrderTheMockTreeFirstReceives` walks too.
 		var scopesBuiltForRequiredProperties = [Property: Scope]()
 		while let property = worklist.popLast() {
-			guard let promotedScope = scopeToPromote(for: property)?.scope else { continue }
+			guard !isForwarded(property), let promotedScope = scopeToPromote(for: property)?.scope else { continue }
 			scopesBuiltForRequiredProperties[property] = promotedScope
 			guard visitedScopes.insert(ObjectIdentifier(promotedScope)).inserted else { continue }
 
@@ -1624,12 +1635,7 @@ public actor DependencyTreeGenerator {
 
 		// Promote all received properties that have scopes.
 		// onlyIfAvailable dependencies are NOT promoted — they become optional
-		// mock parameters with no default.
-		// Filter out forwarded properties — they're bare mock parameters, not promoted children.
-		// ScopeData.root doesn't carry forwardedProperties, so receivedProperties doesn't
-		// subtract them. We filter them here instead.
-		// A forwarded lazily instantiated property also provides the by-value property that reads its instance.
-		let forwardedProperties = instantiable.forwardedReceivableProperties
+		// mock parameters with no default. Nor are forwarded properties.
 		let mockRootScope = Scope(instantiable: instantiable)
 		mockRootScope.propertiesToGenerate = scope.propertiesToGenerate
 
@@ -1654,10 +1660,8 @@ public actor DependencyTreeGenerator {
 		// the receivers of that form. Only an optional form is not promoted beside its non-optional form: the
 		// mock binds what it builds to a non-optional value, which a receive of the optional form is handed too.
 		let propertiesToPromote = allReceived.union(lazilyInstantiatedPropertiesToPromote).filter { receivedProperty in
-			// A forwarded `x: X` fulfills an `x: X?` too.
 			(lazilyInstantiatedPropertiesToPromote.contains(receivedProperty) || !allOnlyIfAvailable.contains(receivedProperty))
-				&& !forwardedProperties.contains(receivedProperty)
-				&& !forwardedProperties.contains(receivedProperty.asUnwrappedProperty)
+				&& !isForwarded(receivedProperty)
 				&& !instancePropertiesOfLazilyInstantiatedProperties.contains(receivedProperty)
 		}
 		var promotedPropertiesToGenerate = [Scope.PropertyToGenerate]()
