@@ -171,10 +171,11 @@ func performScan(
 	let uniqueMockFilePaths = sortedUniqueManifestPaths(mockScopedFileScans.filter(\.outputFileDeclarations.declaresMockGeneratingType))
 
 	// Extract additional mocks to generate from every configuration, those the active configuration
-	// lists first and in its order.
-	let configuredAdditionalMocksToGenerate = configuration?.additionalMocksToGenerate ?? []
-	let additionalMocksToGenerate = configuredAdditionalMocksToGenerate
-		+ moduleOutputFileDeclarations.additionalMocksToGenerate.filter { !configuredAdditionalMocksToGenerate.contains($0) }
+	// lists first and in its order. Each is listed once, even when a configuration lists it twice, so
+	// that no two entries write its mock's file.
+	var listedAdditionalMocksToGenerate = Set<String>()
+	let additionalMocksToGenerate = ((configuration?.additionalMocksToGenerate ?? []) + moduleOutputFileDeclarations.additionalMocksToGenerate)
+		.filter { listedAdditionalMocksToGenerate.insert($0).inserted }
 
 	// Name the mock files and the additional mocks together, so that no two share an output file.
 	let mockOutputNames = mockOutputFileNames(forFilesAt: uniqueMockFilePaths, additionalMocksToGenerate: additionalMocksToGenerate)
@@ -244,10 +245,9 @@ func performScan(
 	func cached(_ fileScan: FileScan) -> CachedFileScan {
 		CachedFileScan(scannedPath: fileScan.path, fileScan: normalized(fileScan))
 	}
-	// The directories as this scan found them, relative to the working directory, so `generate` finds the same files.
-	let additionalDirectories = configuration?.additionalDirectoriesToInclude.map { directory in
-		NormalizedFilePath(directory).path
-	}.sorted() ?? []
+	// The directories as this scan resolved them, against its working directory, so `generate` finds the same files
+	// and judges the entries as this scan read them. The configuration's order is deterministic.
+	let additionalDirectories = configuration?.additionalDirectoriesToInclude.map(AdditionalDirectory.init(entry:)) ?? []
 	// Files are parsed in parallel and their scans arrive in the order parsing finished. Ordering them by
 	// path makes the cache the same bytes whenever the inputs are the same.
 	let sortedFileScans = fileScans.sorted { $0.path < $1.path }
@@ -362,11 +362,11 @@ struct CachedScannedModuleInfo: Codable {
 	/// Used by `generate`'s additional-directory freshness check to compare
 	/// against the current on-disk enumeration without re-sorting the CSV.
 	let additionalInputAbsolutePaths: [String]
-	/// Absolute paths of `additionalDirectoriesToInclude` from the
-	/// configuration that drove this scan. `generate` re-enumerates these
-	/// during freshness checks so files added to those directories
-	/// between scan and generate correctly invalidate the cache.
-	let additionalDirectories: [String]
+	/// The `additionalDirectoriesToInclude` entries of the configuration that drove this scan, in the order it
+	/// lists them, each with the absolute path scan found its files at. `generate` re-enumerates these paths
+	/// during freshness checks so files added to those directories between scan and generate correctly
+	/// invalidate the cache, and warns about an entry from which scan could read no Swift file.
+	let additionalDirectories: [AdditionalDirectory]
 	/// Every compilation condition the scan treated as active. `generate` reuses a file's cached scan
 	/// only when its own conditions give each of the scan's `consultedCompilationConditions` the value
 	/// this set gives it, because walking the file again would then find the same. Other conditions

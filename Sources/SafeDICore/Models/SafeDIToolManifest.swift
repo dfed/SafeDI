@@ -20,7 +20,9 @@
 
 /// A manifest that describes the desired outputs of the SafeDITool.
 /// All input file paths are relative to the working directory where the tool is invoked.
-/// Output file paths may be absolute or relative to the working directory.
+/// Output file paths may be absolute or relative to the working directory. Each output – every entry's
+/// `outputFilePath` and the `mockConfigurationOutputFilePath` – must name a different file: `generate`
+/// rejects a manifest in which two of them name one file.
 public struct SafeDIToolManifest: Codable, Sendable {
 	/// A mapping from an input Swift file to an output file.
 	public struct InputOutputMap: Codable, Sendable {

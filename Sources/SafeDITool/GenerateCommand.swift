@@ -153,6 +153,9 @@ struct Generate: AsyncParsableCommand {
 				from: Data(contentsOf: resolvedSwiftManifest.asFileURL),
 			)
 		}
+		if let manifest {
+			try Self.validateEachOutputIsWrittenOnce(by: manifest)
+		}
 
 		// A manifest without a project root, which only a hand-written manifest lacks, names files as written.
 		let projectFilePaths = scannedProjectFilePaths ?? manifest?.projectRoot.map(ProjectFilePaths.init(projectRoot:))
@@ -178,6 +181,9 @@ struct Generate: AsyncParsableCommand {
 		// Derived from the configuration rather than from how this run parsed, so a module loaded from
 		// scan's cache warns too. Only `generate` warns, so a build that runs `scan` first warns once.
 		var warnings = [sourceConfiguration?.placementWarning].compactMap(\.self)
+			// Judged at the paths the module's additional files were found at: as scan resolved them when the module
+			// comes from scan's cache, and as this run resolved them otherwise.
+			+ (sourceConfiguration?.unreadableAdditionalDirectoryWarnings(for: parsed.module.additionalDirectories) ?? [])
 
 		let resolvedAdditionalImportedModules: [String] = if let sourceConfiguration {
 			additionalImportedModules + sourceConfiguration.additionalImportedModules
@@ -308,13 +314,12 @@ struct Generate: AsyncParsableCommand {
 			return normalized
 		}
 		let additionalImportStatements = resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
+		let typeDescriptionToFulfillingInstantiableMap = try resolveSafeDIFulfilledTypes(instantiables: normalizedInstantiables)
 		let generator = try DependencyTreeGenerator(
 			importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportStatements + module.imports,
 			// A dependent module's mock-only declarations reach this module's mocks, so its mock imports do too.
 			mockImportStatements: dependentModuleInfo.flatMap(\.mockImports) + additionalImportStatements + module.mockImports,
-			typeDescriptionToFulfillingInstantiableMap: resolveSafeDIFulfilledTypes(
-				instantiables: normalizedInstantiables,
-			),
+			typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap,
 			aliasDeclarationReferences: AliasDeclarationReferences(
 				declarationFilePaths: Set(normalizedInstantiables.flatMap { instantiable in
 					instantiable.dependencies.compactMap { dependency in
@@ -459,6 +464,9 @@ struct Generate: AsyncParsableCommand {
 						additionalMocksToGenerate = configuredAdditionalMocksToGenerate
 					}
 				}
+				// Only the configuration these conditions select is judged: `scan` lists the mocks of every
+				// configuration, and those of the others are written without code.
+				try sourceConfiguration?.validateAdditionalMocksToGenerate(fulfilledBy: typeDescriptionToFulfillingInstantiableMap)
 
 				// Accumulate every emission as a `(destination, header, body)`
 				// triple. `destination == nil` means the write is combined-
@@ -650,13 +658,14 @@ struct Generate: AsyncParsableCommand {
 	/// file without code for a declaration these conditions leave inactive, but it cannot write a file the
 	/// manifest does not name, which happens when a source file gained such a declaration after `scan` ran,
 	/// or when a hand-written manifest omits it. These errors say so instead of omitting code, and reject a
-	/// hand-written manifest whose paths `generate` cannot match.
+	/// hand-written manifest whose paths `generate` cannot match or whose outputs would overwrite one another.
 	private enum ManifestError: Error, CustomStringConvertible {
 		case rootNotInManifest(sourceFilePath: String)
 		case mockNotInManifest(typeName: String, sourceFilePath: String)
 		case configurationNotInManifest(sourceFilePath: String)
 		case additionalMockNotInManifest(typeName: String)
 		case mockScopedFileListedUnderTwoSpellings(firstSpelling: String, secondSpelling: String)
+		case outputWrittenTwice(outputFilePath: String, firstOutput: ManifestOutput, secondOutput: ManifestOutput)
 
 		var description: String {
 			switch self {
@@ -670,10 +679,51 @@ struct Generate: AsyncParsableCommand {
 				"The #\(SafeDIConfigurationVisitor.macroName) lists `\(typeName)` in additionalMocksToGenerate, but the manifest’s additionalMocksToGenerate does not. \(Self.planningExplanation) A hand-written manifest must list the type in additionalMocksToGenerate and mockGeneration."
 			case let .mockScopedFileListedUnderTwoSpellings(firstSpelling, secondSpelling):
 				"The manifest’s mockScopedFilePaths lists one file as both '\(firstSpelling)' and '\(secondSpelling)'. A hand-written manifest must list each file once, spelled as its configurationFilePaths and mockGeneration spell it."
+			case let .outputWrittenTwice(outputFilePath, firstOutput, secondOutput):
+				"The manifest’s \(firstOutput) and its \(secondOutput) both write '\(outputFilePath)'. A hand-written manifest must name a different file for each."
 			}
 		}
 
 		private static let planningExplanation = "SafeDI decides which files to generate before the build runs, listing every file that declares a root, a type that sets `generateMock: true`, or a #\(SafeDIConfigurationVisitor.macroName) in any clause of its `#if` blocks, so the file most likely changed after that decision; building again lists it."
+	}
+
+	/// A file a manifest tells `generate` to write.
+	private enum ManifestOutput: Equatable, CustomStringConvertible {
+		case dependencyTree(inputFilePath: String)
+		case mock(inputFilePath: String)
+		case mockConfiguration
+
+		var description: String {
+			switch self {
+			case let .dependencyTree(inputFilePath):
+				"dependencyTreeGeneration entry for '\(inputFilePath)'"
+			case let .mock(inputFilePath):
+				"mockGeneration entry for '\(inputFilePath)'"
+			case .mockConfiguration:
+				"mockConfigurationOutputFilePath"
+			}
+		}
+	}
+
+	/// Throws when two of `manifest`'s outputs name one file, since the one written last would replace the
+	/// other's code. `scan` gives each output its own file, so only a hand-written manifest can do this. An
+	/// entry listed twice writes the same code twice, so it is not rejected here.
+	private static func validateEachOutputIsWrittenOnce(by manifest: SafeDIToolManifest) throws {
+		let outputs: [(output: ManifestOutput, outputFilePath: String)] = manifest.dependencyTreeGeneration.map { (.dependencyTree(inputFilePath: $0.inputFilePath), $0.outputFilePath) }
+			+ manifest.mockGeneration.map { (.mock(inputFilePath: $0.inputFilePath), $0.outputFilePath) }
+			+ (manifest.mockConfigurationOutputFilePath.map { [(.mockConfiguration, $0)] } ?? [])
+		// Files are written at their paths relative to the working directory, so two spellings can name one file.
+		var outputsByFilePath = [NormalizedFilePath: (output: ManifestOutput, outputFilePath: String)]()
+		for (output, outputFilePath) in outputs {
+			let filePath = NormalizedFilePath(outputFilePath)
+			if let firstOutput = outputsByFilePath[filePath] {
+				guard firstOutput.output == output else {
+					throw ManifestError.outputWrittenTwice(outputFilePath: firstOutput.outputFilePath, firstOutput: firstOutput.output, secondOutput: output)
+				}
+			} else {
+				outputsByFilePath[filePath] = (output, outputFilePath)
+			}
+		}
 	}
 
 	private func findGenerateSwiftFiles() async throws -> Set<String> {
@@ -796,7 +846,7 @@ struct Generate: AsyncParsableCommand {
 		// about — it would miss a newly-added file whose path doesn't appear in
 		// `cached.scannedInputs`.
 		if !cached.additionalDirectories.isEmpty {
-			let currentAdditionalFiles = await (try? findSwiftFiles(inDirectories: cached.additionalDirectories)) ?? []
+			let currentAdditionalFiles = await (try? findSwiftFiles(inDirectories: cached.additionalDirectories.map(\.path))) ?? []
 			// Compared as scan compared the files it found with the inputs.
 			guard Set(currentAdditionalFiles.map(projectFilePaths.projectFilePath(of:)))
 				== Set(cached.additionalInputAbsolutePaths.map(projectFilePaths.projectFilePath(of:)))
@@ -837,6 +887,7 @@ struct Generate: AsyncParsableCommand {
 			moduleInfo: cached.moduleInfo.adding(fileScans).including(cached.additionalModuleInfo.adding(additionalFileScans)),
 			configuration: configuration,
 			conditionalCompilationEvaluator: evaluator,
+			additionalDirectories: cached.additionalDirectories,
 		)
 	}
 
@@ -1095,6 +1146,48 @@ struct Generate: AsyncParsableCommand {
 				.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 		}
 	}
+}
+
+extension SafeDIConfiguration {
+	/// Throws when an `additionalMocksToGenerate` entry names no type an `@Instantiable` declaration declares, whose
+	/// mock can then never be generated. Mock generation matches an entry to the declared type that the entry spells
+	/// exactly, so each error also names the declared types that differ from the entry only in leading components,
+	/// and the declared type that fulfills the entry when an `@Instantiable` fulfills it as an additional type.
+	///
+	/// - Parameter typeDescriptionToFulfillingInstantiableMap: Every type the `@Instantiable` declarations SafeDI read
+	///   fulfill, mapped to the declaration that fulfills it.
+	func validateAdditionalMocksToGenerate(
+		fulfilledBy typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
+	) throws(AdditionalMocksNameNoInstantiableError) {
+		let declaredTypeNames = Set(typeDescriptionToFulfillingInstantiableMap.values.map(\.concreteInstantiable.asSource))
+		let undeclaredTypeNames = Set(additionalMocksToGenerate).subtracting(declaredTypeNames).sorted()
+		guard !undeclaredTypeNames.isEmpty else { return }
+		throw AdditionalMocksNameNoInstantiableError(sourceDiagnostics: undeclaredTypeNames.map { typeName in
+			let similarTypeNames = declaredTypeNames
+				.filter { $0.hasSuffix(".\(typeName)") || typeName.hasSuffix(".\($0)") }
+				.sorted()
+			let similarTypeNamesDescription = similarTypeNames.isEmpty
+				? ""
+				: " SafeDI read @\(InstantiableVisitor.macroName) types with similar names: \(similarTypeNames.map { "`\($0)`" }.joined(separator: ", "))."
+			let fulfillingTypeNameDescription = typeDescriptionToFulfillingInstantiableMap
+				.filter { $0.key.asSource == typeName }
+				.map(\.value.concreteInstantiable.asSource)
+				.min()
+				.map { " `\(typeName)` is fulfilled by the @\(InstantiableVisitor.macroName) type `\($0)`." }
+				?? ""
+			return SourceDiagnostic(
+				severity: .error,
+				location: declarationLocation,
+				message: "This #\(SafeDIConfigurationVisitor.macroName) lists `\(typeName)` in \(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel), but no @\(InstantiableVisitor.macroName) declaration SafeDI read declares `\(typeName)`, so SafeDI cannot generate its mock.\(fulfillingTypeNameDescription)\(similarTypeNamesDescription) Correct the name to that of an @\(InstantiableVisitor.macroName) type, or remove `\(typeName)` from \(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel).",
+			)
+		})
+	}
+}
+
+/// A `#SafeDIConfiguration` lists, in `additionalMocksToGenerate`, types no `@Instantiable` declaration declares.
+/// Each diagnostic names one such type, in name order.
+struct AdditionalMocksNameNoInstantiableError: SourceLocatedError {
+	let sourceDiagnostics: [SourceDiagnostic]
 }
 
 /// A `.safedi` file named by `--dependent-module-info-file-path` that this SafeDITool cannot read.
