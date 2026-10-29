@@ -248,6 +248,20 @@ final class Scope: Hashable {
 			}
 		}
 
+	/// Computes every property derived from `instantiable` and `propertiesToGenerate`, so that reading one afterwards
+	/// writes nothing to the scope. Called by `FrozenScopeMap` once the scope's map is complete.
+	fileprivate func freeze() {
+		_ = properties
+		_ = createdProperties
+		_ = forwardedLazilyInstantiatedInstanceProperties
+		_ = declaredProperties
+		_ = declaredLabels
+		_ = declaredLazilyInstantiatedInstanceProperties
+		_ = providedProperties
+		_ = unconditionallyCreatedProperties
+		_ = requiredReceivedProperties
+	}
+
 	/// Creates the generator of the tree this scope creates. The generators of the scopes in the tree are
 	/// created depth first, each after the generators of the scopes it creates, with a stack of the scopes
 	/// whose generator is under construction, since a tree can be as deep as the module has types.
@@ -302,6 +316,43 @@ final class Scope: Hashable {
 			}
 		}
 	}
+}
+
+/// The scopes of a complete scope map, which concurrent tasks read.
+///
+/// `Scope` is a class whose derived properties are computed when they are first read, so it is not `Sendable`: two
+/// tasks reading one first would each compute and store it. A map of scopes is sendable once its scopes are frozen,
+/// which only this type's initializer does: it computes every derived property of every scope of the map, and the map
+/// is complete, so nothing writes to a scope afterwards and the tasks that share the map only read. A scope's
+/// `propertiesToGenerate` refers to scopes of its own map alone, so a task that holds the map holds every scope the
+/// trees it walks reach. A scope made for one task, such as a mock root's, is read by that task alone.
+struct FrozenScopeMap: @unchecked Sendable {
+	/// Freezes every scope of `typeDescriptionToScopeMap`, which must be complete: every scope's
+	/// `propertiesToGenerate` is set, and nothing sets it again.
+	init(_ typeDescriptionToScopeMap: [TypeDescription: Scope]) {
+		self.typeDescriptionToScopeMap = typeDescriptionToScopeMap
+		// Several types can map to one scope, and a type whose hand-written mock is not passed some of its
+		// dependencies has two, which only identity tells apart: the full one first, then the one its mock builds.
+		let scopes = Set(typeDescriptionToScopeMap.values).sorted {
+			($0.instantiable.concreteInstantiable, $0.dependenciesLeftOut.count) < ($1.instantiable.concreteInstantiable, $1.dependenciesLeftOut.count)
+		}
+		for scope in scopes {
+			scope.freeze()
+		}
+		var scopeIndexByIdentifier = [ObjectIdentifier: Int]()
+		for (index, scope) in scopes.enumerated() {
+			scopeIndexByIdentifier[ObjectIdentifier(scope)] = index
+		}
+		self.scopes = scopes
+		// `scopes` holds every scope of the map, so every value is found.
+		typeDescriptionToScopeIndex = typeDescriptionToScopeMap.compactMapValues { scopeIndexByIdentifier[ObjectIdentifier($0)] }
+	}
+
+	let typeDescriptionToScopeMap: [TypeDescription: Scope]
+	/// Every scope of the map once, in the order of its concrete type and then of how many dependencies it leaves out.
+	let scopes: [Scope]
+	/// The index in `scopes` of the scope each type maps to.
+	let typeDescriptionToScopeIndex: [TypeDescription: Int]
 }
 
 /// A scope whose generator `Scope.createScopeGenerator` is creating, with what the generator is created from once
