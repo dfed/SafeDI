@@ -1749,11 +1749,18 @@ public actor DependencyTreeGenerator {
 	/// The receive by which `dependency` of `scope` closes a cycle through the property it is fulfilled by
 	/// (`dependency.source.fulfillingProperty ?? dependency.property`), which is still being built, or `nil` when
 	/// `dependency` does not receive that property. Production's walk of received properties counts a required
-	/// alias the same way, since `Scope.requiredReceivedProperties` lists its fulfilling property.
+	/// alias the same way, since `Scope.requiredReceivedProperties` lists its fulfilling property unless `scope`
+	/// instantiates or is forwarded it.
 	private static func closingReceive(of dependency: Dependency, in scope: Scope) -> CycleClosingReceive? {
 		switch dependency.source {
-		case .received:
-			CycleClosingReceive(aliasProperty: nil)
+		case let .received(onlyIfAvailable):
+			// Generation passes `nil` to an `onlyIfAvailable` receive of a property still being built, as it does to an
+			// `onlyIfAvailable` alias.
+			if onlyIfAvailable {
+				nil
+			} else {
+				CycleClosingReceive(aliasProperty: nil)
+			}
 		case let .aliased(fulfillingProperty, _, onlyIfAvailable):
 			// An alias receives its fulfilling property, unless it is `onlyIfAvailable` – generation does not create it
 			// while that property is still being built, and passes `nil` in its place – or `scope` creates the property,
@@ -2971,7 +2978,9 @@ public actor DependencyTreeGenerator {
 				func isAvailable(_ onlyIfAvailableProperty: Property) -> Bool {
 					// The instantiation stack holds a lazily instantiated property as the constant it stands for.
 					if cyclesOnly {
-						!instantiationStack.contains(onlyIfAvailableProperty.asUnwrappedProperty.asValidatedForDependencyCycles)
+						![onlyIfAvailableProperty, onlyIfAvailableProperty.asUnwrappedProperty].contains {
+							instantiationStack.contains($0.asValidatedForDependencyCycles)
+						}
 					} else {
 						[onlyIfAvailableProperty, onlyIfAvailableProperty.asUnwrappedProperty].contains {
 							receivableProperties.contains($0) && !instantiationStack.contains($0.asValidatedForDependencyCycles)

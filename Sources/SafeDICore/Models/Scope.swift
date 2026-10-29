@@ -182,6 +182,24 @@ final class Scope: Hashable {
 		let bareAttributeRange: Dependency.SourceRange?
 	}
 
+	/// The properties this scope’s `@Instantiated` and `@Forwarded` dependencies put in scope.
+	private lazy var instantiatedOrForwardedProperties = Set(
+		instantiable
+			.dependencies
+			.filter {
+				switch $0.source {
+				case .instantiated, .forwarded:
+					true
+				case .aliased, .received:
+					false
+				}
+			}
+			.flatMap(\.receivableProperties),
+	)
+
+	/// The received properties this scope requires an ancestor to provide. An alias of a property this scope
+	/// instantiates or is forwarded refers to that property, so it requires nothing of an ancestor. An alias of
+	/// another alias this scope declares is listed, so that validation can check the alias it refers to is created.
 	private(set) lazy var requiredReceivedProperties: [RequiredReceivedProperty] = instantiable
 		.dependencies
 		.compactMap {
@@ -200,7 +218,7 @@ final class Scope: Hashable {
 					)
 				}
 			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-				if onlyIfAvailable {
+				if onlyIfAvailable || instantiatedOrForwardedProperties.contains(fulfillingProperty) {
 					nil
 				} else {
 					RequiredReceivedProperty(
@@ -279,7 +297,7 @@ final class Scope: Hashable {
 				// A mock builds, or is handed, every property an ancestor does not
 				// create — onlyIfAvailable dependencies become optional mock parameters.
 				// Only a property that is still being built is unavailable, as in production.
-				return childPropertyStack.contains(property.asUnwrappedProperty)
+				return childPropertyStack.contains(property) || childPropertyStack.contains(property.asUnwrappedProperty)
 			} else {
 				let propertyIsAvailableInParentStack = receivableProperties.contains(property) && !childPropertyStack.contains(property)
 				let unwrappedPropertyIsAvailableInParentStack = receivableProperties.contains(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty)
