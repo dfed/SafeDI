@@ -77,10 +77,15 @@ extension CachedScannedModuleInfo: BinarySchemaMember {
 }
 
 extension AdditionalDirectory: BinarySchemaMember {
-	static let binaryLayout = [
-		"entry",
-		"path",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("entry", \.entry),
+				BinaryLayoutField("path", \.path),
+			],
+			unwrittenProperties: [],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
