@@ -26,9 +26,10 @@ import Testing
 /// A module of a `query` test: the name of its directory and the Swift files it holds. A name with `/` in it
 /// nests the directory, for a test of how directories are named.
 struct QueryTestModule {
-	init(_ name: String, _ swiftFileContent: [String], input: Input = .directory) {
+	init(_ name: String, _ swiftFileContent: [String], swiftFileContentByFilePath: [String: String] = [:], input: Input = .directory) {
 		self.name = name
 		self.swiftFileContent = swiftFileContent
+		self.swiftFileContentByFilePath = swiftFileContentByFilePath
 		self.input = input
 	}
 
@@ -36,6 +37,9 @@ struct QueryTestModule {
 	/// Each file's content. Files are named after the `@Instantiable` type each declares, as
 	/// `executeSafeDIToolTest` names its fixtures.
 	let swiftFileContent: [String]
+	/// Each file's content at the path it is given, relative to the module's directory, for a file whose name
+	/// matters, as `executeSafeDIToolTest` writes them.
+	let swiftFileContentByFilePath: [String: String]
 	/// How the module is named to `query needs`.
 	let input: Input
 
@@ -164,7 +168,12 @@ func executeSafeDIToolQuery(
 		let moduleDirectory = fixtureDirectory.appendingPathComponent(module.name)
 		try FileManager.default.createDirectory(at: moduleDirectory, withIntermediateDirectories: true)
 		moduleDirectories[module.name] = moduleDirectory
-		moduleFiles[module.name] = try createSwiftFixtureFiles(from: module.swiftFileContent, in: moduleDirectory)
+		let contentNamedSwiftFiles = try createSwiftFixtureFiles(from: module.swiftFileContent, in: moduleDirectory)
+		moduleFiles[module.name] = try contentNamedSwiftFiles + createSwiftFixtureFiles(
+			atFilePaths: module.swiftFileContentByFilePath,
+			in: moduleDirectory,
+			alongside: contentNamedSwiftFiles,
+		)
 	}
 	// Module info files are written once every module's fixtures exist, since one may be written from another's.
 	for module in modules {
