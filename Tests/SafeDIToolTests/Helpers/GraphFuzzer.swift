@@ -97,10 +97,11 @@ struct GraphFuzzerFixture: Equatable {
 	}
 }
 
-/// A renaming of a graph that changes no declaration's meaning but reverses an order SafeDI could depend on: the order
-/// of its type names, of its property labels, of its file names, or all three at once. The rename-invariance oracle
-/// runs each graph under every renaming and requires the same results once the renaming is undone: the same verdict,
-/// the same diagnostics in any order, and byte-identical generated files.
+/// A renaming of a graph that changes no declaration's meaning but changes an order SafeDI could depend on: the order
+/// of its type names, of its property labels, of its file names, or all three at once, or where its type names sort
+/// among the names of the wrappers SafeDI provides. The rename-invariance oracle runs each graph under every renaming
+/// and requires the same results once the renaming is undone: the same verdict, the same diagnostics in any order,
+/// and byte-identical generated files.
 ///
 /// Type names `<prefix>T<i>`, `<prefix>AnyT<i>`, `<prefix>Root<i>`, and `<prefix>Missing<i>` – with any suffix, such
 /// as `Protocol` – and labels `t<i>`, `anyT<i>`, `lazyT<i>`, `lazyAnyT<i>`, and `missing<i>` – with any suffix, such
@@ -108,16 +109,37 @@ struct GraphFuzzerFixture: Equatable {
 /// names that embed them. Every index the generator writes is a single digit, so each name keeps its length and
 /// every other character, the names of each kind sort in reverse order, and no renamed name becomes another's
 /// prefix. Both maps are their own inverse. File order is reversed by naming each file `F<99 - rank>_<name>`.
+///
+/// Every type name begins with the prefix `S<seed>_`, and reversing indices keeps it, so the reversals alone always
+/// sort a type's name after `ErasedInstantiator<`, `Instantiator<`, and `LazilyInstantiated<`, and before
+/// `SendableErasedInstantiator<`, `SendableInstantiator<`, and `SendableLazilyInstantiated<` (a digit sorts before
+/// `e`): no reversal changes whether `x: X` or `x: Instantiator<X>` sorts first. Moving type names across wrapper
+/// names replaces the prefix's `S` with `A`, which sorts before every wrapper's name, or with `Z`, which sorts after
+/// every one, wherever a type name appears, including inside generated names that embed it. Which letter a name
+/// gets is drawn from the seed and the name's kind and index (`T3`, `AnyT3`, `Value`), so it is the same on every
+/// run, a type and its `Protocol` move together, and most graphs get both letters, which also reorders the names
+/// that get different ones. Restoring replaces either letter with `S`.
 struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
+	init(reversesTypeNames: Bool, reversesLabels: Bool, reversesFileNames: Bool, movesTypeNamesAcrossWrapperNames: Bool = false) {
+		self.reversesTypeNames = reversesTypeNames
+		self.reversesLabels = reversesLabels
+		self.reversesFileNames = reversesFileNames
+		self.movesTypeNamesAcrossWrapperNames = movesTypeNamesAcrossWrapperNames
+	}
+
 	let reversesTypeNames: Bool
 	let reversesLabels: Bool
 	let reversesFileNames: Bool
+	let movesTypeNamesAcrossWrapperNames: Bool
 
+	/// Every renaming the oracle runs. A seed's first renamed failure is the one its known issue matches, so a new
+	/// renaming goes last: the seeds the earlier ones already list keep their entries.
 	static let all = [
 		GraphFuzzerRenaming(reversesTypeNames: true, reversesLabels: false, reversesFileNames: false),
 		GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: true, reversesFileNames: false),
 		GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: false, reversesFileNames: true),
 		GraphFuzzerRenaming(reversesTypeNames: true, reversesLabels: true, reversesFileNames: true),
+		GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: false, reversesFileNames: false, movesTypeNamesAcrossWrapperNames: true),
 	]
 
 	var description: String {
@@ -126,24 +148,24 @@ struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
 			reversesLabels ? "labels" : nil,
 			reversesFileNames ? "file names" : nil,
 		].compactMap(\.self)
-		return switch reversedOrders.count {
+		let reversal: String? = switch reversedOrders.count {
 		case 0:
-			"reversing nothing"
+			nil
 		case 1:
 			"reversing its \(reversedOrders[0])"
 		default:
 			"reversing its \(reversedOrders.dropLast().joined(separator: ", ")), and \(reversedOrders[reversedOrders.count - 1])"
 		}
+		let move = movesTypeNamesAcrossWrapperNames ? "moving its type names across wrapper names" : nil
+		let changes = [reversal, move].compactMap(\.self)
+		return changes.isEmpty ? "reversing nothing" : changes.joined(separator: " and ")
 	}
 
-	/// `text` with the type names and labels this renaming reverses renamed.
+	/// `text` with the type names and labels this renaming changes renamed.
 	func rename(_ text: String, typeNamePrefix: String) -> String {
-		var text = text
-		if reversesTypeNames {
-			text = Self.reversingIndices(in: text, pattern: NSRegularExpression.escapedPattern(for: typeNamePrefix) + "(?:Root|AnyT|T|Missing)([0-9])")
-		}
-		if reversesLabels {
-			text = Self.reversingIndices(in: text, pattern: "(?<![A-Za-z0-9])(?:lazyAnyT|lazyT|anyT|t|missing)([0-9])")
+		var text = reversingOrders(in: text, typeNamePrefix: typeNamePrefix)
+		if movesTypeNamesAcrossWrapperNames {
+			text = Self.movingTypeNamesAcrossWrapperNames(in: text, typeNamePrefix: typeNamePrefix)
 		}
 		return text
 	}
@@ -151,6 +173,13 @@ struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
 	/// `text`, from the tool's run over a graph this renaming renamed, with the renaming undone.
 	func restore(_ text: String, typeNamePrefix: String) -> String {
 		var text = text
+		if movesTypeNamesAcrossWrapperNames {
+			text = text.replacingOccurrences(
+				of: "(?<![A-Za-z0-9])[AZ](?=" + NSRegularExpression.escapedPattern(for: String(typeNamePrefix.dropFirst())) + "[A-Za-z])",
+				with: String(typeNamePrefix.prefix(1)),
+				options: .regularExpression,
+			)
+		}
 		if reversesFileNames {
 			text = text.replacingOccurrences(
 				of: "F[0-9]{2}_(?=" + NSRegularExpression.escapedPattern(for: typeNamePrefix) + ")",
@@ -160,7 +189,19 @@ struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
 		}
 		// A path to a fixture file holds no name the renaming changed but the file's own name, so restoring the
 		// whole text renames nothing else.
-		return rename(text, typeNamePrefix: typeNamePrefix)
+		return reversingOrders(in: text, typeNamePrefix: typeNamePrefix)
+	}
+
+	/// `text` with the indices of the type names and labels this renaming reverses reversed, which undoes itself.
+	private func reversingOrders(in text: String, typeNamePrefix: String) -> String {
+		var text = text
+		if reversesTypeNames {
+			text = Self.reversingIndices(in: text, pattern: NSRegularExpression.escapedPattern(for: typeNamePrefix) + "(?:Root|AnyT|T|Missing)([0-9])")
+		}
+		if reversesLabels {
+			text = Self.reversingIndices(in: text, pattern: "(?<![A-Za-z0-9])(?:lazyAnyT|lazyT|anyT|t|missing)([0-9])")
+		}
+		return text
 	}
 
 	/// `outcome`, from the tool's run over a graph this renaming renamed, with the renaming undone.
@@ -191,6 +232,25 @@ struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
 	/// path but the name a renaming may change and restore.
 	static func reducingFixturePathsToFileNames(in text: String) -> String {
 		text.replacingOccurrences(of: #"[^\s"'`(]*<fixture-directory>/"#, with: "", options: .regularExpression)
+	}
+
+	/// `text` with the `S` that begins each type name's `typeNamePrefix` replaced by `A` or `Z`, chosen by the
+	/// letters and index that follow the prefix: the type's kind and index, without a suffix such as `Protocol`.
+	private static func movingTypeNamesAcrossWrapperNames(in text: String, typeNamePrefix: String) -> String {
+		let expression = try! NSRegularExpression(pattern: "(?<![A-Za-z0-9])" + NSRegularExpression.escapedPattern(for: typeNamePrefix) + "([A-Za-z]+[0-9]?)")
+		let source = text as NSString
+		var result = ""
+		var location = 0
+		for match in expression.matches(in: text, range: NSRange(location: 0, length: source.length)) {
+			let kindAndIndex = source.substring(with: match.range(at: 1))
+			var hash = GraphFuzzerHash()
+			hash.combine(typeNamePrefix + kindAndIndex)
+			var random = GraphFuzzerRandomNumberGenerator(seed: hash.value)
+			result += source.substring(with: NSRange(location: location, length: match.range.location - location))
+			result += random.percentChance(50) ? "A" : "Z"
+			location = match.range.location + 1
+		}
+		return result + source.substring(from: location)
 	}
 
 	private static func reversingIndices(in text: String, pattern: String) -> String {
@@ -1537,7 +1597,7 @@ struct GraphFuzzerFailure: Equatable {
 		case runsDiffer = "two runs of the tool differ"
 		case runsDifferAcrossProcesses = "the tool's output differs between two processes"
 		case compilerCrashedOnGeneratedCode = "the Swift compiler crashed on generated code"
-		case renamedGraphDiffers = "the graph renamed to reverse an order gives other results"
+		case renamedGraphDiffers = "the graph renamed to change an order gives other results"
 	}
 
 	let seed: UInt64

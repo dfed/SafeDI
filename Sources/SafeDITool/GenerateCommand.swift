@@ -222,7 +222,7 @@ struct Generate: AsyncParsableCommand {
 		let normalizedInstantiables = normalizingInstantiableTypes(of: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables)
 		let additionalImportStatements = resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
 		let typeDescriptionToFulfillingInstantiableMap = try resolveSafeDIFulfilledTypes(instantiables: normalizedInstantiables)
-		let generator = try DependencyTreeGenerator(
+		let generator = DependencyTreeGenerator(
 			importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportStatements + module.imports,
 			// A dependent module's mock-only declarations reach this module's mocks, so its mock imports do too.
 			mockImportStatements: dependentModuleInfo.flatMap(\.mockImports) + additionalImportStatements + module.mockImports,
