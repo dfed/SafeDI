@@ -1243,7 +1243,7 @@ Generated code names an aliased dependency’s `@Received` declaration in a `#so
 
 Diagnostics are the exception: `SafeDITool` resolves a relative input path against its working directory before printing an error, so the location in the build log is one an editor can open. Under Bazel that working directory is the action’s sandbox, so a diagnostic there names the sandbox copy of the source file.
 
-Run `swift run SafeDITool --help`, `swift run SafeDITool scan --help`, or `swift run SafeDITool generate --help` to see documentation of all supported arguments, and `swift run SafeDITool dump --help` for the command that prints a `.safedi` file, or the cache `scan` writes beside its manifest, as JSON.
+Run `swift run SafeDITool --help`, `swift run SafeDITool scan --help`, or `swift run SafeDITool generate --help` to see documentation of all supported arguments, `swift run SafeDITool query needs --help` for the command that [reports what types need](#querying-what-a-type-needs), and `swift run SafeDITool dump --help` for the command that prints a `.safedi` file, or the cache `scan` writes beside its manifest, as JSON.
 
 ## Introspecting a SafeDI tree
 
@@ -1255,3 +1255,160 @@ dot path_to_dot_file.dot -Tpdf > path_to_pdf_file.pdf
 ```
 
 You can find instructions for how to install the `dot` command [here](https://graphviz.org/download/).
+
+### Querying what a type needs
+
+A focused app – one that builds a single feature with mock data instead of the whole product – needs only the modules that feature needs. `SafeDITool query needs` names them. Give it one or more `@Instantiable` types and the directories of the project’s modules, as `generate --include` takes them:
+
+```bash
+swift run SafeDITool query needs HomeFeature SettingsFeature --include Sources/Foundations Sources/Services Sources/HomeFeature Sources/SettingsFeature --active-compilation-conditions DEBUG
+```
+
+The modules are read once for every type named, and each type gets a report, in the order named. Each directory is a module holding the Swift files found in it recursively, so the targets of a package laid out as `Sources/<Target>` are included with `--include Sources/*/`. A module is named after its directory’s last path component, or, when included directories end alike (`Modules/Home/Sources` and `Modules/Settings/Sources`), after as many trailing components as tell them apart (`Home/Sources` and `Settings/Sources`); the JSON report also carries each module’s `--include` paths, which do not depend on what else was included. The query reads each module as `generate` reads a module’s own files, builds the type with every dependency it receives provided by an `@Instantiable` declaration – which is what the type’s `mock()` does – and reports:
+
+- The modules the type is built from in production, each with the declarations that build it: the `@Instantiable` declaration of the type, of its `@Instantiated` dependencies, and of the dependencies it receives, transitively, and, for a `@Received` dependency built by [erasing a concrete type](#receiving-a-type-erased-dependency), one declaration that erases it, preferring a module already needed and otherwise the first by name, with the other modules that declare the erasure named beside it. A module that holds only types nothing builds is left out, such as the type of a dependency received only if available, which is passed `nil`. The list is the modules whose SafeDI declarations build the type, not the full set a target links: the modules those modules import come along through the build system, as they do for any target.
+- The `@Forwarded` parameters of the type.
+- The dependencies no `@Instantiable` declaration fulfills, which the project provides by hand, each with its reason: no declaration fulfills the type, the type declares `@Forwarded` properties so only an `Instantiator` can build it, or more than one concrete type is erased to it.
+
+It then reports the same for the type’s mock: the modules the mock is built from, which differ from the type’s where a hand-written mock stands in for a declaration or [is not passed a dependency](#the-mockonly-parameter); the `@Forwarded` parameters the mock requires and those it defaults, with their defaults; and the dependencies it still requires as parameters, by the rules of the [dependency kinds table](#dependency-kinds-in-the-generated-mock). Which mock that is depends on what the project gives the type:
+
+- When a declaration sets `generateMock: true` or a `#SafeDIConfiguration` lists the type in `additionalMocksToGenerate`, the report is for the generated `mock()`, and names the module that generates it. A project that leaves that module out generates the mock by listing the type the same way, which the report says when no module that generates the mock is needed for anything else.
+- When the project generates no `mock()` and a declaration gives the type a hand-written mock, that mock is the one reported, by its own name.
+- Otherwise the report is for the `mock()` that a `#SafeDIConfiguration` listing the type would generate, so that the project can be assembled before that configuration is written. The one type SafeDI can build no mock for is one whose hand-written method named `mock` returns another type (a `mockOnly` extension returning a protocol the type fulfills): a generated `mock()` would collide with it, and the report says so instead.
+
+Both parts are read from the dependency tree `generate` builds, the mock from every declaration and the type from the declarations with every hand-written mock removed, so the report never disagrees with the generated code.
+
+Name each type as `additionalMocksToGenerate` names it: by its own name, such as `Feature.Consumer` for a nested type, not by a protocol it fulfills; a name no declaration has is answered with the types that fulfill it and the types named most like it. Include only modules that could build together: two modules that each declare an `@Instantiable` for the same type, as the modules of two separate app targets may, cannot be read together, and the query reports the duplicate as `generate` would. The query does not follow `additionalDirectoriesToInclude`, since every module is included directly. What a build would report for a type – a dependency cycle, or a hand-written `mock()` on a type whose `mock()` the project generates – the query reports the same way, and any error ends the whole command with a non-zero exit code.
+
+#### The JSON report
+
+Pass `--json` for the same report as JSON, for a script that assembles the app. The root object carries a `formatVersion`, which a script checks before reading further: it is raised when a key is renamed, removed, or changes meaning, and not when a key is added. Keys are sorted. Every array is present, empty when there is nothing to list; a key whose value is optional – `defaultExpression`, `methodName`, `erasure`, `generatedIn`, `filePath`, and one of `mock` or `noMock` – is left out when it has no value, never set to `null`. For `Feature` with `generateMock: true` in `Sources/FeatureModule`, which forwards a `user` and a `config` and receives an `Analytics` nothing declares, where a `mockOnly` extension in `Sources/ConfigMocks` gives `Config` a `mock()`:
+
+```json
+{
+  "formatVersion" : 1,
+  "types" : [
+    {
+      "forwardedParameters" : [
+        {
+          "label" : "config",
+          "type" : "Config"
+        },
+        {
+          "label" : "user",
+          "type" : "User"
+        }
+      ],
+      "mock" : {
+        "forwardedParameters" : [
+          {
+            "defaultExpression" : "Config.mock()",
+            "label" : "config",
+            "type" : "Config"
+          },
+          {
+            "label" : "user",
+            "type" : "User"
+          }
+        ],
+        "generatedIn" : [
+          "FeatureModule"
+        ],
+        "kind" : "generated",
+        "methodName" : "mock",
+        "modules" : [
+          {
+            "declarations" : [
+              {
+                "filePath" : "Sources/ConfigMocks/Config+Mock.swift",
+                "kind" : "handWrittenMock",
+                "methodName" : "mock",
+                "typeName" : "Config"
+              }
+            ],
+            "name" : "ConfigMocks",
+            "paths" : [
+              "Sources/ConfigMocks"
+            ]
+          },
+          {
+            "declarations" : [
+              {
+                "filePath" : "Sources/FeatureModule/Feature.swift",
+                "kind" : "instantiable",
+                "typeName" : "Feature"
+              }
+            ],
+            "name" : "FeatureModule",
+            "paths" : [
+              "Sources/FeatureModule"
+            ]
+          }
+        ],
+        "unfulfilledDependencies" : [
+          {
+            "label" : "analytics",
+            "reason" : "No @Instantiable declaration fulfills `Analytics`.",
+            "reasonKind" : "noInstantiableFulfillsType",
+            "type" : "Analytics"
+          }
+        ]
+      },
+      "modules" : [
+        {
+          "declarations" : [
+            {
+              "filePath" : "Sources/FeatureModule/Feature.swift",
+              "kind" : "instantiable",
+              "typeName" : "Feature"
+            }
+          ],
+          "name" : "FeatureModule",
+          "paths" : [
+            "Sources/FeatureModule"
+          ]
+        }
+      ],
+      "typeName" : "Feature",
+      "unfulfilledDependencies" : [
+        {
+          "label" : "analytics",
+          "reason" : "No @Instantiable declaration fulfills `Analytics`.",
+          "reasonKind" : "noInstantiableFulfillsType",
+          "type" : "Analytics"
+        }
+      ]
+    }
+  ]
+}
+```
+
+| Key | Value |
+| --- | --- |
+| `formatVersion` | The format’s version, `1`. |
+| `types` | One report per type named, in the order named. |
+| `types[].typeName` | The concrete type queried, as its declaration spells it. |
+| `types[].modules` | The modules the type is built from in production, sorted by `name`. `paths` are the `--include` arguments that named the module, as given, which a script maps back to a build target. `declarations` are sorted by type: `kind` is `instantiable` (an `@Instantiable` declaration, `typeName` the type), `handWrittenMock` (`typeName` the mocked type, `methodName` the method), or `erasure` (`typeName` the type declaring the erasing property, and `erasure` holding the `property` as declared, the `erasedTypeName` received, the `concreteTypeName` built, and `alsoDeclaredInModules`, the other modules any of which would do instead). `filePath` is the file that holds the declaration, under the `--include` argument that named its module, so it opens from where the tool ran. |
+| `types[].forwardedParameters` | The type’s `@Forwarded` parameters in the order `mock()` declares them: `label` and `type`. |
+| `types[].unfulfilledDependencies` | The dependencies no `@Instantiable` declaration fulfills, in the order `mock()` would take them: `label`, `type`, `reasonKind` (`noInstantiableFulfillsType`, `typeHasForwardedProperties`, or `erasedToMultipleConcreteTypes`), and the `reason` as the text report states it. |
+| `types[].mock` | What the type’s mock needs. `kind` is `generated`, `handWritten`, or `wouldBeGenerated`, as the list above distinguishes them; `methodName` is the method to call; `generatedIn`, present only when `kind` is `generated`, names the modules that generate it; `modules` is as above, for the mock; `forwardedParameters` adds `defaultExpression` where the mock defaults a parameter; `unfulfilledDependencies` are the dependencies the mock still takes as parameters, spelled as the type’s. |
+| `types[].noMock` | Present instead of `mock` when SafeDI can build no mock for the type: `reasonKind` (`handWrittenMockNamedMockReturnsAnotherType`) and the `reason` the text report prints. |
+
+With `--json`, an error is printed to standard output as JSON too, with the same `formatVersion`, and the command exits non-zero. `error.kind` is the query’s own kind – `noModuleIncluded`, `moduleHasNoSwiftFiles`, `fileInTwoModules`, `filesWithUnexpectedNodes`, `noInstantiableNamed`, or `onlyMockOnlyDeclarationNamed` – or `diagnostics` for what a build would report, or `other`; `error.message` is what the text mode prints. A `noInstantiableNamed` error adds `typeName`, `fulfilledBy`, and `similarlyNamed`; an `onlyMockOnlyDeclarationNamed` error adds `typeName`; the file errors add `paths`; and `diagnostics` adds each diagnostic’s `severity`, `filePath`, `line`, `column`, and `message`:
+
+```json
+{
+  "error" : {
+    "fulfilledBy" : [
+      "DefaultUserService"
+    ],
+    "kind" : "noInstantiableNamed",
+    "message" : "No @Instantiable declaration in the included modules declares a type named `UserService`. `DefaultUserService` fulfills `UserService`: query that type instead. Name the type as `additionalMocksToGenerate` would: by its own name, not by a type it fulfills.",
+    "similarlyNamed" : [
+
+    ],
+    "typeName" : "UserService"
+  },
+  "formatVersion" : 1
+}
+```

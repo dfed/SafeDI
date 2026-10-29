@@ -599,7 +599,7 @@ func currentDirectoryRelativePath(to target: URL) -> String {
 	return (ascents + targetComponents[sharedComponentCount...]).joined(separator: "/")
 }
 
-private func createSwiftFixtureFiles(
+func createSwiftFixtureFiles(
 	from swiftFileContent: [String],
 	in directory: URL,
 ) throws -> [URL] {

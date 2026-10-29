@@ -123,84 +123,10 @@ public actor DependencyTreeGenerator {
 		currentModuleSourceFilePaths: Set<String>? = nil,
 		additionalMocksToGenerate: Set<String> = [],
 	) async throws -> MockGenerationResult {
-		// Build a map of erased wrapper types → concrete fulfilling types.
-		// This lets mocks construct types like AnyUserService(DefaultUserService())
-		// even when the erased type isn't directly @Instantiable. An erased type
-		// that declarations erase different concrete types to is left out: nothing
-		// says which one a mock should build, so a received property of that type
-		// stays a required mock parameter.
-		let erasedToConcreteTypeMap = typeDescriptionToFulfillingInstantiableMap.values
-			.reduce(into: [TypeDescription: Set<TypeDescription>]()) { partialResult, instantiable in
-				for dependency in instantiable.dependencies {
-					if case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential) = dependency.source,
-					   erasedToConcreteExistential,
-					   let concreteType = fulfillingTypeDescription?.asInstantiatedType
-					{
-						partialResult[dependency.property.typeDescription, default: []].insert(concreteType)
-						// A lazily instantiated dependency is also received by value, with the type of its instance.
-						if let instanceProperty = dependency.property.asLazilyInstantiatedInstanceProperty {
-							partialResult[instanceProperty.typeDescription, default: []].insert(concreteType)
-						}
-					}
-				}
-			}
-			.compactMapValues { concreteTypes in
-				concreteTypes.count == 1 ? concreteTypes.first : nil
-			}
-
-		// Build mock scope mapping — like production but includes all types and
-		// promotes received dependencies as instantiated children.
-		let typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping()
-
-		// Validate mock scopes for cycles. Mock-only types (generateMock: true without
-		// isRoot) bypass root validation but can still have partially-lazy cycles.
-		// Uses cyclesOnly to skip unfulfillable property checks — mock-only types
-		// have unfulfillable received properties by design (they become mock parameters).
-		// `collectReceivedProperties` gives a scope the same complete result however it is
-		// reached, every scope it caches is in `typeDescriptionToScopeMap`, which lives through
-		// this method, and only complete results outlive a walk, so one cache serves this
-		// validation and every mock root.
 		var receivedPropertiesCache = ReceivedPropertiesCache()
-		try validatePropertiesAreFulfillable(
-			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
-			// The scopes of the types the mock-root loop below generates a mock for because they are listed.
-			additionalMockRootScopes: additionalMocksToGenerate.isEmpty ? [] : Set(
-				typeDescriptionToFulfillingInstantiableMap.values.compactMap { instantiable in
-					additionalMocksToGenerate.contains(instantiable.concreteInstantiable.asSource)
-						? typeDescriptionToScopeMap[instantiable.concreteInstantiable]
-						: nil
-				},
-			),
-			receivedPropertiesCache: &receivedPropertiesCache,
-			cyclesOnly: true,
-		)
-
-		// Compute types with hand-written mocks that can be called with zero arguments,
-		// suitable for use as default values in forwarded mock parameters. This includes
-		// standalone mockOnly types AND merged entries where a mockOnly declaration's mock
-		// was copied onto a production entry (which may also have generateMock). Types
-		// whose mock method has required parameters are excluded. The mock return type
-		// must be compatible with the concrete type — extension mocks returning a
-		// protocol type are not valid defaults for concrete-type forwarded parameters.
-		let forwardedParameterMockDefaults: [TypeDescription: String] = typeDescriptionToFulfillingInstantiableMap.values
-			.reduce(into: [TypeDescription: String]()) { result, instantiable in
-				guard let mockInitializer = instantiable.mockInitializer,
-				      mockInitializer.arguments.allSatisfy(\.hasDefaultValue),
-				      instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiable.concreteInstantiable)
-				else { return }
-				result[instantiable.concreteInstantiable] = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
-			}
-
-		// Locate the hand-written methods named `mock` (no `customMockName`) for
-		// each concrete type. Several map entries can carry the same method
-		// (merged and unmerged mockOnly slots), so locations are deduplicated.
-		let handWrittenMockLocationsByConcreteType: [TypeDescription: Set<Dependency.DeclarationLocation?>] = typeDescriptionToFulfillingInstantiableMap.values
-			.reduce(into: [TypeDescription: Set<Dependency.DeclarationLocation?>]()) { result, instantiable in
-				guard instantiable.mockInitializer != nil,
-				      instantiable.customMockName == nil
-				else { return }
-				result[instantiable.concreteInstantiable, default: []].insert(instantiable.mockDeclarationLocation)
-			}
+		let mockScopes = try mockScopes(additionalMocksToGenerate: additionalMocksToGenerate, receivedPropertiesCache: &receivedPropertiesCache)
+		let typeDescriptionToScopeMap = mockScopes.typeDescriptionToScopeMap
+		let forwardedParameterMockDefaults = mockScopes.forwardedParameterMockDefaults
 
 		// Create mock-root ScopeGenerators using the production Scope tree.
 		var seen = Set<TypeDescription>()
@@ -221,15 +147,7 @@ public actor DependencyTreeGenerator {
 			      seen.insert(instantiable.concreteInstantiable).inserted,
 			      let scope = typeDescriptionToScopeMap[instantiable.concreteInstantiable]
 			else { continue }
-			// Canonicalize: slot-specific merges can produce different entries
-			// for the same concreteInstantiable (e.g., the ServiceProtocol key
-			// has a protocol-returning mock but the MyService key does not).
-			// Always use the concrete-type key entry so mock root generation
-			// uses the correct mock info for the concrete type.
-			// The mock root declares the dependencies its scope builds, which leaves out those its hand-written
-			// mock is not passed (see `createMockTypeDescriptionToScopeMapping`).
-			let instantiable = (typeDescriptionToFulfillingInstantiableMap[instantiable.concreteInstantiable] ?? instantiable)
-				.keepingDependencies { !scope.dependenciesLeftOut.contains($0) }
+			let instantiable = mockRootInstantiable(for: instantiable, scope: scope)
 			// Without module scoping, every type belongs to the current module.
 			let isDeclaredInCurrentModule = currentModuleSourceFilePaths.map { currentModuleSourceFilePaths in
 				instantiable.sourceFilePath.map(currentModuleSourceFilePaths.contains) ?? false
@@ -238,54 +156,14 @@ public actor DependencyTreeGenerator {
 
 			// Each mock root reports the first error it finds, and the errors of every mock root are reported.
 			do {
-				// A hand-written method also named `mock` can be confused with the
-				// generated `mock()`: identical signatures redeclare, overlapping ones
-				// make calls ambiguous or silently pick the generated method, and a
-				// mockOnly extension's mock defaults every parameter, so even a
-				// generated `mock(safeDIOverrides:)` leaves `Type.mock()` ambiguous.
-				// The macro rejects the pair within one declaration; this extends the
-				// rule across declarations and modules.
-				let handWrittenMockLocations = handWrittenMockLocationsByConcreteType[instantiable.concreteInstantiable, default: []]
-				guard handWrittenMockLocations.isEmpty else {
-					throw DependencyTreeGeneratorError.handWrittenMockSharesGeneratedMockName(
-						instantiable.concreteInstantiable,
-						declaredAt: Array(handWrittenMockLocations),
-						// A `generateMock: true` type declared in this module gets its mock whether
-						// or not it is listed; any other type reaching here is generated only
-						// because it is listed, so removing it from the list is also a fix.
-						isGeneratedForAdditionalMocksToGenerate: !(instantiable.generateMock && isDeclaredInCurrentModule),
-					)
-				}
-
-				// Validate that this type's constant @Instantiated children have no @Forwarded properties.
-				// Use the mock scope map (not typeDescriptionToFulfillingInstantiableMap) because
-				// mockOnly types can win additional-type slots and may have different @Forwarded properties.
-				// For fulfilledByType deps, validate against the declared type (same as mock resolution).
-				for dependency in scope.instantiable.dependencies {
-					guard case let .instantiated(fulfillingTypeDescription, _) = dependency.source else { continue }
-					let instantiatedType = dependency.asInstantiatedType
-					let childScope: Scope? = if fulfillingTypeDescription != nil {
-						typeDescriptionToScopeMap[dependency.property.typeDescription.asInstantiatedType]
-							?? typeDescriptionToScopeMap[instantiatedType]
-					} else {
-						typeDescriptionToScopeMap[instantiatedType]
-					}
-					if let childScope,
-					   let error = forwardedPropertyError(
-					   	for: dependency,
-					   	instantiable: childScope.instantiable,
-					   	parent: scope.instantiable,
-					   )
-					{
-						throw error
-					}
-				}
-
-				let mockRoot = try createMockRootScopeGenerator(
+				let mockRoot = try createMockRoot(
 					for: instantiable,
 					scope: scope,
-					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
-					erasedToConcreteTypeMap: erasedToConcreteTypeMap,
+					// A `generateMock: true` type declared in this module gets its mock whether
+					// or not it is listed; any other type reaching here is generated only
+					// because it is listed, so removing it from the list is also a fix.
+					generatedMockReason: instantiable.generateMock && isDeclaredInCurrentModule ? .generateMock : .additionalMocksToGenerate,
+					mockScopes: mockScopes,
 					receivedPropertiesCache: &receivedPropertiesCache,
 					childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 				)
@@ -443,6 +321,400 @@ public actor DependencyTreeGenerator {
 		return MockGenerationResult(
 			generatedRoots: mergedGeneratedRoots,
 			mockConfigurationCode: mockConfigurationCode,
+		)
+	}
+
+	/// What building the `@Instantiable` type named `typeName` needs when every dependency it receives is provided
+	/// beside it, or `nil` when no declaration this generator knows has a concrete type of that name. The type is
+	/// built as the mock root `generateMockCode` builds for a type listed in `additionalMocksToGenerate`, from
+	/// every declaration this generator knows, so over every declaration the result is what the type's mock needs
+	/// (or would need, were it generated), and over the declarations with every hand-written mock removed it is
+	/// what the type needs in production; see `TypeRequirements`. The type's tree is validated as
+	/// `generateMockCode` validates a listed type's, and the result throws what generating the mock would throw.
+	/// - Parameter generatesMock: Whether `mock()` is generated for the type, so that a hand-written method named
+	///   `mock` is rejected as `generateMockCode` rejects it. Otherwise such a method is the type's mock, which
+	///   the root is built with.
+	public func requirements(forTypeNamed typeName: String, generatesMock: Bool) async throws -> TypeRequirements? {
+		var receivedPropertiesCache = ReceivedPropertiesCache()
+		let mockScopes = try mockScopes(additionalMocksToGenerate: [typeName], receivedPropertiesCache: &receivedPropertiesCache)
+		// The type's own entry in the scope map, which `generateMockCode` builds each mock root from. The name is
+		// matched as `additionalMocksToGenerate` matches it, and the entry is chosen by type, never by map order.
+		guard let (concreteType, scope) = mockScopes.typeDescriptionToScopeMap
+			.filter({ $0.key == $0.value.instantiable.concreteInstantiable && $0.key.asSource == typeName })
+			.min(by: { $0.key < $1.key })
+		else { return nil }
+		let instantiable = mockRootInstantiable(for: scope.instantiable, scope: scope)
+		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation(scopes: mockScopes.typeDescriptionToScopeMap.values)
+		let mockRoot = try createMockRoot(
+			for: instantiable,
+			scope: scope,
+			// A type that sets `generateMock: true` fails to generate in its own module; any other generated mock
+			// exists only because the type is listed, so removing it from the list is also a fix.
+			generatedMockReason: generatesMock ? (instantiable.generateMock ? .generateMock : .additionalMocksToGenerate) : nil,
+			mockScopes: mockScopes,
+			receivedPropertiesCache: &receivedPropertiesCache,
+			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
+		)
+		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable)
+
+		// The declarations the mock calls, each once, in the order the mock reaches them.
+		var declarations = [TypeRequirements.Declaration]()
+		var recordedDeclarations = Set<TypeRequirements.Declaration>()
+		func record(_ declaration: TypeRequirements.Declaration) {
+			if recordedDeclarations.insert(declaration).inserted {
+				declarations.append(declaration)
+			}
+		}
+		record(TypeRequirements.Declaration(typeDescription: concreteType, sourceFilePath: instantiable.sourceFilePath, kind: .instantiable))
+		// A mock root is constructed with its hand-written mock whenever it has one.
+		if instantiable.mockInitializer != nil {
+			record(TypeRequirements.Declaration(
+				typeDescription: concreteType,
+				sourceFilePath: instantiable.mockDeclarationLocation?.filePath,
+				kind: .handWrittenMock(methodName: instantiable.customMockName ?? InstantiableVisitor.mockMethodName),
+			))
+		}
+		func recordTree(_ items: [ScopeGenerator.MockTreeItem]) {
+			for case let .property(node) in items {
+				record(TypeRequirements.Declaration(typeDescription: node.concreteType, sourceFilePath: node.sourceFilePath, kind: .instantiable))
+				if node.useMockInitializer {
+					record(TypeRequirements.Declaration(
+						typeDescription: node.concreteType,
+						sourceFilePath: node.mockDeclarationLocation?.filePath,
+						kind: .handWrittenMock(methodName: node.customMockName ?? InstantiableVisitor.mockMethodName),
+					))
+				}
+				recordTree(node.children)
+			}
+		}
+		recordTree(parameters.parameterTree)
+
+		/// The declarations that erase a concrete type to the type of `property`, or to the type of its
+		/// instance, which is how the mock root resolves an erasure.
+		func erasureDeclarations(to property: Property) -> Set<ErasureDeclaration> {
+			Set([property.typeDescription, property.asLazilyInstantiatedInstanceProperty?.typeDescription].compactMap(\.self)
+				.flatMap { mockScopes.erasureDeclarations[$0] ?? [] })
+		}
+		// A received property the mock root builds by erasure is built from a concrete type some other
+		// declaration erases to its type. The mocked type's own erased `@Instantiated` properties are its own
+		// declarations, already recorded.
+		let rootInstantiatedProperties = Set(instantiable.dependencies.filter(\.isInstantiated).map(\.property))
+		var erasures = [TypeRequirements.Erasure]()
+		for case let .property(node) in parameters.parameterTree
+			where node.erasedToConcreteExistential && !rootInstantiatedProperties.contains(node.property)
+		{
+			erasures.append(TypeRequirements.Erasure(
+				property: node.property,
+				concreteType: node.concreteType,
+				declarations: erasureDeclarations(to: node.property)
+					.filter { $0.concreteType == node.concreteType }
+					.map(\.declaration)
+					.sorted { ($0.declaringType, $0.property) < ($1.declaringType, $1.property) },
+			))
+		}
+
+		// Forwarded parameters default as `generateMockRootCode` defaults them: from the construction
+		// initializer, else from a hand-written mock of the forwarded type that takes no arguments.
+		var constructionDefaults = [String: String]()
+		for argument in parameters.rootConstructionInitializer?.arguments ?? [] {
+			if let defaultExpression = argument.defaultValueExpression {
+				constructionDefaults[argument.innerLabel] = defaultExpression
+			}
+		}
+		var forwardedParameters = [TypeRequirements.ForwardedParameter]()
+		for dependency in parameters.forwardedDependencies {
+			let property = dependency.property
+			let defaultExpression: String?
+			if let constructionDefault = constructionDefaults[property.label] {
+				defaultExpression = constructionDefault
+			} else if let mockMethodName = mockScopes.forwardedParameterMockDefaults[property.typeDescription] {
+				defaultExpression = "\(property.typeDescription.asSource).\(mockMethodName)()"
+				record(TypeRequirements.Declaration(
+					typeDescription: property.typeDescription,
+					sourceFilePath: handWrittenMockFilePath(of: property.typeDescription),
+					kind: .handWrittenMock(methodName: mockMethodName),
+				))
+			} else {
+				defaultExpression = nil
+			}
+			forwardedParameters.append(TypeRequirements.ForwardedParameter(
+				label: property.label,
+				typeDescription: property.typeDescription,
+				defaultExpression: defaultExpression,
+			))
+		}
+
+		// A received property is a flat parameter because the mock root did not promote it: its type has no
+		// scope and no single erasure, or `mockCanBuild` rejected the scope it would be built from.
+		func reason(forReceived property: Property) -> TypeRequirements.RequiredParameter.Reason {
+			func typeHasForwardedProperties(_ scope: Scope) -> TypeRequirements.RequiredParameter.Reason {
+				.typeHasForwardedProperties(
+					scope.instantiable.concreteInstantiable,
+					forwardedProperties: scope.instantiable.dependencies.filter(\.isForwarded).map(\.property),
+				)
+			}
+			let instantiatedType = property.typeDescription.asInstantiatedType
+			if let scope = mockScopes.typeDescriptionToScopeMap[instantiatedType] {
+				return typeHasForwardedProperties(scope)
+			} else if let concreteType = Self.concreteTypeErased(to: property, in: mockScopes.erasedToConcreteTypeMap) {
+				if let scope = mockScopes.typeDescriptionToScopeMap[concreteType] {
+					return typeHasForwardedProperties(scope)
+				} else {
+					return .noInstantiableFulfillsType(concreteType)
+				}
+			} else {
+				let erasedConcreteTypes = Set(erasureDeclarations(to: property).map(\.concreteType))
+				if erasedConcreteTypes.count > 1 {
+					return .erasedToMultipleConcreteTypes(instantiatedType, concreteTypes: erasedConcreteTypes.sorted())
+				} else {
+					return .noInstantiableFulfillsType(instantiatedType)
+				}
+			}
+		}
+		var requiredParameters = [TypeRequirements.RequiredParameter]()
+		for property in parameters.flatReceivedProperties {
+			requiredParameters.append(TypeRequirements.RequiredParameter(
+				label: property.label,
+				typeSource: property.typeDescription.asFunctionParameter.asSource,
+				reason: reason(forReceived: property),
+			))
+		}
+		for uncoveredParameter in parameters.flatUncoveredParameters {
+			requiredParameters.append(TypeRequirements.RequiredParameter(
+				label: uncoveredParameter.label,
+				typeSource: uncoveredParameter.typeSource,
+				reason: .noInstantiableFulfillsType(uncoveredParameter.instantiatedType),
+			))
+		}
+
+		return TypeRequirements(
+			typeDescription: concreteType,
+			declarations: declarations,
+			erasures: erasures,
+			forwardedParameters: forwardedParameters,
+			requiredParameters: requiredParameters,
+		)
+	}
+
+	/// The file that declares the hand-written mock of `concreteType`, which every map entry for the type carries.
+	private func handWrittenMockFilePath(of concreteType: TypeDescription) -> String? {
+		typeDescriptionToFulfillingInstantiableMap.values
+			.lazy
+			.filter { $0.concreteInstantiable == concreteType }
+			.compactMap(\.mockDeclarationLocation?.filePath)
+			.min()
+	}
+
+	/// What every mock root is built from: the scope of each type a mock can build, and what completes a mock
+	/// root's tree.
+	private struct MockScopes {
+		/// The `@Instantiated(erasedToConcreteExistential: true)` properties that erase a concrete type to each
+		/// type, in any module, keyed by the property's type and, for a lazily instantiated property, by the
+		/// type of its instance.
+		let erasureDeclarations: [TypeDescription: Set<ErasureDeclaration>]
+		/// The concrete type a mock builds an erased type from: the one concrete type `erasureDeclarations`
+		/// erase to it.
+		let erasedToConcreteTypeMap: [TypeDescription: TypeDescription]
+		let typeDescriptionToScopeMap: [TypeDescription: Scope]
+		/// The name of the hand-written mock that can be called with no arguments, by concrete type.
+		let forwardedParameterMockDefaults: [TypeDescription: String]
+		/// Where each concrete type's hand-written methods named `mock` are declared.
+		let handWrittenMockLocationsByConcreteType: [TypeDescription: Set<Dependency.DeclarationLocation?>]
+	}
+
+	/// An `@Instantiated(erasedToConcreteExistential: true)` property, with the concrete type it erases.
+	private struct ErasureDeclaration: Hashable {
+		let concreteType: TypeDescription
+		let declaration: TypeRequirements.Erasure.Declaration
+	}
+
+	/// Builds the mock scope map and validates it, and collects what every mock root is built with.
+	/// - Parameter additionalMocksToGenerate: The names of the types whose mocks are generated because they are listed.
+	private func mockScopes(
+		additionalMocksToGenerate: Set<String>,
+		receivedPropertiesCache: inout ReceivedPropertiesCache,
+	) throws -> MockScopes {
+		// Build a map of erased wrapper types → concrete fulfilling types.
+		// This lets mocks construct types like AnyUserService(DefaultUserService())
+		// even when the erased type isn't directly @Instantiable.
+		let erasureDeclarations = typeDescriptionToFulfillingInstantiableMap.values
+			.reduce(into: [TypeDescription: Set<ErasureDeclaration>]()) { partialResult, instantiable in
+				for dependency in instantiable.dependencies {
+					if case let .instantiated(fulfillingTypeDescription, erasedToConcreteExistential) = dependency.source,
+					   erasedToConcreteExistential,
+					   let concreteType = fulfillingTypeDescription?.asInstantiatedType
+					{
+						let erasureDeclaration = ErasureDeclaration(
+							concreteType: concreteType,
+							declaration: TypeRequirements.Erasure.Declaration(
+								declaringType: instantiable.concreteInstantiable,
+								property: dependency.property,
+								sourceFilePath: instantiable.sourceFilePath,
+							),
+						)
+						partialResult[dependency.property.typeDescription, default: []].insert(erasureDeclaration)
+						// A lazily instantiated dependency is also received by value, with the type of its instance.
+						if let instanceProperty = dependency.property.asLazilyInstantiatedInstanceProperty {
+							partialResult[instanceProperty.typeDescription, default: []].insert(erasureDeclaration)
+						}
+					}
+				}
+			}
+		// An erased type that declarations erase different concrete types to is left out: nothing
+		// says which one a mock should build, so a received property of that type stays a
+		// required mock parameter.
+		let erasedToConcreteTypeMap = erasureDeclarations.compactMapValues { erasureDeclarations in
+			let concreteTypes = Set(erasureDeclarations.map(\.concreteType))
+			return concreteTypes.count == 1 ? concreteTypes.first : nil
+		}
+
+		// Build mock scope mapping — like production but includes all types and
+		// promotes received dependencies as instantiated children.
+		let typeDescriptionToScopeMap = createMockTypeDescriptionToScopeMapping()
+
+		// Validate mock scopes for cycles. Mock-only types (generateMock: true without
+		// isRoot) bypass root validation but can still have partially-lazy cycles.
+		// Uses cyclesOnly to skip unfulfillable property checks — mock-only types
+		// have unfulfillable received properties by design (they become mock parameters).
+		// `collectReceivedProperties` gives a scope the same complete result however it is
+		// reached, every scope it caches is in `typeDescriptionToScopeMap`, which outlives
+		// this method in the result, and only complete results outlive a walk, so the caller's
+		// one cache serves this validation and every mock root.
+		try validatePropertiesAreFulfillable(
+			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			// The scopes of the types the mock-root loop below generates a mock for because they are listed.
+			additionalMockRootScopes: additionalMocksToGenerate.isEmpty ? [] : Set(
+				typeDescriptionToFulfillingInstantiableMap.values.compactMap { instantiable in
+					additionalMocksToGenerate.contains(instantiable.concreteInstantiable.asSource)
+						? typeDescriptionToScopeMap[instantiable.concreteInstantiable]
+						: nil
+				},
+			),
+			receivedPropertiesCache: &receivedPropertiesCache,
+			cyclesOnly: true,
+		)
+
+		// Compute types with hand-written mocks that can be called with zero arguments,
+		// suitable for use as default values in forwarded mock parameters. This includes
+		// standalone mockOnly types AND merged entries where a mockOnly declaration's mock
+		// was copied onto a production entry (which may also have generateMock). Types
+		// whose mock method has required parameters are excluded. The mock return type
+		// must be compatible with the concrete type — extension mocks returning a
+		// protocol type are not valid defaults for concrete-type forwarded parameters.
+		let forwardedParameterMockDefaults: [TypeDescription: String] = typeDescriptionToFulfillingInstantiableMap.values
+			.reduce(into: [TypeDescription: String]()) { result, instantiable in
+				guard let mockInitializer = instantiable.mockInitializer,
+				      mockInitializer.arguments.allSatisfy(\.hasDefaultValue),
+				      instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiable.concreteInstantiable)
+				else { return }
+				result[instantiable.concreteInstantiable] = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
+			}
+
+		// Locate the hand-written methods named `mock` (no `customMockName`) for
+		// each concrete type. Several map entries can carry the same method
+		// (merged and unmerged mockOnly slots), so locations are deduplicated.
+		let handWrittenMockLocationsByConcreteType: [TypeDescription: Set<Dependency.DeclarationLocation?>] = typeDescriptionToFulfillingInstantiableMap.values
+			.reduce(into: [TypeDescription: Set<Dependency.DeclarationLocation?>]()) { result, instantiable in
+				guard instantiable.mockInitializer != nil,
+				      instantiable.customMockName == nil
+				else { return }
+				result[instantiable.concreteInstantiable, default: []].insert(instantiable.mockDeclarationLocation)
+			}
+
+		return MockScopes(
+			erasureDeclarations: erasureDeclarations,
+			erasedToConcreteTypeMap: erasedToConcreteTypeMap,
+			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+			forwardedParameterMockDefaults: forwardedParameterMockDefaults,
+			handWrittenMockLocationsByConcreteType: handWrittenMockLocationsByConcreteType,
+		)
+	}
+
+	/// The instantiable a mock root is built from: the entry of `scope`'s concrete type, declaring only the
+	/// dependencies the scope builds.
+	private func mockRootInstantiable(for instantiable: Instantiable, scope: Scope) -> Instantiable {
+		// Canonicalize: slot-specific merges can produce different entries
+		// for the same concreteInstantiable (e.g., the ServiceProtocol key
+		// has a protocol-returning mock but the MyService key does not).
+		// Always use the concrete-type key entry so mock root generation
+		// uses the correct mock info for the concrete type.
+		// The mock root declares the dependencies its scope builds, which leaves out those its hand-written
+		// mock is not passed (see `createMockTypeDescriptionToScopeMapping`).
+		(typeDescriptionToFulfillingInstantiableMap[instantiable.concreteInstantiable] ?? instantiable)
+			.keepingDependencies { !scope.dependenciesLeftOut.contains($0) }
+	}
+
+	/// Why the project generates `mock()` for a type, which decides the fix a diagnostic about a hand-written
+	/// method named `mock` offers.
+	private enum GeneratedMockReason {
+		/// The type sets `generateMock: true`.
+		case generateMock
+		/// A `#SafeDIConfiguration` lists the type in `additionalMocksToGenerate`.
+		case additionalMocksToGenerate
+	}
+
+	/// The mock root of `instantiable`, the instantiable `mockRootInstantiable(for:scope:)` returned for `scope`,
+	/// once the type is known to be one a mock can be generated for.
+	/// - Parameter generatedMockReason: Why the project generates `mock()` for the type, or `nil` when it does
+	///   not, so that a hand-written method named `mock` is the type's mock rather than a collision.
+	private func createMockRoot(
+		for instantiable: Instantiable,
+		scope: Scope,
+		generatedMockReason: GeneratedMockReason?,
+		mockScopes: MockScopes,
+		receivedPropertiesCache: inout ReceivedPropertiesCache,
+		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
+	) throws -> ScopeGenerator {
+		// A hand-written method also named `mock` can be confused with the
+		// generated `mock()`: identical signatures redeclare, overlapping ones
+		// make calls ambiguous or silently pick the generated method, and a
+		// mockOnly extension's mock defaults every parameter, so even a
+		// generated `mock(safeDIOverrides:)` leaves `Type.mock()` ambiguous.
+		// The macro rejects the pair within one declaration; this extends the
+		// rule across declarations and modules.
+		// A method named `mock` collides only with a generated `mock()`.
+		if let generatedMockReason {
+			let handWrittenMockLocations = mockScopes.handWrittenMockLocationsByConcreteType[instantiable.concreteInstantiable, default: []]
+			guard handWrittenMockLocations.isEmpty else {
+				throw DependencyTreeGeneratorError.handWrittenMockSharesGeneratedMockName(
+					instantiable.concreteInstantiable,
+					declaredAt: Array(handWrittenMockLocations),
+					isGeneratedForAdditionalMocksToGenerate: generatedMockReason == .additionalMocksToGenerate,
+				)
+			}
+		}
+
+		// Validate that this type's constant @Instantiated children have no @Forwarded properties.
+		// Use the mock scope map (not typeDescriptionToFulfillingInstantiableMap) because
+		// mockOnly types can win additional-type slots and may have different @Forwarded properties.
+		// For fulfilledByType deps, validate against the declared type (same as mock resolution).
+		for dependency in scope.instantiable.dependencies {
+			guard case let .instantiated(fulfillingTypeDescription, _) = dependency.source else { continue }
+			let instantiatedType = dependency.asInstantiatedType
+			let childScope: Scope? = if fulfillingTypeDescription != nil {
+				mockScopes.typeDescriptionToScopeMap[dependency.property.typeDescription.asInstantiatedType]
+					?? mockScopes.typeDescriptionToScopeMap[instantiatedType]
+			} else {
+				mockScopes.typeDescriptionToScopeMap[instantiatedType]
+			}
+			if let childScope,
+			   let error = forwardedPropertyError(
+			   	for: dependency,
+			   	instantiable: childScope.instantiable,
+			   	parent: scope.instantiable,
+			   )
+			{
+				throw error
+			}
+		}
+
+		return try createMockRootScopeGenerator(
+			for: instantiable,
+			scope: scope,
+			typeDescriptionToScopeMap: mockScopes.typeDescriptionToScopeMap,
+			erasedToConcreteTypeMap: mockScopes.erasedToConcreteTypeMap,
+			receivedPropertiesCache: &receivedPropertiesCache,
+			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 		)
 	}
 
@@ -1287,12 +1559,8 @@ public actor DependencyTreeGenerator {
 		var visitedScopes = Set<ObjectIdentifier>()
 		var worklist = Array(allRequired)
 
-		/// The concrete type the mock builds `property` from when no `@Instantiable` fulfills its type. A lazily
-		/// instantiated property is built from the type its instance is erased from, whichever form declares
-		/// the erasure and whether or not the property is optional.
 		func concreteTypeErased(to property: Property) -> TypeDescription? {
-			erasedToConcreteTypeMap[property.typeDescription]
-				?? property.asLazilyInstantiatedInstanceProperty.flatMap { erasedToConcreteTypeMap[$0.typeDescription] }
+			Self.concreteTypeErased(to: property, in: erasedToConcreteTypeMap)
 		}
 
 		/// The scope that builds a received property promoted to the mock root, when the mock can build one.
@@ -1473,6 +1741,14 @@ public actor DependencyTreeGenerator {
 			erasedToConcreteExistential: false,
 			forMockGeneration: true,
 		)
+	}
+
+	/// The concrete type a mock builds `property` from when no `@Instantiable` fulfills its type, or `nil` when
+	/// `erasedToConcreteTypeMap` names none. A lazily instantiated property is built from the type its instance
+	/// is erased from, whichever form declares the erasure and whether or not the property is optional.
+	private static func concreteTypeErased(to property: Property, in erasedToConcreteTypeMap: [TypeDescription: TypeDescription]) -> TypeDescription? {
+		erasedToConcreteTypeMap[property.typeDescription]
+			?? property.asLazilyInstantiatedInstanceProperty.flatMap { erasedToConcreteTypeMap[$0.typeDescription] }
 	}
 
 	/// Whether a mock can build the received `property` from `scope` when it promotes the property to a
