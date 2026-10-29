@@ -1698,8 +1698,8 @@ public actor DependencyTreeGenerator {
 		mockRootScope.propertiesToGenerate = scope.propertiesToGenerate.map { propertyToGenerate in
 			guard case let .instantiated(property, childScope, erasedToConcreteExistential) = propertyToGenerate,
 			      let lazilyInstantiatedProperty = lazilyInstantiatedPropertiesReceived
-			      .filter({ $0.asLazilyInstantiatedInstanceProperty == property })
-			      .min(by: { $0.precedesInMockOrder($1) })
+			      	.filter({ $0.asLazilyInstantiatedInstanceProperty == property })
+			      	.min(by: { $0.precedesInMockOrder($1) })
 			else { return propertyToGenerate }
 			return .instantiated(lazilyInstantiatedProperty, childScope, erasedToConcreteExistential: erasedToConcreteExistential)
 		}
@@ -1949,8 +1949,8 @@ public actor DependencyTreeGenerator {
 				let scope = scopeToWalk.scope
 				if let hidingReceive = scopeToWalk.hidingReceive,
 				   let hiddenReceive = scope.instantiable.dependencies.lazy
-				   .compactMap({ dependency in receivedProperty(of: dependency).map { (dependency: dependency, property: $0) } })
-				   .first(where: { isForwardedProperty($0.property) })
+				   	.compactMap({ dependency in receivedProperty(of: dependency).map { (dependency: dependency, property: $0) } })
+				   	.first(where: { isForwardedProperty($0.property) })
 				{
 					return .init(
 						property: hiddenReceive.property,
