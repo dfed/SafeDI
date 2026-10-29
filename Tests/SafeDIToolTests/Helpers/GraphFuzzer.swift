@@ -851,7 +851,7 @@ enum GraphFuzzerGenerator {
 					// a binding named apart by its type is spelled with that type, so the type must be an identifier.
 					let receivedProperties = receivedProperties(beneath: builtTypeName, depth: 3).filter { receivedProperty in
 						!declaration.properties.contains { $0.label == receivedProperty.label }
-							&& (receivedProperty.type.contains("LazilyInstantiated<") || !receivedProperty.type.contains("<"))
+							&& (receivedProperty.type.hasPrefix("LazilyInstantiated<") || receivedProperty.type.hasPrefix("SendableLazilyInstantiated<") || !receivedProperty.type.contains("<"))
 					}
 					guard !receivedProperties.isEmpty, generatedNameRandom.percentChance(50) else { continue }
 					for receivedProperty in receivedProperties {
@@ -1162,11 +1162,6 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case forwardedErasedInstantiator
 	/// A default-valued parameter of an extension's `instantiate(…)` method.
 	case defaultValuedInstantiateParameter
-
-	/// The features the macro rejects until it accepts received and forwarded erased instantiators (PR 438), so
-	/// that no graph the oracle passes can exercise them. Every graph that has one fails as the known issue that
-	/// says so, which goes stale once the macro accepts them; remove this then.
-	static let awaitingMacroSupport: Set<GraphFuzzerFeature> = [.receivedErasedInstantiator, .forwardedErasedInstantiator]
 
 	static func < (lhs: GraphFuzzerFeature, rhs: GraphFuzzerFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue

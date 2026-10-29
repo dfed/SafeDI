@@ -62,7 +62,8 @@ public struct InjectableMacro: PeerMacro {
 			} else {
 				throw InjectableError.fulfilledByTypeArgumentInvalidType
 			}
-		} else {
+		} else if variableDecl.attributes.instantiatedMacro != nil {
+			// An @Received or @Forwarded erased instantiator is handed in rather than built, so it names no type to build.
 			let decoratesErasedInstantiator = variableDecl
 				.bindings
 				.compactMap(\.typeAnnotation)
@@ -175,7 +176,7 @@ public struct InjectableMacro: PeerMacro {
 			case .erasedToConcreteExistentialInvalidType:
 				"The argument `erasedToConcreteExistential` must be a Bool literal (`true` or `false`)."
 			case .erasedInstantiatorUsedWithoutFulfilledByType:
-				"An `ErasedInstantiator` or `SendableErasedInstantiator` property must name the type it builds with the argument `fulfilledByType`, such as `@Instantiated(fulfilledByType: \"DefaultService\")`. Use an `Instantiator` or `SendableInstantiator` when the property’s type is the type it builds."
+				"An @Instantiated `ErasedInstantiator` or `SendableErasedInstantiator` property must name the type it builds with the argument `fulfilledByType`, such as `@Instantiated(fulfilledByType: \"DefaultService\")`. Use an `Instantiator` or `SendableInstantiator` when the property’s type is the type it builds."
 			case .onlyIfAvailableInvalidType:
 				"The argument `onlyIfAvailable` must be a Bool literal (`true` or `false`)."
 			}

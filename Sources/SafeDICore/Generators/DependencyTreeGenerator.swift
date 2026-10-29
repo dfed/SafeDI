@@ -972,7 +972,12 @@ public actor DependencyTreeGenerator {
 						[]
 					}
 				} else if suggestedAlternatives.isEmpty {
-					hint = "Declare `@\(Dependency.Source.instantiatedRawValue) let \(property.asSource)` on `\(root.asSource)` or on another type in the chain to fix."
+					hint = if property.propertyType.isErasedInstantiator {
+						// The `@Instantiated` macro requires an erased instantiator to name the type it builds.
+						"Declare `@\(Dependency.Source.instantiatedRawValue)(fulfilledByType:) let \(property.asSource)`, naming the type it builds, on `\(root.asSource)` or on another type in the chain to fix."
+					} else {
+						"Declare `@\(Dependency.Source.instantiatedRawValue) let \(property.asSource)` on `\(root.asSource)` or on another type in the chain to fix."
+					}
 					fixIts = []
 				} else if suggestedAlternatives.count == 1 {
 					let suggestedAlternative = suggestedAlternatives[0]
@@ -1441,8 +1446,12 @@ public actor DependencyTreeGenerator {
 	/// child of the mock root. A type with `@Forwarded` properties can be built only by an `Instantiator`
 	/// that is handed the forwarded values, so a mock cannot build a constant of that type, or lazily
 	/// instantiate one: as in production, where such a property is never `@Instantiated`, it must be received.
+	/// Nor can it build an erased instantiator whose first generic argument is not the type's `@Forwarded`
+	/// properties. Such a received property stays a `mock()` parameter; an `@Instantiated` declaration of the
+	/// mismatched type is reported where a tree builds that declaration.
 	private static func mockCanBuild(_ property: Property, from scope: Scope) -> Bool {
-		!(property.propertyType.isConstant || property.propertyType.isLazilyInstantiated)
+		guard property.firstGenericMatchesForwardedProperties(of: scope.instantiable) else { return false }
+		return !(property.propertyType.isConstant || property.propertyType.isLazilyInstantiated)
 			|| !scope.instantiable.dependencies.contains(where: \.isForwarded)
 	}
 
