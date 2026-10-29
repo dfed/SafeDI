@@ -1245,7 +1245,7 @@ Generated code names an aliased dependency’s `@Received` declaration in a `#so
 
 Diagnostics are the exception: `SafeDITool` resolves a relative input path against its working directory before printing an error, so the location in the build log is one an editor can open. Under Bazel that working directory is the action’s sandbox, so a diagnostic there names the sandbox copy of the source file.
 
-Run `swift run SafeDITool --help`, `swift run SafeDITool scan --help`, or `swift run SafeDITool generate --help` to see documentation of all supported arguments, `swift run SafeDITool query needs --help` for the command that [reports what types need](#querying-what-a-type-needs), and `swift run SafeDITool dump --help` for the command that prints a `.safedi` file, or the cache `scan` writes beside its manifest, as JSON.
+Run `swift run SafeDITool --help`, `swift run SafeDITool scan --help`, or `swift run SafeDITool generate --help` to see documentation of all supported arguments, `swift run SafeDITool query needs --help` for the command that [reports what types need](#querying-what-a-type-needs) (in beta), and `swift run SafeDITool dump --help` for the command that prints a `.safedi` file, or the cache `scan` writes beside its manifest, as JSON.
 
 ## Introspecting a SafeDI tree
 
@@ -1259,6 +1259,8 @@ dot path_to_dot_file.dot -Tpdf > path_to_pdf_file.pdf
 You can find instructions for how to install the `dot` command [here](https://graphviz.org/download/).
 
 ### Querying what a type needs
+
+> `query needs` is in beta. It was built ahead of a live use, so as real projects adopt it its options, its text, and its JSON may change in any release, not only a major one. A change to the JSON’s shape still raises its `formatVersion`, so a script can tell.
 
 A focused app – one that builds a single feature with mock data instead of the whole product – needs only the modules that feature needs. `SafeDITool query needs` names them. Give it one or more `@Instantiable` types and the directories of the project’s modules, as `generate --include` takes them:
 
@@ -1292,7 +1294,7 @@ Name each type as `additionalMocksToGenerate` names it: by its own name, such as
 
 #### The JSON report
 
-Pass `--json` for the same report as JSON, for a script that assembles the app. The root object carries a `formatVersion`, which a script checks before reading further: it is raised when a key is renamed, removed, or changes meaning, and not when a key is added. Keys are sorted. Every array is present, empty when there is nothing to list; a key whose value is optional – `defaultExpression`, `methodName`, `erasure`, `generatedIn`, `filePath`, and one of `mock` or `noMock` – is left out when it has no value, never set to `null`. For `Feature` with `generateMock: true` in `Sources/FeatureModule`, which forwards a `user` and a `config` and receives an `Analytics` nothing declares, where a `mockOnly` extension in `Sources/ConfigMocks` gives `Config` a `mock()`:
+Pass `--json` for the same report as JSON, for a script that assembles the app. The root object carries a `formatVersion`, which a script checks before reading further: it is raised when a key is renamed, removed, or changes meaning, and not when a key is added; while the command is in beta, it may be raised in any release. Keys are sorted. Every array is present, empty when there is nothing to list; a key whose value is optional – `defaultExpression`, `methodName`, `erasure`, `generatedIn`, `filePath`, and one of `mock` or `noMock` – is left out when it has no value, never set to `null`. For `Feature` with `generateMock: true` in `Sources/FeatureModule`, which forwards a `user` and a `config` and receives an `Analytics` nothing declares, where a `mockOnly` extension in `Sources/ConfigMocks` gives `Config` a `mock()`:
 
 ```json
 {
