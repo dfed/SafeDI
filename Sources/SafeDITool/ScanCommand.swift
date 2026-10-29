@@ -167,9 +167,8 @@ func performScan(
 	)
 	let rootOutputNames = outputFileNames(forFilesAt: uniqueRootFilePaths)
 
-	// Collect mock files (only from scoped files) and compute output file names.
+	// Collect mock files (only from scoped files).
 	let uniqueMockFilePaths = sortedUniqueManifestPaths(mockScopedFileScans.filter(\.outputFileDeclarations.declaresMockGeneratingType))
-	let mockOutputNames = mockOutputFileNames(forFilesAt: uniqueMockFilePaths)
 
 	// Extract additional mocks to generate from every configuration, those the active configuration
 	// lists first and in its order.
@@ -177,12 +176,15 @@ func performScan(
 	let additionalMocksToGenerate = configuredAdditionalMocksToGenerate
 		+ moduleOutputFileDeclarations.additionalMocksToGenerate.filter { !configuredAdditionalMocksToGenerate.contains($0) }
 
+	// Name the mock files and the additional mocks together, so that no two share an output file.
+	let mockOutputNames = mockOutputFileNames(forFilesAt: uniqueMockFilePaths, additionalMocksToGenerate: additionalMocksToGenerate)
+
 	// Build additional mock output entries.
-	let additionalMockEntries: [SafeDIToolManifest.InputOutputMap] = additionalMocksToGenerate.map { typeName in
+	let additionalMockEntries: [SafeDIToolManifest.InputOutputMap] = zip(additionalMocksToGenerate, mockOutputNames.additionalMocks).map { typeName, outputFileName in
 		.init(
 			inputFilePath: typeName,
 			outputFilePath: outputDirectoryURL
-				.appendingPathComponent("\(typeName)+SafeDIMock.swift")
+				.appendingPathComponent(outputFileName)
 				.path,
 		)
 	}
@@ -210,7 +212,7 @@ func performScan(
 					.path,
 			)
 		},
-		mockGeneration: zip(uniqueMockFilePaths, mockOutputNames).map { inputFilePath, outputFileName in
+		mockGeneration: zip(uniqueMockFilePaths, mockOutputNames.mockFiles).map { inputFilePath, outputFileName in
 			.init(
 				inputFilePath: inputFilePath,
 				outputFilePath: outputDirectoryURL
@@ -267,8 +269,9 @@ func performScan(
 		activeCompilationConditions: activeCompilationConditions.sorted(),
 	)
 	// Cache write is best-effort. A full disk or other transient FS
-	// failure shouldn't block the build — `generate` always falls back
-	// to a fresh parse when the cache is missing or can't be read. The
+	// failure, or a type nested too deeply to write, shouldn't block the
+	// build — `generate` always falls back to a fresh parse when the cache
+	// is missing, can't be read, or predates a source's modification. The
 	// write is atomic, so a `generate` never reads a partly written cache.
 	try? cached.scanCacheData.write(to: scannedModuleInfoURL(forManifestPath: manifestFile), options: .atomic)
 	return cached
@@ -405,10 +408,15 @@ struct CachedFileScan: Codable {
 }
 
 extension CachedFileScan: BinarySchemaMember {
-	static let binaryLayout = [
-		"fileScan",
-		"differingScannedPath",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("fileScan", \.fileScan),
+				BinaryLayoutField("differingScannedPath", \.differingScannedPath),
+			],
+			unwrittenProperties: [],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(

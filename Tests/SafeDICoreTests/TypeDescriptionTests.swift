@@ -1783,6 +1783,89 @@ struct TypeDescriptionTests {
 
 		#expect(typeDescription.replacingInstantiatedType { _ in nil } == nil)
 	}
+
+	// MARK: - Equatable and Hashable
+
+	@Test
+	func equals_returnsTrueAndHashesAlike_whenTypesDifferOnlyInAnyAtAnyDepth() {
+		for (anySpelling, plainSpelling) in [
+			("any Service", "Service"),
+			("(any Service)?", "Service?"),
+			("(any Service)!", "Service!"),
+			("[any Service]", "[Service]"),
+			("[String: any Service]", "[String: Service]"),
+			("(any Service, label: any Other)", "(Service, label: Other)"),
+			("(any Service) async throws -> any Other", "(Service) async throws -> Other"),
+			("@Sendable (any Service) -> Void", "@Sendable (Service) -> Void"),
+			("any Service & Other", "Service & Other"),
+			("(any Service & Other)?", "(Service & Other)?"),
+			("any Service.Type", "Service.Type"),
+			("(any Service).Type", "Service.Protocol"),
+			("Instantiator<any Service>", "Instantiator<Service>"),
+			("Feature<any Service>.Nested<any Other>", "Feature<Service>.Nested<Other>"),
+			("(any Service, ~Copyable)", "(Service, ~Copyable)"),
+		] {
+			let anyType = TypeSyntax(stringLiteral: anySpelling).typeDescription
+			let plainType = TypeSyntax(stringLiteral: plainSpelling).typeDescription
+
+			#expect(anyType == plainType, "\(anySpelling) != \(plainSpelling)")
+			#expect(Set([anyType]).contains(plainType), "\(anySpelling) does not hash as \(plainSpelling)")
+		}
+	}
+
+	@Test
+	func equals_returnsFalse_whenTypesDifferInMoreThanAny() {
+		for (lhsSpelling, rhsSpelling) in [
+			("some Service", "Service"),
+			("some Service", "any Service"),
+			("(any Service).Type", "Service.Type"),
+			("any Service.Type", "Service.Protocol"),
+			("any Service", "Other"),
+			("(any Service)?", "any Service"),
+			("(any Service, ~Copyable)", "(Service, ~Escapable)"),
+		] {
+			let lhs = TypeSyntax(stringLiteral: lhsSpelling).typeDescription
+			let rhs = TypeSyntax(stringLiteral: rhsSpelling).typeDescription
+
+			#expect(lhs != rhs, "\(lhsSpelling) == \(rhsSpelling)")
+		}
+	}
+
+	@Test
+	func lessThan_ordersBySpellingWithoutAny_whenTypesAreSpelledWithAny() {
+		for (lesserSpelling, greaterSpelling) in [
+			("any Proto", "Result"),
+			("[any Proto]", "[Result]"),
+			("(any Proto)?", "Result?"),
+			("(any Proto)!", "Result!"),
+			("[String: any Proto]", "[String: Result]"),
+			("(any Proto, Int)", "(Result, Int)"),
+			("(any Proto) -> Void", "(Result) -> Void"),
+			("@Sendable (any Proto) -> Void", "@Sendable (Result) -> Void"),
+			("any Proto & Other", "Result & Other"),
+			("(any Proto).Type", "Result.Type"),
+			("some Box<any Proto>", "some Box<Result>"),
+			("Feature<any Proto>.Inner", "Feature<Result>.Inner"),
+			("any Proto", "Void"),
+			("any Proto", "~Copyable"),
+			("Result", "any Service"),
+		] {
+			let lesser = TypeSyntax(stringLiteral: lesserSpelling).typeDescription
+			let greater = TypeSyntax(stringLiteral: greaterSpelling).typeDescription
+
+			#expect(lesser < greater, "\(lesserSpelling) is not less than \(greaterSpelling)")
+			#expect(!(greater < lesser), "\(greaterSpelling) is less than \(lesserSpelling)")
+		}
+	}
+
+	@Test
+	func lessThan_ordersBySpelling_whenTypesDifferOnlyInAny() {
+		let plainType = TypeSyntax(stringLiteral: "Service").typeDescription
+		let anyType = TypeSyntax(stringLiteral: "any Service").typeDescription
+
+		#expect(plainType < anyType)
+		#expect(!(anyType < plainType))
+	}
 }
 
 extension TypeDescription {

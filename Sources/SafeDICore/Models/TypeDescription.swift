@@ -177,7 +177,189 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	}
 
 	public static func < (lhs: TypeDescription, rhs: TypeDescription) -> Bool {
-		lhs.asSource < rhs.asSource
+		let lhsSpellingWithoutAny = lhs.withoutAny.asSource
+		let rhsSpellingWithoutAny = rhs.withoutAny.asSource
+		return if lhsSpellingWithoutAny != rhsSpellingWithoutAny {
+			lhsSpellingWithoutAny < rhsSpellingWithoutAny
+		} else {
+			lhs.asSource < rhs.asSource
+		}
+	}
+
+	/// The receiver with `any` removed wherever it appears, as `==` compares it.
+	private var withoutAny: TypeDescription {
+		switch self {
+		case .void, .unknown:
+			self
+		case let .any(constraint):
+			constraint.withoutAny
+		case let .simple(name, generics):
+			.simple(name: name, generics: generics.map(\.withoutAny))
+		case let .nested(name, parentType, generics):
+			.nested(name: name, parentType: parentType.withoutAny, generics: generics.map(\.withoutAny))
+		case let .composition(types):
+			.composition(UnorderedEquatingCollection(types.map(\.withoutAny)))
+		case let .optional(type):
+			.optional(type.withoutAny)
+		case let .implicitlyUnwrappedOptional(type):
+			.implicitlyUnwrappedOptional(type.withoutAny)
+		case let .some(type):
+			.some(type.withoutAny)
+		case let .metatype(type, isType):
+			.metatype(type.withoutAny, isType: Self.isExistentialMetatype(ofInstanceType: type, isType: isType))
+		case let .attributed(type, specifiers, attributes):
+			.attributed(type.withoutAny, specifiers: specifiers, attributes: attributes)
+		case let .array(element):
+			.array(element: element.withoutAny)
+		case let .dictionary(key, value):
+			.dictionary(key: key.withoutAny, value: value.withoutAny)
+		case let .tuple(elements):
+			.tuple(elements.map { TupleElement(label: $0.label, $0.typeDescription.withoutAny) })
+		case let .closure(arguments, isAsync, doesThrow, returnType):
+			.closure(arguments: arguments.map(\.withoutAny), isAsync: isAsync, doesThrow: doesThrow, returnType: returnType.withoutAny)
+		}
+	}
+
+	// MARK: Equatable
+
+	/// Whether the two types are the same type. A protocol spelled with `any` is the same existential type as the
+	/// protocol spelled without it, at any depth: `any Service` equals `Service`, `(any Service)?` equals
+	/// `Service?`, and `Instantiator<any Service>` equals `Instantiator<Service>`. `some Service` is a different type.
+	/// Each type keeps its own spelling in `asSource` and `asIdentifier`.
+	public static func == (lhs: TypeDescription, rhs: TypeDescription) -> Bool {
+		if case let .any(constraint) = rhs {
+			lhs == constraint
+		} else {
+			lhs.isSameType(asTypeNotSpelledWithAny: rhs)
+		}
+	}
+
+	/// Whether the receiver is the same type as `other`, which is not spelled with `any` at its top level.
+	private func isSameType(asTypeNotSpelledWithAny other: TypeDescription) -> Bool {
+		switch self {
+		case let .any(constraint):
+			return constraint == other
+		case let .void(spelling):
+			guard case let .void(otherSpelling) = other else { return false }
+			return spelling == otherSpelling
+		case let .simple(name, generics):
+			guard case let .simple(otherName, otherGenerics) = other else { return false }
+			return name == otherName && generics == otherGenerics
+		case let .nested(name, parentType, generics):
+			guard case let .nested(otherName, otherParentType, otherGenerics) = other else { return false }
+			return name == otherName && parentType == otherParentType && generics == otherGenerics
+		case let .composition(types):
+			guard case let .composition(otherTypes) = other else { return false }
+			return types == otherTypes
+		case let .optional(type):
+			guard case let .optional(otherType) = other else { return false }
+			return type == otherType
+		case let .implicitlyUnwrappedOptional(type):
+			guard case let .implicitlyUnwrappedOptional(otherType) = other else { return false }
+			return type == otherType
+		case let .some(type):
+			guard case let .some(otherType) = other else { return false }
+			return type == otherType
+		case let .metatype(type, isType):
+			guard case let .metatype(otherType, otherIsType) = other else { return false }
+			return type == otherType
+				&& Self.isExistentialMetatype(ofInstanceType: type, isType: isType) == Self.isExistentialMetatype(ofInstanceType: otherType, isType: otherIsType)
+		case let .attributed(type, specifiers, attributes):
+			guard case let .attributed(otherType, otherSpecifiers, otherAttributes) = other else { return false }
+			return type == otherType && specifiers == otherSpecifiers && attributes == otherAttributes
+		case let .array(element):
+			guard case let .array(otherElement) = other else { return false }
+			return element == otherElement
+		case let .dictionary(key, value):
+			guard case let .dictionary(otherKey, otherValue) = other else { return false }
+			return key == otherKey && value == otherValue
+		case let .tuple(elements):
+			guard case let .tuple(otherElements) = other else { return false }
+			return elements == otherElements
+		case let .closure(arguments, isAsync, doesThrow, returnType):
+			guard case let .closure(otherArguments, otherIsAsync, otherDoesThrow, otherReturnType) = other else { return false }
+			return arguments == otherArguments
+				&& isAsync == otherIsAsync
+				&& doesThrow == otherDoesThrow
+				&& returnType == otherReturnType
+		case let .unknown(text):
+			guard case let .unknown(otherText) = other else { return false }
+			return text == otherText
+		}
+	}
+
+	// MARK: Hashable
+
+	/// Hashes the type so that types `==` considers the same hash alike: an existential hashes as its constraint.
+	public func hash(into hasher: inout Hasher) {
+		switch self {
+		case let .void(spelling):
+			hasher.combine(0)
+			hasher.combine(spelling)
+		case let .simple(name, generics):
+			hasher.combine(1)
+			hasher.combine(name)
+			hasher.combine(generics)
+		case let .nested(name, parentType, generics):
+			hasher.combine(2)
+			hasher.combine(name)
+			hasher.combine(parentType)
+			hasher.combine(generics)
+		case let .composition(types):
+			hasher.combine(3)
+			hasher.combine(types)
+		case let .optional(type):
+			hasher.combine(4)
+			hasher.combine(type)
+		case let .implicitlyUnwrappedOptional(type):
+			hasher.combine(5)
+			hasher.combine(type)
+		case let .some(type):
+			hasher.combine(6)
+			hasher.combine(type)
+		case let .any(constraint):
+			constraint.hash(into: &hasher)
+		case let .metatype(type, isType):
+			hasher.combine(7)
+			hasher.combine(type)
+			hasher.combine(Self.isExistentialMetatype(ofInstanceType: type, isType: isType))
+		case let .attributed(type, specifiers, attributes):
+			hasher.combine(8)
+			hasher.combine(type)
+			hasher.combine(specifiers)
+			hasher.combine(attributes)
+		case let .array(element):
+			hasher.combine(9)
+			hasher.combine(element)
+		case let .dictionary(key, value):
+			hasher.combine(10)
+			hasher.combine(key)
+			hasher.combine(value)
+		case let .tuple(elements):
+			hasher.combine(11)
+			hasher.combine(elements)
+		case let .closure(arguments, isAsync, doesThrow, returnType):
+			hasher.combine(12)
+			hasher.combine(arguments)
+			hasher.combine(isAsync)
+			hasher.combine(doesThrow)
+			hasher.combine(returnType)
+		case let .unknown(text):
+			hasher.combine(13)
+			hasher.combine(text)
+		}
+	}
+
+	/// Whether a metatype of `instanceType` spelled with `.Type` (`isType`) or `.Protocol` is the existential
+	/// metatype: `Service.Type` and `any Service.Type` are, while `(any Service).Type` is the metatype of the
+	/// existential itself, `Service.Protocol`.
+	private static func isExistentialMetatype(ofInstanceType instanceType: TypeDescription, isType: Bool) -> Bool {
+		switch instanceType {
+		case .any:
+			false
+		case .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .nested, .optional, .simple, .some, .tuple, .unknown, .void:
+			isType
+		}
 	}
 
 	public enum VoidSpelling: String, Codable, Hashable, Sendable, CustomStringConvertible {

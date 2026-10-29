@@ -28,7 +28,9 @@
 /// LEB128 variable-length integers; signed integers are zigzag-encoded first. A `Bool`, an `Optional`'s presence,
 /// and an enum's case are each one tag byte. An `Array`'s length precedes its elements, and a `Set` is written
 /// as its elements sorted, so a value always encodes to the same bytes. A `String` is an index into a table of
-/// the distinct strings written, which ``BinaryWriter/encoded`` places before the values.
+/// the distinct strings written, which ``BinaryWriter/encoded`` places before the values. Strings are distinct
+/// when their UTF-8 bytes differ, so canonically equivalent spellings that `String`'s `==` calls equal each
+/// read back as written.
 ///
 /// Readers infer what to read from the type each field has, so changing a field's type changes how it is read
 /// and written alike, and a field whose type cannot be written fails to compile.
@@ -42,23 +44,106 @@ protocol BinaryCodable {
 
 /// A struct or enum whose layout is part of the schema of the files in ``BinaryFile``.
 ///
-/// Every such file's header carries a fingerprint of every member's ``binaryLayout``, so a file written
-/// by a SafeDITool whose types were laid out differently is never read. Tests compare each struct's
-/// ``binaryLayout`` against the stored properties the type actually has, so a stored property added to a
-/// stored type fails the tests until it is written, read, and listed here.
+/// Every such file's header carries a fingerprint of every member's ``binaryLayout``: the name and type of
+/// each field a struct writes, and the name and payload types of each case an enum writes, in the order they
+/// are written. A file written by a SafeDITool whose stored types write other fields, fields of other types, or
+/// the same fields in another order is therefore never read. Tests compare each layout against the stored
+/// properties the type has and against the bytes ``BinaryCodable/write(to:)`` produces, so a stored property
+/// added to a stored type fails the tests until it is written, read, and listed here.
 protocol BinarySchemaMember: BinaryCodable {
-	/// For a struct, the names of its stored properties, in declaration order. For an enum, the names
-	/// of the tags its cases are written as.
-	static var binaryLayout: [String] { get }
+	static var binaryLayout: BinaryLayout<Self> { get }
 }
 
-/// The tag a case of a cached enum is written as. Its cases are the enum's layout in the schema.
+extension BinarySchemaMember {
+	/// The member's layout in a line of ``BinaryFile/schemaDescription``.
+	static var binaryLayoutDescription: String {
+		binaryLayout.description
+	}
+}
+
+/// The tag a case of a cached enum is written as. Its cases are the enum's cases in the schema.
 protocol BinaryTag: RawRepresentable, CaseIterable where RawValue == UInt8 {}
 
-extension BinarySchemaMember {
-	/// The layout of an enum whose cases are written as `Tag`.
-	static func tagNames<Tag: BinaryTag>(_: Tag.Type) -> [String] {
-		Tag.allCases.map { "\($0)" }
+/// How a ``BinarySchemaMember`` is written.
+enum BinaryLayout<Member>: CustomStringConvertible {
+	/// A struct, written as each of `fields` in turn. `unwrittenProperties` names each stored property that is
+	/// not written as a field of its own name, because the initializer derives it from the fields or because
+	/// fields of other names write it.
+	case structure(fields: [BinaryLayoutField<Member>], unwrittenProperties: [String])
+	/// An enum, written as the tag of its case, then that case's payload. The cases are in tag order.
+	case enumeration(cases: [BinaryLayoutCase])
+
+	/// An enum whose cases are written as `Tag`, each followed by the payload `payload` returns for it.
+	static func enumeration<Tag: BinaryTag>(writtenAs _: Tag.Type, payload: (Tag) -> [BinaryLayoutPayloadElement]) -> Self {
+		.enumeration(cases: Tag.allCases.map { tag in
+			BinaryLayoutCase(name: "\(tag)", payload: payload(tag))
+		})
+	}
+
+	/// Every field or case in the order it is written, with the type of each value written.
+	var description: String {
+		switch self {
+		case let .structure(fields, _):
+			fields.map { "\($0.name): \(String(reflecting: $0.type))" }.joined(separator: ", ")
+		case let .enumeration(cases):
+			cases.map(\.description).joined(separator: ", ")
+		}
+	}
+}
+
+/// A field a struct writes.
+struct BinaryLayoutField<Member> {
+	/// - Parameters:
+	///   - name: The stored property the field writes, or, for a field the initializer splits into or
+	///     combines from stored properties, the value it writes.
+	///   - keyPath: The value the field writes. Its type is the type the field is written and read as.
+	init<Value: BinaryCodable>(_ name: String, _ keyPath: KeyPath<Member, Value>) {
+		self.name = name
+		self.keyPath = keyPath
+		type = Value.self
+	}
+
+	let name: String
+	/// The value the field writes, through which tests confirm that the field reads back into it.
+	let keyPath: PartialKeyPath<Member>
+	/// The type the field is written and read as.
+	let type: any BinaryCodable.Type
+}
+
+/// A case an enum writes.
+struct BinaryLayoutCase: CustomStringConvertible {
+	let name: String
+	/// The case's associated values, in the order they are declared, written, and read.
+	let payload: [BinaryLayoutPayloadElement]
+
+	var description: String {
+		if payload.isEmpty {
+			name
+		} else {
+			"\(name)(\(payload.map(\.description).joined(separator: ", ")))"
+		}
+	}
+}
+
+/// An associated value of an enum case.
+struct BinaryLayoutPayloadElement: CustomStringConvertible {
+	/// - Parameters:
+	///   - label: The associated value's label, or `nil` when it has none.
+	///   - type: The type the associated value is written and read as.
+	init(_ label: String?, _ type: (some BinaryCodable).Type) {
+		self.label = label
+		self.type = type
+	}
+
+	let label: String?
+	let type: any BinaryCodable.Type
+
+	var description: String {
+		if let label {
+			"\(label): \(String(reflecting: type))"
+		} else {
+			String(reflecting: type)
+		}
 	}
 }
 
@@ -100,23 +185,70 @@ struct BinaryWriter {
 	}
 
 	mutating func writeString(_ string: String) {
-		if let index = stringIndices[string] {
+		let key = StringTableKey(string: string)
+		if let index = stringIndices[key] {
 			writeUnsigned(index)
 		} else {
 			let index = UInt64(strings.count)
-			stringIndices[string] = index
+			stringIndices[key] = index
 			strings.append(string)
 			writeUnsigned(index)
+		}
+	}
+
+	/// Writes a value that may contain itself, such as a type description. A ``BinaryReader`` does not read a
+	/// value nested more deeply than ``BinaryReader/maximumNestingDepth``, so the writer notes one that is, and
+	/// the value around it written through ``writeDescribed(as:_:)`` names it in ``valueNestedTooDeeply``.
+	mutating func writeNested(_ write: (inout BinaryWriter) -> Void) {
+		nestingDepth += 1
+		isNestedTooDeeply = isNestedTooDeeply || nestingDepth > BinaryReader.maximumNestingDepth
+		write(&self)
+		nestingDepth -= 1
+	}
+
+	/// Writes a value that holds values written through ``writeNested(_:)``. When the first of them that nests
+	/// too deeply is within this value, and within no value inside it written this way, `description` is
+	/// recorded as ``valueNestedTooDeeply``. It is evaluated only then: describing the nested value itself
+	/// could recurse as deeply as it nests.
+	/// - Parameters:
+	///   - description: The value as its source spells it, for the error that names it.
+	///   - write: Writes the value.
+	mutating func writeDescribed(as description: @autoclosure () -> String, _ write: (inout BinaryWriter) -> Void) {
+		write(&self)
+		if valueNestedTooDeeply == nil, isNestedTooDeeply {
+			valueNestedTooDeeply = description()
 		}
 	}
 
 	/// Every value written, without the string table.
 	private(set) var bytes = [UInt8]()
 
+	/// The value written through ``writeDescribed(as:_:)`` that holds the first value written through
+	/// ``writeNested(_:)`` that nests more deeply than a ``BinaryReader`` reads, as its source spells it.
+	private(set) var valueNestedTooDeeply: String?
+
 	// MARK: Private
 
+	/// A string in the string table, compared and hashed by its UTF-8 bytes. `String`'s `==` and hashing
+	/// treat canonically equivalent spellings, such as a precomposed `é` and `e` followed by a combining
+	/// accent, as one string, but Swift compares identifiers byte for byte, so the table keeps each spelling.
+	private struct StringTableKey: Hashable {
+		let string: String
+
+		static func == (lhs: Self, rhs: Self) -> Bool {
+			lhs.string.utf8.elementsEqual(rhs.string.utf8)
+		}
+
+		func hash(into hasher: inout Hasher) {
+			var string = string
+			string.withUTF8 { hasher.combine(bytes: UnsafeRawBufferPointer($0)) }
+		}
+	}
+
 	private var strings = [String]()
-	private var stringIndices = [String: UInt64]()
+	private var stringIndices = [StringTableKey: UInt64]()
+	private var nestingDepth = 0
+	private var isNestedTooDeeply = false
 }
 
 /// Reads values in SafeDITool's binary format from bytes that ``BinaryWriter/encoded`` produced.
@@ -140,6 +272,11 @@ struct BinaryReader {
 	}
 
 	// MARK: Internal
+
+	/// Far deeper than any type written in practice. Reading bytes that nest without a limit could exhaust the
+	/// stack, so a ``BinaryWriter`` notes a value nested more deeply than this, and ``BinaryFile`` refuses to
+	/// write a file that holds one rather than write a file no SafeDITool reads.
+	static let maximumNestingDepth = 128
 
 	/// Throws unless every byte has been read.
 	func finish() throws(BinaryDecodingError) {
@@ -199,7 +336,7 @@ struct BinaryReader {
 	}
 
 	/// Reads a value that may contain itself, such as a type description, throwing rather than recursing
-	/// without bound when the bytes nest more deeply than any value SafeDITool writes.
+	/// without bound when the bytes nest more deeply than ``maximumNestingDepth``, which no SafeDITool writes.
 	mutating func readNested<Value>(_ read: (inout BinaryReader) throws(BinaryDecodingError) -> Value) throws(BinaryDecodingError) -> Value {
 		guard nestingDepth < Self.maximumNestingDepth else {
 			throw .nestedTooDeeply(offset: offset)
@@ -215,10 +352,6 @@ struct BinaryReader {
 	private var offset = 0
 	private var strings = [String]()
 	private var nestingDepth = 0
-
-	/// Far deeper than any type written in practice. A cache holding a type nested more deeply than this
-	/// is not read, which costs a fresh parse, while reading such bytes without a limit could exhaust the stack.
-	private static let maximumNestingDepth = 128
 
 	private mutating func readByte() throws(BinaryDecodingError) -> UInt8 {
 		guard offset < bytes.count else {

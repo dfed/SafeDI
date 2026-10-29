@@ -411,12 +411,25 @@ struct Generate: AsyncParsableCommand {
 						let candidateFileNames = Set(candidateMockScopedFilePaths.map { ($0 as NSString).lastPathComponent })
 						// The manifest's name for a module file, matched by its comparable path, or for a manifest
 						// without a project root, as written.
-						let mockScopedManifestPath: (String) -> String? = if let projectFilePaths {
-							{ [mockScopedManifestPathsByFilePath = Dictionary(uniqueKeysWithValues: candidateMockScopedFilePaths.map { (projectFilePaths.projectFilePath(of: $0), $0) })] sourceFilePath in
+						let mockScopedManifestPath: (String) -> String?
+						if let projectFilePaths {
+							// The name found here is compared as written with configurationFilePaths and mockGeneration,
+							// so a file listed under two spellings has no one name to compare.
+							let mockScopedManifestPathsByFilePath = try Dictionary(
+								candidateMockScopedFilePaths.map { (projectFilePaths.projectFilePath(of: $0), $0) },
+								uniquingKeysWith: { firstSpelling, secondSpelling in
+									guard firstSpelling == secondSpelling else {
+										throw ManifestError.mockScopedFileListedUnderTwoSpellings(firstSpelling: min(firstSpelling, secondSpelling), secondSpelling: max(firstSpelling, secondSpelling))
+									}
+									return firstSpelling
+								},
+							)
+							mockScopedManifestPath = { sourceFilePath in
 								mockScopedManifestPathsByFilePath[projectFilePaths.projectFilePath(of: sourceFilePath)]
 							}
 						} else {
-							{ [mockScopedFilePathSet = Set(candidateMockScopedFilePaths)] sourceFilePath in
+							let mockScopedFilePathSet = Set(candidateMockScopedFilePaths)
+							mockScopedManifestPath = { sourceFilePath in
 								mockScopedFilePathSet.contains(sourceFilePath) ? sourceFilePath : nil
 							}
 						}
@@ -528,12 +541,21 @@ struct Generate: AsyncParsableCommand {
 						}
 						typeNameToMockExtensions[mock.typeDescription.asSource, default: []].append(mock.code)
 					}
+					// A type declared here with `generateMock: true` and also listed in
+					// `additionalMocksToGenerate` gets its mock only once, where its source file's
+					// mock goes: emitting it twice fails to compile.
+					let currentModuleMockSourceFileSet = Set(currentModuleMockSourceFiles)
+					let typeNamesEmittedBySource = Set(
+						mockResult.generatedRoots
+							.filter { $0.sourceFilePath.map(currentModuleMockSourceFileSet.contains) ?? false }
+							.map(\.typeDescription.asSource),
+					)
 
 					if let manifest {
 						let additionalMockTypeNames = Set(manifest.additionalMocksToGenerate)
 						for entry in manifest.mockGeneration {
 							let extensions: [String]? = if additionalMockTypeNames.contains(entry.inputFilePath) {
-								typeNameToMockExtensions[entry.inputFilePath]
+								typeNamesEmittedBySource.contains(entry.inputFilePath) ? nil : typeNameToMockExtensions[entry.inputFilePath]
 							} else {
 								sourceFileToMockExtensions[entry.inputFilePath]
 							}
@@ -556,12 +578,6 @@ struct Generate: AsyncParsableCommand {
 					} else {
 						// Combined mode: per-source mocks sorted, then
 						// per-type-name additional mocks sorted.
-						let currentModuleMockSourceFileSet = Set(currentModuleMockSourceFiles)
-						let typeNamesEmittedBySource = Set(
-							mockResult.generatedRoots
-								.filter { $0.sourceFilePath.map(currentModuleMockSourceFileSet.contains) ?? false }
-								.map(\.typeDescription.asSource),
-						)
 						for sourceFile in currentModuleMockSourceFiles {
 							writes.append((
 								destination: nil,
@@ -569,11 +585,7 @@ struct Generate: AsyncParsableCommand {
 								body: sourceFileToMockExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? "",
 							))
 						}
-						// Skip types already emitted via the per-source
-						// loop — a type declared locally with
-						// `generateMock: true` AND listed in
-						// `additionalMocksToGenerate` otherwise emits
-						// twice and fails to compile.
+						// Skip types already emitted via the per-source loop.
 						for typeName in Set(additionalMocksToGenerate).sorted()
 							where !typeNamesEmittedBySource.contains(typeName)
 						{
@@ -637,12 +649,14 @@ struct Generate: AsyncParsableCommand {
 	/// each declaration that decides which files exist, in any clause of any `#if` block. `generate` writes a
 	/// file without code for a declaration these conditions leave inactive, but it cannot write a file the
 	/// manifest does not name, which happens when a source file gained such a declaration after `scan` ran,
-	/// or when a hand-written manifest omits it. These errors say so instead of omitting code.
+	/// or when a hand-written manifest omits it. These errors say so instead of omitting code, and reject a
+	/// hand-written manifest whose paths `generate` cannot match.
 	private enum ManifestError: Error, CustomStringConvertible {
 		case rootNotInManifest(sourceFilePath: String)
 		case mockNotInManifest(typeName: String, sourceFilePath: String)
 		case configurationNotInManifest(sourceFilePath: String)
 		case additionalMockNotInManifest(typeName: String)
+		case mockScopedFileListedUnderTwoSpellings(firstSpelling: String, secondSpelling: String)
 
 		var description: String {
 			switch self {
@@ -654,6 +668,8 @@ struct Generate: AsyncParsableCommand {
 				"Found #\(SafeDIConfigurationVisitor.macroName) in '\(sourceFilePath)', but this file is not listed in the manifest’s configurationFilePaths. \(Self.planningExplanation) A hand-written manifest must list the file."
 			case let .additionalMockNotInManifest(typeName):
 				"The #\(SafeDIConfigurationVisitor.macroName) lists `\(typeName)` in additionalMocksToGenerate, but the manifest’s additionalMocksToGenerate does not. \(Self.planningExplanation) A hand-written manifest must list the type in additionalMocksToGenerate and mockGeneration."
+			case let .mockScopedFileListedUnderTwoSpellings(firstSpelling, secondSpelling):
+				"The manifest’s mockScopedFilePaths lists one file as both '\(firstSpelling)' and '\(secondSpelling)'. A hand-written manifest must list each file once, spelled as its configurationFilePaths and mockGeneration spell it."
 			}
 		}
 
@@ -1087,6 +1103,6 @@ struct UnreadableModuleInfoError: Error, CustomStringConvertible {
 	let reason: BinaryFileReadError
 
 	var description: String {
-		"Could not read the SafeDI module info file at \(path): \(reason) A different version of SafeDI most likely wrote this file, or its write was interrupted. To fix this, clean your build (in Xcode: Product > Clean Build Folder) and build again, so that the module that wrote the file regenerates it."
+		"Could not read the SafeDI module info file at \(path): \(reason) \(BinaryFile.unreadableFileExplanation)"
 	}
 }

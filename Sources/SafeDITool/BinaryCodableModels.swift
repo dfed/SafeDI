@@ -22,24 +22,30 @@ import SafeDICore
 
 // Each type writes its fields in the order its initializer takes them, and reads them back through that
 // initializer, whose argument expressions Swift evaluates from left to right. A field the initializer derives
-// from the others is not written. `binaryLayout` lists every stored property, derived or not, because tests
-// compare it against the properties the type declares.
+// from the others is not written. `binaryLayout` lists each field in the order it is written, with the value it
+// writes, and names every stored property that is not itself a field, because tests compare it against the
+// properties the type declares and the bytes it writes. An enum writes each case's payload in declaration order.
 
 // MARK: - SafeDITool types
 
 extension CachedScannedModuleInfo: BinarySchemaMember {
-	static let binaryLayout = [
-		"moduleInfo",
-		"conditionSensitiveFileScans",
-		"additionalModuleInfo",
-		"additionalConditionSensitiveFileScans",
-		"projectRoot",
-		"scannedInputs",
-		"csvInputPaths",
-		"additionalInputAbsolutePaths",
-		"additionalDirectories",
-		"activeCompilationConditions",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("moduleInfo", \.moduleInfo),
+				BinaryLayoutField("conditionSensitiveFileScans", \.conditionSensitiveFileScans),
+				BinaryLayoutField("additionalModuleInfo", \.additionalModuleInfo),
+				BinaryLayoutField("additionalConditionSensitiveFileScans", \.additionalConditionSensitiveFileScans),
+				BinaryLayoutField("projectRoot", \.projectRoot),
+				BinaryLayoutField("scannedInputs", \.scannedInputs),
+				BinaryLayoutField("csvInputPaths", \.csvInputPaths),
+				BinaryLayoutField("additionalInputAbsolutePaths", \.additionalInputAbsolutePaths),
+				BinaryLayoutField("additionalDirectories", \.additionalDirectories),
+				BinaryLayoutField("activeCompilationConditions", \.activeCompilationConditions),
+			],
+			unwrittenProperties: [],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
@@ -71,10 +77,15 @@ extension CachedScannedModuleInfo: BinarySchemaMember {
 }
 
 extension ScannedInput: BinarySchemaMember {
-	static let binaryLayout = [
-		"path",
-		"modificationStamp",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("path", \.path),
+				BinaryLayoutField("modificationStamp", \.modificationStamp),
+			],
+			unwrittenProperties: [],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
@@ -90,19 +101,24 @@ extension ScannedInput: BinarySchemaMember {
 }
 
 extension FileScan: BinarySchemaMember {
-	static let binaryLayout = [
-		"path",
-		"imports",
-		"mockImports",
-		"instantiables",
-		"configurations",
-		"encounteredUnexpectedNodes",
-		"conditionalCompilationDecisions",
-		"consultedCompilationConditions",
-		"importSegments",
-		"importOnlyConsultedCompilationConditions",
-		"outputFileDeclarations",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("path", \.path),
+				BinaryLayoutField("imports", \.imports),
+				BinaryLayoutField("mockImports", \.mockImports),
+				BinaryLayoutField("instantiables", \.instantiables),
+				BinaryLayoutField("configurations", \.configurations),
+				BinaryLayoutField("encounteredUnexpectedNodes", \.encounteredUnexpectedNodes),
+				BinaryLayoutField("conditionalCompilationDecisions", \.conditionalCompilationDecisions),
+				BinaryLayoutField("consultedCompilationConditions", \.consultedCompilationConditions),
+				BinaryLayoutField("importSegments", \.importSegments),
+				BinaryLayoutField("importOnlyConsultedCompilationConditions", \.importOnlyConsultedCompilationConditions),
+				BinaryLayoutField("outputFileDeclarations", \.outputFileDeclarations),
+			],
+			unwrittenProperties: [],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
@@ -136,13 +152,18 @@ extension FileScan: BinarySchemaMember {
 }
 
 extension OutputFileDeclarations: BinarySchemaMember {
-	static let binaryLayout = [
-		"declaresRoot",
-		"declaresMockGeneratingType",
-		"declaresConfiguration",
-		"additionalMocksToGenerate",
-		"additionalDirectoriesToInclude",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("declaresRoot", \.declaresRoot),
+				BinaryLayoutField("declaresMockGeneratingType", \.declaresMockGeneratingType),
+				BinaryLayoutField("declaresConfiguration", \.declaresConfiguration),
+				BinaryLayoutField("additionalMocksToGenerate", \.additionalMocksToGenerate),
+				BinaryLayoutField("additionalDirectoriesToInclude", \.additionalDirectoriesToInclude),
+			],
+			unwrittenProperties: [],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
@@ -164,14 +185,19 @@ extension OutputFileDeclarations: BinarySchemaMember {
 }
 
 extension ModuleInfo: BinarySchemaMember {
-	static let binaryLayout = [
-		"imports",
-		"mockImports",
-		"instantiables",
-		"configurations",
-		"filesWithUnexpectedNodes",
-		"conditionalCompilationDecisions",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("imports", \.imports),
+				BinaryLayoutField("mockImports", \.mockImports),
+				BinaryLayoutField("instantiables", \.instantiables),
+				BinaryLayoutField("configurations", \.configurations),
+				BinaryLayoutField("filesWithUnexpectedNodes", \.filesWithUnexpectedNodes),
+				BinaryLayoutField("conditionalCompilationDecisions", \.conditionalCompilationDecisions),
+			],
+			unwrittenProperties: [],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
@@ -197,12 +223,17 @@ extension ModuleInfo: BinarySchemaMember {
 // MARK: - SafeDICore types
 
 extension ImportStatement: BinarySchemaMember {
-	static let binaryLayout = [
-		"attribute",
-		"kind",
-		"moduleName",
-		"type",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("attribute", \.attribute),
+				BinaryLayoutField("kind", \.kind),
+				BinaryLayoutField("moduleName", \.moduleName),
+				BinaryLayoutField("type", \.type),
+			],
+			unwrittenProperties: [],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
@@ -222,7 +253,14 @@ extension ImportStatement: BinarySchemaMember {
 }
 
 extension FileVisitor.ImportSegment: BinarySchemaMember {
-	static let binaryLayout = tagNames(Tag.self)
+	static var binaryLayout: BinaryLayout<Self> {
+		.enumeration(writtenAs: Tag.self) { tag in
+			switch tag {
+			case .imports: [.init(nil, [ImportStatement].self)]
+			case .conditionalImports: [.init("source", String.self)]
+			}
+		}
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		self = switch try reader.readTag() as Tag {
@@ -251,10 +289,15 @@ extension FileVisitor.ImportSegment: BinarySchemaMember {
 }
 
 extension ConditionalCompilationDecision: BinarySchemaMember {
-	static let binaryLayout = [
-		"condition",
-		"isActive",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("condition", \.condition),
+				BinaryLayoutField("isActive", \.isActive),
+			],
+			unwrittenProperties: [],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
@@ -270,14 +313,19 @@ extension ConditionalCompilationDecision: BinarySchemaMember {
 }
 
 extension SafeDIConfiguration: BinarySchemaMember {
-	static let binaryLayout = [
-		"additionalImportedModules",
-		"additionalDirectoriesToInclude",
-		"additionalMocksToGenerate",
-		"mockConditionalCompilation",
-		"sourceFilePath",
-		"declarationLocation",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("additionalImportedModules", \.additionalImportedModules),
+				BinaryLayoutField("additionalDirectoriesToInclude", \.additionalDirectoriesToInclude),
+				BinaryLayoutField("additionalMocksToGenerate", \.additionalMocksToGenerate),
+				BinaryLayoutField("mockConditionalCompilation", \.mockConditionalCompilation),
+				BinaryLayoutField("declarationLocation", \.declarationLocation),
+				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
+			],
+			unwrittenProperties: [],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
@@ -301,22 +349,28 @@ extension SafeDIConfiguration: BinarySchemaMember {
 }
 
 extension Instantiable: BinarySchemaMember {
-	static let binaryLayout = [
-		"instantiableTypes",
-		"isRoot",
-		"initializer",
-		"dependencies",
-		"declarationType",
-		"mockAttributes",
-		"generateMock",
-		"mockOnly",
-		"mockInitializer",
-		"mockReturnType",
-		"customMockName",
-		"mockDeclarationLocation",
-		"sourceFilePath",
-		"declarationLocation",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("concreteInstantiable", \.concreteInstantiable),
+				BinaryLayoutField("isRoot", \.isRoot),
+				BinaryLayoutField("initializer", \.initializer),
+				BinaryLayoutField("additionalInstantiables", \.additionalInstantiables),
+				BinaryLayoutField("dependencies", \.dependencies),
+				BinaryLayoutField("declarationType", \.declarationType),
+				BinaryLayoutField("mockAttributes", \.mockAttributes),
+				BinaryLayoutField("generateMock", \.generateMock),
+				BinaryLayoutField("mockOnly", \.mockOnly),
+				BinaryLayoutField("mockInitializer", \.mockInitializer),
+				BinaryLayoutField("mockReturnType", \.mockReturnType),
+				BinaryLayoutField("customMockName", \.customMockName),
+				BinaryLayoutField("mockDeclarationLocation", \.mockDeclarationLocation),
+				BinaryLayoutField("declarationLocation", \.declarationLocation),
+				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
+			],
+			unwrittenProperties: ["instantiableTypes"],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		// `instantiableTypes` is written as its first element and then the rest, so it is never empty.
@@ -339,27 +393,37 @@ extension Instantiable: BinarySchemaMember {
 		sourceFilePath = try reader.read() as String?
 	}
 
+	/// Every type description a file holds is part of an instantiable, which names the one that nests too deeply.
 	func write(to writer: inout BinaryWriter) {
-		writer.write(concreteInstantiable)
-		writer.write(isRoot)
-		writer.write(initializer)
-		writer.write(Array(instantiableTypes.dropFirst()))
-		writer.write(dependencies)
-		writer.write(declarationType)
-		writer.write(mockAttributes)
-		writer.write(generateMock)
-		writer.write(mockOnly)
-		writer.write(mockInitializer)
-		writer.write(mockReturnType)
-		writer.write(customMockName)
-		writer.write(mockDeclarationLocation)
-		writer.write(declarationLocation)
-		writer.write(sourceFilePath)
+		writer.writeDescribed(as: concreteInstantiable.asSource) { writer in
+			writer.write(concreteInstantiable)
+			writer.write(isRoot)
+			writer.write(initializer)
+			writer.write(additionalInstantiables)
+			writer.write(dependencies)
+			writer.write(declarationType)
+			writer.write(mockAttributes)
+			writer.write(generateMock)
+			writer.write(mockOnly)
+			writer.write(mockInitializer)
+			writer.write(mockReturnType)
+			writer.write(customMockName)
+			writer.write(mockDeclarationLocation)
+			writer.write(declarationLocation)
+			writer.write(sourceFilePath)
+		}
+	}
+
+	/// Every type the instantiable fulfills but its concrete type.
+	fileprivate var additionalInstantiables: [TypeDescription] {
+		Array(instantiableTypes.dropFirst())
 	}
 }
 
 extension Instantiable.DeclarationType: BinarySchemaMember {
-	static let binaryLayout = tagNames(Tag.self)
+	static var binaryLayout: BinaryLayout<Self> {
+		.enumeration(writtenAs: Tag.self) { _ in [] }
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		self = switch try reader.readTag() as Tag {
@@ -388,15 +452,20 @@ extension Instantiable.DeclarationType: BinarySchemaMember {
 }
 
 extension Initializer: BinarySchemaMember {
-	static let binaryLayout = [
-		"isPublicOrOpen",
-		"isOptional",
-		"isAsync",
-		"doesThrow",
-		"hasGenericParameter",
-		"hasGenericWhereClause",
-		"arguments",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("isPublicOrOpen", \.isPublicOrOpen),
+				BinaryLayoutField("isOptional", \.isOptional),
+				BinaryLayoutField("isAsync", \.isAsync),
+				BinaryLayoutField("doesThrow", \.doesThrow),
+				BinaryLayoutField("hasGenericParameter", \.hasGenericParameter),
+				BinaryLayoutField("hasGenericWhereClause", \.hasGenericWhereClause),
+				BinaryLayoutField("arguments", \.arguments),
+			],
+			unwrittenProperties: [],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
@@ -422,12 +491,17 @@ extension Initializer: BinarySchemaMember {
 }
 
 extension Initializer.Argument: BinarySchemaMember {
-	static let binaryLayout = [
-		"outerLabel",
-		"innerLabel",
-		"typeDescription",
-		"defaultValueExpression",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("outerLabel", \.outerLabel),
+				BinaryLayoutField("innerLabel", \.innerLabel),
+				BinaryLayoutField("typeDescription", \.typeDescription),
+				BinaryLayoutField("defaultValueExpression", \.defaultValueExpression),
+			],
+			unwrittenProperties: [],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
@@ -447,15 +521,19 @@ extension Initializer.Argument: BinarySchemaMember {
 }
 
 extension Dependency: BinarySchemaMember {
-	static let binaryLayout = [
-		"property",
-		"source",
-		"asInstantiatedType",
-		"declarationLocation",
-		"identifierRange",
-		"typeAnnotationRange",
-		"bareAttributeRange",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("property", \.property),
+				BinaryLayoutField("source", \.source),
+				BinaryLayoutField("declarationLocation", \.declarationLocation),
+				BinaryLayoutField("identifierRange", \.identifierRange),
+				BinaryLayoutField("typeAnnotationRange", \.typeAnnotationRange),
+				BinaryLayoutField("bareAttributeRange", \.bareAttributeRange),
+			],
+			unwrittenProperties: ["asInstantiatedType"],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		// `asInstantiatedType` is derived from `property` and `source`.
@@ -480,7 +558,16 @@ extension Dependency: BinarySchemaMember {
 }
 
 extension Dependency.Source: BinarySchemaMember {
-	static let binaryLayout = tagNames(Tag.self)
+	static var binaryLayout: BinaryLayout<Self> {
+		.enumeration(writtenAs: Tag.self) { tag in
+			switch tag {
+			case .instantiated: [.init("fulfillingTypeDescription", TypeDescription?.self), .init("erasedToConcreteExistential", Bool.self)]
+			case .received: [.init("onlyIfAvailable", Bool.self)]
+			case .aliased: [.init("fulfillingProperty", Property.self), .init("erasedToConcreteExistential", Bool.self), .init("onlyIfAvailable", Bool.self)]
+			case .forwarded: []
+			}
+		}
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		self = switch try reader.readTag() as Tag {
@@ -530,12 +617,17 @@ extension Dependency.Source: BinarySchemaMember {
 }
 
 extension Dependency.SourceRange: BinarySchemaMember {
-	static let binaryLayout = [
-		"startLine",
-		"startColumn",
-		"endLine",
-		"endColumn",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("startLine", \.startLine),
+				BinaryLayoutField("startColumn", \.startColumn),
+				BinaryLayoutField("endLine", \.endLine),
+				BinaryLayoutField("endColumn", \.endColumn),
+			],
+			unwrittenProperties: [],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
@@ -555,11 +647,16 @@ extension Dependency.SourceRange: BinarySchemaMember {
 }
 
 extension Dependency.DeclarationLocation: BinarySchemaMember {
-	static let binaryLayout = [
-		"filePath",
-		"line",
-		"column",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("filePath", \.filePath),
+				BinaryLayoutField("line", \.line),
+				BinaryLayoutField("column", \.column),
+			],
+			unwrittenProperties: [],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
@@ -577,11 +674,15 @@ extension Dependency.DeclarationLocation: BinarySchemaMember {
 }
 
 extension Property: BinarySchemaMember {
-	static let binaryLayout = [
-		"label",
-		"typeDescription",
-		"hashOfLabelAndTypeDescription",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("label", \.label),
+				BinaryLayoutField("typeDescription", \.typeDescription),
+			],
+			unwrittenProperties: ["hashOfLabelAndTypeDescription"],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		// The stored hash is not written: Swift seeds hashing differently in every process, so the
@@ -599,7 +700,27 @@ extension Property: BinarySchemaMember {
 }
 
 extension TypeDescription: BinarySchemaMember {
-	static let binaryLayout = tagNames(Tag.self)
+	static var binaryLayout: BinaryLayout<Self> {
+		.enumeration(writtenAs: Tag.self) { tag in
+			switch tag {
+			case .void: [.init(nil, VoidSpelling.self)]
+			case .simple: [.init("name", String.self), .init("generics", [TypeDescription].self)]
+			case .nested: [.init("name", String.self), .init("parentType", TypeDescription.self), .init("generics", [TypeDescription].self)]
+			case .composition: [.init(nil, UnorderedEquatingCollection<TypeDescription>.self)]
+			case .optional: [.init(nil, TypeDescription.self)]
+			case .implicitlyUnwrappedOptional: [.init(nil, TypeDescription.self)]
+			case .some: [.init(nil, TypeDescription.self)]
+			case .any: [.init(nil, TypeDescription.self)]
+			case .metatype: [.init(nil, TypeDescription.self), .init("isType", Bool.self)]
+			case .attributed: [.init(nil, TypeDescription.self), .init("specifiers", [String].self), .init("attributes", [String].self)]
+			case .array: [.init("element", TypeDescription.self)]
+			case .dictionary: [.init("key", TypeDescription.self), .init("value", TypeDescription.self)]
+			case .tuple: [.init(nil, [TupleElement].self)]
+			case .closure: [.init("arguments", [TypeDescription].self), .init("isAsync", Bool.self), .init("doesThrow", Bool.self), .init("returnType", TypeDescription.self)]
+			case .unknown: [.init("text", String.self)]
+			}
+		}
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		self = try reader.readNested { reader throws(BinaryDecodingError) in
@@ -639,6 +760,12 @@ extension TypeDescription: BinarySchemaMember {
 	}
 
 	func write(to writer: inout BinaryWriter) {
+		writer.writeNested { writer in
+			writeCase(to: &writer)
+		}
+	}
+
+	private func writeCase(to writer: inout BinaryWriter) {
 		switch self {
 		case let .void(spelling):
 			writer.writeTag(Tag.void)
@@ -718,7 +845,9 @@ extension TypeDescription: BinarySchemaMember {
 }
 
 extension TypeDescription.VoidSpelling: BinarySchemaMember {
-	static let binaryLayout = tagNames(Tag.self)
+	static var binaryLayout: BinaryLayout<Self> {
+		.enumeration(writtenAs: Tag.self) { _ in [] }
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		self = switch try reader.readTag() as Tag {
@@ -741,10 +870,15 @@ extension TypeDescription.VoidSpelling: BinarySchemaMember {
 }
 
 extension TypeDescription.TupleElement: BinarySchemaMember {
-	static let binaryLayout = [
-		"label",
-		"typeDescription",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("label", \.label),
+				BinaryLayoutField("typeDescription", \.typeDescription),
+			],
+			unwrittenProperties: [],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
@@ -760,12 +894,14 @@ extension TypeDescription.TupleElement: BinarySchemaMember {
 }
 
 extension UnorderedEquatingCollection: BinaryCodable, BinarySchemaMember where Element: BinaryCodable {
-	/// `set` is derived from `array`.
-	static var binaryLayout: [String] {
-		[
-			"array",
-			"set",
-		]
+	/// `array` is written as `elements`, and `set` is derived from it.
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("array", \.elements),
+			],
+			unwrittenProperties: ["set"],
+		)
 	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
@@ -773,6 +909,11 @@ extension UnorderedEquatingCollection: BinaryCodable, BinarySchemaMember where E
 	}
 
 	func write(to writer: inout BinaryWriter) {
-		writer.write(Array(self))
+		writer.write(elements)
+	}
+
+	/// The elements in the order the collection holds them.
+	fileprivate var elements: [Element] {
+		Array(self)
 	}
 }
