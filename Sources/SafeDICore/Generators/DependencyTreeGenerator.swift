@@ -1284,7 +1284,7 @@ public actor DependencyTreeGenerator {
 		var allReceived = initialReceived
 		var allOnlyIfAvailable = initialOnlyIfAvailable
 		var allRequired = initialReceived.subtracting(initialOnlyIfAvailable)
-		var visitedTypes = Set<TypeDescription>()
+		var visitedScopes = Set<ObjectIdentifier>()
 		var worklist = Array(allRequired)
 
 		/// The concrete type the mock builds `property` from when no `@Instantiable` fulfills its type. A lazily
@@ -1294,17 +1294,32 @@ public actor DependencyTreeGenerator {
 			erasedToConcreteTypeMap[property.typeDescription]
 				?? property.asLazilyInstantiatedInstanceProperty.flatMap { erasedToConcreteTypeMap[$0.typeDescription] }
 		}
-		while let property = worklist.popLast() {
-			var dependencyType = property.typeDescription.asInstantiatedType
-			if typeDescriptionToScopeMap[dependencyType] == nil,
-			   let concreteType = concreteTypeErased(to: property)
+
+		/// The scope that builds a received property promoted to the mock root, when the mock can build one.
+		/// A received dependency the mock cannot build stays received: the root's `mock()` takes it as a parameter.
+		func scopeToPromote(for receivedProperty: Property) -> (scope: Scope, erasedToConcreteExistential: Bool)? {
+			let dependencyType = receivedProperty.typeDescription.asInstantiatedType
+			let scopeOfReceivedProperty: (scope: Scope, erasedToConcreteExistential: Bool)? = if let receivedScope = typeDescriptionToScopeMap[dependencyType] {
+				(receivedScope, false)
+			} else if let concreteType = concreteTypeErased(to: receivedProperty),
+			          let receivedScope = typeDescriptionToScopeMap[concreteType]
 			{
-				dependencyType = concreteType
+				(receivedScope, true)
+			} else {
+				nil
 			}
-			guard let promotedScope = typeDescriptionToScopeMap[dependencyType],
-			      Self.mockCanBuild(property, from: promotedScope),
-			      visitedTypes.insert(dependencyType).inserted
-			else { continue }
+			guard let scopeOfReceivedProperty, Self.mockCanBuild(receivedProperty, from: scopeOfReceivedProperty.scope) else {
+				return nil
+			}
+			return scopeOfReceivedProperty
+		}
+
+		// The scope the mock builds for each required property, which `inOrderTheMockTreeFirstReceives` walks too.
+		var scopesBuiltForRequiredProperties = [Property: Scope]()
+		while let property = worklist.popLast() {
+			guard let promotedScope = scopeToPromote(for: property)?.scope else { continue }
+			scopesBuiltForRequiredProperties[property] = promotedScope
+			guard visitedScopes.insert(ObjectIdentifier(promotedScope)).inserted else { continue }
 
 			let scopeReceivedProperties = Self.collectReceivedProperties(
 				from: promotedScope,
@@ -1331,25 +1346,6 @@ public actor DependencyTreeGenerator {
 		let mockRootScope = Scope(instantiable: instantiable)
 		mockRootScope.propertiesToGenerate = scope.propertiesToGenerate
 
-		/// The scope that builds a received property promoted to the mock root, when the mock can build one.
-		/// A received dependency the mock cannot build stays received: the root's `mock()` takes it as a parameter.
-		func scopeToPromote(for receivedProperty: Property) -> (scope: Scope, erasedToConcreteExistential: Bool)? {
-			let dependencyType = receivedProperty.typeDescription.asInstantiatedType
-			let scopeOfReceivedProperty: (scope: Scope, erasedToConcreteExistential: Bool)? = if let receivedScope = typeDescriptionToScopeMap[dependencyType] {
-				(receivedScope, false)
-			} else if let concreteType = concreteTypeErased(to: receivedProperty),
-			          let receivedScope = typeDescriptionToScopeMap[concreteType]
-			{
-				(receivedScope, true)
-			} else {
-				nil
-			}
-			guard let scopeOfReceivedProperty, Self.mockCanBuild(receivedProperty, from: scopeOfReceivedProperty.scope) else {
-				return nil
-			}
-			return scopeOfReceivedProperty
-		}
-
 		// A dependency the tree receives both as `LazilyInstantiated` and by value is one dependency. It is
 		// promoted once, as the lazily instantiated property, whenever any receiver requires it in either form;
 		// receivers of its instance read it from that property. The same holds for a lazily instantiated
@@ -1370,7 +1366,7 @@ public actor DependencyTreeGenerator {
 		// both required and onlyIfAvailable versions of the same dep exist.
 		// Property.< sorts non-optional before optional, so the required version
 		// wins and the optional version is skipped.
-		var promotedPropertiesToGenerate = [(property: Scope.PropertyToGenerate, scope: Scope)]()
+		var promotedPropertiesToGenerate = [Scope.PropertyToGenerate]()
 		var promotedLabelAndTypes = Set<String>()
 		for receivedProperty in allReceived.union(lazilyInstantiatedPropertiesToPromote).sorted() {
 			// A forwarded `x: X` fulfills an `x: X?` too.
@@ -1386,30 +1382,28 @@ public actor DependencyTreeGenerator {
 			guard let (receivedScope, erasedToConcreteExistential) = scopeToPromote(for: receivedProperty) else {
 				continue
 			}
-			promotedPropertiesToGenerate.append((
-				property: .instantiated(
-					receivedProperty,
-					receivedScope,
-					erasedToConcreteExistential: erasedToConcreteExistential,
-				),
-				scope: receivedScope,
+			promotedPropertiesToGenerate.append(.instantiated(
+				receivedProperty,
+				receivedScope,
+				erasedToConcreteExistential: erasedToConcreteExistential,
 			))
 		}
-		mockRootScope.propertiesToGenerate += promotedPropertiesToGenerate.map(\.property)
-		// The generated mock declares the promoted children in label order. They are validated in the order their
-		// types are declared, after the mock root's own children, so which error a mock root reports never depends on
-		// their labels. Sorting is stable, so promoted children of one type stay in label order.
-		let validatedMockRootScope = Scope(instantiable: instantiable)
-		validatedMockRootScope.propertiesToGenerate = scope.propertiesToGenerate + promotedPropertiesToGenerate
-			.sorted { Dependency.DeclarationLocation.precedesInSourceOrder($0.scope.instantiable.declarationLocation, $1.scope.instantiable.declarationLocation) }
-			.map(\.property)
+		// The mock declares and validates the promoted children in the order its tree first receives them, after its
+		// own children, so which promoted sibling is passed `nil` when two receive each other only if available, the
+		// order of their overrides, and which error the mock root reports depend on where properties are declared,
+		// never on their labels or type names.
+		mockRootScope.propertiesToGenerate += Self.inOrderTheMockTreeFirstReceives(
+			promotedPropertiesToGenerate,
+			walkingFrom: scope,
+			scopesBuiltForRequiredProperties: scopesBuiltForRequiredProperties,
+		)
 
 		// Validate the promoted mock scope for cycles before generating code.
 		// This catches cycles that only become visible after @Received dependencies
 		// are promoted to the mock root (e.g., B @Receives Instantiator<A> where A
 		// instantiates B — the promotion creates a cycle in the mock root scope).
 		let declaresOnlyIfAvailableAliasOfPropertyBeingBuilt = try validateMockRootScopeForCycles(
-			validatedMockRootScope,
+			mockRootScope,
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 		)
 		// Promotion can also make the mock root's children require one another
@@ -1423,17 +1417,17 @@ public actor DependencyTreeGenerator {
 		// walk above found such an alias too.
 		// The mock root binds every received property it does not promote, which encloses its whole tree.
 		let mockRootEnclosingProvidedProperties = childrenRequiringEachOtherValidation.enclosingProvidedProperties(
-			ofMockRoot: validatedMockRootScope,
+			ofMockRoot: mockRootScope,
 			receivedProperties: allReceived,
 		)
 		let mockRootChildrenRequiringEachOther = Self.childrenRequiringEachOther(
-			in: validatedMockRootScope,
+			in: mockRootScope,
 			enclosingProvidedProperties: mockRootEnclosingProvidedProperties,
 			cache: &cache,
 		)
 		try validatePropertiesAreFulfillable(
 			onRootScopes: mockRootChildrenRequiringEachOther != nil || declaresOnlyIfAvailableAliasOfPropertyBeingBuilt
-				? [ValidatedRootScope(scope: validatedMockRootScope, boundProperties: allReceived)]
+				? [ValidatedRootScope(scope: mockRootScope, boundProperties: allReceived)]
 				: [],
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 			cyclesOnly: true,
@@ -1444,18 +1438,18 @@ public actor DependencyTreeGenerator {
 		// that require one another, in the order `validateChildrenDoNotRequireEachOther`
 		// checks them. The mock root's own children were checked above, so only their
 		// trees are left.
-		if let aliasesFulfillingOneAnother = Self.aliasesFulfillingOneAnother(in: validatedMockRootScope) {
+		if let aliasesFulfillingOneAnother = Self.aliasesFulfillingOneAnother(in: mockRootScope) {
 			throw aliasesFulfillingOneAnother.error
 		} else if let mockRootChildrenRequiringEachOther {
 			throw mockRootChildrenRequiringEachOther.error
 		} else {
 			var mockRootChildScopes = [(scope: Scope, enclosingProvidedProperties: Set<Property>)]()
-			for case let .instantiated(childProperty, childScope, _) in validatedMockRootScope.propertiesToGenerate {
+			for case let .instantiated(childProperty, childScope, _) in mockRootScope.propertiesToGenerate {
 				mockRootChildScopes.append((
 					childScope,
 					childrenRequiringEachOtherValidation.enclosingProvidedProperties(
 						ofChild: childProperty,
-						of: validatedMockRootScope,
+						of: mockRootScope,
 						enclosingProvidedProperties: mockRootEnclosingProvidedProperties,
 					),
 				))
@@ -1492,6 +1486,77 @@ public actor DependencyTreeGenerator {
 		guard property.firstGenericMatchesForwardedProperties(of: scope.instantiable) else { return false }
 		return !(property.propertyType.isConstant || property.propertyType.isLazilyInstantiated)
 			|| !scope.instantiable.dependencies.contains(where: \.isForwarded)
+	}
+
+	/// The children a mock root promotes, in the order its tree first receives them: the order in which a walk first
+	/// meets a receive of each. The walk visits the mock root's own dependencies in declaration order, then the tree of
+	/// each child it instantiates, depth first, each type's dependencies before its children's trees, all in
+	/// declaration order. It then walks, in the order it first met them, the trees of the dependencies the mock builds
+	/// for what its receivers require, which are where the mock tree receives the rest. A receive of a promoted child is
+	/// one of its property, of the property's optional form, or of the instance of a lazily instantiated property.
+	///
+	/// The order depends only on where properties are declared and how they are nested, never on their labels or type
+	/// names: when two promoted children receive each other only if available, the one received first is built second,
+	/// as the property declared first is in production.
+	/// - Parameters:
+	///   - promotedChildren: The children the mock root promotes. The walk meets a receive of each, since each is a
+	///     dependency that the mock root's tree, or the tree of a dependency the mock builds for a receiver, receives.
+	///   - mockRootScope: The scope of the mocked type, without the promoted children.
+	///   - scopesBuiltForRequiredProperties: The scope from which the mock builds each received property that a
+	///     receiver requires, when it builds one: the scopes whose trees the promotion worklist walks.
+	private static func inOrderTheMockTreeFirstReceives(
+		_ promotedChildren: [Scope.PropertyToGenerate],
+		walkingFrom mockRootScope: Scope,
+		scopesBuiltForRequiredProperties: [Property: Scope],
+	) -> [Scope.PropertyToGenerate] {
+		var promotedChildIndexByReceivedProperty = [Property: Int]()
+		for (index, promotedChild) in promotedChildren.enumerated() {
+			for receivableProperty in promotedChild.receivableProperties {
+				promotedChildIndexByReceivedProperty[receivableProperty.asUnwrappedProperty] = index
+			}
+		}
+		var orderedIndices = [Int]()
+		var orderedIndexSet = Set<Int>()
+		var walkedScopes = Set<ObjectIdentifier>()
+		// Every receive the walk meets, in order. The trees of the dependencies the mock builds for them are walked in
+		// that order once the trees met before are walked, and only while a promoted child is left to order.
+		var receivedProperties = [Property]()
+		func walk(_ scope: Scope) {
+			// Once every promoted child is ordered, nothing further can change the order.
+			guard orderedIndices.count < promotedChildren.count,
+			      walkedScopes.insert(ObjectIdentifier(scope)).inserted
+			else { return }
+			for dependency in scope.instantiable.dependencies {
+				let receivedProperty: Property? = switch dependency.source {
+				case .received:
+					dependency.property
+				case let .aliased(fulfillingProperty, _, _):
+					fulfillingProperty
+				case .instantiated, .forwarded:
+					nil
+				}
+				if let receivedProperty {
+					receivedProperties.append(receivedProperty)
+					if let index = promotedChildIndexByReceivedProperty[receivedProperty.asUnwrappedProperty],
+					   orderedIndexSet.insert(index).inserted
+					{
+						orderedIndices.append(index)
+					}
+				}
+			}
+			for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
+				walk(childScope)
+			}
+		}
+		walk(mockRootScope)
+		var receivedPropertyIndex = 0
+		while orderedIndices.count < promotedChildren.count, receivedPropertyIndex < receivedProperties.count {
+			if let builtScope = scopesBuiltForRequiredProperties[receivedProperties[receivedPropertyIndex]] {
+				walk(builtScope)
+			}
+			receivedPropertyIndex += 1
+		}
+		return orderedIndices.map { promotedChildren[$0] }
 	}
 
 	/// Walks a post-promotion mock root scope for dependency cycles.
