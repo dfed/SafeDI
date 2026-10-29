@@ -1088,8 +1088,9 @@ enum GraphFuzzerGenerator {
 		/// `X.self`; now and then one or two aliases of that alias follow, each required or `onlyIfAvailable`, on the
 		/// same type or on a child it dominates; usually a child the last alias's type dominates receives the alias,
 		/// mostly required, or, where there is none, a required alias of it on the same type; and usually `X` receives
-		/// `b`. Each step takes only a child the previous type dominates, so that no receiver is rejected merely because
-		/// another path reaches it without the alias. A receiver that requires the chain needs every alias created, so
+		/// `b`. Each step takes only a child the previous type dominates – counting every root's properties, including
+		/// one the other roots lack – so that no receiver is rejected merely because another path from a root reaches it
+		/// without the alias. A receiver that requires the chain needs every alias created, so
 		/// `x` built before `b`, while `X` receiving `b` needs `b` built first: SafeDI must reject the graph through the
 		/// chain. Without the receive of `b`, the chain must be built after `x`, which the compiled output shows.
 		/// `addingAliasChains` never draws a source built around its host, so no other pass draws the cycle, and
@@ -1099,7 +1100,6 @@ enum GraphFuzzerGenerator {
 			var declarations = declarations
 			let graphTypeIndexByName = Dictionary(uniqueKeysWithValues: (0..<typeCount).map { (typeName($0), $0) })
 			let declarationIndexByName = Dictionary(uniqueKeysWithValues: declarations.enumerated().map { ($1.name, $0) })
-			let rootDeclarations = declarations.filter { $0.instantiableArguments.contains("isRoot: true") }
 			/// The index in `declarations` of the type of the graph `property` instantiates, or `nil` when it instantiates
 			/// another type or `onlyWithoutInstantiator` and it instantiates through an instantiator.
 			func instantiatedDeclarationIndex(of property: PropertyDeclaration, onlyWithoutInstantiator: Bool) -> Int? {
@@ -1123,14 +1123,30 @@ enum GraphFuzzerGenerator {
 			func declaresProperty(labeled label: String, at index: Int) -> Bool {
 				declarations[index].properties.contains { $0.label == label }
 			}
+			// Which declaration is on every path to which, read from the declarations rather than from `dominators`:
+			// a root may declare a property the other roots do not, which is not among the graph's `edges`. No pass
+			// before this one instantiates a type of the graph, and this one adds only received properties.
+			let rootIndices = declarations.indices.filter { declarations[$0].instantiableArguments.contains("isRoot: true") }
+			let childIndicesByDeclaration = declarations.map { declaration in
+				declaration.properties.compactMap { instantiatedDeclarationIndex(of: $0, onlyWithoutInstantiator: false) }
+			}
+			/// The declarations a root reaches without passing through the one at `excludedIndex`.
+			func reachableFromRoots(excluding excludedIndex: Int?) -> Set<Int> {
+				var reached = Set<Int>()
+				var stack = rootIndices.flatMap { childIndicesByDeclaration[$0] }.filter { $0 != excludedIndex }
+				while let current = stack.popLast() {
+					guard reached.insert(current).inserted else { continue }
+					stack += childIndicesByDeclaration[current].filter { $0 != excludedIndex }
+				}
+				return reached
+			}
+			let reachedFromRoots = reachableFromRoots(excluding: nil)
 			/// Whether the declaration at `providerIndex` is on every path from a root to the type at `index`, so that
 			/// what it provides is available wherever the type is built: it is a root, whose properties every root
-			/// declares here, or it dominates the type.
+			/// declares here, or it dominates the type, or no root reaches the type, which only mocks then build.
 			func isOnEveryPath(from providerIndex: Int, to index: Int) -> Bool {
-				guard let providerTypeIndex = graphTypeIndexByName[declarations[providerIndex].name] else {
-					return declarations[providerIndex].instantiableArguments.contains("isRoot: true")
-				}
-				return graphTypeIndexByName[declarations[index].name].map { dominators[$0].contains(providerTypeIndex) } ?? false
+				guard !rootIndices.contains(providerIndex), reachedFromRoots.contains(index) else { return true }
+				return providerIndex == index || !reachableFromRoots(excluding: providerIndex).contains(index)
 			}
 			/// The types of the graph the declaration at `index` instantiates, other than itself, that it is on every
 			/// path to, so that a receiver among them is handed what the declaration provides wherever it is built.
@@ -1151,9 +1167,9 @@ enum GraphFuzzerGenerator {
 			var candidates = [Siblings]()
 			for (scopeIndex, scope) in declarations.enumerated() where scope.instantiableArguments.contains("isRoot: true") || graphTypeIndexByName[scope.name] != nil {
 				func isDeclaredByEveryRoot(_ property: PropertyDeclaration) -> Bool {
-					rootDeclarations.allSatisfy { root in root.properties.contains { $0.label == property.label && $0.type == property.type } }
+					rootIndices.allSatisfy { rootIndex in declarations[rootIndex].properties.contains { $0.label == property.label && $0.type == property.type } }
 				}
-				let isRoot = scope.instantiableArguments.contains("isRoot: true")
+				let isRoot = rootIndices.contains(scopeIndex)
 				for x in scope.properties where x.attribute == "@Instantiated" && graphTypeIndexByName[x.type] != nil && (!isRoot || isDeclaredByEveryRoot(x)) {
 					guard declarations.allSatisfy({ $0.properties.allSatisfy { $0.label != x.label || $0.type == x.type || $0.type == x.type + "?" } }),
 					      let xDeclarationIndex = declarationIndexByName[x.type]
