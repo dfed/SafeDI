@@ -171,14 +171,32 @@ public actor DependencyTreeGenerator {
 
 		// Create mock-root ScopeGenerators using the production Scope tree, each in a task of its own. The roots
 		// are independent: each reads the frozen scope map and writes only to a scope of its own and to caches of
-		// its own, seeded with what validating the map already collected. The received-properties cache and the
-		// validated scopes are memos of results that are the same however a scope is reached, so a task that lacks
-		// what another found walks a scope again and finds the same.
-		let childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation(scopes: mockScopes.scopes.scopes)
-		let collectedReceivedPropertiesCache = receivedPropertiesCache
+		// its own. The received-properties cache and the validated scopes are memos of results that are the same
+		// however a scope is reached, so a task that lacks what another found walks a scope again and finds the same.
+		// So that no task walks what another walks too, both are filled first, once, from every scope the mock roots
+		// can reach, and each task's copies share what they hold rather than copying it when the task writes.
+		let scopesMockRootsReach = Self.scopesReached(
+			fromMockRootScopes: mockRootsToCreate.map { mockScopes.scopes.scopes[$0.scopeIndex] },
+			in: mockScopes,
+		)
+		for scope in scopesMockRootsReach {
+			_ = Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache)
+		}
+		// Each scope's tree is validated for children that require one another as a mock root's child is when no
+		// scope enclosing it provides the property of an `onlyIfAvailable` alias, which is every child when the
+		// module declares no such alias. Only the scopes validated without an error are kept: an error is reported
+		// by each mock root whose tree reaches it, when its task validates that tree again.
+		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation(scopes: mockScopes.scopes.scopes)
+		_ = try? Self.validateChildrenDoNotRequireEachOther(
+			inTreesRootedAt: scopesMockRootsReach.map { (scope: $0, enclosingProvidedProperties: []) },
+			cache: &receivedPropertiesCache,
+			validation: &childrenRequiringEachOtherValidation,
+		)
+		let sharedReceivedPropertiesCache = ReceivedPropertiesCache(sharing: receivedPropertiesCache.complete)
+		let sharedChildrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation(sharingScopesValidatedBy: childrenRequiringEachOtherValidation)
 		let mockRootOutcomes = await Self.mapConcurrently(mockRootsToCreate) { mockRootToCreate in
-			var receivedPropertiesCache = collectedReceivedPropertiesCache
-			var childrenRequiringEachOtherValidation = childrenRequiringEachOtherValidation
+			var receivedPropertiesCache = sharedReceivedPropertiesCache
+			var childrenRequiringEachOtherValidation = sharedChildrenRequiringEachOtherValidation
 			return Result<ScopeGenerator, any Error> {
 				try self.createMockRoot(
 					for: mockRootToCreate.instantiable,
@@ -564,6 +582,47 @@ public actor DependencyTreeGenerator {
 		var typeDescriptionToScopeMap: [TypeDescription: Scope] {
 			scopes.typeDescriptionToScopeMap
 		}
+	}
+
+	/// The scopes that creating the mock roots of `mockRootScopes` walks, each once, in the order they are first
+	/// reached: the scope of each mock root, every scope it instantiates, and the scope of each property any of them
+	/// receives, which a mock root can promote, and in turn the scopes those reach. A scope this misses costs only a
+	/// walk in each task that reaches it.
+	private static func scopesReached(
+		fromMockRootScopes mockRootScopes: [Scope],
+		in mockScopes: MockScopes,
+	) -> [Scope] {
+		var scopesReached = [Scope]()
+		var reachedScopes = Set<ObjectIdentifier>()
+		var scopesToVisit = mockRootScopes.reversed() as [Scope]
+		while let scope = scopesToVisit.popLast() {
+			guard reachedScopes.insert(ObjectIdentifier(scope)).inserted else { continue }
+			scopesReached.append(scope)
+			for case let .instantiated(_, childScope, _) in scope.propertiesToGenerate {
+				scopesToVisit.append(childScope)
+			}
+			for dependency in scope.instantiable.dependencies {
+				let receivedProperty: Property? = switch dependency.source {
+				case .received:
+					dependency.property
+				case let .aliased(fulfillingProperty, _, _):
+					fulfillingProperty
+				case .instantiated, .forwarded:
+					nil
+				}
+				if let receivedProperty {
+					if let receivedScope = mockScopes.typeDescriptionToScopeMap[receivedProperty.typeDescription.asInstantiatedType] {
+						scopesToVisit.append(receivedScope)
+					}
+					if let concreteType = concreteTypeErased(to: receivedProperty, in: mockScopes.erasedToConcreteTypeMap),
+					   let erasedScope = mockScopes.typeDescriptionToScopeMap[concreteType]
+					{
+						scopesToVisit.append(erasedScope)
+					}
+				}
+			}
+		}
+		return scopesReached
 	}
 
 	/// A type `generateMockCode` creates a mock root for.
@@ -2060,9 +2119,12 @@ public actor DependencyTreeGenerator {
 		/// are recorded as provided by enclosing scopes, so that a scope is validated once for each way its
 		/// enclosing scopes can affect the result, rather than once for every path that reaches it.
 		let onlyIfAvailableAliasProperties: Set<Property>
+		/// The scopes known to be validated, as in `validatedScopes`, when this validation was created from another,
+		/// which every copy of it shares and no copy writes to.
+		let sharedValidatedScopes: Set<ValidatedScope>
 		/// The scopes whose children, and whose trees' children, are known not to require one another, each with
 		/// the `onlyIfAvailableAliasProperties` its enclosing scopes provide to it.
-		var validatedScopes = Set<ValidatedScope>()
+		private(set) var validatedScopes = Set<ValidatedScope>()
 
 		init(scopes: some Sequence<Scope>) {
 			var onlyIfAvailableAliasProperties = Set<Property>()
@@ -2073,6 +2135,26 @@ public actor DependencyTreeGenerator {
 				}
 			}
 			self.onlyIfAvailableAliasProperties = onlyIfAvailableAliasProperties
+			sharedValidatedScopes = []
+		}
+
+		/// A validation that starts with every scope `validation` knows to be validated, which its copies share: a copy
+		/// that a concurrent task writes to holds only the scopes that task validates.
+		init(sharingScopesValidatedBy validation: ChildrenRequiringEachOtherValidation) {
+			onlyIfAvailableAliasProperties = validation.onlyIfAvailableAliasProperties
+			sharedValidatedScopes = validation.sharedValidatedScopes.union(validation.validatedScopes)
+		}
+
+		/// Adds `validatedScope` to `validatedScopes`, returning whether it was validated neither there nor in
+		/// `sharedValidatedScopes`.
+		mutating func insert(_ validatedScope: ValidatedScope) -> Bool {
+			!sharedValidatedScopes.contains(validatedScope) && validatedScopes.insert(validatedScope).inserted
+		}
+
+		/// Removes `validatedScope` from `validatedScopes`, on the path to an error, so that the next tree that reaches
+		/// it validates it again.
+		mutating func remove(_ validatedScope: ValidatedScope) {
+			validatedScopes.remove(validatedScope)
 		}
 
 		/// The `onlyIfAvailableAliasProperties` that the mock root `mockRootScope`, whose tree and promoted scopes'
@@ -2269,8 +2351,8 @@ public actor DependencyTreeGenerator {
 	/// children would be generated with one of them referring to a sibling declared
 	/// after it, which no compiler stage before SIL rejects. Each tree reports the first
 	/// error it finds, and the errors of every tree are reported. Scopes in `validation`'s
-	/// `validatedScopes` are skipped along with their trees, and every scope whose tree is
-	/// validated without error is added to it. Each tree is validated depth first, in the
+	/// `validatedScopes` or `sharedValidatedScopes` are skipped along with their trees, and every
+	/// scope whose tree is validated without error is added to `validatedScopes`. Each tree is validated depth first, in the
 	/// order each scope declares its children, with a stack of the scopes left to validate,
 	/// since a tree can be as deep as the module has types.
 	/// - Parameter rootScopes: The roots of the trees, each with the properties of `onlyIfAvailable` aliases that
@@ -2290,7 +2372,7 @@ public actor DependencyTreeGenerator {
 			do {
 				while let (scope, enclosingProvidedProperties, parentIndex) = scopesToValidate.popLast() {
 					let validatedScope = ChildrenRequiringEachOtherValidation.ValidatedScope(scope: ObjectIdentifier(scope), enclosingProvidedProperties: enclosingProvidedProperties)
-					guard validation.validatedScopes.insert(validatedScope).inserted else { continue }
+					guard validation.insert(validatedScope) else { continue }
 					walkedScopes.append((validatedScope: validatedScope, parentIndex: parentIndex))
 					let walkedScopeIndex = walkedScopes.count - 1
 					if let aliasesFulfillingOneAnother = aliasesFulfillingOneAnother(in: scope) {
@@ -2320,7 +2402,7 @@ public actor DependencyTreeGenerator {
 				// The scope that reported the error was the last one walked.
 				var walkedScopeIndex = walkedScopes.indices.last
 				while let index = walkedScopeIndex {
-					validation.validatedScopes.remove(walkedScopes[index].validatedScope)
+					validation.remove(walkedScopes[index].validatedScope)
 					walkedScopeIndex = walkedScopes[index].parentIndex
 				}
 				treeErrors.append(error)
@@ -2657,6 +2739,18 @@ public actor DependencyTreeGenerator {
 	/// the cycle receives from that subtree's view, and which subtree walks the cycle first can follow
 	/// set iteration order.
 	private struct ReceivedPropertiesCache {
+		init() {
+			shared = [:]
+		}
+
+		/// A cache that starts with `complete`, results that lack nothing, which its copies share: a copy that a
+		/// concurrent task writes to copies only what that task collects itself.
+		init(sharing complete: [ObjectIdentifier: ReceivedProperties]) {
+			shared = complete
+		}
+
+		/// Results that lack nothing, collected before the cache was copied, which no copy writes to.
+		let shared: [ObjectIdentifier: ReceivedProperties]
 		/// Results that lack nothing, which are the same however the scope is reached.
 		var complete = [ObjectIdentifier: ReceivedProperties]()
 		/// The depth of each scope whose walk is unfinished.
@@ -2738,7 +2832,7 @@ public actor DependencyTreeGenerator {
 		cache: inout ReceivedPropertiesCache,
 	) -> ReceivedPropertiesWalkStart {
 		let id = ObjectIdentifier(scope)
-		if let complete = cache.complete[id] {
+		if let complete = cache.shared[id] ?? cache.complete[id] {
 			return .walked(WalkedReceivedProperties(receivedProperties: complete, shallowestUnfinishedWalkDepth: nil))
 		} else if let unfinishedWalkDepth = cache.unfinishedWalkDepths[id] {
 			// A cycle re-entered this scope. Its unfinished walk accounts for what it receives.
