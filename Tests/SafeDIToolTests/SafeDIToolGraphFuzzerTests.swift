@@ -840,7 +840,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// invocation when nothing fails.
 	static let smokeSeeds: [UInt64] = [14, 25, 62, 582, 691, 705, 731, 930, 2_420, 4_224]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x8143853CAEA92642
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xAC14B1A4751098A2
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -872,7 +872,7 @@ struct SafeDIToolGraphFuzzerTests {
 				2_437, 2_444, 2_456, 2_485, 2_515, 2_518, 2_553, 2_555, 2_577, 2_630, 2_637, 2_667, 2_704, 2_731, 2_741,
 				2_752, 2_791, 2_808, 2_835, 2_841, 2_845, 2_874, 2_902, 2_914, 2_916, 3_004, 3_023, 3_064,
 				3_074, 3_075, 3_091, 3_132, 3_134, 3_149, 3_180, 3_183, 3_214, 3_215, 3_221, 3_225, 3_241, 3_252, 3_298, 3_306,
-				3_329, 3_344, 3_361, 3_397, 3_430, 3_439, 3_491, 3_504, 3_506, 3_513, 3_526, 3_533, 3_534, 3_537, 3_577,
+				3_329, 3_344, 3_361, 3_397, 3_430, 3_439, 3_470, 3_491, 3_504, 3_506, 3_513, 3_526, 3_533, 3_534, 3_537, 3_577,
 				3_582, 3_588, 3_596, 3_602, 3_604, 3_620, 3_645, 3_648, 3_661, 3_699, 3_707, 3_715, 3_723, 3_741, 3_750, 3_775,
 				3_776, 3_805, 3_823, 3_843, 3_894, 3_915, 3_942, 4_044, 4_068, 4_102, 4_107, 4_110, 4_117, 4_122, 4_125, 4_156,
 				4_177, 4_191, 4_192, 4_196, 4_206, 4_213, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_360, 4_371,
@@ -886,14 +886,6 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(containing: "changes its generated mock configuration code")],
 			seeds: [
 				69, 1_992, 2_186, 2_254, 3_931, 4_643, 4_747, 4_974,
-			],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "A type's construction passes an `onlyIfAvailable` alias of its own `onlyIfAvailable` alias by name where neither is created and nothing requires the chain",
-			// The alias of an alias is labeled `<label>AliasAlias`, or `<label>AliasAliasAlias` one chain further.
-			signatures: [.compilerError(containing: "AliasAlias' in scope")],
-			seeds: [
-				1_753, 2_546, 3_470, 4_547, 4_698,
 			],
 		),
 		GraphFuzzerKnownIssue(
