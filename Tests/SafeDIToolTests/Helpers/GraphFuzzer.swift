@@ -86,6 +86,126 @@ struct GraphFuzzerFixture: Equatable {
 	static func typeNamePrefix(forSeed seed: UInt64) -> String {
 		"S\(seed)_"
 	}
+
+	/// The same graph renamed by `renaming`, with its files listed in reverse order. A tool whose output depends
+	/// only on what a graph declares gives the renamed graph the output it gives this one, renamed.
+	func renamed(by renaming: GraphFuzzerRenaming) -> GraphFuzzerFixture {
+		GraphFuzzerFixture(
+			seed: seed,
+			swiftFileContent: swiftFileContent.reversed().map { renaming.rename($0, typeNamePrefix: typeNamePrefix) },
+		)
+	}
+}
+
+/// A renaming of a graph that changes no declaration's meaning but reverses an order SafeDI could depend on: the order
+/// of its type names, of its property labels, of its file names, or all three at once. The rename-invariance oracle
+/// runs each graph under every renaming and requires the same results once the renaming is undone: the same verdict,
+/// the same diagnostics in any order, and byte-identical generated files.
+///
+/// Type names `<prefix>T<i>`, `<prefix>AnyT<i>`, `<prefix>Root<i>`, and `<prefix>Missing<i>` – with any suffix, such
+/// as `Protocol` – and labels `t<i>`, `anyT<i>`, `lazyT<i>`, `lazyAnyT<i>`, and `missing<i>` – with any suffix, such
+/// as `Builder` – are renamed by replacing index `i` with `9 - i`, wherever they appear, including inside generated
+/// names that embed them. Every index the generator writes is a single digit, so each name keeps its length and
+/// every other character, the names of each kind sort in reverse order, and no renamed name becomes another's
+/// prefix. Both maps are their own inverse. File order is reversed by naming each file `F<99 - rank>_<name>`.
+struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
+	let reversesTypeNames: Bool
+	let reversesLabels: Bool
+	let reversesFileNames: Bool
+
+	static let all = [
+		GraphFuzzerRenaming(reversesTypeNames: true, reversesLabels: false, reversesFileNames: false),
+		GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: true, reversesFileNames: false),
+		GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: false, reversesFileNames: true),
+		GraphFuzzerRenaming(reversesTypeNames: true, reversesLabels: true, reversesFileNames: true),
+	]
+
+	var description: String {
+		let reversedOrders = [
+			reversesTypeNames ? "type names" : nil,
+			reversesLabels ? "labels" : nil,
+			reversesFileNames ? "file names" : nil,
+		].compactMap(\.self)
+		return switch reversedOrders.count {
+		case 0:
+			"reversing nothing"
+		case 1:
+			"reversing its \(reversedOrders[0])"
+		default:
+			"reversing its \(reversedOrders.dropLast().joined(separator: ", ")), and \(reversedOrders[reversedOrders.count - 1])"
+		}
+	}
+
+	/// `text` with the type names and labels this renaming reverses renamed.
+	func rename(_ text: String, typeNamePrefix: String) -> String {
+		var text = text
+		if reversesTypeNames {
+			text = Self.reversingIndices(in: text, pattern: NSRegularExpression.escapedPattern(for: typeNamePrefix) + "(?:Root|AnyT|T|Missing)([0-9])")
+		}
+		if reversesLabels {
+			text = Self.reversingIndices(in: text, pattern: "(?<![A-Za-z0-9])(?:lazyAnyT|lazyT|anyT|t|missing)([0-9])")
+		}
+		return text
+	}
+
+	/// `text`, from the tool's run over a graph this renaming renamed, with the renaming undone.
+	func restore(_ text: String, typeNamePrefix: String) -> String {
+		var text = text
+		if reversesFileNames {
+			text = text.replacingOccurrences(
+				of: "F[0-9]{2}_(?=" + NSRegularExpression.escapedPattern(for: typeNamePrefix) + ")",
+				with: "",
+				options: .regularExpression,
+			)
+		}
+		// A path to a fixture file holds no name the renaming changed but the file's own name, so restoring the
+		// whole text renames nothing else.
+		return rename(text, typeNamePrefix: typeNamePrefix)
+	}
+
+	/// `outcome`, from the tool's run over a graph this renaming renamed, with the renaming undone.
+	func restore(_ outcome: GraphFuzzerToolOutcome, typeNamePrefix: String) -> GraphFuzzerToolOutcome {
+		switch outcome {
+		case let .rejected(diagnostics):
+			.rejected(diagnostics: restore(diagnostics, typeNamePrefix: typeNamePrefix))
+		case let .accepted(generatedFiles, warnings):
+			.accepted(
+				generatedFiles: Dictionary(uniqueKeysWithValues: generatedFiles.map {
+					(restore($0.key, typeNamePrefix: typeNamePrefix), restore($0.value, typeNamePrefix: typeNamePrefix))
+				}),
+				warnings: warnings.map { restore($0, typeNamePrefix: typeNamePrefix) },
+			)
+		}
+	}
+
+	/// The names to give the files of `fixture`, in its order: their own names or, when this renaming reverses
+	/// file names, the same names with a prefix that reverses their order.
+	func fileNames(of fixture: GraphFuzzerFixture) -> [String]? {
+		guard reversesFileNames else { return nil }
+		let fileNames = fixture.fileNames
+		let rankByFileName = Dictionary(uniqueKeysWithValues: fileNames.sorted().enumerated().map { ($1, $0) })
+		return fileNames.map { "F\(99 - rankByFileName[$0]!)_\($0)" }
+	}
+
+	/// `text` with each path to a fixture file reduced to the file's name, so that the oracle compares no part of a
+	/// path but the name a renaming may change and restore.
+	static func reducingFixturePathsToFileNames(in text: String) -> String {
+		text.replacingOccurrences(of: #"[^\s"'`(]*<fixture-directory>/"#, with: "", options: .regularExpression)
+	}
+
+	private static func reversingIndices(in text: String, pattern: String) -> String {
+		let expression = try! NSRegularExpression(pattern: pattern)
+		let source = text as NSString
+		var result = ""
+		var location = 0
+		for match in expression.matches(in: text, range: NSRange(location: 0, length: source.length)) {
+			let digitRange = match.range(at: 1)
+			result += source.substring(with: NSRange(location: location, length: digitRange.location - location))
+			result += String(9 - Int(source.substring(with: digitRange))!)
+			location = digitRange.location + digitRange.length
+		}
+		return result + source.substring(from: location)
+	}
 }
 
 /// Generates graphs of `final class` `@Instantiable` types in two passes.
@@ -113,6 +233,10 @@ enum GraphFuzzerGenerator {
 		let instantiableArguments: [String]
 		var properties: [PropertyDeclaration]
 		let declaresHelperTypes: Bool
+		/// Protocols the type conforms to beyond those every type of its kind does.
+		var additionalConformances = [String]()
+		/// Declarations written after the type's own.
+		var additionalDeclarations = [String]()
 	}
 
 	/// How an `@Instantiated` property builds its target.
@@ -244,9 +368,62 @@ enum GraphFuzzerGenerator {
 			for index in 0..<typeCount {
 				declarations.append(typeDeclaration(index: index))
 			}
+			appendMotif(to: &declarations)
 			// Decided last, so that the rest of a seed's graph does not depend on whether it has the extension.
 			let extensionSource = random.percentChance(25) ? extensionDeclarationSource(addingPropertyToOneOf: &declarations) : nil
 			return declarations.map(source(of:)) + [extensionSource].compactMap(\.self)
+		}
+
+		/// A quarter of graphs end with a motif: a few more types, in a shape whose generated code or diagnostics
+		/// SafeDI must choose among equals for, so that a choice made by name, label, or file order shows up under the
+		/// rename-invariance oracle. The motif's types take the indices past every graph's own, 7 through 9, which
+		/// no other type refers to. It is drawn after the graph's own types, so a graph without one is drawn exactly as before.
+		private mutating func appendMotif(to declarations: inout [TypeDeclaration]) {
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			func motifType(_ index: Int, arguments: [String] = [], properties: [PropertyDeclaration]) -> TypeDeclaration {
+				TypeDeclaration(name: typeName(index), instantiableArguments: arguments, properties: properties, declaresHelperTypes: true)
+			}
+			let roll = random.integer(in: 0...99)
+			if roll < 5 {
+				// A lazy cycle of two or three mocked types: which edge closes it decides which configuration lacks a field.
+				let length = random.integer(in: 2...3)
+				for position in 0..<length {
+					let next = 7 + (position + 1) % length
+					declarations.append(motifType(7 + position, arguments: ["generateMock: true"], properties: [
+						PropertyDeclaration(attribute: "@Instantiated", label: "t\(next)Builder", type: "\(instantiator)<\(typeName(next))>"),
+					]))
+				}
+			} else if roll < 10 {
+				// A mocked type whose mock promotes two siblings that receive each other only if available: only one can see the other.
+				declarations.append(motifType(7, arguments: ["generateMock: true"], properties: [
+					PropertyDeclaration(attribute: "@Received", label: "t8", type: typeName(8)),
+					PropertyDeclaration(attribute: "@Received", label: "t9", type: typeName(9)),
+				]))
+				declarations.append(motifType(8, properties: [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "t9", type: typeName(9) + "?")]))
+				declarations.append(motifType(9, properties: [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "t8", type: typeName(8) + "?")]))
+			} else if roll < 15 {
+				// A mocked type whose tree receives one label as an instance and as an instantiator, which its mock names apart.
+				declarations.append(motifType(7, arguments: ["generateMock: true"], properties: [
+					PropertyDeclaration(attribute: "@Received", label: "t9", type: "\(instantiator)<\(typeName(9))>"),
+					PropertyDeclaration(attribute: "@Instantiated", label: "t8", type: typeName(8)),
+				]))
+				declarations.append(motifType(8, properties: [PropertyDeclaration(attribute: "@Received", label: "t9", type: typeName(9))]))
+				declarations.append(motifType(9, properties: []))
+			} else if roll < 20, rootCount > 1 {
+				// Roots that are each invalid on their own: each instantiates a type that is not `@Instantiable`.
+				for rootIndex in 0..<rootCount {
+					let missingTypeName = "\(prefix)Missing\(rootIndex)"
+					declarations[rootIndex].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "missing\(rootIndex)", type: missingTypeName))
+					declarations[rootIndex].additionalDeclarations.append("public final class \(missingTypeName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+				}
+			} else if roll >= 20, roll < 25 {
+				// Two types, in two files, that both fulfill one protocol.
+				let sharedProtocol = protocolName(7)
+				declarations.append(motifType(7, arguments: ["fulfillingAdditionalTypes: [\(sharedProtocol).self]"], properties: []))
+				var duplicate = motifType(8, arguments: ["fulfillingAdditionalTypes: [\(sharedProtocol).self]"], properties: [])
+				duplicate.additionalConformances.append(sharedProtocol)
+				declarations.append(duplicate)
+			}
 		}
 
 		private var random: GraphFuzzerRandomNumberGenerator
@@ -633,7 +810,8 @@ enum GraphFuzzerGenerator {
 		/// default-valued parameters and now and then receives a property, and an `@Instantiated` property of it on
 		/// one of `declarations`, a root or a type of the graph. A default-valued parameter is not a dependency.
 		private mutating func extensionDeclarationSource(addingPropertyToOneOf declarations: inout [TypeDeclaration]) -> String {
-			let hostIndex = random.integer(in: 0...(declarations.count - 1))
+			// A root or a type of the graph, never a motif type, which `appendMotif` adds after them.
+			let hostIndex = random.integer(in: 0...(rootCount + typeCount - 1))
 			declarations[hostIndex].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "ext", type: extensionTypeName))
 			// The roots come first among the declarations. A root's properties are receivable below it.
 			let candidates = hostIndex < rootCount
@@ -753,7 +931,7 @@ enum GraphFuzzerGenerator {
 				? "@Instantiable"
 				: "@Instantiable(\(declaration.instantiableArguments.joined(separator: ", ")))"
 			let protocolName = declaration.name + "Protocol"
-			let conformances = switch (sendability, declaration.declaresHelperTypes) {
+			let baseConformances = switch (sendability, declaration.declaresHelperTypes) {
 			case (.nonSendable, true), (.sendable, true):
 				"Instantiable, \(protocolName)"
 			case (.mixed, true):
@@ -764,6 +942,7 @@ enum GraphFuzzerGenerator {
 			case (.nonSendable, false), (.mixed, false):
 				"Instantiable"
 			}
+			let conformances = ([baseConformances] + declaration.additionalConformances).joined(separator: ", ")
 			var lines = [instantiableAttribute, "public final class \(declaration.name): \(conformances) {"]
 			if declaration.properties.isEmpty {
 				lines.append("\tpublic init() {}")
@@ -792,6 +971,9 @@ enum GraphFuzzerGenerator {
 				]
 			} else if declaration.name == "\(prefix)Root0" {
 				lines += ["", "public final class \(valueTypeName): Instantiable\(helperTypesAreSendable ? ", Sendable" : "") {}"]
+			}
+			for additionalDeclaration in declaration.additionalDeclarations {
+				lines += ["", additionalDeclaration]
 			}
 			return lines.joined(separator: "\n") + "\n"
 		}
@@ -829,6 +1011,12 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case sameLabelWithDifferentTypes
 	/// A graph whose properties use both `Sendable` wrappers and wrappers that are not `Sendable`.
 	case sendableAndNonSendableWrappers
+	/// A type with `generateMock: true` on a cycle that an instantiator makes lazy.
+	case mockedTypeOnLazyCycle
+	/// Two types that each receive the other only if available.
+	case typesReceivingEachOtherOnlyIfAvailable
+	/// One label received as a type and as an instantiator of that type.
+	case labelReceivedAsInstanceAndAsInstantiator
 	/// One label received as two different wrappers of a type that is not `@Instantiable`.
 	case sameLabelReceivedAsDifferentUnbuildableWrappers
 	/// A received `ErasedInstantiator` or `SendableErasedInstantiator`.
@@ -857,19 +1045,26 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		var unbuildableWrapperTypesByLabel = [String: Set<String>]()
 		var usesSendableWrapper = false
 		var usesNonSendableWrapper = false
+		var mockedTypeNames = Set<String>()
+		var onlyIfAvailableReceivedTypesByTypeName = [String: Set<String>]()
 		for content in fixture.swiftFileContent {
 			var currentTypeName: String?
+			var nextTypeIsMocked = false
 			for line in GraphFuzzerSourceLine.lines(of: content) {
 				switch line {
 				case let .instantiableAttribute(arguments):
 					if arguments.contains("isRoot: true") {
 						rootCount += 1
 					}
-					if arguments.contains("generateMock: true") {
+					nextTypeIsMocked = arguments.contains("generateMock: true")
+					if nextTypeIsMocked {
 						features.insert(.generateMock)
 					}
 				case let .typeDeclaration(name):
 					currentTypeName = name
+					if nextTypeIsMocked {
+						mockedTypeNames.insert(name)
+					}
 				case let .instantiateMethod(parameters):
 					if parameters.contains(" = ") {
 						features.insert(.defaultValuedInstantiateParameter)
@@ -882,6 +1077,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					typesByLabel[label, default: []].insert(instanceType ?? nonOptionalType)
 					if let instanceType, attribute.hasPrefix("@Instantiated") || attribute == "@Forwarded" {
 						lazilyInstantiatedInstanceTypesByLabel[label, default: []].insert(instanceType)
+					}
+					if attribute == "@Received(onlyIfAvailable: true)", let currentTypeName {
+						onlyIfAvailableReceivedTypesByTypeName[currentTypeName, default: []].insert(nonOptionalType)
 					}
 					if attribute == "@Received" || attribute == "@Received(onlyIfAvailable: true)" {
 						receivedTypesByLabel[label, default: []].insert(nonOptionalType)
@@ -927,6 +1125,19 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		if usesSendableWrapper, usesNonSendableWrapper {
 			features.insert(.sendableAndNonSendableWrappers)
+		}
+		if mockedTypeNames.contains(where: { GraphFuzzerInstantiationEdge.isOnLazyCycle($0, edges: instantiationEdges) }) {
+			features.insert(.mockedTypeOnLazyCycle)
+		}
+		if onlyIfAvailableReceivedTypesByTypeName.contains(where: { typeName, receivedTypes in
+			receivedTypes.contains { onlyIfAvailableReceivedTypesByTypeName[$0]?.contains(typeName) == true }
+		}) {
+			features.insert(.typesReceivingEachOtherOnlyIfAvailable)
+		}
+		if receivedTypesByLabel.values.contains(where: { types in
+			types.contains { types.contains("Instantiator<\($0)>") || types.contains("SendableInstantiator<\($0)>") }
+		}) {
+			features.insert(.labelReceivedAsInstanceAndAsInstantiator)
 		}
 		return features
 	}
@@ -1001,6 +1212,13 @@ private struct GraphFuzzerInstantiationEdge {
 	static func containsLazyCycle(_ edges: [GraphFuzzerInstantiationEdge]) -> Bool {
 		edges.contains { edge in
 			edge.isLazy && reaches(from: edge.target, to: edge.source, through: edges)
+		}
+	}
+
+	/// Whether `typeName` is on a cycle that a lazy edge closes.
+	static func isOnLazyCycle(_ typeName: String, edges: [GraphFuzzerInstantiationEdge]) -> Bool {
+		edges.contains { edge in
+			edge.isLazy && reaches(from: edge.target, to: typeName, through: edges) && reaches(from: typeName, to: edge.source, through: edges)
 		}
 	}
 
@@ -1082,6 +1300,85 @@ enum GraphFuzzerToolOutcome: Equatable {
 	case rejected(diagnostics: String)
 	case accepted(generatedFiles: [String: String], warnings: [String])
 
+	/// The first aspect in which two outcomes differ, or `nil` when they agree: their verdict, their diagnostics
+	/// or warnings in any order, the names of their generated files, or one file's code, byte for byte. Paths to
+	/// fixture files are compared by file name.
+	static func difference(between outcome: GraphFuzzerToolOutcome, and otherOutcome: GraphFuzzerToolOutcome) -> String? {
+		let reduce = GraphFuzzerRenaming.reducingFixturePathsToFileNames(in:)
+		switch (outcome, otherOutcome) {
+		case let (.rejected(diagnostics), .rejected(otherDiagnostics)):
+			return diagnosticEntries(of: reduce(diagnostics)) == diagnosticEntries(of: reduce(otherDiagnostics)) ? nil : "its diagnostics"
+		case let (.accepted(generatedFiles, warnings), .accepted(otherGeneratedFiles, otherWarnings)):
+			if Set(generatedFiles.keys) != Set(otherGeneratedFiles.keys) {
+				return "the names of its generated files"
+			}
+			for fileName in generatedFiles.keys.sorted() {
+				let code = reduce(generatedFiles[fileName, default: ""])
+				let otherCode = reduce(otherGeneratedFiles[fileName, default: ""])
+				guard code != otherCode else { continue }
+				let kind = if fileName.hasSuffix("+SafeDIMock.swift") {
+					"its generated mock code"
+				} else if fileName == "SafeDIMockConfiguration.swift" {
+					"its generated mock configuration code"
+				} else {
+					"its generated dependency tree code"
+				}
+				let orderOnly = declarationsInAnyOrder(code) == declarationsInAnyOrder(otherCode) ? " (the order of its extensions only)" : ""
+				return "\(kind)\(orderOnly), in \(fileName)"
+			}
+			return warnings.sorted() == otherWarnings.sorted() ? nil : "its warnings"
+		case (.accepted, .rejected), (.rejected, .accepted):
+			return "its verdict"
+		}
+	}
+
+	/// The diagnostics, each with the notes after it, sorted.
+	private static func diagnosticEntries(of diagnostics: String) -> [String] {
+		var entries = [[Substring]]()
+		for line in diagnostics.split(separator: "\n", omittingEmptySubsequences: false) {
+			if line.contains(": error: ") || line.contains(": warning: ") || entries.isEmpty {
+				entries.append([line])
+			} else {
+				entries[entries.count - 1].append(line)
+			}
+		}
+		return entries.map { $0.joined(separator: "\n") }.sorted()
+	}
+
+	/// `code` with each run of consecutive top-level extensions sorted, which says whether two files differ only
+	/// in the order they declare their extensions.
+	private static func declarationsInAnyOrder(_ code: String) -> String {
+		var lines = [String]()
+		var extensions = [String]()
+		var currentExtension: [Substring]?
+		func endExtension() {
+			if let currentExtension {
+				extensions.append(currentExtension.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines))
+			}
+			currentExtension = nil
+		}
+		func endExtensions() {
+			endExtension()
+			lines += extensions.sorted()
+			extensions = []
+		}
+		for line in code.split(separator: "\n", omittingEmptySubsequences: false) {
+			if line.hasPrefix("extension ") {
+				endExtension()
+				currentExtension = [line]
+			} else if line.hasPrefix("#") {
+				endExtensions()
+				lines.append(String(line))
+			} else if currentExtension != nil {
+				currentExtension?.append(line)
+			} else if !line.isEmpty {
+				lines.append(String(line))
+			}
+		}
+		endExtensions()
+		return lines.joined(separator: "\n")
+	}
+
 	var description: String {
 		switch self {
 		case let .rejected(diagnostics):
@@ -1102,6 +1399,7 @@ struct GraphFuzzerFailure: Equatable {
 		case runsDiffer = "two runs of the tool differ"
 		case runsDifferAcrossProcesses = "the tool's output differs between two processes"
 		case compilerCrashedOnGeneratedCode = "the Swift compiler crashed on generated code"
+		case renamedGraphDiffers = "the graph renamed to reverse an order gives other results"
 	}
 
 	let seed: UInt64
@@ -1125,9 +1423,21 @@ struct GraphFuzzerFailure: Equatable {
 
 /// The oracle's verdict on one graph.
 struct GraphFuzzerResult {
+	init(fixture: GraphFuzzerFixture, outcome: GraphFuzzerToolOutcome, failure: GraphFuzzerFailure?, renamedGraphFailures: [GraphFuzzerFailure] = []) {
+		self.fixture = fixture
+		self.outcome = outcome
+		self.failure = failure
+		self.renamedGraphFailures = renamedGraphFailures
+	}
+
 	let fixture: GraphFuzzerFixture
 	let outcome: GraphFuzzerToolOutcome
+	/// The first way the graph fails the oracle: its runs differ, it does not compile, or, failing neither way, a
+	/// renamed graph gives other results.
 	let failure: GraphFuzzerFailure?
+	/// How each renamed graph that gives other results differs, in the order of `GraphFuzzerRenaming.all`, whether
+	/// or not the graph also fails another way.
+	let renamedGraphFailures: [GraphFuzzerFailure]
 
 	var isAccepted: Bool {
 		switch outcome {
@@ -1148,6 +1458,8 @@ struct GraphFuzzerKnownIssue: Equatable {
 		case compilerError(containing: String)
 		/// The Swift compiler crashes while compiling a generated mock.
 		case compilerCrashInGeneratedMock
+		/// A renamed graph gives other results, in the aspect whose description contains this text.
+		case renamedGraphDiffers(containing: String)
 		/// The fixture itself fails to compile, with an error whose message contains this text: the macro rejects
 		/// a shape the generator emits before the macro accepts it.
 		case macroRejectsFixture(containing: String)
@@ -1166,6 +1478,8 @@ struct GraphFuzzerKnownIssue: Equatable {
 				failure.kind == .generatedCodeDoesNotCompile && failure.details.contains(text)
 			case .compilerCrashInGeneratedMock:
 				failure.kind == .compilerCrashedOnGeneratedCode && failure.details.contains("+SafeDIMock.swift")
+			case let .renamedGraphDiffers(text):
+				failure.kind == .renamedGraphDiffers && failure.details.prefix { $0 != "\n" }.contains(text)
 			case let .macroRejectsFixture(text):
 				failure.kind == .fixtureDoesNotCompile && failure.details.contains(text)
 			}
@@ -1273,9 +1587,37 @@ struct GraphFuzzerHash {
 
 /// A graph with what two runs of the tool produced for it.
 struct GraphFuzzerToolRuns {
+	/// - Parameter renamedOutcomes: The outcome of the graph renamed by each renaming, with the renaming undone.
+	init(
+		fixture: GraphFuzzerFixture,
+		firstOutcome: GraphFuzzerToolOutcome,
+		secondOutcome: GraphFuzzerToolOutcome,
+		renamedOutcomes: [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)] = [],
+	) {
+		self.fixture = fixture
+		self.firstOutcome = firstOutcome
+		self.secondOutcome = secondOutcome
+		self.renamedOutcomes = renamedOutcomes
+	}
+
 	let fixture: GraphFuzzerFixture
 	let firstOutcome: GraphFuzzerToolOutcome
 	let secondOutcome: GraphFuzzerToolOutcome
+	let renamedOutcomes: [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)]
+
+	/// The failure of each renamed graph that, with its renaming undone, gives another verdict, other
+	/// diagnostics or warnings in any order (the tool sorts them by file, and the files are renamed), other
+	/// generated file names, or generated code that is not byte-identical.
+	var renamedGraphFailures: [GraphFuzzerFailure] {
+		renamedOutcomes.compactMap { renaming, outcome in
+			guard let difference = GraphFuzzerToolOutcome.difference(between: firstOutcome, and: outcome) else { return nil }
+			return GraphFuzzerFailure(
+				seed: fixture.seed,
+				kind: .renamedGraphDiffers,
+				details: "\(renaming.description.prefix(1).uppercased())\(renaming.description.dropFirst()) changes \(difference).\nThis graph:\n\(firstOutcome.description)\nThe renamed graph, with its renaming undone:\n\(outcome.description)",
+			)
+		}
+	}
 
 	var runsDifferFailure: GraphFuzzerFailure? {
 		guard firstOutcome != secondOutcome else { return nil }
@@ -1322,24 +1664,36 @@ enum GraphFuzzerOracle {
 			? try compilationFailures(of: toolRuns.filter { $0.runsDifferFailure == nil })
 			: [:]
 		return toolRuns.map { runs in
-			GraphFuzzerResult(
+			let renamedGraphFailures = runs.renamedGraphFailures
+			return GraphFuzzerResult(
 				fixture: runs.fixture,
 				outcome: runs.firstOutcome,
-				failure: runs.runsDifferFailure ?? compilationFailures[runs.fixture.seed],
+				failure: runs.runsDifferFailure ?? compilationFailures[runs.fixture.seed] ?? renamedGraphFailures.first,
+				renamedGraphFailures: renamedGraphFailures,
 			)
 		}
 	}
 
-	static func toolRuns(of fixture: GraphFuzzerFixture) async throws -> GraphFuzzerToolRuns {
-		try await GraphFuzzerToolRuns(
+	/// Runs the tool twice over `fixture`, and once over it renamed by each of `renamings`.
+	static func toolRuns(of fixture: GraphFuzzerFixture, renamings: [GraphFuzzerRenaming] = GraphFuzzerRenaming.all) async throws -> GraphFuzzerToolRuns {
+		var renamedOutcomes = [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)]()
+		for renaming in renamings {
+			let renamedFixture = fixture.renamed(by: renaming)
+			let outcome = try await toolOutcome(of: renamedFixture, fileNames: renaming.fileNames(of: renamedFixture))
+			renamedOutcomes.append((renaming, renaming.restore(outcome, typeNamePrefix: fixture.typeNamePrefix)))
+		}
+		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
 			firstOutcome: toolOutcome(of: fixture),
 			secondOutcome: toolOutcome(of: fixture),
+			renamedOutcomes: renamedOutcomes,
 		)
 	}
 
 	/// Runs SafeDITool once over `fixture`, as `executeSafeDIToolTest` runs it for every other generator test.
-	static func toolOutcome(of fixture: GraphFuzzerFixture) async throws -> GraphFuzzerToolOutcome {
+	/// - Parameter fileNames: The names to give the fixture's files, in its order, or `nil` to name each after the
+	///   type it declares, as `executeSafeDIToolTest` does.
+	static func toolOutcome(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil) async throws -> GraphFuzzerToolOutcome {
 		var filesToDelete = [URL]()
 		defer {
 			for fileToDelete in filesToDelete {
@@ -1348,18 +1702,19 @@ enum GraphFuzzerOracle {
 		}
 		do {
 			let output = try await executeSafeDIToolTest(
-				swiftFileContent: fixture.swiftFileContent,
+				swiftFileContent: fileNames == nil ? fixture.swiftFileContent : [],
+				swiftFileContentByFilePath: fileNames.map { Dictionary(uniqueKeysWithValues: zip($0, fixture.swiftFileContent)) } ?? [:],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 				skipCompileVerification: true,
 			)
-			let normalize = normalizer(fixtureDirectory: fixtureDirectory(of: fixture, in: output.fixtures))
+			let normalize = normalizer(fixtureDirectory: fixtureDirectory(of: fileNames ?? fixture.fileNames, in: output.fixtures))
 			return .accepted(
 				generatedFiles: (output.generatedFiles ?? [:]).mapValues(normalize),
 				warnings: output.warnings.map { normalize("\($0)") },
 			)
 		} catch let error as SafeDIToolTestError {
-			let directory = fixtureDirectory(of: fixture, in: error.fixtures)
+			let directory = fixtureDirectory(of: fileNames ?? fixture.fileNames, in: error.fixtures)
 			// `executeSafeDIToolTest` schedules the fixture directory for deletion only when `generate` succeeds.
 			filesToDelete.append(URL(fileURLWithPath: directory))
 			return .rejected(diagnostics: normalizer(fixtureDirectory: directory)("\(error.underlyingError)"))
@@ -1428,8 +1783,8 @@ enum GraphFuzzerOracle {
 		)
 	}
 
-	private static func fixtureDirectory(of fixture: GraphFuzzerFixture, in fixtures: FixturePaths) -> String {
-		(fixtures[fixture.fileNames[0]] as NSString).deletingLastPathComponent
+	private static func fixtureDirectory(of fileNames: [String], in fixtures: FixturePaths) -> String {
+		(fixtures[fileNames[0]] as NSString).deletingLastPathComponent
 	}
 
 	/// Replaces the fixture directory, whose last component is a fresh UUID each run, however the path is spelled.
