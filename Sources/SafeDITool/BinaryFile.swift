@@ -37,9 +37,11 @@ import SafeDICore
 /// | 30 | | The body: a string table, then one ``CachedScannedModuleInfo`` or ``ModuleInfo`` |
 ///
 /// A file that fails any check is not read. A scan cache that cannot be read makes `generate` parse the
-/// module afresh, so a cache written by a SafeDITool whose types were laid out differently, cut short by an
-/// interrupted write, or corrupted on disk costs a parse, never a wrong result. Module info that cannot be
-/// read fails the build with the reason, because nothing else describes the module that wrote it.
+/// module afresh, so a cache written by a SafeDITool whose stored types write other fields, fields of other
+/// types, or fields in another order (see ``BinarySchemaMember``), cut short by an interrupted write, or
+/// corrupted on disk costs a parse, never a wrong result. Module info that cannot be read fails the build
+/// with the reason, because nothing else describes the module that wrote it. A value that nests more deeply
+/// than a ``BinaryReader`` reads is never written, so every file SafeDITool writes, it can read.
 enum BinaryFile {
 	/// What a file holds.
 	enum Kind: Equatable {
@@ -113,21 +115,28 @@ enum BinaryFile {
 	}
 
 	/// A fingerprint of the layout of every type in ``schemaMembers``, so that a file written by a SafeDITool
-	/// whose types were laid out differently is never read, even when both report the same version.
+	/// whose stored types are written differently is never read, even when both report the same version.
 	static let schemaFingerprint = Array(schemaDescription.utf8).withUnsafeBytes(checksum(of:))
 
-	/// The format version and every schema member's layout, one member per line.
+	/// The format version and every schema member's layout, one member per line: the name and type of each
+	/// field a struct writes, and the name and payload types of each case an enum writes, in the order written.
 	static var schemaDescription: String {
 		(["\(formatVersion)"] + schemaMembers.map { member in
-			"\(String(reflecting: member)): \(member.binaryLayout.joined(separator: ","))"
+			"\(String(reflecting: member)): \(member.binaryLayoutDescription)"
 		}).joined(separator: "\n")
 	}
 
 	/// A file of `kind` that holds `value`.
-	static func data(_ kind: Kind, holding value: some BinaryCodable) -> Data {
+	/// - Throws: When `value` holds an instantiable whose declaration names a type that nests more deeply than a
+	///   ``BinaryReader`` reads.
+	static func data(_ kind: Kind, holding value: some BinaryCodable) throws(BinaryFileWriteError) -> Data {
 		var writer = BinaryWriter()
 		writer.write(value)
-		return data(kind, body: writer.encoded)
+		if let valueNestedTooDeeply = writer.valueNestedTooDeeply {
+			throw BinaryFileWriteError(kind: kind, instantiableNestedTooDeeply: valueNestedTooDeeply)
+		} else {
+			return data(kind, body: writer.encoded)
+		}
 	}
 
 	/// A file of `kind` that holds `body`, a value ``BinaryWriter/encoded`` produced.
@@ -281,6 +290,18 @@ struct BinaryFileReadError: Error, Equatable, CustomStringConvertible {
 	}
 }
 
+/// Why a ``BinaryFile`` could not be written.
+struct BinaryFileWriteError: Error, CustomStringConvertible {
+	let kind: BinaryFile.Kind
+	/// The instantiable whose declaration names a type that nests more deeply than a ``BinaryReader`` reads, as
+	/// its source spells it.
+	let instantiableNestedTooDeeply: String
+
+	var description: String {
+		"SafeDI cannot write `\(instantiableNestedTooDeeply)` to a \(kind.name): a type its declaration names nests more than \(BinaryReader.maximumNestingDepth) types deep, which is more than SafeDI reads back. To fix this, declare a typealias for part of that type, so that no type in the declaration nests more than \(BinaryReader.maximumNestingDepth) types deep."
+	}
+}
+
 extension CachedScannedModuleInfo {
 	/// Reads the scan cache `data` holds.
 	init(scanCacheData data: Data) throws(BinaryFileReadError) {
@@ -289,7 +310,9 @@ extension CachedScannedModuleInfo {
 
 	/// This value as a scan cache.
 	var scanCacheData: Data {
-		BinaryFile.data(.scanCache, holding: self)
+		get throws(BinaryFileWriteError) {
+			try BinaryFile.data(.scanCache, holding: self)
+		}
 	}
 }
 
@@ -301,6 +324,8 @@ extension ModuleInfo {
 
 	/// This module as a module info file.
 	var moduleInfoData: Data {
-		BinaryFile.data(.moduleInfo, holding: self)
+		get throws(BinaryFileWriteError) {
+			try BinaryFile.data(.moduleInfo, holding: self)
+		}
 	}
 }

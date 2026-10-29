@@ -82,9 +82,14 @@ struct FileModificationStamp: Codable, Equatable {
 }
 
 extension FileModificationStamp: BinarySchemaMember {
-	static let binaryLayout = [
-		"times",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("times", \.times),
+			],
+			unwrittenProperties: [],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(times: reader.read())
