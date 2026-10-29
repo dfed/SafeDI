@@ -111,7 +111,7 @@ enum GraphFuzzerGenerator {
 	private struct TypeDeclaration {
 		let name: String
 		let instantiableArguments: [String]
-		let properties: [PropertyDeclaration]
+		var properties: [PropertyDeclaration]
 		let declaresHelperTypes: Bool
 	}
 
@@ -219,7 +219,9 @@ enum GraphFuzzerGenerator {
 			for index in 0..<typeCount {
 				declarations.append(typeDeclaration(index: index))
 			}
-			return declarations.map(source(of:))
+			// Decided last, so that the rest of a seed's graph does not depend on whether it has the extension.
+			let extensionSource = random.percentChance(25) ? extensionDeclarationSource(addingPropertyToOneOf: &declarations) : nil
+			return declarations.map(source(of:)) + [extensionSource].compactMap(\.self)
 		}
 
 		private var random: GraphFuzzerRandomNumberGenerator
@@ -549,6 +551,53 @@ enum GraphFuzzerGenerator {
 			return property
 		}
 
+		// MARK: Extension
+
+		/// An `@Instantiable` extension of a type that is not itself `@Instantiable`, whose `instantiate(…)` has
+		/// default-valued parameters and now and then receives a property, and an `@Instantiated` property of it on
+		/// one of `declarations`, a root or a type of the graph. A default-valued parameter is not a dependency.
+		private mutating func extensionDeclarationSource(addingPropertyToOneOf declarations: inout [TypeDeclaration]) -> String {
+			let hostIndex = random.integer(in: 0...(declarations.count - 1))
+			declarations[hostIndex].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "ext", type: extensionTypeName))
+			// The roots come first among the declarations. A root's properties are receivable below it.
+			let candidates = hostIndex < rootCount
+				? provided.filter { $0.providerIndex == nil }
+				: receivableProperties(receiverIndex: hostIndex - rootCount)
+			var parameters = [String]()
+			if !candidates.isEmpty, random.percentChance(50) {
+				let receivedProperty = random.element(of: candidates)
+				parameters.append("\(receivedProperty.label): \(receivedProperty.type)")
+			}
+			let defaultValuedParameters = ["title: String = \"default\"", "retryCount: Int = 3", "isEnabled: Bool = false"]
+			for _ in 0..<random.integer(in: 1...2) {
+				let parameter = random.element(of: defaultValuedParameters)
+				if !parameters.contains(parameter) {
+					parameters.append(parameter)
+				}
+			}
+			// An unlabeled default-valued parameter last, which a generated call leaves to its default.
+			if random.percentChance(20) {
+				parameters.append("_ note: String = \"\"")
+			}
+			let instantiableAttribute = random.percentChance(30) ? "@Instantiable(generateMock: true)" : "@Instantiable"
+			return [
+				instantiableAttribute,
+				"extension \(extensionTypeName): Instantiable {",
+				"\tpublic static func instantiate(\(parameters.joined(separator: ", "))) -> \(extensionTypeName) {",
+				"\t\t\(extensionTypeName)()",
+				"\t}",
+				"}",
+				"",
+				"public final class \(extensionTypeName)\(isSendable ? ": Sendable" : "") {",
+				"\tpublic init() {}",
+				"}",
+			].joined(separator: "\n") + "\n"
+		}
+
+		private var extensionTypeName: String {
+			"\(prefix)Ext"
+		}
+
 		// MARK: Emission
 
 		private func typeName(_ index: Int) -> String {
@@ -668,6 +717,8 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case generateMock
 	case lazyCycle
 	case sameLabelWithDifferentTypes
+	/// A default-valued parameter of an extension's `instantiate(…)` method.
+	case defaultValuedInstantiateParameter
 
 	static func < (lhs: GraphFuzzerFeature, rhs: GraphFuzzerFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -693,6 +744,10 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					}
 				case let .typeDeclaration(name):
 					currentTypeName = name
+				case let .instantiateMethod(parameters):
+					if parameters.contains(" = ") {
+						features.insert(.defaultValuedInstantiateParameter)
+					}
 				case let .property(attribute, label, type):
 					// A receive of `x: T?` names the same type as `x: T` does, and so does a receive of the instance of
 					// `x: LazilyInstantiated<T>`.
@@ -817,7 +872,10 @@ private struct GraphFuzzerInstantiationEdge {
 /// One line of a generated fixture, in the shape `GraphFuzzerGenerator` emits it.
 enum GraphFuzzerSourceLine {
 	case instantiableAttribute(arguments: String)
+	/// A `public final class` or an `extension … : Instantiable` that an `@Instantiable` attribute decorates.
 	case typeDeclaration(name: String)
+	/// An extension's `instantiate(…)` method, with the source of its parameters.
+	case instantiateMethod(parameters: String)
 	case property(attribute: String, label: String, type: String)
 	case other
 
@@ -825,7 +883,7 @@ enum GraphFuzzerSourceLine {
 		switch self {
 		case let .typeDeclaration(name):
 			name
-		case .instantiableAttribute, .property, .other:
+		case .instantiableAttribute, .instantiateMethod, .property, .other:
 			nil
 		}
 	}
@@ -841,6 +899,11 @@ enum GraphFuzzerSourceLine {
 			} else if previousLineWasInstantiableAttribute, line.hasPrefix("public final class ") {
 				let name = line.dropFirst("public final class ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
 				parsedLine = .typeDeclaration(name: String(name))
+			} else if previousLineWasInstantiableAttribute, line.hasPrefix("extension ") {
+				let name = line.dropFirst("extension ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
+				parsedLine = .typeDeclaration(name: String(name))
+			} else if line.hasPrefix("public static func instantiate("), let parametersEnd = line.range(of: ") -> ", options: .backwards) {
+				parsedLine = .instantiateMethod(parameters: String(line[line.index(line.startIndex, offsetBy: "public static func instantiate(".count)..<parametersEnd.lowerBound]))
 			} else if line.hasPrefix("@Instantiated") || line.hasPrefix("@Received") || line.hasPrefix("@Forwarded"),
 			          let letRange = line.range(of: " let ", options: .backwards),
 			          let colonIndex = line[letRange.upperBound...].firstIndex(of: ":")

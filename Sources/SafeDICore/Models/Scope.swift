@@ -328,7 +328,18 @@ final class Scope: Hashable {
 			propertiesToGenerate: isPropertyCycle ? [] : propertiesToGenerate.map {
 				switch $0 {
 				case let .instantiated(property, scope, erasedToConcreteExistential):
-					try scope.createScopeGenerator(
+					// Only the dependency tree checks this. A mock tree with a mismatched generic is not diagnosed.
+					if !forMockGeneration,
+					   let error = ErasedInstantiatorForwardedPropertiesMismatchError(
+					   	property: property,
+					   	declarationLocation: instantiable.dependencies.first(where: { $0.property == property })?.declarationLocation,
+					   	parent: instantiable.concreteInstantiable,
+					   	builtInstantiable: scope.instantiable,
+					   )
+					{
+						throw error
+					}
+					return try scope.createScopeGenerator(
 						for: property,
 						propertyStack: childPropertyStack,
 						receivableProperties: receivableProperties,
@@ -338,7 +349,7 @@ final class Scope: Hashable {
 						forMockGeneration: forMockGeneration,
 					)
 				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
-					ScopeGenerator(
+					return ScopeGenerator(
 						property: property,
 						fulfillingProperty: fulfillingProperty,
 						// An alias that keeps the label of the dependency it retypes is not in scope where its
@@ -421,4 +432,56 @@ extension Dependency.Source {
 			false
 		}
 	}
+}
+
+// MARK: - ErasedInstantiatorForwardedPropertiesMismatchError
+
+/// An `@Instantiated` `ErasedInstantiator` or `SendableErasedInstantiator` whose first generic argument is not the
+/// `@Forwarded` properties of the type it builds. Reported at the property's declaration.
+struct ErasedInstantiatorForwardedPropertiesMismatchError: SourceLocatedError {
+	/// The error for `property`, declared on `parent` at `declarationLocation` to build `builtInstantiable`, or
+	/// `nil` when `property` is not an erased instantiator or its first generic argument matches.
+	init?(
+		property: Property,
+		declarationLocation: Dependency.DeclarationLocation?,
+		parent: TypeDescription,
+		builtInstantiable: Instantiable,
+	) {
+		let forwardedProperties = builtInstantiable.dependencies
+			.filter { $0.source == .forwarded }
+			.map(\.property)
+		guard property.propertyType.isErasedInstantiator,
+		      !forwardedProperties.isEmpty,
+		      let forwardedArgument = property.generics?.first,
+		      // The forwarded argument is the same type as the only `@Forwarded` property.
+		      forwardedProperties.count != 1 || forwardedArgument != forwardedProperties[0].typeDescription,
+		      // The forwarded argument is the same as `InstantiableName.ForwardedProperties`.
+		      forwardedArgument != .nested(name: "ForwardedProperties", parentType: builtInstantiable.concreteInstantiable),
+		      // The forwarded argument is the same as the tuple the macro generates for `InstantiableName.ForwardedProperties`.
+		      forwardedArgument != forwardedProperties.asTupleTypeDescription
+		else { return nil }
+		self.property = property
+		self.declarationLocation = declarationLocation
+		self.parent = parent
+		builtType = builtInstantiable.concreteInstantiable
+		// The forwarded properties are spelled out rather than as `ForwardedProperties` on the built type, which the
+		// module that declares the property may not be able to see.
+		forwardedPropertiesType = forwardedProperties.asForwardedPropertiesType.typeDescription
+	}
+
+	var sourceDiagnostics: [SourceDiagnostic] {
+		[
+			SourceDiagnostic(
+				severity: .error,
+				location: declarationLocation,
+				message: "The first generic argument of `\(property.asSource)` on `\(parent.asSource)` must be the @\(Dependency.Source.forwardedRawValue) properties of `\(builtType.asSource)`, which it builds. Declare it as `\(property.propertyType.isSendable ? Dependency.sendableErasedInstantiatorType : Dependency.erasedInstantiatorType)<\(forwardedPropertiesType.asSource), \(property.typeDescription.asInstantiatedType.asSource)>`.",
+			),
+		]
+	}
+
+	private let property: Property
+	private let declarationLocation: Dependency.DeclarationLocation?
+	private let parent: TypeDescription
+	private let builtType: TypeDescription
+	private let forwardedPropertiesType: TypeDescription
 }

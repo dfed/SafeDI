@@ -24,18 +24,18 @@ import Testing
 struct FixableInstantiableErrorTests {
 	@Test
 	func mockMethodMissingArguments_description_mentionsMockMethodAndProperties() {
-		let error = FixableInstantiableError.mockMethodMissingArguments([
+		let error = FixableInstantiableError.mockMethodMissingArguments(methodName: "mock", [
 			Property(label: "service", typeDescription: .simple(name: "Service")),
 		])
-		#expect(error.description == "@Instantiable-decorated type’s `mock()` method must have a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Extra parameters with default values are allowed.")
+		#expect(error.description == "This `mock()` method has no parameter for `service: Service`. A hand-written mock must take a parameter for each @Instantiated, @Received, or @Forwarded-decorated property; extra parameters with default values are allowed.")
 	}
 
 	@Test
 	func mockMethodMissingArguments_fixIt_mentionsAddingMockArguments() {
-		let error = FixableInstantiableError.mockMethodMissingArguments([
+		let error = FixableInstantiableError.mockMethodMissingArguments(methodName: "mock", [
 			Property(label: "service", typeDescription: .simple(name: "Service")),
 		])
-		#expect(error.fixIt.message == "Add mock() arguments for service: Service")
+		#expect(error.fixIt.message == "Add `mock()` arguments for service: Service")
 	}
 
 	@Test
@@ -47,7 +47,7 @@ struct FixableInstantiableErrorTests {
 	@Test
 	func mockMethodNotPublic_fixIt_mentionsAddingPublicModifier() {
 		let error = FixableInstantiableError.mockMethodNotPublic
-		#expect(error.fixIt.message == "Add `public` modifier to mock() method")
+		#expect(error.fixIt.message == "Add `public` modifier to `mock()` method")
 	}
 
 	@Test
@@ -59,7 +59,22 @@ struct FixableInstantiableErrorTests {
 	@Test
 	func mockMethodIncorrectReturnType_fixIt_mentionsChangingReturnType() {
 		let error = FixableInstantiableError.mockMethodIncorrectReturnType(typeName: "MyService")
-		#expect(error.fixIt.message == "Change mock() return type to `MyService`")
+		#expect(error.fixIt.message == "Change `mock()` return type to `MyService`")
+	}
+
+	@Test
+	func extensionMockMethodIncorrectReturnType_description_mentionsExtendedTypeAndAdditionalTypes() {
+		let error = FixableInstantiableError.extensionMockMethodIncorrectReturnType(typeName: "MyService")
+		#expect(error.description == "@Instantiable-decorated extension’s `mock()` method must return `MyService` or a type listed in `fulfillingAdditionalTypes`.")
+	}
+
+	@Test
+	func mockMethodNonDependencyMissingDefaultValue_description_namesEveryParameter_whenSeveralLackDefaults() {
+		let error = FixableInstantiableError.mockMethodNonDependencyMissingDefaultValue([
+			Property(label: "extra", typeDescription: .simple(name: "Bool")),
+			Property(label: "count", typeDescription: .simple(name: "Int")),
+		])
+		#expect(error.description == "This `mock()` method’s parameters `extra: Bool`, `count: Int` do not correspond to a dependency, so they must have default values.")
 	}
 
 	@Test
@@ -71,7 +86,7 @@ struct FixableInstantiableErrorTests {
 	@Test
 	func duplicateMockMethod_fixIt_mentionsRemovingDuplicate() {
 		let error = FixableInstantiableError.duplicateMockMethod
-		#expect(error.fixIt.message == "Remove duplicate mock() method")
+		#expect(error.fixIt.message == "Remove duplicate `mock()` method")
 	}
 
 	@Test
@@ -88,13 +103,13 @@ struct FixableInstantiableErrorTests {
 
 	@Test
 	func mockMethodConflictsWithGeneratedMock_description_mentionsConflict() {
-		let error = FixableInstantiableError.mockMethodConflictsWithGeneratedMock
-		#expect(error.description == "@Instantiable-decorated type with `generateMock: true` cannot also have a hand-written `mock()` method. The generated `mock()` would conflict with this method. Remove it or rename it.")
+		let error = FixableInstantiableError.mockMethodConflictsWithGeneratedMock(customMockName: "customMock")
+		#expect(error.description == "This `mock()` method conflicts with the `mock()` that `generateMock: true` generates. This type’s hand-written mock is `customMock`, which `customMockName` names; remove this method or rename it.")
 	}
 
 	@Test
 	func mockMethodConflictsWithGeneratedMock_fixIt_mentionsRemovingMethod() {
-		let error = FixableInstantiableError.mockMethodConflictsWithGeneratedMock
+		let error = FixableInstantiableError.mockMethodConflictsWithGeneratedMock(customMockName: "customMock")
 		#expect(error.fixIt.message == "Remove this `mock()` method")
 	}
 
@@ -113,7 +128,7 @@ struct FixableInstantiableErrorTests {
 	@Test
 	func customMockNameMethodNotFound_description_mentionsMissingMethodName() {
 		let error = FixableInstantiableError.customMockNameMethodNotFound("customMock")
-		#expect(error.description == "No method named `customMock` found. Add a `public static func customMock(…)` method.")
+		#expect(error.description == "`customMockName` names `customMock`, but this declaration has no method named `customMock`. Add a `public static func customMock(…)` method.")
 	}
 
 	@Test
@@ -127,7 +142,7 @@ struct FixableInstantiableErrorTests {
 		let error = FixableInstantiableError.mockMethodNonDependencyMissingDefaultValue([
 			Property(label: "extra", typeDescription: .simple(name: "Bool")),
 		])
-		#expect(error.description == "@Instantiable-decorated type’s `mock()` method has non-dependency parameters without default values. Parameters that do not correspond to a dependency must have default values.")
+		#expect(error.description == "This `mock()` method’s parameter `extra: Bool` does not correspond to a dependency, so it must have a default value.")
 	}
 
 	@Test
@@ -135,7 +150,7 @@ struct FixableInstantiableErrorTests {
 		let error = FixableInstantiableError.mockMethodNonDependencyMissingDefaultValue([
 			Property(label: "extra", typeDescription: .simple(name: "Bool")),
 		])
-		#expect(error.fixIt.message == "Add default values to mock() non-dependency parameters for extra: Bool")
+		#expect(error.fixIt.message == "Add default values to `mock()` non-dependency parameters for extra: Bool")
 	}
 
 	// MARK: mockOnly Tests
@@ -143,7 +158,7 @@ struct FixableInstantiableErrorTests {
 	@Test
 	func mockOnlyWithGenerateMock_description_mentionsIncompatibleCombination() {
 		let error = FixableInstantiableError.mockOnlyWithGenerateMock
-		#expect(error.description == "`mockOnly` and `generateMock` cannot both be `true`.")
+		#expect(error.description == "`mockOnly` and `generateMock` cannot both be `true`: a `mockOnly` declaration provides a hand-written mock. To generate a mock, set `generateMock: true` on the production `@Instantiable` declaration instead.")
 	}
 
 	@Test
@@ -182,7 +197,7 @@ struct FixableInstantiableErrorTests {
 			defaultedParameter: Property(label: "enabled", typeDescription: .simple(name: "Bool")),
 			followingParameter: Property(label: "leaf", typeDescription: .simple(name: "Leaf")),
 		)
-		#expect(error.description == "Unlabeled parameter `enabled: Bool` has a default value but is followed by unlabeled required parameter `leaf: Leaf`. SafeDI cannot generate a mock for this signature: the default cannot be elided from the mock's override surface (Swift requires the earlier positional slot to be passed when a later unlabeled parameter is required), and an unlabeled parameter cannot be exposed as a labeled field on `SafeDIMockConfiguration`. Either add an external label to the defaulted parameter, reorder so unlabeled defaults come last, or remove the default.")
+		#expect(error.description == "Unlabeled parameter `enabled: Bool` has a default value but is followed by unlabeled required parameter `leaf: Leaf`, so a generated `mock()` cannot leave `enabled` out of its call. Add an argument label to `enabled`, move unlabeled parameters with defaults after the required ones, or remove the default.")
 	}
 
 	@Test
@@ -191,18 +206,18 @@ struct FixableInstantiableErrorTests {
 			defaultedParameter: Property(label: "enabled", typeDescription: .simple(name: "Bool")),
 			followingParameter: Property(label: "leaf", typeDescription: .simple(name: "Leaf")),
 		)
-		#expect(error.fixIt.message == "Promote `enabled` to an external label (rewrite `_ enabled:` as `enabled:`)")
+		#expect(error.fixIt.message == "Add argument label `enabled`")
 	}
 
 	@Test
 	func calleeScopeReferenceInDefaultExpression_description_mentionsParameter() {
-		let error = FixableInstantiableError.calleeScopeReferenceInDefaultExpression(parameterLabel: "name")
-		#expect(error.description == "Default expression for parameter `name` references `Self`, which is resolved in the callee's scope. SafeDI's generated mock code may surface this default on its override struct, where `Self` would resolve against the wrong type. Move the referenced value to a file-scoped or module-scoped symbol, or remove the default.")
+		let error = FixableInstantiableError.calleeScopeReferenceInDefaultExpression(parameterLabel: "name", typeName: "MyService")
+		#expect(error.description == "The default value of `name` refers to `Self`. A generated `mock()` repeats this default outside `MyService`, where `Self` names a different type. Write `MyService` instead of `Self`, or remove the default.")
 	}
 
 	@Test
 	func calleeScopeReferenceInDefaultExpression_fixIt_describesRemediation() {
-		let error = FixableInstantiableError.calleeScopeReferenceInDefaultExpression(parameterLabel: "name")
+		let error = FixableInstantiableError.calleeScopeReferenceInDefaultExpression(parameterLabel: "name", typeName: "MyService")
 		#expect(error.fixIt.message == "Remove the default from `name` or move the referenced value to a file-scoped or module-scoped symbol")
 	}
 

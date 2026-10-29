@@ -50,7 +50,7 @@ public struct ConditionalCompilationDecision: Codable, Hashable, Comparable, Sen
 				let assertedCondition = decision.isActive ? "!(\(decision.condition))" : decision.condition
 				let assumption = decision.isActive ? "active" : "inactive"
 				let contradiction = decision.isActive ? "inactive" : "active"
-				let message = "SafeDI scanned this module assuming `#if \(decision.condition)` was \(assumption), but it is \(contradiction) in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\\"Conditional compilation\\\" section of the SafeDI manual."
+				let message = "SafeDI scanned this module assuming `#if \(decision.condition)` was \(assumption), but it is \(contradiction) in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\\"Reporting active conditions\\\" section of the SafeDI manual describes for your build system."
 				return "#if \(assertedCondition)\n#error(\"\(message)\")\n#endif\n\n"
 			}
 			.joined()

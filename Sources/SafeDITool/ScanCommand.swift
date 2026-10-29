@@ -269,8 +269,9 @@ func performScan(
 		activeCompilationConditions: activeCompilationConditions.sorted(),
 	)
 	// Cache write is best-effort. A full disk or other transient FS
-	// failure shouldn't block the build — `generate` always falls back
-	// to a fresh parse when the cache is missing or can't be read. The
+	// failure, or a type nested too deeply to write, shouldn't block the
+	// build — `generate` always falls back to a fresh parse when the cache
+	// is missing, can't be read, or predates a source's modification. The
 	// write is atomic, so a `generate` never reads a partly written cache.
 	try? cached.scanCacheData.write(to: scannedModuleInfoURL(forManifestPath: manifestFile), options: .atomic)
 	return cached
@@ -407,10 +408,15 @@ struct CachedFileScan: Codable {
 }
 
 extension CachedFileScan: BinarySchemaMember {
-	static let binaryLayout = [
-		"fileScan",
-		"differingScannedPath",
-	]
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("fileScan", \.fileScan),
+				BinaryLayoutField("differingScannedPath", \.differingScannedPath),
+			],
+			unwrittenProperties: [],
+		)
+	}
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(

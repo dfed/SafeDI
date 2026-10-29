@@ -1072,25 +1072,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let returnLineSansReturn = "\(instantiationDeclaration)(\(argumentList))"
 
 			let propertyType = property.propertyType
-			if propertyType.isErasedInstantiator,
-			   let firstForwardedProperty = forwardedProperties.first,
-			   let forwardedArgument = property.generics?.first,
-			   !(
-			   	// The forwarded argument is the same type as our only `@Forwarded` property.
-			   	(forwardedProperties.count == 1 && forwardedArgument == firstForwardedProperty.typeDescription)
-			   		// The forwarded argument is the same as `InstantiableName.ForwardedProperties`.
-			   		|| forwardedArgument == .nested(name: "ForwardedProperties", parentType: instantiable.concreteInstantiable)
-			   		// The forwarded argument is the same as the tuple we generated for `InstantiableName.ForwardedProperties`.
-			   		|| forwardedArgument == forwardedProperties.asTupleTypeDescription
-			   )
-			{
-				throw GenerationError.erasedInstantiatorGenericDoesNotMatch(
-					property: property,
-					instantiable: instantiable,
-					forwardedProperties: forwardedProperties,
-				)
-			}
-
 			switch propertyType {
 			case .instantiator,
 			     .erasedInstantiator,
@@ -1709,11 +1690,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// to the root and the `onlyIfAvailable` override bindings. Bind an alias whose label
 		// one of those already binds under a name of its own, and pass that name to the root
 		// and to the alias's receivers in the tree.
-		let rootBindingNames = Set(treePropertyNodes.map { node in
+		let treePropertyNodeBindingNames = Set(treePropertyNodes.map { node in
 			siblingDisambiguationMap[node.propertyLabel]?[node.typeDescription] ?? node.propertyLabel
 		})
-		.union(onlyIfAvailableOverrides.map(\.name))
-		.union(lazilyInstantiatedBindingNameMap.values.flatMap(\.values))
+		let rootBindingNames = treePropertyNodeBindingNames
+			.union(onlyIfAvailableOverrides.map(\.name))
+			.union(lazilyInstantiatedBindingNameMap.values.flatMap(\.values))
 		let (rootItems, aliasBindingNames) = Self.renamingAliases(
 			in: parameterTree,
 			thatRedeclare: rootBindingNames,
@@ -1745,15 +1727,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A root's own received dependency whose label the root scope already binds – to a node
 		// the mock builds for another receiver – cannot be rebound to its label without
 		// redeclaring that binding, so the root is passed the dependency's binding by name.
+		// So is one whose binding is a node the tree builds under a name of its own: the
+		// rebinds precede the tree, so a rebind would reference the node before its declaration.
 		var rootDependenciesToRebind = [Dependency]()
 		for dependency in instantiable.dependencies {
-			if rootBindingNames.contains(dependency.property.label),
-			   let binding = Self.disambiguatedBinding(
+			if let binding = Self.disambiguatedBinding(
 			   	ofReceived: dependency,
 			   	unavailableProperties: [],
 			   	lazilyInstantiatedInstanceProperties: [],
 			   	flatParameterDisambiguationMap: rootDisambiguationMap,
-			   )
+			   ),
+			   rootBindingNames.contains(dependency.property.label) || treePropertyNodeBindingNames.contains(binding.name)
 			{
 				returnDisambiguationMap[dependency.property.label, default: [:]][dependency.property.typeDescription] = binding.name
 			} else {
@@ -3561,21 +3545,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"#if \(mockConditionalCompilation)\n\(code)\n#endif"
 		} else {
 			code
-		}
-	}
-
-	// MARK: GenerationError
-
-	private enum GenerationError: Error, CustomStringConvertible {
-		case erasedInstantiatorGenericDoesNotMatch(property: Property, instantiable: Instantiable, forwardedProperties: Set<Property>)
-
-		var description: String {
-			switch self {
-			case let .erasedInstantiatorGenericDoesNotMatch(property, instantiable, forwardedProperties):
-				// The forwarded properties are spelled out rather than as `ForwardedProperties` on the instantiated
-				// type, which the module that declares the property may not be able to see.
-				"Property `\(property.asSource)` on \(instantiable.concreteInstantiable.asSource) incorrectly configured. Property should instead be of type `\(property.propertyType.isSendable ? Dependency.sendableErasedInstantiatorType : Dependency.erasedInstantiatorType)<\(forwardedProperties.asForwardedPropertiesType.typeDescription.asSource), \(property.typeDescription.asInstantiatedType.asSource)>`."
-			}
 		}
 	}
 }
