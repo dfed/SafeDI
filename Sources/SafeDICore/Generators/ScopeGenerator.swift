@@ -207,11 +207,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		var requiredOnlyIfAvailableAliasProperties = Set<Property>()
 		var requiredOnlyIfAvailableAliasFulfillingProperties = Set<Property>()
-		for case let (aliasProperty?, fulfillingProperty?) in propertiesToGenerate.lazy.map({ ($0.property, $0.onlyIfAvailableAliasFulfillingProperty) })
-			where isRequiredByChild(aliasProperty)
-		{
-			requiredOnlyIfAvailableAliasProperties.insert(aliasProperty)
-			requiredOnlyIfAvailableAliasFulfillingProperties.insert(fulfillingProperty)
+		// An `onlyIfAvailable` alias of another `onlyIfAvailable` alias this scope declares is created from it, so
+		// one that is required requires the alias it renames in turn, which its own generator does not say: an
+		// `onlyIfAvailable` alias's generator requires nothing. The aliases are found until a pass finds no more.
+		var foundRequiredAlias = true
+		while foundRequiredAlias {
+			foundRequiredAlias = false
+			for case let (aliasProperty?, fulfillingProperty?) in propertiesToGenerate.lazy.map({ ($0.property, $0.onlyIfAvailableAliasFulfillingProperty) })
+				where !requiredOnlyIfAvailableAliasProperties.contains(aliasProperty)
+				&& (isRequiredByChild(aliasProperty) || requiredOnlyIfAvailableAliasFulfillingProperties.contains(aliasProperty))
+			{
+				requiredOnlyIfAvailableAliasProperties.insert(aliasProperty)
+				requiredOnlyIfAvailableAliasFulfillingProperties.insert(fulfillingProperty)
+				foundRequiredAlias = true
+			}
 		}
 		self.requiredOnlyIfAvailableAliasProperties = requiredOnlyIfAvailableAliasProperties
 		requiredAliasFulfillingProperties = Set(propertiesToGenerate.flatMap(\.requiredAliasFulfillingProperties))
