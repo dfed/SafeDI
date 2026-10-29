@@ -79,7 +79,9 @@ public struct SafeDIToolManifest: Codable, Sendable {
 	/// The current module's own source files, written like `inputFilePath`s: the files whose
 	/// `@Instantiable(generateMock: true)` types `mockGeneration` must list. `generate` rejects such a
 	/// type in a file `mockGeneration` omits, which happens when the file changed after `scan` ran.
-	/// `nil` in a hand-written manifest, where nothing is checked.
+	/// `nil` in a hand-written manifest, where nothing is checked. A manifest with a `projectRoot` must
+	/// spell each file one way, since the spelling found here is compared as written with
+	/// `configurationFilePaths` and `mockGeneration`.
 	public var mockScopedFilePaths: [String]?
 
 	/// The directory `scan` resolved input paths against when writing `configurationFilePaths`

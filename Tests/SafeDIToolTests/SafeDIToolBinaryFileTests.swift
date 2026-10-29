@@ -364,7 +364,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func dumpScanCache_explains_whenFileIsJSONFromAnEarlierRelease() async throws {
 		try await assertDumpThrows(
-			"The file is not a scan cache: it does not begin with `SDSC`.",
+			"The file begins with neither `SDMI`, as a module info file does, nor `SDSC`, as a scan cache does. A different version of SafeDI most likely wrote this file, or its write was interrupted. To fix this, clean your build (in Xcode: Product > Clean Build Folder) and build again, so that the module that wrote the file regenerates it.",
 			whenCacheIs: { cache in try JSONEncoder().encode(CachedScannedModuleInfo(scanCacheData: cache)) },
 		)
 	}

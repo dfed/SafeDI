@@ -15,7 +15,8 @@ Compile-time-safe dependency injection without the boilerplate. No containers. N
 - **Scoped runtime values.** Make your real logged-in `User` available non-optionally to any type in the subtree with just a single macro decoration.
 - **Full-graph mocks.** Generated from your real dependency graph, `mock()` lets you override any branch for easy previews and tests.
 - **Architecture-independent.** SwiftUI or UIKit, coordinators or MVVM, one module or hundreds — SafeDI fits what you already have.
-- **Clear failures.** SafeDI flags unsolvable dependency graphs, outlining the problem and suggesting fixes.
+- **Delayed instantiation.** `Instantiator` creates a new instance each time you ask; `LazilyInstantiated` creates one shared instance the first time it is read. An expensive or rarely needed dependency is built only when something uses it.
+- **Clear failures.** SafeDI reports an unsolvable graph as a compiler diagnostic at your declaration, in Xcode and in build logs. It names the declarations involved and offers a fix-it where one exists.
 
 ## The core concept
 
@@ -114,7 +115,8 @@ For previews and tests that need real data, pass forwarded values directly and u
 <tr><td>✓ Compile-time safe</td><td>✓ Thread safe</td><td>✓ Hierarchical dependency scoping</td></tr>
 <tr><td>✓ Constructor injection</td><td>✓ Multi-module support</td><td>✓ Dependency inversion support</td></tr>
 <tr><td>✓ Transitive dependency solving</td><td>✓ Cycle detection</td><td>✓ Architecture independent</td></tr>
-<tr><td>✓ No DI-specific types or generics required</td><td>✓ Full-graph mocks</td><td>✓ Clear errors: never debug generated code</td></tr>
+<tr><td>✓ No DI-specific types or generics required</td><td>✓ Full-graph mocks</td><td>✓ Clear errors at your declaration, with fix-its</td></tr>
+<tr><td>✓ Conditional compilation support</td><td>✓ Lazy shared dependencies</td><td>✓ Swift Package Manager, Xcode, Bazel, and Tuist</td></tr>
 </table>
 
 ## Getting started
@@ -137,7 +139,7 @@ SafeDI is closest in spirit to [Needle](https://github.com/uber/needle) and [Wea
 
 SwiftUI’s own `Environment` is a useful mental model for a dependency tree — but without compile-time validation. SafeDI applies that tree shape to the full object graph and guarantees it resolves.
 
-Across all of these, SafeDI is the only Swift DI library that generates full-graph mocks from your real dependency graph, and the only hierarchical DI library whose integration errors surface as Swift macro diagnostics with fix-its directly in your IDE.
+Across all of these, SafeDI is the only Swift DI library that generates full-graph mocks from your real dependency graph, and the only hierarchical DI library whose macros report integration errors as you type. The build reports errors in the graph as a whole the same way — as compiler diagnostics at your declaration, with a fix-it wherever the repair is unambiguous.
 
 ## Contributing
 
