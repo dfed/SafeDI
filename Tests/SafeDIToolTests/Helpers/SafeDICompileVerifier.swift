@@ -41,9 +41,9 @@ import Testing
 ///
 /// Fixtures must be self-contained Swift that compiles against SafeDI alone —
 /// define stand-in types rather than importing platform frameworks that
-/// aren't available on the host SDK (e.g., UIKit on macOS). Tests that rely
-/// on cross-module references should opt out at the call site via
-/// `skipCompileVerification` or by declaring additional imported modules.
+/// aren't available on the host SDK (e.g., UIKit on macOS). A test whose
+/// fixtures span modules runs them through `executeSafeDIToolMultiModuleTest`,
+/// which compiles each module against the ones before it with `verifyModulesCompile`.
 ///
 /// Set the `SAFEDI_SKIP_COMPILE_CHECK` environment variable (to any value) to
 /// disable the verification pass for faster local iteration.
@@ -57,10 +57,73 @@ func verifyGeneratedCodeCompiles(
 	filesToDelete: inout [URL],
 	sourceLocation: SourceLocation = #_sourceLocation,
 ) throws {
-	guard compileVerificationIsEnabled else { return }
+	guard compileVerificationIsEnabled, let artifacts = locateBuildArtifacts(sourceLocation: sourceLocation) else { return }
 
-	let inputURLs = inputSwiftFiles + additionalDirectorySwiftFiles
+	let outcome = try compileModule(
+		ModuleCompileSources(
+			moduleName: standaloneVerificationModuleName,
+			packageName: nil,
+			dependencyModuleNames: [],
+			inputSwiftFiles: inputSwiftFiles + additionalDirectorySwiftFiles,
+			generatedFiles: generatedFiles,
+			activeCompilationConditions: activeCompilationConditions,
+			mockConditionalCompilation: mockConditionalCompilation,
+		),
+		moduleSearchPaths: [],
+		emitsModule: false,
+		artifacts: artifacts,
+		filesToDelete: &filesToDelete,
+	)
+	outcome.recordIssues(skippingVerificationBy: "pass `skipCompileVerification: true`", sourceLocation: sourceLocation)
+}
 
+/// Compiles each of `modules` in order, each against the modules it depends on, and records an `Issue` for each
+/// module that fails to compile or whose generated code draws a warning, as `verifyGeneratedCodeCompiles` does
+/// for one module. Every module is compiled, whether or not it generated anything: a dependency with no SafeDI
+/// content still has to produce the `.swiftmodule` the modules after it import.
+///
+/// Each module is staged in a directory of its own, since generated file names such as
+/// `SafeDIMockConfiguration.swift` repeat across modules, and is compiled with `-module-name` and
+/// `-package-name` from `modules`, emitting its `.swiftmodule` into that directory, which the compile of every
+/// module that names it in `dependencyModuleNames` searches. So `canImport(M)` holds in a module only for the
+/// modules it depends on, and an import of any other module fails, as it does in a build.
+///
+/// - Parameter recordsIssues: Whether a failure records an `Issue`. A test that expects a module not to compile
+///   passes `false` and asserts on the returned outcome instead.
+/// - Returns: Each module's outcome, or `nil` when compile verification is disabled or the build artifacts
+///   cannot be found, which records an `Issue` as it does for one module.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+func verifyModulesCompile(
+	_ modules: [ModuleCompileSources],
+	recordsIssues: Bool,
+	filesToDelete: inout [URL],
+	sourceLocation: SourceLocation = #_sourceLocation,
+) throws -> MultiModuleCompileOutcome? {
+	guard compileVerificationIsEnabled, let artifacts = locateBuildArtifacts(sourceLocation: sourceLocation) else { return nil }
+
+	var outcomes = [ModuleCompileOutcome]()
+	for module in modules {
+		let outcome = try compileModule(
+			module,
+			moduleSearchPaths: outcomes.filter { module.dependencyModuleNames.contains($0.moduleName) }.map(\.directory),
+			emitsModule: true,
+			artifacts: artifacts,
+			filesToDelete: &filesToDelete,
+		)
+		if recordsIssues {
+			outcome.recordIssues(skippingVerificationBy: "pass `compileVerification: .skipped`", sourceLocation: sourceLocation)
+		}
+		outcomes.append(outcome)
+		// A later module would import a module that did not build, so its failure would say nothing new.
+		guard outcome.failure == nil else { break }
+	}
+	return MultiModuleCompileOutcome(modules: outcomes)
+}
+
+/// The module name the standalone verifier compiles under, which no fixture names.
+let standaloneVerificationModuleName = "SafeDICodegenVerification"
+
+private func locateBuildArtifacts(sourceLocation: SourceLocation) -> SafeDIBuildArtifacts? {
 	guard let artifacts = SafeDIBuildArtifactLocator.locate() else {
 		Issue.record(
 			"""
@@ -70,77 +133,166 @@ func verifyGeneratedCodeCompiles(
 			""",
 			sourceLocation: sourceLocation,
 		)
-		return
+		return nil
+	}
+	return artifacts
+}
+
+/// What one module's compile is given: its sources, which `stageCompileSources` stages, and how the compiler
+/// names the module.
+struct ModuleCompileSources {
+	let moduleName: String
+	/// The package the module belongs to, which the compile passes as `-package-name`, or `nil` for none.
+	let packageName: String?
+	/// The names of the modules this one may import: those compiled before it whose staging directories its
+	/// compile searches.
+	let dependencyModuleNames: [String]
+	let inputSwiftFiles: [URL]
+	let generatedFiles: [String: String]
+	let activeCompilationConditions: [String]
+	/// The condition the module's generated mocks are wrapped in, which the compile defines so the mocks compile
+	/// too, as the module's mock-enabled configuration does. `DEBUG` is always defined.
+	let mockConditionalCompilation: String?
+}
+
+/// Why a module did not compile.
+enum ModuleCompileFailure {
+	/// The inputs failed to compile on their own, before any generated code: the compile of the inputs alone.
+	case inputsFailedOnTheirOwn(SwiftCompileResult)
+	/// The inputs compile on their own, and fail with the generated code.
+	case generatedCodeFailedAlongsideInputs
+}
+
+/// How one module's compile went.
+struct ModuleCompileOutcome {
+	let moduleName: String
+	/// The compile of the module's inputs and generated files together.
+	let result: SwiftCompileResult
+	/// Why the module did not compile, or `nil` when it did.
+	let failure: ModuleCompileFailure?
+	/// The warning lines the compiler reported in the generated files whose message it did not also report in
+	/// an input file.
+	let generatedCodeWarnings: [String]
+	/// The directory the module's sources were staged in, where the compiler wrote its output.
+	let directory: URL
+
+	var exitCode: Int32 {
+		result.exitCode
 	}
 
-	let staged = try stageCompileSources(
-		inputSwiftFiles: inputURLs,
-		generatedFiles: generatedFiles,
-		filesToDelete: &filesToDelete,
-	)
-	let inputCompileFiles = staged.inputFiles
-	let combinedCompileFiles = staged.inputFiles + staged.generatedFiles
-	// Generated mock code is wrapped in `#if <mockConditionalCompilation>`, so define that condition
-	// to compile the mocks too, as the module's mock-enabled configuration does.
-	let compilationConditions = activeCompilationConditions + [mockConditionalCompilation].compactMap(\.self)
+	var standardError: String {
+		result.stderr
+	}
 
-	let combinedResult = try compileSwift(
-		sources: combinedCompileFiles,
-		outputDirectory: staged.directory,
-		artifacts: artifacts,
-		activeCompilationConditions: compilationConditions,
-	)
-	guard combinedResult.exitCode != 0 else {
-		let warnings = warningsOnlyGeneratedCodeDraws(
-			inCompilerOutput: combinedResult.stderr,
-			generatedFiles: staged.generatedFiles,
-			inputFiles: staged.inputFiles,
-		)
-		if !warnings.isEmpty {
+	/// Records what `verifyGeneratedCodeCompiles` records: a failure, attributed to the inputs or to the
+	/// generated code, or a warning drawn by generated code.
+	/// - Parameter skippingVerificationHint: How the caller's test opts out of verification, which the message
+	///   for inputs that do not compile on their own suggests when the failure is unavoidable.
+	func recordIssues(skippingVerificationBy skippingVerificationHint: String, sourceLocation: SourceLocation) {
+		switch failure {
+		case nil:
+			if !generatedCodeWarnings.isEmpty {
+				Issue.record(
+					"""
+					\(generatedCodeWarningMessage)
+					\(generatedCodeWarnings.joined(separator: "\n"))
+					""",
+					sourceLocation: sourceLocation,
+				)
+			}
+		case let .inputsFailedOnTheirOwn(inputsOnlyResult):
 			Issue.record(
 				"""
-				\(generatedCodeWarningMessage)
-				\(warnings.joined(separator: "\n"))
+				Test inputs failed to compile on their own (before SafeDI codegen \
+				runs). The fixture must be valid Swift against SafeDI alone. \
+				Common causes: referencing types that aren't declared in the \
+				fixture or stubbed out (define stand-ins instead of importing \
+				platform frameworks like UIKit that are unavailable on the host \
+				SDK), syntax errors in the fixture, or relying on symbols from \
+				modules that aren't imported. If the failure is unavoidable for \
+				the scenario under test, \(skippingVerificationHint) \
+				and add a comment explaining why.
+				\(inputsOnlyResult.stderr)
+				""",
+				sourceLocation: sourceLocation,
+			)
+		case .generatedCodeFailedAlongsideInputs:
+			Issue.record(
+				"""
+				\(generatedCodeCompilationFailureMessage)
+				\(result.stderr)
 				""",
 				sourceLocation: sourceLocation,
 			)
 		}
-		return
 	}
+}
 
-	// Combined pass failed. Re-run inputs alone to attribute the failure.
-	// The extra subprocess is only paid when something is broken.
-	let inputsOnlyResult = try compileSwift(
-		sources: inputCompileFiles,
-		outputDirectory: staged.directory,
-		artifacts: artifacts,
-		activeCompilationConditions: compilationConditions,
+/// How each module of a multi-module compile went.
+struct MultiModuleCompileOutcome {
+	/// Each compiled module's outcome, in the order the modules were given, ending with the first module that
+	/// failed: the modules after it are not compiled.
+	let modules: [ModuleCompileOutcome]
+
+	/// The outcome of the module that failed, or `nil` when every module compiled.
+	var failure: ModuleCompileOutcome? {
+		modules.last.flatMap { $0.failure == nil ? nil : $0 }
+	}
+}
+
+/// Stages and compiles one module's inputs and generated files together, against the modules whose staging
+/// directories `moduleSearchPaths` names. When that fails, the inputs are compiled alone to attribute the
+/// failure; the extra subprocess is only paid when something is broken.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+private func compileModule(
+	_ module: ModuleCompileSources,
+	moduleSearchPaths: [URL],
+	emitsModule: Bool,
+	artifacts: SafeDIBuildArtifacts,
+	filesToDelete: inout [URL],
+) throws -> ModuleCompileOutcome {
+	let staged = try stageCompileSources(
+		inputSwiftFiles: module.inputSwiftFiles,
+		generatedFiles: module.generatedFiles,
+		filesToDelete: &filesToDelete,
 	)
-	if inputsOnlyResult.exitCode != 0 {
-		Issue.record(
-			"""
-			Test inputs failed to compile on their own (before SafeDI codegen \
-			runs). The fixture must be valid Swift against SafeDI alone. \
-			Common causes: referencing types that aren't declared in the \
-			fixture or stubbed out (define stand-ins instead of importing \
-			platform frameworks like UIKit that are unavailable on the host \
-			SDK), syntax errors in the fixture, or relying on symbols from \
-			modules that aren't imported. If the failure is unavoidable for \
-			the scenario under test, pass `skipCompileVerification: true` \
-			and add a comment explaining why.
-			\(inputsOnlyResult.stderr)
-			""",
-			sourceLocation: sourceLocation,
+	// Generated mock code is wrapped in `#if <mockConditionalCompilation>`, so define that condition
+	// to compile the mocks too, as the module's mock-enabled configuration does.
+	let compilationConditions = module.activeCompilationConditions + [module.mockConditionalCompilation].compactMap(\.self)
+	func compile(_ sources: [URL]) throws -> SwiftCompileResult {
+		try compileSwift(
+			sources: sources,
+			outputDirectory: staged.directory,
+			artifacts: artifacts,
+			activeCompilationConditions: compilationConditions,
+			moduleName: module.moduleName,
+			packageName: module.packageName,
+			emitsModule: emitsModule,
+			moduleSearchPaths: moduleSearchPaths,
 		)
-		return
 	}
 
-	Issue.record(
-		"""
-		\(generatedCodeCompilationFailureMessage)
-		\(combinedResult.stderr)
-		""",
-		sourceLocation: sourceLocation,
+	let combinedResult = try compile(staged.inputFiles + staged.generatedFiles)
+	let failure: ModuleCompileFailure?
+	let generatedCodeWarnings: [String]
+	if combinedResult.exitCode == 0 {
+		failure = nil
+		generatedCodeWarnings = warningsOnlyGeneratedCodeDraws(
+			inCompilerOutput: combinedResult.stderr,
+			generatedFiles: staged.generatedFiles,
+			inputFiles: staged.inputFiles,
+		)
+	} else {
+		let inputsOnlyResult = try compile(staged.inputFiles)
+		failure = inputsOnlyResult.exitCode == 0 ? .generatedCodeFailedAlongsideInputs : .inputsFailedOnTheirOwn(inputsOnlyResult)
+		generatedCodeWarnings = []
+	}
+	return ModuleCompileOutcome(
+		moduleName: module.moduleName,
+		result: combinedResult,
+		failure: failure,
+		generatedCodeWarnings: generatedCodeWarnings,
+		directory: staged.directory,
 	)
 }
 
@@ -359,14 +511,24 @@ func stageCompileSources(
 /// module instead of one per file, so the macro plugin and the `SafeDI` module load once; that
 /// saves more than emitting the object file costs, so this is cheaper than per-file `-typecheck`.
 ///
-/// - Parameter activeCompilationConditions: Conditions defined for the compile, mirroring what the
-///   test supplied to SafeDITool. `DEBUG` is always defined, as it is in a debug build.
+/// - Parameters:
+///   - activeCompilationConditions: Conditions defined for the compile, mirroring what the
+///     test supplied to SafeDITool. `DEBUG` is always defined, as it is in a debug build.
+///   - moduleName: The module's name, which also names the object file and the `.swiftmodule`.
+///   - packageName: The package the module belongs to, passed as `-package-name`, or `nil` for none.
+///   - emitsModule: Whether to emit `<moduleName>.swiftmodule` into `outputDirectory` as well, for the
+///     modules compiled after this one to import.
+///   - moduleSearchPaths: Directories searched for imported modules, after the one holding `SafeDI`.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func compileSwift(
 	sources: [URL],
 	outputDirectory: URL,
 	artifacts: SafeDIBuildArtifacts,
 	activeCompilationConditions: [String] = [],
+	moduleName: String = standaloneVerificationModuleName,
+	packageName: String? = nil,
+	emitsModule: Bool = false,
+	moduleSearchPaths: [URL] = [],
 ) throws -> SwiftCompileResult {
 	let process = Process()
 	#if os(Linux)
@@ -379,13 +541,24 @@ func compileSwift(
 	arguments.append(contentsOf: [
 		"-emit-object",
 		"-whole-module-optimization",
-		"-o", outputDirectory.appendingPathComponent("SafeDICodegenVerification.o").path,
-		"-module-name", "SafeDICodegenVerification",
+		"-o", outputDirectory.appendingPathComponent("\(moduleName).o").path,
+		"-module-name", moduleName,
 		"-I", artifacts.swiftModuleSearchPath.path,
+	])
+	for moduleSearchPath in moduleSearchPaths {
+		arguments.append(contentsOf: ["-I", moduleSearchPath.path])
+	}
+	arguments.append(contentsOf: [
 		"-load-plugin-executable", "\(artifacts.safeDIMacrosToolPath.path)#SafeDIMacros",
 		"-DDEBUG",
 		"-swift-version", "6",
 	])
+	if let packageName {
+		arguments.append(contentsOf: ["-package-name", packageName])
+	}
+	if emitsModule {
+		arguments.append(contentsOf: ["-emit-module", "-emit-module-path", outputDirectory.appendingPathComponent("\(moduleName).swiftmodule").path])
+	}
 	arguments.append(contentsOf: Set(activeCompilationConditions).subtracting(["DEBUG"]).sorted().map { "-D\($0)" })
 	arguments.append(contentsOf: sources.map(\.path))
 	process.arguments = arguments
