@@ -888,13 +888,6 @@ struct SafeDIToolGraphFuzzerTests {
 				69, 1_992, 2_186, 2_254, 3_931, 4_643, 4_747, 4_974,
 			],
 		),
-		GraphFuzzerKnownIssue(
-			reason: "A requirement of an `onlyIfAvailable` alias of an `onlyIfAvailable` alias of the property being built – a required alias of it, or a required receive beneath – is accepted, and names the uncreated alias",
-			signatures: [.compilerError(containing: "AliasAlias' in scope")],
-			seeds: [
-				4_445,
-			],
-		),
 	]
 
 	/// Known issues for the tests of `GraphFuzzerFinding`, which must not depend on what `knownIssues` lists today.
