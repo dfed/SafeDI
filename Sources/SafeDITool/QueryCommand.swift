@@ -39,7 +39,7 @@ struct QueryNeeds: AsyncParsableCommand {
 	static let configuration = CommandConfiguration(
 		commandName: "needs",
 		abstract: "Report what types need: the modules whose declarations build each and its dependencies, the `@Forwarded` parameters it takes, the dependencies no `@Instantiable` declaration fulfills, and what its mock needs.",
-		discussion: "Reads the modules named with `--include` and `--module-info` once, builds each type with every dependency it receives provided by an `@Instantiable` declaration, as its mock does, and reports the modules those declarations are in. It then reports the same for the type's mock: the `mock()` the project generates, the hand-written mock that stands in when the project generates none, or the `mock()` a `#SafeDIConfiguration` listing the type in `additionalMocksToGenerate` would generate. A project that depends on the reported modules alone builds the type, or its mock, from them. With `--json`, the report and any error are printed as JSON, in the format the manual documents. This command is in beta: its options, text, and JSON may change in any release, and a change to the JSON's shape raises its `formatVersion`.",
+		discussion: "Reads the modules named with `--include` and `--module-info` once, builds each type with every dependency it receives provided by an `@Instantiable` declaration, as its mock does, and reports the modules those declarations are in. It then reports the same for the type's mock: the `mock()` the project generates, the hand-written mock that stands in when the project generates none, or the `mock()` a `#SafeDIConfiguration` listing the type in `additionalMocksToGenerate` would generate. A project that depends on the reported modules alone builds the type, or its mock, from them. With `--json`, the report and any error are printed as JSON, in the format the manual documents. This command is in beta: its options, text, and JSON may change in any release, which the JSON's `formatVersion` of 0 says; 1 will be the first stable format.",
 	)
 
 	@Argument(help: "The names of `@Instantiable` types: each its own name, as `additionalMocksToGenerate` would list it, not a type it fulfills. The modules are read once for all of them.") var typeNames: [String]
@@ -460,10 +460,10 @@ enum QueryError: Error, CustomStringConvertible, Equatable {
 
 /// What `QueryNeeds` reports: one report per type named, in the order named.
 struct QueryReport: Encodable, Equatable {
-	/// The version of the JSON format, so that a script can refuse a shape it does not know. Raised when a key is
-	/// renamed, removed, or changes meaning; adding a key does not raise it. While the command is in beta, it may be
-	/// raised in any release.
-	static let formatVersion = 1
+	/// The version of the JSON format, so that a script can refuse a shape it does not know. `0` while the command
+	/// is in beta: the shape may change in any release without raising it. `1` is the first stable format, from which
+	/// it is raised when a key is renamed, removed, or changes meaning, and not when a key is added.
+	static let formatVersion = 0
 
 	let types: [TypeReport]
 

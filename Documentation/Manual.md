@@ -1260,7 +1260,7 @@ You can find instructions for how to install the `dot` command [here](https://gr
 
 ### Querying what a type needs
 
-> `query needs` is in beta. Its options, text, and JSON may change in any release; a change to the JSON’s shape raises its `formatVersion`, so a script can tell.
+> `query needs` is in beta. Its options, text, and JSON may change in any release; the JSON’s `formatVersion` is `0` until the format is stable.
 
 A focused app – one that builds a single feature with mock data instead of the whole product – needs only the modules that feature needs. `SafeDITool query needs` names them. Give it one or more `@Instantiable` types and the directories of the project’s modules, as `generate --include` takes them:
 
@@ -1294,11 +1294,11 @@ Name each type as `additionalMocksToGenerate` names it: by its own name, such as
 
 #### The JSON report
 
-Pass `--json` for the same report as JSON, for a script that assembles the app. The root object carries a `formatVersion`, which a script checks before reading further: it is raised when a key is renamed, removed, or changes meaning, and not when a key is added; while the command is in beta, it may be raised in any release. Keys are sorted. Every array is present, empty when there is nothing to list; a key whose value is optional – `defaultExpression`, `methodName`, `erasure`, `generatedIn`, `filePath`, and one of `mock` or `noMock` – is left out when it has no value, never set to `null`. For `Feature` with `generateMock: true` in `Sources/FeatureModule`, which forwards a `user` and a `config` and receives an `Analytics` nothing declares, where a `mockOnly` extension in `Sources/ConfigMocks` gives `Config` a `mock()`:
+Pass `--json` for the same report as JSON, for a script that assembles the app. The root object carries a `formatVersion`, which a script checks before reading further. It is `0` while the command is in beta, when the shape may change in any release without raising it, so a script that needs a stable shape pins the SafeDI release instead; `1` will be the first stable format, raised from then on when a key is renamed, removed, or changes meaning, and not when a key is added. Keys are sorted. Every array is present, empty when there is nothing to list; a key whose value is optional – `defaultExpression`, `methodName`, `erasure`, `generatedIn`, `filePath`, and one of `mock` or `noMock` – is left out when it has no value, never set to `null`. For `Feature` with `generateMock: true` in `Sources/FeatureModule`, which forwards a `user` and a `config` and receives an `Analytics` nothing declares, where a `mockOnly` extension in `Sources/ConfigMocks` gives `Config` a `mock()`:
 
 ```json
 {
-  "formatVersion" : 1,
+  "formatVersion" : 0,
   "types" : [
     {
       "forwardedParameters" : [
@@ -1397,7 +1397,7 @@ Pass `--json` for the same report as JSON, for a script that assembles the app. 
 
 | Key | Value |
 | --- | --- |
-| `formatVersion` | The format’s version, `1`. |
+| `formatVersion` | The format’s version: `0` while the command is in beta, `1` once the format is stable. |
 | `types` | One report per type named, in the order named. |
 | `types[].typeName` | The concrete type queried, as its declaration spells it. |
 | `types[].modules` | The modules the type is built from in production, sorted by `name`. `paths` are the `--include` or `--module-info` arguments that named the module, as given, which a script maps back to a build target. `declarations` are sorted by type: `kind` is `instantiable` (an `@Instantiable` declaration, `typeName` the type), `handWrittenMock` (`typeName` the mocked type, `methodName` the method), or `erasure` (`typeName` the type declaring the erasing property, and `erasure` holding the `property` as declared, the `erasedTypeName` received, the `concreteTypeName` built, and `alsoDeclaredInModules`, the other modules any of which would do instead). `filePath` is the file that holds the declaration: under the `--include` argument that named its module, so it opens from where the tool ran, or, for a module named with `--module-info`, as that file records it. |
@@ -1421,6 +1421,6 @@ With `--json`, an error is printed to standard output as JSON too, with the same
     ],
     "typeName" : "UserService"
   },
-  "formatVersion" : 1
+  "formatVersion" : 0
 }
 ```

@@ -1238,7 +1238,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 		let configMocks = try #require(output.moduleDirectories["ConfigMocks"]?.path)
 		#expect(output.json == """
 		{
-		  "formatVersion" : 1,
+		  "formatVersion" : 0,
 		  "types" : [
 		    {
 		      "forwardedParameters" : [
@@ -1376,7 +1376,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 				    "message" : "`Ghost` is declared only with `mockOnly: true`, which builds nothing in production. Name a type that an @Instantiable declaration without `mockOnly` declares.",
 				    "typeName" : "Ghost"
 				  },
-				  "formatVersion" : 1
+				  "formatVersion" : 0
 				}
 				"""
 			},
@@ -1503,7 +1503,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 				    "kind" : "noModuleIncluded",
 				    "message" : "Name at least one module: a directory of Swift files with --include, or a `.safedi` module info file with --module-info."
 				  },
-				  "formatVersion" : 1
+				  "formatVersion" : 0
 				}
 				"""
 			},
@@ -1589,7 +1589,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 				      "\(missingDirectory)"
 				    ]
 				  },
-				  "formatVersion" : 1
+				  "formatVersion" : 0
 				}
 				"""
 			},
@@ -1624,7 +1624,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 				      "\(file)"
 				    ]
 				  },
-				  "formatVersion" : 1
+				  "formatVersion" : 0
 				}
 				"""
 			},
@@ -1668,7 +1668,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 				      "\(file)"
 				    ]
 				  },
-				  "formatVersion" : 1
+				  "formatVersion" : 0
 				}
 				"""
 			},
@@ -1886,7 +1886,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 		let servicesModule = try #require(output.moduleDirectories["ServicesModule"]?.path)
 		#expect(output.json == """
 		{
-		  "formatVersion" : 1,
+		  "formatVersion" : 0,
 		  "types" : [
 		    {
 		      "forwardedParameters" : [
@@ -2131,7 +2131,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 		    "kind" : "diagnostics",
 		    "message" : "\(featureFile):1:1: error: Found multiple @Instantiable types or extensions that fulfill `Feature`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `Feature` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable.\\n\(twinFile):1:1: error: Found multiple @Instantiable types or extensions that fulfill `Feature`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `Feature` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
 		  },
-		  "formatVersion" : 1
+		  "formatVersion" : 0
 		}
 		""")
 	}
@@ -2175,7 +2175,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 		    ],
 		    "typeName" : "FeatureProtocol"
 		  },
-		  "formatVersion" : 1
+		  "formatVersion" : 0
 		}
 		""")
 	}
@@ -2190,7 +2190,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 		    "kind" : "other",
 		    "message" : "UnexpectedError()"
 		  },
-		  "formatVersion" : 1
+		  "formatVersion" : 0
 		}
 		""")
 	}
@@ -2385,7 +2385,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 		let moduleInfoFile = output.paths(of: "FeatureModule")[0]
 		#expect(output.json == """
 		{
-		  "formatVersion" : 1,
+		  "formatVersion" : 0,
 		  "types" : [
 		    {
 		      "forwardedParameters" : [
@@ -2460,7 +2460,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 				      "\(missingFile)"
 				    ]
 				  },
-				  "formatVersion" : 1
+				  "formatVersion" : 0
 				}
 				"""
 			},
@@ -2496,7 +2496,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 				      "\(brokenFile.path)"
 				    ]
 				  },
-				  "formatVersion" : 1
+				  "formatVersion" : 0
 				}
 				"""
 			},
