@@ -44,7 +44,7 @@ The `additionalDirectoriesToInclude` parameter specifies folders outside of your
 
 > **Note:** Xcode does not expose build settings to build tool plugins, so the `SafeDIGenerator` plugin reads the target’s compilation conditions from its `SWIFT_ACTIVE_COMPILATION_CONDITIONS` and `OTHER_SWIFT_FLAGS` build settings when the build runs, rather than while it plans the build. Any SafeDI declaration, roots included, may sit behind a bare condition such as `#if DEBUG`; see [Conditional compilation](#conditional-compilation).
 
-> **Note:** `additionalDirectoriesToInclude` is only honored by the SPM build-tool plugin. The Bazel and Tuist integrations enumerate every input up front (Bazel via declared rule inputs; Tuist via the build phase's `inputPaths`), so files reached only through `additionalDirectoriesToInclude` won't be visible to SafeDITool at build time and won't trigger incremental rebuilds. Under those integrations, list every Swift source you want SafeDI to see directly via the build target.
+> **Note:** Only the `SafeDIGenerator` build-tool plugin declares the files reached through `additionalDirectoriesToInclude` as build inputs. Under Tuist and Bazel, don't rely on `additionalDirectoriesToInclude`. Tuist may read those files but won't rebuild when they change, and can't read them under user script sandboxing; Bazel can't see them at all. List every Swift source in the build target instead.
 
 ##### Installing the prebuilt SafeDITool binary
 
@@ -554,8 +554,8 @@ Declare the configuration in a file named `SafeDIConfiguration.swift` in the mod
 **Parameters:**
 
 - `additionalImportedModules`: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types. When those files import a module whole in more than one way, the generated code imports it once, the way that asks for least: `import MyModule` if any file imports it without attributes (or with only `@preconcurrency`, which the generated code does not need), and otherwise with the attributes that sort first, so `@testable import MyModule` is chosen only when every file that imports the module whole does so with `@testable`. Default: `[]`.
-- `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. Only honored by the SPM build-tool plugin. The Bazel and Tuist integrations enumerate inputs up front and ignore this parameter — list every Swift source via the build target itself instead. Default: `[]`.
-- `additionalMocksToGenerate`: Type names from dependent modules to generate `mock()` methods for in this module. The types must be `@Instantiable` in their home module. See [Cross-module mock generation](#cross-module-mock-generation). Default: `[]`.
+- `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. An entry may also name a single Swift file. Only the `SafeDIGenerator` build-tool plugin declares the files it reaches as build inputs; under Tuist and Bazel, list every Swift source via the build target itself instead (see the note under [Xcode project](#xcode-project)). SafeDI warns at the `#SafeDIConfiguration` when an entry names a path that doesn't exist or isn't a Swift file. An existing directory with no Swift files is fine. Default: `[]`.
+- `additionalMocksToGenerate`: Type names from dependent modules to generate `mock()` methods for in this module. The types must be `@Instantiable` in their home module. When an entry of the configuration the build selects names no type an `@Instantiable` declaration that SafeDI read declares, generation fails with an error at the `#SafeDIConfiguration`. See [Cross-module mock generation](#cross-module-mock-generation). Default: `[]`.
 - `mockConditionalCompilation`: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation. Default: `"DEBUG"`.
 
 ## Delayed instantiation
@@ -991,6 +991,8 @@ For the second case, use the `additionalMocksToGenerate` parameter on [`#SafeDIC
 ```
 
 This generates a `mock()` method for each listed type in the current module, even though the type is defined elsewhere. The type must be `@Instantiable` in its home module, but `generateMock: true` is not required there unless that home module also wants to generate its own mock.
+
+List each type by its declared name, with enclosing types and without the module (`Outer.Inner`, not `MyModule.Outer.Inner`). SafeDI reports an error for an entry that names no `@Instantiable` type and suggests close matches. An entry in a clause of an `#if` block that the build does not select is not checked.
 
 **Note:** `additionalDirectoriesToInclude` helps SafeDI scan source from Xcode project dependencies, but it does not generate mocks for those dependency modules. Use `additionalMocksToGenerate` when the current module needs a local mock for a dependency-module type.
 

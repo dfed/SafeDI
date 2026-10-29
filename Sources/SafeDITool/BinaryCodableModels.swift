@@ -76,6 +76,25 @@ extension CachedScannedModuleInfo: BinarySchemaMember {
 	}
 }
 
+extension AdditionalDirectory: BinarySchemaMember {
+	static let binaryLayout = [
+		"entry",
+		"path",
+	]
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(
+			entry: reader.read(),
+			path: reader.read(),
+		)
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(entry)
+		writer.write(path)
+	}
+}
+
 extension ScannedInput: BinarySchemaMember {
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(

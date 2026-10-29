@@ -88,6 +88,7 @@ enum BinaryFile {
 	static var schemaMembers: [any BinarySchemaMember.Type] {
 		[
 			CachedScannedModuleInfo.self,
+			AdditionalDirectory.self,
 			ScannedInput.self,
 			FileModificationStamp.self,
 			CachedFileScan.self,
