@@ -319,6 +319,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		aliasPropertyIsProvidedByEnclosingScope = isProvidedByEnclosingScope
 	}
 
+	deinit {
+		// A tree of generators can be as deep as the module has types, so the generators this one holds the last
+		// references to are released one at a time rather than from within this deinitializer.
+		var propertiesToGenerate = [ScopeGenerator]()
+		swap(&propertiesToGenerate, &self.propertiesToGenerate)
+		DeferredRelease.release(consume propertiesToGenerate)
+	}
+
 	// MARK: CustomStringConvertible
 
 	let description: String
@@ -427,7 +435,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	func generateDOT() async throws -> String {
-		let orderedPropertiesToGenerate = orderedPropertiesToGenerate
+		let orderedPropertiesToGenerate = Array(orderedPropertiesToGenerate)
 		let instantiatedProperties = orderedPropertiesToGenerate.map(\.scopeData.asDOTNode)
 		var childDOTs = [String]()
 		for orderedPropertyToGenerate in orderedPropertiesToGenerate {
@@ -807,8 +815,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let unavailableProperties: [Property]
 	}
 
-	/// Properties that will be generated as `let` constants.
-	private let propertiesToGenerate: [ScopeGenerator]
+	/// Properties that will be generated as `let` constants. Mutated only by `deinit`, which has the only access.
+	nonisolated(unsafe) private var propertiesToGenerate: [ScopeGenerator]
 	/// Properties that this scope declares as a `let` constant.
 	private let propertiesToDeclare: Set<Property>
 	/// The received properties that are in scope only as the instance of a `LazilyInstantiated` property created
@@ -865,7 +873,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// ancestor provides it. Receives are considered in sibling order, so the result
 	/// is deterministic, and it matches a plain topological order whenever every
 	/// receive can be honored.
-	private lazy var orderedPropertiesToGenerate: [ScopeGenerator] = {
+	private var orderedPropertiesToGenerate: LazyMapSequence<[Int], ScopeGenerator> {
+		orderedPropertyToGenerateIndices.lazy.map { self.propertiesToGenerate[$0] }
+	}
+
+	/// The indices in `propertiesToGenerate` of `orderedPropertiesToGenerate`. Kept as indices so that
+	/// `propertiesToGenerate` holds the only references this generator has to its children (see `deinit`).
+	private lazy var orderedPropertyToGenerateIndices: [Int] = {
 		// A property can be listed more than once — a mock root promotes a received
 		// property that a promoted scope receives even when the root already
 		// instantiates it. Only the first child for each property is generated.
@@ -980,21 +994,29 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
-		var orderedPropertiesToGenerate = [ScopeGenerator]()
+		// Each sibling follows the siblings it depends upon, depth first in index order. The search keeps its own
+		// path, since a scope can have as many children depending on one another in turn as the module has types.
+		var orderedIndices = [Int]()
 		var unfulfilledIndices = Set(siblings.map(\.index))
-		func fulfill(_ index: Int) {
-			// Mark as fulfilled before recursing to prevent cycles.
-			guard unfulfilledIndices.remove(index) != nil else { return }
-			// Fulfill the scopes we depend upon.
-			for siblingIndex in siblingDependencies[index].sorted() {
-				fulfill(siblingIndex)
+		for startIndex in propertiesToGenerate.indices where unfulfilledIndices.contains(startIndex) {
+			// Mark as fulfilled before descending to prevent cycles.
+			unfulfilledIndices.remove(startIndex)
+			// Each sibling on the path, with the siblings it depends upon and the position of the next one to fulfill.
+			var path = [(index: startIndex, dependencyIndices: siblingDependencies[startIndex].sorted(), nextDependencyPosition: 0)]
+			while let (index, dependencyIndices, dependencyPosition) = path.last {
+				if dependencyPosition < dependencyIndices.count {
+					path[path.count - 1].nextDependencyPosition += 1
+					let dependencyIndex = dependencyIndices[dependencyPosition]
+					if unfulfilledIndices.remove(dependencyIndex) != nil {
+						path.append((index: dependencyIndex, dependencyIndices: siblingDependencies[dependencyIndex].sorted(), nextDependencyPosition: 0))
+					}
+				} else {
+					orderedIndices.append(index)
+					path.removeLast()
+				}
 			}
-			orderedPropertiesToGenerate.append(propertiesToGenerate[index])
 		}
-		for index in propertiesToGenerate.indices {
-			fulfill(index)
-		}
-		return orderedPropertiesToGenerate
+		return orderedIndices
 	}()
 
 	/// The index in `orderedPropertiesToGenerate` of the last child declaring each
@@ -1759,7 +1781,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// When a child has a custom mock method, its @Instantiated deps that aren't
 		// in the scope map become builder arguments. These must surface as flat params
 		// so the mock body can pass them.
-		Self.collectUncoveredDependenciesFromTree(
+		await Self.collectUncoveredDependenciesFromTree(
 			treePropertyNodes,
 			namesDeclaredByEnclosingBuilderFunctions: [],
 			into: &uncoveredDependencies,
@@ -2175,7 +2197,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			lines.append(contentsOf: lazilyInstantiatedBindings)
 			lines.append(contentsOf: rootReceiverBindings)
-			let bodyBindings = Self.generateMockBodyBindings(
+			let bodyBindings = await Self.generateMockBodyBindings(
 				items: rootItems,
 				propertyNodeLabelMap: rootLabelMap,
 				parentPath: ReservedName.mockOverridesParameterName,
@@ -2401,7 +2423,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Child items in the dependency tree (instantiated sub-properties and aliased
 		/// bindings declared at this scope). Ordered so that an alias always follows
 		/// the child that fulfills it — mirrors production's `orderedPropertiesToGenerate`.
-		let children: [MockTreeItem]
+		var children: [MockTreeItem] {
+			childItems?.items ?? []
+		}
+
+		/// Holds `children`, or `nil` when there are none, as at most nodes.
+		let childItems: MockTreeItems?
 		/// Non-dependency default-valued parameters from this type's init or customMock.
 		let defaultParameters: [DefaultParameter]
 		/// All arguments from the init or customMock that will be used for construction.
@@ -2839,6 +2866,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		case alias(MockAliasNode)
 	}
 
+	/// The children of a `MockParameterNode`. A tree of nodes can be as deep as the module has types, so each
+	/// node's children are released after the release of the items that hold the node returns, rather than
+	/// within it, which would nest a release for each level of the tree.
+	final class MockTreeItems: Sendable {
+		init(_ items: [MockTreeItem]) {
+			self.items = items
+		}
+
+		deinit {
+			var items = [MockTreeItem]()
+			swap(&items, &self.items)
+			DeferredRelease.release(consume items)
+		}
+
+		/// Mutated only by `deinit`, which has the only access.
+		nonisolated(unsafe) private(set) var items: [MockTreeItem]
+	}
+
 	/// A directed edge in the global type-reference graph that, when removed,
 	/// breaks a cycle. Computed once globally (one back-edge per strongly-connected
 	/// component of size > 1) and applied uniformly when generating every type's
@@ -2853,7 +2898,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// type, in alphabetical root order, and generates its struct once with `generateConfigurationStruct`.
 	func collectConfigurationTypes() async -> [MockParameterNode] {
 		let parameterTree = await rootMockParameterTree
-		return Self.collectUniqueConfigurationTypes(from: parameterTree.propertyNodes)
+		return await Self.collectUniqueConfigurationTypes(from: parameterTree.propertyNodes)
 	}
 
 	/// A node of a mock root's parameter tree, with the type that builds the node's property.
@@ -2884,23 +2929,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var seen = Set<ConstructedType>()
 		var result = [BuiltMockParameterNode]()
 
-		func walk(_ node: MockParameterNode, parent: TypeDescription?) {
+		// Each node before its children, depth first, in the order the tree declares them, with a stack of the nodes
+		// left to walk, since a mock tree can be as deep as the module has types. A node at the top of the tree is a
+		// field of `SafeDIOverrides`, which no cycle edge prunes, so it has no parent here.
+		var nodesToWalk: [(node: MockParameterNode, parent: TypeDescription?)] = parameterTree.propertyNodes.reversed().map { (node: $0, parent: nil) }
+		while let (node, parent) = nodesToWalk.popLast() {
 			let isPrunedByCycleEdge = parent.map { cycleEdges.contains(CycleEdge(parent: $0.asSource, child: node.concreteType.asSource)) } ?? false
-			guard !isPrunedByCycleEdge else { return }
+			guard !isPrunedByCycleEdge else { continue }
 			if node.needsConfigurationStruct,
 			   concreteTypes.contains(node.concreteType),
 			   seen.insert(ConstructedType(concreteType: node.concreteType, usesMockInitializer: node.useMockInitializer)).inserted
 			{
 				result.append(BuiltMockParameterNode(node: node, parent: parent ?? mockRoot, mockRoot: mockRoot))
 			}
-			for child in node.propertyChildren {
-				walk(child, parent: node.concreteType)
-			}
-		}
-
-		for node in parameterTree.propertyNodes {
-			// A node at the top of the tree is a field of `SafeDIOverrides`, which no cycle edge prunes.
-			walk(node, parent: nil)
+			// The node walked next is the last one on the stack, so the first child goes last.
+			nodesToWalk.append(contentsOf: node.propertyChildren.reversed().map { (node: $0, parent: node.concreteType) })
 		}
 		return result
 	}
@@ -2951,18 +2994,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	func collectSendableConfigurationTypeNames() async -> Set<String> {
 		let parameterTree = await rootMockParameterTree
 		var result = Set<String>()
-
-		func walk(_ node: MockParameterNode) {
-			if node.requiresSendable, node.needsConfigurationStruct {
-				result.insert(node.concreteType.asSource)
+		// A worklist of each node's children rather than recursion, since the tree can be as deep as the module has types.
+		var nodeListsToVisit = [parameterTree.propertyNodes]
+		while let nodes = nodeListsToVisit.popLast() {
+			for node in nodes {
+				if node.requiresSendable, node.needsConfigurationStruct {
+					result.insert(node.concreteType.asSource)
+				}
+				nodeListsToVisit.append(node.propertyChildren)
 			}
-			for child in node.propertyChildren {
-				walk(child)
-			}
-		}
-
-		for node in parameterTree.propertyNodes {
-			walk(node)
 		}
 		return result
 	}
@@ -3054,7 +3094,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					isInstantiator: isInstantiator,
 					isExtensionBased: childInstantiable.declarationType.isExtension,
 					erasedToConcreteExistential: erasedToConcreteExistential,
-					children: childItems,
+					childItems: childItems.isEmpty ? nil : MockTreeItems(childItems),
 					defaultParameters: defaultParameters,
 					constructionArguments: constructionArguments,
 					dependencies: childInstantiable.dependencies,
@@ -3114,7 +3154,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Walks the parameter tree and collects `@Instantiated` dependencies from child
 	/// types that aren't fulfilled by their own child nodes. These are deps that
 	/// surface through builder arguments (especially via custom mock methods) but aren't
-	/// fulfilled by any type in the scope map.
+	/// fulfilled by any type in the scope map. `async` for the reason `generateMockBodyBindings` is.
 	///
 	/// A type is passed such a dependency where it is built, inside the builder functions of the nodes
 	/// above it. `namesDeclaredByEnclosingBuilderFunctions` holds the names those functions declare –
@@ -3124,7 +3164,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		_ nodes: [MockParameterNode],
 		namesDeclaredByEnclosingBuilderFunctions: Set<String>,
 		into uncoveredDependencies: inout UncoveredDependencies,
-	) {
+	) async {
 		for node in nodes {
 			let propertyChildren = node.propertyChildren
 			let childLabels = Set(propertyChildren.map(\.propertyLabel))
@@ -3147,7 +3187,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			for dependency in node.dependencies where !uncoveredLabels.contains(dependency.property.label) {
 				namesDeclaredByChildrensEnclosingBuilderFunctions.insert(dependency.property.label)
 			}
-			collectUncoveredDependenciesFromTree(
+			await collectUncoveredDependenciesFromTree(
 				nonCycleChildren,
 				namesDeclaredByEnclosingBuilderFunctions: namesDeclaredByChildrensEnclosingBuilderFunctions,
 				into: &uncoveredDependencies,
@@ -3229,15 +3269,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// and aliases.
 	private static func namesDeclaredInBuilderFunctions(of nodes: [MockParameterNode]) -> Set<String> {
 		var names = Set<String>()
-		func collectNames(in nodes: [MockParameterNode]) {
-			for node in nodes {
-				for dependency in node.dependencies {
-					names.insert(dependency.property.label)
-				}
-				collectNames(in: node.propertyChildren)
+		// A stack of the nodes left to visit, since a mock tree can be as deep as the module has types.
+		var nodesToVisit = nodes
+		while let node = nodesToVisit.popLast() {
+			for dependency in node.dependencies {
+				names.insert(dependency.property.label)
 			}
+			nodesToVisit.append(contentsOf: node.propertyChildren)
 		}
-		collectNames(in: nodes)
 		return names
 	}
 
@@ -3360,13 +3399,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// cannot contain nested type declarations.
 	/// When the same type appears in both sendable and non-sendable contexts,
 	/// the sendable version is preferred (`@Sendable` closures work in both contexts).
+	/// `async` for the reason `generateMockBodyBindings` is.
 	private static func collectUniqueConfigurationTypes(
 		from nodes: [MockParameterNode],
-	) -> [MockParameterNode] {
+	) async -> [MockParameterNode] {
 		var seen = Set<String>()
 		var result = [MockParameterNode]()
 
-		func walk(_ node: MockParameterNode, ancestorTypes: Set<String> = []) {
+		func walk(_ node: MockParameterNode, ancestorTypes: Set<String> = []) async {
 			let key = node.concreteType.asSource
 			// Skip nodes whose type matches an ancestor — self-referencing cycle.
 			guard !ancestorTypes.contains(key) else { return }
@@ -3375,7 +3415,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// Process children first (depth-first). Only property children
 			// produce configuration structs; aliases are plain `let` bindings.
 			for child in node.propertyChildren {
-				walk(child, ancestorTypes: childAncestors)
+				await walk(child, ancestorTypes: childAncestors)
 			}
 			// Skip leaf nodes that don't need a SafeDIMockConfiguration struct.
 			guard node.needsConfigurationStruct else { return }
@@ -3401,7 +3441,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		for node in nodes {
-			walk(node)
+			await walk(node)
 		}
 		return result
 	}
@@ -3615,6 +3655,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// scope whose body holds `items`. `propertyNodeLabelMap` names the property nodes among
 	/// `items`, as `disambiguatePropertyLabels` does; the mock root passes the names its scope
 	/// chose apart from the names declared beneath it.
+	/// This method and `generateInstantiatorBinding` call one another for each level of the
+	/// tree, which can be as deep as the module has types. They are `async` so that their frames
+	/// are allocated with the task rather than on the thread's stack, which could not hold them.
 	private static func generateMockBodyBindings(
 		items: [MockTreeItem],
 		propertyNodeLabelMap: [String: [TypeDescription: String]]? = nil,
@@ -3630,7 +3673,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleEdges: Set<CycleEdge>,
 		overridePathReachable: Bool,
 		handWrittenMockDefaultParameters: [TypeDescription: [MockParameterNode.DefaultParameter]],
-	) -> [String] {
+	) async -> [String] {
 		var lines = [String]()
 
 		// Disambiguate sibling labels at this level (property children only —
@@ -3750,7 +3793,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// code which builds the entire subtree inside the builder function.
 					var childAncestors = ancestorTypes
 					childAncestors.insert(nodeTypeKey)
-					lines.append(contentsOf: generateInstantiatorBinding(
+					await lines.append(contentsOf: generateInstantiatorBinding(
 						for: node,
 						outerBindingName: outerBindingName,
 						functionName: functionName,
@@ -3797,7 +3840,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 					var childAncestors = ancestorTypes
 					childAncestors.insert(nodeTypeKey)
-					let childBindings = generateMockBodyBindings(
+					let childBindings = await generateMockBodyBindings(
 						items: node.children,
 						parentPath: nodePath,
 						indent: innerIndent,
@@ -4018,7 +4061,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `MockParameterNode.constructionExpression`). `sendableOverrideExtractor`
 	/// is set when the binding is already inside a `@Sendable` function; a
 	/// sendable binding outside one starts its own extractor and re-reads its
-	/// override and `arguments` through it.
+	/// override and `arguments` through it. `async` for the reason
+	/// `generateMockBodyBindings` is.
 	private static func generateInstantiatorBinding(
 		for node: MockParameterNode,
 		outerBindingName: String,
@@ -4036,7 +4080,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleEdges: Set<CycleEdge>,
 		overridePathReachable: Bool,
 		handWrittenMockDefaultParameters: [TypeDescription: [MockParameterNode.DefaultParameter]],
-	) -> [String] {
+	) async -> [String] {
 		let forwardedProperties = node.forwardedProperties.sorted()
 		let propertyType = node.typeDescription.propertyType
 		let innerIndent = "\(indent)\(standardIndent)"
@@ -4113,7 +4157,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// cycles (e.g., Instantiator<Self>) are detected.
 			var functionAncestors = ancestorTypes
 			functionAncestors.insert(node.instantiatedTypeDescription.asSource)
-			let childBindings = generateMockBodyBindings(
+			let childBindings = await generateMockBodyBindings(
 				items: node.children,
 				parentPath: nodePath,
 				indent: innerIndent,

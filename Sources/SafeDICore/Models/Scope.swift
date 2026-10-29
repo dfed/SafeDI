@@ -29,6 +29,14 @@ final class Scope: Hashable {
 		self.dependenciesLeftOut = dependenciesLeftOut
 	}
 
+	deinit {
+		// A chain of scopes can be as long as the module has types, so the scopes this one instantiates are
+		// released one at a time rather than from within this deinitializer.
+		var propertiesToGenerate = [PropertyToGenerate]()
+		swap(&propertiesToGenerate, &self.propertiesToGenerate)
+		DeferredRelease.release(consume propertiesToGenerate)
+	}
+
 	// MARK: Equatable
 
 	static func == (lhs: Scope, rhs: Scope) -> Bool {
@@ -135,13 +143,13 @@ final class Scope: Hashable {
 		+ instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)
 
 	/// The labels of `declaredProperties`.
-	private lazy var declaredLabels = Set(declaredProperties.map(\.label))
+	fileprivate lazy var declaredLabels = Set(declaredProperties.map(\.label))
 
 	/// The by-value properties with which the scopes this scope builds receive the instance of a lazily
 	/// instantiated property this scope declares. A mock root can declare a property itself and also be given
 	/// a promoted lazily instantiated property with the same label. Types that receive the property by value
 	/// are then built with the root's own. Read only once `propertiesToGenerate` is complete.
-	private lazy var declaredLazilyInstantiatedInstanceProperties = Set(
+	fileprivate lazy var declaredLazilyInstantiatedInstanceProperties = Set(
 		(
 			propertiesToGenerate.compactMap(\.lazilyInstantiatedInstanceProperty)
 				+ forwardedLazilyInstantiatedInstanceProperties,
@@ -240,6 +248,9 @@ final class Scope: Hashable {
 			}
 		}
 
+	/// Creates the generator of the tree this scope creates. The generators of the scopes in the tree are
+	/// created depth first, each after the generators of the scopes it creates, with a stack of the scopes
+	/// whose generator is under construction, since a tree can be as deep as the module has types.
 	/// - Parameter boundProperties: The received properties a mock root binds, which enclose its whole tree.
 	///   Kept apart from `receivableProperties`, which grows at every scope, so that the scopes of a mock
 	///   tree do not each copy them.
@@ -252,6 +263,60 @@ final class Scope: Hashable {
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool = false,
 	) throws -> ScopeGenerator {
+		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
+			scope: self,
+			property: property,
+			propertyStack: propertyStack,
+			receivableProperties: receivableProperties,
+			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+			boundProperties: boundProperties,
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			forMockGeneration: forMockGeneration,
+		)]
+		while true {
+			let index = scopeGeneratorsUnderConstruction.count - 1
+			if let propertyToGenerate = scopeGeneratorsUnderConstruction[index].nextPropertyToGenerate() {
+				switch propertyToGenerate {
+				case let .instantiated(property, scope, erasedToConcreteExistential):
+					try scopeGeneratorsUnderConstruction.append(scopeGeneratorsUnderConstruction[index].childUnderConstruction(
+						scope: scope,
+						property: property,
+						erasedToConcreteExistential: erasedToConcreteExistential,
+					))
+				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
+					scopeGeneratorsUnderConstruction[index].addAliasGenerator(
+						property: property,
+						fulfillingProperty: fulfillingProperty,
+						erasedToConcreteExistential: erasedToConcreteExistential,
+						onlyIfAvailable: onlyIfAvailable,
+						declarationReference: declarationReference,
+					)
+				}
+			} else {
+				let scopeGenerator = scopeGeneratorsUnderConstruction.removeLast().scopeGenerator()
+				if scopeGeneratorsUnderConstruction.isEmpty {
+					return scopeGenerator
+				} else {
+					scopeGeneratorsUnderConstruction[scopeGeneratorsUnderConstruction.count - 1].childGenerators.append(scopeGenerator)
+				}
+			}
+		}
+	}
+}
+
+/// A scope whose generator `Scope.createScopeGenerator` is creating, with what the generator is created from once
+/// the generators of the scopes it creates exist.
+private struct ScopeGeneratorUnderConstruction {
+	init(
+		scope: Scope,
+		property: Property?,
+		propertyStack: [Property],
+		receivableProperties: Set<Property>,
+		lazilyInstantiatedInstanceProperties: Set<Property>,
+		boundProperties: Set<Property>,
+		erasedToConcreteExistential: Bool,
+		forMockGeneration: Bool,
+	) {
 		var childPropertyStack = propertyStack
 		let isPropertyCycle: Bool
 		if let property {
@@ -263,39 +328,28 @@ final class Scope: Hashable {
 		} else {
 			isPropertyCycle = false
 		}
-		/// Whether a scope enclosing this one provides `property` to the scopes this one
-		/// generates: it creates the property, or its unwrapped form, and is not an
-		/// ancestor still being built. The instance of a lazily instantiated property does
-		/// not count: it is read from that property, which a declaration with its label hides.
-		func isProvidedByEnclosingScope(_ property: Property) -> Bool {
-			func isReceivable(_ property: Property) -> Bool {
-				(receivableProperties.contains(property) || boundProperties.contains(property))
-					&& !lazilyInstantiatedInstanceProperties.contains(property)
-			}
-			return (isReceivable(property) && !childPropertyStack.contains(property))
-				|| (isReceivable(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty))
-		}
-		let receivableProperties = receivableProperties.union(createdProperties)
+		let enclosingScopeReceivableProperties = receivableProperties
+		let receivableProperties = receivableProperties.union(scope.createdProperties)
 		// The properties this scope’s children receive by reading the instance of a `LazilyInstantiated` property.
 		let childLazilyInstantiatedInstanceProperties: Set<Property> = if lazilyInstantiatedInstanceProperties.isEmpty {
 			// Nearly every scope: nothing above it is lazily instantiated, so there is nothing to shadow.
-			declaredLazilyInstantiatedInstanceProperties
-		} else if declaredLazilyInstantiatedInstanceProperties.isEmpty,
-		          !lazilyInstantiatedInstanceProperties.contains(where: { declaredLabels.contains($0.label) })
+			scope.declaredLazilyInstantiatedInstanceProperties
+		} else if scope.declaredLazilyInstantiatedInstanceProperties.isEmpty,
+		          !lazilyInstantiatedInstanceProperties.contains(where: { scope.declaredLabels.contains($0.label) })
 		{
 			// Most scopes below a lazily instantiated property neither shadow it nor declare one of their
 			// own, so they share the set they were given.
 			lazilyInstantiatedInstanceProperties
 		} else {
 			lazilyInstantiatedInstanceProperties
-				.filter { !declaredLabels.contains($0.label) }
-				.union(declaredLazilyInstantiatedInstanceProperties)
+				.filter { !scope.declaredLabels.contains($0.label) }
+				.union(scope.declaredLazilyInstantiatedInstanceProperties)
 		}
 		/// Whether an `onlyIfAvailable` dependency of `property` is unavailable. A property this scope
 		/// creates is available. Otherwise, the property this scope is built for and its ancestors are
 		/// still being built, so they are unavailable.
 		func isPropertyUnavailable(_ property: Property) -> Bool {
-			if createdProperties.contains(property) {
+			if scope.createdProperties.contains(property) {
 				return false
 			} else if forMockGeneration {
 				// A mock builds, or is handed, every property an ancestor does not
@@ -313,7 +367,7 @@ final class Scope: Hashable {
 				return !(propertyIsAvailableInParentStack || unwrappedPropertyIsAvailableInParentStack)
 			}
 		}
-		let unavailableOptionalProperties = Set<Property>(instantiable.dependencies.flatMap { dependency in
+		unavailableOptionalProperties = Set<Property>(scope.instantiable.dependencies.flatMap { dependency in
 			switch dependency.source {
 			case .instantiated, .forwarded:
 				[Property]()
@@ -331,51 +385,95 @@ final class Scope: Hashable {
 				}
 			}
 		})
-		let scopeGenerator = try ScopeGenerator(
-			instantiable: instantiable,
+		self.scope = scope
+		self.property = property
+		// A scope that closes a cycle creates no children.
+		propertiesToGenerate = isPropertyCycle ? [] : scope.propertiesToGenerate
+		self.childPropertyStack = childPropertyStack
+		self.enclosingScopeReceivableProperties = enclosingScopeReceivableProperties
+		self.receivableProperties = receivableProperties
+		self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
+		self.childLazilyInstantiatedInstanceProperties = childLazilyInstantiatedInstanceProperties
+		self.boundProperties = boundProperties
+		self.erasedToConcreteExistential = erasedToConcreteExistential
+		self.isPropertyCycle = isPropertyCycle
+		self.forMockGeneration = forMockGeneration
+		childGenerators.reserveCapacity(propertiesToGenerate.count)
+	}
+
+	/// The generators created so far for `propertiesToGenerate`, in order.
+	var childGenerators = [ScopeGenerator]()
+
+	/// The next of `propertiesToGenerate` to create a generator for, or `nil` once every one has its generator.
+	mutating func nextPropertyToGenerate() -> Scope.PropertyToGenerate? {
+		guard nextPropertyIndex < propertiesToGenerate.count else { return nil }
+		let propertyToGenerate = propertiesToGenerate[nextPropertyIndex]
+		nextPropertyIndex += 1
+		return propertyToGenerate
+	}
+
+	/// The scope under construction for a scope this one instantiates.
+	func childUnderConstruction(
+		scope: Scope,
+		property: Property,
+		erasedToConcreteExistential: Bool,
+	) throws -> ScopeGeneratorUnderConstruction {
+		if let error = ErasedInstantiatorForwardedPropertiesMismatchError(
 			property: property,
-			propertiesToGenerate: isPropertyCycle ? [] : propertiesToGenerate.map {
-				switch $0 {
-				case let .instantiated(property, scope, erasedToConcreteExistential):
-					if let error = ErasedInstantiatorForwardedPropertiesMismatchError(
-						property: property,
-						declarationLocation: instantiable.dependencies.first(where: { $0.property == property })?.declarationLocation,
-						parent: instantiable.concreteInstantiable,
-						builtInstantiable: scope.instantiable,
-					) {
-						throw error
-					}
-					return try scope.createScopeGenerator(
-						for: property,
-						propertyStack: childPropertyStack,
-						receivableProperties: receivableProperties,
-						lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
-						boundProperties: boundProperties,
-						erasedToConcreteExistential: erasedToConcreteExistential,
-						forMockGeneration: forMockGeneration,
-					)
-				case let .aliased(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference):
-					return ScopeGenerator(
-						property: property,
-						fulfillingProperty: fulfillingProperty,
-						// An alias that keeps the label of the dependency it retypes is not in scope where its
-						// own value is read, so it does not shadow a lazily instantiated property further up the tree.
-						fulfillingPropertyIsLazilyInstantiatedInstance: (
-							fulfillingProperty.label == property.label
-								? lazilyInstantiatedInstanceProperties
-								: childLazilyInstantiatedInstanceProperties,
-						).contains(fulfillingProperty.asUnwrappedProperty),
-						unavailableOptionalProperties: unavailableOptionalProperties,
-						erasedToConcreteExistential: erasedToConcreteExistential,
-						onlyIfAvailable: onlyIfAvailable,
-						isProvidedByEnclosingScope: isProvidedByEnclosingScope(property),
-						declarationReference: declarationReference,
-					)
-				}
-			},
+			declarationLocation: self.scope.instantiable.dependencies.first(where: { $0.property == property })?.declarationLocation,
+			parent: self.scope.instantiable.concreteInstantiable,
+			builtInstantiable: scope.instantiable,
+		) {
+			throw error
+		} else {
+			ScopeGeneratorUnderConstruction(
+				scope: scope,
+				property: property,
+				propertyStack: childPropertyStack,
+				receivableProperties: receivableProperties,
+				lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
+				boundProperties: boundProperties,
+				erasedToConcreteExistential: erasedToConcreteExistential,
+				forMockGeneration: forMockGeneration,
+			)
+		}
+	}
+
+	/// Creates the generator of an alias this scope declares.
+	mutating func addAliasGenerator(
+		property: Property,
+		fulfillingProperty: Property,
+		erasedToConcreteExistential: Bool,
+		onlyIfAvailable: Bool,
+		declarationReference: AliasDeclarationReferences.Reference?,
+	) {
+		childGenerators.append(ScopeGenerator(
+			property: property,
+			fulfillingProperty: fulfillingProperty,
+			// An alias that keeps the label of the dependency it retypes is not in scope where its
+			// own value is read, so it does not shadow a lazily instantiated property further up the tree.
+			fulfillingPropertyIsLazilyInstantiatedInstance: (
+				fulfillingProperty.label == property.label
+					? lazilyInstantiatedInstanceProperties
+					: childLazilyInstantiatedInstanceProperties,
+			).contains(fulfillingProperty.asUnwrappedProperty),
+			unavailableOptionalProperties: unavailableOptionalProperties,
+			erasedToConcreteExistential: erasedToConcreteExistential,
+			onlyIfAvailable: onlyIfAvailable,
+			isProvidedByEnclosingScope: isProvidedByEnclosingScope(property),
+			declarationReference: declarationReference,
+		))
+	}
+
+	/// Creates the scope's generator once `childGenerators` holds a generator for each of `propertiesToGenerate`.
+	func scopeGenerator() -> ScopeGenerator {
+		let scopeGenerator = ScopeGenerator(
+			instantiable: scope.instantiable,
+			property: property,
+			propertiesToGenerate: childGenerators,
 			unavailableOptionalProperties: unavailableOptionalProperties,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
-			forwardedLazilyInstantiatedInstanceProperties: forwardedLazilyInstantiatedInstanceProperties,
+			forwardedLazilyInstantiatedInstanceProperties: scope.forwardedLazilyInstantiatedInstanceProperties,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			isPropertyCycle: isPropertyCycle,
 		)
@@ -386,6 +484,37 @@ final class Scope: Hashable {
 			}
 		}
 		return scopeGenerator
+	}
+
+	private let scope: Scope
+	private let property: Property?
+	private let propertiesToGenerate: [Scope.PropertyToGenerate]
+	/// The index in `propertiesToGenerate` of the next property to create a generator for.
+	private var nextPropertyIndex = 0
+	private let childPropertyStack: [Property]
+	/// The properties the scopes enclosing this one make receivable.
+	private let enclosingScopeReceivableProperties: Set<Property>
+	/// `enclosingScopeReceivableProperties` and the properties this scope creates.
+	private let receivableProperties: Set<Property>
+	private let lazilyInstantiatedInstanceProperties: Set<Property>
+	private let childLazilyInstantiatedInstanceProperties: Set<Property>
+	private let unavailableOptionalProperties: Set<Property>
+	private let boundProperties: Set<Property>
+	private let erasedToConcreteExistential: Bool
+	private let isPropertyCycle: Bool
+	private let forMockGeneration: Bool
+
+	/// Whether a scope enclosing this one provides `property` to the scopes this one
+	/// generates: it creates the property, or its unwrapped form, and is not an
+	/// ancestor still being built. The instance of a lazily instantiated property does
+	/// not count: it is read from that property, which a declaration with its label hides.
+	private func isProvidedByEnclosingScope(_ property: Property) -> Bool {
+		func isReceivable(_ property: Property) -> Bool {
+			(enclosingScopeReceivableProperties.contains(property) || boundProperties.contains(property))
+				&& !lazilyInstantiatedInstanceProperties.contains(property)
+		}
+		return (isReceivable(property) && !childPropertyStack.contains(property))
+			|| (isReceivable(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty))
 	}
 }
 
