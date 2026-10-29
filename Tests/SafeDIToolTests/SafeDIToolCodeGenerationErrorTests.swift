@@ -4287,6 +4287,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				configurationFilePaths: ["SafeDIConfiguration.swift"],
 				mockScopedFilePaths: ["SafeDIConfiguration.swift", "./SafeDIConfiguration.swift"],
 				projectRoot: swiftFile.deletingLastPathComponent().path,
+			))
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_throwsError_whenDependencyTreeAndMockEntriesShareOutputFilePath() async throws {
 		let swiftFile = try writeTemporarySwiftFile("""
 		@Instantiable(isRoot: true, generateMock: true)
@@ -4319,6 +4325,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			mockScopedFilePaths: ["SafeDIConfiguration.swift", "SafeDIConfiguration.swift"],
 			projectRoot: swiftFile.deletingLastPathComponent().path,
 		))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_throwsError_whenTwoMockEntriesShareOutputFilePath() async throws {
 		let swiftFile = try writeTemporarySwiftFile("""
 		#SafeDIConfiguration(additionalMocksToGenerate: ["Service"])
@@ -5826,6 +5836,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		let swiftFile = projectDirectory.appendingPathComponent(fileName)
 		try content.write(to: swiftFile, atomically: true, encoding: .utf8)
 		return swiftFile
+	}
+
 	/// A path named `fileName` in a new directory, for a manifest whose outputs `generate` rejects before writing any.
 	private func temporaryOutputFilePath(named fileName: String) -> String {
 		URL(fileURLWithPath: NSTemporaryDirectory())
