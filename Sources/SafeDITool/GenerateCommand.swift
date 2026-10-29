@@ -181,6 +181,9 @@ struct Generate: AsyncParsableCommand {
 		// Derived from the configuration rather than from how this run parsed, so a module loaded from
 		// scan's cache warns too. Only `generate` warns, so a build that runs `scan` first warns once.
 		var warnings = [sourceConfiguration?.placementWarning].compactMap(\.self)
+			// Judged at the paths the module's additional files were found at: as scan resolved them when the module
+			// comes from scan's cache, and as this run resolved them otherwise.
+			+ (sourceConfiguration?.unreadableAdditionalDirectoryWarnings(for: parsed.module.additionalDirectories) ?? [])
 
 		let resolvedAdditionalImportedModules: [String] = if let sourceConfiguration {
 			additionalImportedModules + sourceConfiguration.additionalImportedModules
@@ -311,13 +314,12 @@ struct Generate: AsyncParsableCommand {
 			return normalized
 		}
 		let additionalImportStatements = resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
+		let typeDescriptionToFulfillingInstantiableMap = try resolveSafeDIFulfilledTypes(instantiables: normalizedInstantiables)
 		let generator = try DependencyTreeGenerator(
 			importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportStatements + module.imports,
 			// A dependent module's mock-only declarations reach this module's mocks, so its mock imports do too.
 			mockImportStatements: dependentModuleInfo.flatMap(\.mockImports) + additionalImportStatements + module.mockImports,
-			typeDescriptionToFulfillingInstantiableMap: resolveSafeDIFulfilledTypes(
-				instantiables: normalizedInstantiables,
-			),
+			typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap,
 			aliasDeclarationReferences: AliasDeclarationReferences(
 				declarationFilePaths: Set(normalizedInstantiables.flatMap { instantiable in
 					instantiable.dependencies.compactMap { dependency in
@@ -351,7 +353,7 @@ struct Generate: AsyncParsableCommand {
 				// Please refrain from editing this file directly.
 
 				#error(\"""
-				Compiler errors prevented the generation of the dependency tree. Files with errors:
+				SafeDI could not generate code because these files have syntax errors. Fix them and build again:
 					\(filesWithUnexpectedNodes.joined(separator: "\n\t"))
 				\""")
 				"""
@@ -462,6 +464,9 @@ struct Generate: AsyncParsableCommand {
 						additionalMocksToGenerate = configuredAdditionalMocksToGenerate
 					}
 				}
+				// Only the configuration these conditions select is judged: `scan` lists the mocks of every
+				// configuration, and those of the others are written without code.
+				try sourceConfiguration?.validateAdditionalMocksToGenerate(fulfilledBy: typeDescriptionToFulfillingInstantiableMap)
 
 				// Accumulate every emission as a `(destination, header, body)`
 				// triple. `destination == nil` means the write is combined-
@@ -478,7 +483,7 @@ struct Generate: AsyncParsableCommand {
 					var destinations = [String: URL]()
 					for entry in manifest.dependencyTreeGeneration {
 						guard destinations[entry.inputFilePath] == nil else {
-							throw ValidationError("Manifest contains duplicate dependencyTreeGeneration inputFilePath: \(entry.inputFilePath)")
+							throw ValidationError("Manifest contains duplicate dependencyTreeGeneration inputFilePath: \(entry.inputFilePath). List each input file once.")
 						}
 						destinations[entry.inputFilePath] = URL(fileURLWithPath: entry.outputFilePath)
 					}
@@ -841,7 +846,7 @@ struct Generate: AsyncParsableCommand {
 		// about — it would miss a newly-added file whose path doesn't appear in
 		// `cached.scannedInputs`.
 		if !cached.additionalDirectories.isEmpty {
-			let currentAdditionalFiles = await (try? findSwiftFiles(inDirectories: cached.additionalDirectories)) ?? []
+			let currentAdditionalFiles = await (try? findSwiftFiles(inDirectories: cached.additionalDirectories.map(\.path))) ?? []
 			// Compared as scan compared the files it found with the inputs.
 			guard Set(currentAdditionalFiles.map(projectFilePaths.projectFilePath(of:)))
 				== Set(cached.additionalInputAbsolutePaths.map(projectFilePaths.projectFilePath(of:)))
@@ -882,6 +887,7 @@ struct Generate: AsyncParsableCommand {
 			moduleInfo: cached.moduleInfo.adding(fileScans).including(cached.additionalModuleInfo.adding(additionalFileScans)),
 			configuration: configuration,
 			conditionalCompilationEvaluator: evaluator,
+			additionalDirectories: cached.additionalDirectories,
 		)
 	}
 
@@ -1122,10 +1128,10 @@ struct Generate: AsyncParsableCommand {
 			let declarationLocations: [Dependency.DeclarationLocation?]
 			switch self {
 			case let .foundDuplicateInstantiable(duplicateInstantiable, declaredAt):
-				message = "@\(InstantiableVisitor.macroName)-decorated types and extensions must have globally unique type names and fulfill globally unique types. Found multiple types or extensions fulfilling `\(duplicateInstantiable.asSource)`"
+				message = "Found multiple @\(InstantiableVisitor.macroName) types or extensions that fulfill `\(duplicateInstantiable.asSource)`. Each type can be fulfilled by only one @\(InstantiableVisitor.macroName) declaration, across all modules. Keep one, and remove `\(duplicateInstantiable.asSource)` from the others’ `fulfillingAdditionalTypes` or remove their @\(InstantiableVisitor.macroName)."
 				declarationLocations = declaredAt
 			case let .duplicateMockProvider(duplicateInstantiable, declaredAt):
-				message = "Found multiple hand-written mock providers for `\(duplicateInstantiable.asSource)`. A type can have at most one hand-written mock — either on the production declaration or via `mockOnly: true`, not both."
+				message = "Found multiple hand-written mocks for `\(duplicateInstantiable.asSource)`. A type can have at most one, on its production declaration or on a single `mockOnly: true` declaration. Remove all but one."
 				declarationLocations = declaredAt
 			}
 			// Sorted by location so the output does not depend on collection order.
@@ -1140,6 +1146,48 @@ struct Generate: AsyncParsableCommand {
 				.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 		}
 	}
+}
+
+extension SafeDIConfiguration {
+	/// Throws when an `additionalMocksToGenerate` entry names no type an `@Instantiable` declaration declares, whose
+	/// mock can then never be generated. Mock generation matches an entry to the declared type that the entry spells
+	/// exactly, so each error also names the declared types that differ from the entry only in leading components,
+	/// and the declared type that fulfills the entry when an `@Instantiable` fulfills it as an additional type.
+	///
+	/// - Parameter typeDescriptionToFulfillingInstantiableMap: Every type the `@Instantiable` declarations SafeDI read
+	///   fulfill, mapped to the declaration that fulfills it.
+	func validateAdditionalMocksToGenerate(
+		fulfilledBy typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
+	) throws(AdditionalMocksNameNoInstantiableError) {
+		let declaredTypeNames = Set(typeDescriptionToFulfillingInstantiableMap.values.map(\.concreteInstantiable.asSource))
+		let undeclaredTypeNames = Set(additionalMocksToGenerate).subtracting(declaredTypeNames).sorted()
+		guard !undeclaredTypeNames.isEmpty else { return }
+		throw AdditionalMocksNameNoInstantiableError(sourceDiagnostics: undeclaredTypeNames.map { typeName in
+			let similarTypeNames = declaredTypeNames
+				.filter { $0.hasSuffix(".\(typeName)") || typeName.hasSuffix(".\($0)") }
+				.sorted()
+			let similarTypeNamesDescription = similarTypeNames.isEmpty
+				? ""
+				: " SafeDI read @\(InstantiableVisitor.macroName) types with similar names: \(similarTypeNames.map { "`\($0)`" }.joined(separator: ", "))."
+			let fulfillingTypeNameDescription = typeDescriptionToFulfillingInstantiableMap
+				.filter { $0.key.asSource == typeName }
+				.map(\.value.concreteInstantiable.asSource)
+				.min()
+				.map { " `\(typeName)` is fulfilled by the @\(InstantiableVisitor.macroName) type `\($0)`." }
+				?? ""
+			return SourceDiagnostic(
+				severity: .error,
+				location: declarationLocation,
+				message: "This #\(SafeDIConfigurationVisitor.macroName) lists `\(typeName)` in \(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel), but no @\(InstantiableVisitor.macroName) declaration SafeDI read declares `\(typeName)`, so SafeDI cannot generate its mock.\(fulfillingTypeNameDescription)\(similarTypeNamesDescription) Correct the name to that of an @\(InstantiableVisitor.macroName) type, or remove `\(typeName)` from \(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel).",
+			)
+		})
+	}
+}
+
+/// A `#SafeDIConfiguration` lists, in `additionalMocksToGenerate`, types no `@Instantiable` declaration declares.
+/// Each diagnostic names one such type, in name order.
+struct AdditionalMocksNameNoInstantiableError: SourceLocatedError {
+	let sourceDiagnostics: [SourceDiagnostic]
 }
 
 /// A `.safedi` file named by `--dependent-module-info-file-path` that this SafeDITool cannot read.

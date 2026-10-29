@@ -37,11 +37,11 @@ public struct InstantiableMacro: MemberMacro {
 			.fulfillingAdditionalTypes
 		{
 			if let arrayExpression = ArrayExprSyntax(fulfillingAdditionalTypesArgument) {
-				if arrayExpression
+				if let optionalElement = arrayExpression
 					.elements
-					.contains(where: \.expression.typeDescription.isOptional)
+					.first(where: \.expression.typeDescription.isOptional)
 				{
-					throw InstantiableError.fulfillingAdditionalTypesContainsOptional
+					throw InstantiableError.fulfillingAdditionalTypesContainsOptional(optionalElement.expression.trimmedDescription)
 				}
 			} else {
 				throw InstantiableError.fulfillingAdditionalTypesArgumentInvalid
@@ -232,6 +232,7 @@ public struct InstantiableMacro: MemberMacro {
 				Self.validateDefaultExpressions(
 					functionSyntax: selectedInitializerSyntax.signature,
 					dependencies: visitor.dependencies,
+					typeName: concreteDeclaration.name.text,
 					context: context,
 				)
 				Self.validateReservedParameterLabels(
@@ -253,6 +254,7 @@ public struct InstantiableMacro: MemberMacro {
 				Self.validateDefaultExpressions(
 					functionSyntax: mockSyntax.signature,
 					dependencies: visitor.dependencies,
+					typeName: concreteDeclaration.name.text,
 					context: context,
 				)
 				Self.validateReservedParameterLabels(
@@ -557,12 +559,12 @@ public struct InstantiableMacro: MemberMacro {
 				}
 				// When customMockName is set and a literal "mock" method also exists, it conflicts with the generated mock.
 				if instantiableMacro.generateMockValue,
-				   customMockNameValue != nil,
+				   let customMockNameValue,
 				   let conflictingMock = visitor.conflictingMockFunctionSyntax
 				{
 					context.diagnose(Diagnostic(
 						node: Syntax(conflictingMock),
-						error: FixableInstantiableError.mockMethodConflictsWithGeneratedMock,
+						error: FixableInstantiableError.mockMethodConflictsWithGeneratedMock(customMockName: customMockNameValue),
 						changes: [
 							.replace(
 								oldNode: Syntax(conflictingMock),
@@ -715,7 +717,7 @@ public struct InstantiableMacro: MemberMacro {
 							)
 							context.diagnose(Diagnostic(
 								node: Syntax(mockSyntax),
-								error: FixableInstantiableError.mockMethodMissingArguments(missingArguments),
+								error: FixableInstantiableError.mockMethodMissingArguments(methodName: mockSyntax.name.text, missingArguments),
 								changes: [
 									.replace(
 										oldNode: Syntax(mockSyntax),
@@ -878,12 +880,12 @@ public struct InstantiableMacro: MemberMacro {
 				}
 				// When customMockName is set and a literal "mock" method also exists, it conflicts with the generated mock.
 				if instantiableMacro.generateMockValue,
-				   customMockNameValue != nil,
+				   let customMockNameValue,
 				   let conflictingMock = visitor.conflictingMockFunctionSyntax
 				{
 					context.diagnose(Diagnostic(
 						node: Syntax(conflictingMock),
-						error: FixableInstantiableError.mockMethodConflictsWithGeneratedMock,
+						error: FixableInstantiableError.mockMethodConflictsWithGeneratedMock(customMockName: customMockNameValue),
 						changes: [
 							.replace(
 								oldNode: Syntax(conflictingMock),
@@ -949,6 +951,7 @@ public struct InstantiableMacro: MemberMacro {
 				Self.validateDefaultExpressions(
 					functionSyntax: mockFunction.signature,
 					dependencies: dependenciesForMock,
+					typeName: extendedTypeName,
 					context: context,
 				)
 				Self.validateReservedParameterLabels(
@@ -1024,7 +1027,7 @@ public struct InstantiableMacro: MemberMacro {
 					}
 					context.diagnose(Diagnostic(
 						node: Syntax(mockFunction),
-						error: FixableInstantiableError.mockMethodIncorrectReturnType(typeName: extendedTypeName),
+						error: FixableInstantiableError.extensionMockMethodIncorrectReturnType(typeName: extendedTypeName),
 						changes: [
 							.replace(
 								oldNode: Syntax(mockFunction),
@@ -1096,7 +1099,7 @@ public struct InstantiableMacro: MemberMacro {
 							)
 							context.diagnose(Diagnostic(
 								node: Syntax(mockFunction),
-								error: FixableInstantiableError.mockMethodMissingArguments(missingArguments),
+								error: FixableInstantiableError.mockMethodMissingArguments(methodName: mockFunction.name.text, missingArguments),
 								changes: [
 									.replace(
 										oldNode: Syntax(mockFunction),
@@ -1114,25 +1117,48 @@ public struct InstantiableMacro: MemberMacro {
 					.first(where: { $0.concreteInstantiable == instantiableType })?
 					.dependencies ?? []
 				guard rootDependencies.isEmpty else {
-					throw InstantiableError.cannotBeRoot(
+					throw InstantiableError.extensionCannotBeRoot(
 						instantiableType,
-						violatingDependencies: rootDependencies,
+						instantiateParameters: rootDependencies,
 					)
 				}
 			}
 
-			// Every argument on an extension's `instantiate()` method is
-			// treated as a dependency, so the "unmockable unlabeled default"
-			// shape can't occur there — it requires a non-dependency
-			// defaulted parameter. We only validate the extension's mock
-			// methods (below), not `instantiate`.
+			// A default-valued parameter of `instantiate(…)` is not a dependency, as for an initializer, so the
+			// method gets the checks an initializer gets. As for an initializer, its defaults reach a generated
+			// mock only when the type has no hand-written mock.
+			for instantiateFunction in visitor.instantiateFunctions {
+				Self.validateUnlabeledDefaultShape(
+					functionSyntax: instantiateFunction.syntax.signature,
+					arguments: instantiateFunction.initializer.arguments,
+					dependencies: instantiateFunction.dependencies,
+					diagnosticNode: Syntax(instantiateFunction.syntax),
+					context: context,
+				)
+				if visitor.mockInitializer == nil {
+					Self.validateDefaultExpressions(
+						functionSyntax: instantiateFunction.syntax.signature,
+						dependencies: instantiateFunction.dependencies,
+						typeName: extendedTypeName,
+						context: context,
+					)
+					Self.validateReservedParameterLabels(
+						functionSyntax: instantiateFunction.syntax.signature,
+						dependencies: instantiateFunction.dependencies,
+						context: context,
+					)
+				}
+			}
 
 			let instantiables = visitor.instantiables
 			if instantiables.count > 1 {
 				var concreteInstantiables = Set<TypeDescription>()
 				for concreteInstantiable in instantiables.map(\.concreteInstantiable) {
 					if concreteInstantiables.contains(concreteInstantiable) {
-						throw InstantiableError.tooManyInstantiateMethods(concreteInstantiable)
+						throw InstantiableError.tooManyInstantiateMethods(
+							concreteInstantiable,
+							count: instantiables.count(where: { $0.concreteInstantiable == concreteInstantiable }),
+						)
 					} else {
 						concreteInstantiables.insert(concreteInstantiable)
 					}
@@ -1203,6 +1229,8 @@ public struct InstantiableMacro: MemberMacro {
 				))
 			}
 			return []
+		} else if ProtocolDeclSyntax(declaration) != nil {
+			throw InstantiableError.decoratingProtocol
 		} else {
 			throw InstantiableError.decoratingIncompatibleType
 		}
@@ -1289,6 +1317,7 @@ public struct InstantiableMacro: MemberMacro {
 	private static func validateDefaultExpressions(
 		functionSyntax: FunctionSignatureSyntax,
 		dependencies: [Dependency],
+		typeName: String,
 		context: some MacroExpansionContext,
 	) {
 		let dependencyLabels = Set(dependencies.map(\.property.label))
@@ -1307,6 +1336,7 @@ public struct InstantiableMacro: MemberMacro {
 				node: Syntax(parameter),
 				message: FixableInstantiableError.calleeScopeReferenceInDefaultExpression(
 					parameterLabel: innerLabel,
+					typeName: typeName,
 				).diagnostic,
 			))
 		}
@@ -1691,42 +1721,52 @@ public struct InstantiableMacro: MemberMacro {
 
 	private enum InstantiableError: Error, CustomStringConvertible {
 		case decoratingIncompatibleType
-		case fulfillingAdditionalTypesContainsOptional
+		case decoratingProtocol
+		case fulfillingAdditionalTypesContainsOptional(String)
 		case fulfillingAdditionalTypesArgumentInvalid
 		case mockAttributesArgumentInvalid
 		case generateMockArgumentInvalid
 		case mockOnlyArgumentInvalid
 		case customMockNameArgumentInvalid
-		case tooManyInstantiateMethods(TypeDescription)
+		case tooManyInstantiateMethods(TypeDescription, count: Int)
 		case cannotBeRoot(TypeDescription, violatingDependencies: [Dependency])
+		case extensionCannotBeRoot(TypeDescription, instantiateParameters: [Dependency])
 
 		var description: String {
 			switch self {
 			case .decoratingIncompatibleType:
-				"@\(InstantiableVisitor.macroName) must decorate an extension on a type or a class, struct, or actor declaration"
-			case .fulfillingAdditionalTypesContainsOptional:
-				"The argument `fulfillingAdditionalTypes` must not include optionals"
+				"@\(InstantiableVisitor.macroName) must decorate a class, struct, or actor declaration, or an extension of a type."
+			case .decoratingProtocol:
+				"@\(InstantiableVisitor.macroName) must decorate a class, struct, or actor declaration, or an extension of a type. To fulfill a protocol, decorate a type that conforms to it and list the protocol in `fulfillingAdditionalTypes`."
+			case let .fulfillingAdditionalTypesContainsOptional(element):
+				"The argument `fulfillingAdditionalTypes` must not include optional types, but it includes `\(element)`. List the non-optional type instead."
 			case .fulfillingAdditionalTypesArgumentInvalid:
-				"The argument `fulfillingAdditionalTypes` must be an inlined array"
+				"The argument `fulfillingAdditionalTypes` must be an array literal of types, such as `[MyProtocol.self]`."
 			case .mockAttributesArgumentInvalid:
-				"The argument `mockAttributes` must be a string literal"
+				"The argument `mockAttributes` must be a string literal."
 			case .generateMockArgumentInvalid:
-				"The argument `generateMock` must be a Bool literal (`true` or `false`)"
+				"The argument `generateMock` must be a Bool literal (`true` or `false`)."
 			case .mockOnlyArgumentInvalid:
-				"The argument `mockOnly` must be a Bool literal (`true` or `false`)"
+				"The argument `mockOnly` must be a Bool literal (`true` or `false`)."
 			case .customMockNameArgumentInvalid:
-				"The argument `customMockName` must be a string literal or `nil`"
-			case let .tooManyInstantiateMethods(type):
-				"@\(InstantiableVisitor.macroName)-decorated extension must have a single `\(InstantiableVisitor.instantiateMethodName)(…)` method that returns `\(type.asSource)`"
+				"The argument `customMockName` must be a string literal or `nil`."
+			case let .tooManyInstantiateMethods(type, count):
+				"@\(InstantiableVisitor.macroName)-decorated extension must have a single `\(InstantiableVisitor.instantiateMethodName)(…)` method that returns `\(type.asSource)`, but it has \(count). Remove all but one."
 			case let .cannotBeRoot(declaredRootType, violatingDependencies):
-				"""
-				Types decorated with `@\(InstantiableVisitor.macroName)(isRoot: true)` must only have dependencies that are all `@\(Dependency.Source.instantiatedRawValue)` or `@\(Dependency.Source.receivedRawValue)(fulfilledByDependencyNamed:ofType:)`, where the latter properties can be fulfilled by `@\(Dependency.Source.instantiatedRawValue)` or `@\(Dependency.Source.receivedRawValue)(fulfilledByDependencyNamed:ofType:)` properties declared on this type.
-
-				The following dependencies were found on \(declaredRootType.asSource) that violated this contract:
-				\(violatingDependencies.map(\.property.asSource).joined(separator: "\n"))
-				"""
+				"`\(declaredRootType.asSource)` is declared with `isRoot: true`, so no other type passes it dependencies, but it needs \(violatingDependencies.asBacktickedPropertyList) from outside it. Declare each as @\(Dependency.Source.instantiatedRawValue), or as `@\(Dependency.Source.receivedRawValue)(fulfilledByDependencyNamed:ofType:)` naming an @\(Dependency.Source.instantiatedRawValue) property of `\(declaredRootType.asSource)`, or remove `isRoot: true` and instantiate `\(declaredRootType.asSource)` from another type."
+			case let .extensionCannotBeRoot(declaredRootType, instantiateParameters):
+				"`\(declaredRootType.asSource)` is declared with `isRoot: true`, so no other type passes it dependencies, but its `\(InstantiableVisitor.instantiateMethodName)(…)` method takes \(instantiateParameters.asBacktickedPropertyList). Remove the parameters, or remove `isRoot: true` and instantiate `\(declaredRootType.asSource)` from another type."
 			}
 		}
+	}
+}
+
+// MARK: - [Dependency]
+
+extension [Dependency] {
+	/// The dependencies’ properties as a comma-separated list, each spelled as source in backticks.
+	fileprivate var asBacktickedPropertyList: String {
+		map { "`\($0.property.asSource)`" }.joined(separator: ", ")
 	}
 }
 

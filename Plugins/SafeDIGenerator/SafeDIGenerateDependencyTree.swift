@@ -81,8 +81,9 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			)
 		} catch let error as SafeDIToolLaunchError {
 			Diagnostics.warning(
-				"SafeDITool could not be launched during plugin setup (\(error)). "
-					+ "Falling back to in-process scan. Output file discovery may over-approximate.",
+				"SafeDITool could not be launched while planning this target’s build (\(error)), so SafeDI planned "
+					+ "the target’s generated files with a simpler scanner instead. The build continues, and may include "
+					+ "generated files that contain no code.",
 			)
 			return try createBuildCommandsWithPluginScanner(
 				tool: tool,
@@ -269,11 +270,10 @@ extension Target {
 				tool = try context.tool(named: "SafeDITool").url
 				runsRealScan = false
 				Diagnostics.warning("""
-				SafeDI's build-tool plugin is falling back to a regex-based output \
-				scanner because the SPM-provided SafeDITool path contains unresolved \
-				Xcode build variables at plugin-setup time. To install the prebuilt \
-				SafeDITool binary for version \(context.safeDIVersion), right-click \
-				the project in Xcode and choose SafeDI → Safedi Release Install.
+				SafeDI is planning this target’s generated files with a simpler scanner, \
+				because Xcode does not give build plugins a runnable SafeDITool. To install \
+				the prebuilt SafeDITool \(context.safeDIVersion), right-click the project \
+				in Xcode and choose SafeDI → Safedi Release Install.
 				""")
 			}
 			let inputSwiftFiles = target
@@ -351,7 +351,7 @@ extension Target {
 				// (scan exited non-zero — parse/validation error) is not
 				// caught here; it propagates so real errors surface
 				// instead of being masked by a regex-based fallback.
-				Diagnostics.warning("SafeDITool could not be launched during plugin setup (\(error)). Falling back to in-process scan.")
+				Diagnostics.warning("The SafeDITool binary in .safedi/ could not be launched (\(error)), so SafeDI planned this target’s generated files with a simpler scanner. To reinstall it, right-click the project in Xcode and choose SafeDI → Safedi Release Install.")
 				return nil
 			}
 			let manifest = try JSONDecoder().decode(

@@ -132,19 +132,24 @@ struct SafeDIToolProcessError: Error, CustomStringConvertible {
 	let standardError: String
 
 	var description: String {
-		if standardError.isEmpty {
-			"SafeDITool exited with status \(terminationStatus)"
+		// ArgumentParser prefixes the message of an error it prints with "Error: ".
+		let message = standardError
+			.trimmingCharacters(in: .whitespacesAndNewlines)
+			.replacingOccurrences(of: "Error: ", with: "", options: .anchored)
+		return if message.isEmpty {
+			"SafeDI could not plan this target’s generated files: SafeDITool exited with status \(terminationStatus)."
 		} else {
-			"SafeDITool exited with status \(terminationStatus): \(standardError)"
+			"SafeDI could not plan this target’s generated files: \(message)"
 		}
 	}
 }
 
 struct SafeDIToolLaunchError: Error, CustomStringConvertible {
+	let toolURL: URL
 	let underlyingError: Error
 
 	var description: String {
-		underlyingError.localizedDescription
+		"\(toolURL.path(percentEncoded: false)): \(underlyingError.localizedDescription)"
 	}
 }
 
@@ -160,7 +165,7 @@ func runSafeDITool(
 	do {
 		try process.run()
 	} catch {
-		throw SafeDIToolLaunchError(underlyingError: error)
+		throw SafeDIToolLaunchError(toolURL: toolURL, underlyingError: error)
 	}
 	process.waitUntilExit()
 	guard process.terminationStatus == 0 else {

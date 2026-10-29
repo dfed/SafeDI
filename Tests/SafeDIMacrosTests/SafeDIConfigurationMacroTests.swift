@@ -148,7 +148,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The `additionalImportedModules` argument must be an array of string literals",
+						message: "The `additionalImportedModules` argument must be an array of string literals.",
 						line: 1,
 						column: 1,
 					),
@@ -172,7 +172,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The `additionalDirectoriesToInclude` argument must be an array of string literals",
+						message: "The `additionalDirectoriesToInclude` argument must be an array of string literals.",
 						line: 1,
 						column: 1,
 					),
@@ -196,7 +196,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The `additionalImportedModules` argument must be an array of string literals",
+						message: "The `additionalImportedModules` argument must be an array of string literals.",
 						line: 1,
 						column: 1,
 					),
@@ -220,7 +220,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The `additionalMocksToGenerate` argument must be an array of string literals",
+						message: "The `additionalMocksToGenerate` argument must be an array of string literals.",
 						line: 1,
 						column: 1,
 					),
@@ -244,7 +244,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The `mockConditionalCompilation` argument must be a string literal or `nil`",
+						message: "The `mockConditionalCompilation` argument must be a string literal or `nil`.",
 						line: 1,
 						column: 1,
 					),
@@ -268,7 +268,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The `mockConditionalCompilation` argument must be a string literal or `nil`",
+						message: "The `mockConditionalCompilation` argument must be a string literal or `nil`.",
 						line: 1,
 						column: 1,
 					),
@@ -292,7 +292,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "#SafeDIConfiguration does not accept unlabeled arguments",
+						message: "#SafeDIConfiguration does not accept unlabeled arguments. Label each argument: `additionalImportedModules`, `additionalDirectoriesToInclude`, `additionalMocksToGenerate`, or `mockConditionalCompilation`.",
 						line: 1,
 						column: 1,
 					),
@@ -316,7 +316,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "#SafeDIConfiguration does not accept an argument labeled `unknownParameter`",
+						message: "#SafeDIConfiguration does not accept an argument labeled `unknownParameter`. It accepts `additionalImportedModules`, `additionalDirectoriesToInclude`, `additionalMocksToGenerate`, and `mockConditionalCompilation`.",
 						line: 1,
 						column: 1,
 					),

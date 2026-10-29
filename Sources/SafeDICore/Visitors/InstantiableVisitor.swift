@@ -101,12 +101,15 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		// Check the bindings.
 		for binding in node.bindings {
 			// Check that each variable has no initializer.
-			if binding.initializer != nil {
+			if let initializer = binding.initializer {
 				var bindingWithoutInitializer = binding
 				bindingWithoutInitializer.initializer = nil
 				diagnostics.append(Diagnostic(
 					node: node,
-					error: FixableInstantiableError.dependencyHasInitializer,
+					error: FixableInstantiableError.dependencyHasInitializer(
+						propertyName: binding.pattern.trimmedDescription,
+						initializer: initializer.trimmedDescription,
+					),
 					changes: [
 						.replace(
 							oldNode: Syntax(binding),
@@ -263,7 +266,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			)
 			diagnostics.append(Diagnostic(
 				node: node,
-				error: FixableInstantiableError.incorrectReturnType,
+				error: FixableInstantiableError.incorrectReturnType(typeName: instantiableType.strippingGenerics.asSource),
 				changes: [
 					.replace(
 						oldNode: Syntax(node.signature),
@@ -275,27 +278,33 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 		let initializer = Initializer(node)
 		if let instantiableType = node.signature.returnClause?.type.typeDescription {
-			// Each parameter is a dependency named by its inner name. Its argument label binds nothing.
-			for name in node.signature.parameterClause.parameters.lazy.map({ $0.secondName ?? $0.firstName }) {
+			// Each parameter without a default value is a dependency named by its inner name. Its argument label
+			// binds nothing. A parameter with a default value is not a dependency, as for an initializer: the
+			// generated call leaves it out, so its default applies, and a generated mock offers it as an override.
+			let dependencyParameters = zip(initializer.arguments, node.signature.parameterClause.parameters).filter { argument, _ in
+				!argument.hasDefaultValue
+			}
+			for name in dependencyParameters.lazy.map({ $0.1.secondName ?? $0.1.firstName }) {
 				if let reservation = ReservedName(reserving: name.text) {
 					diagnose(name.text, reservedAs: reservation, at: name)
 				}
+			}
+			let dependencies = dependencyParameters.map { argument, parameter in
+				Dependency(
+					property: argument.asProperty,
+					source: .received(onlyIfAvailable: false),
+					declarationLocation: declarationLocation(of: parameter),
+					// The dependency's label is the inner name, so that is the token a rename fix-it replaces.
+					identifierRange: sourceRange(of: parameter.secondName ?? parameter.firstName),
+					typeAnnotationRange: sourceRange(of: parameter.type),
+				)
 			}
 			extensionInstantiables.append(.init(
 				instantiableType: instantiableType,
 				isRoot: false,
 				initializer: initializer,
 				additionalInstantiables: additionalInstantiables,
-				dependencies: zip(initializer.arguments, node.signature.parameterClause.parameters).map { argument, parameter in
-					Dependency(
-						property: argument.asProperty,
-						source: .received(onlyIfAvailable: false),
-						declarationLocation: declarationLocation(of: parameter),
-						// The dependency's label is the inner name, so that is the token a rename fix-it replaces.
-						identifierRange: sourceRange(of: parameter.secondName ?? parameter.firstName),
-						typeAnnotationRange: sourceRange(of: parameter.type),
-					)
-				},
+				dependencies: dependencies,
 				declarationType: .extensionType,
 				mockAttributes: mockAttributes,
 				generateMock: generateMock,
@@ -306,6 +315,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				mockDeclarationLocation: mockDeclarationLocation,
 				declarationLocation: instantiableDeclarationLocation,
 			))
+			instantiateFunctions.append(InstantiateFunction(syntax: node, initializer: initializer, dependencies: dependencies))
 		}
 
 		if !initializer.isPublicOrOpen || node.modifiers.staticModifier == nil {
@@ -404,6 +414,17 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// Where `mockFunctionSyntax` begins, recorded when the declaration is visited with a converter.
 	public private(set) var mockDeclarationLocation: Dependency.DeclarationLocation?
 	public private(set) var duplicateMockFunctionSyntaxes = [FunctionDeclSyntax]()
+	/// The `instantiate(…)` methods of an extension that declare a return type, in source order.
+	public private(set) var instantiateFunctions = [InstantiateFunction]()
+
+	/// An extension's `instantiate(…)` method, with the dependencies it takes.
+	public struct InstantiateFunction {
+		public let syntax: FunctionDeclSyntax
+		public let initializer: Initializer
+		/// The parameters without default values.
+		public let dependencies: [Dependency]
+	}
+
 	public private(set) var conflictingMockFunctionSyntax: FunctionDeclSyntax?
 	public private(set) var diagnostics = [Diagnostic]()
 	public private(set) var uninitializedNonOptionalPropertyNames = [String]()

@@ -1132,6 +1132,7 @@ extension Set: BinarySample where Element: BinarySample & Comparable {
 }
 
 extension CachedScannedModuleInfo: BinarySample {}
+extension AdditionalDirectory: BinarySample {}
 extension ScannedInput: BinarySample {}
 extension FileModificationStamp: BinarySample {}
 extension CachedFileScan: BinarySample {}

@@ -85,7 +85,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(DEBUG)
-		#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -132,7 +132,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(DEBUG)
-		#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -234,7 +234,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if DEBUG
-		#error("SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if DEBUG` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -296,7 +296,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(STAGING)
-		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -358,7 +358,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if STAGING
-		#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -464,11 +464,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !(DEBUG)
-		#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		#if STAGING
-		#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if STAGING` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -506,7 +506,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#if !DEBUG
-		#error("SafeDI scanned this module assuming `#if !DEBUG` was inactive, but it is active in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if !DEBUG` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		""" + "\n"])
@@ -9092,6 +9092,73 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_writesConvenienceExtensionOnRootOfTree_passesEnclosingPropertyToRequiredReceiverOfOnlyIfAvailableAlias_whenAliasRenamesPropertyBuiltFromReceiver() async throws {
+		// T requires `tProtocol`, which Child renames from `t`, the T being built. Root's
+		// `tProtocol` stands in for it, so Child does not create its alias and T gets Root's.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public protocol TProtocol: AnyObject {}
+
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(other: Other, tProtocol: TProtocol?, child: Child) { self.other = other; self.tProtocol = tProtocol; self.child = child }
+				    @Instantiated let other: Other
+				    @Received(fulfilledByDependencyNamed: "other", ofType: Other.self) let tProtocol: TProtocol?
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Other: Instantiable, TProtocol {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(tProtocol: TProtocol?, t: T) { self.tProtocol = tProtocol; self.t = t }
+				    @Received(fulfilledByDependencyNamed: "t", ofType: T.self, onlyIfAvailable: true) let tProtocol: TProtocol?
+				    @Instantiated let t: T
+				}
+				""",
+				"""
+				@Instantiable
+				public final class T: Instantiable, TProtocol {
+				    public init(tProtocol: TProtocol?) { self.tProtocol = tProtocol }
+				    @Received let tProtocol: TProtocol?
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		extension Root {
+		    public convenience init() {
+		        let other = Other()
+		        #sourceLocation(file: "\(output.fixtures["Root.swift"])", line: 7)
+		        let tProtocol: TProtocol? = other
+		        #sourceLocation()
+		        func __safeDI_child() -> Child {
+		            // Did not create `tProtocol: TProtocol?` because `t: T` is unavailable.
+		            let t = T(tProtocol: tProtocol)
+		            return Child(tProtocol: tProtocol, t: t)
+		        }
+		        let child: Child = __safeDI_child()
+		        self.init(other: other, tProtocol: tProtocol, child: child)
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_buildsFulfillingDependencyFirst_whenOnlyIfAvailableAliasIsRequiredByReceiverAndItsDependencyIsSiblingOfAlias() async throws {
 		// Grand requires the `onlyIfAvailable` alias of `missing`, so `missing` is built
 		// before the alias, and DefaultGreeter, which receives the alias only if available, gets `nil`.
@@ -11149,7 +11216,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		let rootFile = try #require(output.generatedFiles?["Root+SafeDI.swift"])
 		#expect(rootFile.contains("#error"))
-		#expect(rootFile.contains("Compiler errors prevented the generation of the dependency tree"))
+		#expect(rootFile.contains("SafeDI could not generate code because these files have syntax errors. Fix them and build again:"))
 	}
 
 	@Test
@@ -12800,7 +12867,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		#endif
 
 		#if !(DEPENDENCY)
-		#error("SafeDI scanned this module assuming `#if DEPENDENCY` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if DEPENDENCY` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -13242,7 +13309,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		#endif
 
 		#if !(STAGING)
-		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \\"Conditional compilation\\" section of the SafeDI manual.")
+		#error("SafeDI scanned this module assuming `#if STAGING` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
 		extension Root {
@@ -13345,7 +13412,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		try FileManager.default.removeItem(at: extraHelperFile)
 
 		await assertThrowsError(
-			"\(rootFile.path):8:5: error: No `@Instantiable`-decorated type or extension found to fulfill `@Instantiated`-decorated property with type `ExtraHelper`",
+			"\(rootFile.path):8:5: error: No @Instantiable type or extension fulfills `ExtraHelper`, which @Instantiated property `helper: ExtraHelper` instantiates. Decorate `ExtraHelper`, or an extension of it, with @Instantiable; list `ExtraHelper` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.",
 		) {
 			try await (Generate.parse([
 				swiftFileCSV.path,
@@ -13426,6 +13493,137 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		)
 		let rootFileNames = Set(manifest.dependencyTreeGeneration.map { ($0.inputFilePath as NSString).lastPathComponent })
 		#expect(rootFileNames == ["Root.swift", "ExtraRoot.swift"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_callsInstantiateWithoutDefaultValuedParameter_whenNoAncestorProvidesIt() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(database: Database, service: Service) {
+				        self.database = database
+				        self.service = service
+				    }
+
+				    @Instantiated let database: Database
+				    @Instantiated let service: Service
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Database: Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				public struct Service {
+				    public init(database: Database, title: String) {
+				        self.database = database
+				        self.title = title
+				    }
+
+				    public let database: Database
+				    public let title: String
+				}
+
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(database: Database, title: String = "production") -> Service {
+				        Service(database: database, title: title)
+				    }
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		extension Root {
+		    public init() {
+		        let database = Database()
+		        let service: Service = Service.instantiate(database: database)
+		        self.init(database: database, service: service)
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_doesNotPassAncestorPropertyToDefaultValuedInstantiateParameter_whenAncestorForwardsPropertyWithSameLabelAndType() async throws {
+		// A default-valued parameter of `instantiate(…)` is not a dependency, as for an initializer, so the forwarded
+		// `title` is not passed to it and its default applies.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(parentBuilder: Instantiator<Parent>) {
+				        self.parentBuilder = parentBuilder
+				    }
+
+				    @Instantiated let parentBuilder: Instantiator<Parent>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Parent: Instantiable {
+				    public init(title: String, service: Service) {
+				        self.title = title
+				        self.service = service
+				    }
+
+				    @Forwarded let title: String
+				    @Instantiated let service: Service
+				}
+				""",
+				"""
+				public struct Service {
+				    public init(title: String) {
+				        self.title = title
+				    }
+
+				    public let title: String
+				}
+
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(title: String = "production") -> Service {
+				        Service(title: title)
+				    }
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		extension Root {
+		    public init() {
+		        func __safeDI_parentBuilder(title: String) -> Parent {
+		            let service: Service = Service.instantiate()
+		            return Parent(title: title, service: service)
+		        }
+		        let parentBuilder = Instantiator<Parent> {
+		            __safeDI_parentBuilder(title: $0)
+		        }
+		        self.init(parentBuilder: parentBuilder)
+		    }
+		}
+		""")
 	}
 
 	// MARK: Private

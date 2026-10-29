@@ -130,7 +130,7 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 		Linux:aarch64|Linux:arm64)  tool_variant="SafeDITool-linux-arm64" ;;
 		Linux:x86_64|Linux:amd64)   tool_variant="SafeDITool-linux-x86_64" ;;
 		*)
-			echo "error: SafeDI plugin: unsupported host $host_os/$host_arch" >&2
+			echo "error: SafeDI plugin: unsupported host $host_os/$host_arch. SafeDITool is published for macOS and Linux on arm64 and x86_64." >&2
 			exit 3
 			;;
 	esac
@@ -146,7 +146,7 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 
 	module_dir="$SRCROOT/$module"
 	if [ ! -d "$module_dir" ]; then
-		echo "error: SafeDI plugin: module directory not found at $module_dir" >&2
+		echo "error: SafeDI plugin: module directory not found at $module_dir. The module argument of SafeDI.preCompileScript must name the directory under SRCROOT that holds the target's Swift sources." >&2
 		exit 4
 	fi
 
@@ -171,7 +171,7 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 	done <"$sources_list"
 
 	if [ ! -s "$input_csv" ]; then
-		echo "error: SafeDI plugin: no .swift sources found under $module_dir" >&2
+		echo "error: SafeDI plugin: no .swift sources found under $module_dir. Check the module argument of SafeDI.preCompileScript." >&2
 		exit 4
 	fi
 
@@ -193,7 +193,7 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 		for dependency_name in "$@"; do
 			dependency_path="$shared_safedi_dir/$dependency_name.safedi"
 			if [ ! -f "$dependency_path" ]; then
-				echo "error: SafeDI plugin: $dependency_name.safedi not found at $dependency_path — the $dependency_name target must build first" >&2
+				echo "error: SafeDI plugin: $dependency_name.safedi not found at $dependency_path. Add $dependency_name to this target's dependencies so it builds first, and check that it also runs SafeDI.preCompileScript." >&2
 				exit 1
 			fi
 			if [ "$first" = 1 ]; then

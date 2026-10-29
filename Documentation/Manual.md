@@ -44,11 +44,11 @@ The `additionalDirectoriesToInclude` parameter specifies folders outside of your
 
 > **Note:** Xcode does not expose build settings to build tool plugins, so the `SafeDIGenerator` plugin reads the target’s compilation conditions from its `SWIFT_ACTIVE_COMPILATION_CONDITIONS` and `OTHER_SWIFT_FLAGS` build settings when the build runs, rather than while it plans the build. Any SafeDI declaration, roots included, may sit behind a bare condition such as `#if DEBUG`; see [Conditional compilation](#conditional-compilation).
 
-> **Note:** `additionalDirectoriesToInclude` is only honored by the SPM build-tool plugin. The Bazel and Tuist integrations enumerate every input up front (Bazel via declared rule inputs; Tuist via the build phase's `inputPaths`), so files reached only through `additionalDirectoriesToInclude` won't be visible to SafeDITool at build time and won't trigger incremental rebuilds. Under those integrations, list every Swift source you want SafeDI to see directly via the build target.
+> **Note:** Only the `SafeDIGenerator` build-tool plugin declares the files reached through `additionalDirectoriesToInclude` as build inputs. Under Tuist and Bazel, don't rely on `additionalDirectoriesToInclude`. Tuist may read those files but won't rebuild when they change, and can't read them under user script sandboxing; Bazel can't see them at all. List every Swift source in the build target instead.
 
 ##### Installing the prebuilt SafeDITool binary
 
-If you see a build warning that starts with **"SafeDI's build-tool plugin is falling back to a regex-based output scanner..."** — installing the prebuilt tool fixes it.
+If you see a build warning that starts with **"SafeDI is planning this target’s generated files with a simpler scanner..."** — installing the prebuilt tool fixes it.
 
 In Xcode, right-click your project in the navigator and choose **SafeDI → Safedi Release Install**. Approve the network-access and write-to-package-directory prompts. Xcode runs the command and downloads the prebuilt SafeDITool release binary for your SafeDI version into `.safedi/<version>/safeditool` next to your `.xcodeproj`. The build plugin picks it up automatically on subsequent builds.
 
@@ -196,7 +196,7 @@ public struct LoggedInView: Instantiable, View {
 
 The exact semantics of each dependency kind — including `@Instantiated`’s configuration parameters for dependency inversion, and `@Received`’s `onlyIfAvailable` option — are covered in [@Instantiated](#instantiated), [@Received](#received), and [@Forwarded](#forwarded).
 
-SafeDI reserves the names its generated code introduces, so the `@Instantiable` macro reports an error for a name SafeDI uses in that code – a decorated property’s name, the name of an `instantiate(…)` parameter, a `fulfilledByDependencyNamed:` name, or the argument label of a default-valued initializer or mock parameter that a generated `mock()` takes and passes on – that begins with `__safeDI_`, or that is exactly `safeDIOverrides`, `safeDIBuilder`, or the name of a type generated code constructs (`Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, `SendableErasedInstantiator`, `LazilyInstantiated`, or `SendableLazilyInstantiated`).
+SafeDI reserves the names its generated code introduces, so the `@Instantiable` macro reports an error for a name SafeDI uses in that code – a decorated property’s name, the name of an `instantiate(…)` parameter without a default value, a `fulfilledByDependencyNamed:` name, or the argument label of a default-valued initializer, `instantiate(…)`, or mock parameter that a generated `mock()` takes and passes on – that begins with `__safeDI_`, or that is exactly `safeDIOverrides`, `safeDIBuilder`, or the name of a type generated code constructs (`Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, `SendableErasedInstantiator`, `LazilyInstantiated`, or `SendableLazilyInstantiated`).
 
 SafeDI recognizes its wrapper types by name alone. A property type spelled `Instantiator<…>`, `SendableInstantiator<…>`, `ErasedInstantiator<…>`, `SendableErasedInstantiator<…>`, `LazilyInstantiated<…>`, or `SendableLazilyInstantiated<…>` is treated as SafeDI’s wrapper of that name, even when the name refers to a type your project declares. Do not declare types with these names in a project that uses SafeDI.
 
@@ -291,7 +291,7 @@ public struct NotesApp: App, Instantiable {
 
 #### Making external types `@Instantiable`
 
-Types that are declared outside of your project can be instantiated by SafeDI if there is an extension on the type decorated with the `@Instantiable` macro. Extensions decorated with this macro define how to instantiate the extended type via a `public static func instantiate(…) -> ExtendedType` function. This `instantiate(…)` function can receive dependencies instantiated or forwarded by objects further up the dependency tree by declaring these dependencies as parameters to the `instantiate(…)` function.
+Types that are declared outside of your project can be instantiated by SafeDI if there is an extension on the type decorated with the `@Instantiable` macro. Extensions decorated with this macro define how to instantiate the extended type via a `public static func instantiate(…) -> ExtendedType` function. This `instantiate(…)` function can receive dependencies instantiated or forwarded by objects further up the dependency tree by declaring these dependencies as parameters to the `instantiate(…)` function. A parameter with a default value is not a dependency, as for an initializer: SafeDI calls `instantiate(…)` without it, so its default applies even when an object further up the tree has a property with the same label and type, and a generated mock offers it as an override.
 
 Here we have a sample `@Instantiable` extension on `UserDefaults` that adopts a first-party `StringStorage` protocol so SafeDI can instantiate it in place of a hand-rolled storage type:
 
@@ -534,7 +534,7 @@ A type under `B` that receives `a` is receiving a property of `Parent`, which is
 - **Both receive each other only if available.** The property declared later is built first and receives `nil`.
 - **Nothing is provided below a `nil`.** A property received only if available that is `nil` provides nothing to the types below the receiver. A type further down that receives the same property without `onlyIfAvailable` needs a type above it to provide the property, and the build fails at that declaration when none does. When the only such property is one the type is built inside — `user: User?` required by a type under `user: User` — the build reports a dependency cycle there, as it does for a receive of `user: User`. When the receiver of `user: User?` is handed a parent’s non-optional `user: User`, a type further down that requires `user: User?` is handed the same instance, and `user` is built before it.
 - **A renamed dependency is unavailable.** A `@Received(fulfilledByDependencyNamed:ofType:onlyIfAvailable: true)` property whose fulfilling dependency is unavailable is `nil`, and so is that property for anything that receives it in turn with `onlyIfAvailable: true`. The exception is when an enclosing type instantiates, forwards, or creates through its own alias a property of the same name and type (or its non-optional form): those receivers then get that property.
-- **A type requires a renamed dependency that is only available sometimes.** A type further down the tree that receives the renamed property without `onlyIfAvailable` gets an enclosing type’s property of that name when there is one, and that property is built before it. Otherwise it needs the renamed property to exist, as it would for a renaming without `onlyIfAvailable`: the fulfilling dependency is built before the property, and anything that receives the property only if available and must itself be built first gets `nil`. The build fails at the receiving declaration when the fulfilling dependency is not `@Instantiated` or `@Forwarded` by the renaming type or above it, or can only be built after the receiver.
+- **A type requires a renamed dependency that is only available sometimes.** A type further down the tree that receives the renamed property without `onlyIfAvailable` gets an enclosing type’s property of that name when there is one, and that property is built before it. Otherwise it needs the renamed property to exist, as it would for a renaming without `onlyIfAvailable`: the fulfilling dependency is built before the property, and anything that receives the property only if available and must itself be built first gets `nil`. The build fails at the receiving declaration when the fulfilling dependency is not `@Instantiated` or `@Forwarded` by the renaming type or above it, or can only be built after the receiver (because the receiver is built inside it, or because it receives the receiver, directly or through other properties of the renaming type). This holds wherever the renaming type is, the root of the tree or a mocked type included, and whatever the property types, an `Instantiator` included. When the fulfilling dependency can only be built after the receiver, the build reports a dependency cycle and suggests receiving the renamed property with `onlyIfAvailable: true`, which gives the receiver `nil` where the fulfilling dependency cannot be built first.
 
 ### #SafeDIConfiguration
 
@@ -554,8 +554,8 @@ Declare the configuration in a file named `SafeDIConfiguration.swift` in the mod
 **Parameters:**
 
 - `additionalImportedModules`: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types. When those files import a module whole in more than one way, the generated code imports it once, the way that asks for least: `import MyModule` if any file imports it without attributes (or with only `@preconcurrency`, which the generated code does not need), and otherwise with the attributes that sort first, so `@testable import MyModule` is chosen only when every file that imports the module whole does so with `@testable`. Default: `[]`.
-- `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. Only honored by the SPM build-tool plugin. The Bazel and Tuist integrations enumerate inputs up front and ignore this parameter — list every Swift source via the build target itself instead. Default: `[]`.
-- `additionalMocksToGenerate`: Type names from dependent modules to generate `mock()` methods for in this module. The types must be `@Instantiable` in their home module. See [Cross-module mock generation](#cross-module-mock-generation). Default: `[]`.
+- `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. An entry may also name a single Swift file. Only the `SafeDIGenerator` build-tool plugin declares the files it reaches as build inputs; under Tuist and Bazel, list every Swift source via the build target itself instead (see the note under [Xcode project](#xcode-project)). SafeDI warns at the `#SafeDIConfiguration` when an entry names a path that doesn't exist or isn't a Swift file. An existing directory with no Swift files is fine. Default: `[]`.
+- `additionalMocksToGenerate`: Type names from dependent modules to generate `mock()` methods for in this module. The types must be `@Instantiable` in their home module. When an entry of the configuration the build selects names no type an `@Instantiable` declaration that SafeDI read declares, generation fails with an error at the `#SafeDIConfiguration`. See [Cross-module mock generation](#cross-module-mock-generation). Default: `[]`.
 - `mockConditionalCompilation`: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation. Default: `"DEBUG"`.
 
 ## Delayed instantiation
@@ -895,7 +895,7 @@ LoggedInView.mock(safeDIOverrides: .init(
 ))
 ```
 
-`SafeDIMockConfiguration` exposes an optional override for each of the child’s own `@Instantiated` dependencies and each default-valued init parameter, plus a trailing builder closure. The builder’s parameters match the type’s hand-written `mock` method signature if one is defined, or its `init` parameters otherwise. When no builder is provided, the generated mock calls the type’s hand-written `mock` method or `init` directly.
+`SafeDIMockConfiguration` exposes an optional override for each of the child’s own `@Instantiated` dependencies and each default-valued parameter of its `init` (or of its `instantiate(…)` method, for an extension), plus a trailing builder closure. The builder’s parameters match the type’s hand-written `mock` method signature if one is defined, or its `init` parameters otherwise. When no builder is provided, the generated mock calls the type’s hand-written `mock` method or `init` directly.
 
 Closure fields on `SafeDIMockConfiguration` are plain (non-`@Sendable`) by default, so overrides can capture mutable non-`Sendable` test state. When a type is reached through a `SendableInstantiator`, `SendableErasedInstantiator`, or `SendableLazilyInstantiated` anywhere in the dependency graph, its `SafeDIMockConfiguration` is emitted with `@Sendable` closure fields instead so the overrides remain safe to invoke across isolation boundaries.
 
@@ -992,6 +992,8 @@ For the second case, use the `additionalMocksToGenerate` parameter on [`#SafeDIC
 
 This generates a `mock()` method for each listed type in the current module, even though the type is defined elsewhere. The type must be `@Instantiable` in its home module, but `generateMock: true` is not required there unless that home module also wants to generate its own mock.
 
+List each type by its declared name, with enclosing types and without the module (`Outer.Inner`, not `MyModule.Outer.Inner`). SafeDI reports an error for an entry that names no `@Instantiable` type and suggests close matches. An entry in a clause of an `#if` block that the build does not select is not checked.
+
 **Note:** `additionalDirectoriesToInclude` helps SafeDI scan source from Xcode project dependencies, but it does not generate mocks for those dependency modules. Use `additionalMocksToGenerate` when the current module needs a local mock for a dependency-module type.
 
 ## Conditional compilation
@@ -1017,7 +1019,7 @@ The reported conditions are taken as complete, so a condition your build defines
 
 ```swift
 #if !(DEBUG)
-#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. SafeDI's build integration must report the compilation conditions the compiler uses; see the \"Conditional compilation\" section of the SafeDI manual.")
+#error("SafeDI scanned this module assuming `#if DEBUG` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \"Reporting active conditions\" section of the SafeDI manual describes for your build system.")
 #endif
 ```
 
