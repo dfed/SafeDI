@@ -1726,16 +1726,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
-		var flatUncoveredParameters = [(label: String, typeSource: String)]()
+		var uncoveredDependencies = UncoveredDependencies()
 		// Collect uncovered @Instantiated deps from the root type.
 		for dependency in instantiable.dependencies {
 			switch dependency.source {
 			case .instantiated:
-				guard !treePropertyLabels.contains(dependency.property.label) else { continue }
-				let sourceType = dependency.property.propertyType.isConstant
-					? dependency.property.typeDescription.asInstantiatedType.asFunctionParameter.asSource
-					: dependency.property.typeDescription.asFunctionParameter.asSource
-				flatUncoveredParameters.append((label: dependency.property.label, typeSource: sourceType))
+				// A dependency promoted to the root under the label, of another type, does not build it.
+				guard !treePropertyNodes.contains(where: { $0.property == dependency.property }) else { continue }
+				uncoveredDependencies.add(dependency.property, isHiddenWhereReferenced: false)
 			case .received, .aliased, .forwarded:
 				break
 			}
@@ -1746,7 +1744,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// so the mock body can pass them.
 		Self.collectUncoveredDependenciesFromTree(
 			treePropertyNodes,
-			into: &flatUncoveredParameters,
+			namesDeclaredByEnclosingBuilderFunctions: [],
+			into: &uncoveredDependencies,
 		)
 
 		// Every name the mock root's scope generates – a binding of the tree, a parameter, or an override
@@ -1758,6 +1757,40 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let rootLabelMap = Self.disambiguatePropertyLabels(for: treePropertyNodes, reservedNames: namesDeclaredInBuilderFunctions)
 		let treeBindingNames = Self.bindingNames(of: treePropertyNodes, labels: treePropertyLabels, labelMap: rootLabelMap)
 
+		// An uncovered dependency is a `mock()` parameter under its label, unless another uncovered dependency
+		// has the label and another type, a forwarded or default-valued parameter has it, a binding of the
+		// root's tree has it, the mocked type receives or aliases a dependency under it, which the mock binds
+		// under its label, or a builder function around a type that is passed the dependency declares it,
+		// which would hide the parameter there. Those are named apart, and each type that is passed one is
+		// passed its name. A parameter or override for a dependency only the tree receives under its label is
+		// the one renamed, below.
+		let uncoveredDependencyNames = Self.namesApart(
+			preferredNames: uncoveredDependencies.properties.map(\.label),
+			typeDescriptions: uncoveredDependencies.properties.map(\.typeDescription),
+			namesInScope: Set(forwardedDependencies.map(\.property.label))
+				.union(rootDefaultParameters.map(\.label))
+				.union(treeBindingNames)
+				.union(instantiable.dependencies.lazy.compactMap { dependency in
+					switch dependency.source {
+					case .received, .aliased:
+						dependency.property.label
+					case .instantiated, .forwarded:
+						nil
+					}
+				}),
+			reservedNames: namesDeclaredInBuilderFunctions
+				.union(flatReceivedProperties.map(\.label))
+				.union(onlyIfAvailableReceivedProperties.map(\.label)),
+			hiddenEntries: uncoveredDependencies.indicesHiddenWhereReferenced,
+		)
+		var uncoveredDependencyNameMap = [String: [TypeDescription: String]]()
+		for (property, name) in zip(uncoveredDependencies.properties, uncoveredDependencyNames) where name != property.label {
+			uncoveredDependencyNameMap[property.label, default: [:]][property.typeDescription] = name
+		}
+		let flatUncoveredParameters = uncoveredDependencies.properties.indices.map { index in
+			(label: uncoveredDependencyNames[index], typeSource: uncoveredDependencies.typeSources[index])
+		}
+
 		// Disambiguate flat received parameter labels when collisions exist.
 		// Include onlyIfAvailable labels so flat params with the same label
 		// get disambiguated: an onlyIfAvailable override keeps its label over
@@ -1767,7 +1800,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// its label and another type does not provide it, and the parameter would be hidden by it.
 		let otherFlatLabels = forwardedDependencies.map(\.property.label)
 			+ rootDefaultParameters.map(\.label)
-			+ flatUncoveredParameters.map(\.label)
+			+ uncoveredDependencyNames
 			+ onlyIfAvailableReceivedProperties.map(\.label)
 		let allFlatLabels = otherFlatLabels + flatReceivedProperties.map(\.label)
 		// Map of (label → (type → disambiguatedLabel)) for flat received
@@ -1797,7 +1830,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				for: onlyIfAvailableReceivedProperties,
 				namesInMockScope: Set(forwardedDependencies.map(\.property.label))
 					.union(rootDefaultParameters.map(\.label))
-					.union(flatUncoveredParameters.map(\.label))
+					.union(uncoveredDependencyNames)
 					.union(treeBindingNames),
 				reservedNames: Set(flatReceivedParameters.map(\.label)).union(namesDeclaredInBuilderFunctions),
 			)
@@ -1827,6 +1860,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			typeDescriptions: lazilyInstantiatedInstanceProperties.map(\.typeDescription),
 			namesInScope: Set(allFlatLabels)
 				.union(flatReceivedParameters.map(\.label))
+				.union(uncoveredDependencyNames)
 				.union(onlyIfAvailableOverrides.map(\.name))
 				.union(treeBindingNames)
 				.union(namesDeclaredInBuilderFunctions),
@@ -2014,6 +2048,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				returnDisambiguationMap[label, default: [:]][typeDescription] = name
 			}
 		}
+		// The root is passed the parameter of each of its own uncovered dependencies by its name.
+		for dependency in instantiable.dependencies {
+			if case .instantiated = dependency.source,
+			   let name = uncoveredDependencyNameMap[dependency.property.label]?[dependency.property.typeDescription]
+			{
+				returnDisambiguationMap[dependency.property.label, default: [:]][dependency.property.typeDescription] = name
+			}
+		}
 
 		// A root's own received dependency whose label the root scope already binds – to a node
 		// the mock builds for another receiver – cannot be rebound to its label without
@@ -2062,6 +2104,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				indent: bodyIndent,
 				flatParameterDisambiguationMap: treeDisambiguationMap,
 				lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNameMap,
+				uncoveredDependencyNames: uncoveredDependencyNameMap,
 				parentConcreteType: nil,
 				cycleEdges: context.cycleEdges,
 				overridePathReachable: true,
@@ -2951,39 +2994,75 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return items
 	}
 
+	/// The `@Instantiated` dependencies of a mock's types that the mock cannot build, which `mock()` takes as
+	/// parameters, one for each label and type, in the order they are found.
+	private struct UncoveredDependencies {
+		private(set) var properties = [Property]()
+		/// The type each parameter is spelled with.
+		private(set) var typeSources = [String]()
+		/// The indices of the dependencies whose label a builder function around a type passed them declares.
+		private(set) var indicesHiddenWhereReferenced = Set<Int>()
+
+		mutating func add(_ property: Property, isHiddenWhereReferenced: Bool) {
+			let index: Int
+			if let existingIndex = properties.firstIndex(of: property) {
+				index = existingIndex
+			} else {
+				index = properties.count
+				properties.append(property)
+				// Route through `asFunctionParameter` so closure types surface
+				// as `@escaping` — matching the `rootDefaultParameters` and
+				// flat-received emission conventions. Idempotent for non-closures.
+				typeSources.append(property.propertyType.isConstant
+					? property.typeDescription.asInstantiatedType.asFunctionParameter.asSource
+					: property.typeDescription.asFunctionParameter.asSource)
+			}
+			if isHiddenWhereReferenced {
+				indicesHiddenWhereReferenced.insert(index)
+			}
+		}
+	}
+
 	/// Walks the parameter tree and collects `@Instantiated` dependencies from child
 	/// types that aren't fulfilled by their own child nodes. These are deps that
 	/// surface through builder arguments (especially via custom mock methods) but aren't
 	/// fulfilled by any type in the scope map.
+	///
+	/// A type is passed such a dependency where it is built, inside the builder functions of the nodes
+	/// above it. `namesDeclaredByEnclosingBuilderFunctions` holds the names those functions declare –
+	/// their parameters and the bindings of their dependencies, other than the dependencies they are
+	/// passed themselves – which hide a parameter of the same name there.
 	private static func collectUncoveredDependenciesFromTree(
 		_ nodes: [MockParameterNode],
-		into flatUncoveredParameters: inout [(label: String, typeSource: String)],
+		namesDeclaredByEnclosingBuilderFunctions: Set<String>,
+		into uncoveredDependencies: inout UncoveredDependencies,
 	) {
 		for node in nodes {
 			let propertyChildren = node.propertyChildren
 			let childLabels = Set(propertyChildren.map(\.propertyLabel))
-			let collectedKeys = Set(flatUncoveredParameters.map { "\($0.label):\($0.typeSource)" })
+			var uncoveredLabels = Set<String>()
 			for dependency in node.dependencies {
 				guard case .instantiated = dependency.source else { continue }
 				// Skip deps that are covered by a child node in the tree.
 				guard !childLabels.contains(dependency.property.label) else { continue }
-				// Route through `asFunctionParameter` so closure types surface
-				// as `@escaping` — matching the `rootDefaultParameters` and
-				// flat-received emission conventions. Idempotent for non-closures.
-				let sourceType = dependency.property.propertyType.isConstant
-					? dependency.property.typeDescription.asInstantiatedType.asFunctionParameter.asSource
-					: dependency.property.typeDescription.asFunctionParameter.asSource
-				// Skip deps already collected (by label AND type).
-				let key = "\(dependency.property.label):\(sourceType)"
-				guard !collectedKeys.contains(key) else { continue }
-				flatUncoveredParameters.append((label: dependency.property.label, typeSource: sourceType))
+				uncoveredLabels.insert(dependency.property.label)
+				uncoveredDependencies.add(
+					dependency.property,
+					isHiddenWhereReferenced: namesDeclaredByEnclosingBuilderFunctions.contains(dependency.property.label),
+				)
 			}
 			// Skip recursion into property cycle children — they're self-references
 			// whose deps would incorrectly surface as uncovered.
 			let nonCycleChildren = propertyChildren.filter { !$0.isPropertyCycle }
+			guard !nonCycleChildren.isEmpty else { continue }
+			var namesDeclaredByChildrensEnclosingBuilderFunctions = namesDeclaredByEnclosingBuilderFunctions
+			for dependency in node.dependencies where !uncoveredLabels.contains(dependency.property.label) {
+				namesDeclaredByChildrensEnclosingBuilderFunctions.insert(dependency.property.label)
+			}
 			collectUncoveredDependenciesFromTree(
 				nonCycleChildren,
-				into: &flatUncoveredParameters,
+				namesDeclaredByEnclosingBuilderFunctions: namesDeclaredByChildrensEnclosingBuilderFunctions,
+				into: &uncoveredDependencies,
 			)
 		}
 	}
@@ -3108,7 +3187,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// The names of entries bound in one scope, in the order of `preferredNames`: each entry's preferred name,
-	/// unless another entry prefers it too or it is one of `namesInScope`. Those entries are named apart by
+	/// unless another entry prefers it too, it is one of `namesInScope`, or the entry is in `hiddenEntries`, whose
+	/// preferred name a declaration hides where the entry is referenced. Those entries are named apart by
 	/// `identifierSafeNames`: by the preferred name followed by the entry's type in `typeDescriptions`, never
 	/// taking a name in `namesInScope`, in `reservedNames`, or that another entry prefers or is named by.
 	private static func namesApart(
@@ -3116,10 +3196,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		typeDescriptions: [TypeDescription],
 		namesInScope: Set<String>,
 		reservedNames: Set<String>,
+		hiddenEntries: Set<Int> = [],
 	) -> [String] {
 		let collidingNames = collidingLabels(in: preferredNames).union(namesInScope.intersection(preferredNames))
-		guard !collidingNames.isEmpty else { return preferredNames }
-		let collidingIndices = preferredNames.indices.filter { collidingNames.contains(preferredNames[$0]) }
+		guard !collidingNames.isEmpty || !hiddenEntries.isEmpty else { return preferredNames }
+		let collidingIndices = preferredNames.indices.filter { collidingNames.contains(preferredNames[$0]) || hiddenEntries.contains($0) }
 		let disambiguatedNames = identifierSafeNames(
 			for: collidingIndices.map { index in
 				(label: preferredNames[index], suffixTypes: [typeDescriptions[index].simplified, typeDescriptions[index]])
@@ -3456,6 +3537,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		flatParameterDisambiguationMap: [String: [TypeDescription: String]] = [:],
 		enclosingFunctionNames: [Property: String] = [:],
 		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:],
+		uncoveredDependencyNames: [String: [TypeDescription: String]] = [:],
 		parentConcreteType: String?,
 		cycleEdges: Set<CycleEdge>,
 		overridePathReachable: Bool,
@@ -3561,6 +3643,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					for: node,
 					nodePath: nodePath,
 					lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
+					uncoveredDependencyNames: uncoveredDependencyNames,
 					sendableOverrideExtractor: sendableOverrideExtractor,
 					overrideReachable: thisOverrideReachable,
 					handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
@@ -3592,6 +3675,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						sendableOverrideExtractor: sendableOverrideExtractor,
 						flatParameterDisambiguationMap: combinedDisambiguationMap,
 						lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
+						uncoveredDependencyNames: uncoveredDependencyNames,
 						cycleEdges: cycleEdges,
 						overridePathReachable: thisOverrideReachable,
 						handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
@@ -3634,6 +3718,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						flatParameterDisambiguationMap: functionDisambiguationMap,
 						enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 						lazilyInstantiatedBindingNames: functionLazilyInstantiatedBindingNames,
+						uncoveredDependencyNames: uncoveredDependencyNames,
 						parentConcreteType: node.concreteType.asSource,
 						cycleEdges: cycleEdges,
 						overridePathReachable: thisOverrideReachable,
@@ -3785,6 +3870,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for node: MockParameterNode,
 		nodePath: String,
 		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
+		uncoveredDependencyNames: [String: [TypeDescription: String]],
 		sendableOverrideExtractor: SendableOverrideExtractor?,
 		overrideReachable: Bool,
 		handWrittenMockDefaultParameters: [MockParameterNode.DefaultParameter],
@@ -3812,6 +3898,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				{
 					// The `LazilyInstantiated` the mock wrapped around the instance it was passed.
 					bindingName
+				} else if case .instantiated = dependency.source,
+				          let parameterName = uncoveredDependencyNames[argument.innerLabel]?[dependency.property.typeDescription]
+				{
+					// The `mock()` parameter of an uncovered dependency, named apart from a name in scope.
+					parameterName
 				} else {
 					argument.innerLabel
 				}
@@ -3853,6 +3944,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		sendableOverrideExtractor: SendableOverrideExtractor?,
 		flatParameterDisambiguationMap: [String: [TypeDescription: String]],
 		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
+		uncoveredDependencyNames: [String: [TypeDescription: String]],
 		cycleEdges: Set<CycleEdge>,
 		overridePathReachable: Bool,
 		handWrittenMockDefaultParameters: [TypeDescription: [MockParameterNode.DefaultParameter]],
@@ -3942,6 +4034,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				flatParameterDisambiguationMap: builderDisambiguationMap,
 				enclosingFunctionNames: enclosingFunctionNames,
 				lazilyInstantiatedBindingNames: builderLazilyInstantiatedBindingNames,
+				uncoveredDependencyNames: uncoveredDependencyNames,
 				parentConcreteType: node.concreteType.asSource,
 				cycleEdges: cycleEdges,
 				overridePathReachable: overridePathReachable,
@@ -3962,6 +4055,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					for: node,
 					nodePath: nodePath,
 					lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
+					uncoveredDependencyNames: uncoveredDependencyNames,
 					sendableOverrideExtractor: startedSendableOverrideExtractor,
 					overrideReachable: overridePathReachable,
 					handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
