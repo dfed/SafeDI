@@ -1128,10 +1128,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithInstantiatedPropertyWithForwardedArgumentOnSeveralTypes_throwsErrorForFirstTypeName() async {
-		// Scopes were validated in the order of a set hashed by object identity, so which type's
-		// property was reported changed from run to run. With fifty such types, reporting the
-		// first type name by chance is unlikely.
+	mutating func run_onCodeWithInstantiatedPropertyWithForwardedArgumentOnSeveralTypes_throwsErrorForEveryTypeInSourceOrder() async {
+		// Scopes are validated in the order of a set hashed by object identity, which changes from
+		// run to run. With fifty such types, reporting them in source order by chance is unlikely.
 		let parentNames = (0..<50).map { "Parent" + ($0 < 10 ? "0" : "") + "\($0)" }
 		let parentFiles = parentNames.map { parentName in
 			"""
@@ -1153,10 +1152,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			.joined(separator: "\n")
 		await assertThrowsError(
 			diagnostics: { fixtures in
-				"""
-				\(fixtures["Parent00.swift"]):7:5: error: `child: Child` on `Parent00` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `Instantiator<Child>`.
-				\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
-				"""
+				parentNames.map { parentName in
+					"""
+					\(fixtures["\(parentName).swift"]):7:5: error: `child: Child` on `\(parentName)` cannot build `Child`, which has @Forwarded properties that only an instantiator is passed. Declare it as `Instantiator<Child>`.
+					\(fixtures["Child.swift"]):7:5: note: @Forwarded property `name: String` is declared here
+					"""
+				}.joined(separator: "\n")
 			},
 		) {
 			try await executeSafeDIToolTest(
@@ -4200,13 +4201,15 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_onCodeWithManyRootsInCycles_throwsErrorOfFirstRootInTypeOrder() async {
+	mutating func run_onCodeWithManyRootsInCycles_throwsErrorOfEveryRootInSourceOrder() async {
 		// Every one of the 200 roots builds its own cycle. A set of roots iterates in an order
-		// that depends on the process's hash seed, so validating in that order reports
-		// `Root000`'s cycle about once in 200 runs.
-		let swiftFileContent = (0..<200).map { index in
-			let suffix = String(repeating: "0", count: 3 - String(index).count) + String(index)
-			return """
+		// that depends on the process's hash seed; every cycle is reported, in source order,
+		// whichever order validates them.
+		let suffixes = (0..<200).map { index in
+			String(repeating: "0", count: 3 - String(index).count) + String(index)
+		}
+		let swiftFileContent = suffixes.map { suffix in
+			"""
 			@Instantiable(isRoot: true)
 			public struct Root\(suffix): Instantiable {
 			    public init(partner: Partner\(suffix)) { self.partner = partner }
@@ -4226,11 +4229,14 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		}.joined(separator: "\n")
 		await assertThrowsError(
 			diagnostics: { fixtures in
-				"""
-				\(fixtures["Root000.swift"]):14:5: error: Dependency cycle: `Partner000` -> `Other000` -> `Partner000`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `partner: Partner000` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
-				\(fixtures["Root000.swift"]):6:1: note: `Partner000` is part of the cycle
-				\(fixtures["Root000.swift"]):11:1: note: `Other000` is part of the cycle
-				"""
+				// Each root and its cycle take fifteen lines.
+				suffixes.enumerated().map { index, suffix in
+					"""
+					\(fixtures["Root000.swift"]):\(15 * index + 14):5: error: Dependency cycle: `Partner\(suffix)` -> `Other\(suffix)` -> `Partner\(suffix)`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `partner: Partner\(suffix)` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
+					\(fixtures["Root000.swift"]):\(15 * index + 6):1: note: `Partner\(suffix)` is part of the cycle
+					\(fixtures["Root000.swift"]):\(15 * index + 11):1: note: `Other\(suffix)` is part of the cycle
+					"""
+				}.joined(separator: "\n")
 			},
 		) {
 			try await executeSafeDIToolTest(

@@ -534,7 +534,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// whole corpus on every pull request. Compiling the batch is one `swiftc` invocation when nothing fails.
 	static let smokeSeeds: [UInt64] = [14, 62, 582, 691, 705, 930]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xB54DC0728941D95B
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x1525729E25AF9362
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -588,18 +588,7 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "Which errors SafeDI reports, and the root and chain each names, follow the order of type names or labels",
 			signatures: [.renamedGraphDiffers(containing: "changes its diagnostics")],
 			seeds: [
-				46, 70, 79, 106, 127, 293, 335, 377, 411, 417, 463, 485, 557, 603, 607, 615,
-				661, 679, 733, 734, 758, 831, 862, 896, 943, 962, 972, 979, 1_013, 1_101, 1_112, 1_122,
-				1_131, 1_222, 1_230, 1_342, 1_345, 1_353, 1_354, 1_404, 1_410, 1_419, 1_438, 1_439, 1_460, 1_495, 1_498, 1_562,
-				1_611, 1_626, 1_638, 1_749, 1_765, 1_774, 1_808, 1_846, 1_864, 1_923, 1_928, 1_951, 1_960, 2_012, 2_030, 2_050,
-				2_092, 2_190, 2_191, 2_200, 2_239, 2_260, 2_263, 2_293, 2_342, 2_359, 2_379, 2_423, 2_466, 2_495, 2_523, 2_569,
-				2_574, 2_579, 2_673, 2_675, 2_676, 2_695, 2_701, 2_713, 2_718, 2_757, 2_768, 2_777, 2_778, 2_811, 2_822, 2_823,
-				2_851, 2_915, 2_919, 2_944, 2_955, 2_958, 3_009, 3_020, 3_036, 3_072, 3_081, 3_111, 3_126, 3_161, 3_202, 3_209,
-				3_237, 3_253, 3_321, 3_332, 3_374, 3_377, 3_389, 3_395, 3_490, 3_538, 3_542, 3_574, 3_581, 3_652, 3_659, 3_721,
-				3_756, 3_809, 3_812, 3_816, 3_911, 3_932, 3_960, 3_965, 4_028, 4_031, 4_040, 4_092, 4_097, 4_140, 4_148, 4_235,
-				4_238, 4_240, 4_242, 4_264, 4_271, 4_354, 4_374, 4_403, 4_406, 4_449, 4_483, 4_494, 4_506, 4_526, 4_528, 4_559,
-				4_592, 4_614, 4_621, 4_622, 4_638, 4_644, 4_693, 4_700, 4_726, 4_788, 4_790, 4_807, 4_810, 4_820, 4_823, 4_888,
-				4_941, 4_948,
+				417, 557, 1_013, 1_353, 1_638, 1_864, 2_423, 3_020, 3_036, 3_081, 3_111, 3_659, 4_097, 4_449, 4_506, 4_790,
 			],
 		),
 		GraphFuzzerKnownIssue(

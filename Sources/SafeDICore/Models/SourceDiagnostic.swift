@@ -146,25 +146,43 @@ extension Dependency.DeclarationLocation: Comparable {
 	public static func < (lhs: Dependency.DeclarationLocation, rhs: Dependency.DeclarationLocation) -> Bool {
 		(lhs.filePath, lhs.line, lhs.column) < (rhs.filePath, rhs.line, rhs.column)
 	}
+
+	/// Orders locations by file, line, and column, with a missing location after every location.
+	public static func precedesInSourceOrder(_ lhs: Dependency.DeclarationLocation?, _ rhs: Dependency.DeclarationLocation?) -> Bool {
+		switch (lhs, rhs) {
+		case let (lhs?, rhs?):
+			lhs < rhs
+		case (.some, .none):
+			true
+		case (.none, _):
+			false
+		}
+	}
 }
 
 extension SourceDiagnostic {
 	/// Orders diagnostics by file, line, and column, with location-less diagnostics last and the message as the
 	/// tiebreak, so a group of diagnostics prints in source order and never depends on collection order.
 	public static func precedesInSourceOrder(_ lhs: SourceDiagnostic, _ rhs: SourceDiagnostic) -> Bool {
-		switch (lhs.location, rhs.location) {
-		case let (lhsLocation?, rhsLocation?):
-			if lhsLocation == rhsLocation {
-				lhs.message < rhs.message
-			} else {
-				lhsLocation < rhsLocation
-			}
-		case (.some, .none):
-			true
-		case (.none, .some):
-			false
-		case (.none, .none):
+		if lhs.location == rhs.location {
 			lhs.message < rhs.message
+		} else {
+			Dependency.DeclarationLocation.precedesInSourceOrder(lhs.location, rhs.location)
 		}
+	}
+
+	/// The diagnostics of independent errors, such as those of different roots, reported together: each error’s
+	/// diagnostics stay together and in their order, the errors are in source order, and an error found more than
+	/// once is reported once. Which errors are reported, and in what order, never depends on the order in which
+	/// they were found.
+	public static func joiningInSourceOrder(_ diagnosticsOfErrors: some Sequence<[SourceDiagnostic]>) -> [SourceDiagnostic] {
+		Set(diagnosticsOfErrors)
+			.sorted(by: precedesInSourceOrder)
+			.flatMap(\.self)
+	}
+
+	/// Orders the diagnostics of errors by their first diagnostics in source order, then by their second, and so on.
+	public static func precedesInSourceOrder(_ lhs: [SourceDiagnostic], _ rhs: [SourceDiagnostic]) -> Bool {
+		lhs.lexicographicallyPrecedes(rhs) { precedesInSourceOrder($0, $1) }
 	}
 }

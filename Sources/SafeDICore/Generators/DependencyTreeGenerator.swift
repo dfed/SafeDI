@@ -206,6 +206,7 @@ public actor DependencyTreeGenerator {
 		var seen = Set<TypeDescription>()
 		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation(scopes: typeDescriptionToScopeMap.values)
 		var mockRoots = [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]()
+		var mockRootErrors = [DependencyTreeGeneratorError]()
 		for instantiable in typeDescriptionToFulfillingInstantiableMap.values
 			.sorted(by: { $0.concreteInstantiable < $1.concreteInstantiable })
 		{
@@ -235,58 +236,66 @@ public actor DependencyTreeGenerator {
 			} ?? true
 			guard isAdditionalMock || isDeclaredInCurrentModule else { continue }
 
-			// A hand-written method also named `mock` can be confused with the
-			// generated `mock()`: identical signatures redeclare, overlapping ones
-			// make calls ambiguous or silently pick the generated method, and a
-			// mockOnly extension's mock defaults every parameter, so even a
-			// generated `mock(safeDIOverrides:)` leaves `Type.mock()` ambiguous.
-			// The macro rejects the pair within one declaration; this extends the
-			// rule across declarations and modules.
-			let handWrittenMockLocations = handWrittenMockLocationsByConcreteType[instantiable.concreteInstantiable, default: []]
-			guard handWrittenMockLocations.isEmpty else {
-				throw DependencyTreeGeneratorError.handWrittenMockSharesGeneratedMockName(
-					instantiable.concreteInstantiable,
-					declaredAt: Array(handWrittenMockLocations),
-					// A `generateMock: true` type declared in this module gets its mock whether
-					// or not it is listed; any other type reaching here is generated only
-					// because it is listed, so removing it from the list is also a fix.
-					isGeneratedForAdditionalMocksToGenerate: !(instantiable.generateMock && isDeclaredInCurrentModule),
+			// Each mock root reports the first error it finds, and the errors of every mock root are reported.
+			do {
+				// A hand-written method also named `mock` can be confused with the
+				// generated `mock()`: identical signatures redeclare, overlapping ones
+				// make calls ambiguous or silently pick the generated method, and a
+				// mockOnly extension's mock defaults every parameter, so even a
+				// generated `mock(safeDIOverrides:)` leaves `Type.mock()` ambiguous.
+				// The macro rejects the pair within one declaration; this extends the
+				// rule across declarations and modules.
+				let handWrittenMockLocations = handWrittenMockLocationsByConcreteType[instantiable.concreteInstantiable, default: []]
+				guard handWrittenMockLocations.isEmpty else {
+					throw DependencyTreeGeneratorError.handWrittenMockSharesGeneratedMockName(
+						instantiable.concreteInstantiable,
+						declaredAt: Array(handWrittenMockLocations),
+						// A `generateMock: true` type declared in this module gets its mock whether
+						// or not it is listed; any other type reaching here is generated only
+						// because it is listed, so removing it from the list is also a fix.
+						isGeneratedForAdditionalMocksToGenerate: !(instantiable.generateMock && isDeclaredInCurrentModule),
+					)
+				}
+
+				// Validate that this type's constant @Instantiated children have no @Forwarded properties.
+				// Use the mock scope map (not typeDescriptionToFulfillingInstantiableMap) because
+				// mockOnly types can win additional-type slots and may have different @Forwarded properties.
+				// For fulfilledByType deps, validate against the declared type (same as mock resolution).
+				for dependency in scope.instantiable.dependencies {
+					guard case let .instantiated(fulfillingTypeDescription, _) = dependency.source else { continue }
+					let instantiatedType = dependency.asInstantiatedType
+					let childScope: Scope? = if fulfillingTypeDescription != nil {
+						typeDescriptionToScopeMap[dependency.property.typeDescription.asInstantiatedType]
+							?? typeDescriptionToScopeMap[instantiatedType]
+					} else {
+						typeDescriptionToScopeMap[instantiatedType]
+					}
+					if let childScope,
+					   let error = forwardedPropertyError(
+					   	for: dependency,
+					   	instantiable: childScope.instantiable,
+					   	parent: scope.instantiable,
+					   )
+					{
+						throw error
+					}
+				}
+
+				let mockRoot = try createMockRootScopeGenerator(
+					for: instantiable,
+					scope: scope,
+					typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+					erasedToConcreteTypeMap: erasedToConcreteTypeMap,
+					receivedPropertiesCache: &receivedPropertiesCache,
+					childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 				)
+				mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
+			} catch let error as DependencyTreeGeneratorError {
+				mockRootErrors.append(error)
 			}
-
-			// Validate that this type's constant @Instantiated children have no @Forwarded properties.
-			// Use the mock scope map (not typeDescriptionToFulfillingInstantiableMap) because
-			// mockOnly types can win additional-type slots and may have different @Forwarded properties.
-			// For fulfilledByType deps, validate against the declared type (same as mock resolution).
-			for dependency in scope.instantiable.dependencies {
-				guard case let .instantiated(fulfillingTypeDescription, _) = dependency.source else { continue }
-				let instantiatedType = dependency.asInstantiatedType
-				let childScope: Scope? = if fulfillingTypeDescription != nil {
-					typeDescriptionToScopeMap[dependency.property.typeDescription.asInstantiatedType]
-						?? typeDescriptionToScopeMap[instantiatedType]
-				} else {
-					typeDescriptionToScopeMap[instantiatedType]
-				}
-				if let childScope,
-				   let error = forwardedPropertyError(
-				   	for: dependency,
-				   	instantiable: childScope.instantiable,
-				   	parent: scope.instantiable,
-				   )
-				{
-					throw error
-				}
-			}
-
-			let mockRoot = try createMockRootScopeGenerator(
-				for: instantiable,
-				scope: scope,
-				typeDescriptionToScopeMap: typeDescriptionToScopeMap,
-				erasedToConcreteTypeMap: erasedToConcreteTypeMap,
-				receivedPropertiesCache: &receivedPropertiesCache,
-				childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
-			)
-			mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
+		}
+		if let error = DependencyTreeGeneratorError.reportingAll(of: mockRootErrors) {
+			throw error
 		}
 		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: mockRoots)
 
@@ -638,9 +647,27 @@ public actor DependencyTreeGenerator {
 		/// Reported at the hand-written mock of each type that generated mocks build both with that mock and
 		/// without it, in ways one `SafeDIMockConfiguration` struct cannot describe. See `ConfigurationBuiltTwoWays`.
 		case configurationBuiltTwoWays([ConfigurationBuiltTwoWays])
+		/// Errors that validations independent of one another found – those of different roots, for example – each
+		/// reported as it would be alone, in source order. See `reportingAll(of:)`.
+		case independentErrors([DependencyTreeGeneratorError])
+
+		/// An error reporting every one of `errors`, or `nil` when there are none. The errors are reported in source
+		/// order, so neither which are reported nor their order depends on the order of the validations that found
+		/// them, which follows the names of what they validate. Each validation must keep nothing from one that threw
+		/// that would let it skip work the one that threw did not finish, or which errors are found would depend on
+		/// that order too.
+		static func reportingAll(of errors: [DependencyTreeGeneratorError]) -> DependencyTreeGeneratorError? {
+			if errors.count > 1 {
+				.independentErrors(errors)
+			} else {
+				errors.first
+			}
+		}
 
 		var sourceDiagnostics: [SourceDiagnostic] {
 			switch self {
+			case let .independentErrors(errors):
+				SourceDiagnostic.joiningInSourceOrder(errors.map(\.sourceDiagnostics))
 			case let .nonSendableWrapperCapturedBySendableBuilder(captures):
 				// The captures arrive in set order. Two whose errors read the same name the same wrapper on the same
 				// type, so their notes, at that declaration, read the same too, and the diagnostics come out the same.
@@ -1343,6 +1370,7 @@ public actor DependencyTreeGenerator {
 		// both required and onlyIfAvailable versions of the same dep exist.
 		// Property.< sorts non-optional before optional, so the required version
 		// wins and the optional version is skipped.
+		var promotedPropertiesToGenerate = [(property: Scope.PropertyToGenerate, scope: Scope)]()
 		var promotedLabelAndTypes = Set<String>()
 		for receivedProperty in allReceived.union(lazilyInstantiatedPropertiesToPromote).sorted() {
 			// A forwarded `x: X` fulfills an `x: X?` too.
@@ -1358,19 +1386,30 @@ public actor DependencyTreeGenerator {
 			guard let (receivedScope, erasedToConcreteExistential) = scopeToPromote(for: receivedProperty) else {
 				continue
 			}
-			mockRootScope.propertiesToGenerate.append(.instantiated(
-				receivedProperty,
-				receivedScope,
-				erasedToConcreteExistential: erasedToConcreteExistential,
+			promotedPropertiesToGenerate.append((
+				property: .instantiated(
+					receivedProperty,
+					receivedScope,
+					erasedToConcreteExistential: erasedToConcreteExistential,
+				),
+				scope: receivedScope,
 			))
 		}
+		mockRootScope.propertiesToGenerate += promotedPropertiesToGenerate.map(\.property)
+		// The generated mock declares the promoted children in label order. They are validated in the order their
+		// types are declared, after the mock root's own children, so which error a mock root reports never depends on
+		// their labels. Sorting is stable, so promoted children of one type stay in label order.
+		let validatedMockRootScope = Scope(instantiable: instantiable)
+		validatedMockRootScope.propertiesToGenerate = scope.propertiesToGenerate + promotedPropertiesToGenerate
+			.sorted { Dependency.DeclarationLocation.precedesInSourceOrder($0.scope.instantiable.declarationLocation, $1.scope.instantiable.declarationLocation) }
+			.map(\.property)
 
 		// Validate the promoted mock scope for cycles before generating code.
 		// This catches cycles that only become visible after @Received dependencies
 		// are promoted to the mock root (e.g., B @Receives Instantiator<A> where A
 		// instantiates B — the promotion creates a cycle in the mock root scope).
 		let declaresOnlyIfAvailableAliasOfPropertyBeingBuilt = try validateMockRootScopeForCycles(
-			mockRootScope,
+			validatedMockRootScope,
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 		)
 		// Promotion can also make the mock root's children require one another
@@ -1384,17 +1423,17 @@ public actor DependencyTreeGenerator {
 		// walk above found such an alias too.
 		// The mock root binds every received property it does not promote, which encloses its whole tree.
 		let mockRootEnclosingProvidedProperties = childrenRequiringEachOtherValidation.enclosingProvidedProperties(
-			ofMockRoot: mockRootScope,
+			ofMockRoot: validatedMockRootScope,
 			receivedProperties: allReceived,
 		)
 		let mockRootChildrenRequiringEachOther = Self.childrenRequiringEachOther(
-			in: mockRootScope,
+			in: validatedMockRootScope,
 			enclosingProvidedProperties: mockRootEnclosingProvidedProperties,
 			cache: &cache,
 		)
 		try validatePropertiesAreFulfillable(
 			onRootScopes: mockRootChildrenRequiringEachOther != nil || declaresOnlyIfAvailableAliasOfPropertyBeingBuilt
-				? [ValidatedRootScope(scope: mockRootScope, boundProperties: allReceived)]
+				? [ValidatedRootScope(scope: validatedMockRootScope, boundProperties: allReceived)]
 				: [],
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 			cyclesOnly: true,
@@ -1405,18 +1444,18 @@ public actor DependencyTreeGenerator {
 		// that require one another, in the order `validateChildrenDoNotRequireEachOther`
 		// checks them. The mock root's own children were checked above, so only their
 		// trees are left.
-		if let aliasesFulfillingOneAnother = Self.aliasesFulfillingOneAnother(in: mockRootScope) {
+		if let aliasesFulfillingOneAnother = Self.aliasesFulfillingOneAnother(in: validatedMockRootScope) {
 			throw aliasesFulfillingOneAnother.error
 		} else if let mockRootChildrenRequiringEachOther {
 			throw mockRootChildrenRequiringEachOther.error
 		} else {
 			var mockRootChildScopes = [(scope: Scope, enclosingProvidedProperties: Set<Property>)]()
-			for case let .instantiated(childProperty, childScope, _) in mockRootScope.propertiesToGenerate {
+			for case let .instantiated(childProperty, childScope, _) in validatedMockRootScope.propertiesToGenerate {
 				mockRootChildScopes.append((
 					childScope,
 					childrenRequiringEachOtherValidation.enclosingProvidedProperties(
 						ofChild: childProperty,
-						of: mockRootScope,
+						of: validatedMockRootScope,
 						enclosingProvidedProperties: mockRootEnclosingProvidedProperties,
 					),
 				))
@@ -1561,6 +1600,13 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
+	/// A child of a scope that a property names, with how directly it names the child: the lower `directness`, the
+	/// more directly.
+	private struct NamedChild {
+		let index: Int
+		let directness: Int
+	}
+
 	/// What `childrenRequiringEachOther` needs to know about the scopes enclosing a scope: which of the properties
 	/// in `onlyIfAvailableAliasProperties` they provide to it. An `onlyIfAvailable` alias a scope declares is created
 	/// for a receiver that requires it, after its fulfilling property, only when no enclosing scope provides its
@@ -1635,12 +1681,14 @@ public actor DependencyTreeGenerator {
 		for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
 			children.append((property, childScope))
 		}
-		// A lazily instantiated child is also received by value, as the instance it creates.
-		var childIndexByProperty = [Property: Int]()
+		// A property names a child most directly as the child's own property, then as the property that receives
+		// its instance when it is lazily instantiated, then as an alias the scope declares, in declaration order.
+		var childByProperty = [Property: NamedChild]()
 		for (index, child) in children.enumerated() {
-			childIndexByProperty[child.property] = index
+			childByProperty[child.property] = NamedChild(index: index, directness: 0)
+			// A lazily instantiated child is also received by value, as the instance it creates.
 			if let instanceProperty = child.property.asLazilyInstantiatedInstanceProperty {
-				childIndexByProperty[instanceProperty] = index
+				childByProperty[instanceProperty] = NamedChild(index: index, directness: 1)
 			}
 		}
 		// A child's tree that requires an alias the scope declares requires the child the alias is assigned
@@ -1657,50 +1705,52 @@ public actor DependencyTreeGenerator {
 				onlyIfAvailableAliasFulfillingPropertyByProperty[property] = fulfillingProperty
 			}
 		}
-		var aliasedChildIndexByProperty = [Property: Int]()
+		var aliasedChildByProperty = [Property: NamedChild]()
 		var resolvedAnAlias = true
 		while resolvedAnAlias {
 			resolvedAnAlias = false
-			for alias in aliases where aliasedChildIndexByProperty[alias.property] == nil {
-				if let index = childIndexByProperty[alias.fulfillingProperty] ?? aliasedChildIndexByProperty[alias.fulfillingProperty] {
-					aliasedChildIndexByProperty[alias.property] = index
+			for (aliasIndex, alias) in aliases.enumerated() where aliasedChildByProperty[alias.property] == nil {
+				if let namedChild = childByProperty[alias.fulfillingProperty] ?? aliasedChildByProperty[alias.fulfillingProperty] {
+					aliasedChildByProperty[alias.property] = NamedChild(index: namedChild.index, directness: 2 + aliasIndex)
 					resolvedAnAlias = true
 				}
 			}
 		}
-		func childIndex(declaring property: Property) -> Int? {
-			childIndexByProperty[property] ?? aliasedChildIndexByProperty[property]
+		func namedChild(declaring property: Property) -> NamedChild? {
+			childByProperty[property] ?? aliasedChildByProperty[property]
 		}
-		/// The child declaring the unwrapped form of `property`, which fulfills a required receive of `property`.
+		/// The child declaring the unwrapped form of `property`, which fulfills a required receive of `property`, and
+		/// which `property` names less directly than any property the scope declares does.
 		/// A tree can list an optional property it receives only if available as neither, beneath a scope that
 		/// forwards its unwrapped form, so a receiver that requires it is looked for.
-		func childIndex(declaringUnwrapped property: Property, requiredInTreeOf childScope: Scope) -> Int? {
-			guard let index = childIndex(declaring: property.asUnwrappedProperty),
+		func namedChild(declaringUnwrapped property: Property, requiredInTreeOf childScope: Scope) -> NamedChild? {
+			guard let namedChild = namedChild(declaring: property.asUnwrappedProperty),
 			      requiredReceiver(of: property, inTreeOf: childScope) != nil
 			else { return nil }
-			return index
+			return NamedChild(index: namedChild.index, directness: namedChild.directness + 2 + aliases.count)
 		}
-		// The siblings each child requires, in sibling order, each with the first (sorted) property through which it is received.
-		// A child that receives its own property is reported by the received walk or the ancestor check, but one that
-		// receives it through an alias or unwrapped requires itself here. Only the received properties that name a
-		// sibling are kept, so nothing is sorted on the common path.
+		// The siblings each child requires, in sibling order, each with the property through which it is received that
+		// names it most directly. A child that receives its own property is reported by the received walk or the ancestor
+		// check, but one that receives it through an alias or unwrapped requires itself here. Only the received properties
+		// that name a sibling are kept, so nothing is sorted on the common path.
 		let requiredSiblings = children.map { child in
 			let receivedProperties = collectReceivedProperties(from: child.scope, cache: &cache)
-			var firstReceivedPropertyBySiblingIndex = [Int: Property]()
+			var mostDirectReceivedPropertyBySiblingIndex = [Int: (property: Property, directness: Int)]()
 			// A property received only if available is still required when it fulfills an `onlyIfAvailable` alias that a receiver requires.
 			for property in receivedProperties.received
 				where property != child.property
 				&& property != child.property.asLazilyInstantiatedInstanceProperty
 				&& (!receivedProperties.onlyIfAvailable.contains(property) || receivedProperties.requiredAliasFulfilling.contains(property))
 			{
-				if let index = childIndex(declaring: property) ?? childIndex(declaringUnwrapped: property, requiredInTreeOf: child.scope),
-				   firstReceivedPropertyBySiblingIndex[index].map({ property < $0 }) ?? true
+				// Two optional properties can name a child by one unwrapped form, so the property breaks the tie.
+				if let namedChild = namedChild(declaring: property) ?? namedChild(declaringUnwrapped: property, requiredInTreeOf: child.scope),
+				   mostDirectReceivedPropertyBySiblingIndex[namedChild.index].map({ (namedChild.directness, property) < ($0.directness, $0.property) }) ?? true
 				{
-					firstReceivedPropertyBySiblingIndex[index] = property
+					mostDirectReceivedPropertyBySiblingIndex[namedChild.index] = (property, namedChild.directness)
 				}
 			}
-			return firstReceivedPropertyBySiblingIndex
-				.map { (index: $0.key, receivedProperty: $0.value) }
+			return mostDirectReceivedPropertyBySiblingIndex
+				.map { (index: $0.key, receivedProperty: $0.value.property) }
 				.sorted { $0.index < $1.index }
 		}
 		// Depth-first search, in sibling order, for a back edge.
@@ -1744,8 +1794,10 @@ public actor DependencyTreeGenerator {
 	/// Validates that no scope in the trees rooted at `rootScopes` has instantiated
 	/// children that require one another (see `childrenRequiringEachOther`). Such
 	/// children would be generated with one of them referring to a sibling declared
-	/// after it, which no compiler stage before SIL rejects. Scopes in `validation`'s
-	/// `validatedScopes` are skipped along with their trees, and every scope validated is added to it.
+	/// after it, which no compiler stage before SIL rejects. Each tree reports the first
+	/// error it finds, and the errors of every tree are reported. Scopes in `validation`'s
+	/// `validatedScopes` are skipped along with their trees, and every scope whose tree is
+	/// validated without error is added to it.
 	/// - Parameter rootScopes: The roots of the trees, each with the properties of `onlyIfAvailable` aliases that
 	///   the scopes enclosing it provide to it (see `ChildrenRequiringEachOtherValidation`).
 	private static func validateChildrenDoNotRequireEachOther(
@@ -1754,26 +1806,42 @@ public actor DependencyTreeGenerator {
 		validation: inout ChildrenRequiringEachOtherValidation,
 	) throws {
 		func validateChildrenDoNotRequireEachOther(inTreeRootedAt scope: Scope, enclosingProvidedProperties: Set<Property>) throws {
-			guard validation.validatedScopes.insert(.init(scope: scope, enclosingProvidedProperties: enclosingProvidedProperties)).inserted else { return }
-			if let aliasesFulfillingOneAnother = aliasesFulfillingOneAnother(in: scope) {
-				throw aliasesFulfillingOneAnother.error
-			} else if let childrenRequiringEachOther = childrenRequiringEachOther(in: scope, enclosingProvidedProperties: enclosingProvidedProperties, cache: &cache) {
-				throw childrenRequiringEachOther.error
-			} else {
-				for case let .instantiated(childProperty, childScope, _) in scope.propertiesToGenerate {
-					try validateChildrenDoNotRequireEachOther(
-						inTreeRootedAt: childScope,
-						enclosingProvidedProperties: validation.enclosingProvidedProperties(
-							ofChild: childProperty,
-							of: scope,
-							enclosingProvidedProperties: enclosingProvidedProperties,
-						),
-					)
+			let validatedScope = ChildrenRequiringEachOtherValidation.ValidatedScope(scope: scope, enclosingProvidedProperties: enclosingProvidedProperties)
+			guard validation.validatedScopes.insert(validatedScope).inserted else { return }
+			do {
+				if let aliasesFulfillingOneAnother = aliasesFulfillingOneAnother(in: scope) {
+					throw aliasesFulfillingOneAnother.error
+				} else if let childrenRequiringEachOther = childrenRequiringEachOther(in: scope, enclosingProvidedProperties: enclosingProvidedProperties, cache: &cache) {
+					throw childrenRequiringEachOther.error
+				} else {
+					for case let .instantiated(childProperty, childScope, _) in scope.propertiesToGenerate {
+						try validateChildrenDoNotRequireEachOther(
+							inTreeRootedAt: childScope,
+							enclosingProvidedProperties: validation.enclosingProvidedProperties(
+								ofChild: childProperty,
+								of: scope,
+								enclosingProvidedProperties: enclosingProvidedProperties,
+							),
+						)
+					}
 				}
+			} catch {
+				// The next tree that reaches this scope validates it again, and reports the same error, rather than
+				// skipping it and validating what this tree did not reach because it stopped here.
+				validation.validatedScopes.remove(validatedScope)
+				throw error
 			}
 		}
+		var treeErrors = [DependencyTreeGeneratorError]()
 		for rootScope in rootScopes {
-			try validateChildrenDoNotRequireEachOther(inTreeRootedAt: rootScope.scope, enclosingProvidedProperties: rootScope.enclosingProvidedProperties)
+			do {
+				try validateChildrenDoNotRequireEachOther(inTreeRootedAt: rootScope.scope, enclosingProvidedProperties: rootScope.enclosingProvidedProperties)
+			} catch let error as DependencyTreeGeneratorError {
+				treeErrors.append(error)
+			}
+		}
+		if let error = DependencyTreeGeneratorError.reportingAll(of: treeErrors) {
+			throw error
 		}
 	}
 
@@ -2432,9 +2500,9 @@ public actor DependencyTreeGenerator {
 			}
 
 		// Populate the propertiesToGenerate on each scope. Scopes hash by identity, so they are
-		// visited in an order that changes from run to run, and of the dependencies that cannot
-		// be instantiated, the one reported is the first on the type whose name sorts first.
-		var firstForwardedPropertyError: ForwardedPropertyError?
+		// visited in an order that changes from run to run, and every dependency that cannot be
+		// instantiated is reported, in source order.
+		var forwardedPropertyErrors = [DependencyTreeGeneratorError]()
 		for scope in Set(typeDescriptionToScopeMap.values) {
 			for dependency in scope.instantiable.dependencies {
 				switch dependency.source {
@@ -2444,16 +2512,11 @@ public actor DependencyTreeGenerator {
 					   let instantiatedScope = typeDescriptionToScopeMap[instantiatedType]
 					{
 						if let error = forwardedPropertyError(
-						   	for: dependency,
-						   	instantiable: instantiable,
-						   	parent: scope.instantiable,
-						   ),
-						   firstForwardedPropertyError.map({ scope.instantiable.concreteInstantiable < $0.parent }) ?? true
-						{
-							firstForwardedPropertyError = ForwardedPropertyError(
-								parent: scope.instantiable.concreteInstantiable,
-								error: error,
-							)
+							for: dependency,
+							instantiable: instantiable,
+							parent: scope.instantiable,
+						) {
+							forwardedPropertyErrors.append(error)
 						}
 						scope.propertiesToGenerate.append(.instantiated(
 							dependency.property,
@@ -2474,8 +2537,8 @@ public actor DependencyTreeGenerator {
 				}
 			}
 		}
-		if let firstForwardedPropertyError {
-			throw firstForwardedPropertyError.error
+		if let error = DependencyTreeGeneratorError.reportingAll(of: forwardedPropertyErrors) {
+			throw error
 		}
 		return typeDescriptionToScopeMap
 	}
@@ -2493,6 +2556,8 @@ public actor DependencyTreeGenerator {
 			let property: Property
 			/// The label of the dependency that type receives: `property`'s own, or for an alias the label it renames.
 			let receivedLabel: String
+			/// Where that type declares `property`.
+			let declarationLocation: Dependency.DeclarationLocation?
 		}
 
 		/// A lazily instantiated dependency that is instantiated whenever the type declaring it is created.
@@ -2570,8 +2635,12 @@ public actor DependencyTreeGenerator {
 				return readProperty
 			}
 			func recordReads(whileCreating childScope: Scope) {
-				// Sorted so that which reader is reported never depends on dictionary iteration.
-				for (property, reader) in instantiationAnalysis(of: childScope, cache: &cache).readFromAncestors.sorted(by: { $0.key < $1.key }) {
+				// Reads this type renames to one property are recorded as the read of the reader declared first. Sorted by
+				// where each reader is declared, so which reader is reported never depends on dictionary iteration, or on
+				// the labels of the aliases the reads are renamed through. Reads at one location have one reader.
+				for (property, reader) in instantiationAnalysis(of: childScope, cache: &cache).readFromAncestors.sorted(by: {
+					Dependency.DeclarationLocation.precedesInSourceOrder($0.value.declarationLocation, $1.value.declarationLocation)
+				}) {
 					let readProperty = propertyRead(by: property)
 					if readWhileCreated[readProperty] == nil {
 						readWhileCreated[readProperty] = reader
@@ -2579,6 +2648,13 @@ public actor DependencyTreeGenerator {
 				}
 			}
 
+			/// Records that creating this type reads `property` through `dependency`, unless a dependency declared
+			/// earlier reads it, as two renamings of one instance do.
+			func recordRead(of property: Property, by dependency: Dependency, receivedLabel: String) {
+				if readWhileCreated[property] == nil {
+					readWhileCreated[property] = .init(instantiable: instantiable, property: dependency.property, receivedLabel: receivedLabel, declarationLocation: dependency.declarationLocation)
+				}
+			}
 			for dependency in instantiable.dependencies {
 				switch dependency.source {
 				case .instantiated, .forwarded:
@@ -2587,11 +2663,11 @@ public actor DependencyTreeGenerator {
 					// Whether an `onlyIfAvailable` receive reads the instance depends on the order in which
 					// siblings are generated, so it is never taken as the reason a dependency is instantiated.
 					if !onlyIfAvailable, dependency.property.propertyType.isConstant {
-						readWhileCreated[dependency.property] = .init(instantiable: instantiable, property: dependency.property, receivedLabel: dependency.property.label)
+						recordRead(of: dependency.property, by: dependency, receivedLabel: dependency.property.label)
 					}
 				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
 					if !onlyIfAvailable, fulfillingProperty.propertyType.isConstant {
-						readWhileCreated[propertyRead(by: fulfillingProperty)] = .init(instantiable: instantiable, property: dependency.property, receivedLabel: fulfillingProperty.label)
+						recordRead(of: propertyRead(by: fulfillingProperty), by: dependency, receivedLabel: fulfillingProperty.label)
 					}
 				}
 			}
@@ -2625,13 +2701,6 @@ public actor DependencyTreeGenerator {
 			cache[scopeIdentifier] = analysis
 			return analysis
 		}
-	}
-
-	/// A constant or lazily instantiated `@Instantiated` dependency whose type has `@Forwarded` properties, and
-	/// the type that declares it.
-	private struct ForwardedPropertyError {
-		let parent: TypeDescription
-		let error: DependencyTreeGeneratorError
 	}
 
 	/// The error for a constant or lazily instantiated `@Instantiated` dependency on `parent` whose `instantiable`
@@ -2726,9 +2795,9 @@ public actor DependencyTreeGenerator {
 		receivedPropertiesCache: inout ReceivedPropertiesCache,
 		cyclesOnly: Bool,
 	) throws {
-		// Validate in type order, so that the error reported when several trees have one
-		// does not depend on set iteration order. A root receives nothing, so its tree binds
-		// nothing above its own properties.
+		// Every tree is validated, and the errors are reported in source order, so neither depends on the order of the
+		// trees; they are validated in type order regardless. A root receives nothing, so its tree binds nothing above
+		// its own properties.
 		var rootScopes = rootInstantiables.sorted().compactMap { typeDescriptionToScopeMap[$0] }.map { ValidatedRootScope(scope: $0, boundProperties: []) }
 		// When checking cycles only (mock validation), also validate non-root types
 		// that have generateMock enabled — they bypass root entry points. Each one's
@@ -2739,7 +2808,9 @@ public actor DependencyTreeGenerator {
 				.filter { scope in
 					scope.instantiable.generateMock && !rootInstantiableSet.contains(scope.instantiable.concreteInstantiable)
 				}
-				.sorted { $0.instantiable.concreteInstantiable < $1.instantiable.concreteInstantiable }
+				// A type whose hand-written mock is not passed some of its dependencies has two scopes, which only
+				// identity tells apart: the full one first, then the one its hand-written mock builds.
+				.sorted { ($0.instantiable.concreteInstantiable, $0.dependenciesLeftOut.count) < ($1.instantiable.concreteInstantiable, $1.dependenciesLeftOut.count) }
 				.map { scope in ValidatedRootScope(scope: scope, boundProperties: Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received) }
 		}
 		try validatePropertiesAreFulfillable(
@@ -3020,38 +3091,46 @@ public actor DependencyTreeGenerator {
 					}
 				} else if alias.onlyIfAvailable,
 				          let declaringProperty = alias.declaringInstantiationStack.first,
-				          walkedAliasFulfillingProperties.insert([fulfillingProperty] + alias.declaringInstantiationStack).inserted
+				          case let walkedAliasFulfillingProperty = [fulfillingProperty] + alias.declaringInstantiationStack,
+				          walkedAliasFulfillingProperties.insert(walkedAliasFulfillingProperty).inserted
 				{
 					// A required alias's fulfilling property is walked where the alias is declared. Walk this
 					// one there too, since the receive requires it.
 					var stackPropertiesReliedOnByWalkedProperty = [Property: Set<Property>]()
 					do {
-						_ = try validateNoCycleInReceivedProperties(
-							[Scope.RequiredReceivedProperty(
-								property: fulfillingProperty,
-								aliasProperty: receivedProperty,
-								declarationLocation: requiredReceivedProperty.declarationLocation,
-								identifierRange: nil,
-								typeAnnotationRange: nil,
-								bareAttributeRange: nil,
-							)],
-							directParent: alias.declaringType,
-							receivedPropertyStack: [receivedProperty.asValidatedForDependencyCycles],
-							declaredReceivedPropertyStack: receivedProperty.propertyType.isLazilyInstantiated ? [receivedProperty] : [],
-							property: declaringProperty,
-							instantiationStack: alias.declaringInstantiationStack,
-							lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations,
-							stackPropertiesReliedOnByWalkedProperty: &stackPropertiesReliedOnByWalkedProperty,
-						)
-					} catch let DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(instantiated, receivedPropertyChain, declarationLocation, lazilyInstantiatedProperties, _) {
-						// The chain starts with this receive, which closes it only because it requires the alias.
-						throw DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(
-							instantiated: instantiated,
-							receivedPropertyChain: receivedPropertyChain,
-							declarationLocation: declarationLocation,
-							lazilyInstantiatedProperties: lazilyInstantiatedProperties,
-							requiredOnlyIfAvailableAliases: [.init(property: receivedProperty, fulfillingProperty: fulfillingProperty)],
-						)
+						do {
+							_ = try validateNoCycleInReceivedProperties(
+								[Scope.RequiredReceivedProperty(
+									property: fulfillingProperty,
+									aliasProperty: receivedProperty,
+									declarationLocation: requiredReceivedProperty.declarationLocation,
+									identifierRange: nil,
+									typeAnnotationRange: nil,
+									bareAttributeRange: nil,
+								)],
+								directParent: alias.declaringType,
+								receivedPropertyStack: [receivedProperty.asValidatedForDependencyCycles],
+								declaredReceivedPropertyStack: receivedProperty.propertyType.isLazilyInstantiated ? [receivedProperty] : [],
+								property: declaringProperty,
+								instantiationStack: alias.declaringInstantiationStack,
+								lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations,
+								stackPropertiesReliedOnByWalkedProperty: &stackPropertiesReliedOnByWalkedProperty,
+							)
+						} catch let DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(instantiated, receivedPropertyChain, declarationLocation, lazilyInstantiatedProperties, _) {
+							// The chain starts with this receive, which closes it only because it requires the alias.
+							throw DependencyTreeGeneratorError.dependencyReceivedInSameChainItIsInstantiated(
+								instantiated: instantiated,
+								receivedPropertyChain: receivedPropertyChain,
+								declarationLocation: declarationLocation,
+								lazilyInstantiatedProperties: lazilyInstantiatedProperties,
+								requiredOnlyIfAvailableAliases: [.init(property: receivedProperty, fulfillingProperty: fulfillingProperty)],
+							)
+						}
+					} catch {
+						// The next tree that reaches this alias walks it again, and reports the same error, rather than
+						// skipping it and validating what this tree did not reach because it stopped here.
+						walkedAliasFulfillingProperties.remove(walkedAliasFulfillingProperty)
+						throw error
 					}
 				}
 			}
@@ -3277,23 +3356,33 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
+		// Each tree reports the first error it throws, and the errors of every tree are reported, rather than the
+		// unfulfillable and hidden properties the walks record.
+		var rootErrors = [DependencyTreeGeneratorError]()
 		for rootScope in rootScopes {
-			try validatePropertiesAreFulfillable(
-				on: rootScope.scope,
-				receivableProperties: Set(rootScope.scope.properties),
-				receivableAliases: [:],
-				boundProperties: rootScope.boundProperties,
-				closestDeclarationByLabel: [:],
-				validatesCycles: true,
-				// A production root without a mock is validated for production; only mocks generate its tree here.
-				validatesHiddenProperties: !cyclesOnly
-					|| rootScope.scope.instantiable.generateMock
-					|| additionalMockRootScopes.contains { $0.scope == rootScope.scope },
-				property: nil,
-				propertyStack: [],
-				lazilyInstantiatedDeclarations: [:],
-				root: rootScope.scope.instantiable.concreteInstantiable,
-			)
+			do {
+				try validatePropertiesAreFulfillable(
+					on: rootScope.scope,
+					receivableProperties: Set(rootScope.scope.properties),
+					receivableAliases: [:],
+					boundProperties: rootScope.boundProperties,
+					closestDeclarationByLabel: [:],
+					validatesCycles: true,
+					// A production root without a mock is validated for production; only mocks generate its tree here.
+					validatesHiddenProperties: !cyclesOnly
+						|| rootScope.scope.instantiable.generateMock
+						|| additionalMockRootScopes.contains { $0.scope == rootScope.scope },
+					property: nil,
+					propertyStack: [],
+					lazilyInstantiatedDeclarations: [:],
+					root: rootScope.scope.instantiable.concreteInstantiable,
+				)
+			} catch let error as DependencyTreeGeneratorError {
+				rootErrors.append(error)
+			}
+		}
+		if let error = DependencyTreeGeneratorError.reportingAll(of: rootErrors) {
+			throw error
 		}
 		// Walking the other additional mock roots for cycles here could reject a mock that compiles today. Their
 		// mocks are validated for cycles after promotion, in `createMockRootScopeGenerator`.
@@ -3348,28 +3437,29 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// Validates that every reachable type description has a corresponding `@Instantiable` that production
-	/// code can build, reporting the first missing type in type order. A `mockOnly` declaration exists solely
+	/// code can build, reporting every missing type, in source order. A `mockOnly` declaration exists solely
 	/// for mock generation, so it does not count. Were it counted, a type it fulfills that shares a concrete
 	/// type with a production declaration would be built from whichever declaration a set iteration reached first.
 	private func validateReachableTypeDescriptions() throws {
-		if let unbuildableTypeDescription = reachableTypeDescriptions
-			.filter({ typeDescriptionToFulfillingInstantiableMap[$0]?.mockOnly != false })
-			.min()
-		{
-			// The map's values can hold the same instantiable under several keys, so collect into a set.
-			let referencingProperties = Set(
-				typeDescriptionToFulfillingInstantiableMap.values.flatMap { instantiable in
-					instantiable.dependencies
-						.filter { $0.isInstantiated && $0.asInstantiatedType == unbuildableTypeDescription }
-						.map { DependencyTreeGeneratorError.LocatedProperty(property: $0.property, declarationLocation: $0.declarationLocation) }
-				},
-			)
-			throw DependencyTreeGeneratorError.noInstantiableFound(
+		let unbuildableTypeDescriptions = reachableTypeDescriptions
+			.filter { typeDescriptionToFulfillingInstantiableMap[$0]?.mockOnly != false }
+		guard !unbuildableTypeDescriptions.isEmpty else { return }
+		// The map's values can hold the same instantiable under several keys, so collect into sets.
+		var referencingPropertiesByType = [TypeDescription: Set<DependencyTreeGeneratorError.LocatedProperty>]()
+		for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
+			for dependency in instantiable.dependencies where dependency.isInstantiated && unbuildableTypeDescriptions.contains(dependency.asInstantiatedType) {
+				referencingPropertiesByType[dependency.asInstantiatedType, default: []].insert(
+					DependencyTreeGeneratorError.LocatedProperty(property: dependency.property, declarationLocation: dependency.declarationLocation),
+				)
+			}
+		}
+		throw DependencyTreeGeneratorError.independentErrors(unbuildableTypeDescriptions.map { unbuildableTypeDescription in
+			DependencyTreeGeneratorError.noInstantiableFound(
 				unbuildableTypeDescription,
-				referencedBy: Array(referencingProperties),
+				referencedBy: Array(referencingPropertiesByType[unbuildableTypeDescription, default: []]),
 				fulfilledByMockOnlyDeclaration: typeDescriptionToFulfillingInstantiableMap[unbuildableTypeDescription] != nil,
 			)
-		}
+		})
 	}
 }
 

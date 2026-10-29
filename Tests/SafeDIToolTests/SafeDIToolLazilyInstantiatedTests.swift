@@ -1968,6 +1968,51 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_warnsNamingTheFirstDeclaredRename_whenTypeCreatedWithOwnerRenamesInstanceOfLazilyInstantiatedPropertyTwice() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>, child: Child) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let analytics: LazilyInstantiated<Analytics>
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				public protocol EventTracker {}
+
+				@Instantiable
+				public final class Analytics: EventTracker, Instantiable {
+				    public init() {}
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(eventTracker: EventTracker, recorder: EventTracker) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let eventTracker: EventTracker
+				    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let recorder: EventTracker
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.warnings.map(\.formatted) == [
+			"\(output.fixtures["Root.swift"]):7:5: warning: @Instantiated property `analytics: LazilyInstantiated<Analytics>` is instantiated whenever `Root` is created: `Child` is created with `Root` and receives the instance as `eventTracker: EventTracker`. To instantiate it lazily, receive `analytics: LazilyInstantiated<Analytics>` on `Child`.",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_warns_whenOwnerInstantiatedByInstantiatorCreatesTypeThatReceivesLazilyInstantiatedPropertyByValue() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [

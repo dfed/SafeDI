@@ -2149,13 +2149,15 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsErrorOfFirstTypeInTypeOrder_whenManyTypesWithGeneratedMocksHaveCycles() async {
+	mutating func mock_throwsErrorOfEveryTypeInSourceOrder_whenManyTypesWithGeneratedMocksHaveCycles() async {
 		// Every one of the 200 types whose mock is generated is in its own cycle. Their scopes
 		// hash by object identity, so a set of them iterates in an order that changes from run
-		// to run, and validating in that order reports `Mock000`'s cycle about once in 200 runs.
-		let swiftFileContent = (0..<200).map { index in
-			let suffix = String(repeating: "0", count: 3 - String(index).count) + String(index)
-			return """
+		// to run; every cycle is reported, in source order, whichever order validates them.
+		let suffixes = (0..<200).map { index in
+			String(repeating: "0", count: 3 - String(index).count) + String(index)
+		}
+		let swiftFileContent = suffixes.map { suffix in
+			"""
 			@Instantiable(generateMock: true)
 			public struct Mock\(suffix): Instantiable {
 			    public init(partner: Partner\(suffix)) { self.partner = partner }
@@ -2170,11 +2172,14 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		}.joined(separator: "\n")
 		await assertThrowsError(
 			diagnostics: { fixtures in
-				"""
-				\(fixtures["Mock000.swift"]):4:5: error: Dependency cycle: `Partner000` -> `Mock000` -> `Partner000`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `partner: Partner000` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
-				\(fixtures["Mock000.swift"]):6:1: note: `Partner000` is part of the cycle
-				\(fixtures["Mock000.swift"]):1:1: note: `Mock000` is part of the cycle
-				"""
+				// Each type and its partner take ten lines.
+				suffixes.enumerated().map { index, suffix in
+					"""
+					\(fixtures["Mock000.swift"]):\(10 * index + 4):5: error: Dependency cycle: `Partner\(suffix)` -> `Mock\(suffix)` -> `Partner\(suffix)`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `partner: Partner\(suffix)` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
+					\(fixtures["Mock000.swift"]):\(10 * index + 6):1: note: `Partner\(suffix)` is part of the cycle
+					\(fixtures["Mock000.swift"]):\(10 * index + 1):1: note: `Mock\(suffix)` is part of the cycle
+					"""
+				}.joined(separator: "\n")
 			},
 		) {
 			try await executeSafeDIToolTest(
