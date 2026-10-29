@@ -20,7 +20,7 @@ toolchain). The SafeDI rules themselves are platform-agnostic.
   - `<name>_safedi`, a `safedi_compile` target that runs SafeDITool once over the same `srcs` and writes two outputs:
     - `<name>_safedi.safedi` — module-info artifact for cross-module consumers (carried via the rule's `SafeDIInfo` provider).
     - `<name>_safedi.swift` — combined dependency-tree + mocks + mock configuration source.
-  SafeDITool's per-root / per-mock file split is concatenated via `--combined-output` into one statically-declared output — no hand-maintained output list regardless of how many `@Instantiable(isRoot:)` / `generateMock: true` types the module declares.
+  With the manifest `scan` plans, as the SPM plugin uses, SafeDITool writes one generated `.swift` per source file that declares a root, one per source file that declares a `generateMock: true` type, one per `additionalMocksToGenerate` entry, and, when there are mocks, the shared mock configuration. `--combined-output` concatenates them into one statically-declared output instead — no hand-maintained output list regardless of how many `@Instantiable(isRoot:)` / `generateMock: true` types the module declares.
 - **One set of compilation conditions.** Both targets receive the same `defines` and `copts`, so SafeDITool scans the `#if` clauses the compiler compiles. SafeDITool also sees `DEBUG` in `dbg`/`fastbuild` builds, `NDEBUG` in `opt` builds, and every `-D` passed with `--@rules_swift//swift:copt`.
 - **Cross-module type resolution via `.safedi`.** The host target reaches the subproject via `safedi_deps = ["//Subproject:Subproject_safedi"]` and never re-parses its sources.
 - **SafeDI consumed via `bazel_dep`.** MODULE.bazel declares
