@@ -317,6 +317,21 @@ public actor DependencyTreeGenerator {
 			return union
 		}
 
+		// A type with a hand-written mock configures every property with the defaults the mock declares, whether
+		// the property is built with the mock or with `init`: the struct is shared, so it cannot hold both. A
+		// property built with `init` beneath a cycle edge, which no override reaches, passes the struct's default
+		// for each of them too.
+		// The mock's arguments are matched to the dependencies of the entry under the concrete type, which a
+		// `mockOnly` declaration's mock is merged into, so a dependency's argument never counts as a default.
+		let handWrittenMockDefaultParameters = typeDescriptionToFulfillingInstantiableMap.values
+			.reduce(into: [TypeDescription: [ScopeGenerator.MockParameterNode.DefaultParameter]]()) { result, instantiable in
+				guard let mockInitializer = instantiable.mockInitializer else { return }
+				result[instantiable.concreteInstantiable] = ScopeGenerator.MockParameterNode.DefaultParameter.defaultParameters(
+					of: mockInitializer,
+					dependencies: (typeDescriptionToFulfillingInstantiableMap[instantiable.concreteInstantiable] ?? instantiable).dependencies,
+				)
+			}
+
 		// Generate mock code and collect configuration types in parallel.
 		let generatedRoots = try await withThrowingTaskGroup(
 			of: GeneratedMockRoot.self,
@@ -329,6 +344,7 @@ public actor DependencyTreeGenerator {
 							mockConditionalCompilation: mockConditionalCompilation,
 							forwardedParameterMockDefaults: forwardedParameterMockDefaults,
 							cycleEdges: cycleEdges,
+							handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 						)),
 					)
 					async let configurationTypes = mockRoot.collectConfigurationTypes()
@@ -365,8 +381,8 @@ public actor DependencyTreeGenerator {
 			for configurationType in result.configurationTypes {
 				let typeName = configurationType.concreteType.asSource
 				if seenTypeNames.insert(typeName).inserted {
-					// The first node can be one that reads nothing from the struct, beneath a cycle edge, built
-					// the other way from the nodes that read it. The struct must describe those that read it.
+					// The first node can be one that reads no overrides from the struct, beneath a cycle edge, built
+					// the other way from the nodes that read them. The struct must describe those that read them.
 					let structNode = nodesReadingConfiguration[configurationType.concreteType].flatMap { nodeReadingConfiguration in
 						nodeReadingConfiguration.configurationRequirements == configurationType.configurationRequirements ? nil : nodeReadingConfiguration
 					} ?? configurationType
@@ -374,6 +390,7 @@ public actor DependencyTreeGenerator {
 						for: structNode,
 						cycleEdges: cycleEdges,
 						sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+						handWrittenMockDefaultParameters: handWrittenMockDefaultParameters[configurationType.concreteType, default: []],
 					)
 					if rootedTypeNames.contains(typeName) {
 						rootedConfigurationExtensions[typeName] = structCode
@@ -427,7 +444,8 @@ public actor DependencyTreeGenerator {
 	/// builds some of its properties and not others. A construction that needs no struct is built from a closure
 	/// typed by its property, so it never conflicts.
 	///
-	/// A node beneath an edge in `cycleEdges` reads nothing from its struct, so it is not compared.
+	/// A node beneath an edge in `cycleEdges` reads no overrides from its struct, so it is not compared (see
+	/// `ScopeGenerator.collectConfigurationNodesByConstruction`).
 	///
 	/// - Parameter mockRoots: The mock roots in concrete type order, so the properties a diagnostic names are
 	///   the same on every run.
