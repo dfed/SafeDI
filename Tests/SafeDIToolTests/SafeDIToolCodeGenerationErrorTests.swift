@@ -6019,6 +6019,199 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasSharingItsFulfillingPropertyWithAliasRequiredEarlier_throwsError() async {
+		// SecondReceiver requires Child's `onlyIfAvailable` alias `second` of `source`, and Source's tree receives `child`
+		// through the `session` Parent forwards, whose type Other's `sessionBuilder` puts in the tree, and X. FirstReceiver's
+		// alias `first` of `source` is walked first, and that walk stops at Session's receive of `first`, so the cycle is
+		// found only by walking `second` too.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `child: Child` -> @Received `second: SecondGreeter?` -> @Received `source: Source` -> @Received `session: Session` -> @Received `x: X` -> @Received `child: Child`. `child: Child` is received while it is still being instantiated. `second: SecondGreeter?` renames `source: Source` only if available, so a type that receives `second` without `onlyIfAvailable` must be built after `source: Source`. Receive `second` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `source: Source` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(parentBuilder: Instantiator<Parent>) { self.parentBuilder = parentBuilder }
+					    @Instantiated let parentBuilder: Instantiator<Parent>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Parent: Instantiable {
+					    public init(session: Session, child: Child, source: Source, other: Other) { self.session = session; self.child = child; self.source = source; self.other = other }
+					    @Forwarded let session: Session
+					    @Instantiated let child: Child
+					    @Instantiated let source: Source
+					    @Instantiated let other: Other
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Other: Instantiable {
+					    public init(first: FirstGreeter?, x: X, sessionBuilder: Instantiator<Session>) { self.first = first; self.x = x; self.sessionBuilder = sessionBuilder }
+					    @Received(fulfilledByDependencyNamed: "source", ofType: Source.self) let first: FirstGreeter?
+					    @Instantiated let x: X
+					    @Instantiated let sessionBuilder: Instantiator<Session>
+					}
+					""",
+					"""
+					public protocol FirstGreeter: AnyObject {}
+					public protocol SecondGreeter: AnyObject {}
+
+					@Instantiable
+					public final class Source: Instantiable, FirstGreeter, SecondGreeter {
+					    public init(session: Session) { self.session = session }
+					    @Received let session: Session
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Session: Instantiable {
+					    public init(first: FirstGreeter?, x: X) { self.first = first; self.x = x }
+					    @Received let first: FirstGreeter?
+					    @Received let x: X
+					}
+					""",
+					"""
+					@Instantiable
+					public final class X: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Received let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(first: FirstGreeter?, second: SecondGreeter?, firstReceiver: FirstReceiver, secondReceiver: SecondReceiver) { self.first = first; self.second = second; self.firstReceiver = firstReceiver; self.secondReceiver = secondReceiver }
+					    @Received(fulfilledByDependencyNamed: "source", ofType: Source.self, onlyIfAvailable: true) let first: FirstGreeter?
+					    @Received(fulfilledByDependencyNamed: "source", ofType: Source.self, onlyIfAvailable: true) let second: SecondGreeter?
+					    @Instantiated let firstReceiver: FirstReceiver
+					    @Instantiated let secondReceiver: SecondReceiver
+					}
+					""",
+					"""
+					@Instantiable
+					public final class FirstReceiver: Instantiable {
+					    public init(first: FirstGreeter?) { self.first = first }
+					    @Received let first: FirstGreeter?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class SecondReceiver: Instantiable {
+					    public init(second: SecondGreeter?) { self.second = second }
+					    @Received let second: SecondGreeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasSharingItsFulfillingPropertyWithAliasRequiredLater_throwsError() async {
+		// As above, with SecondReceiver declared before FirstReceiver, so `second` is walked first and finds the cycle.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `child: Child` -> @Received `second: SecondGreeter?` -> @Received `source: Source` -> @Received `session: Session` -> @Received `x: X` -> @Received `child: Child`. `child: Child` is received while it is still being instantiated. `second: SecondGreeter?` renames `source: Source` only if available, so a type that receives `second` without `onlyIfAvailable` must be built after `source: Source`. Receive `second` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `source: Source` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(parentBuilder: Instantiator<Parent>) { self.parentBuilder = parentBuilder }
+					    @Instantiated let parentBuilder: Instantiator<Parent>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Parent: Instantiable {
+					    public init(session: Session, child: Child, source: Source, other: Other) { self.session = session; self.child = child; self.source = source; self.other = other }
+					    @Forwarded let session: Session
+					    @Instantiated let child: Child
+					    @Instantiated let source: Source
+					    @Instantiated let other: Other
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Other: Instantiable {
+					    public init(first: FirstGreeter?, x: X, sessionBuilder: Instantiator<Session>) { self.first = first; self.x = x; self.sessionBuilder = sessionBuilder }
+					    @Received(fulfilledByDependencyNamed: "source", ofType: Source.self) let first: FirstGreeter?
+					    @Instantiated let x: X
+					    @Instantiated let sessionBuilder: Instantiator<Session>
+					}
+					""",
+					"""
+					public protocol FirstGreeter: AnyObject {}
+					public protocol SecondGreeter: AnyObject {}
+
+					@Instantiable
+					public final class Source: Instantiable, FirstGreeter, SecondGreeter {
+					    public init(session: Session) { self.session = session }
+					    @Received let session: Session
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Session: Instantiable {
+					    public init(first: FirstGreeter?, x: X) { self.first = first; self.x = x }
+					    @Received let first: FirstGreeter?
+					    @Received let x: X
+					}
+					""",
+					"""
+					@Instantiable
+					public final class X: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Received let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(first: FirstGreeter?, second: SecondGreeter?, secondReceiver: SecondReceiver, firstReceiver: FirstReceiver) { self.first = first; self.second = second; self.secondReceiver = secondReceiver; self.firstReceiver = firstReceiver }
+					    @Received(fulfilledByDependencyNamed: "source", ofType: Source.self, onlyIfAvailable: true) let first: FirstGreeter?
+					    @Received(fulfilledByDependencyNamed: "source", ofType: Source.self, onlyIfAvailable: true) let second: SecondGreeter?
+					    @Instantiated let secondReceiver: SecondReceiver
+					    @Instantiated let firstReceiver: FirstReceiver
+					}
+					""",
+					"""
+					@Instantiable
+					public final class FirstReceiver: Instantiable {
+					    public init(first: FirstGreeter?) { self.first = first }
+					    @Received let first: FirstGreeter?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class SecondReceiver: Instantiable {
+					    public init(second: SecondGreeter?) { self.second = second }
+					    @Received let second: SecondGreeter?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasInsideItsFulfillingProperty_throwsError() async {
 		// DefaultGreeter requires `maybe`, which Child can create only once `missing`,
 		// the DefaultGreeter being built, exists.
