@@ -1723,10 +1723,7 @@ public actor DependencyTreeGenerator {
 				&& !mockRootBuiltProperties.contains(receivedProperty.asUnwrappedProperty)
 				&& !instancePropertiesOfLazilyInstantiatedProperties.contains(receivedProperty)
 		}
-		let mockRootEnclosingForwardedProperties = childrenRequiringEachOtherValidation.enclosingForwardedProperties(
-			ofMockRoot: mockRootScope,
-			mockParameters: mockParameters,
-		)
+		let mockRootEnclosingForwardedProperties = childrenRequiringEachOtherValidation.enclosingForwardedProperties(ofMockRootPassed: mockParameters)
 		let mockRootChildrenRequiringEachOther = Self.childrenRequiringEachOther(
 			in: mockRootScope,
 			enclosingProvidedProperties: mockRootEnclosingProvidedProperties,
@@ -2081,12 +2078,9 @@ public actor DependencyTreeGenerator {
 			self.onlyIfAvailableAliasFulfillingProperties = onlyIfAvailableAliasFulfillingProperties
 		}
 
-		/// The `onlyIfAvailableAliasFulfillingProperties` among `mockParameters`, the properties the mock root
-		/// `mockRootScope` is passed, which are in scope throughout its tree.
-		func enclosingForwardedProperties(
-			ofMockRoot _: Scope,
-			mockParameters: Set<Property>,
-		) -> Set<Property> {
+		/// The `onlyIfAvailableAliasFulfillingProperties` among `mockParameters`, the properties a mock root is
+		/// passed, which are in scope throughout its tree.
+		func enclosingForwardedProperties(ofMockRootPassed mockParameters: Set<Property>) -> Set<Property> {
 			onlyIfAvailableAliasFulfillingProperties.intersection(mockParameters)
 		}
 
