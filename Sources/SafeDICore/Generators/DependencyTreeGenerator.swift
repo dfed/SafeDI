@@ -788,11 +788,18 @@ public actor DependencyTreeGenerator {
 			} else {
 				"`\(sendableWrapperType)` builds `\(wrapperType.asInstantiatedType.asSource)` in a `@Sendable` function, so what the tree of `\(wrapperType.asInstantiatedType.asSource)` receives from outside that function must be `Sendable` too."
 			}
+			// A builder that is not a `Sendable` wrapper is built in a `@Sendable` function because a cycle builds it
+			// again inside one.
+			let sendableBuilderReason = if capture.sendableBuilder.propertyType.isSendable {
+				""
+			} else {
+				" (a `@Sendable` builder function in the tree of `\(capture.sendableBuilder.typeDescription.asInstantiatedType.asSource)` builds it again)"
+			}
 			let error = SourceDiagnostic(
 				severity: .error,
 				location: capture.declarationLocation,
 				message: "@\(Dependency.Source.receivedRawValue) property `\(capture.receivedProperty.asSource)` cannot be received inside a `@Sendable` function in chain: \(capture.chain.map(\.asSource).joined(separator: " -> ")). "
-					+ "SafeDI builds `\(capture.sendableBuilder.asSource)` on `\(capture.sendableBuilderDeclaringType.asSource)` in a `@Sendable` function, which cannot capture \(capturedProperty), because `\(wrapperType.asSource)` is not `Sendable`. "
+					+ "SafeDI builds `\(capture.sendableBuilder.asSource)` on `\(capture.sendableBuilderDeclaringType.asSource)` in a `@Sendable` function\(sendableBuilderReason), which cannot capture \(capturedProperty), because `\(wrapperType.asSource)` is not `Sendable`. "
 					+ "\(fix) \(requirement)",
 			)
 			return if capture.wrapperDeclaringType != nil {

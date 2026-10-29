@@ -4349,6 +4349,64 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsError_whenBuilderFunctionMadeSendableByCycleReceivesLazilyInstantiatedPropertyDeclaredOutsideIt() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["A.swift"]):7:5: error: @Received property `analytics: Analytics` cannot be received inside a `@Sendable` function in chain: Root -> A. SafeDI builds `aBuilder: Instantiator<A>` on `Root` in a `@Sendable` function (a `@Sendable` builder function in the tree of `A` builds it again), which cannot capture `analytics: LazilyInstantiated<Analytics>` on `Root`, because `LazilyInstantiated<Analytics>` is not `Sendable`. Declare `analytics` on `Root` as `SendableLazilyInstantiated<Analytics>` to fix. A `SendableLazilyInstantiated` requires its instance type, `Analytics`, to be `Sendable`.
+				\(fixtures["Root.swift"]):7:5: note: `analytics: LazilyInstantiated<Analytics>` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(analytics: LazilyInstantiated<Analytics>, aBuilder: Instantiator<A>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let analytics: LazilyInstantiated<Analytics>
+					    @Instantiated let aBuilder: Instantiator<A>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Analytics: Instantiable {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable {
+					    public init(analytics: Analytics, bBuilder: SendableInstantiator<B>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let analytics: Analytics
+					    @Instantiated let bBuilder: SendableInstantiator<B>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(aBuilder: Instantiator<A>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let aBuilder: Instantiator<A>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Manifest Validation Tests
 
 	@Test

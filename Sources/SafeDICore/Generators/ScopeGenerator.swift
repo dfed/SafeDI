@@ -74,6 +74,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			cycleClosingProperties = childCycleClosingProperties
 			isReferencedByCycleClosingScope = false
 		}
+		// A cycle-closing scope refers to the builder function of the enclosing scope it closes on. When a
+		// `@Sendable` builder function lies between the two, it captures that function, which must then be
+		// `@Sendable` too.
+		var cycleClosingPropertiesReferencedFromSendableFunction = Set<Property>()
+		for child in propertiesToGenerate {
+			cycleClosingPropertiesReferencedFromSendableFunction.formUnion(child.cycleClosingPropertiesReferencedFromSendableFunction)
+		}
+		let buildsInSendableFunction = if let property, !isPropertyCycle {
+			property.propertyType.isSendable || cycleClosingPropertiesReferencedFromSendableFunction.contains(property)
+		} else {
+			false
+		}
+		// A `@Sendable` builder function holds every reference its subtree makes to the builder functions
+		// enclosing it, including those that made it `@Sendable`.
+		if buildsInSendableFunction {
+			cycleClosingPropertiesReferencedFromSendableFunction.formUnion(childCycleClosingProperties)
+		}
+		if let property, !isPropertyCycle {
+			cycleClosingPropertiesReferencedFromSendableFunction.remove(property)
+		}
+		self.buildsInSendableFunction = buildsInSendableFunction
+		self.cycleClosingPropertiesReferencedFromSendableFunction = cycleClosingPropertiesReferencedFromSendableFunction
 		// A lazily instantiated property also declares the property that receives its instance by value.
 		// This runs at every scope of every tree, so the set is filled without intermediate arrays.
 		var propertiesToDeclare = Set<Property>(minimumCapacity: propertiesToGenerate.count)
@@ -282,6 +304,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		requiredAliasFulfillingProperties = []
 		cycleClosingProperties = []
 		isReferencedByCycleClosingScope = false
+		cycleClosingPropertiesReferencedFromSendableFunction = []
+		buildsInSendableFunction = false
 		declaresBuilderFunction = false
 		childrenTakePartInCycle = false
 		description = property.asSource
@@ -627,7 +651,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			          // A scope that closes a cycle constructs nothing: it refers to an enclosing builder function.
 			          !isPropertyCycle
 			{
-				let childSendableBuilders = childProperty.propertyType.isSendable
+				let childSendableBuilders = child.generator.buildsInSendableFunction
 					? enclosingSendableBuilders + [SendableBuilder(property: childProperty, declaringType: declaringType)]
 					: enclosingSendableBuilders
 				await captures.append(contentsOf: child.generator.nonSendableWrapperCaptures(
@@ -752,6 +776,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private let cycleClosingProperties: Set<Property>
 	/// Whether a cycle-closing scope in this subtree refers to this scope's builder function.
 	private let isReferencedByCycleClosingScope: Bool
+	/// The `cycleClosingProperties` whose builder functions a cycle-closing scope in this subtree refers to
+	/// from inside a `@Sendable` builder function that does not enclose them.
+	private let cycleClosingPropertiesReferencedFromSendableFunction: Set<Property>
+	/// Whether this scope's builder function is `@Sendable`: it builds a `SendableInstantiator`,
+	/// `SendableErasedInstantiator`, or `SendableLazilyInstantiated`, or a cycle-closing scope in its
+	/// subtree refers to it from inside a `@Sendable` builder function.
+	private let buildsInSendableFunction: Bool
 	/// Whether this scope may declare a builder function in its parent's body: it is a property's
 	/// scope that is not a cycle-closing scope.
 	private let declaresBuilderFunction: Bool
@@ -1345,7 +1376,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				} else {
 					builderFunctionNames.functionName ?? Self.functionName(toBuild: property)
 				}
-				let functionDecorator = if propertyType.isSendable {
+				let functionDecorator = if buildsInSendableFunction {
 					"@Sendable "
 				} else {
 					""
@@ -2271,6 +2302,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let cycleClosingProperties: Set<Property>
 		/// The `isReferencedByCycleClosingScope` of the scope this node was built from.
 		let isReferencedByCycleClosingScope: Bool
+		/// The `buildsInSendableFunction` of the scope this node was built from.
+		let buildsInSendableFunction: Bool
 		/// Whether this node is inside a sendable scope (descendant of SendableInstantiator).
 		/// When `true`, the `safeDIBuilder` closure on `SafeDIMockConfiguration` is `@Sendable`.
 		let requiresSendable: Bool
@@ -2831,7 +2864,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)))
 			} else if case let .property(childInstantiable, childProperty, _, erasedToConcreteExistential, isPropertyCycle) = childGenerator.scopeData {
 				let isInstantiator = !childProperty.propertyType.isConstant
-				let childInsideSendable = insideSendableScope || childProperty.propertyType.isSendable
+				let childInsideSendable = insideSendableScope || childGenerator.buildsInSendableFunction
 
 				// Recurse into children to build the subtree.
 				let childItems = await childGenerator.collectMockParameterTree(
@@ -2893,6 +2926,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					isPropertyCycle: isPropertyCycle,
 					cycleClosingProperties: childGenerator.cycleClosingProperties,
 					isReferencedByCycleClosingScope: childGenerator.isReferencedByCycleClosingScope,
+					buildsInSendableFunction: childGenerator.buildsInSendableFunction,
 					requiresSendable: childInsideSendable,
 				)))
 			}
@@ -3830,7 +3864,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			.joined(separator: ", ")
 
-		let functionDecorator = if propertyType.isSendable {
+		let functionDecorator = if node.buildsInSendableFunction {
 			"@Sendable "
 		} else {
 			""
@@ -3848,7 +3882,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// local declared before it. Inside an enclosing `@Sendable` function,
 			// reads keep flowing to the outermost function's extractor, whose
 			// locals are already in scope.
-			let startedSendableOverrideExtractor: SendableOverrideExtractor? = if sendableOverrideExtractor == nil, propertyType.isSendable {
+			let startedSendableOverrideExtractor: SendableOverrideExtractor? = if sendableOverrideExtractor == nil, node.buildsInSendableFunction {
 				SendableOverrideExtractor(functionName: functionName)
 			} else {
 				nil

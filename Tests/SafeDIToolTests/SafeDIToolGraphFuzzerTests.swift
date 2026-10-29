@@ -423,7 +423,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// one `swiftc` invocation when nothing fails.
 	static let smokeSeeds: [UInt64] = [5, 157, 348, 582, 705]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x164E69D10D2E10C7
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xCD23351EF7A6636F
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -439,15 +439,6 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
 	static let knownIssues: [GraphFuzzerKnownIssue] = [
-		GraphFuzzerKnownIssue(
-			reason: "A cycle through a Sendable builder and an Instantiator refers to the enclosing non-Sendable builder function from the @Sendable one",
-			signatures: [.compilerError(containing: "must be marked as '@Sendable'")],
-			seeds: [
-				33, 114, 752, 931, 1_052, 1_258, 1_279, 1_363, 1_420, 1_594, 1_646, 1_693, 1_752, 1_756, 2_102, 2_254,
-				2_270, 2_403, 2_436, 2_625, 3_194, 3_196, 3_302, 3_596, 3_604, 3_728, 3_883, 3_915, 3_934, 4_113, 4_117, 4_428,
-				4_991,
-			],
-		),
 		GraphFuzzerKnownIssue(
 			reason: "A mock wraps the instance it takes for an optional LazilyInstantiated by its label, which an Instantiator of the same label renamed",
 			signatures: [
