@@ -492,7 +492,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#error(\"\"\"
-		Compiler errors prevented the generation of the dependency tree. Files with errors:
+		SafeDI could not generate code because these files have syntax errors. Fix them and build again:
 			<FIXTURE_PATH>/Root.swift
 		\"\"\")
 		""", "Unexpected combined output: \(normalized)")
@@ -545,7 +545,7 @@ struct SafeDIToolCombinedOutputTests: ~Copyable {
 		// Please refrain from editing this file directly.
 
 		#error(\"\"\"
-		Compiler errors prevented the generation of the dependency tree. Files with errors:
+		SafeDI could not generate code because these files have syntax errors. Fix them and build again:
 			\(filesWithErrors.joined(separator: "\n\t"))
 		\"\"\")
 		""", "Unexpected combined output: \(output.combinedOutput ?? "")")

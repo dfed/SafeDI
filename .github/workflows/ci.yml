@@ -968,4 +968,10 @@ jobs:
         with:
           command: swift package resolve --package-path CLI
       - name: Lint Swift
-        run: swift run --package-path CLI swiftformat . --lint
+        # SwiftFormat 0.64 has a fixed per-rule timeout that large test files trip now and then (exit 70, "rule timed
+        # out"), which is a flake, not a lint failure. One retry separates the two: a real lint failure fails twice.
+        run: |
+          swift run --package-path CLI swiftformat . --lint || {
+            echo "SwiftFormat exited $?; retrying once in case a rule timed out"
+            swift run --package-path CLI swiftformat . --lint
+          }
