@@ -39,14 +39,16 @@ struct QueryNeeds: AsyncParsableCommand {
 	static let configuration = CommandConfiguration(
 		commandName: "needs",
 		abstract: "Report what types need: the modules whose declarations build each and its dependencies, the `@Forwarded` parameters it takes, the dependencies no `@Instantiable` declaration fulfills, and what its mock needs.",
-		discussion: "Reads the modules named with `--include` once, builds each type with every dependency it receives provided by an `@Instantiable` declaration, as its mock does, and reports the modules those declarations are in. It then reports the same for the type's mock: the `mock()` the project generates, the hand-written mock that stands in when the project generates none, or the `mock()` a `#SafeDIConfiguration` listing the type in `additionalMocksToGenerate` would generate. A project that depends on the reported modules alone builds the type, or its mock, from them. With `--json`, the report and any error are printed as JSON, in the format the manual documents.",
+		discussion: "Reads the modules named with `--include` and `--module-info` once, builds each type with every dependency it receives provided by an `@Instantiable` declaration, as its mock does, and reports the modules those declarations are in. It then reports the same for the type's mock: the `mock()` the project generates, the hand-written mock that stands in when the project generates none, or the `mock()` a `#SafeDIConfiguration` listing the type in `additionalMocksToGenerate` would generate. A project that depends on the reported modules alone builds the type, or its mock, from them. With `--json`, the report and any error are printed as JSON, in the format the manual documents.",
 	)
 
 	@Argument(help: "The names of `@Instantiable` types: each its own name, as `additionalMocksToGenerate` would list it, not a type it fulfills. The modules are read once for all of them.") var typeNames: [String]
 
-	@Option(parsing: .upToNextOption, help: "Directories containing Swift files to include, relative to the executing directory, as `generate` takes them. Each directory is a module holding the Swift files found in it recursively, named after its last path component, or after as many trailing components as tell it apart from the other included directories (`Home/Sources`); a Swift file named directly belongs to its directory's module. The files are read as `generate` reads a module's own files: the module's `#SafeDIConfiguration` applies to them, and its `additionalDirectoriesToInclude` is not followed, since every module is named here.") var include: [String] = []
+	@Option(parsing: .upToNextOption, help: "Directories containing Swift files to include, relative to the executing directory, as `generate` takes them. Each directory is a module holding the Swift files found in it recursively, named after its last path component, or after as many trailing components as tell it apart from the other modules (`Home/Sources`); a Swift file named directly belongs to its directory's module. The files are read as `generate` reads a module's own files: the module's `#SafeDIConfiguration` applies to them, and its `additionalDirectoriesToInclude` is not followed, since every module is named here.") var include: [String] = []
 
-	@Option(parsing: .upToNextOption, help: "The compilation conditions that are active for the build, matching the compiler's -D flags. SafeDI declarations in `#if` blocks are read only when the block's condition evaluates to true.") var activeCompilationConditions: [String] = []
+	@Option(parsing: .upToNextOption, help: "`.safedi` module info files to include, relative to the executing directory, as `generate --module-info-output` writes them. Each file is a module holding the declarations its build read, named after the file without its `.safedi` extension and without a trailing `_safedi` (`App_safedi.safedi`, which the Bazel macro writes for a library named `App`, is the module `App`), or after as many trailing path components as tell it apart from the other modules. A file is read as `generate --dependent-module-info-file-path` reads one, with what its build read under that build's compilation conditions, so `--active-compilation-conditions` does not apply to it.") var moduleInfo: [String] = []
+
+	@Option(parsing: .upToNextOption, help: "The compilation conditions that are active for the build, matching the compiler's -D flags. SafeDI declarations in `#if` blocks of the files under `--include` are read only when the block's condition evaluates to true.") var activeCompilationConditions: [String] = []
 
 	@Flag(help: "Print the report, or the error, as JSON rather than as text.") var json = false
 
@@ -72,57 +74,39 @@ struct QueryNeeds: AsyncParsableCommand {
 	/// Reads the modules and reports what each type needs.
 	/// Throws errors as-is so tests can inspect them; `run()` formats them.
 	func query() async throws -> QueryReport {
-		let includedModules = IncludedModule.modules(including: include)
+		let includedModules = IncludedModule.modules(including: include, moduleInfo: moduleInfo)
 		guard !includedModules.isEmpty else {
 			throw QueryError.noModuleIncluded
 		}
 		let activeCompilationConditions = Set(activeCompilationConditions)
 
-		// Each module is read as `generate` reads a module's own files, with its own configuration.
+		// Each module is read as `generate` reads it: a directory as a module's own files, with its own
+		// configuration, and a module info file as a dependent module's.
 		let parsedModules = try await withThrowingTaskGroup(
 			of: ParsedQueryModule.self,
 			returning: [ParsedQueryModule].self,
 		) { taskGroup in
 			for includedModule in includedModules {
 				taskGroup.addTask {
-					let filePaths = try await findSwiftFiles(inDirectories: includedModule.paths)
-					// A directory that holds no Swift file is most likely misspelled: one that does not exist enumerates as empty.
-					guard !filePaths.isEmpty else {
-						throw QueryError.moduleHasNoSwiftFiles(name: includedModule.name, paths: includedModule.paths)
-					}
-					let parsed = try await parseModule(
-						filePaths: Set(filePaths.map(\.path)),
-						configurationFilePaths: Set(filePaths.map(\.path)),
-						activeCompilationConditions: activeCompilationConditions,
-					)
-					return ParsedQueryModule(
-						includedModule: includedModule,
-						filePaths: filePaths,
-						moduleInfo: parsed.module.moduleInfo,
-						configuration: parsed.module.configuration,
-					)
+					try await ParsedQueryModule(reading: includedModule, activeCompilationConditions: activeCompilationConditions)
 				}
 			}
 			var parsedModules = [ParsedQueryModule]()
 			for try await parsedModule in taskGroup {
 				parsedModules.append(parsedModule)
 			}
-			// Modules are combined in name order, whatever order their parses finished in.
+			// Modules are combined in name order, whatever order their reads finished in.
 			return parsedModules.sorted { $0.includedModule.name < $1.includedModule.name }
 		}
 
-		// Every declaration the query reports was parsed from one of these files, under this spelling.
+		// Every declaration the query reports was read from one of these files, under this spelling.
 		var attributionsByFilePath = [String: FileAttribution]()
 		for parsedModule in parsedModules {
-			for filePath in parsedModule.filePaths.sorted() {
-				if let otherModuleName = attributionsByFilePath[filePath.path]?.moduleName {
-					throw QueryError.fileInTwoModules(filePath: filePath.path, moduleNames: [otherModuleName, parsedModule.includedModule.name])
+			for (filePath, attribution) in parsedModule.fileAttributions {
+				if let otherModuleName = attributionsByFilePath[filePath]?.moduleName {
+					throw QueryError.fileInTwoModules(filePath: filePath, moduleNames: [otherModuleName, parsedModule.includedModule.name])
 				} else {
-					attributionsByFilePath[filePath.path] = FileAttribution(
-						moduleName: parsedModule.includedModule.name,
-						modulePaths: parsedModule.includedModule.paths,
-						filePath: filePath.path(under: parsedModule.includedModule.directory, spelled: parsedModule.includedModule.directorySpelling),
-					)
+					attributionsByFilePath[filePath] = attribution
 				}
 			}
 		}
@@ -234,74 +218,180 @@ struct QueryNeeds: AsyncParsableCommand {
 	}
 }
 
-/// A module named with `--include`: the directory that names it, and the paths that hold its Swift files.
+/// A module named with `--include` or `--module-info`: what it is read from, and the arguments that name it.
 struct IncludedModule: Equatable {
-	/// The last path component of `directory`, or as many of its trailing components as tell it apart from the
-	/// other included directories, joined by `/`.
+	/// The last component of the module's path, or as many of its trailing components as tell it apart from the
+	/// other modules, joined by `/`. A directory's path is the directory; a module info file's is its directory and
+	/// its file name without the `.safedi` extension and a trailing `_safedi`. A module info file whose path so
+	/// reads the same as another module's is named by its file name as spelled.
 	let name: String
-	/// The directory the module is named after: the included directory, or the directory of an included Swift file.
-	let directory: NormalizedFilePath
-	/// `directory` as the first of `paths` spelled it, under which the module's files are reported.
-	let directorySpelling: String
-	/// The included paths that belong to the module, in the order they were named.
+	let source: Source
+	/// The arguments that name the module, in the order they were given.
 	let paths: [String]
 
-	/// The modules the included `paths` name, ordered by name. Paths in one directory are one module.
-	static func modules(including paths: [String]) -> [IncludedModule] {
-		var pathsByDirectory = [NormalizedFilePath: [String]]()
-		var directorySpellings = [NormalizedFilePath: String]()
-		var directoriesInOrder = [NormalizedFilePath]()
-		for path in paths {
+	/// What a module is read from.
+	enum Source: Hashable {
+		/// The Swift files under a directory named with `--include`, or named directly: the directory, and the
+		/// directory as the first of `paths` spelled it, under which the module's files are reported.
+		case directory(NormalizedFilePath, spelling: String)
+		/// A `.safedi` module info file named with `--module-info`.
+		case moduleInfo(NormalizedFilePath)
+	}
+
+	/// The extension of a module info file.
+	static let moduleInfoPathExtension = ".safedi"
+	/// What the Bazel macro appends to a library's name to name the rule that writes its module info file, and so
+	/// the file: a `safedi_swift_library` named `App` writes `App_safedi.safedi`.
+	static let bazelModuleInfoNameSuffix = "_safedi"
+
+	/// The modules the arguments name, ordered by name. Arguments naming one directory, or one file, are one module.
+	static func modules(including directoryPaths: [String], moduleInfo moduleInfoPaths: [String]) -> [IncludedModule] {
+		struct Entry {
+			let source: Source
+			var paths: [String]
+			/// The components the module is named from, the last of which names the module on its own.
+			let nameComponents: [String]
+			/// The name that tells the module apart when every component of `nameComponents` is another module's.
+			let fallbackName: String
+		}
+		var entries = [Entry]()
+		var entryIndexesBySource = [Source: Int]()
+		func add(_ path: String, source: Source, nameComponents: [String], fallbackName: String) {
+			if let index = entryIndexesBySource[source] {
+				entries[index].paths.append(path)
+			} else {
+				entryIndexesBySource[source] = entries.count
+				entries.append(Entry(source: source, paths: [path], nameComponents: nameComponents, fallbackName: fallbackName))
+			}
+		}
+		for path in directoryPaths {
 			// `generate --include` reads a Swift file named directly, as it reads the files of a directory.
 			let directorySpelling = path.hasSuffix(".swift") ? (path as NSString).deletingLastPathComponent : path
-			let directory = NormalizedFilePath(directorySpelling.isEmpty ? "." : directorySpelling)
-			if pathsByDirectory[directory] == nil {
-				directoriesInOrder.append(directory)
-				directorySpellings[directory] = directorySpelling.isEmpty ? "." : directorySpelling
-			}
-			pathsByDirectory[directory, default: []].append(path)
+			let spelling = directorySpelling.isEmpty ? "." : directorySpelling
+			let directory = NormalizedFilePath(spelling)
+			let components = directory.path.split(separator: "/").map(String.init)
+			add(path, source: .directory(directory, spelling: spelling), nameComponents: components, fallbackName: components.last ?? directory.path)
+		}
+		for path in moduleInfoPaths {
+			let file = NormalizedFilePath(path)
+			var components = file.path.split(separator: "/").map(String.init)
+			let fileName = components.popLast() ?? file.path
+			add(path, source: .moduleInfo(file), nameComponents: components + [Self.moduleName(ofModuleInfoFileNamed: fileName)], fallbackName: fileName)
 		}
 		// Two layouts need more than the last component: `Modules/Home/Sources` and `Modules/Settings/Sources`
-		// are `Home/Sources` and `Settings/Sources`. Normalized paths are distinct, so some suffix tells each apart.
-		let componentsByDirectory = directoriesInOrder.map { $0.path.split(separator: "/").map(String.init) }
+		// are `Home/Sources` and `Settings/Sources`. Distinct paths differ in some component, except a directory and
+		// a module info file that read alike (`Home` and `Home.safedi`), which the file's name as spelled tells apart.
 		func name(of components: [String], length: Int) -> String {
 			components.suffix(length).joined(separator: "/")
 		}
-		return zip(directoriesInOrder, componentsByDirectory)
-			.map { directory, components in
+		let longestNameComponentCount = entries.map(\.nameComponents.count).max() ?? 0
+		return entries
+			.map { entry in
 				var length = 1
-				while componentsByDirectory.filter({ name(of: $0, length: length) == name(of: components, length: length) }).count > 1 {
+				while length < longestNameComponentCount,
+				      entries.filter({ name(of: $0.nameComponents, length: length) == name(of: entry.nameComponents, length: length) }).count > 1
+				{
 					length += 1
 				}
+				let isNamedApart = entries.filter { name(of: $0.nameComponents, length: length) == name(of: entry.nameComponents, length: length) }.count == 1
 				return IncludedModule(
-					name: name(of: components, length: length),
-					directory: directory,
-					directorySpelling: directorySpellings[directory, default: directory.path],
-					paths: pathsByDirectory[directory, default: []],
+					name: isNamedApart ? name(of: entry.nameComponents, length: length) : entry.fallbackName,
+					source: entry.source,
+					paths: entry.paths,
 				)
 			}
 			.sorted { $0.name < $1.name }
+	}
+
+	/// The module a module info file is named for: the file name without its `.safedi` extension, and without the
+	/// `_safedi` the Bazel macro appends. A file named by either alone keeps its name.
+	static func moduleName(ofModuleInfoFileNamed fileName: String) -> String {
+		var name = fileName
+		if name.hasSuffix(moduleInfoPathExtension), name.count > moduleInfoPathExtension.count {
+			name.removeLast(moduleInfoPathExtension.count)
+		}
+		if name.hasSuffix(bazelModuleInfoNameSuffix), name.count > bazelModuleInfoNameSuffix.count {
+			name.removeLast(bazelModuleInfoNameSuffix.count)
+		}
+		return name
 	}
 }
 
 /// A module `QueryNeeds` read.
 private struct ParsedQueryModule {
+	/// Reads the module as `generate` reads it.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	init(reading includedModule: IncludedModule, activeCompilationConditions: Set<String>) async throws {
+		self.includedModule = includedModule
+		switch includedModule.source {
+		case let .directory(directory, spelling):
+			let filePaths = try await findSwiftFiles(inDirectories: includedModule.paths)
+			// A directory that holds no Swift file is most likely misspelled: one that does not exist enumerates as empty.
+			guard !filePaths.isEmpty else {
+				throw QueryError.moduleHasNoSwiftFiles(name: includedModule.name, paths: includedModule.paths)
+			}
+			let parsed = try await parseModule(
+				filePaths: Set(filePaths.map(\.path)),
+				configurationFilePaths: Set(filePaths.map(\.path)),
+				activeCompilationConditions: activeCompilationConditions,
+			)
+			moduleInfo = parsed.module.moduleInfo
+			configuration = parsed.module.configuration
+			// Each file is reported under the `--include` argument that named the module, as that argument was given.
+			fileAttributions = filePaths.sorted().map { filePath in
+				(
+					filePath: filePath.path,
+					attribution: FileAttribution(
+						moduleName: includedModule.name,
+						modulePaths: includedModule.paths,
+						filePath: filePath.path(under: directory, spelled: spelling),
+					),
+				)
+			}
+		case .moduleInfo:
+			let path = includedModule.paths[0]
+			guard FileManager.default.fileExists(atPath: path) else {
+				throw QueryError.moduleInfoNotReadable(path: path, reason: "No file exists at that path.")
+			}
+			// A file that cannot be opened reports the file system's error as `generate` does.
+			let data = try Data(contentsOf: path.asFileURL)
+			do {
+				moduleInfo = try ModuleInfo(moduleInfoData: data)
+			} catch {
+				throw QueryError.moduleInfoNotReadable(path: path, reason: "\(error) \(BinaryFile.unreadableFileExplanation)")
+			}
+			// `parseModule` rejects a module with more than one configuration, so a module info file holds at most one.
+			configuration = moduleInfo.configurations.first
+			// A module info file names each file as the build that wrote it did, so the module's declarations are
+			// attributed, and reported, by those names.
+			fileAttributions = Set(moduleInfo.instantiables.flatMap { instantiable in
+				[instantiable.sourceFilePath, instantiable.declarationLocation?.filePath, instantiable.mockDeclarationLocation?.filePath].compactMap(\.self)
+			})
+			.sorted()
+			.map { filePath in
+				(filePath: filePath, attribution: FileAttribution(moduleName: includedModule.name, modulePaths: includedModule.paths, filePath: filePath))
+			}
+		}
+	}
+
 	let includedModule: IncludedModule
-	let filePaths: Set<NormalizedFilePath>
 	let moduleInfo: ModuleInfo
 	let configuration: SafeDIConfiguration?
+	/// The files whose declarations the module holds, each with how the report attributes it, sorted by path.
+	let fileAttributions: [(filePath: String, attribution: FileAttribution)]
 }
 
 /// The module a file the query read belongs to, and how the report spells the file.
 struct FileAttribution {
 	let moduleName: String
-	/// The `--include` arguments that name the module, as given.
+	/// The `--include` or `--module-info` arguments that name the module, as given.
 	let modulePaths: [String]
-	/// The file's path under the `--include` argument that named its module, as that argument was given.
+	/// The file's path as the report spells it: under the `--include` argument that named its module, as that
+	/// argument was given, or as the `--module-info` file that named its module records it.
 	let filePath: String
 
 	/// The attribution of the file, which is one of the files the query read: every declaration the query reports
-	/// was parsed from a file of an included module, under the spelling `attributionsByFilePath` keys. `nil` and
+	/// was read from a file of an included module, under the spelling `attributionsByFilePath` keys. `nil` and
 	/// unknown paths are reported under a module of their own, since the model allows them.
 	static func attribution(ofFileAt filePath: String?, in attributionsByFilePath: [String: FileAttribution]) -> FileAttribution {
 		filePath.flatMap { attributionsByFilePath[$0] }
@@ -312,6 +402,8 @@ struct FileAttribution {
 enum QueryError: Error, CustomStringConvertible, Equatable {
 	case noModuleIncluded
 	case moduleHasNoSwiftFiles(name: String, paths: [String])
+	/// The `--module-info` file at `path`, as given, could not be read, for `reason`.
+	case moduleInfoNotReadable(path: String, reason: String)
 	case fileInTwoModules(filePath: String, moduleNames: [String])
 	case filesWithUnexpectedNodes([String])
 	/// No declaration has the name. `fulfilledBy` holds the concrete types of the declarations that fulfill a type
@@ -322,11 +414,13 @@ enum QueryError: Error, CustomStringConvertible, Equatable {
 	var description: String {
 		switch self {
 		case .noModuleIncluded:
-			"Name at least one module's directory with --include."
+			"Name at least one module: a directory of Swift files with --include, or a `.safedi` module info file with --module-info."
 		case let .moduleHasNoSwiftFiles(name, paths):
-			"The module '\(name)' has no Swift files at \(paths.map { "'\($0)'" }.joined(separator: ", ")). Include a directory that holds the module's Swift files, or a Swift file."
+			"The module '\(name)' has no Swift files at \(paths.map { "'\($0)'" }.joined(separator: ", ")). Include a directory that holds the module's Swift files, or a Swift file; a `.safedi` module info file is named with --module-info."
+		case let .moduleInfoNotReadable(path, reason):
+			"Could not read the SafeDI module info file at '\(path)': \(reason)"
 		case let .fileInTwoModules(filePath, moduleNames):
-			"The file '\(filePath)' is in two modules: \(moduleNames.map { "'\($0)'" }.joined(separator: " and ")). A file belongs to one module, so include directories that do not overlap."
+			"The file '\(filePath)' is in two modules: \(moduleNames.map { "'\($0)'" }.joined(separator: " and ")). A file belongs to one module, so include directories and module info files that do not overlap."
 		case let .filesWithUnexpectedNodes(filePaths):
 			"Compiler errors prevent SafeDI from reading these files:\n\t\(filePaths.joined(separator: "\n\t"))"
 		case let .noInstantiableNamed(typeName, fulfilledBy, similarlyNamed):
@@ -346,6 +440,8 @@ enum QueryError: Error, CustomStringConvertible, Equatable {
 			"noModuleIncluded"
 		case .moduleHasNoSwiftFiles:
 			"moduleHasNoSwiftFiles"
+		case .moduleInfoNotReadable:
+			"moduleInfoNotReadable"
 		case .fileInTwoModules:
 			"fileInTwoModules"
 		case .filesWithUnexpectedNodes:
@@ -428,6 +524,8 @@ struct QueryErrorReport: Encodable {
 				try errorContainer.encode(typeName, forKey: .typeName)
 			case let .moduleHasNoSwiftFiles(_, paths):
 				try errorContainer.encode(paths, forKey: .paths)
+			case let .moduleInfoNotReadable(path, _):
+				try errorContainer.encode([path], forKey: .paths)
 			case let .fileInTwoModules(filePath, _):
 				try errorContainer.encode([filePath], forKey: .paths)
 			case let .filesWithUnexpectedNodes(filePaths):
@@ -574,7 +672,7 @@ struct TypeReport: Encodable, Equatable {
 
 	struct Module: Encodable, Equatable {
 		let name: String
-		/// The `--include` arguments that name the module, as given.
+		/// The `--include` or `--module-info` arguments that name the module, as given.
 		let paths: [String]
 		let declarations: [Declaration]
 
@@ -629,7 +727,8 @@ struct TypeReport: Encodable, Equatable {
 		/// The type declared: the `@Instantiable` type, the type of the hand-written mock, or the type that
 		/// declares the erasing property.
 		let typeName: String
-		/// The file that holds the declaration, under the `--include` argument that named its module.
+		/// The file that holds the declaration: under the `--include` argument that named its module, or as the
+		/// `--module-info` file that named its module records it.
 		let filePath: String?
 		/// The hand-written mock's name.
 		let methodName: String?

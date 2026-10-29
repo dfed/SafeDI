@@ -1184,7 +1184,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 					""",
 				]),
 			],
-			moduleArguments: { _, moduleFiles in
+			moduleArguments: { _, moduleFiles, _ in
 				moduleFiles["Written"]!.flatMap { ["--include", $0.path] }
 			},
 			filesToDelete: &filesToDelete,
@@ -1493,15 +1493,15 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func query_throwsError_whenNoDirectoryIsIncluded() async {
+	mutating func query_throwsError_whenNoModuleIsNamed() async {
 		await assertThrowsQueryError(
-			diagnostics: { _ in "Name at least one module's directory with --include." },
+			diagnostics: { _ in "Name at least one module: a directory of Swift files with --include, or a `.safedi` module info file with --module-info." },
 			json: { _ in
 				"""
 				{
 				  "error" : {
 				    "kind" : "noModuleIncluded",
-				    "message" : "Name at least one module's directory with --include."
+				    "message" : "Name at least one module: a directory of Swift files with --include, or a `.safedi` module info file with --module-info."
 				  },
 				  "formatVersion" : 1
 				}
@@ -1511,7 +1511,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 			try await executeSafeDIToolQuery(
 				typeName: "Feature",
 				modules: [QueryTestModule("FeatureModule", [Self.standaloneFeature])],
-				moduleArguments: { _, _ in [] },
+				moduleArguments: { _, _, _ in [] },
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1576,7 +1576,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 		await assertThrowsQueryError(
 			diagnostics: { moduleFiles in
 				let missingDirectory = moduleFiles["FeatureModule"]![0].deletingLastPathComponent().appendingPathComponent("Missing").path
-				return "The module 'Missing' has no Swift files at '\(missingDirectory)'. Include a directory that holds the module's Swift files, or a Swift file."
+				return "The module 'Missing' has no Swift files at '\(missingDirectory)'. Include a directory that holds the module's Swift files, or a Swift file; a `.safedi` module info file is named with --module-info."
 			},
 			json: { moduleFiles in
 				let missingDirectory = moduleFiles["FeatureModule"]![0].deletingLastPathComponent().appendingPathComponent("Missing").path
@@ -1584,7 +1584,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 				{
 				  "error" : {
 				    "kind" : "moduleHasNoSwiftFiles",
-				    "message" : "The module 'Missing' has no Swift files at '\(missingDirectory)'. Include a directory that holds the module's Swift files, or a Swift file.",
+				    "message" : "The module 'Missing' has no Swift files at '\(missingDirectory)'. Include a directory that holds the module's Swift files, or a Swift file; a `.safedi` module info file is named with --module-info.",
 				    "paths" : [
 				      "\(missingDirectory)"
 				    ]
@@ -1597,7 +1597,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 			try await executeSafeDIToolQuery(
 				typeName: "Feature",
 				modules: [QueryTestModule("FeatureModule", [Self.standaloneFeature])],
-				moduleArguments: { moduleDirectories, _ in
+				moduleArguments: { moduleDirectories, _, _ in
 					let featureDirectory = moduleDirectories["FeatureModule"]!
 					return ["--include", featureDirectory.path, featureDirectory.appendingPathComponent("Missing").path]
 				},
@@ -1611,7 +1611,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 	mutating func query_throwsError_whenAFileIsInTwoModules() async {
 		await assertThrowsQueryError(
 			diagnostics: { moduleFiles in
-				"The file '\(moduleFiles["Outer/Inner"]![0].path)' is in two modules: 'Inner' and 'Outer'. A file belongs to one module, so include directories that do not overlap."
+				"The file '\(moduleFiles["Outer/Inner"]![0].path)' is in two modules: 'Inner' and 'Outer'. A file belongs to one module, so include directories and module info files that do not overlap."
 			},
 			json: { moduleFiles in
 				let file = moduleFiles["Outer/Inner"]![0].path
@@ -1619,7 +1619,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 				{
 				  "error" : {
 				    "kind" : "fileInTwoModules",
-				    "message" : "The file '\(file)' is in two modules: 'Inner' and 'Outer'. A file belongs to one module, so include directories that do not overlap.",
+				    "message" : "The file '\(file)' is in two modules: 'Inner' and 'Outer'. A file belongs to one module, so include directories and module info files that do not overlap.",
 				    "paths" : [
 				      "\(file)"
 				    ]
@@ -2219,6 +2219,316 @@ struct SafeDIToolQueryTests: ~Copyable {
 		}
 	}
 
+	// MARK: Module info files
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_readsModuleInfoFiles_asItReadsDirectories() async throws {
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Feature",
+			modules: Self.featureModules.map { QueryTestModule($0.name, $0.swiftFileContent, input: .moduleInfo()) },
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.formatted == """
+		`Feature` is built from declarations in 3 modules:
+
+		FeatureModule
+		  @Instantiable Feature
+
+		FoundationModule
+		  @Instantiable Cache
+		  @Instantiable Logger
+
+		ServicesModule
+		  @Instantiable Service
+
+		@Forwarded parameters of `Feature`:
+		  (none)
+
+		Dependencies of `Feature` no @Instantiable declaration fulfills:
+		  (none)
+
+		No module generates `Feature.mock()`; a #SafeDIConfiguration that lists `Feature` in `additionalMocksToGenerate` would generate it from the same declarations.
+
+		Required @Forwarded parameters of `Feature.mock()`:
+		  (none)
+
+		Defaulted @Forwarded parameters of `Feature.mock()`:
+		  (none)
+
+		Required parameters of `Feature.mock()` that no @Instantiable declaration removes:
+		  (none)
+		""")
+		#expect(output.result.modules == [
+			output.module("FeatureModule", [output.instantiable("Feature", in: "FeatureModule")]),
+			output.module("FoundationModule", [
+				output.instantiable("Cache", in: "FoundationModule"),
+				output.instantiable("Logger", in: "FoundationModule", file: 1),
+			]),
+			output.module("ServicesModule", [output.instantiable("Service", in: "ServicesModule")]),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_combinesModuleInfoFilesAndDirectories_whenBothAreNamed() async throws {
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Feature",
+			modules: Self.featureModules.map {
+				QueryTestModule($0.name, $0.swiftFileContent, input: $0.name == "FeatureModule" ? .directory : .moduleInfo())
+			},
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.result.modules == [
+			output.module("FeatureModule", [output.instantiable("Feature", in: "FeatureModule")]),
+			output.module("FoundationModule", [
+				output.instantiable("Cache", in: "FoundationModule"),
+				output.instantiable("Logger", in: "FoundationModule", file: 1),
+			]),
+			output.module("ServicesModule", [output.instantiable("Service", in: "ServicesModule")]),
+		])
+		#expect(output.result.mock?.modules == output.result.modules)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_reportsModuleGeneratingMock_whenAModuleInfoFilesConfigurationListsTheType() async throws {
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Feature",
+			modules: Self.featureModules + [
+				QueryTestModule("AppModule", [
+					"""
+					#SafeDIConfiguration(additionalMocksToGenerate: ["Feature"])
+					""",
+				], input: .moduleInfo()),
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.result.mock?.kind == .generated)
+		#expect(output.result.mock?.generatedIn == ["AppModule"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_namesModuleInfoFileModuleAfterItsFileName_droppingTheBazelMacrosSuffix() async throws {
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Feature",
+			modules: [QueryTestModule("HomeFeature", [Self.standaloneFeature], input: .moduleInfo(fileName: "HomeFeature_safedi.safedi"))],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.result.modules == [output.module("HomeFeature", [output.instantiable("Feature", in: "HomeFeature")])])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_namesModuleInfoFileModuleAfterItsFileName_whenTheNameIsOnlyTheBazelMacrosSuffix() async throws {
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Feature",
+			modules: [QueryTestModule("HomeFeature", [Self.standaloneFeature], input: .moduleInfo(fileName: "_safedi.safedi"))],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.result.modules == [output.module("_safedi", testModule: "HomeFeature", [output.instantiable("Feature", in: "HomeFeature")])])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_namesModuleInfoFilesByDistinguishingPathSuffix_whenFileNamesMatch() async throws {
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Feature",
+			modules: [
+				QueryTestModule("First", [Self.featureInstantiatingCache], input: .moduleInfo(fileName: "Shared.safedi")),
+				QueryTestModule("Second", [Self.cache], input: .moduleInfo(fileName: "Shared.safedi")),
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.result.modules == [
+			output.module("First/Shared", testModule: "First", [output.instantiable("Feature", in: "First")]),
+			output.module("Second/Shared", testModule: "Second", [output.instantiable("Cache", in: "Second")]),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_namesModuleInfoFileByItsFileNameAsSpelled_whenItsPathReadsAsAnotherModules() async throws {
+		// `Home.safedi` beside the directory `Home`: without the extension the two paths read alike.
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Feature",
+			modules: [
+				QueryTestModule("Home", [Self.featureInstantiatingCache]),
+				QueryTestModule("Support", [Self.cache], input: .moduleInfo(fileName: "../Home.safedi")),
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.result.modules == [
+			output.module("Home", [output.instantiable("Feature", in: "Home")]),
+			output.module("Home.safedi", testModule: "Support", [output.instantiable("Cache", in: "Support")]),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_printsJSON_namingAModuleInfoFileAsItsModulesPath() async throws {
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Feature",
+			modules: [QueryTestModule("FeatureModule", [Self.standaloneFeature], input: .moduleInfo())],
+			filesToDelete: &filesToDelete,
+		)
+
+		let featureFile = output.filePath(of: "FeatureModule")
+		let moduleInfoFile = output.paths(of: "FeatureModule")[0]
+		#expect(output.json == """
+		{
+		  "formatVersion" : 1,
+		  "types" : [
+		    {
+		      "forwardedParameters" : [
+
+		      ],
+		      "mock" : {
+		        "forwardedParameters" : [
+
+		        ],
+		        "kind" : "wouldBeGenerated",
+		        "methodName" : "mock",
+		        "modules" : [
+		          {
+		            "declarations" : [
+		              {
+		                "filePath" : "\(featureFile)",
+		                "kind" : "instantiable",
+		                "typeName" : "Feature"
+		              }
+		            ],
+		            "name" : "FeatureModule",
+		            "paths" : [
+		              "\(moduleInfoFile)"
+		            ]
+		          }
+		        ],
+		        "unfulfilledDependencies" : [
+
+		        ]
+		      },
+		      "modules" : [
+		        {
+		          "declarations" : [
+		            {
+		              "filePath" : "\(featureFile)",
+		              "kind" : "instantiable",
+		              "typeName" : "Feature"
+		            }
+		          ],
+		          "name" : "FeatureModule",
+		          "paths" : [
+		            "\(moduleInfoFile)"
+		          ]
+		        }
+		      ],
+		      "typeName" : "Feature",
+		      "unfulfilledDependencies" : [
+
+		      ]
+		    }
+		  ]
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_throwsError_whenModuleInfoFileDoesNotExist() async {
+		await assertThrowsQueryError(
+			diagnostics: { moduleFiles in
+				let missingFile = moduleFiles["FeatureModule"]![0].deletingLastPathComponent().appendingPathComponent("Missing.safedi").path
+				return "Could not read the SafeDI module info file at '\(missingFile)': No file exists at that path."
+			},
+			json: { moduleFiles in
+				let missingFile = moduleFiles["FeatureModule"]![0].deletingLastPathComponent().appendingPathComponent("Missing.safedi").path
+				return """
+				{
+				  "error" : {
+				    "kind" : "moduleInfoNotReadable",
+				    "message" : "Could not read the SafeDI module info file at '\(missingFile)': No file exists at that path.",
+				    "paths" : [
+				      "\(missingFile)"
+				    ]
+				  },
+				  "formatVersion" : 1
+				}
+				"""
+			},
+		) {
+			try await executeSafeDIToolQuery(
+				typeName: "Feature",
+				modules: [QueryTestModule("FeatureModule", [Self.standaloneFeature])],
+				moduleArguments: { moduleDirectories, _, _ in
+					["--module-info", moduleDirectories["FeatureModule"]!.appendingPathComponent("Missing.safedi").path]
+				},
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_throwsError_whenModuleInfoFileIsNotOne() async throws {
+		let brokenFile = try temporaryModuleDirectory().appendingPathComponent("Broken.safedi")
+		try Data(String(repeating: "This is not a module info file. ", count: 8).utf8).write(to: brokenFile)
+
+		await assertThrowsQueryError(
+			diagnostics: { _ in
+				"Could not read the SafeDI module info file at '\(brokenFile.path)': The file is not a module info file: it does not begin with `SDMI`. \(BinaryFile.unreadableFileExplanation)"
+			},
+			json: { _ in
+				"""
+				{
+				  "error" : {
+				    "kind" : "moduleInfoNotReadable",
+				    "message" : "Could not read the SafeDI module info file at '\(brokenFile.path)': The file is not a module info file: it does not begin with `SDMI`. \(BinaryFile.unreadableFileExplanation)",
+				    "paths" : [
+				      "\(brokenFile.path)"
+				    ]
+				  },
+				  "formatVersion" : 1
+				}
+				"""
+			},
+		) {
+			try await executeSafeDIToolQuery(
+				typeName: "Feature",
+				modules: [],
+				additionalArguments: ["--module-info", brokenFile.path],
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_throwsError_whenAFileIsInTwoModuleInfoFiles() async {
+		await assertThrowsQueryError(
+			diagnostics: { moduleFiles in
+				"The file '\(NormalizedFilePath(moduleFiles["FeatureModule"]![0].path).path)' is in two modules: 'Copy' and 'FeatureModule'. A file belongs to one module, so include directories and module info files that do not overlap."
+			},
+		) {
+			try await executeSafeDIToolQuery(
+				typeName: "Feature",
+				modules: [
+					QueryTestModule("FeatureModule", [Self.standaloneFeature], input: .moduleInfo()),
+					QueryTestModule("Copy", [], input: .moduleInfo(sourcesOf: "FeatureModule")),
+				],
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -2312,6 +2622,23 @@ struct SafeDIToolQueryTests: ~Copyable {
 	private static let defaultUserService = """
 	@Instantiable
 	public final class DefaultUserService: UserService, Instantiable {
+	    public init() {}
+	}
+	"""
+
+	private static let featureInstantiatingCache = """
+	@Instantiable
+	public final class Feature: Instantiable {
+	    public init(cache: Cache) {
+	        self.cache = cache
+	    }
+	    @Instantiated private let cache: Cache
+	}
+	"""
+
+	private static let cache = """
+	@Instantiable
+	public final class Cache: Instantiable {
 	    public init() {}
 	}
 	"""
