@@ -1705,17 +1705,22 @@ public actor DependencyTreeGenerator {
 		}
 
 		// A dependency the tree receives both as `LazilyInstantiated` and by value is one dependency. It is
-		// promoted once, as the lazily instantiated property, whenever any receiver requires it in either form;
-		// receivers of its instance read it from that property. The same holds for a lazily instantiated
-		// property the mock root declares itself, which needs no promotion. A receive of the instance that a
-		// forwarded property fulfills does not count: the forwarded value comes from outside the tree.
+		// promoted once, as the lazily instantiated property, whenever any receiver requires it or its instance,
+		// optional or not; receivers of its instance, and of the optional instance, read it from that property.
+		// The same holds for a lazily instantiated property the mock root declares itself, which needs no promotion.
+		// A receive of the instance, or of the optional instance, that a forwarded property fulfills does not count:
+		// the forwarded value comes from outside the tree. A required `x: LazilyInstantiated<X>?` beside no required
+		// instance is promoted below as it is, as any optional form is when nothing requires its non-optional form.
 		var lazilyInstantiatedPropertiesToPromote = Set<Property>()
 		var instancePropertiesOfLazilyInstantiatedProperties = Set(mockRootScope.propertiesToGenerate.compactMap(\.lazilyInstantiatedInstanceProperty))
 		for receivedProperty in allReceived {
 			guard let instanceProperty = receivedProperty.asLazilyInstantiatedInstanceProperty else { continue }
 			let lazilyInstantiatedProperty = receivedProperty.asUnwrappedProperty
-			guard allRequired.contains(lazilyInstantiatedProperty) || (allRequired.contains(instanceProperty) && !isForwarded(instanceProperty)),
-			      scopeToPromote(for: lazilyInstantiatedProperty) != nil
+			let optionalInstanceProperty = Property(label: instanceProperty.label, typeDescription: .optional(instanceProperty.typeDescription))
+			guard allRequired.contains(lazilyInstantiatedProperty)
+				|| (allRequired.contains(instanceProperty) && !isForwarded(instanceProperty))
+				|| (allRequired.contains(optionalInstanceProperty) && !isForwarded(optionalInstanceProperty)),
+				scopeToPromote(for: lazilyInstantiatedProperty) != nil
 			else { continue }
 			lazilyInstantiatedPropertiesToPromote.insert(lazilyInstantiatedProperty)
 			instancePropertiesOfLazilyInstantiatedProperties.insert(instanceProperty)
@@ -1725,10 +1730,11 @@ public actor DependencyTreeGenerator {
 		// `x: Instantiator<X>` and `x: ErasedInstantiator<(), AnyX>` are each built, under a name of its own, for
 		// the receivers of that form. Only an optional form is not promoted beside its non-optional form: the
 		// mock binds what it builds to a non-optional value, which a receive of the optional form is handed too.
+		// Nor is the instance of a promoted lazily instantiated property, optional or not.
 		let propertiesToPromote = allReceived.union(lazilyInstantiatedPropertiesToPromote).filter { receivedProperty in
 			(lazilyInstantiatedPropertiesToPromote.contains(receivedProperty) || !allOnlyIfAvailable.contains(receivedProperty))
 				&& !isForwarded(receivedProperty)
-				&& !instancePropertiesOfLazilyInstantiatedProperties.contains(receivedProperty)
+				&& !instancePropertiesOfLazilyInstantiatedProperties.contains(receivedProperty.asUnwrappedProperty)
 		}
 		var promotedPropertiesToGenerate = [Scope.PropertyToGenerate]()
 		for receivedProperty in propertiesToPromote.sorted()
