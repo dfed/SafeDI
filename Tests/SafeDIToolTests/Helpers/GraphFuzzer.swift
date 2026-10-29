@@ -312,6 +312,7 @@ enum GraphFuzzerGenerator {
 		init(seed: UInt64) {
 			random = GraphFuzzerRandomNumberGenerator(seed: seed)
 			generatedNameRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.generatedNameRandomSeedMask)
+			unbuildableDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencyRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
 			let sendabilityRoll = random.integer(in: 0...99)
@@ -372,7 +373,8 @@ enum GraphFuzzerGenerator {
 			appendMotif(to: &declarations)
 			// Decided last, so that the rest of a seed's graph does not depend on whether it has the extension.
 			let extensionSource = random.percentChance(25) ? extensionDeclarationSource(addingPropertyToOneOf: &declarations) : nil
-			return addingPropertiesLabeledAsGeneratedNames(to: declarations).map(source(of:)) + [extensionSource].compactMap(\.self)
+			return addingDependenciesMocksCannotBuild(to: addingPropertiesLabeledAsGeneratedNames(to: declarations)).map(source(of:))
+				+ [extensionSource].compactMap(\.self)
 		}
 
 		/// A quarter of graphs end with a motif: a few more types, in a shape whose generated code or diagnostics
@@ -431,6 +433,10 @@ enum GraphFuzzerGenerator {
 		/// Draws only the choices of `addingPropertiesLabeledAsGeneratedNames`, so that every other choice is the
 		/// one `random` makes for the seed without them.
 		private var generatedNameRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only the choices of `addingDependenciesMocksCannotBuild`, as `generatedNameRandom` does for its pass.
+		private var unbuildableDependencyRandom: GraphFuzzerRandomNumberGenerator
+		/// How many types that are not `@Instantiable` `addingDependenciesMocksCannotBuild` instantiates.
+		private var unbuildableTypeCount = 0
 		private let prefix: String
 		private let sendability: Sendability
 		private let typeCount: Int
@@ -820,13 +826,7 @@ enum GraphFuzzerGenerator {
 			let declarationsByName = Dictionary(uniqueKeysWithValues: declarations.map { ($0.name, $0) })
 			/// The name of the type `property` builds, when it is a type of the graph.
 			func builtTypeName(of property: PropertyDeclaration) -> String? {
-				let name = if let fulfilledByTypeRange = property.attribute.range(of: "fulfilledByType: \"") {
-					String(property.attribute[fulfilledByTypeRange.upperBound...].prefix { $0 != "\"" })
-				} else if let genericStart = property.type.firstIndex(of: "<"), let genericEnd = property.type.lastIndex(of: ">") {
-					String(property.type[property.type.index(after: genericStart)..<genericEnd])
-				} else {
-					property.type
-				}
+				let name = Self.builtTypeName(of: property)
 				return declarationsByName[name] == nil ? nil : name
 			}
 			/// The properties received in the subtree of the type named `typeName`, to `depth` types deep.
@@ -889,6 +889,50 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let generatedNameRandomSeedMask: UInt64 = 0x6E616D6573417061
+
+		/// Now and then gives a type that no root reaches a constant of a type that is not `@Instantiable`, as a type
+		/// in a module the graph's module does not depend on would be. The mock of a type that builds it cannot build
+		/// the constant, so `mock()` takes it as a parameter. Its label is one the graph's other types use, and its
+		/// type one of two, so that two such constants can share a label with different types, and a type built around
+		/// one can declare its label. A root could not build the constant, so no type a root reaches gets one.
+		private mutating func addingDependenciesMocksCannotBuild(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			let declarationsByName = Dictionary(uniqueKeysWithValues: declarations.map { ($0.name, $0) })
+			var reachedNames = Set<String>()
+			var namesToVisit = declarations.filter { $0.instantiableArguments.contains("isRoot: true") }.map(\.name)
+			while let name = namesToVisit.popLast() {
+				guard reachedNames.insert(name).inserted, let declaration = declarationsByName[name] else { continue }
+				namesToVisit += declaration.properties.filter { $0.attribute.hasPrefix("@Instantiated") }.map(Self.builtTypeName(of:))
+			}
+			return declarations.map { declaration in
+				guard !reachedNames.contains(declaration.name), declaration.declaresHelperTypes, unbuildableDependencyRandom.percentChance(40) else {
+					return declaration
+				}
+				let label = "t\(unbuildableDependencyRandom.integer(in: 0...(typeCount - 1)))"
+				let typeIndex = unbuildableDependencyRandom.integer(in: 0...1)
+				guard !declaration.properties.contains(where: { $0.label == label }) else { return declaration }
+				unbuildableTypeCount = max(unbuildableTypeCount, typeIndex + 1)
+				var declaration = declaration
+				declaration.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: label, type: unbuildableTypeName(typeIndex)))
+				return declaration
+			}
+		}
+
+		private func unbuildableTypeName(_ index: Int) -> String {
+			"\(prefix)Unbuildable\(index)"
+		}
+
+		private static let unbuildableDependencyRandomSeedMask: UInt64 = 0x756E6275696C6461
+
+		/// The name of the type `property` builds: its `fulfilledByType:`, the generic of its wrapper, or its type.
+		private static func builtTypeName(of property: PropertyDeclaration) -> String {
+			if let fulfilledByTypeRange = property.attribute.range(of: "fulfilledByType: \"") {
+				String(property.attribute[fulfilledByTypeRange.upperBound...].prefix { $0 != "\"" })
+			} else if let genericStart = property.type.firstIndex(of: "<"), let genericEnd = property.type.lastIndex(of: ">") {
+				String(property.type[property.type.index(after: genericStart)..<genericEnd])
+			} else {
+				property.type
+			}
+		}
 
 		// MARK: Extension
 
@@ -1057,6 +1101,9 @@ enum GraphFuzzerGenerator {
 				]
 			} else if declaration.name == "\(prefix)Root0" {
 				lines += ["", "public final class \(valueTypeName): Instantiable\(helperTypesAreSendable ? ", Sendable" : "") {}"]
+				for index in 0..<unbuildableTypeCount {
+					lines += ["", "public final class \(unbuildableTypeName(index))\(helperTypesAreSendable ? ": Sendable" : "") {}"]
+				}
 			}
 			for additionalDeclaration in declaration.additionalDeclarations {
 				lines += ["", additionalDeclaration]
@@ -1097,6 +1144,8 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case sameLabelWithDifferentTypes
 	/// An instantiated property labeled as a name a generated mock gives a binding of its own, such as `t1_S0_T1`.
 	case labelSpelledAsGeneratedName
+	/// An instantiated property of a type that is not `@Instantiable`, which a mock takes as a parameter.
+	case dependencyMockCannotBuild
 	/// A graph whose properties use both `Sendable` wrappers and wrappers that are not `Sendable`.
 	case sendableAndNonSendableWrappers
 	/// A type with `generateMock: true` on a cycle that an instantiator makes lazy.
@@ -1183,6 +1232,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					}
 					if attribute.hasPrefix("@Instantiated"), label.contains("_") {
 						features.insert(.labelSpelledAsGeneratedName)
+					}
+					if attribute.hasPrefix("@Instantiated"), type.contains("Unbuildable") {
+						features.insert(.dependencyMockCannotBuild)
 					}
 					if attribute.hasPrefix("@Instantiated"), let currentTypeName {
 						instantiationEdges.append(GraphFuzzerInstantiationEdge(
