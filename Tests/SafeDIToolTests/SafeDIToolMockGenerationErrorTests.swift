@@ -439,6 +439,253 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenLazilyInstantiatedReceivedPropertyIsHiddenByForwardedInstanceOfMockedTypeWithSameLabel() async {
+		// `Feed` is built inside `Screen`, beside the forwarded `session: Session`, as in production, which hides
+		// `session: LazilyInstantiated<Session>` there. A mock builds another form of a forwarded label only for the
+		// dependencies it promotes, which are built beside the mocked type.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Feed.swift"]):4:5: error: @Received property `session: LazilyInstantiated<Session>` is hidden in chain: Screen -> Feed. `Screen` declares `session: Session` with the same label, so the types below `Screen` receive `session: Session` instead. Give `session: Session` on `Screen` a different label to fix.
+				\(fixtures["Screen.swift"]):4:5: note: `session: Session` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(session: Session, feed: Feed) { self.session = session; self.feed = feed }
+					    @Forwarded let session: Session
+					    @Instantiated let feed: Feed
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Feed: Instantiable {
+					    public init(session: LazilyInstantiated<Session>) { self.session = session }
+					    @Received let session: LazilyInstantiated<Session>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Session: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTypeBuiltInsidePromotedDependencyReceivesForwardedPropertyThatInstantiatorOfItsLabelHides() async {
+		// The mock passes `Feed` the `Instantiator<Session>` it builds under the label `session`, inside the function that
+		// also builds `Row`, where the label then names the `Instantiator` rather than the forwarded `session`. Production
+		// rejects the pair under any root.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Row.swift"]):4:5: error: @Received property `session: Session` is hidden in chain: Feed -> Row. In the mock of `Screen`, `Row` is passed the `session: Session` that `Screen` forwards, but `Feed` receives `session: Instantiator<Session>` with the same label, so the types below `Feed` receive `session: Instantiator<Session>` instead. Give `session: Session` on `Screen` a different label to fix.
+				\(fixtures["Feed.swift"]):4:5: note: `session: Instantiator<Session>` is received here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(session: Session, feed: Feed) { self.session = session; self.feed = feed }
+					    @Forwarded let session: Session
+					    @Received let feed: Feed
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Feed: Instantiable {
+					    public init(session: Instantiator<Session>, row: Row) { self.session = session; self.row = row }
+					    @Received let session: Instantiator<Session>
+					    @Instantiated let row: Row
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Row: Instantiable {
+					    public init(session: Session) { self.session = session }
+					    @Received let session: Session
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Session: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTypeBuiltInsidePromotedDependencyReceivesForwardedPropertyThatLazilyInstantiatedPropertyOfItsLabelHides() async {
+		// The mock builds `Feed`'s `LazilyInstantiated<Session>` apart from the forwarded `session` and passes it to `Feed`
+		// under the label, which then hides the forwarded `session` from `Row`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Row.swift"]):4:5: error: @Received property `session: Session` is hidden in chain: Feed -> Row. In the mock of `Screen`, `Row` is passed the `session: Session` that `Screen` forwards, but `Feed` receives `session: LazilyInstantiated<Session>` with the same label, so the types below `Feed` receive `session: LazilyInstantiated<Session>` instead. Give `session: Session` on `Screen` a different label to fix.
+				\(fixtures["Feed.swift"]):4:5: note: `session: LazilyInstantiated<Session>` is received here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(session: Session, feed: Feed) { self.session = session; self.feed = feed }
+					    @Forwarded let session: Session
+					    @Received let feed: Feed
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Feed: Instantiable {
+					    public init(session: LazilyInstantiated<Session>, row: Row) { self.session = session; self.row = row }
+					    @Received let session: LazilyInstantiated<Session>
+					    @Instantiated let row: Row
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Row: Instantiable {
+					    public init(session: Session) { self.session = session }
+					    @Received let session: Session
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Session: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTypeBuiltInsidePromotedDependencyReceivesForwardedPropertyThatParameterOfItsLabelHides() async {
+		// No `@Instantiable` declaration fulfills `Draft`, so `mock()` takes `user_Draft`, which it passes to `Editor` under
+		// the label `user`, hiding the forwarded `user` from `Row`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Row.swift"]):4:5: error: @Received property `user: User` is hidden in chain: Editor -> Row. In the mock of `Screen`, `Row` is passed the `user: User` that `Screen` forwards, but `Editor` receives `user: Draft` with the same label, so the types below `Editor` receive `user: Draft` instead. Give `user: User` on `Screen` a different label to fix.
+				\(fixtures["Editor.swift"]):4:5: note: `user: Draft` is received here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public final class User {}
+					public final class Draft {}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(user: User, editor: Editor) { self.user = user; self.editor = editor }
+					    @Forwarded let user: User
+					    @Received let editor: Editor
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Editor: Instantiable {
+					    public init(user: Draft, row: Row) { self.user = user; self.row = row }
+					    @Received let user: Draft
+					    @Instantiated let row: Row
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Row: Instantiable {
+					    public init(user: User) { self.user = user }
+					    @Received let user: User
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTypeBuiltInsidePromotedDependencyAliasesForwardedPropertyThatInstantiatorOfItsLabelHides() async {
+		// `Row` renames the forwarded `session`, which its alias reads by the label that `Feed`'s `Instantiator<Session>`
+		// takes inside the function that builds `Row`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Row.swift"]):4:5: error: @Received property `session: Session` is hidden in chain: Feed -> Row. In the mock of `Screen`, `Row` is passed the `session: Session` that `Screen` forwards, but `Feed` receives `session: Instantiator<Session>` with the same label, so the types below `Feed` receive `session: Instantiator<Session>` instead. Give `session: Session` on `Screen` a different label to fix.
+				\(fixtures["Feed.swift"]):4:5: note: `session: Instantiator<Session>` is received here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(session: Session, feed: Feed) { self.session = session; self.feed = feed }
+					    @Forwarded let session: Session
+					    @Received let feed: Feed
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Feed: Instantiable {
+					    public init(session: Instantiator<Session>, row: Row) { self.session = session; self.row = row }
+					    @Received let session: Instantiator<Session>
+					    @Instantiated let row: Row
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Row: Instantiable {
+					    public init(current: Session) { self.current = current }
+					    @Received(fulfilledByDependencyNamed: "session", ofType: Session.self) let current: Session
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Session: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenPromotedDependenciesReceiveEachOther() async {
 		// Child.mock() promotes `c` (Child receives it) and `b` (C receives it).
 		// Worker, built inside `b`, requires `c`, so each promoted dependency must be
