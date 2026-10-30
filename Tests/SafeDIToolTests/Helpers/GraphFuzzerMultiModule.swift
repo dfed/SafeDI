@@ -307,8 +307,8 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 /// The generated code of one module under one integration, reduced to what both integrations produce: each generated
 /// extension, keyed as the plugin names the file it would write (`<Type>+SafeDI.swift` for a root's dependency tree,
 /// `<Type>+SafeDIMock.swift` for a mock, and `<Type>+SafeDIMockConfiguration.swift` for a type's
-/// `SafeDIMockConfiguration` struct, which the plugin writes beside the one mock that reads it or in
-/// `SafeDIMockConfiguration.swift`), with the `#if` the mock condition wraps it in; the `import` lines of the generated
+/// `SafeDIMockConfiguration` struct, which the plugin writes in the type's own mock file when this module generates
+/// its mock, else in `SafeDIMockConfiguration.swift`), with the `#if` the mock condition wraps it in; the `import` lines of the generated
 /// files' headers; and the warnings `generate` reported. The plugin writes one file per root and per mock, each under
 /// its own header, where the module-info integration writes one combined file under one header, with the bodies
 /// joined; splitting both into extensions is what makes them comparable. Compile-time assertions, which the two
@@ -468,53 +468,61 @@ struct GraphFuzzerMultiModuleOutcome: Equatable, Sendable {
 	/// - Parameter modules: The partition's modules, in dependency order.
 	static func difference(betweenModuleInfo moduleInfoOutcome: GraphFuzzerMultiModuleOutcome, andPlugin pluginOutcome: GraphFuzzerMultiModuleOutcome, modules: [GraphFuzzerPartition.Module]) -> String? {
 		let pluginKindsByModuleName = Dictionary(uniqueKeysWithValues: pluginOutcome.verdicts.map { ($0.moduleName, $0.kind) })
+		/// How the plugin's verdict on the module it first reads `moduleName`'s files in, among those depending on
+		/// it, differs from the module-info integration's rejection of `moduleName` with `diagnostics`.
+		func differenceAtConsumer(ofSkippedModuleNamed moduleName: String, rejectedWith diagnostics: String) -> String? {
+			for consumer in modules where consumer.dependencies.contains(moduleName) {
+				switch pluginKindsByModuleName[consumer.name] {
+				case .skipped?:
+					continue
+				case let .rejected(otherDiagnostics)?:
+					return difference(betweenDiagnostics: diagnostics, and: otherDiagnostics, inModuleNamed: moduleName).map { "\($0) (which .swiftPackagePlugin reports in module \(consumer.name))" }
+				case .accepted?:
+					return "its verdict for module \(moduleName) (.moduleInfo rejects it, while .swiftPackagePlugin plans no output for it and accepts module \(consumer.name), which depends on it)"
+				case nil:
+					// The plugin stopped before this consumer, at a module that does not depend on this one and
+					// that the module-info integration never reached.
+					return nil
+				}
+			}
+			return nil
+		}
 		for verdict in moduleInfoOutcome.verdicts {
 			let moduleName = verdict.moduleName
-			switch (verdict.kind, pluginKindsByModuleName[moduleName]) {
+			let difference: String? = switch (verdict.kind, pluginKindsByModuleName[moduleName]) {
 			case let (.accepted(module), .accepted(otherModule)?):
-				if let difference = difference(between: module, and: otherModule, inModuleNamed: moduleName) {
-					return difference
-				}
+				difference(between: module, and: otherModule, inModuleNamed: moduleName)
 			case let (.accepted(module), .skipped?):
-				guard module.units.isEmpty else {
-					return "the generated units of module \(moduleName) (\(module.units.keys.sorted().joined(separator: ", ")) under .moduleInfo, while .swiftPackagePlugin plans no output for it)"
-				}
+				module.units.isEmpty
+					? nil
+					: "the generated units of module \(moduleName) (\(module.units.keys.sorted().joined(separator: ", ")) under .moduleInfo, while .swiftPackagePlugin plans no output for it)"
 			case (.accepted, .rejected?):
-				return "its verdict for module \(moduleName) (.moduleInfo accepts it, .swiftPackagePlugin rejects it)"
+				"its verdict for module \(moduleName) (.moduleInfo accepts it, .swiftPackagePlugin rejects it)"
 			case (.accepted, nil):
 				// The plugin stopped at an earlier module, which it rejected and the module-info integration accepted:
 				// reported there.
-				return "its verdict for module \(moduleName) (.moduleInfo accepts it, .swiftPackagePlugin never reached it)"
+				"its verdict for module \(moduleName) (.moduleInfo accepts it, .swiftPackagePlugin never reached it)"
 			case let (.rejected(diagnostics), .rejected(otherDiagnostics)?):
-				return difference(betweenDiagnostics: diagnostics, and: otherDiagnostics, inModuleNamed: moduleName)
+				difference(betweenDiagnostics: diagnostics, and: otherDiagnostics, inModuleNamed: moduleName)
 			case (.rejected, .accepted?):
-				return "its verdict for module \(moduleName) (.moduleInfo rejects it, .swiftPackagePlugin accepts it)"
+				"its verdict for module \(moduleName) (.moduleInfo rejects it, .swiftPackagePlugin accepts it)"
 			case let (.rejected(diagnostics), .skipped?):
 				// The plugin reads the module's files first where a module that depends on it generates.
-				for consumer in modules.map(\.name) where modules.first(where: { $0.name == consumer })?.dependencies.contains(moduleName) == true {
-					switch pluginKindsByModuleName[consumer] {
-					case .skipped?:
-						continue
-					case let .rejected(otherDiagnostics)?:
-						return difference(betweenDiagnostics: diagnostics, and: otherDiagnostics, inModuleNamed: moduleName).map { "\($0) (which .swiftPackagePlugin reports in module \(consumer))" }
-					case .accepted?:
-						return "its verdict for module \(moduleName) (.moduleInfo rejects it, while .swiftPackagePlugin plans no output for it and accepts module \(consumer), which depends on it)"
-					case nil:
-						// The plugin stopped before this consumer, at a module that does not depend on this one and
-						// that the module-info integration never reached.
-						return nil
-					}
-				}
-				return nil
+				differenceAtConsumer(ofSkippedModuleNamed: moduleName, rejectedWith: diagnostics)
 			case (.rejected, nil):
-				return "its verdict for module \(moduleName) (.moduleInfo rejects it, .swiftPackagePlugin never reached it)"
-			case (.skipped, _):
+				"its verdict for module \(moduleName) (.moduleInfo rejects it, .swiftPackagePlugin never reached it)"
+			case (.skipped, .skipped?), (.skipped, .accepted?), (.skipped, .rejected?), (.skipped, nil):
 				// The module-info integration runs `generate` for every module.
-				return "its verdict for module \(moduleName) (.moduleInfo ran no generate for it)"
+				"its verdict for module \(moduleName) (.moduleInfo ran no generate for it)"
+			}
+			if let difference {
+				return difference
+			} else {
+				continue
 			}
 		}
 		// The module-info integration runs `generate` for every module, so it reached them all unless it rejected one,
-		// which returned above, and a module the plugin rejected was compared above too.
+		// which is the last verdict it lists, and a module the plugin rejected was compared above too.
 		return nil
 	}
 
