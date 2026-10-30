@@ -125,33 +125,6 @@ struct ScanManifest: Codable {
 	var additionalInputFiles: [String]
 }
 
-// MARK: - Target Graph
-
-/// The targets whose Swift files the plugin lists in its input CSV, which it writes beside the CSV, in a file named
-/// after it with ``TargetGraph/fileNameSuffix`` appended, for `SafeDITool generate` to read the module and package that
-/// declare each file. Plugins cannot import SafeDITool, so this matches the keys of its `PluginTargetGraph`.
-struct TargetGraph: Encodable {
-	struct Target: Encodable {
-		/// The name of the module the target compiles.
-		var moduleName: String
-		/// The identity of the package that declares the target, from which SwiftPM derives `-package-name`, or `nil`
-		/// when the plugin finds the target in no package it is handed.
-		var packageID: String?
-		/// The target's Swift files, each spelled exactly as the input CSV spells it, sorted.
-		var sourceFilePaths: [String]
-		/// The modules the target depends on directly, through a target or a product, sorted.
-		var dependencyModuleNames: [String]
-	}
-
-	/// The target the plugin generates code for.
-	var target: Target
-	/// Every other target whose Swift files the input CSV lists, sorted.
-	var dependencyTargets: [Target]
-
-	/// What the plugin appends to the input CSV's path to name the file it writes the target graph to.
-	static let fileNameSuffix = ".targets.json"
-}
-
 // MARK: - Process Runner
 
 struct SafeDIToolProcessError: Error, CustomStringConvertible {

@@ -231,7 +231,7 @@ func writeIfChanged(_ data: Data, to file: URL) throws {
 
 /// The file the plugin writes the target graph to, beside the input CSV at `inputSourcesFile`.
 func targetGraphFile(besideInputSourcesFile inputSourcesFile: URL) -> URL {
-	URL(fileURLWithPath: inputSourcesFile.path(percentEncoded: false) + TargetGraph.fileNameSuffix)
+	URL(fileURLWithPath: inputSourcesFile.path(percentEncoded: false) + PluginTargetGraph.fileNameSuffix)
 }
 
 /// `swiftFiles` as the input CSV spells them: each relative to `base` when it lies inside it, and normalized
@@ -270,8 +270,8 @@ func writeTargetGraph(
 	func moduleName(of target: any Target) -> String {
 		(target as? any SourceModuleTarget)?.moduleName ?? target.name
 	}
-	func graphTarget(_ target: SwiftSourceModuleTarget) -> TargetGraph.Target {
-		TargetGraph.Target(
+	func graphTarget(_ target: SwiftSourceModuleTarget) -> PluginTargetGraph.Target {
+		PluginTargetGraph.Target(
 			moduleName: target.moduleName,
 			packageID: packageIDsByTargetID[target.id],
 			// The files the CSV lists for the target, spelled by the same code.
@@ -288,7 +288,7 @@ func writeTargetGraph(
 			}).sorted(),
 		)
 	}
-	let targetGraph = TargetGraph(
+	let targetGraph = PluginTargetGraph(
 		target: graphTarget(target),
 		dependencyTargets: dependencyTargets.map(graphTarget).sorted {
 			($0.moduleName, $0.packageID ?? "") < ($1.moduleName, $1.packageID ?? "")
