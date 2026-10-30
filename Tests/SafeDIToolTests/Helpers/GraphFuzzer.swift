@@ -6878,7 +6878,7 @@ enum GraphFuzzerOracle {
 		if GraphFuzzerGeneratorFeature.features(drawnIn: fixture).isEmpty {
 			let partition = GraphFuzzerPartition.partition(of: fixture)
 			for renaming in multiModuleRenamings {
-				multiModuleRuns.append(try await GraphFuzzerMultiModuleProperty.runs(of: fixture, partition: partition, renaming: renaming))
+				await multiModuleRuns.append(try GraphFuzzerMultiModuleProperty.runs(of: fixture, partition: partition, renaming: renaming))
 			}
 		}
 		let firstOutcome = try await toolOutcome(of: fixture)

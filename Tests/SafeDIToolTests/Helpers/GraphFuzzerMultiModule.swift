@@ -263,8 +263,8 @@ struct GraphFuzzerGeneratedModule: Equatable, Sendable {
 
 	/// The name of the unit `<Type>+SafeDI.swift` names, when it is one.
 	static func rootTypeName(ofUnitNamed unitName: String) -> String? {
-		guard unitName.hasSuffix(Self.dependencyTreeUnitSuffix) else { return nil }
-		return String(unitName.dropLast(Self.dependencyTreeUnitSuffix.count))
+		guard unitName.hasSuffix(dependencyTreeUnitSuffix) else { return nil }
+		return String(unitName.dropLast(dependencyTreeUnitSuffix.count))
 	}
 
 	/// The units of one generated file, which may be the combined file.
