@@ -52,8 +52,36 @@ struct OutputFileNamingTests {
 	}
 
 	@Test
+	func outputFileNames_prefixesParentDirectories_whenFileNamesDifferOnlyInLetterCase() {
+		// A volume that ignores letter case, such as macOS's default, would hold `Root+SafeDI.swift` and
+		// `root+SafeDI.swift` as one file.
+		#expect(outputFileNames(forFilesAt: ["A/Root.swift", "B/root.swift"]) == [
+			"A_Root+SafeDI.swift",
+			"B_root+SafeDI.swift",
+		])
+	}
+
+	@Test
+	func outputFileNames_suffixesTheLaterPath_whenAPrefixedNameMatchesAnotherFileNameIgnoringLetterCase() {
+		#expect(outputFileNames(forFilesAt: ["Feature/root.swift", "Root.swift", "feature_Root.swift"]) == [
+			"Feature_root+SafeDI.swift",
+			"Root+SafeDI.swift",
+			"feature_Root_2+SafeDI.swift",
+		])
+	}
+
+	@Test
+	func outputFileNames_prefixesParentDirectories_whenFileNamesDifferInLetterCaseAndUnicodeNormalization() {
+		// `É` precomposed in one name, and `e` followed by a combining acute accent in the other.
+		#expect(outputFileNames(forFilesAt: ["A/CAF\u{C9}.swift", "B/cafe\u{301}.swift"]) == [
+			"A_CAF\u{C9}+SafeDI.swift",
+			"B_cafe\u{301}+SafeDI.swift",
+		])
+	}
+
+	@Test
 	func outputFileNames_namesEachPathTheSame_whenInputOrderChanges() {
-		let inputFilePaths = ["Feature/Root.swift", "Root.swift", "Feature_Root.swift", "Feature_Root_2.swift", "A_B/Root.swift", "A/B/Root.swift"]
+		let inputFilePaths = ["Feature/Root.swift", "Root.swift", "Feature_Root.swift", "Feature_Root_2.swift", "A_B/Root.swift", "A/B/Root.swift", "feature/root.swift", "B/ROOT.swift"]
 		let expectedNamesByPath = Dictionary(uniqueKeysWithValues: zip(inputFilePaths, outputFileNames(forFilesAt: inputFilePaths)))
 		for reorderedInputFilePaths in [inputFilePaths.reversed(), inputFilePaths.sorted(), inputFilePaths.sorted().reversed()] {
 			#expect(Dictionary(uniqueKeysWithValues: zip(reorderedInputFilePaths, outputFileNames(forFilesAt: reorderedInputFilePaths))) == expectedNamesByPath)
@@ -79,6 +107,21 @@ struct OutputFileNamingTests {
 	}
 
 	@Test
+	func mockOutputFileNames_suffixesAnAdditionalMock_whenItsTypeNameMatchesAFileMockNameIgnoringLetterCase() {
+		let names = mockOutputFileNames(forFilesAt: ["service.swift"], additionalMocksToGenerate: ["Service"])
+		#expect(names.mockFiles == ["service+SafeDIMock.swift"])
+		#expect(names.additionalMocks == ["Service_2+SafeDIMock.swift"])
+	}
+
+	@Test
+	func mockOutputFileNames_suffixesTheLaterTypeName_whenAdditionalMockTypeNamesDifferOnlyInLetterCase() {
+		// `Service` sorts before `service`, so it keeps the name.
+		let names = mockOutputFileNames(forFilesAt: [], additionalMocksToGenerate: ["service", "Service"])
+		#expect(names.mockFiles == [])
+		#expect(names.additionalMocks == ["service_2+SafeDIMock.swift", "Service+SafeDIMock.swift"])
+	}
+
+	@Test
 	func mockOutputFileNames_skipsASuffixAnotherAdditionalMockUses_whenResolvingACollision() {
 		let names = mockOutputFileNames(forFilesAt: ["Service.swift"], additionalMocksToGenerate: ["Service", "Service_2"])
 		#expect(names.mockFiles == ["Service+SafeDIMock.swift"])
@@ -88,17 +131,19 @@ struct OutputFileNamingTests {
 	@Test
 	func mockOutputFileNames_namesEachPathAndTypeTheSame_whenInputOrderChanges() {
 		let inputFilePaths = ["Feature/Service.swift", "Service.swift", "Feature_Service.swift"]
-		let additionalMocksToGenerate = ["Service_2", "Service", "Feature_Service"]
+		let additionalMocksToGenerate = ["Service_2", "Service", "Feature_Service", "service"]
 		let expectedNames = mockOutputFileNames(forFilesAt: inputFilePaths, additionalMocksToGenerate: additionalMocksToGenerate)
 		#expect(expectedNames.mockFiles == [
 			"Feature_Service+SafeDIMock.swift",
 			"Service+SafeDIMock.swift",
 			"Feature_Service_2+SafeDIMock.swift",
 		])
+		// `service` matches `Service.swift`'s mock ignoring letter case, and claims its suffix after `Service`.
 		#expect(expectedNames.additionalMocks == [
 			"Service_2+SafeDIMock.swift",
 			"Service_3+SafeDIMock.swift",
 			"Feature_Service_3+SafeDIMock.swift",
+			"service_4+SafeDIMock.swift",
 		])
 		let expectedFileNamesByPath = Dictionary(uniqueKeysWithValues: zip(inputFilePaths, expectedNames.mockFiles))
 		let expectedNamesByTypeName = Dictionary(uniqueKeysWithValues: zip(additionalMocksToGenerate, expectedNames.additionalMocks))
