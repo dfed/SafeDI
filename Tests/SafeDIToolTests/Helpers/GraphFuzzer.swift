@@ -2168,7 +2168,8 @@ enum GraphFuzzerToolOutcome: Equatable {
 }
 
 /// A graph the oracle does not accept: the tool succeeded and the output does not compile, the fixture itself
-/// does not compile (a defect in the fuzzer), or two runs of the tool differ.
+/// does not compile (a defect in the fuzzer), two runs of the tool differ, a renamed graph gives other results, or
+/// the graph split across modules gives other results under one multi-module integration than under the other.
 struct GraphFuzzerFailure: Equatable {
 	enum Kind: String, Equatable {
 		case generatedCodeDoesNotCompile = "generated code does not compile"
@@ -2498,9 +2499,10 @@ struct GraphFuzzerToolRuns {
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 enum GraphFuzzerOracle {
-	/// Runs each seed's graph through SafeDITool twice, then compiles every graph's fixture, with the generated
-	/// code of each graph the tool accepted, in as few `swiftc` invocations as attribution allows. Compilation is
-	/// skipped when `compileVerificationIsEnabled` is `false`.
+	/// Runs each seed's graph through SafeDITool twice, renamed by each renaming, and split across modules through
+	/// both multi-module integrations (`GraphFuzzerMultiModuleProperty`), then compiles every graph's fixture, with
+	/// the generated code of each graph the tool accepted, in as few `swiftc` invocations as attribution allows.
+	/// Compilation is skipped when `compileVerificationIsEnabled` is `false`.
 	///
 	/// - Parameter willRunSeed: Called before the tool first runs a seed's graph, so that a long run can record
 	///   which seed was running if the tool crashes the process.
