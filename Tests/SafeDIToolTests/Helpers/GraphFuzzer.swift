@@ -373,6 +373,7 @@ enum GraphFuzzerGenerator {
 			random = GraphFuzzerRandomNumberGenerator(seed: seed)
 			generatedNameRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.generatedNameRandomSeedMask)
 			unbuildableDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencyRandomSeedMask)
+			unbuildableDependencyReceiverRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencyReceiverRandomSeedMask)
 			aliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.aliasChainRandomSeedMask)
 			siblingAliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.siblingAliasChainRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
@@ -435,8 +436,11 @@ enum GraphFuzzerGenerator {
 			appendMotif(to: &declarations)
 			// Decided last, so that the rest of a seed's graph does not depend on whether it has the extension.
 			let extensionSource = random.percentChance(25) ? extensionDeclarationSource(addingPropertyToOneOf: &declarations) : nil
-			return addingSiblingAliasChains(to: addingAliasChains(to: addingDependenciesMocksCannotBuild(to: addingPropertiesLabeledAsGeneratedNames(to: declarations)))).map(source(of:))
-				+ [extensionSource].compactMap(\.self)
+			return addingReceiversOfDependenciesMocksCannotBuild(
+				to: addingSiblingAliasChains(to: addingAliasChains(to: addingDependenciesMocksCannotBuild(to: addingPropertiesLabeledAsGeneratedNames(to: declarations)))),
+			)
+			.map(source(of:))
+			+ [extensionSource].compactMap(\.self)
 		}
 
 		/// A quarter of graphs end with a motif: a few more types, in a shape whose generated code or diagnostics
@@ -497,6 +501,8 @@ enum GraphFuzzerGenerator {
 		private var generatedNameRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingDependenciesMocksCannotBuild`, as `generatedNameRandom` does for its pass.
 		private var unbuildableDependencyRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only the choices of `addingReceiversOfDependenciesMocksCannotBuild`, as `generatedNameRandom` does for its pass.
+		private var unbuildableDependencyReceiverRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingAliasChains`, as `generatedNameRandom` does for its pass.
 		private var aliasChainRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingSiblingAliasChains`, as `generatedNameRandom` does for its pass.
@@ -968,13 +974,7 @@ enum GraphFuzzerGenerator {
 		/// type one of two, so that two such constants can share a label with different types, and a type built around
 		/// one can declare its label. A root could not build the constant, so no type a root reaches gets one.
 		private mutating func addingDependenciesMocksCannotBuild(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
-			let declarationsByName = Dictionary(uniqueKeysWithValues: declarations.map { ($0.name, $0) })
-			var reachedNames = Set<String>()
-			var namesToVisit = declarations.filter { $0.instantiableArguments.contains("isRoot: true") }.map(\.name)
-			while let name = namesToVisit.popLast() {
-				guard reachedNames.insert(name).inserted, let declaration = declarationsByName[name] else { continue }
-				namesToVisit += declaration.properties.filter { $0.attribute.hasPrefix("@Instantiated") }.map(Self.builtTypeName(of:))
-			}
+			let reachedNames = Self.namesReachedFromRoots(in: declarations)
 			return declarations.map { declaration in
 				guard !reachedNames.contains(declaration.name), declaration.declaresHelperTypes, unbuildableDependencyRandom.percentChance(40) else {
 					return declaration
@@ -994,6 +994,68 @@ enum GraphFuzzerGenerator {
 		}
 
 		private static let unbuildableDependencyRandomSeedMask: UInt64 = 0x756E6275696C6461
+
+		/// The names of the types a root reaches through the properties `declarations` instantiate.
+		private static func namesReachedFromRoots(in declarations: [TypeDeclaration]) -> Set<String> {
+			let declarationsByName = Dictionary(uniqueKeysWithValues: declarations.map { ($0.name, $0) })
+			var reachedNames = Set<String>()
+			var namesToVisit = declarations.filter { $0.instantiableArguments.contains("isRoot: true") }.map(\.name)
+			while let name = namesToVisit.popLast() {
+				guard reachedNames.insert(name).inserted, let declaration = declarationsByName[name] else { continue }
+				namesToVisit += declaration.properties.filter { $0.attribute.hasPrefix("@Instantiated") }.map(Self.builtTypeName(of:))
+			}
+			return reachedNames
+		}
+
+		/// Now and then gives a receive of a constant that `addingDependenciesMocksCannotBuild` gave a type, of a type that
+		/// is not `@Instantiable`, to a type built beneath that owner: a type the owner instantiates or, now and then, one
+		/// that type instantiates in turn, through any kind of property. The receive is required, or `onlyIfAvailable` in
+		/// its optional form. As in production, a mock passes the receiver the parameter it takes for the constant, which is
+		/// named apart where a builder function around the owner declares the constant's label. A type between the owner
+		/// and the receiver that declares the label with another type hides the constant, which the tool must reject. No
+		/// root reaches the receiver, so no production tree rejects it for receiving a property nothing above it provides.
+		/// It is drawn after every other pass, and `unbuildableDependencyReceiverRandom` draws only for it, so every other
+		/// graph is drawn as before.
+		private mutating func addingReceiversOfDependenciesMocksCannotBuild(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			let reachedNames = Self.namesReachedFromRoots(in: declarations)
+			let declarationIndexByName = Dictionary(uniqueKeysWithValues: declarations.enumerated().map { ($1.name, $0) })
+			let unbuildableTypeNamePrefix = "\(prefix)Unbuildable"
+			/// The indices in `declarations` of the types the declaration at `index` instantiates that may receive the
+			/// constant: types no root reaches, other than the type that declares the constant.
+			func candidateReceiverIndices(instantiatedBy index: Int, declaringIndex: Int) -> [Int] {
+				declarations[index].properties
+					.filter { $0.attribute.hasPrefix("@Instantiated") && !$0.type.hasPrefix(unbuildableTypeNamePrefix) }
+					.compactMap { declarationIndexByName[Self.builtTypeName(of: $0)] }
+					.filter { $0 != declaringIndex && declarations[$0].declaresHelperTypes && !reachedNames.contains(declarations[$0].name) }
+			}
+			var declarations = declarations
+			for declaringIndex in declarations.indices {
+				guard let unbuildableProperty = declarations[declaringIndex].properties.first(where: {
+				      	$0.attribute == "@Instantiated" && $0.type.hasPrefix(unbuildableTypeNamePrefix)
+				      }),
+				      unbuildableDependencyReceiverRandom.percentChance(60)
+				else { continue }
+				let childIndices = candidateReceiverIndices(instantiatedBy: declaringIndex, declaringIndex: declaringIndex)
+				guard !childIndices.isEmpty else { continue }
+				var receiverIndex = unbuildableDependencyReceiverRandom.element(of: childIndices)
+				if unbuildableDependencyReceiverRandom.percentChance(30) {
+					let grandchildIndices = candidateReceiverIndices(instantiatedBy: receiverIndex, declaringIndex: declaringIndex)
+					if !grandchildIndices.isEmpty {
+						receiverIndex = unbuildableDependencyReceiverRandom.element(of: grandchildIndices)
+					}
+				}
+				let isOnlyIfAvailable = unbuildableDependencyReceiverRandom.percentChance(30)
+				guard !declarations[receiverIndex].properties.contains(where: { $0.label == unbuildableProperty.label }) else { continue }
+				declarations[receiverIndex].properties.append(PropertyDeclaration(
+					attribute: isOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received",
+					label: unbuildableProperty.label,
+					type: isOnlyIfAvailable ? unbuildableProperty.type + "?" : unbuildableProperty.type,
+				))
+			}
+			return declarations
+		}
+
+		private static let unbuildableDependencyReceiverRandomSeedMask: UInt64 = 0x756E627265636569
 
 		/// Now and then adds a chain of aliases through an `onlyIfAvailable` alias to a type of the graph: a second
 		/// alias, required or `onlyIfAvailable`, of an `onlyIfAvailable` alias the type declares (or is given here, of a
@@ -1513,6 +1575,8 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case labelSpelledAsGeneratedName
 	/// An instantiated property of a type that is not `@Instantiable`, which a mock takes as a parameter.
 	case dependencyMockCannotBuild
+	/// A receive of such a property beneath the type that instantiates it, which a mock passes the same parameter.
+	case dependencyMockCannotBuildReceivedBeneathItsOwner
 	/// A graph whose properties use both `Sendable` wrappers and wrappers that are not `Sendable`.
 	case sendableAndNonSendableWrappers
 	/// A type with `generateMock: true` on a cycle that an instantiator makes lazy.
@@ -1552,6 +1616,10 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		var nonOptionalTypesByLabel = [String: Set<String>]()
 		/// The types whose optional form an alias names as its `ofType:`, by the label the alias is fulfilled by.
 		var aliasedOptionalFormTypesByLabel = [String: Set<String>]()
+		/// The properties of types that are not `@Instantiable` each type instantiates, and those each type receives, in
+		/// their non-optional form, spelled `label: Type`.
+		var unbuildablePropertiesInstantiatedByTypeName = [String: Set<String>]()
+		var unbuildablePropertiesReceivedByTypeName = [String: Set<String>]()
 		for content in fixture.swiftFileContent {
 			var currentTypeName: String?
 			var nextTypeIsMocked = false
@@ -1620,6 +1688,12 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					}
 					if attribute.hasPrefix("@Instantiated"), type.contains("Unbuildable") {
 						features.insert(.dependencyMockCannotBuild)
+						if let currentTypeName {
+							unbuildablePropertiesInstantiatedByTypeName[currentTypeName, default: []].insert("\(label): \(type)")
+						}
+					}
+					if attribute == "@Received" || attribute == "@Received(onlyIfAvailable: true)", nonOptionalType.contains("Unbuildable"), let currentTypeName {
+						unbuildablePropertiesReceivedByTypeName[currentTypeName, default: []].insert("\(label): \(nonOptionalType)")
 					}
 					if attribute.hasPrefix("@Instantiated"), let currentTypeName {
 						instantiationEdges.append(GraphFuzzerInstantiationEdge(
@@ -1674,6 +1748,15 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			!types.isDisjoint(with: nonOptionalTypesByLabel[label] ?? [])
 		}) {
 			features.insert(.aliasOfOptionalFormOfProperty)
+		}
+		if unbuildablePropertiesInstantiatedByTypeName.contains(where: { ownerName, instantiatedProperties in
+			unbuildablePropertiesReceivedByTypeName.contains { receiverName, receivedProperties in
+				receiverName != ownerName
+					&& !receivedProperties.isDisjoint(with: instantiatedProperties)
+					&& GraphFuzzerInstantiationEdge.reaches(from: ownerName, to: receiverName, through: instantiationEdges)
+			}
+		}) {
+			features.insert(.dependencyMockCannotBuildReceivedBeneathItsOwner)
 		}
 		return features
 	}
@@ -1758,7 +1841,7 @@ private struct GraphFuzzerInstantiationEdge {
 		}
 	}
 
-	private static func reaches(from start: String, to destination: String, through edges: [GraphFuzzerInstantiationEdge]) -> Bool {
+	fileprivate static func reaches(from start: String, to destination: String, through edges: [GraphFuzzerInstantiationEdge]) -> Bool {
 		var visited = Set<String>()
 		var stack = [start]
 		while let current = stack.popLast() {
