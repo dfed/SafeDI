@@ -56,7 +56,7 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project’s root module.") var dotFileOutput: String?
 
-	@Option(help: "The name of the module this run generates code for: the module that compiles the files the input CSV and '--include' name. Each of those files' declarations, and the '--module-info-output' file, record it, so a module that reads the file knows which module declares each type. Files reached through a #SafeDIConfiguration's additionalDirectoriesToInclude belong to another module. The '--module-info-output' file also records, as the modules this one depends on, the module each '--dependent-module-info-file-path' file records. Without this option, '--package-name', and dependent module info that names a module, a run with '--swift-manifest' or '--output-directory' reads the module of each file from the target graph the SafeDIGenerator plugin writes beside its input CSV.") var moduleName: String?
+	@Option(help: "The name of the module this run generates code for: the module that compiles the files the input CSV and '--include' name. Each of those files' declarations, and the '--module-info-output' file, record it, so a module that reads the file knows which module declares each type. Files reached through a #SafeDIConfiguration's additionalDirectoriesToInclude belong to another module. Without this option and '--package-name', a run with '--swift-manifest' or '--output-directory' reads the module of each file from the target graph the SafeDIGenerator plugin writes beside its input CSV. Either way, the '--module-info-output' file also records, as modules this one depends on, the module each '--dependent-module-info-file-path' file records.") var moduleName: String?
 
 	@Option(help: "The package of the module this run generates code for, as the compiler's '-package-name' names it, recorded as '--module-name' is. Omit it when the compiler receives no '-package-name'.") var packageName: String?
 
@@ -231,15 +231,17 @@ struct Generate: AsyncParsableCommand {
 		} else {
 			parsedModuleInfo = initialModule
 		}
-		// Each declaration with the module that declares its file, as the build system tells this run, if it does.
-		let module = try moduleMembership(
-			readsTargetGraph: resolvedSwiftManifest != nil,
-			// The modules whose module info this run reads are the ones this module depends on directly, as the build
-			// system lists them, named as each file records its module.
-			dependencyModuleNames: Set(dependentModuleInfo.compactMap(\.moduleName)).sorted(),
-			inputFilePaths: inputFilePaths,
-			comparisonFilePaths: comparisonFilePaths,
-		).map { parsedModuleInfo.declared(by: $0) } ?? parsedModuleInfo
+		// Each declaration with the module that declares its file, as the build system tells this run, if it does. The
+		// modules whose module info this run reads are ones this module depends on directly, as the build system lists
+		// them, named as each file records its module, however this run learns which module its own files belong to.
+		let module = try parsedModuleInfo.declared(
+			by: moduleMembership(
+				readsTargetGraph: resolvedSwiftManifest != nil,
+				inputFilePaths: inputFilePaths,
+				comparisonFilePaths: comparisonFilePaths,
+			),
+			dependingOn: dependentModuleInfo.compactMap(\.moduleName),
+		)
 
 		// Each module's instantiables are already ordered by `parseSwiftFiles`, so the
 		// combined order depends only on the caller's dependent-module list.
@@ -674,26 +676,23 @@ struct Generate: AsyncParsableCommand {
 		}
 	}
 
-	/// What the build system tells this run about modules, or `nil` when it tells nothing. The options, and the module
-	/// names dependent module info records, when any is given, describe a build system that runs `generate` once per
-	/// module. Otherwise a run with a manifest, which each of the SafeDIGenerator plugin's runs is, reads the target
-	/// graph the plugin writes beside its input CSV, when there is one.
+	/// Which module this run's own files belong to, as the build system tells it, or `nil` when it tells nothing. The
+	/// options, when either is given, describe a build system that runs `generate` once per module. Otherwise a run with
+	/// a manifest, which each of the SafeDIGenerator plugin's runs is, reads the target graph the plugin writes beside
+	/// its input CSV, when there is one.
 	/// - Parameters:
 	///   - readsTargetGraph: Whether this run has a manifest, which it was given or scanned for itself.
-	///   - dependencyModuleNames: The modules the dependent module info this run reads records, sorted.
 	///   - inputFilePaths: The files the input CSV and `--include` name.
 	///   - comparisonFilePaths: How this run compares paths.
 	private func moduleMembership(
 		readsTargetGraph: Bool,
-		dependencyModuleNames: [String],
 		inputFilePaths: Set<String>,
 		comparisonFilePaths: ProjectFilePaths,
 	) throws -> ModuleMembership? {
-		if moduleName != nil || packageName != nil || !dependencyModuleNames.isEmpty {
+		if moduleName != nil || packageName != nil {
 			return ModuleMembership(
 				moduleName: moduleName,
 				packageName: packageName,
-				dependencyModuleNames: dependencyModuleNames,
 				inputFilePaths: Set(inputFilePaths.map(comparisonFilePaths.projectFilePath(of:))),
 				filePathsSpelledBy: comparisonFilePaths,
 			)

@@ -89,7 +89,7 @@ struct DeclaringModule: Hashable, Sendable {
 struct ModuleMembership: Sendable {
 	/// Every input file, and no other file, belongs to the module `generate` generates code for. The options that name
 	/// that module say this for a build system that runs `generate` once per module, such as the Bazel rule and the
-	/// Tuist plugin, and the module info it hands `generate` names the modules that module depends on.
+	/// Tuist plugin.
 	/// - Parameters:
 	///   - inputFilePaths: The files the input CSV and `--include` name, which are the module's own files. Files reached
 	///     through `#SafeDIConfiguration(additionalDirectoriesToInclude:)` belong to another module.
@@ -98,13 +98,12 @@ struct ModuleMembership: Sendable {
 	init(
 		moduleName: String?,
 		packageName: String?,
-		dependencyModuleNames: [String],
 		inputFilePaths: Set<ProjectFilePath>,
 		filePathsSpelledBy projectFilePaths: ProjectFilePaths,
 	) {
 		self.moduleName = moduleName
 		self.packageName = packageName
-		self.dependencyModuleNames = dependencyModuleNames
+		dependencyModuleNames = []
 		let declaringModule = DeclaringModule(moduleName: moduleName, packageName: packageName)
 		declaringModuleOfFile = { filePath in
 			inputFilePaths.contains(projectFilePaths.projectFilePath(of: filePath)) ? declaringModule : nil
@@ -139,7 +138,8 @@ struct ModuleMembership: Sendable {
 	let moduleName: String?
 	/// The package of the module `generate` generates code for, or `nil` when the build system did not say.
 	let packageName: String?
-	/// The modules the module `generate` generates code for depends on directly.
+	/// The modules the module `generate` generates code for depends on directly, as the target graph lists them. The
+	/// options name none: the module info a run per module reads names them.
 	let dependencyModuleNames: [String]
 
 	/// The module that declares the file a declaration names as `filePath`, or `nil` when SafeDITool does not know it.
@@ -151,9 +151,21 @@ struct ModuleMembership: Sendable {
 }
 
 extension ModuleInfo {
-	/// This module as `membership` describes it: the module `generate` generates code for, and each declaration with
-	/// the module that declares its file.
-	func declared(by membership: ModuleMembership) -> ModuleInfo {
+	/// This module as `membership`, when the build system gives one, describes it – the module `generate` generates code
+	/// for, and each declaration with the module that declares its file – depending on the modules `membership` names
+	/// and on `dependencyModuleNames`, whatever `membership` is. Without a membership the declarations are left as read.
+	/// - Parameter dependencyModuleNames: The modules the dependent module info `generate` reads records, which are the
+	///   direct dependencies a build system that runs `generate` once per module lists, however it names this
+	///   module's own files.
+	func declared(by membership: ModuleMembership?, dependingOn dependencyModuleNames: [String]) -> ModuleInfo {
+		guard let membership else {
+			return replacing(
+				instantiables: instantiables,
+				moduleName: moduleName,
+				packageName: packageName,
+				dependencyModuleNames: dependencyModuleNames,
+			)
+		}
 		// A file usually declares one or two types, and spelling a path for comparison costs more than looking it up.
 		let declaringModuleByFilePath = Dictionary(
 			uniqueKeysWithValues: Set(instantiables.compactMap(\.sourceFilePath)).compactMap { sourceFilePath in
@@ -166,7 +178,7 @@ extension ModuleInfo {
 			},
 			moduleName: membership.moduleName,
 			packageName: membership.packageName,
-			dependencyModuleNames: membership.dependencyModuleNames,
+			dependencyModuleNames: membership.dependencyModuleNames + dependencyModuleNames,
 		)
 	}
 

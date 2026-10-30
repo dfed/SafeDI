@@ -350,6 +350,37 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_recordsOwnFilesFromTargetGraphAndDependenciesFromBoth_whenDependentModuleInfoNamesModule() async throws {
+		let dependency = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.instantiableContent(named: "UpstreamEngine")],
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Upstream"],
+		)
+		let project = try makePluginProject(
+			files: [
+				"Sources/App/AppRoot.swift": Self.rootContent,
+				"Sources/Core/Engine.swift": Self.instantiableContent(named: "Engine"),
+			],
+			targets: [Self.appTarget, Self.coreTarget],
+		)
+		let dependentModuleInfoFileCSV = project.swiftFileCSV.deletingLastPathComponent().appendingPathComponent("Dependencies.csv")
+		try dependency.moduleInfoOutputPath.write(to: dependentModuleInfoFileCSV, atomically: true, encoding: .utf8)
+
+		let generateOutput = try await project.scanAndGenerate(
+			reportingProjectRoot: .resolved,
+			generateArguments: ["--dependent-module-info-file-path", dependentModuleInfoFileCSV.path],
+		)
+
+		// The planned target depends on `Core` and `SafeDI`, and the module info file records `Upstream`.
+		#expect(ModuleIdentity(generateOutput.module) == ModuleIdentity(moduleName: "App", packageName: "application", dependencyModuleNames: ["Core", "SafeDI", "Upstream"]))
+		#expect(Self.declaringModules(of: generateOutput.module.instantiables) == [
+			"AppRoot": DeclaringModule(moduleName: "App", packageName: "application"),
+			"Engine": DeclaringModule(moduleName: "Core", packageName: "foundations"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenTargetGraphCannotBeRead() async throws {
 		let project = try makePluginProject(
 			files: ["Sources/App/AppRoot.swift": Self.rootContent],

@@ -160,7 +160,7 @@ struct SafeDIToolInstantiableResolutionTests: ~Copyable {
 			configurationFilePaths: Set(filePaths),
 			activeCompilationConditions: [],
 		)
-		let module = parsed.module.moduleInfo.declared(by: membership)
+		let module = parsed.module.moduleInfo.declared(by: membership, dependingOn: [])
 		return try #require(resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: module.instantiables))[.simple(name: "Service")])
 	}
 
