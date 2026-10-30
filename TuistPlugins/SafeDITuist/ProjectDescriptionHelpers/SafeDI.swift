@@ -226,6 +226,28 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 		set -- "$@" --active-compilation-conditions $SWIFT_ACTIVE_COMPILATION_CONDITIONS
 	fi
 
+	# Name the module this target compiles, its package, and the modules
+	# whose `.safedi` artifacts it reads, which SafeDITool records in
+	# this target's `.safedi` artifact. SafeDITool releases before the
+	# options existed reject them, so they are forwarded only when the
+	# binary advertises them. The package is named only when the target
+	# sets `SWIFT_PACKAGE_NAME`, which Xcode passes the compiler as
+	# `-package-name`.
+	if "$safedi_tool" generate --help | grep -q -- '--module-name'; then
+		if [ -n "${PRODUCT_MODULE_NAME:-}" ]; then
+			set -- "$@" --module-name "$PRODUCT_MODULE_NAME"
+		fi
+		if [ -n "${SWIFT_PACKAGE_NAME:-}" ]; then
+			set -- "$@" --package-name "$SWIFT_PACKAGE_NAME"
+		fi
+		old_ifs="$IFS"
+		IFS=','
+		for dependency_name in $dependency_names_csv; do
+			set -- "$@" --dependency-module-names "$dependency_name"
+		done
+		IFS="$old_ifs"
+	fi
+
 	"$safedi_tool" generate "$@"
 
 	echo "SafeDI: wrote $module_info_output"
