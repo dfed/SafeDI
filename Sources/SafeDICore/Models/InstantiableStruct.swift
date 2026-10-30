@@ -28,6 +28,9 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		additionalInstantiables: [TypeDescription]?,
 		dependencies: [Dependency],
 		declarationType: DeclarationType,
+		accessLevel: AccessLevel?,
+		accessModifierRange: Dependency.SourceRange? = nil,
+		declarationStartLocation: Dependency.DeclarationLocation? = nil,
 		mockAttributes: String = "",
 		generateMock: Bool = false,
 		mockOnly: Bool = false,
@@ -43,6 +46,9 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		self.initializer = initializer
 		self.dependencies = dependencies
 		self.declarationType = declarationType
+		self.accessLevel = accessLevel
+		self.accessModifierRange = accessModifierRange
+		self.declarationStartLocation = declarationStartLocation
 		self.mockAttributes = mockAttributes
 		self.generateMock = generateMock
 		self.mockOnly = mockOnly
@@ -70,6 +76,17 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public private(set) var dependencies: [Dependency]
 	/// The declaration type of the Instantiable’s concrete type.
 	public let declarationType: DeclarationType
+	/// The access level the type declaration's modifiers spell: `internal` when none of them sets one.
+	/// `nil` for an extension, which declares no type: `initializer` records the access level of its `instantiate()`.
+	public let accessLevel: AccessLevel?
+	/// The source range of the modifier that sets `accessLevel`, in the file of `declarationStartLocation`, which a
+	/// fix-it can replace. `nil` when no modifier sets the access level, for an extension, and when the declaration
+	/// was parsed without a file context – macro expansion walks a detached declaration.
+	public let accessModifierRange: Dependency.SourceRange?
+	/// Where the type declaration begins after its attributes – its first modifier, or its `class`, `actor`, or
+	/// `struct` keyword when it has none – which is where a fix-it inserts an access modifier. `nil` for an extension,
+	/// and when the declaration was parsed without a file context – macro expansion walks a detached declaration.
+	public let declarationStartLocation: Dependency.DeclarationLocation?
 	/// Attributes to add to the generated `mock()` method (e.g. `"@MainActor"`).
 	public let mockAttributes: String
 	/// Whether to generate a `mock()` method for this type.

@@ -677,7 +677,7 @@ public struct InstantiableMacro: MemberMacro {
 						],
 					))
 				}
-				if !mockInitializer.isPublicOrOpen {
+				if !mockInitializer.accessLevel.isPublicOrOpen {
 					var fixedMockSyntax = mockSyntax
 					// Mock detection requires `static` or `class`, so modifiers.first is always non-nil.
 					let firstModifier = mockSyntax.modifiers.first
