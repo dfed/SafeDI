@@ -29,6 +29,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		dependencies: [Dependency],
 		declarationType: DeclarationType,
 		access: AccessDeclaration,
+		enclosingAccess: [AccessDeclaration] = [],
 		mockAttributes: String = "",
 		generateMock: Bool = false,
 		mockOnly: Bool = false,
@@ -46,6 +47,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		self.dependencies = dependencies
 		self.declarationType = declarationType
 		self.access = access
+		self.enclosingAccess = enclosingAccess
 		self.mockAttributes = mockAttributes
 		self.generateMock = generateMock
 		self.mockOnly = mockOnly
@@ -81,6 +83,12 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// declared in another declaration that is merged into this one, so the access of the declaration that declares
 	/// it is `mockDeclarationAccess`, and the access spelled on the method itself is on `mockInitializer`.
 	public let access: AccessDeclaration
+	/// The access spelled on each type or extension declaration in the file that encloses the declaration this
+	/// Instantiable was found on, outermost first. Empty for a top-level declaration, and for an extension-based
+	/// Instantiable: an extension is declared at file scope, so its extended type is not declared around it. When
+	/// access is checked, each entry caps the declaration's effective access, and the extended type of an enclosing
+	/// extension, which is declared elsewhere, has an access that is unknown.
+	public let enclosingAccess: [AccessDeclaration]
 	/// Attributes to add to the generated `mock()` method (e.g. `"@MainActor"`).
 	public let mockAttributes: String
 	/// Whether to generate a `mock()` method for this type.
