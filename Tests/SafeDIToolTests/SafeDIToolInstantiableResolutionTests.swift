@@ -53,12 +53,12 @@ struct SafeDIToolInstantiableResolutionTests: ~Copyable {
 		#expect(service.access == AccessDeclaration(
 			level: .public,
 			modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 7),
-			declarationStartLocation: Dependency.DeclarationLocation(filePath: resolved.filePaths["AService.swift"]!, line: 2, column: 1),
+			declarationStartLocation: Dependency.DeclarationLocation(filePath: try #require(resolved.filePaths["AService.swift"]), line: 2, column: 1),
 		))
 		#expect(service.mockDeclarationAccess == AccessDeclaration(
 			level: .package,
 			modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 8),
-			declarationStartLocation: Dependency.DeclarationLocation(filePath: resolved.filePaths["BServiceMock.swift"]!, line: 2, column: 1),
+			declarationStartLocation: Dependency.DeclarationLocation(filePath: try #require(resolved.filePaths["BServiceMock.swift"]), line: 2, column: 1),
 		))
 	}
 
@@ -74,12 +74,12 @@ struct SafeDIToolInstantiableResolutionTests: ~Copyable {
 		#expect(service.access == AccessDeclaration(
 			level: .public,
 			modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 7),
-			declarationStartLocation: Dependency.DeclarationLocation(filePath: resolved.filePaths["BService.swift"]!, line: 2, column: 1),
+			declarationStartLocation: Dependency.DeclarationLocation(filePath: try #require(resolved.filePaths["BService.swift"]), line: 2, column: 1),
 		))
 		#expect(service.mockDeclarationAccess == AccessDeclaration(
 			level: .package,
 			modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 8),
-			declarationStartLocation: Dependency.DeclarationLocation(filePath: resolved.filePaths["AServiceMock.swift"]!, line: 2, column: 1),
+			declarationStartLocation: Dependency.DeclarationLocation(filePath: try #require(resolved.filePaths["AServiceMock.swift"]), line: 2, column: 1),
 		))
 	}
 
