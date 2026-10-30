@@ -1781,14 +1781,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// `SendableLazilyInstantiated<X>` the tree requires beside an `onlyIfAvailable` `LazilyInstantiated<X>?`.
 		// An instance the mocked type instantiates and the mock cannot build does provide it, and the wrapper is made
 		// from it: `mock()` takes that instance as a parameter, which is in scope before any binding, so the dependency
-		// and the wrapper are one instance, as when the mock builds the dependency as the wrapper.
+		// and the wrapper are one instance, as when the mock builds the dependency as the wrapper. The instance of a
+		// wrapper the mocked type instantiates and the mock cannot build provides only that wrapper: `mock()` takes the
+		// wrapper, which makes no wrapper of the other kind, so the mock takes the instance as well, as it builds a
+		// wrapper of the other kind beside a wrapper it builds.
 		let mockedTypeUncoveredDependencies = Self.uncoveredInstantiatedDependencies(ofMockedType: instantiable, treePropertyNodes: treePropertyNodes)
 		let mockedTypeUncoveredProperties = Set(mockedTypeUncoveredDependencies.map(\.property))
+		let mockedTypeUncoveredWrapperInstanceProperties = Set(mockedTypeUncoveredDependencies.compactMap(\.lazilyInstantiatedInstanceProperty))
+		/// Whether the tree provides `property` to the receives the caller of `mock()` would otherwise pass it to by
+		/// value: the instance a received wrapper is made from, or a received property itself.
+		func isProvidedByTreeByValue(_ property: Property) -> Bool {
+			isProvidedByTree(property) && !mockedTypeUncoveredWrapperInstanceProperties.contains(property.asUnwrappedProperty)
+		}
 		let lazilyInstantiatedReceivedProperties = receivedProperties
 			.filter {
 				$0.typeDescription.lazilyInstantiatedInstanceType != nil
 					&& !isProvidedByTree($0)
-					&& (!isProvidedByTree($0.asValidatedForDependencyCycles) || mockedTypeUncoveredProperties.contains($0.asValidatedForDependencyCycles.asUnwrappedProperty))
+					&& (!isProvidedByTreeByValue($0.asValidatedForDependencyCycles) || mockedTypeUncoveredProperties.contains($0.asValidatedForDependencyCycles.asUnwrappedProperty))
 					&& !isFulfilledByForwardedProperty($0)
 			}
 			.sorted()
@@ -1852,8 +1861,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// A receive of a property the tree provides is handed that node: the mock root's own
 			// receive, or an alias's fulfilling property. A tree node with the label and another
 			// type does not provide it: the receivers are handed a parameter or an override of
-			// their own type, named apart from that node below.
-			guard !isProvidedByTree(receivedProperty) else { continue }
+			// their own type, named apart from that node below. Nor does the instance of a wrapper the
+			// mocked type instantiates and the mock cannot build provide a wrapper of the other kind.
+			guard !isProvidedByTreeByValue(receivedProperty) else { continue }
 			if onlyIfAvailableUnwrappedReceivedParameterProperties.contains(receivedProperty.asUnwrappedProperty) {
 				onlyIfAvailableReceivedProperties.append(receivedProperty)
 			} else {
