@@ -914,11 +914,11 @@ LoggedInView.mock(safeDIOverrides: .init(
 
 Closure fields on `SafeDIMockConfiguration` are plain (non-`@Sendable`) by default, so overrides can capture mutable non-`Sendable` test state; a type reached through a [`Sendable` wrapper](#sendable-wrappers) gets `@Sendable` closure fields instead.
 
-A type gets its own `SafeDIOverrides` struct when at least one dependency belongs there: an `@Instantiated` dependency, a `@Received` dependency the mock can build because an `@Instantiable` declaration fulfills its type or a single concrete type is [erased to](#receiving-a-type-erased-dependency), or a `@Received(onlyIfAvailable: true)` dependency. Every other dependency is a flat `mock()` parameter. The table below shows where each kind lands and whether the caller has to supply it.
+A type gets its own `SafeDIOverrides` struct when at least one dependency belongs there: an `@Instantiated` dependency, a `@Received` dependency the mock can build because an `@Instantiable` declaration fulfills its type or a single concrete type is [erased to](#receiving-a-type-erased-dependency), or a `@Received(onlyIfAvailable: true)` dependency. Every other dependency is a flat `mock()` parameter.
 
 #### Dependency kinds in the generated mock
 
-The table below shows where each dependency kind lands in the three buckets above. The main wrinkle is `@Received(onlyIfAvailable: true)`: it appears on `SafeDIOverrides` and defaults to `nil`.
+The table below shows where each dependency kind lands in the three buckets above, and whether the caller has to supply it. The main wrinkle is `@Received(onlyIfAvailable: true)`: it appears on `SafeDIOverrides` and defaults to `nil`.
 
 | Dependency kind | Shape in the mock | Default |
 | --- | --- | --- |
@@ -927,22 +927,21 @@ The table below shows where each dependency kind lands in the three buckets abov
 | Required `@Received` of a type whose `@Instantiable` declaration has `@Forwarded` properties, unless received as an `Instantiator` | Flat `mock()` parameter | Required |
 | `@Forwarded` | Flat `mock()` parameter | Required, unless the root provides a default or the forwarded type has a [`mockOnly`](#the-mockonly-parameter) provider (which defaults the parameter to `Type.mock()`) |
 | `@Instantiated` | Entry on `SafeDIOverrides` | Built from the real subtree — see [Overriding dependencies](#overriding-dependencies) |
+| `@Instantiated` whose fulfilling declaration this module cannot see (`fulfilledByType` in another module) | Flat `mock()` parameter | Required |
 | `@Received(onlyIfAvailable: true)` | Entry on `SafeDIOverrides`, typed as optional | `nil` |
 | Default-valued non-DI init parameter | Flat `mock()` parameter on a direct mock, or a nested `SafeDIMockConfiguration` field when reached through a parent | The parameter’s original default expression |
 
 A type with `@Forwarded` properties can only be built by an `Instantiator` handed the forwarded values, so when the mocked type’s tree receives such a type as a constant, `mock()` takes the instance as a parameter, even when the type has a hand-written mock. A received `Instantiator` of the type is built as usual.
 
-A `@Received(onlyIfAvailable: true)` dependency gets no `SafeDIOverrides` entry of its own when the mock already builds that dependency — because the mocked type instantiates it, or because another type in the tree requires it — or when nothing fulfills it and another type in the tree requires it, which makes it a required flat `mock()` parameter. It is an optional entry only when every receiver in the tree, renames included, receives it `onlyIfAvailable`; a receiver built inside the instance is passed `nil`, as in production.
+A type in a mock’s tree can declare an `@Instantiated(fulfilledByType:)` dependency whose `@Instantiable` declaration the mock’s module cannot see, such as a `DefaultUserService` declared in a module only the app imports. Production code is generated where every module is visible; the mock cannot build the dependency, so `mock()` takes it as a parameter, such as `mock(userService:)`. The parameter does not excuse a missing fulfiller: a root in the mock’s module that reaches the type still fails to generate.
 
-The mock builds the dependencies its tree receives after the mocked type’s own `@Instantiated` dependencies, each after the ones it is built from, in an order set by where you declare properties, never by labels or type names; the `SafeDIOverrides` entries follow that order. Of two that receive each other only if available, the one received later is passed `nil`, as [under a root](#conditionally-receiving-dependencies).
+A `@Received(onlyIfAvailable: true)` dependency gets no `SafeDIOverrides` entry of its own when the mock already builds that dependency — because the mocked type instantiates it, or because another type in the tree requires it — or when nothing fulfills it and another type in the tree requires it, which makes it a required flat `mock()` parameter. It is an optional entry only when every receiver in the tree, renames included, receives it `onlyIfAvailable`; a receiver built inside the instance is passed `nil`, as in production.
 
 A `@Received` dependency is resolved from its declared type, not from the renames in any particular parent. Take `ProfileView` from [Sharing one instance across properties of disparate types](#sharing-one-instance-across-properties-of-disparate-types): `ProfileView.mock()` can build `crashReporter` itself only when `Telemetry` lists `CrashReporter` in `fulfillingAdditionalTypes`. A composition entry such as `(EventTracker & CrashReporter).self` alone does not cover its members. Otherwise `crashReporter` is a required parameter of `ProfileView.mock()`. Because each received dependency is resolved on its own, a mock that receives both `EventTracker` and `CrashReporter` builds a separate `Telemetry` for each. Pass one instance through `safeDIOverrides` if a test needs them to coincide.
 
-When two flat `mock()` parameters or two entries in the same `SafeDIOverrides` or `SafeDIMockConfiguration` share a label, each is named by its label followed by its type as an identifier: received dependencies named `items` of types `[String]` and `Set<String>` become `items_Array_String` and `items_Set__String`.
+The mock builds the dependencies its tree receives after the mocked type’s own `@Instantiated` dependencies, each after the ones it is built from, in an order set by where you declare properties, never by labels or type names; the `SafeDIOverrides` entries follow that order. Of two that receive each other only if available, the one received later is passed `nil`, as [under a root](#conditionally-receiving-dependencies).
 
-A mock builds every form in which its tree receives a dependency under one label, a label the mocked type forwards included: when one type requires `x: X` and another requires `x: Instantiator<X>`, the mock builds both, with the entries `x_X` and `x_Instantiator__X`. An optional form beside its non-optional form, and the instance of a `LazilyInstantiated`, are not forms of their own.
-
-A type in a mock’s tree can declare an `@Instantiated(fulfilledByType:)` dependency whose `@Instantiable` declaration the mock’s module cannot see, such as a `DefaultUserService` declared in a module only the app imports. Production code is generated where every module is visible; the mock cannot build the dependency, so `mock()` takes it as a parameter, such as `mock(userService:)`. The parameter does not excuse a missing fulfiller: a root in the mock’s module that reaches the type still fails to generate.
+When two flat `mock()` parameters or two entries in the same `SafeDIOverrides` or `SafeDIMockConfiguration` share a label, each is named by its label followed by its type as an identifier: received dependencies named `items` of types `[String]` and `Set<String>` become `items_Array_String` and `items_Set__String`. A mock builds every form in which its tree receives a dependency under one label, a label the mocked type forwards included: when one type requires `x: X` and another requires `x: Instantiator<X>`, the mock builds both, with the entries `x_X` and `x_Instantiator__X`. An optional form beside its non-optional form, and the instance of a `LazilyInstantiated`, are not forms of their own.
 
 #### Receiving a type-erased dependency
 
