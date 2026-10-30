@@ -1871,6 +1871,58 @@ struct FileVisitorTests {
 	}
 
 	@Test
+	func walk_recordsMockDeclarationAccessOfExtension_whenExtensionDeclaresMockAfterInstantiate() {
+		let syntaxTree = Parser.parse(source: """
+		@Instantiable(conformsElsewhere: true)
+		package extension Service {
+		    public static func instantiate() -> Service {
+		        Service()
+		    }
+
+		    static func mock() -> Service {
+		        Service()
+		    }
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.instantiables.map(\.mockDeclarationAccess) == [
+			AccessDeclaration(
+				level: .package,
+				modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 8),
+				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+			),
+		])
+		#expect(fileVisitor.instantiables.map(\.mockInitializer?.access.level) == [.internal])
+	}
+
+	@Test
+	func walk_recordsMockDeclarationAccessOfExtension_whenExtensionDeclaresMockBeforeInstantiate() {
+		let syntaxTree = Parser.parse(source: """
+		@Instantiable(conformsElsewhere: true)
+		package extension Service {
+		    static func mock() -> Service {
+		        Service()
+		    }
+
+		    public static func instantiate() -> Service {
+		        Service()
+		    }
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.instantiables.map(\.mockDeclarationAccess) == [
+			AccessDeclaration(
+				level: .package,
+				modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 8),
+				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+			),
+		])
+		#expect(fileVisitor.instantiables.map(\.mockInitializer?.access.level) == [.internal])
+	}
+
+	@Test
 	func walk_recordsEnclosingTypeAccess_whenTypeIsNestedInEnumSpellingNoAccessModifier() {
 		let syntaxTree = Parser.parse(source: """
 		enum Namespace {
