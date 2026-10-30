@@ -420,6 +420,28 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_recordsNoModule_whenTargetGraphLiesBesideCSVOfCombinedOutputRun() async throws {
+		// Only a run with a manifest, which each of the plugin's runs is, reads a target graph.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.instantiableContent(named: "Engine")],
+			buildCombinedOutput: true,
+			filesToDelete: &filesToDelete,
+			pluginTargetGraph: { inputSwiftFilePaths in
+				PluginTargetGraph(
+					target: PluginTargetGraph.Target(moduleName: "App", packageID: "application", sourceFilePaths: inputSwiftFilePaths, dependencyModuleNames: ["Core"]),
+					dependencyTargets: [],
+				)
+			},
+		)
+
+		#expect(ModuleIdentity(output.generateOutput.module) == ModuleIdentity(moduleName: nil, packageName: nil, dependencyModuleNames: []))
+		#expect(Self.declaringModules(of: output.generateOutput.module.instantiables) == [
+			"Engine": DeclaringModule(moduleName: nil, packageName: nil),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_recordsTargetOfEachFile_whenGenerateScansForItself() async throws {
 		// Every cold Swift Build build and every Xcode build of a package runs `generate --output-directory`, which
 		// scans for itself with the working directory as its project root.
@@ -457,26 +479,30 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 
 		let membership = ModuleMembership(targetGraph: try #require(try PluginTargetGraph(besideInputSourcesFileAt: swiftFileCSV.path)))
 
-		// Every file the CSV lists, and a file in the directory of a target that does not list it.
+		// The module and package each file the CSV lists belongs to, as its path names them: the directory under the
+		// last `Sources` (under `VersionMarkerModules` for swift-syntax's version markers), in the package whose
+		// directory holds it.
 		let filePaths = Self.capturedExampleInputSwiftFiles.map { $0.replacingOccurrences(of: placeholder, with: stage) }
-			+ ["Sources/RootModule/Unlisted.swift"]
-		#expect(Dictionary(grouping: filePaths.map(membership.declaringModule(ofFileAt:)), by: \.self).mapValues(\.count) == [
-			DeclaringModule(moduleName: "ChildAModule", packageName: "example"): 1,
-			DeclaringModule(moduleName: "ChildBModule", packageName: "example"): 1,
-			DeclaringModule(moduleName: "ChildCModule", packageName: "example"): 1,
-			DeclaringModule(moduleName: "GrandchildrenModule", packageName: "example"): 3,
-			DeclaringModule(moduleName: "RootModule", packageName: "example"): 3,
-			DeclaringModule(moduleName: "SafeDI", packageName: "safedi"): 11,
-			DeclaringModule(moduleName: "SafeDIMacros", packageName: "safedi"): 45,
-			DeclaringModule(moduleName: "SharedModule", packageName: "example"): 2,
-			DeclaringModule(moduleName: "SwiftSyntax509", packageName: "swift-syntax"): 1,
-			DeclaringModule(moduleName: "SwiftSyntax510", packageName: "swift-syntax"): 1,
-			DeclaringModule(moduleName: "SwiftSyntax600", packageName: "swift-syntax"): 1,
-			DeclaringModule(moduleName: "SwiftSyntax601", packageName: "swift-syntax"): 1,
-			DeclaringModule(moduleName: "SwiftSyntax602", packageName: "swift-syntax"): 1,
-			DeclaringModule(moduleName: "SwiftSyntax603", packageName: "swift-syntax"): 1,
-			nil: 1,
-		])
+		var expectedDeclaringModules = [String: DeclaringModule?]()
+		for filePath in filePaths {
+			let components = filePath.split(separator: "/").map(String.init)
+			let sourcesIndex = try #require(components.lastIndex(of: "Sources"))
+			let moduleName = try #require(components[(sourcesIndex + 1)...].first { $0 != "VersionMarkerModules" })
+			let packageName = if filePath.hasPrefix("\(stage)/SafeDI/") {
+				"safedi"
+			} else if filePath.hasPrefix("\(stage)/example-build-native/checkouts/swift-syntax/") {
+				"swift-syntax"
+			} else {
+				"example"
+			}
+			expectedDeclaringModules[filePath] = DeclaringModule(moduleName: moduleName, packageName: packageName)
+		}
+		// A file in the directory of a target that does not list it.
+		let unlistedFilePath = "Sources/RootModule/Unlisted.swift"
+		expectedDeclaringModules[unlistedFilePath] = .some(nil)
+
+		#expect(Dictionary(uniqueKeysWithValues: (filePaths + [unlistedFilePath]).map { ($0, membership.declaringModule(ofFileAt: $0)) }) == expectedDeclaringModules)
+		#expect(filePaths.count == 73)
 		#expect([membership.moduleName, membership.packageName] == ["RootModule", "example"])
 		#expect(membership.dependencyModuleNames == ["ChildAModule", "ChildBModule", "ChildCModule", "SafeDI", "SharedModule"])
 	}
@@ -1043,19 +1069,22 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 				.joined(separator: ",")
 				.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 			if let targets, let builtTarget = targets.first {
+				// Sorted as the plugin sorts them.
 				func graphTarget(_ target: TargetDeclaration) -> PluginTargetGraph.Target {
 					PluginTargetGraph.Target(
 						moduleName: target.moduleName,
 						packageID: target.packageID,
-						sourceFilePaths: target.files.map(inputSwiftFilePath(of:)),
-						dependencyModuleNames: target.dependencyModuleNames,
+						sourceFilePaths: target.files.map(inputSwiftFilePath(of:)).sorted(),
+						dependencyModuleNames: target.dependencyModuleNames.sorted(),
 					)
 				}
 				let encoder = JSONEncoder()
 				encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 				try encoder.encode(PluginTargetGraph(
 					target: graphTarget(builtTarget),
-					dependencyTargets: targets.dropFirst().map(graphTarget),
+					dependencyTargets: targets.dropFirst().map(graphTarget).sorted {
+						($0.moduleName, $0.packageID ?? "") < ($1.moduleName, $1.packageID ?? "")
+					},
 				)).write(to: URL(fileURLWithPath: swiftFileCSV.path + PluginTargetGraph.fileNameSuffix))
 			}
 			try await Scan.parse([

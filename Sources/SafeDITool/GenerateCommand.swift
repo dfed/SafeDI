@@ -236,7 +236,8 @@ struct Generate: AsyncParsableCommand {
 		// them, named as each file records its module, however this run learns which module its own files belong to.
 		let module = try parsedModuleInfo.declared(
 			by: moduleMembership(
-				readsTargetGraph: resolvedSwiftManifest != nil,
+				// Only a run with a manifest, which each of the SafeDIGenerator plugin's runs is, reads a target graph.
+				targetGraphInputSourcesFilePath: resolvedSwiftManifest != nil ? swiftSourcesFilePath : nil,
 				inputFilePaths: inputFilePaths,
 				comparisonFilePaths: comparisonFilePaths,
 			),
@@ -677,15 +678,15 @@ struct Generate: AsyncParsableCommand {
 	}
 
 	/// Which module this run's own files belong to, as the build system tells it, or `nil` when it tells nothing. The
-	/// options, when either is given, describe a build system that runs `generate` once per module. Otherwise a run with
-	/// a manifest, which each of the SafeDIGenerator plugin's runs is, reads the target graph the plugin writes beside
-	/// its input CSV, when there is one.
+	/// options, when either is given, describe a build system that runs `generate` once per module. Otherwise the target
+	/// graph the SafeDIGenerator plugin writes beside its input CSV describes the files, when there is one.
 	/// - Parameters:
-	///   - readsTargetGraph: Whether this run has a manifest, which it was given or scanned for itself.
+	///   - targetGraphInputSourcesFilePath: The input CSV beside which a target graph is read, or `nil` for a run that
+	///     reads none.
 	///   - inputFilePaths: The files the input CSV and `--include` name.
 	///   - comparisonFilePaths: How this run compares paths.
 	private func moduleMembership(
-		readsTargetGraph: Bool,
+		targetGraphInputSourcesFilePath: String?,
 		inputFilePaths: Set<String>,
 		comparisonFilePaths: ProjectFilePaths,
 	) throws -> ModuleMembership? {
@@ -696,9 +697,8 @@ struct Generate: AsyncParsableCommand {
 				inputFilePaths: Set(inputFilePaths.map(comparisonFilePaths.projectFilePath(of:))),
 				filePathsSpelledBy: comparisonFilePaths,
 			)
-		} else if readsTargetGraph,
-		          let swiftSourcesFilePath,
-		          let targetGraph = try PluginTargetGraph(besideInputSourcesFileAt: swiftSourcesFilePath)
+		} else if let targetGraphInputSourcesFilePath,
+		          let targetGraph = try PluginTargetGraph(besideInputSourcesFileAt: targetGraphInputSourcesFilePath)
 		{
 			return ModuleMembership(targetGraph: targetGraph)
 		} else {
