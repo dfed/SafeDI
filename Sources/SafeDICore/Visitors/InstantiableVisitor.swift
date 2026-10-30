@@ -156,8 +156,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			return .skipChildren
 		}
 		let initializer = Initializer(node, sourceLocationConverter: sourceLocationConverter)
-		initializerToInitSyntaxMap[initializer] = node
 		initializers.append(initializer)
+		initializerSyntaxes.append(node)
 		return .skipChildren
 	}
 
@@ -416,7 +416,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var isRoot = false
 	public private(set) var dependencies = [Dependency]()
 	public private(set) var initializers = [Initializer]()
-	public private(set) var initializerToInitSyntaxMap: [Initializer: InitializerDeclSyntax] = [:]
+	/// The declaration of each of `initializers`, at the same position. Two initializers can be equal – the same
+	/// signature in two clauses of an `#if` block – so a declaration is found by position, never by value.
+	public private(set) var initializerSyntaxes = [InitializerDeclSyntax]()
 	public private(set) var instantiableType: TypeDescription?
 	public private(set) var additionalInstantiables: [TypeDescription]?
 	public private(set) var mockAttributes = ""

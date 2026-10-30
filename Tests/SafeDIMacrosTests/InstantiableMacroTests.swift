@@ -3125,6 +3125,162 @@ import Testing
 		}
 
 		@Test
+		func declaration_diagnosesUnlabeledDefaultAtEachInitializer_whenIfConfigClausesDeclareIdenticalInitializers() {
+			// The two initializers are equal, so each is reported where it is declared only because the macro finds a
+			// declaration by its position among the initializers rather than by its value.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    #if DEBUG
+				    init(_ enabled: Bool = false, _ dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    #else
+				    init(_ enabled: Bool = false, _ dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    #endif
+
+				    @Received let dependency: Dependency
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    #if DEBUG
+				    init(_ enabled: Bool = false, _ dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    #else
+				    init(_ enabled: Bool = false, _ dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    #endif
+
+				    let dependency: Dependency
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "Unlabeled parameter `enabled: Bool` has a default value but is followed by unlabeled required parameter `dependency: Dependency`, so a generated `mock()` cannot leave `enabled` out of its call. Add an argument label to `enabled`, move unlabeled parameters with defaults after the required ones, or remove the default.",
+						line: 4,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add argument label `enabled`"),
+						],
+					),
+					DiagnosticSpec(
+						message: "Unlabeled parameter `enabled: Bool` has a default value but is followed by unlabeled required parameter `dependency: Dependency`, so a generated `mock()` cannot leave `enabled` out of its call. Add an argument label to `enabled`, move unlabeled parameters with defaults after the required ones, or remove the default.",
+						line: 8,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add argument label `enabled`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_diagnosesSelfInDefaultAtFirstInitializer_whenIfConfigClausesDeclareIdenticalInitializers() {
+			// SafeDI constructs the type with the first initializer that fulfills its dependencies, so only that
+			// initializer's defaults are checked, where it is declared.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyType: Instantiable {
+				    #if DEBUG
+				    init(name: String = Self.defaultName) {
+				        self.name = name
+				    }
+				    #else
+				    init(name: String = Self.defaultName) {
+				        self.name = name
+				    }
+				    #endif
+				    static let defaultName = "fallback"
+				    let name: String
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    #if DEBUG
+				    init(name: String = Self.defaultName) {
+				        self.name = name
+				    }
+				    #else
+				    init(name: String = Self.defaultName) {
+				        self.name = name
+				    }
+				    #endif
+				    static let defaultName = "fallback"
+				    let name: String
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The default value of `name` refers to `Self`. A generated `mock()` repeats this default outside `MyType`, where `Self` names a different type. Write `MyType` instead of `Self`, or remove the default.",
+						line: 4,
+						column: 10,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_fixit_updatesFirstInitializer_whenIfConfigClausesDeclareIdenticalInaccessibleInitializers() {
+			// The two initializers are equal and need the same change, so the first declared is fixed.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    #if DEBUG
+				    private init() {}
+				    #else
+				    private init() {}
+				    #endif
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    #if DEBUG
+				    private init() {}
+				    #else
+				    private init() {}
+				    #endif
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type’s initializer must not be `private`: SafeDI calls it in a generated file, where a `private` initializer is not visible. Remove `private`.",
+						line: 4,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove `private` modifier"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove `private` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    #if DEBUG
+				    init() {}
+				    #else
+				    private init() {}
+				    #endif
+				}
+				""",
+			)
+		}
+
+		@Test
 		func declaration_diagnosesUnlabeledDefaultAtEachInitializer_whenIfConfigClausesDeclareSameSignatureWithDifferentPrivateOrFilePrivateAccess() {
 			assertMacroExpansion(
 				"""

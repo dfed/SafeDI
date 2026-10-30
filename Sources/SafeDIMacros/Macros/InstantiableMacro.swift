@@ -209,8 +209,7 @@ public struct InstantiableMacro: MemberMacro {
 			// unlabeled required parameter) on every candidate initializer.
 			// Runs regardless of `generateMock`/`mockOnly` because the shape
 			// is awkward for any future mock use and the diagnostic is local.
-			for initializer in visitor.initializers {
-				guard let initializerSyntax = visitor.initializerToInitSyntaxMap[initializer] else { continue }
+			for (initializer, initializerSyntax) in zip(visitor.initializers, visitor.initializerSyntaxes) {
 				Self.validateUnlabeledDefaultShape(
 					functionSyntax: initializerSyntax.signature,
 					arguments: initializer.arguments,
@@ -228,8 +227,9 @@ public struct InstantiableMacro: MemberMacro {
 			// would be a false positive. Also skipped when a custom mock
 			// exists — then SafeDI prefers `mockInitializer` over any init.
 			if visitor.mockInitializer == nil,
-			   let selectedInitializer = visitor.initializers.first(where: { $0.isValid(forFulfilling: visitor.dependencies) }),
-			   let selectedInitializerSyntax = visitor.initializerToInitSyntaxMap[selectedInitializer]
+			   let (_, selectedInitializerSyntax) = zip(visitor.initializers, visitor.initializerSyntaxes).first(where: { initializer, _ in
+			   	initializer.isValid(forFulfilling: visitor.dependencies)
+			   })
 			{
 				Self.validateDefaultExpressions(
 					functionSyntax: selectedInitializerSyntax.signature,
@@ -268,21 +268,22 @@ public struct InstantiableMacro: MemberMacro {
 
 			let hasMemberwiseInitializerForInjectableProperties = isMockOnly || visitor.canonicalConstructionInitializer != nil
 			guard hasMemberwiseInitializerForInjectableProperties else {
-				func associatedError(for initializer: Initializer) -> (initializer: Initializer, syntax: InitializerDeclSyntax, error: Initializer.FixableError)? {
+				func associatedError(for initializer: Initializer, declaredBy syntax: InitializerDeclSyntax) -> (initializer: Initializer, syntax: InitializerDeclSyntax, error: Initializer.FixableError)? {
 					do {
 						try initializer.validate(fulfilling: visitor.dependencies)
 					} catch {
-						if let fixableError = error.asFixableError, let syntax = visitor.initializerToInitSyntaxMap[initializer] {
+						if let fixableError = error.asFixableError {
 							return (initializer: initializer, syntax: syntax, error: fixableError)
 						}
 					}
 					return nil
 				}
-				let initializerToFix: (initializer: Initializer, syntax: InitializerDeclSyntax, error: Initializer.FixableError)? = visitor.initializers.compactMap {
-					associatedError(for: $0)
-				}.sorted {
-					$0.error < $1.error
-				}.first
+				// Of the initializers that need the smallest change, the first declared is fixed.
+				let initializerToFix: (initializer: Initializer, syntax: InitializerDeclSyntax, error: Initializer.FixableError)? = zip(visitor.initializers, visitor.initializerSyntaxes).compactMap {
+					associatedError(for: $0, declaredBy: $1)
+				}.enumerated().min {
+					($0.element.error, $0.offset) < ($1.element.error, $1.offset)
+				}?.element
 
 				if let initializerToFix {
 					let syntaxToFix = initializerToFix.syntax
