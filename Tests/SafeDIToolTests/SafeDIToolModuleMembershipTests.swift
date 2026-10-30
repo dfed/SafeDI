@@ -468,21 +468,13 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 
 	@Test
 	mutating func targetGraph_attributesEachFileOfInputCSVToTargetListingIt_whenCapturedFromExamplePackageBuild() throws {
-		let placeholder = "$STAGE"
-		let stage = "/Stage"
-		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".csv")
-		let targetGraphFile = URL(fileURLWithPath: swiftFileCSV.path + PluginTargetGraph.fileNameSuffix)
-		try Self.capturedExampleTargetGraph
-			.replacingOccurrences(of: placeholder, with: stage)
-			.write(to: targetGraphFile, atomically: true, encoding: .utf8)
-		filesToDelete.append(targetGraphFile)
-
-		let membership = ModuleMembership(targetGraph: try #require(try PluginTargetGraph(besideInputSourcesFileAt: swiftFileCSV.path)))
+		let membership = try capturedExampleMembership()
 
 		// The module and package each file the CSV lists belongs to, as its path names them: the directory under the
 		// last `Sources` (under `VersionMarkerModules` for swift-syntax's version markers), in the package whose
 		// directory holds it.
-		let filePaths = Self.capturedExampleInputSwiftFiles.map { $0.replacingOccurrences(of: placeholder, with: stage) }
+		let stage = Self.capturedExampleStage
+		let filePaths = Self.capturedExampleInputSwiftFiles.map { $0.replacingOccurrences(of: Self.capturedExampleStagePlaceholder, with: stage) }
 		var expectedDeclaringModules = [String: DeclaringModule?]()
 		for filePath in filePaths {
 			let components = filePath.split(separator: "/").map(String.init)
@@ -503,6 +495,12 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 
 		#expect(Dictionary(uniqueKeysWithValues: (filePaths + [unlistedFilePath]).map { ($0, membership.declaringModule(ofFileAt: $0)) }) == expectedDeclaringModules)
 		#expect(filePaths.count == 73)
+	}
+
+	@Test
+	mutating func targetGraph_recordsPlannedTargetWithDirectDependencies_whenCapturedFromExamplePackageBuild() throws {
+		let membership = try capturedExampleMembership()
+
 		#expect([membership.moduleName, membership.packageName] == ["RootModule", "example"])
 		#expect(membership.dependencyModuleNames == ["ChildAModule", "ChildBModule", "ChildCModule", "SafeDI", "SharedModule"])
 	}
@@ -889,6 +887,24 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 	  }
 	}
 	"""#
+
+	/// What `$STAGE` stands for in `capturedExampleInputSwiftFiles` and `capturedExampleTargetGraph`.
+	private static let capturedExampleStagePlaceholder = "$STAGE"
+
+	/// The directory the captured example's tests put in place of `$STAGE`.
+	private static let capturedExampleStage = "/Stage"
+
+	/// The membership `generate` reads from `capturedExampleTargetGraph`, written where the plugin writes it beside a
+	/// CSV, with `capturedExampleStage` in place of `$STAGE`.
+	private mutating func capturedExampleMembership() throws -> ModuleMembership {
+		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".csv")
+		let targetGraphFile = URL(fileURLWithPath: swiftFileCSV.path + PluginTargetGraph.fileNameSuffix)
+		try Self.capturedExampleTargetGraph
+			.replacingOccurrences(of: Self.capturedExampleStagePlaceholder, with: Self.capturedExampleStage)
+			.write(to: targetGraphFile, atomically: true, encoding: .utf8)
+		filesToDelete.append(targetGraphFile)
+		return ModuleMembership(targetGraph: try #require(try PluginTargetGraph(besideInputSourcesFileAt: swiftFileCSV.path)))
+	}
 
 	/// Two modules of the package `Foundations`, `Core` and `Middle`, and the module `App` of the package
 	/// `Application`, which depends on both. Every module generates code, so the plugin runs `generate` for each.
