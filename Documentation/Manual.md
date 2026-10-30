@@ -107,7 +107,7 @@ A module that needs a shape the macro does not offer can declare the `safedi_com
 
 ### Running SafeDITool yourself
 
-Your integration already has a `SafeDITool`. Run it to read its `--help`, [query what a type needs](#querying-what-a-type-needs), or print a `.safedi` file with `dump`; only that build of it reads the `.safedi` files your build writes.
+Your integration already has a `SafeDITool`. Run it to read its `--help`, [query what a type needs](#querying-what-a-type-needs), or print a `.safedi` file with `dump`.
 
 - **Swift package:** `.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool` from the package’s directory, or `swift run SafeDITool` with the `sourceBuild` trait; writes no `.safedi` files.
 - **Xcode project:** `SourcePackages/artifacts/safedi/SafeDIToolBinary/…` in the project’s derived data, or `.safedi/<version>/safeditool` once [installed](#installing-the-prebuilt-safeditool-binary); writes no `.safedi` files.
