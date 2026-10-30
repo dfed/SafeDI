@@ -374,6 +374,7 @@ enum GraphFuzzerGenerator {
 			generatedNameRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.generatedNameRandomSeedMask)
 			unbuildableDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencyRandomSeedMask)
 			unbuildableDependencyReceiverRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencyReceiverRandomSeedMask)
+			unbuildableDependencySiblingReceiverRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencySiblingReceiverRandomSeedMask)
 			aliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.aliasChainRandomSeedMask)
 			siblingAliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.siblingAliasChainRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
@@ -503,6 +504,8 @@ enum GraphFuzzerGenerator {
 		private var unbuildableDependencyRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingReceiversOfDependenciesMocksCannotBuild`, as `generatedNameRandom` does for its pass.
 		private var unbuildableDependencyReceiverRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only the receives beside an owner that `addingReceiversOfDependenciesMocksCannotBuild` adds.
+		private var unbuildableDependencySiblingReceiverRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingAliasChains`, as `generatedNameRandom` does for its pass.
 		private var aliasChainRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingSiblingAliasChains`, as `generatedNameRandom` does for its pass.
@@ -1016,6 +1019,13 @@ enum GraphFuzzerGenerator {
 		/// root reaches the receiver, so no production tree rejects it for receiving a property nothing above it provides.
 		/// It is drawn after every other pass, and `unbuildableDependencyReceiverRandom` draws only for it, so every other
 		/// graph is drawn as before.
+		///
+		/// Now and then, too, an owner with `generateMock: true` receives a type of the graph that no root reaches, that has
+		/// no forwarded properties, and that it does not instantiate, which its mock builds beside it, and that type
+		/// receives the constant: by value or as its `LazilyInstantiated` (or `SendableLazilyInstantiated`), required or
+		/// only if available. The owner's own properties are one instance in its mock, so the mock wraps the parameter it
+		/// takes for the constant rather than take the wrapper. `unbuildableDependencySiblingReceiverRandom` draws only for
+		/// these receives, so a graph without one is drawn as before.
 		private mutating func addingReceiversOfDependenciesMocksCannotBuild(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			let reachedNames = Self.namesReachedFromRoots(in: declarations)
 			let declarationIndexByName = Dictionary(uniqueKeysWithValues: declarations.enumerated().map { ($1.name, $0) })
@@ -1029,14 +1039,11 @@ enum GraphFuzzerGenerator {
 					.filter { $0 != declaringIndex && declarations[$0].declaresHelperTypes && !reachedNames.contains(declarations[$0].name) }
 			}
 			var declarations = declarations
-			for declaringIndex in declarations.indices {
-				guard let unbuildableProperty = declarations[declaringIndex].properties.first(where: {
-				      	$0.attribute == "@Instantiated" && $0.type.hasPrefix(unbuildableTypeNamePrefix)
-				      }),
-				      unbuildableDependencyReceiverRandom.percentChance(60)
-				else { continue }
+			/// Gives a type beneath the owner at `declaringIndex` a receive of `unbuildableProperty`, now and then.
+			func addReceiverBeneathOwner(at declaringIndex: Int, of unbuildableProperty: PropertyDeclaration) {
+				guard unbuildableDependencyReceiverRandom.percentChance(60) else { return }
 				let childIndices = candidateReceiverIndices(instantiatedBy: declaringIndex, declaringIndex: declaringIndex)
-				guard !childIndices.isEmpty else { continue }
+				guard !childIndices.isEmpty else { return }
 				var receiverIndex = unbuildableDependencyReceiverRandom.element(of: childIndices)
 				if unbuildableDependencyReceiverRandom.percentChance(30) {
 					let grandchildIndices = candidateReceiverIndices(instantiatedBy: receiverIndex, declaringIndex: declaringIndex)
@@ -1045,17 +1052,61 @@ enum GraphFuzzerGenerator {
 					}
 				}
 				let isOnlyIfAvailable = unbuildableDependencyReceiverRandom.percentChance(30)
-				guard !declarations[receiverIndex].properties.contains(where: { $0.label == unbuildableProperty.label }) else { continue }
+				guard !declarations[receiverIndex].properties.contains(where: { $0.label == unbuildableProperty.label }) else { return }
 				declarations[receiverIndex].properties.append(PropertyDeclaration(
 					attribute: isOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received",
 					label: unbuildableProperty.label,
 					type: isOnlyIfAvailable ? unbuildableProperty.type + "?" : unbuildableProperty.type,
 				))
 			}
+			/// Gives the owner at `declaringIndex` a receive of a type of the graph that receives `unbuildableProperty`,
+			/// now and then.
+			func addReceiverBesideOwner(at declaringIndex: Int, of unbuildableProperty: PropertyDeclaration) {
+				guard declarations[declaringIndex].instantiableArguments.contains("generateMock: true"),
+				      unbuildableDependencySiblingReceiverRandom.percentChance(50)
+				else { return }
+				let siblingTypeIndices = (0..<typeCount).filter { typeIndex in
+					guard let index = declarationIndexByName[typeName(typeIndex)] else { return false }
+					return index != declaringIndex
+						&& forwardedProperties[typeIndex] == nil
+						&& declarations[index].declaresHelperTypes
+						&& !reachedNames.contains(declarations[index].name)
+						&& !declarations[index].properties.contains { $0.label == unbuildableProperty.label }
+						&& !declarations[declaringIndex].properties.contains {
+							$0.label == "t\(typeIndex)" || ($0.attribute.hasPrefix("@Instantiated") && Self.builtTypeName(of: $0) == typeName(typeIndex))
+						}
+				}
+				guard !siblingTypeIndices.isEmpty else { return }
+				let siblingTypeIndex = unbuildableDependencySiblingReceiverRandom.element(of: siblingTypeIndices)
+				let wrapper = switch sendability {
+				case .nonSendable:
+					"LazilyInstantiated"
+				case .sendable:
+					"SendableLazilyInstantiated"
+				case .mixed:
+					unbuildableDependencySiblingReceiverRandom.percentChance(50) ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+				}
+				let receivedType = unbuildableDependencySiblingReceiverRandom.percentChance(50) ? "\(wrapper)<\(unbuildableProperty.type)>" : unbuildableProperty.type
+				let isOnlyIfAvailable = unbuildableDependencySiblingReceiverRandom.percentChance(30)
+				declarations[declaringIndex].properties.append(PropertyDeclaration(attribute: "@Received", label: "t\(siblingTypeIndex)", type: typeName(siblingTypeIndex)))
+				declarations[declarationIndexByName[typeName(siblingTypeIndex)]!].properties.append(PropertyDeclaration(
+					attribute: isOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received",
+					label: unbuildableProperty.label,
+					type: isOnlyIfAvailable ? receivedType + "?" : receivedType,
+				))
+			}
+			for declaringIndex in declarations.indices {
+				guard let unbuildableProperty = declarations[declaringIndex].properties.first(where: {
+					$0.attribute == "@Instantiated" && $0.type.hasPrefix(unbuildableTypeNamePrefix)
+				}) else { continue }
+				addReceiverBeneathOwner(at: declaringIndex, of: unbuildableProperty)
+				addReceiverBesideOwner(at: declaringIndex, of: unbuildableProperty)
+			}
 			return declarations
 		}
 
 		private static let unbuildableDependencyReceiverRandomSeedMask: UInt64 = 0x756E627265636569
+		private static let unbuildableDependencySiblingReceiverRandomSeedMask: UInt64 = 0x756E627369626C69
 
 		/// Now and then adds a chain of aliases through an `onlyIfAvailable` alias to a type of the graph: a second
 		/// alias, required or `onlyIfAvailable`, of an `onlyIfAvailable` alias the type declares (or is given here, of a
@@ -1577,6 +1628,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case dependencyMockCannotBuild
 	/// A receive of such a property beneath the type that instantiates it, which a mock passes the same parameter.
 	case dependencyMockCannotBuildReceivedBeneathItsOwner
+	/// A receive of such a property as a `LazilyInstantiated` or `SendableLazilyInstantiated`, by a type a mocked owner
+	/// of the property receives, whose mock wraps the parameter it takes for the property.
+	case dependencyMockCannotBuildReceivedLazilyBesideItsMockedOwner
 	/// A graph whose properties use both `Sendable` wrappers and wrappers that are not `Sendable`.
 	case sendableAndNonSendableWrappers
 	/// A type with `generateMock: true` on a cycle that an instantiator makes lazy.
@@ -1620,6 +1674,10 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		/// their non-optional form, spelled `label: Type`.
 		var unbuildablePropertiesInstantiatedByTypeName = [String: Set<String>]()
 		var unbuildablePropertiesReceivedByTypeName = [String: Set<String>]()
+		/// The properties of types that are not `@Instantiable` each type receives as a lazily instantiated wrapper,
+		/// spelled `label: Type` with the wrapped type, and the types each type receives.
+		var unbuildablePropertiesReceivedLazilyByTypeName = [String: Set<String>]()
+		var receivedTypeNamesByTypeName = [String: Set<String>]()
 		for content in fixture.swiftFileContent {
 			var currentTypeName: String?
 			var nextTypeIsMocked = false
@@ -1693,7 +1751,14 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 						}
 					}
 					if attribute == "@Received" || attribute == "@Received(onlyIfAvailable: true)", nonOptionalType.contains("Unbuildable"), let currentTypeName {
-						unbuildablePropertiesReceivedByTypeName[currentTypeName, default: []].insert("\(label): \(nonOptionalType)")
+						if let instanceType {
+							unbuildablePropertiesReceivedLazilyByTypeName[currentTypeName, default: []].insert("\(label): \(instanceType)")
+						} else {
+							unbuildablePropertiesReceivedByTypeName[currentTypeName, default: []].insert("\(label): \(nonOptionalType)")
+						}
+					}
+					if attribute == "@Received", let currentTypeName {
+						receivedTypeNamesByTypeName[currentTypeName, default: []].insert(type)
 					}
 					if attribute.hasPrefix("@Instantiated"), let currentTypeName {
 						instantiationEdges.append(GraphFuzzerInstantiationEdge(
@@ -1757,6 +1822,13 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 		}) {
 			features.insert(.dependencyMockCannotBuildReceivedBeneathItsOwner)
+		}
+		if unbuildablePropertiesInstantiatedByTypeName.contains(where: { ownerName, instantiatedProperties in
+			mockedTypeNames.contains(ownerName) && receivedTypeNamesByTypeName[ownerName, default: []].contains { receivedTypeName in
+				!unbuildablePropertiesReceivedLazilyByTypeName[receivedTypeName, default: []].isDisjoint(with: instantiatedProperties)
+			}
+		}) {
+			features.insert(.dependencyMockCannotBuildReceivedLazilyBesideItsMockedOwner)
 		}
 		return features
 	}
@@ -2039,6 +2111,7 @@ struct GraphFuzzerFailure: Equatable {
 		case runsDifferAcrossProcesses = "the tool's output differs between two processes"
 		case compilerCrashedOnGeneratedCode = "the Swift compiler crashed on generated code"
 		case renamedGraphDiffers = "the graph renamed to change an order gives other results"
+		case mockTakesWrapperParameterForReceive = "a generated mock takes a LazilyInstantiated parameter for a receive"
 	}
 
 	let seed: UInt64
@@ -2071,8 +2144,8 @@ struct GraphFuzzerResult {
 
 	let fixture: GraphFuzzerFixture
 	let outcome: GraphFuzzerToolOutcome
-	/// The first way the graph fails the oracle: its runs differ, it does not compile, or, failing neither way, a
-	/// renamed graph gives other results.
+	/// The first way the graph fails the oracle: its runs differ, it does not compile, a generated mock takes a
+	/// `LazilyInstantiated` parameter for a receive, or, failing none of those ways, a renamed graph gives other results.
 	let failure: GraphFuzzerFailure?
 	/// How each renamed graph that gives other results differs, in the order of `GraphFuzzerRenaming.all`, whether
 	/// or not the graph also fails another way.
@@ -2268,6 +2341,52 @@ struct GraphFuzzerToolRuns {
 		)
 	}
 
+	/// The failure of a graph whose generated `mock()` takes a `LazilyInstantiated` or `SendableLazilyInstantiated`
+	/// parameter that is not a property the mocked type forwards or instantiates, or `nil` when none does. A mock takes
+	/// the instance of a dependency its tree receives as a wrapper it cannot build, and wraps the instance for the
+	/// receivers, so a type's mock has the same parameters whether the dependencies it receives are lazily
+	/// instantiated or not.
+	var wrapperParameterFailure: GraphFuzzerFailure? {
+		var wrapperPropertyTypesByTypeName = [String: Set<String>]()
+		for content in fixture.swiftFileContent {
+			var currentTypeName: String?
+			for line in GraphFuzzerSourceLine.lines(of: content) {
+				switch line {
+				case let .typeDeclaration(name):
+					currentTypeName = name
+				case let .property(attribute, _, type):
+					if let currentTypeName, attribute == "@Forwarded" || attribute.hasPrefix("@Instantiated") {
+						wrapperPropertyTypesByTypeName[currentTypeName, default: []].insert(type)
+					}
+				case .instantiableAttribute, .instantiateMethod, .other:
+					break
+				}
+			}
+		}
+		let mockFileSuffix = "+SafeDIMock.swift"
+		var wrapperParameters = [String]()
+		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName.hasSuffix(mockFileSuffix) {
+			let mockedTypeName = String(fileName.dropLast(mockFileSuffix.count))
+			let lines = contents.split(separator: "\n", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) }
+			guard let signatureStart = lines.firstIndex(where: { $0.hasSuffix("static func mock(") }) else { continue }
+			for line in lines[(signatureStart + 1)...].prefix(while: { !$0.hasPrefix(")") }) {
+				guard let typeStart = line.range(of: ": ") else { continue }
+				let type = String(line[typeStart.upperBound...].prefix { $0 != "=" && $0 != "," }).trimmingCharacters(in: .whitespaces)
+				if type.hasPrefix("LazilyInstantiated<") || type.hasPrefix("SendableLazilyInstantiated<"),
+				   wrapperPropertyTypesByTypeName[mockedTypeName]?.contains(type) != true
+				{
+					wrapperParameters.append("`\(mockedTypeName).mock` takes `\(line[..<typeStart.lowerBound]): \(type)`.")
+				}
+			}
+		}
+		guard !wrapperParameters.isEmpty else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .mockTakesWrapperParameterForReceive,
+			details: "\(wrapperParameters.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
+		)
+	}
+
 	var generatedFiles: [String: String] {
 		switch firstOutcome {
 		case let .accepted(generatedFiles, _):
@@ -2308,7 +2427,7 @@ enum GraphFuzzerOracle {
 			return GraphFuzzerResult(
 				fixture: runs.fixture,
 				outcome: runs.firstOutcome,
-				failure: runs.runsDifferFailure ?? compilationFailures[runs.fixture.seed] ?? renamedGraphFailures.first,
+				failure: runs.runsDifferFailure ?? compilationFailures[runs.fixture.seed] ?? runs.wrapperParameterFailure ?? renamedGraphFailures.first,
 				renamedGraphFailures: renamedGraphFailures,
 			)
 		}
