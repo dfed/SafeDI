@@ -109,7 +109,7 @@ A module that needs a shape the macro does not offer can declare the `safedi_com
 
 `SafeDITool` is designed to integrate into projects of any size or shape. Our [Releases](https://github.com/dfed/SafeDI/releases) page ships a prebuilt, codesigned `SafeDITool.artifactbundle.zip` that can be downloaded and driven directly from a pre-build script — see the embedded shell in [`TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift`](../TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift) for a working reference (it locates the binary via SPM, runs `generate --combined-output` for fixed-path Swift output, and supports the cross-module `.safedi` module-info handoff). For a non-SPM build system, swap the binary-location lookup for a `curl` of the artifact bundle. Set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script. Pass the target's active compilation conditions to `generate --active-compilation-conditions`, or its `SWIFT_ACTIVE_COMPILATION_CONDITIONS` and `OTHER_SWIFT_FLAGS` build settings to `generate --build-setting-active-compilation-conditions` and `--build-setting-other-swift-flags`, so SafeDITool scans the same `#if` clauses the compiler compiles; see [Conditional compilation](#conditional-compilation).
 
-`SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Run `swift run SafeDITool --help` to see documentation of the tool’s supported arguments.
+`SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Run the `SafeDITool` your integration has, as described under [Querying what a type needs](#querying-what-a-type-needs), with `--help` to see documentation of the tool’s supported arguments.
 
 ### Finding the generated code
 
@@ -1255,11 +1255,11 @@ Generated code names an aliased dependency’s `@Received` declaration in a `#so
 
 Diagnostics are the exception: `SafeDITool` resolves a relative input path against its working directory before printing an error, so the location in the build log is one an editor can open. Under Bazel that working directory is the action’s sandbox, so a diagnostic there names the sandbox copy of the source file.
 
-Run `swift run SafeDITool --help`, `swift run SafeDITool scan --help`, or `swift run SafeDITool generate --help` to see documentation of all supported arguments, `swift run SafeDITool query needs --help` for the command that [reports what types need](#querying-what-a-type-needs) (in beta), and `swift run SafeDITool dump --help` for the command that prints a `.safedi` file, or the cache `scan` writes beside its manifest, as JSON.
+Run the `SafeDITool` your integration has, as described under [Querying what a type needs](#querying-what-a-type-needs), with `--help`, `scan --help`, or `generate --help` to see documentation of all supported arguments, `query needs --help` for the command that reports what types need (in beta), and `dump --help` for the command that prints a `.safedi` file, or the cache `scan` writes beside its manifest, as JSON.
 
 ## Introspecting a SafeDI tree
 
-You can create a [GraphViz DOT file](https://graphviz.org/doc/info/lang.html) to introspect a SafeDI dependency tree by running `swift run SafeDITool` and utilizing the `--dot-file-output` parameter. This command will create a `DOT` file that you can pipe into `GraphViz`’s `dot` command to create a pdf.
+You can create a [GraphViz DOT file](https://graphviz.org/doc/info/lang.html) to introspect a SafeDI dependency tree by running `generate` with the `--dot-file-output` parameter, using the `SafeDITool` your integration has, as described under [Querying what a type needs](#querying-what-a-type-needs). This command will create a `DOT` file that you can pipe into `GraphViz`’s `dot` command to create a pdf.
 
 Once you have the dot file, you can run:
 ```bash
