@@ -145,8 +145,10 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// file. `nil` when SafeDITool does not know it, which is always the case for a declaration the visitors just walked:
 	/// SafeDITool records it when it reads a module, from what the build system tells it.
 	public var moduleName: String?
-	/// The package of the module that declares this Instantiable: the name the compiler's `-package-name` gives it, which
-	/// decides where a `package` declaration is visible. `nil` when SafeDITool does not know it, as for `moduleName`.
+	/// The package of the module that declares this Instantiable, which decides where a `package` declaration is visible:
+	/// the name a build system hands the compiler as `-package-name`, or, under SwiftPM, the package's identity, of which
+	/// `-package-name` carries the C99-mangled form (`swift-syntax` becomes `swift_syntax`), so a diagnostic that names
+	/// the package must mangle it. `nil` when SafeDITool does not know it, as for `moduleName`.
 	public var packageName: String?
 
 	/// Returns a copy of this Instantiable with mock-related fields replaced by those from `mockProvider`.

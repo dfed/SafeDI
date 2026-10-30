@@ -88,7 +88,7 @@ struct ModuleInfo: Codable {
 	/// The module `generate` generated code for from these files, or `nil` when the build system did not say. Each of
 	/// `instantiables` records the module that declares it, which in a build tool plugin's input set is often another.
 	let moduleName: String?
-	/// The package of the module `generate` generated code for, as the compiler's `-package-name` names it, or `nil`
+	/// The package of the module `generate` generated code for, as `Instantiable.packageName` names a package, or `nil`
 	/// when the build system did not say.
 	let packageName: String?
 	/// The names of the modules the module `generate` generated code for depends on directly, as the build system
