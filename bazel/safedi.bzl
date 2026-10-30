@@ -74,7 +74,8 @@ compiles its output (`module_name`) and that module's package
 (`package_name`, which the compiler receives as `-package-name`).
 SafeDITool records them in the `.safedi` artifact, so a consumer knows
 which module and package declare each `@Instantiable` type, and
-records the modules its `deps` name as the module's dependencies. `safedi_swift_library` passes the module name
+records the module each `deps` entry's `.safedi` names as one of the
+module's dependencies. `safedi_swift_library` passes the module name
 its `swift_library` compiles: the `module_name` attribute, or the name
 rules_swift derives from the library's label. Give
 `safedi_swift_library` a `package_name` to compile the library with
@@ -260,7 +261,8 @@ name rules_swift derives from that library's label.
 `safedi_swift_library` passes it. SafeDITool records it in the
 `.safedi` artifact as the module that declares this module's
 `@Instantiable` types, and consumers of this rule record it as one of
-their dependencies.""",
+their dependencies. Without it, SafeDITool records no module for this
+rule's declarations, and consumers record no dependency on it.""",
         ),
         "package_name": attr.string(
             default = "",

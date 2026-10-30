@@ -47,6 +47,10 @@ public enum SafeDI {
 	/// concatenated into one file). Downstream targets pass the
 	/// producer's name in `dependencies:` so the helper feeds that
 	/// `.safedi` artifact through `--dependent-module-info-file-path`.
+	/// The script names the module with `--module-name
+	/// $PRODUCT_MODULE_NAME`, and its package with `--package-name
+	/// $SWIFT_PACKAGE_NAME` when the target sets that build setting, for
+	/// a SafeDITool that accepts them.
 	///
 	/// The helper assumes the target's Swift sources live under
 	/// `$SRCROOT/<module>/**/*.swift`. That single glob feeds both the
