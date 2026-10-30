@@ -75,8 +75,8 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// The declaration type of the Instantiable’s concrete type.
 	public let declarationType: DeclarationType
 	/// The access spelled on the declaration this Instantiable was found on: the type declaration, or, for an
-	/// extension-based Instantiable, the extension, whose members default to it. Its level is `internal` when the
-	/// declaration spells none. An extension's `instantiate()` records the access spelled on the method itself in
+	/// extension-based Instantiable, the extension, whose members default to it (`fileprivate` for a `private`
+	/// extension). Its level is `internal` when the declaration spells none. An extension's `instantiate()` records the access spelled on the method itself in
 	/// `initializer`, so the method's effective access is derived later from both. A hand-written mock method may be
 	/// declared in another declaration that is merged into this one, so the access of the declaration that declares
 	/// it is `mockDeclarationAccess`, and the access spelled on the method itself is on `mockInitializer`.
@@ -102,8 +102,9 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// about the hand-written mock point at the method rather than at the production declaration.
 	public var mockDeclarationLocation: Dependency.DeclarationLocation?
 	/// The access spelled on the declaration that declares the user-defined mock method: the type itself, or a
-	/// `mockOnly` or `conformsElsewhere` extension, whose members default to it. Travels with `mockInitializer` when
-	/// a `mockOnly` declaration's mock is merged into a production entry. `nil` when there is no user-defined mock.
+	/// `mockOnly` or `conformsElsewhere` extension, whose members default to it (`fileprivate` for a `private`
+	/// extension). Travels with `mockInitializer` when a `mockOnly` declaration's mock is merged into a production
+	/// entry. `nil` when there is no user-defined mock.
 	public var mockDeclarationAccess: AccessDeclaration?
 
 	/// Returns a copy of this Instantiable with mock-related fields replaced by those from `mockProvider`.
