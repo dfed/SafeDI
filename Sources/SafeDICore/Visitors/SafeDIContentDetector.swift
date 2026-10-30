@@ -130,16 +130,20 @@ extension IfConfigDeclSyntax {
 
 	/// What SafeDI would learn from this block among type declarations, and the declarations in every
 	/// one of its clauses that decide which files SafeDI generates. Both come from one walk of the block.
-	func safeDIContentAmongDeclarations() -> (content: SafeDIContent, outputFileDeclarations: OutputFileDeclarations) {
-		let detector = SafeDIContentDetector(context: .declarations)
+	/// - Parameter enclosingType: The type whose members the block is among, if any, which encloses the types
+	///   the block declares.
+	func safeDIContentAmongDeclarations(enclosedBy enclosingType: TypeDescription?) -> (content: SafeDIContent, outputFileDeclarations: OutputFileDeclarations) {
+		let detector = SafeDIContentDetector(context: .declarations, enclosingType: enclosingType)
 		detector.walk(self)
 		return (detector.content, detector.outputFileDeclarations)
 	}
 }
 
 private final class SafeDIContentDetector: SyntaxVisitor {
-	init(context: SafeDIContentContext) {
+	/// - Parameter enclosingType: The type whose members the walked block is among, if any.
+	init(context: SafeDIContentContext, enclosingType: TypeDescription? = nil) {
 		self.context = context
+		self.enclosingType = enclosingType
 		super.init(viewMode: .sourceAccurate)
 	}
 
@@ -148,29 +152,50 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	private(set) var outputFileDeclarations = OutputFileDeclarations()
 
 	override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
-		visitTypeDeclaration(node.attributes, isTypeDefinition: true)
+		visitTypeDeclaration(node.attributes, declaring: typeDefined(named: node.name.text), isTypeDefinition: true)
+	}
+
+	override func visitPost(_: ClassDeclSyntax) {
+		exitType()
 	}
 
 	override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
-		visitTypeDeclaration(node.attributes, isTypeDefinition: true)
+		visitTypeDeclaration(node.attributes, declaring: typeDefined(named: node.name.text), isTypeDefinition: true)
+	}
+
+	override func visitPost(_: ActorDeclSyntax) {
+		exitType()
 	}
 
 	override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
-		visitTypeDeclaration(node.attributes, isTypeDefinition: true)
+		visitTypeDeclaration(node.attributes, declaring: typeDefined(named: node.name.text), isTypeDefinition: true)
+	}
+
+	override func visitPost(_: StructDeclSyntax) {
+		exitType()
 	}
 
 	override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
-		visitTypeDeclaration(node.attributes, isTypeDefinition: false)
+		visitTypeDeclaration(node.attributes, declaring: node.extendedType.typeDescription, isTypeDefinition: false)
 	}
 
-	override func visit(_: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
-		switch context {
+	override func visitPost(_: ExtensionDeclSyntax) {
+		exitType()
+	}
+
+	override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
+		enterType(typeDefined(named: node.name.text))
+		return switch context {
 		case .declarations:
 			// Enums can nest instantiable types.
 			.visitChildren
 		case .members:
 			.skipChildren
 		}
+	}
+
+	override func visitPost(_: EnumDeclSyntax) {
+		exitType()
 	}
 
 	override func visit(_ node: MacroExpansionExprSyntax) -> SyntaxVisitorContinueKind {
@@ -217,15 +242,23 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	// MARK: Private
 
 	private let context: SafeDIContentContext
+	/// The type whose members the walk is among, if any, which encloses the types declared there.
+	private var enclosingType: TypeDescription?
+	/// The enclosing type of each type declaration the walk is inside, innermost last.
+	private var outerEnclosingTypes = [TypeDescription?]()
 
-	/// - Parameter isTypeDefinition: Whether the declaration defines a type, which only a type definition
-	///   can make a root: SafeDI never treats an `@Instantiable` extension as one.
-	private func visitTypeDeclaration(_ attributes: AttributeListSyntax, isTypeDefinition: Bool) -> SyntaxVisitorContinueKind {
+	/// - Parameters:
+	///   - declaredType: The type the declaration declares, which encloses the types among its members.
+	///   - isTypeDefinition: Whether the declaration defines a type, which only a type definition
+	///     can make a root: SafeDI never treats an `@Instantiable` extension as one.
+	private func visitTypeDeclaration(_ attributes: AttributeListSyntax, declaring declaredType: TypeDescription, isTypeDefinition: Bool) -> SyntaxVisitorContinueKind {
+		enterType(declaredType)
 		switch context {
 		case .declarations:
 			if let instantiableMacro = attributes.instantiableMacro {
 				record(instantiableMacro.mockOnlyValue ? .mockOnly : .production)
 				outputFileDeclarations.recordInstantiable(
+					named: declaredType.asSource,
 					isRoot: isTypeDefinition && instantiableMacro.isRootValue,
 					generatesMock: instantiableMacro.generateMockValue,
 				)
@@ -235,6 +268,26 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 		case .members:
 			return .skipChildren
 		}
+	}
+
+	/// The type a type definition named `name` defines among the members of the enclosing type, as `FileVisitor` names it.
+	private func typeDefined(named name: String) -> TypeDescription {
+		if let enclosingType {
+			.nested(name: name, parentType: enclosingType)
+		} else {
+			.simple(name: name)
+		}
+	}
+
+	/// Makes `type` the enclosing type until the declaration that declares it ends.
+	private func enterType(_ type: TypeDescription) {
+		outerEnclosingTypes.append(enclosingType)
+		enclosingType = type
+	}
+
+	/// Restores the enclosing type of the declaration that just ended.
+	private func exitType() {
+		enclosingType = outerEnclosingTypes.removeLast()
 	}
 
 	private func record(_ found: SafeDIContent) {

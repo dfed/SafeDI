@@ -35,12 +35,14 @@ public struct OutputFileDeclarations: Codable, Sendable {
 		declaresRoot: Bool,
 		declaresMockGeneratingType: Bool,
 		declaresConfiguration: Bool,
+		instantiableTypeNames: Set<String>,
 		additionalMocksToGenerate: [String],
 		additionalDirectoriesToInclude: [String],
 	) {
 		self.declaresRoot = declaresRoot
 		self.declaresMockGeneratingType = declaresMockGeneratingType
 		self.declaresConfiguration = declaresConfiguration
+		self.instantiableTypeNames = instantiableTypeNames
 		self.additionalMocksToGenerate = additionalMocksToGenerate
 		self.additionalDirectoriesToInclude = additionalDirectoriesToInclude
 	}
@@ -53,6 +55,10 @@ public struct OutputFileDeclarations: Codable, Sendable {
 	public private(set) var declaresMockGeneratingType = false
 	/// Whether the file declares a `#SafeDIConfiguration`.
 	public private(set) var declaresConfiguration = false
+	/// The type each `@Instantiable` declaration in the file declares, named as `additionalMocksToGenerate` names
+	/// it. A configuration may list any of them: the listed type's mock gets its file even when the conditions
+	/// leave the declaration inactive, and the file is then written without code.
+	public private(set) var instantiableTypeNames = Set<String>()
 	/// Every type name the file's configurations list in `additionalMocksToGenerate`, sorted and without duplicates.
 	/// Each listed type's mock gets its own file.
 	public private(set) var additionalMocksToGenerate = [String]()
@@ -62,9 +68,12 @@ public struct OutputFileDeclarations: Codable, Sendable {
 
 	/// Records an `@Instantiable` declaration.
 	/// - Parameters:
+	///   - typeName: The type the declaration declares, with its enclosing types: the type a type definition
+	///     defines, or the type an extension extends.
 	///   - isRoot: Whether the declaration is a root.
 	///   - generatesMock: Whether the declaration sets `generateMock: true`.
-	public mutating func recordInstantiable(isRoot: Bool, generatesMock: Bool) {
+	public mutating func recordInstantiable(named typeName: String, isRoot: Bool, generatesMock: Bool) {
+		instantiableTypeNames.insert(typeName)
 		declaresRoot = declaresRoot || isRoot
 		declaresMockGeneratingType = declaresMockGeneratingType || generatesMock
 	}
@@ -81,6 +90,7 @@ public struct OutputFileDeclarations: Codable, Sendable {
 		declaresRoot = declaresRoot || other.declaresRoot
 		declaresMockGeneratingType = declaresMockGeneratingType || other.declaresMockGeneratingType
 		declaresConfiguration = declaresConfiguration || other.declaresConfiguration
+		instantiableTypeNames.formUnion(other.instantiableTypeNames)
 		additionalMocksToGenerate = Set(additionalMocksToGenerate + other.additionalMocksToGenerate).sorted()
 		additionalDirectoriesToInclude = Set(additionalDirectoriesToInclude + other.additionalDirectoriesToInclude).sorted()
 	}

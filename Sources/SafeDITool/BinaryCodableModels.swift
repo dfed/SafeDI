@@ -182,6 +182,7 @@ extension OutputFileDeclarations: BinarySchemaMember {
 				BinaryLayoutField("declaresRoot", \.declaresRoot),
 				BinaryLayoutField("declaresMockGeneratingType", \.declaresMockGeneratingType),
 				BinaryLayoutField("declaresConfiguration", \.declaresConfiguration),
+				BinaryLayoutField("instantiableTypeNames", \.instantiableTypeNames),
 				BinaryLayoutField("additionalMocksToGenerate", \.additionalMocksToGenerate),
 				BinaryLayoutField("additionalDirectoriesToInclude", \.additionalDirectoriesToInclude),
 			],
@@ -194,6 +195,7 @@ extension OutputFileDeclarations: BinarySchemaMember {
 			declaresRoot: reader.read(),
 			declaresMockGeneratingType: reader.read(),
 			declaresConfiguration: reader.read(),
+			instantiableTypeNames: reader.read(),
 			additionalMocksToGenerate: reader.read(),
 			additionalDirectoriesToInclude: reader.read(),
 		)
@@ -203,6 +205,7 @@ extension OutputFileDeclarations: BinarySchemaMember {
 		writer.write(declaresRoot)
 		writer.write(declaresMockGeneratingType)
 		writer.write(declaresConfiguration)
+		writer.write(instantiableTypeNames)
 		writer.write(additionalMocksToGenerate)
 		writer.write(additionalDirectoriesToInclude)
 	}
@@ -218,6 +221,7 @@ extension ModuleInfo: BinarySchemaMember {
 				BinaryLayoutField("configurations", \.configurations),
 				BinaryLayoutField("filesWithUnexpectedNodes", \.filesWithUnexpectedNodes),
 				BinaryLayoutField("conditionalCompilationDecisions", \.conditionalCompilationDecisions),
+				BinaryLayoutField("instantiableTypeNamesInAnyClause", \.instantiableTypeNamesInAnyClause),
 			],
 			unwrittenProperties: [],
 		)
@@ -231,6 +235,7 @@ extension ModuleInfo: BinarySchemaMember {
 			configurations: reader.read(),
 			filesWithUnexpectedNodes: reader.read() as [String]?,
 			conditionalCompilationDecisions: reader.read(),
+			instantiableTypeNamesInAnyClause: reader.read(),
 		)
 	}
 
@@ -241,6 +246,7 @@ extension ModuleInfo: BinarySchemaMember {
 		writer.write(configurations)
 		writer.write(filesWithUnexpectedNodes)
 		writer.write(conditionalCompilationDecisions)
+		writer.write(instantiableTypeNamesInAnyClause)
 	}
 }
 

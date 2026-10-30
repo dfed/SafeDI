@@ -1012,7 +1012,7 @@ For the second case, use the `additionalMocksToGenerate` parameter on [`#SafeDIC
 
 This generates a `mock()` method for each listed type in the current module, even though the type is defined elsewhere. The type must be `@Instantiable` in its home module, but `generateMock: true` is not required there unless that home module also wants to generate its own mock.
 
-List each type by its declared name, with enclosing types and without the module (`Outer.Inner`, not `MyModule.Outer.Inner`). SafeDI reports an error for an entry that names no `@Instantiable` type and suggests close matches. An entry in a clause of an `#if` block that the build does not select is not checked.
+List each type by its declared name, with enclosing types and without the module (`Outer.Inner`, not `MyModule.Outer.Inner`). SafeDI reports an error for an entry that names no `@Instantiable` type and suggests close matches. An entry in a clause of an `#if` block that the build does not select is not checked. An entry may name a type declared only in clauses the build does not select, such as a type inside `#if DEBUG` in a Release build: SafeDI writes that mock’s file without code, as it does for [any declaration the build leaves inactive](#declarations-that-decide-which-files-safedi-generates).
 
 **Note:** `additionalDirectoriesToInclude` helps SafeDI scan source from Xcode project dependencies, but it does not generate mocks for those dependency modules. Use `additionalMocksToGenerate` when the current module needs a local mock for a dependency-module type.
 

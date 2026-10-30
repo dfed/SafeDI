@@ -76,7 +76,7 @@ public final class FileVisitor: SyntaxVisitor {
 	public override func visit(_ node: IfConfigDeclSyntax) -> SyntaxVisitorContinueKind {
 		// The block's declarations in every clause, including those of nested blocks, which this visitor
 		// reaches again only in the clauses it scans.
-		let (content, blockOutputFileDeclarations) = node.safeDIContentAmongDeclarations()
+		let (content, blockOutputFileDeclarations) = node.safeDIContentAmongDeclarations(enclosedBy: parentType)
 		outputFileDeclarations.formUnion(blockOutputFileDeclarations)
 		let scannable = conditionalCompilationEvaluator.scannableClauses(in: node, guarding: content)
 		activeIfConfigClauses.formUnion(scannable.clauses.map(\.id))
@@ -156,7 +156,7 @@ public final class FileVisitor: SyntaxVisitor {
 	public override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
 		// Enums can't be instantiable because they can't have `let` properties.
 		// However, they can have nested types within them that are instantiable.
-		enterTypeNamed(node.name.text)
+		parentType = typeDefined(named: node.name.text)
 		return .visitChildren
 	}
 
@@ -179,7 +179,13 @@ public final class FileVisitor: SyntaxVisitor {
 		consultedCompilationConditions.formUnion(instantiableVisitor.consultedCompilationConditions)
 		// Recorded from the attribute, whether or not an `instantiate()` method the members' `#if` blocks
 		// may skip produced an instantiable. SafeDI never treats an extension as a root.
-		outputFileDeclarations.recordInstantiable(isRoot: false, generatesMock: instantiableVisitor.generateMock)
+		if node.attributes.instantiableMacro != nil {
+			outputFileDeclarations.recordInstantiable(
+				named: node.extendedType.typeDescription.asSource,
+				isRoot: false,
+				generatesMock: instantiableVisitor.generateMock,
+			)
+		}
 
 		// Extensions are always top-level.
 		parentType = node.extendedType.typeDescription
@@ -261,20 +267,24 @@ public final class FileVisitor: SyntaxVisitor {
 		}
 		record(instantiableVisitor.conditionalCompilationDecisions)
 		consultedCompilationConditions.formUnion(instantiableVisitor.consultedCompilationConditions)
-		outputFileDeclarations.recordInstantiable(isRoot: instantiableVisitor.isRoot, generatesMock: instantiableVisitor.generateMock)
+		let definedType = typeDefined(named: node.name.text)
+		if node.attributes.instantiableMacro != nil {
+			outputFileDeclarations.recordInstantiable(named: definedType.asSource, isRoot: instantiableVisitor.isRoot, generatesMock: instantiableVisitor.generateMock)
+		}
 
 		// Keep track of how nested we are.
-		enterTypeNamed(node.name.text)
+		parentType = definedType
 
 		// Continue to find child types.
 		return .visitChildren
 	}
 
-	private func enterTypeNamed(_ name: String) {
+	/// The type a type definition named `name` defines among the members of `parentType`.
+	private func typeDefined(named name: String) -> TypeDescription {
 		if let parentType {
-			self.parentType = .nested(name: name, parentType: parentType)
+			.nested(name: name, parentType: parentType)
 		} else {
-			parentType = .simple(name: name)
+			.simple(name: name)
 		}
 	}
 
