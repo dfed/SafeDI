@@ -2221,13 +2221,11 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_rootInstantiatedArgUsesRootLocalParameter_whenFlatReceivedSameLabelDisambiguates() async throws {
+	mutating func mock_passesRootLocalParameterToRootAndToReceiverBeneathIt_whenRootInstantiatesTypeNoInstantiableFulfills() async throws {
 		// Root has an uncovered @Instantiated `service: ExternalService` (ExternalService
-		// has no @Instantiable, so no scope). A descendant @Receives `service: ExternalService`,
-		// which bubbles to the root's flat received parameters. The two flat entries collide
-		// on label `service`, so the flat-received param is disambiguated to
-		// `service_ExternalService`. The root's own return construction must still reference
-		// the root-local `service` parameter — not the disambiguated flat-received binding.
+		// has no @Instantiable, so no scope), which `mock()` takes as the root-local `service`
+		// parameter. The `Child` beneath Root receives `service: ExternalService`, which Root
+		// declares, so as in production it is passed the same parameter rather than one of its own.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -2277,15 +2275,10 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        service_ExternalService: ExternalService,
 		        service: ExternalService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        func __safeDI_child() -> Child {
-		            let service: ExternalService = service_ExternalService
-		            return if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(service) } else { Child(service: service) }
-		        }
-		        let child: Child = __safeDI_child()
+		        let child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(service) } else { Child(service: service) }
 		        return Root(service: service, child: child)
 		    }
 		}

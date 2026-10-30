@@ -2944,7 +2944,7 @@ public actor DependencyTreeGenerator {
 	/// `onlyIfAvailableAliasPropertyProvidedByEnclosingScope` to decide what each tree is built after.
 	private struct ScopeDeclarations {
 		init(scope: Scope) {
-			propertiesToDeclare = DependencyTreeGenerator.propertiesToDeclare(in: scope)
+			propertiesToDeclare = scope.propertiesToDeclare
 			forwardedProperties = scope.instantiable.forwardedReceivableProperties
 			lazilyInstantiatedInstanceProperties = scope.instantiable.dependencies.compactMap(\.lazilyInstantiatedInstanceProperty)
 			var onlyIfAvailableAliases = [DependencyTreeGeneratorError.RequiredOnlyIfAvailableAlias]()
@@ -2960,8 +2960,9 @@ public actor DependencyTreeGenerator {
 			self.requiredAliasFulfillingProperties = requiredAliasFulfillingProperties
 		}
 
-		/// The properties the scope declares for its children: those it instantiates and the aliases it assigns. A
-		/// lazily instantiated property also declares the property that receives its instance by value.
+		/// The properties the scope declares for its children: those it instantiates, whether or not a scope builds
+		/// them, and the aliases it assigns (see `Scope.propertiesToDeclare`). A lazily instantiated property also
+		/// declares the property that receives its instance by value.
 		let propertiesToDeclare: Set<Property>
 		/// The properties the scope forwards. A lazily instantiated one is also received by value.
 		let forwardedProperties: Set<Property>
@@ -3083,12 +3084,6 @@ public actor DependencyTreeGenerator {
 			}
 			return resolvedRequirements
 		}
-	}
-
-	/// The properties `scope` declares for its children: those it instantiates and the aliases it assigns.
-	/// A lazily instantiated property also declares the property that receives its instance by value.
-	private static func propertiesToDeclare(in scope: Scope) -> Set<Property> {
-		Set(scope.propertiesToGenerate.flatMap(\.receivableProperties))
 	}
 
 	/// Classifies a detected cycle and throws the appropriate error, or

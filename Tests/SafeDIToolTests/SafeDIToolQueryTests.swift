@@ -428,6 +428,44 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_reportsInstantiatedDependencyOnce_whenTypeBeneathTheTypeInstantiatingItReceivesIt() async throws {
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Feature",
+			modules: [
+				QueryTestModule("FeatureModule", [
+					"""
+					@Instantiable
+					public final class Feature: Instantiable {
+					    public init(widget: Widget, panel: Panel) {
+					        self.widget = widget
+					        self.panel = panel
+					    }
+					    @Instantiated private let widget: Widget
+					    @Instantiated private let panel: Panel
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Panel: Instantiable {
+					    public init(widget: Widget) {
+					        self.widget = widget
+					    }
+					    @Received private let widget: Widget
+					}
+					""",
+				]),
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		// `Panel` receives the `Widget` that `Feature` instantiates, so the project provides one `Widget`.
+		#expect(output.result.unfulfilledDependencies == [
+			TypeReport.UnfulfilledDependency(label: "widget", type: "Widget", reasonKind: .noInstantiableFulfillsType, reason: "No @Instantiable declaration fulfills `Widget`."),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func query_reportsErasedReceiveAsUnfulfilled_whenTheConcreteTypeErasedDeclaresForwardedProperties() async throws {
 		let output = try await executeSafeDIToolQuery(
 			typeName: "Feature",
