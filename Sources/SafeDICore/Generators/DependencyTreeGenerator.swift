@@ -1705,17 +1705,22 @@ public actor DependencyTreeGenerator {
 		}
 
 		// A dependency the tree receives both as `LazilyInstantiated` and by value is one dependency. It is
-		// promoted once, as the lazily instantiated property, whenever any receiver requires it in either form;
-		// receivers of its instance read it from that property. The same holds for a lazily instantiated
-		// property the mock root declares itself, which needs no promotion. A receive of the instance that a
-		// forwarded property fulfills does not count: the forwarded value comes from outside the tree.
+		// promoted once, as the lazily instantiated property, whenever any receiver requires it or its instance,
+		// optional or not; receivers of its instance, and of the optional instance, read it from that property.
+		// The same holds for a lazily instantiated property the mock root declares itself, which needs no promotion.
+		// A receive of the instance, or of the optional instance, that a forwarded property fulfills does not count:
+		// the forwarded value comes from outside the tree. A required `x: LazilyInstantiated<X>?` beside no required
+		// instance is promoted below as it is, as any optional form is when nothing requires its non-optional form.
 		var lazilyInstantiatedPropertiesToPromote = Set<Property>()
 		var instancePropertiesOfLazilyInstantiatedProperties = Set(mockRootScope.propertiesToGenerate.compactMap(\.lazilyInstantiatedInstanceProperty))
 		for receivedProperty in allReceived {
 			guard let instanceProperty = receivedProperty.asLazilyInstantiatedInstanceProperty else { continue }
 			let lazilyInstantiatedProperty = receivedProperty.asUnwrappedProperty
-			guard allRequired.contains(lazilyInstantiatedProperty) || (allRequired.contains(instanceProperty) && !isForwarded(instanceProperty)),
-			      scopeToPromote(for: lazilyInstantiatedProperty) != nil
+			let optionalInstanceProperty = Property(label: instanceProperty.label, typeDescription: .optional(instanceProperty.typeDescription))
+			guard allRequired.contains(lazilyInstantiatedProperty)
+				|| (allRequired.contains(instanceProperty) && !isForwarded(instanceProperty))
+				|| (allRequired.contains(optionalInstanceProperty) && !isForwarded(optionalInstanceProperty)),
+				scopeToPromote(for: lazilyInstantiatedProperty) != nil
 			else { continue }
 			lazilyInstantiatedPropertiesToPromote.insert(lazilyInstantiatedProperty)
 			instancePropertiesOfLazilyInstantiatedProperties.insert(instanceProperty)
@@ -1725,10 +1730,11 @@ public actor DependencyTreeGenerator {
 		// `x: Instantiator<X>` and `x: ErasedInstantiator<(), AnyX>` are each built, under a name of its own, for
 		// the receivers of that form. Only an optional form is not promoted beside its non-optional form: the
 		// mock binds what it builds to a non-optional value, which a receive of the optional form is handed too.
+		// Nor is the instance of a promoted lazily instantiated property, optional or not.
 		let propertiesToPromote = allReceived.union(lazilyInstantiatedPropertiesToPromote).filter { receivedProperty in
 			(lazilyInstantiatedPropertiesToPromote.contains(receivedProperty) || !allOnlyIfAvailable.contains(receivedProperty))
 				&& !isForwarded(receivedProperty)
-				&& !instancePropertiesOfLazilyInstantiatedProperties.contains(receivedProperty)
+				&& !instancePropertiesOfLazilyInstantiatedProperties.contains(receivedProperty.asUnwrappedProperty)
 		}
 		var promotedPropertiesToGenerate = [Scope.PropertyToGenerate]()
 		for receivedProperty in propertiesToPromote.sorted()
@@ -1774,12 +1780,12 @@ public actor DependencyTreeGenerator {
 		)
 		// The properties the mock is passed, which are in scope throughout its tree: those its tree receives that it
 		// neither builds – as a promoted property or one of its own, in some order – nor fulfills with the non-optional
-		// form of one it builds, nor reads from a lazily instantiated property it builds.
+		// form of one it builds, nor reads, optional or not, from a lazily instantiated property it builds.
 		let mockRootBuiltProperties = Set(mockRootScope.propertiesToGenerate.map(\.property))
 		let mockParameters = allReceived.filter { receivedProperty in
 			!mockRootBuiltProperties.contains(receivedProperty)
 				&& !mockRootBuiltProperties.contains(receivedProperty.asUnwrappedProperty)
-				&& !instancePropertiesOfLazilyInstantiatedProperties.contains(receivedProperty)
+				&& !instancePropertiesOfLazilyInstantiatedProperties.contains(receivedProperty.asUnwrappedProperty)
 		}
 		let mockRootEnclosingForwardedProperties = childrenRequiringEachOtherValidation.enclosingForwardedProperties(ofMockRootPassed: mockParameters)
 		let mockRootChildrenRequiringEachOther = Self.childrenRequiringEachOther(
@@ -2102,6 +2108,19 @@ public actor DependencyTreeGenerator {
 			for dependency in scope.instantiable.dependencies where !dependency.isForwarded {
 				let declaredPropertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
 				let propertyForDependency = declaredPropertyForDependency.asValidatedForDependencyCycles
+				guard dependency.canCloseDependencyCycle else {
+					// An `onlyIfAvailable` dependency is passed `nil` instead (`Dependency.canCloseDependencyCycle`). An
+					// alias passed `nil` is not created; a required receive of it is reported by the walk that follows,
+					// which finds the alias's fulfilling property being built in the same forms generation does: an alias
+					// of `x: X?` is passed `nil` inside the tree that builds `x: X`, such as the instance of a
+					// `LazilyInstantiated<X>` this walk holds as `x: X`.
+					if case .aliased(_, _, onlyIfAvailable: true) = dependency.source,
+					   propertyForDependency.formsOnMockInstantiationStack.contains(where: propertyStack.contains)
+					{
+						declaresOnlyIfAvailableAliasOfPropertyBeingBuilt = true
+					}
+					continue
+				}
 				// A mock promotes a received optional property as the non-optional value it builds, so a receive of the
 				// non-optional form inside the tree it builds reaches it too.
 				let receivedForms: [Property] = if dependency.isInstantiated {
@@ -2110,14 +2129,6 @@ public actor DependencyTreeGenerator {
 					[propertyForDependency, Property(label: propertyForDependency.label, typeDescription: .optional(propertyForDependency.typeDescription))]
 				}
 				guard let cycleIndex = propertyStack.firstIndex(where: receivedForms.contains) else {
-					continue
-				}
-				guard dependency.canCloseDependencyCycle else {
-					// An `onlyIfAvailable` dependency is passed `nil` instead (`Dependency.canCloseDependencyCycle`). An
-					// alias passed `nil` is not created; a required receive of it is reported by the walk that follows.
-					if case .aliased(_, _, onlyIfAvailable: true) = dependency.source {
-						declaresOnlyIfAvailableAliasOfPropertyBeingBuilt = true
-					}
 					continue
 				}
 				let propertiesInCycle = [propertyForDependency] + propertyStack[0...cycleIndex]
@@ -4264,11 +4275,10 @@ public actor DependencyTreeGenerator {
 		/// stack: as itself, unwrapped, and – in a mock, which promotes a received optional property as the
 		/// non-optional value it builds – as the optional property promoted to build it.
 		func formsOnStack(of validatedFulfillingProperty: Property) -> [Property] {
-			let unwrappedProperty = validatedFulfillingProperty.asUnwrappedProperty
-			return if cyclesOnly {
-				[validatedFulfillingProperty, unwrappedProperty, Property(label: unwrappedProperty.label, typeDescription: .optional(unwrappedProperty.typeDescription))]
+			if cyclesOnly {
+				validatedFulfillingProperty.formsOnMockInstantiationStack
 			} else {
-				[validatedFulfillingProperty, unwrappedProperty]
+				[validatedFulfillingProperty, validatedFulfillingProperty.asUnwrappedProperty]
 			}
 		}
 		/// The fulfilling properties of the `onlyIfAvailable` aliases already walked by

@@ -8127,10 +8127,10 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_passesOnlyIfAvailableOverrideToReceiverOfLazilyInstantiatedProperty_whenMockBuildsOptionalInstanceOfSameLabel() async throws {
-		// Reduced from graph fuzzer seed 2606. Root requires `x: Xyz?`, which the mock builds after Child, and Child
-		// receives `x: LazilyInstantiated<Xyz>?` only if available. The node built for the instance cannot be wrapped
-		// before it is declared, so Child is passed an override of its own.
+	mutating func mock_passesPromotedLazilyInstantiatedPropertyToOnlyIfAvailableReceiver_whenMockedTypeRequiresOptionalInstanceOfSameLabel() async throws {
+		// Reduced from graph fuzzer seed 2606. Root requires `x: Xyz?` and Child receives `x: LazilyInstantiated<Xyz>?`
+		// only if available. They are one dependency: the mock builds the `LazilyInstantiated` before Child, passes
+		// it to Child, and passes Root its instance. No override is typed `LazilyInstantiated`.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -8176,31 +8176,26 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
-		            child: ((LazilyInstantiated<Xyz>?) -> Child)? = nil,
 		            x: (() -> Xyz)? = nil,
-		            x_LazilyInstantiated__Xyz: LazilyInstantiated<Xyz>? = nil
+		            child: ((LazilyInstantiated<Xyz>?) -> Child)? = nil
 		        ) {
-		            self.child = child
 		            self.x = x
-		            self.x_LazilyInstantiated__Xyz = x_LazilyInstantiated__Xyz
+		            self.child = child
 		        }
 
-		        let child: ((LazilyInstantiated<Xyz>?) -> Child)?
 		        let x: (() -> Xyz)?
-		        let x_LazilyInstantiated__Xyz: LazilyInstantiated<Xyz>?
+		        let child: ((LazilyInstantiated<Xyz>?) -> Child)?
 		    }
 
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Root {
-		        let x_LazilyInstantiated__Xyz: LazilyInstantiated<Xyz>? = safeDIOverrides.x_LazilyInstantiated__Xyz
-		        func __safeDI_child() -> Child {
-		            let x: LazilyInstantiated<Xyz>? = x_LazilyInstantiated__Xyz
-		            return if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(x) } else { Child(x: x) }
+		        func __safeDI_x() -> Xyz {
+		            if let safeDIBuilder = safeDIOverrides.x { safeDIBuilder() } else { Xyz() }
 		        }
-		        let child: Child = __safeDI_child()
-		        let x = if let safeDIBuilder = safeDIOverrides.x { safeDIBuilder() } else { Xyz() }
-		        return Root(x: x, child: child)
+		        let x = LazilyInstantiated<Xyz>(__safeDI_x)
+		        let child = if let safeDIBuilder = safeDIOverrides.child { safeDIBuilder(x) } else { Child(x: x) }
+		        return Root(x: x.instance, child: child)
 		    }
 		}
 		#endif

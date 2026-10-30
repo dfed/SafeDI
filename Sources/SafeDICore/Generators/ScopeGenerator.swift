@@ -1780,9 +1780,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// The lazily instantiated dependencies the tree receives and the mock cannot build. The caller of
 		// `mock()` passes the instance of such a dependency, exactly as for one received by value, and the
 		// mock wraps it for the types that receive it as `LazilyInstantiated`. A node of another form under
-		// the dependency's label, such as an `Instantiator` the mock builds, does not provide it. A node the
-		// mock builds for the instance itself does, though the wrapper cannot be made from it: the node is
-		// declared among the tree's bindings, after the wrappers.
+		// the dependency's label, such as an `Instantiator` the mock builds, does not provide it. A node that
+		// declares the instance does, though the wrapper cannot be made from it: the node is declared among the
+		// tree's bindings, after the wrappers. The mock builds no node for the instance itself beside a received
+		// wrapper, which it promotes instead, so that node is a wrapper of the other kind, such as a
+		// `SendableLazilyInstantiated<X>` the tree requires beside an `onlyIfAvailable` `LazilyInstantiated<X>?`.
 		let lazilyInstantiatedReceivedProperties = receivedProperties
 			.filter {
 				$0.typeDescription.lazilyInstantiatedInstanceType != nil
