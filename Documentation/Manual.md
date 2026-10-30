@@ -176,7 +176,7 @@ Every `@Instantiable`-decorated type must be:
 
 2. Have a `public init(…)` or `open init(…)` that has a parameter for each of its injected properties.
 
-3. Spell a nested type in a decorated property’s type with its enclosing types, such as `@Forwarded let configuration: Feature.Configuration`: generated code is in an extension where the members of `Feature` are not in scope, and the `@Instantiable` macro warns, with a fix-it, when a type declared inside the decorated type is spelled without it. SafeDI itself qualifies a nested type that an `@Instantiable` declaration fulfills.
+3. Spell a nested type in a decorated property’s type with its enclosing types, such as `@Forwarded let configuration: Feature.Configuration` for a `Configuration` declared inside `Feature`: generated code is in an extension where the members of `Feature` are not in scope, and the `@Instantiable` macro warns, with a fix-it, when a type declared inside the decorated type is spelled without it. SafeDI itself qualifies a nested type that an `@Instantiable` declaration [fulfills](#making-protocols-instantiable).
 
 The `@Instantiable` macro guides developers through satisfying the first two requirements with code generation and build-time fix-its.
 
@@ -218,8 +218,6 @@ public struct LoggedInView: Instantiable, View {
 - `@Instantiated` marks a dependency that SafeDI constructs when this type is instantiated. `noteStorage`’s own `@Received` inputs are resolved from this scope’s context.
 
 The exact semantics of each dependency kind — including `@Instantiated`’s configuration parameters for dependency inversion, and `@Received`’s `onlyIfAvailable` option — are covered in [@Instantiated](#instantiated), [@Received](#received), and [@Forwarded](#forwarded).
-
-SafeDI recognizes its wrapper types – `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, `SendableErasedInstantiator`, `LazilyInstantiated`, and `SendableLazilyInstantiated` – by name alone, so do not declare types with these names in a project that uses SafeDI.
 
 #### Creating the root of your dependency tree
 
@@ -472,7 +470,7 @@ SafeDI ignores `any` when it matches types, so `any SessionsApi` and `SessionsAp
 
 #### Renaming and retyping dependencies
 
-Use `@Received(fulfilledByDependencyNamed:ofType:)` to give a dependency an additional name and type. The dependency is the property of that name that the declaring type instantiates, forwards, or itself renames, or, when the declaring type has none, the one a type above it instantiates or forwards. Types further down the tree can then `@Received` the same instance under either name and type.
+Use `@Received(fulfilledByDependencyNamed:ofType:)` to give a dependency an additional name and type. The dependency is the property of that name that the declaring type instantiates, forwards, or itself renames, or, when the declaring type has none, the one a type above it instantiates, forwards, or renames. Types further down the tree can then `@Received` the same instance under either name and type.
 
 Here, a parent instantiates a read-write `UserManager` and also renames the object to make it available a `UserVendor`. A child receives the same instance as the read-only `UserVendor`:
 
@@ -559,7 +557,7 @@ A type under `B` that receives `a` is receiving a property of `Parent`, which is
 - **Both receive each other only if available.** The property declared later is built first and receives `nil`.
 - **Nothing is provided below a `nil`.** A property received only if available that is `nil` provides nothing to the types below the receiver, so a type further down that requires the same property needs a type above it to provide it.
 - **A renamed dependency is unavailable.** A `@Received(fulfilledByDependencyNamed:ofType:onlyIfAvailable: true)` property whose fulfilling dependency is unavailable is `nil`, and so is that property for anything that receives it in turn with `onlyIfAvailable: true`.
-- **A type requires a renamed dependency that is only available sometimes.** A type that receives the renamed property without `onlyIfAvailable` requires it, as with any dependency: an enclosing property of that name stands in when there is one, and otherwise the fulfilling dependency is built first. The build reports at the receiving declaration when neither is possible.
+- **A type requires a renamed dependency that is only available sometimes.** A type that receives the renamed property without `onlyIfAvailable` requires it, as with any dependency: an enclosing property of that name stands in when there is one, and otherwise the fulfilling dependency is built first. The build fails at the receiving declaration when neither is possible.
 
 ### #SafeDIConfiguration
 
@@ -579,7 +577,7 @@ Declare the configuration in a file named `SafeDIConfiguration.swift` in the mod
 **Parameters:**
 
 - `additionalImportedModules`: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types. Default: `[]`.
-- `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. An entry may also name a single Swift file. Only the `SafeDIGenerator` build-tool plugin honors it (see the note under [Xcode project](#xcode-project)). Default: `[]`.
+- `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. An entry may also name a single Swift file. Only the `SafeDIGenerator` build-tool plugin declares the files it reaches as build inputs; under Tuist and Bazel, list every Swift source in the build target instead (see the note under [Xcode project](#xcode-project)). Default: `[]`.
 - `additionalMocksToGenerate`: Type names from dependent modules to generate `mock()` methods for in this module. The types must be `@Instantiable` in their home module. See [Cross-module mock generation](#cross-module-mock-generation). Default: `[]`.
 - `mockConditionalCompilation`: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation. Default: `"DEBUG"`.
 
@@ -597,6 +595,8 @@ An `Instantiator` creates a new instance each time it is asked for one. When you
 | `Dependency` can have `@Forwarded` properties | No | Yes | No |
 | Can break a dependency cycle | No | Yes | No |
 | `Sendable` twin | – | [`SendableInstantiator<Dependency>`](#sendable-wrappers) | [`SendableLazilyInstantiated<Dependency>`](#sendable-wrappers) |
+
+SafeDI recognizes its wrapper types – `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, `SendableErasedInstantiator`, `LazilyInstantiated`, and `SendableLazilyInstantiated` – by name alone, so do not declare types with these names in a project that uses SafeDI.
 
 ### Instantiator
 
@@ -714,7 +714,7 @@ In a [generated mock](#mock-generation), a lazily instantiated dependency is ove
 
 A `Sendable` wrapper builds its dependency in a `@Sendable` function, which places two requirements on the dependency’s subtree:
 
-- **What the subtree receives from outside it must be `Sendable`**, even when the receiving type is itself `Sendable`. Declare a wrapper the subtree receives from outside, or whose instance it receives, as its `Sendable` twin. Wrappers instantiated inside the same `Sendable` wrapper are fine. SafeDI reports an error at the receiving property.
+- **What the subtree receives from outside it must be `Sendable`**, even when the receiving type is itself `Sendable`. Declare a wrapper the subtree receives from outside, or whose instance it receives, as its `Sendable` twin; SafeDI reports an error at the property that receives one that is not. Wrappers instantiated inside the same `Sendable` wrapper are fine. Anything else the subtree receives that is not `Sendable` is rejected by the compiler in the generated code.
 - **Every initializer the function calls must be callable synchronously outside any actor**, and so must an extension’s `instantiate(…)` and a hand-written mock method that a generated mock calls there. The initializer’s isolation counts, not the type’s: a `@MainActor` class with a `nonisolated init` is fine when its stored properties are `Sendable`. SafeDI does not check this, and the generated code fails to compile otherwise; declare such an initializer `nonisolated`. `mockAttributes: "@MainActor"` does not help.
 
 Generated mocks follow the same rules, and the `SafeDIMockConfiguration` of a type reached through a `Sendable` wrapper has `@Sendable` closure fields.
@@ -931,7 +931,7 @@ The table below shows where each dependency kind lands in the three buckets abov
 | Required `@Received` of a type whose `@Instantiable` declaration has `@Forwarded` properties, unless received as an `Instantiator` | Flat `mock()` parameter | Required |
 | `@Forwarded` | Flat `mock()` parameter | Required, unless the root provides a default or the forwarded type has a [`mockOnly`](#the-mockonly-parameter) provider (which defaults the parameter to `Type.mock()`) |
 | `@Instantiated` | Entry on `SafeDIOverrides` | Built from the real subtree — see [Overriding dependencies](#overriding-dependencies) |
-| `@Instantiated` whose fulfilling declaration this module cannot see (`fulfilledByType` in another module) | Flat `mock()` parameter | Required |
+| `@Instantiated` whose fulfilling declaration this module cannot see (declared in a module this one does not depend on) | Flat `mock()` parameter | Required |
 | `@Received(onlyIfAvailable: true)` | Entry on `SafeDIOverrides`, typed as optional | `nil` |
 | Default-valued non-DI init parameter | Flat `mock()` parameter on a direct mock, or a nested `SafeDIMockConfiguration` field when reached through a parent | The parameter’s original default expression |
 
@@ -979,6 +979,8 @@ When a type’s initializer is bound to a global actor that the plugin cannot de
 @Instantiable(mockAttributes: "@MainActor")
 public final class MyPresenter: Instantiable { … }
 ```
+
+`mockAttributes` does not relax the [`Sendable` wrappers](#sendable-wrappers) rule: an initializer reached through one must still be callable outside any actor.
 
 ### Multi-module mock generation
 
@@ -1083,7 +1085,7 @@ The generated mocks import `NetworkingMocks` whatever conditions the build repor
 SafeDITool can read the conditions in two ways:
 
 - **From the build settings, when the build runs.** The `SafeDIGenerator` plugin passes `${SWIFT_ACTIVE_COMPILATION_CONDITIONS}` and `${OTHER_SWIFT_FLAGS}` to SafeDITool. A build system that expands them hands SafeDITool exactly the conditions the compiler receives, and SafeDITool uses those instead of any reported another way.
-- **From what the plugin can see, while it plans the build.** A Swift package’s build tool plugin can read the target’s `swiftSettings` defines, including those with `.when(configuration:)` conditions, and its trait defines, but not SwiftPM’s implicit `DEBUG`. An Xcode project’s build tool plugin can read no conditions at all. When the build-setting references reach SafeDITool unexpanded, it uses these conditions instead.
+- **From what the plugin can see, while it plans the build.** A Swift package’s build tool plugin can read the target’s `swiftSettings` defines, including those with `.when(configuration:)` conditions, and its trait defines, but not SwiftPM’s implicit `DEBUG`. An Xcode project’s build tool plugin can read no conditions at all. When the build-setting references the plugin passes reach SafeDITool unexpanded, it uses these conditions instead.
 
 | Integration | Conditions SafeDITool generates code with |
 |-------------|-------------------------------------------|
@@ -1262,7 +1264,7 @@ A focused app – one that builds a single feature with mock data instead of the
 .build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool query needs HomeFeature SettingsFeature --include Sources/Foundations Sources/Services Sources/HomeFeature Sources/SettingsFeature --active-compilation-conditions DEBUG
 ```
 
-A project whose build already writes `.safedi` [module info files](#custom-build-system-integration) – a Bazel or Tuist project, or any other that runs `generate --module-info-output` per module – can name those files with `--module-info`, instead of or alongside directories, and skip parsing the sources. In a Bazel project:
+A project whose build already writes `.safedi` [module info files](#migrating-prebuild-scripts-or-custom-build-system-integrations) – a Bazel or Tuist project, or any other that runs `generate --module-info-output` per module – can name those files with `--module-info`, instead of or alongside directories, and skip parsing the sources. In a Bazel project:
 
 ```bash
 bazel run @safedi//bazel:safeditool -- query needs HomeFeature --module-info "$PWD"/bazel-bin/Modules/Foundations/Foundations_safedi.safedi "$PWD"/bazel-bin/Modules/Services/Services_safedi.safedi "$PWD"/bazel-bin/Modules/HomeFeature/HomeFeature_safedi.safedi
