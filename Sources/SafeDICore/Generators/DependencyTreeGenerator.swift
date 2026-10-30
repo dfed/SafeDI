@@ -1307,10 +1307,6 @@ public actor DependencyTreeGenerator {
 						inability = "construct \(constructedTypeName)"
 						fixedDeclaration = "`\(type.asSource)`"
 					}
-				case .instantiableExtension:
-					subject = "The @\(InstantiableVisitor.macroName) extension of \(constructedTypeName)"
-					inability = "construct \(constructedTypeName)"
-					fixedDeclaration = "the extension"
 				case let .extensionDeclaringType(type):
 					subject = type == constructedType
 						? "The extension that declares \(constructedTypeName)"

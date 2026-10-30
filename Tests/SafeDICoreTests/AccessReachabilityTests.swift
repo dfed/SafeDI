@@ -157,27 +157,27 @@ struct AccessReachabilityTests {
 	@Test
 	func effective_isTheExtensionsLevelForInstantiateMethod_whenOnlyTheExtensionSpellsModifier() throws {
 		let instantiable = try instantiable(in: """
-		@Instantiable
-		package extension Service: Instantiable {
+		@Instantiable(conformsElsewhere: true)
+		package extension Service {
 		    static func instantiate() -> Service { Service() }
 		}
 		""")
 
-		#expect(AccessLevel.effective(ofTypeDeclaredBy: instantiable) == .package)
+		#expect(AccessLevel.effective(ofTypeDeclaredBy: instantiable) == .open)
 		#expect(effectiveConstructionAccess(of: instantiable) == .package)
 	}
 
 	@Test
-	func effective_capsInstantiateMethodByTheExtensionsSpelledLevel() throws {
+	func effective_isTheInstantiateMethodsSpelledLevel_whenItIsMorePermissiveThanItsExtension() throws {
 		let instantiable = try instantiable(in: """
-		@Instantiable
-		internal extension Service: Instantiable {
+		@Instantiable(conformsElsewhere: true)
+		internal extension Service {
 		    public static func instantiate() -> Service { Service() }
 		}
 		""")
 
-		#expect(AccessLevel.effective(ofTypeDeclaredBy: instantiable) == .internal)
-		#expect(effectiveConstructionAccess(of: instantiable) == .internal)
+		#expect(AccessLevel.effective(ofTypeDeclaredBy: instantiable) == .open)
+		#expect(effectiveConstructionAccess(of: instantiable) == .public)
 	}
 
 	@Test
@@ -215,6 +215,19 @@ struct AccessReachabilityTests {
 		""")
 
 		#expect(try effectiveMockAccess(of: instantiable) == .fileprivate)
+	}
+
+	@Test
+	func effective_isTheMockMethodsSpelledLevel_whenItIsMorePermissiveThanItsExtension() throws {
+		let instantiable = try instantiable(in: """
+		@Instantiable(mockOnly: true)
+		internal extension Service {
+		    public static func mock() -> Service { Service() }
+		}
+		""")
+
+		#expect(AccessLevel.effective(ofTypeDeclaredBy: instantiable) == .open)
+		#expect(try effectiveMockAccess(of: instantiable) == .public)
 	}
 
 	@Test(arguments: [

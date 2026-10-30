@@ -384,6 +384,45 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		""")
 	}
 
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsPublicInstantiateMethod_whenAnotherPackageConstructsTypeThroughInternalExtension(integration: MultiModuleIntegration) async throws {
+		// Swift caps no member of an extension by the extension's level, and only warns at a member more permissive
+		// than its extension, so another package can call the `public` method.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(
+					name: "Feature",
+					packageName: "Toolkit",
+					swiftFileContentByFilePath: [
+						"Service.swift": """
+						public final class Service {}
+						extension Service: Instantiable {}
+
+						@Instantiable(conformsElsewhere: true)
+						internal extension Service {
+						    public static func instantiate() -> Service { Service() }
+						}
+						""",
+					],
+				),
+				Self.app(inPackage: "Shop"),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(output.modules["App"]).generatedFiles == Self.appGeneratedFiles(under: integration, code: """
+		extension Root {
+		    public convenience init() {
+		        let service: Service = Service.instantiate()
+		        self.init(service: service)
+		    }
+		}
+		"""))
+		try expectEveryModuleCompiled(output)
+	}
+
 	// MARK: Tests – Constructions that do not compile
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -580,7 +619,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	mutating func generate_throwsErrorAtExtension_whenInstantiateMethodSpellsNoModifierAndItsExtensionIsInternal() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Service.swift"]):5:1: error: The @Instantiable extension of `Service` is `internal`, so module `App`, another module of the same package, cannot construct `Service` in the code SafeDI generates. Make the extension `package` to fix.
+			\(fixtures["Feature"]!["Service.swift"]):5:1: error: The extension that declares `Service.instantiate()` is `internal`, so module `App`, another module of the same package, cannot call `Service.instantiate()` in the code SafeDI generates. Make the extension `package` to fix.
 			\(fixtures["Feature"]!["Service.swift"]):5:1-5:9: fixit: package
 			"""
 		}) {
@@ -604,6 +643,41 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 					Self.app(inPackage: "Shop"),
 				],
 				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorWithPublicFixItAtExtension_whenAnotherPackageCallsInstantiateMethodTakingPackageFromItsExtension(integration: MultiModuleIntegration) async {
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let servicePath = Self.declarationPath(of: "Service.swift", in: "Feature", fixtures: fixtures, under: integration)
+			return """
+			\(servicePath):5:1: error: The extension that declares `Service.instantiate()` is `package`, so module `App`, in another package, cannot call `Service.instantiate()` in the code SafeDI generates. Make the extension `public` to fix.
+			\(servicePath):5:1-5:8: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Feature",
+						packageName: "Toolkit",
+						swiftFileContentByFilePath: [
+							"Service.swift": """
+							public final class Service {}
+							extension Service: Instantiable {}
+
+							@Instantiable(conformsElsewhere: true)
+							package extension Service {
+							    static func instantiate() -> Service { Service() }
+							}
+							""",
+						],
+					),
+					Self.app(inPackage: "Shop"),
+				],
+				integration: integration,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -961,6 +1035,79 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsPublicHandWrittenMock_whenAnotherPackageCallsItThroughInternalExtension(integration: MultiModuleIntegration) async throws {
+		// Swift caps no member of an extension by the extension's level, and only warns at a member more permissive
+		// than its extension, so another package can call the `public` mock.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesMockingServiceFromTestSupport(inPackage: "Kit", mockDeclaration: """
+			@Instantiable(mockOnly: true)
+			internal extension Service {
+			    public static func mock() -> Service { Service() }
+			}
+			"""),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		let header = generatedFileHeader + Self.importBlock("Feature") + "\n" + Self.importBlock("TestSupport") + "\n\n"
+		let screenMock = header + """
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            service: (() -> Service)? = nil
+		        ) {
+		            self.service = service
+		        }
+
+		        let service: (() -> Service)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let service = if let safeDIBuilder = safeDIOverrides.service { safeDIBuilder() } else { Service.mock() }
+		        return Screen(service: service)
+		    }
+		}
+		#endif
+		"""
+		let expectedGeneratedFiles = switch integration {
+		case .moduleInfo:
+			["App.swift": screenMock]
+		case .swiftPackagePlugin:
+			["Screen+SafeDIMock.swift": screenMock, "SafeDIMockConfiguration.swift": header]
+		}
+		#expect(try #require(output.modules["App"]).generatedFiles == expectedGeneratedFiles)
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorWithPublicFixItAtExtension_whenAnotherPackageCallsHandWrittenMockTakingPackageFromItsExtension(integration: MultiModuleIntegration) async {
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let mockPath = Self.declarationPath(of: "ServiceMock.swift", in: "TestSupport", fixtures: fixtures, under: integration)
+			return """
+			\(mockPath):4:1: error: The extension that declares `Service.mock()` is `package`, so module `App`, in another package, cannot call `Service.mock()` in the code SafeDI generates. Make the extension `public` to fix.
+			\(mockPath):4:1-4:8: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesMockingServiceFromTestSupport(inPackage: "Kit", mockDeclaration: """
+				@Instantiable(mockOnly: true)
+				package extension Service {
+				    static func mock() -> Service { Service() }
+				}
+				"""),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Tests – Roots another module declares
 
 	@Test
@@ -1115,8 +1262,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	}
 
 	/// A public `Service` in `Feature`, its hand-written mock in `TestSupport`, and a type in `App` whose generated
-	/// mock builds `Service` with that mock.
-	private static func modulesMockingServiceFromTestSupport(mockDeclaration: String) -> [ModuleFixture] {
+	/// mock builds `Service` with that mock: `Feature` and `App` in package `Shop`, and `TestSupport` in
+	/// `testSupportPackageName`.
+	private static func modulesMockingServiceFromTestSupport(inPackage testSupportPackageName: String = "Shop", mockDeclaration: String) -> [ModuleFixture] {
 		[
 			feature(
 				inPackage: "Shop",
@@ -1129,14 +1277,14 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			),
 			ModuleFixture(
 				name: "TestSupport",
-				packageName: "Shop",
+				packageName: testSupportPackageName,
 				swiftFileContentByFilePath: ["ServiceMock.swift": "import Feature\n\n" + mockDeclaration],
 				dependencies: ["Feature"],
 			),
 			ModuleFixture(
 				name: "App",
 				packageName: "Shop",
-				swiftFileContent: [screenMockedInApp],
+				swiftFileContent: ["import TestSupport\n" + screenMockedInApp],
 				dependencies: ["Feature", "TestSupport"],
 			),
 		]
