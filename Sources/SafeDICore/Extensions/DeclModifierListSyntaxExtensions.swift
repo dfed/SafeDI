@@ -35,11 +35,11 @@ extension DeclModifierListSyntax {
 	}
 
 	/// The modifier that sets the access level of the declaration these modifiers belong to, with the level it sets,
-	/// or `nil` when no modifier does and the declaration has the default access level, `internal`. A modifier with a
-	/// detail, such as `private(set)`, sets the access level of a property's setter alone, so it is never this one.
+	/// or `nil` when no modifier does and the declaration has the default access level, `internal`. The compiler
+	/// rejects a detail, such as `(set)`, on the access modifier of every declaration SafeDI reads, so a modifier is
+	/// read by its name alone.
 	var accessModifier: (accessLevel: AccessLevel, name: TokenSyntax)? {
 		lazy
-			.filter { $0.detail == nil }
 			.compactMap { modifier in
 				AccessLevel(modifier.name.tokenKind).map { (accessLevel: $0, name: modifier.name) }
 			}
