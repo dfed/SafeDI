@@ -833,6 +833,38 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsInaccessibleConstructionOnce_whenTypeOfAnotherModuleConstructsItTwice() async {
+		// `Hub` instantiates `Service` twice, and `App` generates both constructions, which refer to `Service` from
+		// one place in `App`: its `hub` property.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):2:1: error: `Service` is `internal`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` to fix.
+			\(fixtures["Feature"]!["Service.swift"]):2:1-2:1: fixit: package\(" ")
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.feature(inPackage: "Shop", declaring: Self.internalServiceWithPackageInitializer, alongside: """
+					@Instantiable
+					public final class Hub: Instantiable {
+					    package init(first: Service, second: Service) {
+					        self.first = first
+					        self.second = second
+					    }
+					    @Instantiated let first: Service
+					    @Instantiated let second: Service
+					}
+					"""),
+					Self.app(inPackage: "Shop", serviceType: "Hub"),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorAtMockMethod_whenMockDefaultsForwardedParameterToInternalHandWrittenMockOfAnotherModule() async {
 		// `mock()` defaults `user` to `User.mock()`, which `App` cannot call.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
@@ -1086,7 +1118,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	/// mock builds `Service` with that mock.
 	private static func modulesMockingServiceFromTestSupport(mockDeclaration: String) -> [ModuleFixture] {
 		[
-			Self.feature(
+			feature(
 				inPackage: "Shop",
 				declaring: """
 				@Instantiable
