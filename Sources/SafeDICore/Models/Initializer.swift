@@ -77,8 +77,8 @@ public struct Initializer: Codable, Hashable, Sendable {
 	// MARK: Public
 
 	/// The access the initializer's own modifiers spell, which begins at its first modifier or its `init` or `func`
-	/// keyword. A method declared in an extension defaults to the extension's access, which the `Instantiable`
-	/// records.
+	/// keyword. A method declared in an extension defaults to the extension's access (`fileprivate` for a `private`
+	/// extension), which the `Instantiable` records.
 	public let access: AccessDeclaration
 	public let isOptional: Bool
 	public let isAsync: Bool
