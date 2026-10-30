@@ -840,7 +840,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// invocation when nothing fails.
 	static let smokeSeeds: [UInt64] = [14, 25, 62, 582, 691, 705, 731, 930, 2_420, 4_224]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x091AD017590D650C
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x9D6A0EB496C499A4
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -850,8 +850,8 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
-	static let corpusAcceptedSeedCount = 2_354
-	static let corpusAcceptedSeedsSum: UInt64 = 0xE194DAFFA12804C8
+	static let corpusAcceptedSeedCount = 2_359
+	static let corpusAcceptedSeedsSum: UInt64 = 0xE0054FBE754B01CC
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
@@ -863,8 +863,8 @@ struct SafeDIToolGraphFuzzerTests {
 				3, 35, 37, 45, 55, 77, 107, 114, 131, 157, 168, 223, 233, 241, 281,
 				309, 311, 364, 371, 381, 383, 390, 431, 434, 448, 450, 473, 515, 545, 567, 593,
 				595, 617, 630, 632, 680, 688, 714, 728, 732, 751, 768, 774, 785, 786, 808, 833,
-				836, 847, 903, 912, 940, 948, 956, 975, 987, 1_004, 1_029, 1_035, 1_042, 1_044, 1_061, 1_064,
-				1_072, 1_075, 1_084, 1_092, 1_139, 1_145, 1_147, 1_185, 1_215, 1_236, 1_289, 1_300, 1_329, 1_352, 1_362,
+				836, 847, 886, 903, 912, 940, 948, 956, 975, 987, 1_004, 1_029, 1_035, 1_042, 1_044, 1_061, 1_064,
+				1_072, 1_075, 1_084, 1_092, 1_139, 1_145, 1_147, 1_185, 1_215, 1_236, 1_289, 1_300, 1_322, 1_329, 1_352, 1_362,
 				1_372, 1_432, 1_433, 1_441, 1_453, 1_464, 1_492, 1_496, 1_502, 1_504, 1_524, 1_525, 1_531, 1_567, 1_602, 1_633,
 				1_646, 1_664, 1_675, 1_695, 1_742, 1_752, 1_781, 1_784, 1_804, 1_853, 1_857, 1_867, 1_896, 1_898, 1_919,
 				1_938, 1_970, 1_972, 2_005, 2_017, 2_051, 2_083, 2_084, 2_117, 2_123, 2_149, 2_152, 2_165, 2_201, 2_211,
