@@ -327,6 +327,16 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 			\(path(of: "Engine.swift")):1:1: \(message)
 			\(path(of: "Motor.swift")):1:1: \(message)
 			"""
+		}, inspectingOutputs: { outputs in
+			// The error carries the outputs of the modules processed before the failing one: none under Bazel's
+			// invocation, which fails at `Core`, and `Core`'s, which ran no `generate`, under the plugin's.
+			switch integration {
+			case .moduleInfo:
+				#expect(outputs.keys.sorted() == [])
+			case .swiftPackagePlugin:
+				#expect(outputs.keys.sorted() == ["Core"])
+				#expect(outputs["Core"]?.generateRan == false)
+			}
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [

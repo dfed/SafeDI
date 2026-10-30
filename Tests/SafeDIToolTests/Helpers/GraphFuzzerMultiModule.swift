@@ -753,7 +753,11 @@ enum GraphFuzzerMultiModuleProperty {
 				verdicts.append(rejection)
 				break
 			}
-			guard let moduleOutput = outputsByModuleName[module.name] else { break }
+			// The harness processes every module up to the one it rejects, so a module without an output before that
+			// is a harness defect, not a verdict.
+			guard let moduleOutput = outputsByModuleName[module.name] else {
+				throw GraphFuzzerInfrastructureError(description: "The multi-module test harness produced no output for module \(module.name) of seed \(seed) under \(integration), and rejected no module before it.")
+			}
 			guard moduleOutput.generateRan else {
 				verdicts.append(GraphFuzzerMultiModuleOutcome.ModuleVerdict(moduleName: module.name, kind: .skipped))
 				continue

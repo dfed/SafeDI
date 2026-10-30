@@ -199,10 +199,12 @@ struct SafeDIToolMultiModuleTestError: Error, CustomStringConvertible {
 
 /// Asserts that `block` throws because `generate` failed for the module named `expectedModuleName`, with an error
 /// whose description – the compiler-formatted diagnostics for a `SourceLocatedError` – exactly matches
-/// `expectedDiagnostics`, which is given every module's fixture files so it can cite their paths.
+/// `expectedDiagnostics`, which is given every module's fixture files so it can cite their paths, and hands the
+/// outputs of the modules processed before the failing one to `inspectingOutputs`.
 func assertThrowsMultiModuleError(
 	inModule expectedModuleName: String,
 	diagnostics expectedDiagnostics: (_ fixtures: [String: FixturePaths]) -> String,
+	inspectingOutputs: (_ outputs: [String: ModuleTestOutput]) -> Void = { _ in },
 	sourceLocation: SourceLocation = #_sourceLocation,
 	block: () async throws -> some Sendable,
 ) async {
@@ -212,6 +214,7 @@ func assertThrowsMultiModuleError(
 	} catch let error as SafeDIToolMultiModuleTestError {
 		#expect(error.moduleName == expectedModuleName, sourceLocation: sourceLocation)
 		#expect(expectedDiagnostics(error.fixtures) == "\(error.underlyingError)", sourceLocation: sourceLocation)
+		inspectingOutputs(error.outputs)
 	} catch {
 		Issue.record("Threw an error that does not carry fixture paths: \(error)", sourceLocation: sourceLocation)
 	}
