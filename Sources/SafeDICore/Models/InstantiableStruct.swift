@@ -28,7 +28,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		additionalInstantiables: [TypeDescription]?,
 		dependencies: [Dependency],
 		declarationType: DeclarationType,
-		accessLevel: AccessLevel?,
+		accessLevel: AccessLevel,
 		accessModifierRange: Dependency.SourceRange? = nil,
 		declarationStartLocation: Dependency.DeclarationLocation? = nil,
 		mockAttributes: String = "",
@@ -76,16 +76,19 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public private(set) var dependencies: [Dependency]
 	/// The declaration type of the Instantiable’s concrete type.
 	public let declarationType: DeclarationType
-	/// The access level the type declaration's modifiers spell: `internal` when none of them sets one.
-	/// `nil` for an extension, which declares no type: `initializer` records the access level of its `instantiate()`.
-	public let accessLevel: AccessLevel?
+	/// The access level spelled on the declaration this Instantiable was found on: the type declaration, or, for an
+	/// extension-based Instantiable, the extension, whose members default to it. `internal` when the declaration spells
+	/// none. The `initializer` and `mockInitializer` of an extension-based Instantiable record the access level spelled
+	/// on the member itself, so the effective access of such a member is derived later from both.
+	public let accessLevel: AccessLevel
 	/// The source range of the modifier that sets `accessLevel`, in the file of `declarationStartLocation`, which a
-	/// fix-it can replace. `nil` when no modifier sets the access level, for an extension, and when the declaration
-	/// was parsed without a file context – macro expansion walks a detached declaration.
+	/// fix-it can replace. `nil` when the declaration spells no access modifier, and when it was parsed without a file
+	/// context – macro expansion walks a detached declaration.
 	public let accessModifierRange: Dependency.SourceRange?
-	/// Where the type declaration begins after its attributes – its first modifier, or its `class`, `actor`, or
-	/// `struct` keyword when it has none – which is where a fix-it inserts an access modifier. `nil` for an extension,
-	/// and when the declaration was parsed without a file context – macro expansion walks a detached declaration.
+	/// Where the declaration this Instantiable was found on begins after its attributes – its first modifier, or its
+	/// `class`, `actor`, `struct`, or `extension` keyword when it has none – which is where a fix-it inserts an access
+	/// modifier. `nil` when the declaration was parsed without a file context – macro expansion walks a detached
+	/// declaration.
 	public let declarationStartLocation: Dependency.DeclarationLocation?
 	/// Attributes to add to the generated `mock()` method (e.g. `"@MainActor"`).
 	public let mockAttributes: String

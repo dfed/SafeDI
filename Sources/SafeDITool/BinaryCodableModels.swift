@@ -414,7 +414,7 @@ extension Instantiable: BinarySchemaMember {
 			additionalInstantiables: reader.read() as [TypeDescription],
 			dependencies: reader.read(),
 			declarationType: reader.read(),
-			accessLevel: reader.read() as AccessLevel?,
+			accessLevel: reader.read(),
 			accessModifierRange: reader.read() as Dependency.SourceRange?,
 			declarationStartLocation: reader.read() as Dependency.DeclarationLocation?,
 			mockAttributes: reader.read(),
