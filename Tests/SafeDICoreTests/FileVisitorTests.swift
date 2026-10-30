@@ -144,8 +144,11 @@ struct FileVisitorTests {
 				instantiableType: .simple(name: "LoggedInViewController"),
 				isRoot: false,
 				initializer: Initializer(
-					accessModifierRange: Dependency.SourceRange(startLine: 5, startColumn: 5, endLine: 5, endColumn: 11),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 5, column: 5),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 5, startColumn: 5, endLine: 5, endColumn: 11),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 5, column: 5),
+					),
 					arguments: [
 						.init(
 							innerLabel: "user",
@@ -185,9 +188,11 @@ struct FileVisitorTests {
 					),
 				],
 				declarationType: .classType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 4, startColumn: 1, endLine: 4, endColumn: 7),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 4, column: 1),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 4, startColumn: 1, endLine: 4, endColumn: 7),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 4, column: 1),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 1),
 			),
 		])
@@ -219,8 +224,11 @@ struct FileVisitorTests {
 				instantiableType: .simple(name: "LoggedInViewController"),
 				isRoot: false,
 				initializer: Initializer(
-					accessModifierRange: Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 11),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 11),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
+					),
 					arguments: [
 						.init(
 							innerLabel: "user",
@@ -260,25 +268,32 @@ struct FileVisitorTests {
 					),
 				],
 				declarationType: .classType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 7),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 7),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 			Instantiable(
 				instantiableType: .simple(name: "SomeOtherInstantiable"),
 				isRoot: false,
 				initializer: Initializer(
-					accessModifierRange: Dependency.SourceRange(startLine: 14, startColumn: 5, endLine: 14, endColumn: 11),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 14, column: 5),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 14, startColumn: 5, endLine: 14, endColumn: 11),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 14, column: 5),
+					),
 					arguments: [],
 				),
 				additionalInstantiables: nil,
 				dependencies: [],
 				declarationType: .structType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 13, startColumn: 1, endLine: 13, endColumn: 7),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 13, column: 1),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 13, startColumn: 1, endLine: 13, endColumn: 7),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 13, column: 1),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 12, column: 1),
 			),
 		])
@@ -304,8 +319,11 @@ struct FileVisitorTests {
 				instantiableType: .simple(name: "OuterLevel"),
 				isRoot: false,
 				initializer: Initializer(
-					accessModifierRange: Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 11),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 11),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
+					),
 					arguments: [],
 				),
 				additionalInstantiables: [
@@ -313,25 +331,32 @@ struct FileVisitorTests {
 				],
 				dependencies: [],
 				declarationType: .structType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 7),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 7),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
 				isRoot: false,
 				initializer: Initializer(
-					accessModifierRange: Dependency.SourceRange(startLine: 7, startColumn: 9, endLine: 7, endColumn: 15),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 9),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 7, startColumn: 9, endLine: 7, endColumn: 15),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 9),
+					),
 					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .structType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 6, startColumn: 5, endLine: 6, endColumn: 11),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 6, column: 5),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 6, startColumn: 5, endLine: 6, endColumn: 11),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 6, column: 5),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 5, column: 5),
 			),
 		])
@@ -356,31 +381,41 @@ struct FileVisitorTests {
 				instantiableType: .simple(name: "OuterLevel"),
 				isRoot: false,
 				initializer: Initializer(
-					accessModifierRange: Dependency.SourceRange(startLine: 2, startColumn: 5, endLine: 2, endColumn: 11),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 5),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 5, endLine: 2, endColumn: 11),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 5),
+					),
 					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .extensionType,
-				accessLevel: .internal,
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+				access: AccessDeclaration(
+					level: .internal,
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
 				isRoot: false,
 				initializer: Initializer(
-					accessModifierRange: Dependency.SourceRange(startLine: 6, startColumn: 9, endLine: 6, endColumn: 15),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 6, column: 9),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 6, startColumn: 9, endLine: 6, endColumn: 15),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 6, column: 9),
+					),
 					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .structType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 5, startColumn: 5, endLine: 5, endColumn: 11),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 5, column: 5),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 5, startColumn: 5, endLine: 5, endColumn: 11),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 5, column: 5),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 4, column: 5),
 			),
 		])
@@ -416,63 +451,83 @@ struct FileVisitorTests {
 				instantiableType: .simple(name: "OuterLevel"),
 				isRoot: false,
 				initializer: Initializer(
-					accessModifierRange: Dependency.SourceRange(startLine: 2, startColumn: 5, endLine: 2, endColumn: 11),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 5),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 5, endLine: 2, endColumn: 11),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 5),
+					),
 					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .extensionType,
-				accessLevel: .internal,
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+				access: AccessDeclaration(
+					level: .internal,
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "InnerLevel1", parentType: .simple(name: "OuterLevel")),
 				isRoot: false,
 				initializer: Initializer(
-					accessModifierRange: Dependency.SourceRange(startLine: 6, startColumn: 9, endLine: 6, endColumn: 15),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 6, column: 9),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 6, startColumn: 9, endLine: 6, endColumn: 15),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 6, column: 9),
+					),
 					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .actorType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 5, startColumn: 5, endLine: 5, endColumn: 11),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 5, column: 5),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 5, startColumn: 5, endLine: 5, endColumn: 11),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 5, column: 5),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 4, column: 5),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "InnerLevel2", parentType: .simple(name: "OuterLevel")),
 				isRoot: false,
 				initializer: Initializer(
-					accessModifierRange: Dependency.SourceRange(startLine: 10, startColumn: 9, endLine: 10, endColumn: 15),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 10, column: 9),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 10, startColumn: 9, endLine: 10, endColumn: 15),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 10, column: 9),
+					),
 					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 9, startColumn: 5, endLine: 9, endColumn: 11),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 5),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 9, startColumn: 5, endLine: 9, endColumn: 11),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 5),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 8, column: 5),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "InnerLevel3", parentType: .simple(name: "OuterLevel")),
 				isRoot: false,
 				initializer: Initializer(
-					accessModifierRange: Dependency.SourceRange(startLine: 14, startColumn: 9, endLine: 14, endColumn: 15),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 14, column: 9),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 14, startColumn: 9, endLine: 14, endColumn: 15),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 14, column: 9),
+					),
 					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .structType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 13, startColumn: 5, endLine: 13, endColumn: 11),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 13, column: 5),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 13, startColumn: 5, endLine: 13, endColumn: 11),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 13, column: 5),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 12, column: 5),
 			),
 		])
@@ -495,16 +550,21 @@ struct FileVisitorTests {
 				instantiableType: .nested(name: "InnerLevel", parentType: .simple(name: "OuterLevel")),
 				isRoot: false,
 				initializer: Initializer(
-					accessModifierRange: Dependency.SourceRange(startLine: 4, startColumn: 9, endLine: 4, endColumn: 15),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 4, column: 9),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 4, startColumn: 9, endLine: 4, endColumn: 15),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 4, column: 9),
+					),
 					arguments: [],
 				),
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .structType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 11),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 11),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 5),
 			),
 		])
@@ -610,16 +670,21 @@ struct FileVisitorTests {
 				instantiableType: .simple(name: "SomeService"),
 				isRoot: false,
 				initializer: Initializer(
-					accessModifierRange: Dependency.SourceRange(startLine: 7, startColumn: 5, endLine: 7, endColumn: 11),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 5),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 7, startColumn: 5, endLine: 7, endColumn: 11),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 5),
+					),
 					arguments: [],
 				),
 				additionalInstantiables: nil,
 				dependencies: [],
 				declarationType: .structType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 6, startColumn: 1, endLine: 6, endColumn: 7),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 6, column: 1),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 6, startColumn: 1, endLine: 6, endColumn: 7),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 6, column: 1),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 5, column: 1),
 			),
 		])
@@ -746,9 +811,11 @@ struct FileVisitorTests {
 				instantiableType: .nested(name: "Nested", parentType: .simple(name: "Nested")),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 4, startColumn: 9, endLine: 4, endColumn: 15),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 4, column: 9),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 4, startColumn: 9, endLine: 4, endColumn: 15),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 4, column: 9),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -759,18 +826,22 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .structType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 11),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 11),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 5),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 8, startColumn: 13, endLine: 8, endColumn: 19),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 8, column: 13),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 8, startColumn: 13, endLine: 8, endColumn: 19),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 8, column: 13),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -781,18 +852,22 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .actorType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 7, startColumn: 9, endLine: 7, endColumn: 15),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 9),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 7, startColumn: 9, endLine: 7, endColumn: 15),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 9),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 6, column: 9),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 12, startColumn: 17, endLine: 12, endColumn: 23),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 12, column: 17),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 12, startColumn: 17, endLine: 12, endColumn: 23),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 12, column: 17),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -803,18 +878,22 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 11, startColumn: 13, endLine: 11, endColumn: 19),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 13),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 11, startColumn: 13, endLine: 11, endColumn: 19),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 13),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 10, column: 13),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 16, startColumn: 21, endLine: 16, endColumn: 27),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 16, column: 21),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 16, startColumn: 21, endLine: 16, endColumn: 27),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 16, column: 21),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -825,18 +904,22 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .actorType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 15, startColumn: 17, endLine: 15, endColumn: 23),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 15, column: 17),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 15, startColumn: 17, endLine: 15, endColumn: 23),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 15, column: 17),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 14, column: 17),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 20, startColumn: 25, endLine: 20, endColumn: 31),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 20, column: 25),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 20, startColumn: 25, endLine: 20, endColumn: 31),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 20, column: 25),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -847,18 +930,22 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 19, startColumn: 21, endLine: 19, endColumn: 27),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 19, column: 21),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 19, startColumn: 21, endLine: 19, endColumn: 27),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 19, column: 21),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 18, column: 21),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 24, startColumn: 29, endLine: 24, endColumn: 35),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 24, column: 29),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 24, startColumn: 29, endLine: 24, endColumn: 35),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 24, column: 29),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -869,18 +956,22 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .structType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 23, startColumn: 25, endLine: 23, endColumn: 31),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 23, column: 25),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 23, startColumn: 25, endLine: 23, endColumn: 31),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 23, column: 25),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 22, column: 25),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 28, startColumn: 33, endLine: 28, endColumn: 39),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 28, column: 33),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 28, startColumn: 33, endLine: 28, endColumn: 39),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 28, column: 33),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -891,18 +982,22 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 27, startColumn: 29, endLine: 27, endColumn: 35),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 27, column: 29),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 27, startColumn: 29, endLine: 27, endColumn: 35),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 27, column: 29),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 26, column: 29),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 32, startColumn: 37, endLine: 32, endColumn: 43),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 32, column: 37),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 32, startColumn: 37, endLine: 32, endColumn: 43),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 32, column: 37),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -913,18 +1008,22 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .actorType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 31, startColumn: 33, endLine: 31, endColumn: 39),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 31, column: 33),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 31, startColumn: 33, endLine: 31, endColumn: 39),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 31, column: 33),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 30, column: 33),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 36, startColumn: 41, endLine: 36, endColumn: 47),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 36, column: 41),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 36, startColumn: 41, endLine: 36, endColumn: 47),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 36, column: 41),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -935,18 +1034,22 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .actorType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 35, startColumn: 37, endLine: 35, endColumn: 43),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 35, column: 37),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 35, startColumn: 37, endLine: 35, endColumn: 43),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 35, column: 37),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 34, column: 37),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 40, startColumn: 45, endLine: 40, endColumn: 51),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 40, column: 45),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 40, startColumn: 45, endLine: 40, endColumn: 51),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 40, column: 45),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -957,18 +1060,22 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .structType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 39, startColumn: 41, endLine: 39, endColumn: 47),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 39, column: 41),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 39, startColumn: 41, endLine: 39, endColumn: 47),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 39, column: 41),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 38, column: 41),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 44, startColumn: 49, endLine: 44, endColumn: 55),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 44, column: 49),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 44, startColumn: 49, endLine: 44, endColumn: 55),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 44, column: 49),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -979,18 +1086,22 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .structType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 43, startColumn: 45, endLine: 43, endColumn: 51),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 43, column: 45),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 43, startColumn: 45, endLine: 43, endColumn: 51),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 43, column: 45),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 42, column: 45),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 48, startColumn: 53, endLine: 48, endColumn: 59),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 48, column: 53),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 48, startColumn: 53, endLine: 48, endColumn: 59),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 48, column: 53),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -1001,18 +1112,22 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 47, startColumn: 49, endLine: 47, endColumn: 55),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 47, column: 49),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 47, startColumn: 49, endLine: 47, endColumn: 55),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 47, column: 49),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 46, column: 49),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 52, startColumn: 57, endLine: 52, endColumn: 63),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 52, column: 57),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 52, startColumn: 57, endLine: 52, endColumn: 63),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 52, column: 57),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -1023,18 +1138,22 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 51, startColumn: 53, endLine: 51, endColumn: 59),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 51, column: 53),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 51, startColumn: 53, endLine: 51, endColumn: 59),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 51, column: 53),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 50, column: 53),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 56, startColumn: 61, endLine: 56, endColumn: 67),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 56, column: 61),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 56, startColumn: 61, endLine: 56, endColumn: 67),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 56, column: 61),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -1045,18 +1164,22 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 55, startColumn: 57, endLine: 55, endColumn: 63),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 55, column: 57),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 55, startColumn: 57, endLine: 55, endColumn: 63),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 55, column: 57),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 54, column: 57),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))))),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 60, startColumn: 65, endLine: 60, endColumn: 71),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 60, column: 65),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 60, startColumn: 65, endLine: 60, endColumn: 71),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 60, column: 65),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -1067,18 +1190,22 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 59, startColumn: 61, endLine: 59, endColumn: 67),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 59, column: 61),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 59, startColumn: 61, endLine: 59, endColumn: 67),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 59, column: 61),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 58, column: 61),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))))),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 64, startColumn: 69, endLine: 64, endColumn: 75),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 64, column: 69),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 64, startColumn: 69, endLine: 64, endColumn: 75),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 64, column: 69),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -1089,18 +1216,22 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 63, startColumn: 65, endLine: 63, endColumn: 71),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 63, column: 65),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 63, startColumn: 65, endLine: 63, endColumn: 71),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 63, column: 65),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 62, column: 65),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))))))),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 68, startColumn: 73, endLine: 68, endColumn: 79),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 68, column: 73),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 68, startColumn: 73, endLine: 68, endColumn: 79),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 68, column: 73),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -1111,18 +1242,22 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 67, startColumn: 69, endLine: 67, endColumn: 75),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 67, column: 69),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 67, startColumn: 69, endLine: 67, endColumn: 75),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 67, column: 69),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 66, column: 69),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested"))))))))))))))))))),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 72, startColumn: 77, endLine: 72, endColumn: 83),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 72, column: 77),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 72, startColumn: 77, endLine: 72, endColumn: 83),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 72, column: 77),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -1133,18 +1268,22 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 71, startColumn: 73, endLine: 71, endColumn: 79),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 71, column: 73),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 71, startColumn: 73, endLine: 71, endColumn: 79),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 71, column: 73),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 70, column: 73),
 			),
 			Instantiable(
 				instantiableType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .nested(name: "Nested", parentType: .simple(name: "Nested")))))))))))))))))))),
 				isRoot: false,
 				initializer: Initializer(
-					accessLevel: .public,
-					accessModifierRange: Dependency.SourceRange(startLine: 76, startColumn: 81, endLine: 76, endColumn: 87),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 76, column: 81),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 76, startColumn: 81, endLine: 76, endColumn: 87),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 76, column: 81),
+					),
 					isOptional: false,
 					isAsync: false,
 					doesThrow: false,
@@ -1155,9 +1294,11 @@ struct FileVisitorTests {
 				additionalInstantiables: [],
 				dependencies: [],
 				declarationType: .classType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 75, startColumn: 77, endLine: 75, endColumn: 83),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 75, column: 77),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 75, startColumn: 77, endLine: 75, endColumn: 83),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 75, column: 77),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 74, column: 77),
 			),
 		])
@@ -1178,16 +1319,21 @@ struct FileVisitorTests {
 				instantiableType: .simple(name: "OptedIn"),
 				isRoot: false,
 				initializer: Initializer(
-					accessModifierRange: Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 11),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 11),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
+					),
 					arguments: [],
 				),
 				additionalInstantiables: nil,
 				dependencies: [],
 				declarationType: .structType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 7),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 7),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+				),
 				generateMock: true,
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
@@ -1209,16 +1355,21 @@ struct FileVisitorTests {
 				instantiableType: .simple(name: "OptedOut"),
 				isRoot: false,
 				initializer: Initializer(
-					accessModifierRange: Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 11),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 11),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
+					),
 					arguments: [],
 				),
 				additionalInstantiables: nil,
 				dependencies: [],
 				declarationType: .structType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 7),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 7),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+				),
 				generateMock: false,
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
@@ -1240,16 +1391,21 @@ struct FileVisitorTests {
 				instantiableType: .simple(name: "DefaultType"),
 				isRoot: false,
 				initializer: Initializer(
-					accessModifierRange: Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 11),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
+					access: AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 11),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
+					),
 					arguments: [],
 				),
 				additionalInstantiables: nil,
 				dependencies: [],
 				declarationType: .structType,
-				accessLevel: .public,
-				accessModifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 7),
-				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 7),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 		])
@@ -1290,8 +1446,8 @@ struct FileVisitorTests {
 		""")
 		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
 		fileVisitor.walk(syntaxTree)
-		#expect(fileVisitor.instantiables.map(\.accessLevel) == [.open, .public, .package, .internal, .fileprivate, .private])
-		#expect(fileVisitor.instantiables.map(\.accessModifierRange) == [
+		#expect(fileVisitor.instantiables.map(\.access.level) == [.open, .public, .package, .internal, .fileprivate, .private])
+		#expect(fileVisitor.instantiables.map(\.access.modifierRange) == [
 			Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 5),
 			Dependency.SourceRange(startLine: 7, startColumn: 1, endLine: 7, endColumn: 7),
 			Dependency.SourceRange(startLine: 12, startColumn: 1, endLine: 12, endColumn: 8),
@@ -1299,7 +1455,7 @@ struct FileVisitorTests {
 			Dependency.SourceRange(startLine: 22, startColumn: 1, endLine: 22, endColumn: 12),
 			Dependency.SourceRange(startLine: 27, startColumn: 1, endLine: 27, endColumn: 8),
 		])
-		#expect(fileVisitor.instantiables.map(\.declarationStartLocation) == [
+		#expect(fileVisitor.instantiables.map(\.access.declarationStartLocation) == [
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 1),
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 12, column: 1),
@@ -1319,9 +1475,9 @@ struct FileVisitorTests {
 		""")
 		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
 		fileVisitor.walk(syntaxTree)
-		#expect(fileVisitor.instantiables.map(\.accessLevel) == [.internal])
-		#expect(fileVisitor.instantiables.map(\.accessModifierRange) == [nil])
-		#expect(fileVisitor.instantiables.map(\.declarationStartLocation) == [
+		#expect(fileVisitor.instantiables.map(\.access.level) == [.internal])
+		#expect(fileVisitor.instantiables.map(\.access.modifierRange) == [nil])
+		#expect(fileVisitor.instantiables.map(\.access.declarationStartLocation) == [
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
 		])
 	}
@@ -1335,11 +1491,11 @@ struct FileVisitorTests {
 		""")
 		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
 		fileVisitor.walk(syntaxTree)
-		#expect(fileVisitor.instantiables.map(\.accessLevel) == [.public])
-		#expect(fileVisitor.instantiables.map(\.accessModifierRange) == [
+		#expect(fileVisitor.instantiables.map(\.access.level) == [.public])
+		#expect(fileVisitor.instantiables.map(\.access.modifierRange) == [
 			Dependency.SourceRange(startLine: 1, startColumn: 32, endLine: 1, endColumn: 38),
 		])
-		#expect(fileVisitor.instantiables.map(\.declarationStartLocation) == [
+		#expect(fileVisitor.instantiables.map(\.access.declarationStartLocation) == [
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 26),
 		])
 	}
@@ -1376,13 +1532,13 @@ struct FileVisitorTests {
 		""")
 		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
 		fileVisitor.walk(syntaxTree)
-		#expect(fileVisitor.instantiables.map(\.mockInitializer?.accessLevel) == [.open, .package, .private])
-		#expect(fileVisitor.instantiables.map(\.mockInitializer?.accessModifierRange) == [
+		#expect(fileVisitor.instantiables.map(\.mockInitializer?.access.level) == [.open, .package, .private])
+		#expect(fileVisitor.instantiables.map(\.mockInitializer?.access.modifierRange) == [
 			Dependency.SourceRange(startLine: 5, startColumn: 5, endLine: 5, endColumn: 9),
 			Dependency.SourceRange(startLine: 14, startColumn: 5, endLine: 14, endColumn: 12),
 			Dependency.SourceRange(startLine: 23, startColumn: 5, endLine: 23, endColumn: 12),
 		])
-		#expect(fileVisitor.instantiables.map(\.mockInitializer?.declarationStartLocation) == [
+		#expect(fileVisitor.instantiables.map(\.mockInitializer?.access.declarationStartLocation) == [
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 5, column: 5),
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 14, column: 5),
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 23, column: 5),
@@ -1403,9 +1559,9 @@ struct FileVisitorTests {
 		""")
 		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
 		fileVisitor.walk(syntaxTree)
-		#expect(fileVisitor.instantiables.map(\.mockInitializer?.accessLevel) == [.internal])
-		#expect(fileVisitor.instantiables.map(\.mockInitializer?.accessModifierRange) == [nil])
-		#expect(fileVisitor.instantiables.map(\.mockInitializer?.declarationStartLocation) == [
+		#expect(fileVisitor.instantiables.map(\.mockInitializer?.access.level) == [.internal])
+		#expect(fileVisitor.instantiables.map(\.mockInitializer?.access.modifierRange) == [nil])
+		#expect(fileVisitor.instantiables.map(\.mockInitializer?.access.declarationStartLocation) == [
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 5, column: 5),
 		])
 	}
@@ -1429,12 +1585,12 @@ struct FileVisitorTests {
 		""")
 		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
 		fileVisitor.walk(syntaxTree)
-		#expect(fileVisitor.instantiables.map(\.initializer?.accessLevel) == [.fileprivate, .package])
-		#expect(fileVisitor.instantiables.map(\.initializer?.accessModifierRange) == [
+		#expect(fileVisitor.instantiables.map(\.initializer?.access.level) == [.fileprivate, .package])
+		#expect(fileVisitor.instantiables.map(\.initializer?.access.modifierRange) == [
 			Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 16),
 			Dependency.SourceRange(startLine: 10, startColumn: 5, endLine: 10, endColumn: 12),
 		])
-		#expect(fileVisitor.instantiables.map(\.initializer?.declarationStartLocation) == [
+		#expect(fileVisitor.instantiables.map(\.initializer?.access.declarationStartLocation) == [
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 10, column: 5),
 		])
@@ -1452,9 +1608,9 @@ struct FileVisitorTests {
 		""")
 		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
 		fileVisitor.walk(syntaxTree)
-		#expect(fileVisitor.instantiables.map(\.initializer?.accessLevel) == [.internal])
-		#expect(fileVisitor.instantiables.map(\.initializer?.accessModifierRange) == [nil])
-		#expect(fileVisitor.instantiables.map(\.initializer?.declarationStartLocation) == [
+		#expect(fileVisitor.instantiables.map(\.initializer?.access.level) == [.internal])
+		#expect(fileVisitor.instantiables.map(\.initializer?.access.modifierRange) == [nil])
+		#expect(fileVisitor.instantiables.map(\.initializer?.access.declarationStartLocation) == [
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
 		])
 	}
@@ -1499,15 +1655,15 @@ struct FileVisitorTests {
 		""")
 		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
 		fileVisitor.walk(syntaxTree)
-		#expect(fileVisitor.instantiables.map(\.accessLevel) == [.public, .package, .internal, .fileprivate, .private])
-		#expect(fileVisitor.instantiables.map(\.accessModifierRange) == [
+		#expect(fileVisitor.instantiables.map(\.access.level) == [.public, .package, .internal, .fileprivate, .private])
+		#expect(fileVisitor.instantiables.map(\.access.modifierRange) == [
 			Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 7),
 			Dependency.SourceRange(startLine: 9, startColumn: 1, endLine: 9, endColumn: 8),
 			Dependency.SourceRange(startLine: 16, startColumn: 1, endLine: 16, endColumn: 9),
 			Dependency.SourceRange(startLine: 23, startColumn: 1, endLine: 23, endColumn: 12),
 			Dependency.SourceRange(startLine: 30, startColumn: 1, endLine: 30, endColumn: 8),
 		])
-		#expect(fileVisitor.instantiables.map(\.declarationStartLocation) == [
+		#expect(fileVisitor.instantiables.map(\.access.declarationStartLocation) == [
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 1),
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 16, column: 1),
@@ -1528,9 +1684,9 @@ struct FileVisitorTests {
 		""")
 		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
 		fileVisitor.walk(syntaxTree)
-		#expect(fileVisitor.instantiables.map(\.accessLevel) == [.internal])
-		#expect(fileVisitor.instantiables.map(\.accessModifierRange) == [nil])
-		#expect(fileVisitor.instantiables.map(\.declarationStartLocation) == [
+		#expect(fileVisitor.instantiables.map(\.access.level) == [.internal])
+		#expect(fileVisitor.instantiables.map(\.access.modifierRange) == [nil])
+		#expect(fileVisitor.instantiables.map(\.access.declarationStartLocation) == [
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
 		])
 	}
@@ -1546,11 +1702,11 @@ struct FileVisitorTests {
 		""")
 		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
 		fileVisitor.walk(syntaxTree)
-		#expect(fileVisitor.instantiables.map(\.accessLevel) == [.public])
-		#expect(fileVisitor.instantiables.map(\.accessModifierRange) == [
+		#expect(fileVisitor.instantiables.map(\.access.level) == [.public])
+		#expect(fileVisitor.instantiables.map(\.access.modifierRange) == [
 			Dependency.SourceRange(startLine: 1, startColumn: 51, endLine: 1, endColumn: 57),
 		])
-		#expect(fileVisitor.instantiables.map(\.declarationStartLocation) == [
+		#expect(fileVisitor.instantiables.map(\.access.declarationStartLocation) == [
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 51),
 		])
 	}
@@ -1567,9 +1723,9 @@ struct FileVisitorTests {
 		""")
 		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
 		fileVisitor.walk(syntaxTree)
-		#expect(fileVisitor.instantiables.map(\.accessLevel) == [.public])
-		#expect(fileVisitor.instantiables.map(\.initializer?.accessLevel) == [.internal])
-		#expect(fileVisitor.instantiables.map(\.initializer?.accessModifierRange) == [nil])
+		#expect(fileVisitor.instantiables.map(\.access.level) == [.public])
+		#expect(fileVisitor.instantiables.map(\.initializer?.access.level) == [.internal])
+		#expect(fileVisitor.instantiables.map(\.initializer?.access.modifierRange) == [nil])
 	}
 
 	@Test
@@ -1584,13 +1740,57 @@ struct FileVisitorTests {
 		""")
 		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
 		fileVisitor.walk(syntaxTree)
-		#expect(fileVisitor.instantiables.map(\.accessLevel) == [.public])
-		#expect(fileVisitor.instantiables.map(\.accessModifierRange) == [
+		#expect(fileVisitor.instantiables.map(\.access.level) == [.public])
+		#expect(fileVisitor.instantiables.map(\.access.modifierRange) == [
 			Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 7),
 		])
-		#expect(fileVisitor.instantiables.map(\.declarationStartLocation) == [
+		#expect(fileVisitor.instantiables.map(\.access.declarationStartLocation) == [
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
 		])
-		#expect(fileVisitor.instantiables.map(\.mockInitializer?.accessLevel) == [.internal])
+	}
+
+	@Test
+	func walk_recordsMockDeclarationAccessOfType_whenMockMethodIsDeclaredInType() {
+		let syntaxTree = Parser.parse(source: """
+		@Instantiable
+		package struct Service: Instantiable {
+		    public init() {}
+
+		    public static func mock() -> Service {
+		        Service()
+		    }
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.instantiables.map(\.mockDeclarationAccess) == [
+			AccessDeclaration(
+				level: .package,
+				modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 8),
+				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+			),
+		])
+	}
+
+	@Test
+	func walk_recordsMockDeclarationAccessOfExtension_whenMockOnlyExtensionSpellsAccessModifierAndMockSpellsNone() {
+		let syntaxTree = Parser.parse(source: """
+		@Instantiable(mockOnly: true)
+		public extension Service {
+		    static func mock() -> Service {
+		        Service()
+		    }
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.instantiables.map(\.mockDeclarationAccess) == [
+			AccessDeclaration(
+				level: .public,
+				modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 7),
+				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+			),
+		])
+		#expect(fileVisitor.instantiables.map(\.mockInitializer?.access.level) == [.internal])
 	}
 }

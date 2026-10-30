@@ -37,15 +37,15 @@ struct InstantiableVisitorTests {
 		}
 		""")
 		let visitor = try Self.walkedVisitor(of: StructDeclSyntax.self, in: syntaxTree)
-		#expect(visitor.initializers.map(\.accessLevel) == [.public, .package, .internal, .fileprivate, .private])
-		#expect(visitor.initializers.map(\.accessModifierRange) == [
+		#expect(visitor.initializers.map(\.access.level) == [.public, .package, .internal, .fileprivate, .private])
+		#expect(visitor.initializers.map(\.access.modifierRange) == [
 			Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 11),
 			Dependency.SourceRange(startLine: 4, startColumn: 5, endLine: 4, endColumn: 12),
 			Dependency.SourceRange(startLine: 5, startColumn: 5, endLine: 5, endColumn: 13),
 			Dependency.SourceRange(startLine: 6, startColumn: 5, endLine: 6, endColumn: 16),
 			Dependency.SourceRange(startLine: 7, startColumn: 5, endLine: 7, endColumn: 12),
 		])
-		#expect(visitor.initializers.map(\.declarationStartLocation) == [
+		#expect(visitor.initializers.map(\.access.declarationStartLocation) == [
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 4, column: 5),
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 5, column: 5),
@@ -63,9 +63,9 @@ struct InstantiableVisitorTests {
 		}
 		""")
 		let visitor = try Self.walkedVisitor(of: StructDeclSyntax.self, in: syntaxTree)
-		#expect(visitor.initializers.map(\.accessLevel) == [.internal])
-		#expect(visitor.initializers.map(\.accessModifierRange) == [nil])
-		#expect(visitor.initializers.map(\.declarationStartLocation) == [
+		#expect(visitor.initializers.map(\.access.level) == [.internal])
+		#expect(visitor.initializers.map(\.access.modifierRange) == [nil])
+		#expect(visitor.initializers.map(\.access.declarationStartLocation) == [
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
 		])
 	}
@@ -79,11 +79,11 @@ struct InstantiableVisitorTests {
 		}
 		""")
 		let visitor = try Self.walkedVisitor(of: ClassDeclSyntax.self, in: syntaxTree)
-		#expect(visitor.initializers.map(\.accessLevel) == [.public])
-		#expect(visitor.initializers.map(\.accessModifierRange) == [
+		#expect(visitor.initializers.map(\.access.level) == [.public])
+		#expect(visitor.initializers.map(\.access.modifierRange) == [
 			Dependency.SourceRange(startLine: 3, startColumn: 28, endLine: 3, endColumn: 34),
 		])
-		#expect(visitor.initializers.map(\.declarationStartLocation) == [
+		#expect(visitor.initializers.map(\.access.declarationStartLocation) == [
 			Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 16),
 		])
 	}

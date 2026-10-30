@@ -34,22 +34,22 @@ extension DeclModifierListSyntax {
 		})
 	}
 
-	/// The modifier that sets the access level of the declaration these modifiers belong to, with the level it sets,
-	/// or `nil` when no modifier does and the declaration has the default access level, `internal`. The compiler
-	/// rejects a detail, such as `(set)`, on the access modifier of every declaration SafeDI reads, so a modifier is
-	/// read by its name alone.
-	var accessModifier: (accessLevel: AccessLevel, name: TokenSyntax)? {
-		lazy
+	/// The access these modifiers spell on the declaration that `keyword` introduces: the level the first access
+	/// modifier names, or `internal` when none does. The compiler rejects a detail, such as `(set)`, on the access
+	/// modifier of every declaration SafeDI reads, so a modifier is read by its name alone.
+	/// - Parameter sourceLocationConverter: A converter for the tree that holds the declaration. When provided, the
+	///   access records where its modifier is and where the declaration begins after its attributes.
+	func access(introducedBy keyword: TokenSyntax, sourceLocationConverter: SourceLocationConverter?) -> AccessDeclaration {
+		let accessModifier = lazy
 			.compactMap { modifier in
-				AccessLevel(modifier.name.tokenKind).map { (accessLevel: $0, name: modifier.name) }
+				AccessLevel(modifier.name.tokenKind).map { (level: $0, name: modifier.name) }
 			}
 			.first
-	}
-
-	/// Where the declaration these modifiers belong to begins after its attributes, which is where a modifier is
-	/// inserted: at its first modifier, or at `keyword`, the keyword that introduces it, when it has none.
-	func declarationStartPosition(introducedBy keyword: TokenSyntax) -> AbsolutePosition {
-		(first?.name ?? keyword).positionAfterSkippingLeadingTrivia
+		return AccessDeclaration(
+			level: accessModifier?.level ?? .internal,
+			modifierRange: accessModifier.flatMap { sourceLocationConverter?.sourceRange(of: $0.name) },
+			declarationStartLocation: sourceLocationConverter?.declarationLocation(for: (first?.name ?? keyword).positionAfterSkippingLeadingTrivia),
+		)
 	}
 }
 
