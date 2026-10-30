@@ -1214,20 +1214,23 @@ After (2.x), single module:
 safeditool generate input.csv --combined-output ./generated/SafeDI.swift
 ```
 
-For multi-module projects, you can add the `--module-info-output` flag so downstream modules can resolve `@Instantiable` types declared upstream without re-parsing the producer's sources. Each producer emits a `.safedi` sidecar; each consumer feeds the producer's `.safedi` back in through `--dependent-module-info-file-path`:
+For multi-module projects, you can add the `--module-info-output` flag so downstream modules can resolve `@Instantiable` types declared upstream without re-parsing the producer's sources. Each producer emits a `.safedi` sidecar; each consumer feeds the producer's `.safedi` back in through `--dependent-module-info-file-path`. Name each module, and the modules it depends on, with `--module-name` and `--dependency-module-names`, and its package with `--package-name` when the compiler receives one, so the `.safedi` records which module declares each type (see [Custom build system integration](#custom-build-system-integration)):
 
 ```bash
 # Producing module (Subproject):
 safeditool generate Subproject.csv \
   --combined-output Subproject/SafeDIGenerated.swift \
-  --module-info-output Subproject.safedi
+  --module-info-output Subproject.safedi \
+  --module-name Subproject
 
 # Consuming module (App), with Subproject already built:
 echo "Subproject.safedi" > deps.csv
 safeditool generate App.csv \
   --combined-output App/SafeDIGenerated.swift \
   --module-info-output App.safedi \
-  --dependent-module-info-file-path deps.csv
+  --dependent-module-info-file-path deps.csv \
+  --module-name App \
+  --dependency-module-names Subproject
 ```
 
 Given the same input files, `generate` writes the same `.safedi` bytes every time, so a build cache keyed on them stays warm. `query needs --module-info` reads the same files, so a project that writes them can [query what a type needs](#querying-what-a-type-needs) without parsing its sources again. A `.safedi` file names each file by the path the input CSV gives it, so a CSV of relative paths, like those the Bazel rule and the Tuist plugin write, keeps absolute paths out of it.
@@ -1260,6 +1263,14 @@ Both subcommands utilize Apple’s [SwiftSyntax](https://github.com/apple/swift-
 Generated code names an aliased dependency’s `@Received` declaration in a `#sourceLocation` directive only when SafeDITool knows the path the compiler is handed for each source file. The compiler compares the directive’s path with its own as strings: it warns at a directive whose path differs from the one it was handed for a file in the same module, even when both name the same file, as a relative and an absolute path or a path through a symbolic link do. Pass `generate --compiler-receives-input-paths-unchanged` when your build system hands the compiler every Swift file, including the files behind dependent `.safedi` module info, at exactly the path it hands SafeDITool; the vended Bazel rule does, since `rules_swift` compiles the same execution-root-relative paths. Without that flag, and outside the `SafeDIGenerator` plugin, each assignment instead ends in a comment naming the declaration’s file and line exactly as the path was supplied, so generated code holds no path the build did not hand SafeDITool. The Tuist plugin hands SafeDITool paths relative to `$SRCROOT` while Xcode compiles absolute ones, so Tuist builds use the comment, and their generated code and `.safedi` files hold only those relative paths. With the `SafeDIGenerator` plugin, a directive names a file of the target exactly as the build system reported it to the plugin, which is how the build system hands it to the compiler. When SafeDITool learns two spellings of a file’s path, as for a project under `/tmp`, which Xcode reports as `/tmp/…` while SafeDITool’s working directory reads `/private/tmp/…`, it cannot tell which one the compiler has and uses the comment, naming the file relative to the project root. It uses the comment for every alias, too, when the build system reports the project root through a symbolic link, or otherwise spells it differently from the path the file system resolves it to: Xcode reports a package under `/tmp` as `/tmp/…` and hands the compiler `/private/tmp/…`. On macOS that covers any project under `/tmp`, `/var` (which holds `$TMPDIR`), or `/etc`.
 
 Diagnostics are the exception: `SafeDITool` resolves a relative input path against its working directory before printing an error, so the location in the build log is one an editor can open. Under Bazel that working directory is the action’s sandbox, so a diagnostic there names the sandbox copy of the source file.
+
+A build system that runs `generate` once per module should also tell `SafeDITool` which module it runs for, so that `SafeDITool` knows which module and package declare each `@Instantiable` type it reads:
+
+- `--module-name` names the Swift module that compiles the files the input CSV and `--include` name. Files reached through a `#SafeDIConfiguration`’s `additionalDirectoriesToInclude` belong to another module, which `SafeDITool` does not know.
+- `--package-name` names that module’s package exactly as the compiler’s `-package-name` names it. Omit it when the compiler receives no `-package-name`.
+- `--dependency-module-names` names the modules the module depends on directly.
+
+`generate --module-info-output` records all three in the module’s `.safedi` file, so a module that reads the file knows which module and package declare each type in it. A `package` declaration is visible only to modules compiled with the same `-package-name`. SwiftPM passes every target of a package the same one, derived from the package’s identity. Bazel passes one only when a `swift_library` sets `package_name`, which `safedi_swift_library` takes too and passes to both the library and SafeDITool. Xcode, and therefore Tuist, passes one only when a target sets the `SWIFT_PACKAGE_NAME` build setting, which the Tuist plugin forwards. The Bazel rule passes all three options, and the Tuist plugin passes them to a SafeDITool that accepts them. The `SafeDIGenerator` plugin needs none of them: for a Swift package target it writes the module, package, and directory of every target whose files it lists beside its input CSV, and `generate` reads that instead. An Xcode project target’s plugin knows no modules, so `SafeDITool` does not know which module declares each file there.
 
 Run `swift run SafeDITool --help`, `swift run SafeDITool scan --help`, or `swift run SafeDITool generate --help` to see documentation of all supported arguments, `swift run SafeDITool query needs --help` for the command that [reports what types need](#querying-what-a-type-needs) (in beta), and `swift run SafeDITool dump --help` for the command that prints a `.safedi` file, or the cache `scan` writes beside its manifest, as JSON.
 
