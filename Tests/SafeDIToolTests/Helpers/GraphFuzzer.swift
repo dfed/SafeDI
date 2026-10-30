@@ -5690,6 +5690,7 @@ struct GraphFuzzerFailure: Equatable {
 		case compilerCrashedOnGeneratedCode = "the Swift compiler crashed on generated code"
 		case renamedGraphDiffers = "the graph renamed to change an order gives other results"
 		case mockTakesWrapperParameterForReceive = "a generated mock takes a LazilyInstantiated parameter for a receive"
+		case integrationsDiffer = "the graph split across modules gives other results under the two multi-module integrations"
 		case seamRejectsGraphInlineAccepts = "the tool rejects the graph with an error that is not a seam's own, and accepts it with no seam"
 		case seamPassesNilWhereInlinePassesValue = "the generated code passes a literal nil more often with the seam than without it"
 		case seamReadsUncreatedAliasBinding = "a seam's generated code reads the binding of an only-if-available alias of a parameter that may be nil other than as its declaring type's argument"
@@ -5761,12 +5762,22 @@ struct GraphFuzzerFailure: Equatable {
 
 /// The oracle's verdict on one graph.
 struct GraphFuzzerResult {
-	init(fixture: GraphFuzzerFixture, outcome: GraphFuzzerToolOutcome, failure: GraphFuzzerFailure?, laterFailures: [GraphFuzzerFailure] = [], renamedGraphFailures: [GraphFuzzerFailure] = [], isInspectedByValueOracle: Bool = false, isComparedByValueOracle: Bool = false) {
+	init(
+		fixture: GraphFuzzerFixture,
+		outcome: GraphFuzzerToolOutcome,
+		failure: GraphFuzzerFailure?,
+		laterFailures: [GraphFuzzerFailure] = [],
+		renamedGraphFailures: [GraphFuzzerFailure] = [],
+		multiModuleRuns: [GraphFuzzerMultiModuleRuns] = [],
+		isInspectedByValueOracle: Bool = false,
+		isComparedByValueOracle: Bool = false,
+	) {
 		self.fixture = fixture
 		self.outcome = outcome
 		self.failure = failure
 		self.laterFailures = laterFailures
 		self.renamedGraphFailures = renamedGraphFailures
+		self.multiModuleRuns = multiModuleRuns
 		self.isInspectedByValueOracle = isInspectedByValueOracle
 		self.isComparedByValueOracle = isComparedByValueOracle
 	}
@@ -5774,20 +5785,30 @@ struct GraphFuzzerResult {
 	let fixture: GraphFuzzerFixture
 	let outcome: GraphFuzzerToolOutcome
 	/// The first way the graph fails the oracle: its runs differ, it does not compile or its generated code draws a
-	/// compiler warning, a generated mock takes a `LazilyInstantiated` parameter for a receive, or, failing none of
-	/// those ways, a renamed graph gives other results.
+	/// compiler warning, a generated mock takes a `LazilyInstantiated` parameter for a receive, the graph split across
+	/// modules gives other results under one multi-module integration than under the other, or, failing none of those
+	/// ways, a renamed graph gives other results.
 	let failure: GraphFuzzerFailure?
 	/// The ways the graph fails after `failure` in the oracle's chain, which a known value failure does not mask.
 	let laterFailures: [GraphFuzzerFailure]
 	/// How each renamed graph that gives other results differs, in the order of `GraphFuzzerRenaming.all`, whether
 	/// or not the graph also fails another way.
 	let renamedGraphFailures: [GraphFuzzerFailure]
+	/// What the two multi-module integrations produced for the graph split across modules, in the order of
+	/// `GraphFuzzerOracle.multiModuleRenamings`.
+	let multiModuleRuns: [GraphFuzzerMultiModuleRuns]
 	/// Whether the value oracle compared the graph's generated code with its inline build's: the tool accepts the
 	/// graph with its seam and without it.
 	let isInspectedByValueOracle: Bool
 	/// Whether the comparator did compare the two builds: the graph is inspected, its runs agree, and its generated
 	/// code compiles cleanly, since `results(of:)` hands the comparator no graph with a compilation failure.
 	let isComparedByValueOracle: Bool
+
+	/// How each partitioned run that gives other results under the two multi-module integrations differs, whether or
+	/// not the graph also fails another way.
+	var multiModuleFailures: [GraphFuzzerFailure] {
+		multiModuleRuns.compactMap(\.failure)
+	}
 
 	var isAccepted: Bool {
 		switch outcome {
@@ -5815,6 +5836,9 @@ struct GraphFuzzerKnownIssue: Equatable {
 		/// The fixture itself fails to compile, with an error whose message contains this text: the macro rejects
 		/// a shape the generator emits before the macro accepts it.
 		case macroRejectsFixture(containing: String)
+		/// The graph split across modules gives other results under the two multi-module integrations, in the
+		/// aspect whose description contains this text.
+		case integrationsDiffer(containing: String)
 		/// The tool rejects the graph with the seam, with an error whose text contains this, and accepts it without.
 		case seamRejectsGraphInlineAccepts(containing: String)
 		/// The generated code passes a literal `nil` more often with the seam than without it, to an argument whose
@@ -5853,6 +5877,8 @@ struct GraphFuzzerKnownIssue: Equatable {
 				failure.kind == .renamedGraphDiffers && failure.details.prefix { $0 != "\n" }.contains(text)
 			case let .macroRejectsFixture(text):
 				failure.kind == .fixtureDoesNotCompile && failure.details.contains(text)
+			case let .integrationsDiffer(text):
+				failure.kind == .integrationsDiffer && failure.details.prefix { $0 != "\n" }.contains(text)
 			case let .seamRejectsGraphInlineAccepts(text):
 				failure.kind == .seamRejectsGraphInlineAccepts && failure.details.contains(text)
 			case let .seamPassesNilWhereInlinePassesValue(text):
@@ -6002,6 +6028,7 @@ struct GraphFuzzerToolRuns {
 	///     draws a hole.
 	///   - knownRightOutcome: The outcome of the known-right path of a graph drawn with `generateMockPublic`
 	///     (`GraphFuzzerGenerator.knownRightPublicMockFixture(forSeed:)`).
+	///   - multiModuleRuns: What the two multi-module integrations produced for the graph split across modules.
 	init(
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,
@@ -6010,6 +6037,7 @@ struct GraphFuzzerToolRuns {
 		inlineOutcome: GraphFuzzerToolOutcome? = nil,
 		visibleOutcome: GraphFuzzerToolOutcome? = nil,
 		knownRightOutcome: GraphFuzzerToolOutcome? = nil,
+		multiModuleRuns: [GraphFuzzerMultiModuleRuns] = [],
 	) {
 		self.fixture = fixture
 		self.firstOutcome = firstOutcome
@@ -6018,6 +6046,7 @@ struct GraphFuzzerToolRuns {
 		self.inlineOutcome = inlineOutcome
 		self.visibleOutcome = visibleOutcome
 		self.knownRightOutcome = knownRightOutcome
+		self.multiModuleRuns = multiModuleRuns
 	}
 
 	let fixture: GraphFuzzerFixture
@@ -6027,6 +6056,12 @@ struct GraphFuzzerToolRuns {
 	let inlineOutcome: GraphFuzzerToolOutcome?
 	let visibleOutcome: GraphFuzzerToolOutcome?
 	let knownRightOutcome: GraphFuzzerToolOutcome?
+	let multiModuleRuns: [GraphFuzzerMultiModuleRuns]
+
+	/// The failure of each partitioned run whose two integrations give other results, in the order the runs were made.
+	var multiModuleFailures: [GraphFuzzerFailure] {
+		multiModuleRuns.compactMap(\.failure)
+	}
 
 	/// The failure of a graph whose seam takes a builder for a hole that the tool accepts while it rejects the graph's
 	/// visible build, or `nil`: a fill may be rejected where inline would read another value, but what the seam's module
@@ -6359,13 +6394,14 @@ enum GraphFuzzerOracle {
 		let valueFailures = try valueFailures(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil })
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
-			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.uncreatedAliasRejectionFailure, runs.nilArgumentFailure, runs.uncreatedAliasReadFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], valueFailures[runs.fixture.seed], runs.wrapperParameterFailure, renamedGraphFailures.first].compactMap(\.self)
+			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.uncreatedAliasRejectionFailure, runs.nilArgumentFailure, runs.uncreatedAliasReadFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], valueFailures[runs.fixture.seed], runs.wrapperParameterFailure, runs.multiModuleFailures.first, renamedGraphFailures.first].compactMap(\.self)
 			return GraphFuzzerResult(
 				fixture: runs.fixture,
 				outcome: runs.firstOutcome,
 				failure: failures.first,
 				laterFailures: Array(failures.dropFirst()),
 				renamedGraphFailures: renamedGraphFailures,
+				multiModuleRuns: runs.multiModuleRuns,
 				isInspectedByValueOracle: runs.isInspectedByValueOracle,
 				isComparedByValueOracle: compileVerificationIsEnabled && runs.isInspectedByValueOracle && runs.runsDifferFailure == nil && compilationFailures[runs.fixture.seed] == nil,
 			)
@@ -6814,13 +6850,33 @@ enum GraphFuzzerOracle {
 		"but that call passes the builder `",
 	]
 
-	/// Runs the tool twice over `fixture`, and once over it renamed by each of `renamings`.
-	static func toolRuns(of fixture: GraphFuzzerFixture, renamings: [GraphFuzzerRenaming] = GraphFuzzerRenaming.all) async throws -> GraphFuzzerToolRuns {
+	/// The renamings the graph is split across modules under, besides the graph as generated (`nil`). See
+	/// `GraphFuzzerPartition`.
+	static let multiModuleRenamings: [GraphFuzzerRenaming?] = [nil]
+
+	/// Runs the tool twice over `fixture`, once over it renamed by each of `renamings`, and, when it declares no seam and
+	/// no public mock, split across modules by `GraphFuzzerPartition` and renamed by each of `multiModuleRenamings`, once
+	/// through each multi-module integration.
+	static func toolRuns(
+		of fixture: GraphFuzzerFixture,
+		renamings: [GraphFuzzerRenaming] = GraphFuzzerRenaming.all,
+		multiModuleRenamings: [GraphFuzzerRenaming?] = multiModuleRenamings,
+	) async throws -> GraphFuzzerToolRuns {
 		var renamedOutcomes = [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)]()
 		for renaming in renamings {
 			let renamedFixture = fixture.renamed(by: renaming)
 			let outcome = try await toolOutcome(of: renamedFixture, fileNames: renaming.fileNames(of: renamedFixture))
 			renamedOutcomes.append((renaming, renaming.restore(outcome, typeNamePrefix: fixture.typeNamePrefix)))
+		}
+		// The partition splits only a graph that declares no seam and no public mock, as no graph of the base corpus does:
+		// a seam's or a public mock's graph is split across modules by roles of its own (`GraphFuzzerModule`), which the
+		// partition does not model.
+		var multiModuleRuns = [GraphFuzzerMultiModuleRuns]()
+		if GraphFuzzerGeneratorFeature.features(drawnIn: fixture).isEmpty {
+			let partition = GraphFuzzerPartition.partition(of: fixture)
+			for renaming in multiModuleRenamings {
+				multiModuleRuns.append(try await GraphFuzzerMultiModuleProperty.runs(of: fixture, partition: partition, renaming: renaming))
+			}
 		}
 		let firstOutcome = try await toolOutcome(of: fixture)
 		// A graph with a seam is run again with no seam: a rejection inline does not make is either a seam's own error
@@ -6843,6 +6899,7 @@ enum GraphFuzzerOracle {
 			inlineOutcome: inlineOutcome,
 			visibleOutcome: visibleOutcome,
 			knownRightOutcome: knownRightOutcome,
+			multiModuleRuns: multiModuleRuns,
 		)
 	}
 
