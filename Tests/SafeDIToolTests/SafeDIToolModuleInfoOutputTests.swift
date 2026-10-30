@@ -71,6 +71,36 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesModuleAndPackageToModuleInfo_whenOptionsNameModulePackageAndDependencies() async throws {
+		// The file is binary, so its contents are compared as `dump` prints them, with sorted keys.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Leaf: Instantiable {
+				    public init() {}
+				    public static func mock() -> Leaf {
+				        Leaf()
+				    }
+				}
+				""",
+			],
+			filesToDelete: &filesToDelete,
+			inputPathsRelativeToCurrentDirectory: true,
+			moduleMembershipArguments: ["--module-name", "Tree", "--package-name", "Forest", "--dependency-module-names", "Roots", "Bark"],
+		)
+
+		let leafPath = output.fixtures["Leaf.swift"].replacingOccurrences(of: "/", with: "\\/")
+		let encoder = JSONEncoder()
+		encoder.outputFormatting = [.sortedKeys]
+		let moduleInfo = try ModuleInfo(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.moduleInfoOutputPath)))
+		#expect(try String(decoding: encoder.encode(moduleInfo), as: UTF8.self) == """
+		{"conditionalCompilationDecisions":[],"configurations":[],"dependencyModuleNames":["Bark","Roots"],"imports":[],"instantiableTypeNamesInAnyClause":["Leaf"],"instantiables":[{"access":{"declarationStartLocation":{"column":1,"filePath":"\(leafPath)","line":2},"level":{"public":{}},"modifierRange":{"endColumn":7,"endLine":2,"startColumn":1,"startLine":2}},"declarationLocation":{"column":1,"filePath":"\(leafPath)","line":1},"declarationType":{"structType":{}},"dependencies":[],"enclosingTypeAccess":[],"generateMock":false,"initializer":{"access":{"declarationStartLocation":{"column":5,"filePath":"\(leafPath)","line":3},"level":{"public":{}},"modifierRange":{"endColumn":11,"endLine":3,"startColumn":5,"startLine":3}},"arguments":[],"doesThrow":false,"hasGenericParameter":false,"hasGenericWhereClause":false,"isAsync":false,"isOptional":false},"instantiableTypes":[{"simple":{"generics":[],"name":"Leaf"}}],"isRoot":false,"mockAttributes":"","mockDeclarationAccess":{"declarationStartLocation":{"column":1,"filePath":"\(leafPath)","line":2},"level":{"public":{}},"modifierRange":{"endColumn":7,"endLine":2,"startColumn":1,"startLine":2}},"mockDeclarationLocation":{"column":5,"filePath":"\(leafPath)","line":4},"mockDeclarationModuleName":"Tree","mockDeclarationPackageName":"Forest","mockInitializer":{"access":{"declarationStartLocation":{"column":5,"filePath":"\(leafPath)","line":4},"level":{"public":{}},"modifierRange":{"endColumn":11,"endLine":4,"startColumn":5,"startLine":4}},"arguments":[],"doesThrow":false,"hasGenericParameter":false,"hasGenericWhereClause":false,"isAsync":false,"isOptional":false},"mockOnly":false,"mockReturnType":{"simple":{"generics":[],"name":"Leaf"}},"moduleName":"Tree","packageName":"Forest","sourceFilePath":"\(leafPath)"}],"mockImports":[],"moduleName":"Tree","packageName":"Forest"}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_writesIdenticalModuleInfo_whenRunRepeatedlyOverManyFiles() async throws {
 		// `generate` reads, parses, and walks files in parallel, so the order in which files finish differs
 		// from run to run. Across this many files, two runs practically never finish in the same order, so

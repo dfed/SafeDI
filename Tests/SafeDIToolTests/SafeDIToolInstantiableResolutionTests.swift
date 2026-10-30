@@ -83,6 +83,28 @@ struct SafeDIToolInstantiableResolutionTests: ~Copyable {
 		))
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func resolveSafeDIFulfilledTypes_keepsProductionModuleAndTakesMockDeclarationModule_whenProductionDeclarationIsMetFirst() async throws {
+		let service = try await resolvedServiceDeclaredInTwoModules(
+			productionFilePath: "AServices/Service.swift",
+			mockOnlyFilePath: "BServicesTestSupport/ServiceMock.swift",
+		)
+
+		#expect([service.moduleName, service.packageName, service.mockDeclarationModuleName, service.mockDeclarationPackageName] == ["Services", "production", "ServicesTestSupport", "support"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func resolveSafeDIFulfilledTypes_keepsProductionModuleAndTakesMockDeclarationModule_whenMockOnlyExtensionIsMetFirst() async throws {
+		let service = try await resolvedServiceDeclaredInTwoModules(
+			productionFilePath: "BServices/Service.swift",
+			mockOnlyFilePath: "AServicesTestSupport/ServiceMock.swift",
+		)
+
+		#expect([service.moduleName, service.packageName, service.mockDeclarationModuleName, service.mockDeclarationPackageName] == ["Services", "production", "ServicesTestSupport", "support"])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -102,6 +124,45 @@ struct SafeDIToolInstantiableResolutionTests: ~Copyable {
 	    }
 	}
 	"""
+
+	/// `Service` declared in the module `Services` of the package `production`, at `productionFilePath`, and given a
+	/// mock by a `mockOnly` extension in the module `ServicesTestSupport` of the package `support`, at
+	/// `mockOnlyFilePath`, both paths relative to one directory, which the SafeDIGenerator plugin's target graph names
+	/// as the modules' directories, as `generate` resolves it.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func resolvedServiceDeclaredInTwoModules(productionFilePath: String, mockOnlyFilePath: String) async throws -> Instantiable {
+		let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		filesToDelete.append(directory)
+		var filePaths = [String]()
+		for (filePath, content) in [(productionFilePath, Self.productionDeclaration), (mockOnlyFilePath, Self.mockOnlyExtension)] {
+			let file = directory.appendingPathComponent(filePath)
+			try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+			try content.write(to: file, atomically: true, encoding: .utf8)
+			filePaths.append(file.path)
+		}
+		func target(moduleName: String, packageID: String, containing filePath: String) -> PluginTargetGraph.Target {
+			PluginTargetGraph.Target(
+				moduleName: moduleName,
+				packageID: packageID,
+				directoryPath: directory.appendingPathComponent(filePath).deletingLastPathComponent().path,
+				dependencyModuleNames: [],
+			)
+		}
+		let membership = ModuleMembership(
+			targetGraph: PluginTargetGraph(
+				target: target(moduleName: "ServicesTestSupport", packageID: "support", containing: mockOnlyFilePath),
+				dependencyTargets: [target(moduleName: "Services", packageID: "production", containing: productionFilePath)],
+			),
+			projectFilePaths: ProjectFilePaths(projectRoot: directory.path),
+		)
+		let parsed = try await parseModule(
+			filePaths: Set(filePaths),
+			configurationFilePaths: Set(filePaths),
+			activeCompilationConditions: [],
+		)
+		let module = parsed.module.moduleInfo.declared(by: membership, filePathsSpelledBy: ProjectFilePaths(projectRoot: directory.path))
+		return try #require(resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: module.instantiables))[.simple(name: "Service")])
+	}
 
 	/// Writes each file of `contentByFileName` into a new directory, parses them as one module as `generate` does, and
 	/// resolves the type each declaration fulfills.
