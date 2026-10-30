@@ -2399,6 +2399,84 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_warns_whenRootRenamesInstanceOfItsOwnLazilyInstantiatedPropertyOnlyIfAvailable() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>, eventTracker: EventTracker?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let analytics: LazilyInstantiated<Analytics>
+				    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self, onlyIfAvailable: true) let eventTracker: EventTracker?
+				}
+				""",
+				"""
+				public protocol EventTracker {}
+
+				@Instantiable
+				public final class Analytics: EventTracker, Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.warnings.map(\.formatted) == [
+			"\(output.fixtures["Root.swift"]):7:5: warning: @Instantiated property `analytics: LazilyInstantiated<Analytics>` is instantiated whenever `Root` is created: `Root` renames the instance to `eventTracker: EventTracker?`. Declare `analytics: Analytics` instead, or read `analytics.instance` where `Root` needs it.",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_warns_whenOwnerRenamesInstanceOfItsOwnLazilyInstantiatedPropertyOnlyIfAvailable() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(feature: Feature) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let feature: Feature
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Feature: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>, eventTracker: EventTracker?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let analytics: LazilyInstantiated<Analytics>
+				    @Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self, onlyIfAvailable: true) let eventTracker: EventTracker?
+				}
+				""",
+				"""
+				public protocol EventTracker {}
+
+				@Instantiable
+				public final class Analytics: EventTracker, Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.warnings.map(\.formatted) == [
+			"\(output.fixtures["Feature.swift"]):7:5: warning: @Instantiated property `analytics: LazilyInstantiated<Analytics>` is instantiated whenever `Feature` is created: `Feature` renames the instance to `eventTracker: EventTracker?`. Declare `analytics: Analytics` instead, or read `analytics.instance` where `Feature` needs it.",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_warns_whenRootRenamesInstanceOfItsOwnSendableLazilyInstantiatedProperty() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
