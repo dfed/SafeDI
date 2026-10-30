@@ -115,11 +115,6 @@ public struct ProjectFilePath: Hashable, Comparable, Sendable {
 		lhs.normalizedPath < rhs.normalizedPath
 	}
 
-	/// Whether the file at this path lies inside the directory at `directory`, at any depth.
-	public func liesInside(_ directory: ProjectFilePath) -> Bool {
-		path.hasPrefix(directory.normalizedPath.directoryPrefix)
-	}
-
 	fileprivate let normalizedPath: NormalizedFilePath
 }
 

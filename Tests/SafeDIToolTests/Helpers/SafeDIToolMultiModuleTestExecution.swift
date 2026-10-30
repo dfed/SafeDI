@@ -128,8 +128,8 @@ enum MultiModuleIntegration: CaseIterable {
 	/// when it lies inside it and spelled whole otherwise, with only the module's own files mock-scoped, the
 	/// package directory reported with its symbolic links resolved, and no `.safedi` anywhere. Beside the CSV lies
 	/// the target graph the plugin writes: the module and each module whose files the CSV lists, with its package
-	/// (the fixture's package name, which stands in for SwiftPM's package identity), its source directory as
-	/// SwiftPM reports it, and the modules it depends on directly. The build system
+	/// (the fixture's package name, which stands in for SwiftPM's package identity), its files spelled as the CSV
+	/// spells them, and the modules it depends on directly. The build system
 	/// spells a file to the compiler as the reported package directory joined with the CSV's relative path
 	/// (`FixturePaths.compilerPath(of:)`): an alias's declaration is referenced by a `#sourceLocation` directive
 	/// naming that spelling, a found additional file outside the package is listed by its normalized path, and a
@@ -274,7 +274,6 @@ func executeSafeDIToolMultiModuleTest(
 		writtenModules.append(WrittenModule(
 			fixture: module,
 			packageDirectory: packageDirectory,
-			sourceDirectory: sourceDirectory,
 			swiftFiles: contentNamedSwiftFiles + pathNamedSwiftFiles,
 			fileNames: contentNamedSwiftFiles.map(\.lastPathComponent) + module.swiftFileContentByFilePath.keys.sorted(),
 			transitiveDependencies: transitiveDependencies[module.name, default: []],
@@ -349,8 +348,8 @@ func executeSafeDIToolMultiModuleTest(
 			let encoder = JSONEncoder()
 			encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 			try encoder.encode(PluginTargetGraph(
-				target: module.graphTarget(),
-				dependencyTargets: firstPartyDependencies.map { try $0.graphTarget() }.sorted { $0.moduleName < $1.moduleName },
+				target: module.graphTarget(spellingFilesAs: csvEntry(of:)),
+				dependencyTargets: firstPartyDependencies.map { $0.graphTarget(spellingFilesAs: csvEntry(of:)) }.sorted { $0.moduleName < $1.moduleName },
 			)).write(to: URL(fileURLWithPath: swiftFileCSV.path + PluginTargetGraph.fileNameSuffix))
 			let manifestFile = fixtureRoot.appendingPathComponent("Manifests").appendingPathComponent("\(moduleName).json")
 			try FileManager.default.createDirectory(at: manifestFile.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -483,21 +482,19 @@ private struct WrittenModule {
 	let fixture: ModuleFixture
 	/// `<fixture root>/<packageName>`, or `<fixture root>/checkouts/<packageName>` for a checkout package.
 	let packageDirectory: URL
-	/// `<package directory>/Sources/<name>`.
-	let sourceDirectory: URL
 	let swiftFiles: [URL]
 	let fileNames: [String]
 	/// The names of every module this one depends on, directly or through another, in the order the modules
 	/// were given.
 	let transitiveDependencies: [String]
 
-	/// The module as the plugin's target graph describes it: its source directory as SwiftPM reports it, resolved and
-	/// ending in `/`, and the modules it depends on directly, sorted.
-	func graphTarget() throws -> PluginTargetGraph.Target {
-		try PluginTargetGraph.Target(
+	/// The module as the plugin's target graph describes it: its files, each spelled by `csvEntry` as the CSV spells
+	/// it, sorted, and the modules it depends on directly, sorted.
+	func graphTarget(spellingFilesAs csvEntry: (URL) -> String) -> PluginTargetGraph.Target {
+		PluginTargetGraph.Target(
 			moduleName: fixture.name,
 			packageID: fixture.packageName,
-			directoryPath: realPath(of: sourceDirectory) + "/",
+			sourceFilePaths: swiftFiles.map(csvEntry).sorted(),
 			dependencyModuleNames: fixture.dependencies.sorted(),
 		)
 	}

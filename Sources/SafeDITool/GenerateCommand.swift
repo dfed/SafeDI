@@ -238,7 +238,7 @@ struct Generate: AsyncParsableCommand {
 			readsTargetGraph: resolvedSwiftManifest != nil,
 			inputFilePaths: inputFilePaths,
 			comparisonFilePaths: comparisonFilePaths,
-		).map { parsedModuleInfo.declared(by: $0, filePathsSpelledBy: comparisonFilePaths) } ?? parsedModuleInfo
+		).map { parsedModuleInfo.declared(by: $0) } ?? parsedModuleInfo
 
 		// Each module's instantiables are already ordered by `parseSwiftFiles`, so the
 		// combined order depends only on the caller's dependent-module list.
@@ -691,12 +691,13 @@ struct Generate: AsyncParsableCommand {
 				packageName: packageName,
 				dependencyModuleNames: dependencyModuleNames,
 				inputFilePaths: Set(inputFilePaths.map(comparisonFilePaths.projectFilePath(of:))),
+				filePathsSpelledBy: comparisonFilePaths,
 			)
 		} else if readsTargetGraph,
 		          let swiftSourcesFilePath,
 		          let targetGraph = try PluginTargetGraph(besideInputSourcesFileAt: swiftSourcesFilePath)
 		{
-			return ModuleMembership(targetGraph: targetGraph, projectFilePaths: comparisonFilePaths)
+			return ModuleMembership(targetGraph: targetGraph)
 		} else {
 			return nil
 		}

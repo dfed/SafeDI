@@ -127,8 +127,8 @@ struct SafeDIToolInstantiableResolutionTests: ~Copyable {
 
 	/// `Service` declared in the module `Services` of the package `production`, at `productionFilePath`, and given a
 	/// mock by a `mockOnly` extension in the module `ServicesTestSupport` of the package `support`, at
-	/// `mockOnlyFilePath`, both paths relative to one directory, which the SafeDIGenerator plugin's target graph names
-	/// as the modules' directories, as `generate` resolves it.
+	/// `mockOnlyFilePath`, both paths relative to one directory, each of which the SafeDIGenerator plugin's target graph
+	/// lists as its module's file, as `generate` resolves it.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func resolvedServiceDeclaredInTwoModules(productionFilePath: String, mockOnlyFilePath: String) async throws -> Instantiable {
 		let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
@@ -140,11 +140,12 @@ struct SafeDIToolInstantiableResolutionTests: ~Copyable {
 			try content.write(to: file, atomically: true, encoding: .utf8)
 			filePaths.append(file.path)
 		}
+		// The parse names each file by the path it is handed, as the target graph spells it.
 		func target(moduleName: String, packageID: String, containing filePath: String) -> PluginTargetGraph.Target {
 			PluginTargetGraph.Target(
 				moduleName: moduleName,
 				packageID: packageID,
-				directoryPath: directory.appendingPathComponent(filePath).deletingLastPathComponent().path,
+				sourceFilePaths: [directory.appendingPathComponent(filePath).path],
 				dependencyModuleNames: [],
 			)
 		}
@@ -153,14 +154,13 @@ struct SafeDIToolInstantiableResolutionTests: ~Copyable {
 				target: target(moduleName: "ServicesTestSupport", packageID: "support", containing: mockOnlyFilePath),
 				dependencyTargets: [target(moduleName: "Services", packageID: "production", containing: productionFilePath)],
 			),
-			projectFilePaths: ProjectFilePaths(projectRoot: directory.path),
 		)
 		let parsed = try await parseModule(
 			filePaths: Set(filePaths),
 			configurationFilePaths: Set(filePaths),
 			activeCompilationConditions: [],
 		)
-		let module = parsed.module.moduleInfo.declared(by: membership, filePathsSpelledBy: ProjectFilePaths(projectRoot: directory.path))
+		let module = parsed.module.moduleInfo.declared(by: membership)
 		return try #require(resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: module.instantiables))[.simple(name: "Service")])
 	}
 

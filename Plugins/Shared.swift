@@ -137,8 +137,8 @@ struct TargetGraph: Encodable {
 		/// The identity of the package that declares the target, from which SwiftPM derives `-package-name`, or `nil`
 		/// when the plugin finds the target in no package it is handed.
 		var packageID: String?
-		/// The directory that holds the target's sources, absolute, as SwiftPM reports it.
-		var directoryPath: String
+		/// The target's Swift files, each spelled exactly as the input CSV spells it, sorted.
+		var sourceFilePaths: [String]
 		/// The modules the target depends on directly, through a target or a product, sorted.
 		var dependencyModuleNames: [String]
 	}

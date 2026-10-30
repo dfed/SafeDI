@@ -63,6 +63,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			of: sourceTarget,
 			dependencyTargets: sourceTarget.sourceModuleRecursiveDependencies,
 			in: context.package,
+			relativeTo: packageRoot,
 			besideInputSourcesFile: inputSourcesFile,
 		)
 
@@ -206,17 +207,14 @@ let buildSettingCompilationConditionArguments = [
 	"--build-setting-other-swift-flags=[${OTHER_SWIFT_FLAGS}]",
 ]
 
-/// Writes `swiftFiles` to `inputSourcesFile` as SafeDITool reads its input CSV, each relative to `base` when it lies
-/// inside it. `NormalizedFilePath` comes from SafeDICore's `FilePathSpelling.swift`, which this plugin compiles
-/// through a symbolic link.
+/// Writes `swiftFiles` to `inputSourcesFile` as SafeDITool reads its input CSV, each spelled as
+/// `inputSwiftFilePaths(of:relativeTo:)` spells it.
 func writeInputSwiftFilesCSV(
 	_ swiftFiles: [URL],
 	relativeTo base: URL,
 	to inputSourcesFile: URL,
 ) throws {
-	let normalizedBase = NormalizedFilePath(base.path(percentEncoded: false))
-	try swiftFiles
-		.map { NormalizedFilePath($0.path(percentEncoded: false)).path(relativeTo: normalizedBase) }
+	try inputSwiftFilePaths(of: swiftFiles, relativeTo: base)
 		.joined(separator: ",")
 		.write(
 			to: inputSourcesFile,
@@ -225,8 +223,17 @@ func writeInputSwiftFilesCSV(
 		)
 }
 
-/// Writes the target graph of `target`, whose input CSV lists its own files and those of `dependencyTargets`, beside
-/// `inputSourcesFile`, for `generate` to read the module and package that declare each file.
+/// `swiftFiles` as the input CSV spells them: each relative to `base` when it lies inside it, and normalized
+/// otherwise. `NormalizedFilePath` comes from SafeDICore's `FilePathSpelling.swift`, which this plugin compiles
+/// through a symbolic link.
+func inputSwiftFilePaths(of swiftFiles: [URL], relativeTo base: URL) -> [String] {
+	let normalizedBase = NormalizedFilePath(base.path(percentEncoded: false))
+	return swiftFiles.map { NormalizedFilePath($0.path(percentEncoded: false)).path(relativeTo: normalizedBase) }
+}
+
+/// Writes the target graph of `target`, whose input CSV lists its own files and those of `dependencyTargets`, each
+/// spelled relative to `base` as `inputSwiftFilePaths(of:relativeTo:)` spells it, beside `inputSourcesFile`, for
+/// `generate` to read the module and package that declare each file.
 ///
 /// The plugin API reports which package declares a target only by listing the package's targets, so each target's
 /// package is found among `package` and the packages it depends on, directly or through another. The API does not
@@ -235,6 +242,7 @@ func writeTargetGraph(
 	of target: SwiftSourceModuleTarget,
 	dependencyTargets: [SwiftSourceModuleTarget],
 	in package: Package,
+	relativeTo base: URL,
 	besideInputSourcesFile inputSourcesFile: URL,
 ) throws {
 	var packageIDsByTargetID = [String: Package.ID]()
@@ -255,7 +263,8 @@ func writeTargetGraph(
 		TargetGraph.Target(
 			moduleName: target.moduleName,
 			packageID: packageIDsByTargetID[target.id],
-			directoryPath: target.directoryURL.path(percentEncoded: false),
+			// The files the CSV lists for the target, spelled by the same code.
+			sourceFilePaths: inputSwiftFilePaths(of: target.sourceFiles(withSuffix: ".swift").map(\.url), relativeTo: base).sorted(),
 			dependencyModuleNames: Set(target.dependencies.flatMap { dependency in
 				switch dependency {
 				case let .target(dependencyTarget):
@@ -271,7 +280,7 @@ func writeTargetGraph(
 	let targetGraph = TargetGraph(
 		target: graphTarget(target),
 		dependencyTargets: dependencyTargets.map(graphTarget).sorted {
-			($0.moduleName, $0.packageID ?? "", $0.directoryPath) < ($1.moduleName, $1.packageID ?? "", $1.directoryPath)
+			($0.moduleName, $0.packageID ?? "") < ($1.moduleName, $1.packageID ?? "")
 		},
 	)
 	let encoder = JSONEncoder()

@@ -39,8 +39,10 @@ struct PluginTargetGraph: Codable {
 		/// SwiftPM's identity of the package that declares the target, from which SwiftPM derives the
 		/// `-package-name` it hands the compiler, or `nil` when the plugin found the target in no package.
 		let packageID: String?
-		/// The directory that holds the target's sources, absolute, as SwiftPM reports it to the plugin.
-		let directoryPath: String
+		/// The target's Swift files, each spelled exactly as the input CSV spells it, which the plugin spells with the
+		/// same code: relative to the package directory SwiftPM reports when the file lies inside it, and normalized
+		/// otherwise.
+		let sourceFilePaths: [String]
 		/// The modules the target depends on directly, through a target or a product, sorted.
 		let dependencyModuleNames: [String]
 	}
@@ -88,49 +90,48 @@ struct ModuleMembership: Sendable {
 	/// Every input file, and no other file, belongs to the module `generate` generates code for. The options that name
 	/// that module say this for a build system that runs `generate` once per module, such as the Bazel rule and the
 	/// Tuist plugin.
-	/// - Parameter inputFilePaths: The files the input CSV and `--include` name, which are the module's own files.
-	///   Files reached through `#SafeDIConfiguration(additionalDirectoriesToInclude:)` belong to another module.
+	/// - Parameters:
+	///   - inputFilePaths: The files the input CSV and `--include` name, which are the module's own files. Files reached
+	///     through `#SafeDIConfiguration(additionalDirectoriesToInclude:)` belong to another module.
+	///   - projectFilePaths: How a declaration's file is spelled for comparison with `inputFilePaths`: a fresh parse
+	///     names a file as the CSV does, and scan's cache as its manifest does.
 	init(
 		moduleName: String?,
 		packageName: String?,
 		dependencyModuleNames: [String],
 		inputFilePaths: Set<ProjectFilePath>,
+		filePathsSpelledBy projectFilePaths: ProjectFilePaths,
 	) {
 		self.moduleName = moduleName
 		self.packageName = packageName
 		self.dependencyModuleNames = dependencyModuleNames
 		let declaringModule = DeclaringModule(moduleName: moduleName, packageName: packageName)
 		declaringModuleOfFile = { filePath in
-			inputFilePaths.contains(filePath) ? declaringModule : nil
+			inputFilePaths.contains(projectFilePaths.projectFilePath(of: filePath)) ? declaringModule : nil
 		}
 	}
 
-	/// Each file belongs to the target whose directory holds it, nested most deeply when targets nest, and the module
-	/// `generate` generates code for is the target the plugin planned. A file no target's directory holds, such as one
-	/// of a checkout package reached through `additionalDirectoriesToInclude`, belongs to no module SafeDITool knows,
-	/// and neither does a file in a directory two targets share: SwiftPM lets targets split one directory with
-	/// `sources:`, which the directories alone cannot tell apart.
-	/// - Parameter projectFilePaths: How the files' paths are compared with the targets' directories.
-	init(targetGraph: PluginTargetGraph, projectFilePaths: ProjectFilePaths) {
+	/// Each file belongs to the target that lists it, and the module `generate` generates code for is the target the
+	/// plugin planned. The target graph spells each file exactly as the input CSV does, and so does every declaration
+	/// `generate` reads from a file the CSV lists: a fresh parse names the file by its CSV entry, and scan's cache names
+	/// it relative to the package directory when it lies inside it, and normalized otherwise, which is how the plugin
+	/// spells the entry. A file no target lists, such as one of a checkout package reached through
+	/// `additionalDirectoriesToInclude`, belongs to no module SafeDITool knows, and neither does a file two targets
+	/// list, which the target graph cannot attribute to either.
+	init(targetGraph: PluginTargetGraph) {
 		moduleName = targetGraph.target.moduleName
 		packageName = targetGraph.target.packageID
 		dependencyModuleNames = targetGraph.target.dependencyModuleNames
-		let targetsByDirectory = Dictionary(
-			grouping: [targetGraph.target] + targetGraph.dependencyTargets,
-			by: { projectFilePaths.projectFilePath(of: $0.directoryPath) },
+		let declaringModulesByFilePath = Dictionary(
+			([targetGraph.target] + targetGraph.dependencyTargets).flatMap { target in
+				target.sourceFilePaths.map { filePath in
+					(filePath, Optional(DeclaringModule(moduleName: target.moduleName, packageName: target.packageID)))
+				}
+			},
+			uniquingKeysWith: { _, _ in nil },
 		)
-		// The longest directory first, so a file is attributed to the most deeply nested target that holds it: the
-		// directories that hold a file all enclose one another, and two directories of one length cannot.
-		let directories = targetsByDirectory
-			.map { directory, targets in
-				(
-					directory: directory,
-					declaringModule: targets.count == 1 ? DeclaringModule(moduleName: targets[0].moduleName, packageName: targets[0].packageID) : nil,
-				)
-			}
-			.sorted { $0.directory.path.count > $1.directory.path.count }
 		declaringModuleOfFile = { filePath in
-			directories.first { filePath.liesInside($0.directory) }?.declaringModule
+			declaringModulesByFilePath[filePath] ?? nil
 		}
 	}
 
@@ -141,23 +142,22 @@ struct ModuleMembership: Sendable {
 	/// The modules the module `generate` generates code for depends on directly.
 	let dependencyModuleNames: [String]
 
-	/// The module that declares the file at `filePath`, or `nil` when SafeDITool does not know it.
-	func declaringModule(ofFileAt filePath: ProjectFilePath) -> DeclaringModule? {
+	/// The module that declares the file a declaration names as `filePath`, or `nil` when SafeDITool does not know it.
+	func declaringModule(ofFileAt filePath: String) -> DeclaringModule? {
 		declaringModuleOfFile(filePath)
 	}
 
-	private let declaringModuleOfFile: @Sendable (ProjectFilePath) -> DeclaringModule?
+	private let declaringModuleOfFile: @Sendable (String) -> DeclaringModule?
 }
 
 extension ModuleInfo {
 	/// This module as `membership` describes it: the module `generate` generates code for, and each declaration with
 	/// the module that declares its file.
-	/// - Parameter projectFilePaths: How each declaration's file is spelled for comparison with what `membership` knows.
-	func declared(by membership: ModuleMembership, filePathsSpelledBy projectFilePaths: ProjectFilePaths) -> ModuleInfo {
+	func declared(by membership: ModuleMembership) -> ModuleInfo {
 		// A file usually declares one or two types, and spelling a path for comparison costs more than looking it up.
 		let declaringModuleByFilePath = Dictionary(
 			uniqueKeysWithValues: Set(instantiables.compactMap(\.sourceFilePath)).compactMap { sourceFilePath in
-				membership.declaringModule(ofFileAt: projectFilePaths.projectFilePath(of: sourceFilePath)).map { (sourceFilePath, $0) }
+				membership.declaringModule(ofFileAt: sourceFilePath).map { (sourceFilePath, $0) }
 			},
 		)
 		return replacing(

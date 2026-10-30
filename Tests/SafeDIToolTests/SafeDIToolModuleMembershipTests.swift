@@ -153,7 +153,7 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_recordsNoModule_whenInputFileLiesInNoTargetDirectory() async throws {
+	mutating func generate_recordsNoModule_whenNoTargetListsInputFile() async throws {
 		let project = try makePluginProject(
 			files: [
 				"Sources/App/AppRoot.swift": Self.rootContent,
@@ -229,7 +229,7 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_recordsMostDeeplyNestedTarget_whenTargetDirectoryLiesInsideAnother() async throws {
+	mutating func generate_recordsTargetListingEachFile_whenTargetDirectoryLiesInsideAnother() async throws {
 		// SwiftPM accepts a target whose directory lies inside another's when the outer target excludes it.
 		let project = try makePluginProject(
 			files: [
@@ -239,8 +239,8 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 			],
 			targets: [
 				Self.appTarget,
-				TargetDeclaration(moduleName: "Outer", packageID: "application", directory: "Sources/Outer"),
-				TargetDeclaration(moduleName: "Inner", packageID: "application", directory: "Sources/Outer/Inner"),
+				TargetDeclaration(moduleName: "Outer", packageID: "application", files: ["Sources/Outer/Outer.swift"]),
+				TargetDeclaration(moduleName: "Inner", packageID: "application", files: ["Sources/Outer/Inner/Inner.swift"]),
 			],
 		)
 
@@ -255,19 +255,18 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_recordsNoModule_whenTwoTargetsShareFilesDirectory() async throws {
-		// SwiftPM accepts two targets with one directory that split its files with `sources:`, which the target graph
-		// does not list, so no file there can be attributed to either.
+	mutating func generate_recordsTargetListingEachFile_whenTwoTargetsSplitOneDirectoryWithSources() async throws {
+		// SwiftPM accepts two targets with one `path:` that split its files with `sources:`.
 		let project = try makePluginProject(
 			files: [
 				"Sources/App/AppRoot.swift": Self.rootContent,
-				"Sources/Shared/First/First.swift": Self.instantiableContent(named: "First"),
-				"Sources/Shared/Second/Second.swift": Self.instantiableContent(named: "Second"),
+				"Sources/Shared/First.swift": Self.instantiableContent(named: "First"),
+				"Sources/Shared/Second.swift": Self.instantiableContent(named: "Second"),
 			],
 			targets: [
 				Self.appTarget,
-				TargetDeclaration(moduleName: "FirstTarget", packageID: "application", directory: "Sources/Shared"),
-				TargetDeclaration(moduleName: "SecondTarget", packageID: "application", directory: "Sources/Shared"),
+				TargetDeclaration(moduleName: "FirstTarget", packageID: "application", files: ["Sources/Shared/First.swift"]),
+				TargetDeclaration(moduleName: "SecondTarget", packageID: "application", files: ["Sources/Shared/Second.swift"]),
 			],
 		)
 
@@ -275,8 +274,31 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 
 		#expect(Self.declaringModules(of: generateOutput.module.instantiables) == [
 			"AppRoot": DeclaringModule(moduleName: "App", packageName: "application"),
-			"First": DeclaringModule(moduleName: nil, packageName: nil),
-			"Second": DeclaringModule(moduleName: nil, packageName: nil),
+			"First": DeclaringModule(moduleName: "FirstTarget", packageName: "application"),
+			"Second": DeclaringModule(moduleName: "SecondTarget", packageName: "application"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_recordsNoModule_whenTwoTargetsListOneFile() async throws {
+		let project = try makePluginProject(
+			files: [
+				"Sources/App/AppRoot.swift": Self.rootContent,
+				"Sources/Shared/Shared.swift": Self.instantiableContent(named: "Shared"),
+			],
+			targets: [
+				Self.appTarget,
+				TargetDeclaration(moduleName: "FirstTarget", packageID: "application", files: ["Sources/Shared/Shared.swift"]),
+				TargetDeclaration(moduleName: "SecondTarget", packageID: "dependency", files: ["Sources/Shared/Shared.swift"]),
+			],
+		)
+
+		let generateOutput = try await project.scanAndGenerate(reportingProjectRoot: .resolved)
+
+		#expect(Self.declaringModules(of: generateOutput.module.instantiables) == [
+			"AppRoot": DeclaringModule(moduleName: "App", packageName: "application"),
+			"Shared": DeclaringModule(moduleName: nil, packageName: nil),
 		])
 	}
 
@@ -330,9 +352,9 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 			],
 			pluginInvocation: .scanDuringGenerate(reportsFixtureDirectoryThroughSymbolicLink: false),
 			filesToDelete: &filesToDelete,
-			pluginTargetGraph: { fixtureDirectory in
+			pluginTargetGraph: { inputSwiftFilePaths in
 				PluginTargetGraph(
-					target: PluginTargetGraph.Target(moduleName: "App", packageID: "application", directoryPath: fixtureDirectory + "/", dependencyModuleNames: []),
+					target: PluginTargetGraph.Target(moduleName: "App", packageID: "application", sourceFilePaths: inputSwiftFilePaths, dependencyModuleNames: []),
 					dependencyTargets: [],
 				)
 			},
@@ -345,35 +367,22 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 	}
 
 	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func targetGraph_attributesEveryFileOfInputCSV_whenCapturedFromExamplePackageBuild() throws {
-		// The files are created, under a directory of their own, because normalization drops a leading `/private` only
-		// from a path that names a file, as it did for the plugin.
-		let stageDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
-		try FileManager.default.createDirectory(at: stageDirectory, withIntermediateDirectories: true)
-		filesToDelete.append(stageDirectory)
-		let stage = try realPath(of: stageDirectory)
+	mutating func targetGraph_attributesEachFileOfInputCSVToTargetListingIt_whenCapturedFromExamplePackageBuild() throws {
 		let placeholder = "$STAGE"
-		var inputSwiftFiles = [String]()
-		for entry in Self.capturedExampleInputSwiftFiles {
-			let isAbsolute = entry.hasPrefix(placeholder)
-			let file = URL(fileURLWithPath: isAbsolute ? stage + entry.dropFirst(placeholder.count) : "\(stage)/Example/\(entry)")
-			try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-			try "".write(to: file, atomically: true, encoding: .utf8)
-			inputSwiftFiles.append(isAbsolute ? NormalizedFilePath(file.path).path : entry)
-		}
-		let swiftFileCSV = stageDirectory.appendingPathComponent("InputSwiftFiles.csv")
+		let stage = "/Stage"
+		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".csv")
+		let targetGraphFile = URL(fileURLWithPath: swiftFileCSV.path + PluginTargetGraph.fileNameSuffix)
 		try Self.capturedExampleTargetGraph
 			.replacingOccurrences(of: placeholder, with: stage)
-			.write(toFile: swiftFileCSV.path + PluginTargetGraph.fileNameSuffix, atomically: true, encoding: .utf8)
+			.write(to: targetGraphFile, atomically: true, encoding: .utf8)
+		filesToDelete.append(targetGraphFile)
 
-		let targetGraph = try #require(try PluginTargetGraph(besideInputSourcesFileAt: swiftFileCSV.path))
-		// The plugin reports the package directory to `scan` as SwiftPM reports it, with a trailing `/`.
-		let projectFilePaths = ProjectFilePaths(projectRoot: "\(stage)/Example/")
-		let membership = ModuleMembership(targetGraph: targetGraph, projectFilePaths: projectFilePaths)
+		let membership = ModuleMembership(targetGraph: try #require(try PluginTargetGraph(besideInputSourcesFileAt: swiftFileCSV.path)))
 
-		let declaringModules = inputSwiftFiles.map { membership.declaringModule(ofFileAt: projectFilePaths.projectFilePath(of: $0)) }
-		#expect(Dictionary(grouping: declaringModules, by: \.self).mapValues(\.count) == [
+		// Every file the CSV lists, and a file in the directory of a target that does not list it.
+		let filePaths = Self.capturedExampleInputSwiftFiles.map { $0.replacingOccurrences(of: placeholder, with: stage) }
+			+ ["Sources/RootModule/Unlisted.swift"]
+		#expect(Dictionary(grouping: filePaths.map(membership.declaringModule(ofFileAt:)), by: \.self).mapValues(\.count) == [
 			DeclaringModule(moduleName: "ChildAModule", packageName: "example"): 1,
 			DeclaringModule(moduleName: "ChildBModule", packageName: "example"): 1,
 			DeclaringModule(moduleName: "ChildCModule", packageName: "example"): 1,
@@ -388,6 +397,7 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 			DeclaringModule(moduleName: "SwiftSyntax601", packageName: "swift-syntax"): 1,
 			DeclaringModule(moduleName: "SwiftSyntax602", packageName: "swift-syntax"): 1,
 			DeclaringModule(moduleName: "SwiftSyntax603", packageName: "swift-syntax"): 1,
+			nil: 1,
 		])
 		#expect([membership.moduleName, membership.packageName] == ["RootModule", "example"])
 		#expect(membership.dependencyModuleNames == ["ChildAModule", "ChildBModule", "ChildCModule", "SafeDI", "SharedModule"])
@@ -417,9 +427,9 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 	private var filesToDelete: [URL]
 
 	/// The input CSV the SafeDIGenerator plugin wrote for `RootModule` in a build of the Example Package Integration
-	/// (in a directory named `Example`) with SwiftPM's native backend on 2026-10-29, in order. `$STAGE` stands for the
-	/// directory that held the package and, beside it, the SafeDI package it depends on by path. The plugin names a file
-	/// inside the package relative to it, and any other by its normalized path, which drops a leading `/private`.
+	/// (in a directory named `Example`) with SwiftPM's native backend on 2026-10-30, in order. `$STAGE` stands for the
+	/// normalized path of the directory that held the package and, beside it, the SafeDI package it depends on by path.
+	/// The plugin names a file inside the package relative to it, and any other by its normalized path.
 	private static let capturedExampleInputSwiftFiles = [
 		"Sources/RootModule/EventLogger.swift",
 		"Sources/RootModule/LaunchRecorder.swift",
@@ -496,8 +506,8 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 		"Sources/ChildCModule/ChildC.swift",
 	]
 
-	/// The target graph the plugin wrote beside `capturedExampleInputSwiftFiles` in the same build. `$STAGE` stands for
-	/// the same directory as SwiftPM reported it, resolved, which kept its leading `/private`.
+	/// The target graph the plugin wrote beside `capturedExampleInputSwiftFiles` in the same build, with `$STAGE` for the
+	/// same directory.
 	private static let capturedExampleTargetGraph = #"""
 	{
 	  "dependencyTargets" : [
@@ -507,9 +517,11 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 	        "SafeDI",
 	        "SharedModule"
 	      ],
-	      "directoryPath" : "$STAGE\/Example\/Sources\/ChildAModule\/",
 	      "moduleName" : "ChildAModule",
-	      "packageID" : "example"
+	      "packageID" : "example",
+	      "sourceFilePaths" : [
+	        "Sources\/ChildAModule\/ChildA.swift"
+	      ]
 	    },
 	    {
 	      "dependencyModuleNames" : [
@@ -517,9 +529,11 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 	        "SafeDI",
 	        "SharedModule"
 	      ],
-	      "directoryPath" : "$STAGE\/Example\/Sources\/ChildBModule\/",
 	      "moduleName" : "ChildBModule",
-	      "packageID" : "example"
+	      "packageID" : "example",
+	      "sourceFilePaths" : [
+	        "Sources\/ChildBModule\/ChildB.swift"
+	      ]
 	    },
 	    {
 	      "dependencyModuleNames" : [
@@ -527,26 +541,44 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 	        "SafeDI",
 	        "SharedModule"
 	      ],
-	      "directoryPath" : "$STAGE\/Example\/Sources\/ChildCModule\/",
 	      "moduleName" : "ChildCModule",
-	      "packageID" : "example"
+	      "packageID" : "example",
+	      "sourceFilePaths" : [
+	        "Sources\/ChildCModule\/ChildC.swift"
+	      ]
 	    },
 	    {
 	      "dependencyModuleNames" : [
 	        "SafeDI",
 	        "SharedModule"
 	      ],
-	      "directoryPath" : "$STAGE\/Example\/Sources\/GrandchildrenModule\/",
 	      "moduleName" : "GrandchildrenModule",
-	      "packageID" : "example"
+	      "packageID" : "example",
+	      "sourceFilePaths" : [
+	        "Sources\/GrandchildrenModule\/Grandchild C\/GrandchildC.swift",
+	        "Sources\/GrandchildrenModule\/GrandchildA.swift",
+	        "Sources\/GrandchildrenModule\/GrandchildB.swift"
+	      ]
 	    },
 	    {
 	      "dependencyModuleNames" : [
 	        "SafeDIMacros"
 	      ],
-	      "directoryPath" : "$STAGE\/SafeDI\/Sources\/SafeDI\/",
 	      "moduleName" : "SafeDI",
-	      "packageID" : "safedi"
+	      "packageID" : "safedi",
+	      "sourceFilePaths" : [
+	        "$STAGE\/SafeDI\/Sources\/SafeDI\/Decorators\/Forwarded.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDI\/Decorators\/Instantiable.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDI\/Decorators\/Instantiated.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDI\/Decorators\/Received.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDI\/Decorators\/SafeDIConfiguration.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDI\/DelayedInstantiation\/ErasedInstantiator.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDI\/DelayedInstantiation\/Instantiator.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDI\/DelayedInstantiation\/LazilyInstantiated.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDI\/DelayedInstantiation\/SendableErasedInstantiator.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDI\/DelayedInstantiation\/SendableInstantiator.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDI\/DelayedInstantiation\/SendableLazilyInstantiated.swift"
+	      ]
 	    },
 	    {
 	      "dependencyModuleNames" : [
@@ -557,65 +589,126 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 	        "SwiftSyntaxBuilder",
 	        "SwiftSyntaxMacros"
 	      ],
-	      "directoryPath" : "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/",
 	      "moduleName" : "SafeDIMacros",
-	      "packageID" : "safedi"
+	      "packageID" : "safedi",
+	      "sourceFilePaths" : [
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/Macros\/InjectableMacro.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/Macros\/InstantiableMacro.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/Macros\/SafeDIConfigurationMacro.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Errors\/DiagnosticError.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Errors\/FixableInjectableError.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Errors\/FixableInstantiableError.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Extensions\/AttributeListSyntaxElementExtensions.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Extensions\/AttributeListSyntaxExtensions.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Extensions\/AttributeSyntaxExtensions.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Extensions\/CollectionExtensions.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Extensions\/DeclModifierListSyntaxExtensions.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Extensions\/DiagnosticExtensions.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Extensions\/ImportDeclSyntaxExtensions.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Extensions\/PatternBindingSyntaxExtensions.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Generators\/DependencyTreeGenerator.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Generators\/ScopeGenerator.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/AccessDeclaration.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/AccessLevel.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/AliasDeclarationReferences.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/ConcreteDeclSyntaxProtocol.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/ConcreteDeclType.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/ConditionalCompilationDecision.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/Dependency.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/ImportStatement.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/Initializer.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/InstantiableStruct.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/OutputFileDeclarations.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/Property.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/ReservedName.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/SafeDIConfiguration.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/SafeDIToolManifest.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/Scope.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/SourceDiagnostic.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/TypeDescription.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/TypeRequirements.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Models\/UnorderedEquatingCollection.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Utilities\/DeferredRelease.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Utilities\/FilePathSpelling.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Utilities\/OutputFileNaming.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Visitors\/ConditionalCompilationEvaluator.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Visitors\/FileVisitor.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Visitors\/InstantiableVisitor.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Visitors\/SafeDIConfigurationVisitor.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDICore\/Visitors\/SafeDIContentDetector.swift",
+	        "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/SafeDIMacroPlugin.swift"
+	      ]
 	    },
 	    {
 	      "dependencyModuleNames" : [
 	        "SafeDI"
 	      ],
-	      "directoryPath" : "$STAGE\/Example\/Sources\/SharedModule\/",
 	      "moduleName" : "SharedModule",
-	      "packageID" : "example"
+	      "packageID" : "example",
+	      "sourceFilePaths" : [
+	        "Sources\/SharedModule\/SharedThing.swift",
+	        "Sources\/SharedModule\/UserDefaults.swift"
+	      ]
 	    },
 	    {
 	      "dependencyModuleNames" : [
 
 	      ],
-	      "directoryPath" : "$STAGE\/example-build-native\/checkouts\/swift-syntax\/Sources\/VersionMarkerModules\/SwiftSyntax509\/",
 	      "moduleName" : "SwiftSyntax509",
-	      "packageID" : "swift-syntax"
+	      "packageID" : "swift-syntax",
+	      "sourceFilePaths" : [
+	        "$STAGE\/example-build-native\/checkouts\/swift-syntax\/Sources\/VersionMarkerModules\/SwiftSyntax509\/Empty.swift"
+	      ]
 	    },
 	    {
 	      "dependencyModuleNames" : [
 
 	      ],
-	      "directoryPath" : "$STAGE\/example-build-native\/checkouts\/swift-syntax\/Sources\/VersionMarkerModules\/SwiftSyntax510\/",
 	      "moduleName" : "SwiftSyntax510",
-	      "packageID" : "swift-syntax"
+	      "packageID" : "swift-syntax",
+	      "sourceFilePaths" : [
+	        "$STAGE\/example-build-native\/checkouts\/swift-syntax\/Sources\/VersionMarkerModules\/SwiftSyntax510\/Empty.swift"
+	      ]
 	    },
 	    {
 	      "dependencyModuleNames" : [
 
 	      ],
-	      "directoryPath" : "$STAGE\/example-build-native\/checkouts\/swift-syntax\/Sources\/VersionMarkerModules\/SwiftSyntax600\/",
 	      "moduleName" : "SwiftSyntax600",
-	      "packageID" : "swift-syntax"
+	      "packageID" : "swift-syntax",
+	      "sourceFilePaths" : [
+	        "$STAGE\/example-build-native\/checkouts\/swift-syntax\/Sources\/VersionMarkerModules\/SwiftSyntax600\/Empty.swift"
+	      ]
 	    },
 	    {
 	      "dependencyModuleNames" : [
 
 	      ],
-	      "directoryPath" : "$STAGE\/example-build-native\/checkouts\/swift-syntax\/Sources\/VersionMarkerModules\/SwiftSyntax601\/",
 	      "moduleName" : "SwiftSyntax601",
-	      "packageID" : "swift-syntax"
+	      "packageID" : "swift-syntax",
+	      "sourceFilePaths" : [
+	        "$STAGE\/example-build-native\/checkouts\/swift-syntax\/Sources\/VersionMarkerModules\/SwiftSyntax601\/Empty.swift"
+	      ]
 	    },
 	    {
 	      "dependencyModuleNames" : [
 
 	      ],
-	      "directoryPath" : "$STAGE\/example-build-native\/checkouts\/swift-syntax\/Sources\/VersionMarkerModules\/SwiftSyntax602\/",
 	      "moduleName" : "SwiftSyntax602",
-	      "packageID" : "swift-syntax"
+	      "packageID" : "swift-syntax",
+	      "sourceFilePaths" : [
+	        "$STAGE\/example-build-native\/checkouts\/swift-syntax\/Sources\/VersionMarkerModules\/SwiftSyntax602\/Empty.swift"
+	      ]
 	    },
 	    {
 	      "dependencyModuleNames" : [
 
 	      ],
-	      "directoryPath" : "$STAGE\/example-build-native\/checkouts\/swift-syntax\/Sources\/VersionMarkerModules\/SwiftSyntax603\/",
 	      "moduleName" : "SwiftSyntax603",
-	      "packageID" : "swift-syntax"
+	      "packageID" : "swift-syntax",
+	      "sourceFilePaths" : [
+	        "$STAGE\/example-build-native\/checkouts\/swift-syntax\/Sources\/VersionMarkerModules\/SwiftSyntax603\/Empty.swift"
+	      ]
 	    }
 	  ],
 	  "target" : {
@@ -626,9 +719,13 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 	      "SafeDI",
 	      "SharedModule"
 	    ],
-	    "directoryPath" : "$STAGE\/Example\/Sources\/RootModule\/",
 	    "moduleName" : "RootModule",
-	    "packageID" : "example"
+	    "packageID" : "example",
+	    "sourceFilePaths" : [
+	      "Sources\/RootModule\/EventLogger.swift",
+	      "Sources\/RootModule\/LaunchRecorder.swift",
+	      "Sources\/RootModule\/Root.swift"
+	    ]
 	  }
 	}
 	"""#
@@ -703,8 +800,8 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 		"""
 	}
 
-	private static let appTarget = TargetDeclaration(moduleName: "App", packageID: "application", directory: "Sources/App", dependencyModuleNames: ["Core", "SafeDI"])
-	private static let coreTarget = TargetDeclaration(moduleName: "Core", packageID: "foundations", directory: "Sources/Core")
+	private static let appTarget = TargetDeclaration(moduleName: "App", packageID: "application", files: ["Sources/App/AppRoot.swift"], dependencyModuleNames: ["Core", "SafeDI"])
+	private static let coreTarget = TargetDeclaration(moduleName: "Core", packageID: "foundations", files: ["Sources/Core/Engine.swift"])
 
 	/// The module and package each of `instantiables` records, by the name of the type it declares.
 	private static func declaringModules(of instantiables: [Instantiable]) -> [String: DeclaringModule] {
@@ -748,18 +845,18 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 		}
 	}
 
-	/// A target as the plugin's target graph describes it, with its directory relative to the package directory.
+	/// A target as the plugin's target graph describes it, with its files relative to the fixture directory.
 	private struct TargetDeclaration {
-		init(moduleName: String, packageID: String, directory: String, dependencyModuleNames: [String] = []) {
+		init(moduleName: String, packageID: String, files: [String], dependencyModuleNames: [String] = []) {
 			self.moduleName = moduleName
 			self.packageID = packageID
-			self.directory = directory
+			self.files = files
 			self.dependencyModuleNames = dependencyModuleNames
 		}
 
 		let moduleName: String
 		let packageID: String
-		let directory: String
+		let files: [String]
 		let dependencyModuleNames: [String]
 	}
 
@@ -803,8 +900,12 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 		) async throws -> Generate.Output {
 			let packageRoot = try packageRoot(spelled: projectRootSpelling)
 			let reportedFixtureDirectory = "\(packageRoot)/\(relativeFixtureDirectory)"
+			// As the plugin spells each file in the CSV and the target graph: relative to the package directory.
+			func inputSwiftFilePath(of relativeFilePath: String) -> String {
+				"\(relativeFixtureDirectory)/\(relativeFilePath)"
+			}
 			try relativeFilePaths
-				.map { "\(relativeFixtureDirectory)/\($0)" }
+				.map(inputSwiftFilePath(of:))
 				.joined(separator: ",")
 				.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 			if let targets, let builtTarget = targets.first {
@@ -812,7 +913,7 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 					PluginTargetGraph.Target(
 						moduleName: target.moduleName,
 						packageID: target.packageID,
-						directoryPath: "\(reportedFixtureDirectory)/\(target.directory)/",
+						sourceFilePaths: target.files.map(inputSwiftFilePath(of:)),
 						dependencyModuleNames: target.dependencyModuleNames,
 					)
 				}
@@ -844,8 +945,9 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 	/// to the working directory in a temporary directory.
 	/// - Parameters:
 	///   - files: Each file's content, by its path relative to the fixture directory.
-	///   - targets: The targets of the target graph, the planned target first, each with its directory relative to the
-	///     fixture directory, or `nil` to write no target graph. The planned target's files are those in its directory.
+	///   - targets: The targets of the target graph, the planned target first, each with its files relative to the
+	///     fixture directory, or `nil` to write no target graph, when the planned target's files are those in
+	///     `Sources/App`.
 	private mutating func makePluginProject(files: [String: String], targets: [TargetDeclaration]?) throws -> PluginProject {
 		let relativeFixtureDirectory = ".build/SafeDIToolTestFixtures/\(UUID().uuidString)"
 		let fixtureDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(relativeFixtureDirectory)
@@ -862,12 +964,11 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 		let symbolicLink = temporaryDirectory.appendingPathComponent("Link")
 		try FileManager.default.createSymbolicLink(at: symbolicLink, withDestinationURL: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
 		let relativeFilePaths = files.keys.sorted()
-		let plannedDirectory = (targets?.first?.directory ?? "Sources/App") + "/"
 		return PluginProject(
 			relativeFixtureDirectory: relativeFixtureDirectory,
 			symbolicLink: symbolicLink,
 			relativeFilePaths: relativeFilePaths,
-			ownRelativeFilePaths: relativeFilePaths.filter { $0.hasPrefix(plannedDirectory) },
+			ownRelativeFilePaths: targets?.first?.files ?? relativeFilePaths.filter { $0.hasPrefix("Sources/App/") },
 			targets: targets,
 			swiftFileCSV: temporaryDirectory.appendingPathComponent("InputSwiftFiles.csv"),
 			outputDirectory: outputDirectory,

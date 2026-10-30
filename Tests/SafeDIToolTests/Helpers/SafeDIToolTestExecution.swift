@@ -53,7 +53,7 @@ func executeSafeDIToolTest(
 	activeCompilationConditions: [String] = [],
 	buildSettingArguments: [String] = [],
 	moduleMembershipArguments: [String] = [],
-	pluginTargetGraph: ((_ reportedFixtureDirectory: String) -> PluginTargetGraph)? = nil,
+	pluginTargetGraph: ((_ inputSwiftFilePaths: [String]) -> PluginTargetGraph)? = nil,
 	verificationCompilationConditions: [String]? = nil,
 	swiftFileContentAfterScan: [String]? = nil,
 ) async throws -> TestOutput {
@@ -149,9 +149,9 @@ func executeSafeDIToolTest(
 		.joined(separator: ",")
 		.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 	if let pluginTargetGraph {
-		// As the SafeDIGenerator plugin writes it beside its CSV, naming the fixture directory as the build system reports it.
+		// As the SafeDIGenerator plugin writes it beside its CSV, spelling each file as the CSV does.
 		let targetGraphFile = URL(fileURLWithPath: swiftFileCSV.path + PluginTargetGraph.fileNameSuffix)
-		try JSONEncoder().encode(pluginTargetGraph(reportedFixtureDirectoryPath ?? swiftFixtureDirectory.path)).write(to: targetGraphFile)
+		try JSONEncoder().encode(pluginTargetGraph(inputSwiftFilePaths)).write(to: targetGraphFile)
 		filesToDelete.append(targetGraphFile)
 	}
 
