@@ -58,7 +58,8 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			relativeTo: packageRoot,
 			to: inputSourcesFile,
 		)
-		// Every form of the `generate` command below reads it, to record the module and package that declare each file.
+		// Every form of the `generate` command below reads it, to record the module and package that declare each file,
+		// and declares it, with the CSV, as an input, so a change to the targets that changes no Swift file reruns it.
 		try writeTargetGraph(
 			of: sourceTarget,
 			dependencyTargets: sourceTarget.sourceModuleRecursiveDependencies,
@@ -133,7 +134,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 					+ activeCompilationConditionArguments
 					+ buildSettingCompilationConditionArguments,
 				environment: [:],
-				inputFiles: allSwiftFiles + additionalInputFiles,
+				inputFiles: allSwiftFiles + additionalInputFiles + [inputSourcesFile, targetGraphFile(besideInputSourcesFile: inputSourcesFile)],
 				outputFiles: outputFiles,
 			),
 		]
@@ -175,7 +176,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 					+ activeCompilationConditionArguments
 					+ buildSettingCompilationConditionArguments,
 				environment: [:],
-				inputFiles: allSwiftFiles + scanResult.additionalInputFiles,
+				inputFiles: allSwiftFiles + scanResult.additionalInputFiles + [inputSourcesFile, targetGraphFile(besideInputSourcesFile: inputSourcesFile)],
 				outputFiles: scanResult.outputFiles,
 			),
 		]
@@ -214,13 +215,23 @@ func writeInputSwiftFilesCSV(
 	relativeTo base: URL,
 	to inputSourcesFile: URL,
 ) throws {
-	try inputSwiftFilePaths(of: swiftFiles, relativeTo: base)
-		.joined(separator: ",")
-		.write(
-			to: inputSourcesFile,
-			atomically: true,
-			encoding: .utf8,
-		)
+	try writeIfChanged(
+		Data(inputSwiftFilePaths(of: swiftFiles, relativeTo: base).joined(separator: ",").utf8),
+		to: inputSourcesFile,
+	)
+}
+
+/// Writes `data` to `file` unless the file already holds it. A command that declares the file as an input then
+/// reruns only when what the file holds changes: the plugin writes the file each time it plans the build.
+func writeIfChanged(_ data: Data, to file: URL) throws {
+	if (try? Data(contentsOf: file)) != data {
+		try data.write(to: file, options: .atomic)
+	}
+}
+
+/// The file the plugin writes the target graph to, beside the input CSV at `inputSourcesFile`.
+func targetGraphFile(besideInputSourcesFile inputSourcesFile: URL) -> URL {
+	URL(fileURLWithPath: inputSourcesFile.path(percentEncoded: false) + TargetGraph.fileNameSuffix)
 }
 
 /// `swiftFiles` as the input CSV spells them: each relative to `base` when it lies inside it, and normalized
@@ -285,10 +296,7 @@ func writeTargetGraph(
 	)
 	let encoder = JSONEncoder()
 	encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-	try encoder.encode(targetGraph).write(
-		to: URL(fileURLWithPath: inputSourcesFile.path(percentEncoded: false) + TargetGraph.fileNameSuffix),
-		options: .atomic,
-	)
+	try writeIfChanged(encoder.encode(targetGraph), to: targetGraphFile(besideInputSourcesFile: inputSourcesFile))
 }
 
 extension Target {
