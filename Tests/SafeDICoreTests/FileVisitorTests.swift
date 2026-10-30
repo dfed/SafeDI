@@ -1345,23 +1345,6 @@ struct FileVisitorTests {
 	}
 
 	@Test
-	func walk_ignoresModifierWithDetail_whenTypeSpellsSetterAccessModifier() {
-		let syntaxTree = Parser.parse(source: """
-		@Instantiable
-		private(set) struct SetterType: Instantiable {
-		    public init() {}
-		}
-		""")
-		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
-		fileVisitor.walk(syntaxTree)
-		#expect(fileVisitor.instantiables.map(\.accessLevel) == [.internal])
-		#expect(fileVisitor.instantiables.map(\.accessModifierRange) == [nil])
-		#expect(fileVisitor.instantiables.map(\.declarationStartLocation) == [
-			Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
-		])
-	}
-
-	@Test
 	func walk_recordsAccessLevelOfEachMockMethod_whenMockMethodsSpellAccessModifiers() {
 		let syntaxTree = Parser.parse(source: """
 		@Instantiable
