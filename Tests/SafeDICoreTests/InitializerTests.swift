@@ -25,7 +25,7 @@ struct InitializerTests {
 	@Test
 	func generateSafeDIInitializer_throwsWhenInitializerIsNotPublicOrOpen() {
 		let initializer = Initializer(
-			isPublicOrOpen: false,
+			accessLevel: .internal,
 			arguments: [],
 		)
 

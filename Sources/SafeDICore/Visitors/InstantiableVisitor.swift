@@ -148,7 +148,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		guard declarationType.isTypeDefinition else {
 			return .skipChildren
 		}
-		let initializer = Initializer(node)
+		let initializer = Initializer(node, sourceLocationConverter: sourceLocationConverter)
 		initializerToInitSyntaxMap[initializer] = node
 		initializers.append(initializer)
 		return .skipChildren
@@ -228,7 +228,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				// Already found one mock() method — this is a duplicate.
 				duplicateMockFunctionSyntaxes.append(node)
 			} else {
-				mockInitializer = Initializer(node)
+				mockInitializer = Initializer(node, sourceLocationConverter: sourceLocationConverter)
 				mockReturnType = node.signature.returnClause?.type.typeDescription
 				mockDeclarationLocation = declarationLocation(of: node)
 				mockFunctionSyntax = node
@@ -276,7 +276,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			))
 		}
 
-		let initializer = Initializer(node)
+		let initializer = Initializer(node, sourceLocationConverter: sourceLocationConverter)
 		if let instantiableType = node.signature.returnClause?.type.typeDescription {
 			// Each parameter without a default value is a dependency named by its inner name. Its argument label
 			// binds nothing. A parameter with a default value is not a dependency, as for an initializer: the
@@ -306,6 +306,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				additionalInstantiables: additionalInstantiables,
 				dependencies: dependencies,
 				declarationType: .extensionType,
+				accessLevel: nil,
 				mockAttributes: mockAttributes,
 				generateMock: generateMock,
 				mockOnly: mockOnly,
@@ -318,7 +319,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			instantiateFunctions.append(InstantiateFunction(syntax: node, initializer: initializer, dependencies: dependencies))
 		}
 
-		if !initializer.isPublicOrOpen || node.modifiers.staticModifier == nil {
+		if !initializer.accessLevel.isPublicOrOpen || node.modifiers.staticModifier == nil {
 			var modifiedNode = node
 			modifiedNode.modifiers = DeclModifierListSyntax(
 				arrayLiteral:
@@ -495,6 +496,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						additionalInstantiables: additionalInstantiables,
 						dependencies: dependencies,
 						declarationType: instantiableDeclarationType.asDeclarationType,
+						accessLevel: instantiableAccessLevel,
+						accessModifierRange: instantiableAccessModifierRange,
+						declarationStartLocation: instantiableDeclarationStartLocation,
 						mockAttributes: mockAttributes,
 						generateMock: generateMock,
 						mockOnly: mockOnly,
@@ -522,6 +526,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						additionalInstantiables: additionalInstantiables,
 						dependencies: [],
 						declarationType: .extensionType,
+						accessLevel: nil,
 						mockAttributes: mockAttributes,
 						generateMock: generateMock,
 						mockOnly: mockOnly,
@@ -567,6 +572,12 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	/// The location of the decorated declaration, recorded when the declaration is visited with a converter.
 	private var instantiableDeclarationLocation: Dependency.DeclarationLocation?
+	/// The access level the decorated type declaration's modifiers spell, recorded when the type declaration is visited.
+	private var instantiableAccessLevel: AccessLevel?
+	/// The range of the modifier that sets `instantiableAccessLevel`, recorded when the declaration is visited with a converter.
+	private var instantiableAccessModifierRange: Dependency.SourceRange?
+	/// Where the decorated type declaration begins after its attributes, recorded when the declaration is visited with a converter.
+	private var instantiableDeclarationStartLocation: Dependency.DeclarationLocation?
 
 	/// Reports that `name`, which generated code binds or refers to, collides with `reservation`.
 	/// No fix-it is offered: SafeDI matches dependencies by label, so a new name could fulfill, or be fulfilled
@@ -588,14 +599,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// The range of `node`’s text, excluding its leading and trailing trivia, or `nil` without a converter.
 	private func sourceRange(of node: some SyntaxProtocol) -> Dependency.SourceRange? {
 		sourceLocationConverter.map { sourceLocationConverter in
-			let start = sourceLocationConverter.location(for: node.positionAfterSkippingLeadingTrivia)
-			let end = sourceLocationConverter.location(for: node.endPositionBeforeTrailingTrivia)
-			return Dependency.SourceRange(
-				startLine: start.line,
-				startColumn: start.column,
-				endLine: end.line,
-				endColumn: end.column,
-			)
+			sourceLocationConverter.sourceRange(of: node)
 		}
 	}
 
@@ -625,6 +629,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		instantiableType = nodeDeclarationType
 		processAttributes(node.attributes, on: macro)
 		processModifiers(node.modifiers, on: node)
+		let accessModifier = node.modifiers.accessModifier
+		instantiableAccessLevel = accessModifier?.accessLevel ?? .internal
+		instantiableAccessModifierRange = accessModifier.flatMap { sourceRange(of: $0.name) }
+		instantiableDeclarationStartLocation = sourceLocationConverter?.declarationLocation(for: node.modifiers.declarationStartPosition(introducedBy: node.keyword))
 
 		return .visitChildren
 	}
@@ -710,5 +718,17 @@ extension SourceLocationConverter {
 	func declarationLocation(for position: AbsolutePosition) -> Dependency.DeclarationLocation {
 		let location = location(for: position)
 		return Dependency.DeclarationLocation(filePath: location.file, line: location.line, column: location.column)
+	}
+
+	/// The range of `node`’s text, excluding its leading and trailing trivia.
+	func sourceRange(of node: some SyntaxProtocol) -> Dependency.SourceRange {
+		let start = location(for: node.positionAfterSkippingLeadingTrivia)
+		let end = location(for: node.endPositionBeforeTrailingTrivia)
+		return Dependency.SourceRange(
+			startLine: start.line,
+			startColumn: start.column,
+			endLine: end.line,
+			endColumn: end.column,
+		)
 	}
 }

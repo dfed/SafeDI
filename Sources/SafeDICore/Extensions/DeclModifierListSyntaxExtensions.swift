@@ -33,4 +33,47 @@ extension DeclModifierListSyntax {
 			modifier.name.text == "static"
 		})
 	}
+
+	/// The modifier that sets the access level of the declaration these modifiers belong to, with the level it sets,
+	/// or `nil` when no modifier does and the declaration has the default access level, `internal`. A modifier with a
+	/// detail, such as `private(set)`, sets the access level of a property's setter alone, so it is never this one.
+	var accessModifier: (accessLevel: AccessLevel, name: TokenSyntax)? {
+		lazy
+			.filter { $0.detail == nil }
+			.compactMap { modifier in
+				AccessLevel(modifier.name.tokenKind).map { (accessLevel: $0, name: modifier.name) }
+			}
+			.first
+	}
+
+	/// Where the declaration these modifiers belong to begins after its attributes, which is where a modifier is
+	/// inserted: at its first modifier, or at `keyword`, the keyword that introduces it, when it has none.
+	func declarationStartPosition(introducedBy keyword: TokenSyntax) -> AbsolutePosition {
+		(first?.name ?? keyword).positionAfterSkippingLeadingTrivia
+	}
+}
+
+// MARK: - AccessLevel
+
+extension AccessLevel {
+	/// The access level a modifier named by `tokenKind` sets, or `nil` when the modifier sets none.
+	fileprivate init?(_ tokenKind: TokenKind) {
+		switch tokenKind {
+		case .keyword(.open):
+			self = .open
+		case .keyword(.public):
+			self = .public
+		case .keyword(.package):
+			self = .package
+		case .keyword(.internal):
+			self = .internal
+		case .keyword(.fileprivate):
+			self = .fileprivate
+		case .keyword(.private):
+			self = .private
+		default:
+			// Every other modifier, such as `static` or `final`, sets something other than an access level.
+			return nil
+		}
+	}
 }

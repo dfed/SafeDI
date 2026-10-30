@@ -152,7 +152,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			writtenTagsByType[String(reflecting: type(of: value)), default: []].insert(writer.bytes[0])
 		}
 
-		#expect(writtenTagsByType.count == 5)
+		#expect(writtenTagsByType.count == 6)
 		for schemaMember in BinaryFile.schemaMembers where writtenTagsByType[String(reflecting: schemaMember)] != nil {
 			#expect(writtenTagsByType[String(reflecting: schemaMember)] == Set(0..<UInt8(Self.caseCount(of: schemaMember))), "\(schemaMember)")
 		}
@@ -834,8 +834,8 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	/// A project whose cache holds every shape the cache can hold: each kind of type description, dependency
-	/// source, and declaration, imports kept as segments, files whose scans consulted compilation conditions,
-	/// and files reached through `additionalDirectoriesToInclude`.
+	/// source, declaration, and access level, imports kept as segments, files whose scans consulted compilation
+	/// conditions, and files reached through `additionalDirectoriesToInclude`.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func scannedKitchenSinkProject() async throws -> ScannedProject {
 		let additionalDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
@@ -969,6 +969,30 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			public struct Broken: Instantiable {
 			    public init() {}
 			    let value: = 1
+			}
+			""",
+			"Workshop.swift": """
+			@Instantiable
+			open class Workshop: Instantiable {
+			    public init() {}
+			    package static func mock() -> Workshop {
+			        Workshop()
+			    }
+			}
+
+			@Instantiable
+			struct Shed: Instantiable {
+			    public init() {}
+			    private static func mock() -> Shed {
+			        Shed()
+			    }
+			}
+
+			@Instantiable(conformsElsewhere: true)
+			extension Garage {
+			    fileprivate static func instantiate() -> Garage {
+			        Garage()
+			    }
 			}
 			""",
 		])
@@ -1145,6 +1169,7 @@ extension ConditionalCompilationDecision: BinarySample {}
 extension SafeDIConfiguration: BinarySample {}
 extension Instantiable: BinarySample {}
 extension Instantiable.DeclarationType: BinarySample {}
+extension AccessLevel: BinarySample {}
 extension Initializer: BinarySample {}
 extension Initializer.Argument: BinarySample {}
 extension Dependency: BinarySample {}

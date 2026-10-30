@@ -24,8 +24,13 @@ import SwiftSyntaxBuilder
 public struct Initializer: Codable, Hashable, Sendable {
 	// MARK: Initialization
 
-	init(_ node: InitializerDeclSyntax) {
-		isPublicOrOpen = node.modifiers.containsPublicOrOpen
+	/// - Parameter sourceLocationConverter: A converter for the tree that holds `node`. When provided, the initializer
+	///   records where its access modifier is and where its declaration begins.
+	init(_ node: InitializerDeclSyntax, sourceLocationConverter: SourceLocationConverter? = nil) {
+		let accessModifier = node.modifiers.accessModifier
+		accessLevel = accessModifier?.accessLevel ?? .internal
+		accessModifierRange = accessModifier.flatMap { sourceLocationConverter?.sourceRange(of: $0.name) }
+		declarationStartLocation = sourceLocationConverter?.declarationLocation(for: node.modifiers.declarationStartPosition(introducedBy: node.initKeyword))
 		isOptional = node.optionalMark != nil
 		isAsync = node.signature.effectSpecifiers?.asyncSpecifier != nil
 		doesThrow = node.signature.effectSpecifiers?.throwsClause?.throwsSpecifier != nil
@@ -38,8 +43,13 @@ public struct Initializer: Codable, Hashable, Sendable {
 			.map(Argument.init)
 	}
 
-	public init(_ node: FunctionDeclSyntax) {
-		isPublicOrOpen = node.modifiers.containsPublicOrOpen
+	/// - Parameter sourceLocationConverter: A converter for the tree that holds `node`. When provided, the initializer
+	///   records where its access modifier is and where its declaration begins.
+	public init(_ node: FunctionDeclSyntax, sourceLocationConverter: SourceLocationConverter? = nil) {
+		let accessModifier = node.modifiers.accessModifier
+		accessLevel = accessModifier?.accessLevel ?? .internal
+		accessModifierRange = accessModifier.flatMap { sourceLocationConverter?.sourceRange(of: $0.name) }
+		declarationStartLocation = sourceLocationConverter?.declarationLocation(for: node.modifiers.declarationStartPosition(introducedBy: node.funcKeyword))
 		isOptional = false
 		isAsync = node.signature.effectSpecifiers?.asyncSpecifier != nil
 		doesThrow = node.signature.effectSpecifiers?.throwsClause?.throwsSpecifier != nil
@@ -53,7 +63,9 @@ public struct Initializer: Codable, Hashable, Sendable {
 	}
 
 	public init(
-		isPublicOrOpen: Bool = true,
+		accessLevel: AccessLevel = .public,
+		accessModifierRange: Dependency.SourceRange? = nil,
+		declarationStartLocation: Dependency.DeclarationLocation? = nil,
 		isOptional: Bool = false,
 		isAsync: Bool = false,
 		doesThrow: Bool = false,
@@ -61,7 +73,9 @@ public struct Initializer: Codable, Hashable, Sendable {
 		hasGenericWhereClause: Bool = false,
 		arguments: [Initializer.Argument],
 	) {
-		self.isPublicOrOpen = isPublicOrOpen
+		self.accessLevel = accessLevel
+		self.accessModifierRange = accessModifierRange
+		self.declarationStartLocation = declarationStartLocation
 		self.isOptional = isOptional
 		self.isAsync = isAsync
 		self.doesThrow = doesThrow
@@ -72,7 +86,16 @@ public struct Initializer: Codable, Hashable, Sendable {
 
 	// MARK: Public
 
-	public let isPublicOrOpen: Bool
+	/// The access level the initializer's modifiers spell: `internal` when none of them sets one.
+	public let accessLevel: AccessLevel
+	/// The source range of the modifier that sets `accessLevel`, in the file of `declarationStartLocation`, which a
+	/// fix-it can replace. `nil` when no modifier sets the access level, and when the initializer was parsed without
+	/// a file context – macro expansion walks a detached declaration.
+	public let accessModifierRange: Dependency.SourceRange?
+	/// Where the declaration begins after its attributes – its first modifier, or its `init` or `func` keyword when it
+	/// has none – which is where a fix-it inserts an access modifier. `nil` when the initializer was parsed without a
+	/// file context – macro expansion walks a detached declaration.
+	public let declarationStartLocation: Dependency.DeclarationLocation?
 	public let isOptional: Bool
 	public let isAsync: Bool
 	public let doesThrow: Bool
@@ -122,7 +145,9 @@ public struct Initializer: Codable, Hashable, Sendable {
 
 	public func mapArguments(_ transform: (Argument) -> Argument) -> Self? {
 		.init(
-			isPublicOrOpen: isPublicOrOpen,
+			accessLevel: accessLevel,
+			accessModifierRange: accessModifierRange,
+			declarationStartLocation: declarationStartLocation,
 			isOptional: isOptional,
 			isAsync: isAsync,
 			doesThrow: doesThrow,
@@ -268,7 +293,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 	/// The reasons this initializer cannot construct its type, whatever dependencies the type has.
 	private var dependencyIndependentErrors: [GenerationError] {
 		[
-			isPublicOrOpen ? nil : .inaccessibleInitializer,
+			accessLevel.isPublicOrOpen ? nil : .inaccessibleInitializer,
 			isOptional ? .optionalInitializer : nil,
 			isAsync ? .asyncInitializer : nil,
 			doesThrow ? .throwingInitializer : nil,

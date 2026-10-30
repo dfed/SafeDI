@@ -101,6 +101,7 @@ enum BinaryFile {
 			SafeDIConfiguration.self,
 			Instantiable.self,
 			Instantiable.DeclarationType.self,
+			AccessLevel.self,
 			Initializer.self,
 			Initializer.Argument.self,
 			Dependency.self,
