@@ -1051,7 +1051,7 @@ The reported conditions are taken as complete, so a condition your build defines
 
 The compiler evaluates the same condition with the real build settings, so a mismatch fails the build at the generated file with a message naming the condition instead of producing code for the wrong configuration. Blocks that guard nothing SafeDI reads are not asserted.
 
-SafeDI constructs an `@Instantiable` type with the first initializer that fulfills its dependencies, so a guarded initializer is asserted only when some evaluation of the type’s `#if` blocks could select it. An initializer that fulfills no such evaluation’s dependencies—one that is not `public`, or that takes an argument without a default value that no dependency provides, or that omits a dependency declared outside every `#if` block—is not asserted, nor is one that follows an unguarded initializer that fulfills the dependencies of every evaluation. This keeps a preview helper working under every integration:
+SafeDI constructs an `@Instantiable` type with the first initializer that fulfills its dependencies, so a guarded initializer is asserted only when some evaluation of the type’s `#if` blocks could select it. An initializer that fulfills no such evaluation’s dependencies—one that is `private` or `fileprivate`, or that takes an argument without a default value that no dependency provides, or that omits a dependency declared outside every `#if` block—is not asserted, nor is one that follows an unguarded initializer that fulfills the dependencies of every evaluation. This keeps a preview helper working under every integration:
 
 ```swift
 @Instantiable
