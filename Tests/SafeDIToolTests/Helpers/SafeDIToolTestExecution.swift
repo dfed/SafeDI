@@ -310,6 +310,18 @@ func executeSafeDIToolTest(
 		} else {
 			nil
 		}
+		if let generatedFiles {
+			// Every output the manifest plans is a file of its own. Two names a volume holds as one file, such as
+			// names that differ only in letter case on macOS's default volume, would leave one file holding the
+			// code written last, which compiles the file listing alone cannot notice.
+			let manifest = try JSONDecoder().decode(
+				SafeDIToolManifest.self,
+				from: Data(contentsOf: URL(fileURLWithPath: manifestPath ?? outputDirectory.appendingPathComponent("SafeDIManifest.json").path)),
+			)
+			let plannedOutputFilePaths = (manifest.dependencyTreeGeneration + manifest.mockGeneration).map(\.outputFilePath)
+				+ (manifest.mockConfigurationOutputFilePath.map { [$0] } ?? [])
+			#expect(generatedFiles.keys.sorted() == plannedOutputFilePaths.map { ($0 as NSString).lastPathComponent }.sorted())
+		}
 
 		let moduleInfo = try ModuleInfo(moduleInfoData: Data(contentsOf: moduleInfoOutput))
 		if let generatedFiles, !generatedFiles.isEmpty, !skipCompileVerification {

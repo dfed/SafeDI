@@ -4740,6 +4740,83 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsError_whenTwoEntriesNameOutputFilesThatDifferOnlyInLetterCase() async throws {
+		let swiftFile = try writeTemporarySwiftFile("""
+		@Instantiable(isRoot: true, generateMock: true)
+		public struct Root: Instantiable {
+		    public init() {}
+		}
+		""")
+		let outputDirectory = try temporaryOutputDirectory()
+		let outputFilePath = outputDirectory.appendingPathComponent("A.swift").path
+		let otherOutputFilePath = outputDirectory.appendingPathComponent("a.swift").path
+
+		await assertThrowsError(
+			"The manifest’s dependencyTreeGeneration entry for '\(swiftFile.relativePath)' and its mockGeneration entry for '\(swiftFile.relativePath)' write '\(outputFilePath)' and '\(otherOutputFilePath)', which name one file on a volume that ignores letter case or Unicode normalization, as macOS’s does by default. A hand-written manifest must name a different file for each, ignoring letter case.",
+		) {
+			try await generate(swiftFile, manifest: SafeDIToolManifest(
+				dependencyTreeGeneration: [.init(inputFilePath: swiftFile.relativePath, outputFilePath: outputFilePath)],
+				mockGeneration: [.init(inputFilePath: swiftFile.relativePath, outputFilePath: otherOutputFilePath)],
+			))
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsError_whenTwoEntriesNameOneOutputFileThroughASymbolicLinkedDirectory() async throws {
+		let swiftFile = try writeTemporarySwiftFile("""
+		@Instantiable(isRoot: true, generateMock: true)
+		public struct Root: Instantiable {
+		    public init() {}
+		}
+		""")
+		let outputDirectory = try temporaryOutputDirectory()
+		let linkedOutputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createSymbolicLink(at: linkedOutputDirectory, withDestinationURL: outputDirectory)
+		filesToDelete.append(linkedOutputDirectory)
+		let outputFilePath = outputDirectory.appendingPathComponent("Root+SafeDI.swift").path
+
+		await assertThrowsError(
+			"The manifest’s dependencyTreeGeneration entry for '\(swiftFile.relativePath)' and its mockGeneration entry for '\(swiftFile.relativePath)' both write '\(outputFilePath)'. A hand-written manifest must name a different file for each.",
+		) {
+			try await generate(swiftFile, manifest: SafeDIToolManifest(
+				dependencyTreeGeneration: [.init(inputFilePath: swiftFile.relativePath, outputFilePath: outputFilePath)],
+				mockGeneration: [.init(inputFilePath: swiftFile.relativePath, outputFilePath: linkedOutputDirectory.appendingPathComponent("Root+SafeDI.swift").path)],
+			))
+		}
+	}
+
+	#if canImport(Darwin)
+		@Test
+		@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+		mutating func run_throwsError_whenTwoEntriesNameOneOutputFileUnderPrivateTmpAndTmpBeforeItExists() async throws {
+			let swiftFile = try writeTemporarySwiftFile("""
+			@Instantiable(isRoot: true, generateMock: true)
+			public struct Root: Instantiable {
+			    public init() {}
+			}
+			""")
+			// `/tmp` is a symbolic link to `/private/tmp`. Foundation drops the `/private` only from a path that
+			// names an existing file, and the output does not exist yet.
+			let outputDirectoryName = UUID().uuidString
+			let outputDirectory = URL(fileURLWithPath: "/private/tmp").appendingPathComponent(outputDirectoryName)
+			try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+			filesToDelete.append(outputDirectory)
+			let outputFilePath = "/private/tmp/\(outputDirectoryName)/Root+SafeDI.swift"
+
+			await assertThrowsError(
+				"The manifest’s dependencyTreeGeneration entry for '\(swiftFile.relativePath)' and its mockGeneration entry for '\(swiftFile.relativePath)' both write '\(outputFilePath)'. A hand-written manifest must name a different file for each.",
+			) {
+				try await generate(swiftFile, manifest: SafeDIToolManifest(
+					dependencyTreeGeneration: [.init(inputFilePath: swiftFile.relativePath, outputFilePath: outputFilePath)],
+					mockGeneration: [.init(inputFilePath: swiftFile.relativePath, outputFilePath: "/tmp/\(outputDirectoryName)/Root+SafeDI.swift")],
+				))
+			}
+		}
+	#endif
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesMock_whenManifestListsOneMockEntryTwice() async throws {
 		let swiftFile = try writeTemporarySwiftFile("""
 		@Instantiable(generateMock: true)
@@ -7718,6 +7795,14 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 			.appendingPathComponent(UUID().uuidString)
 			.appendingPathComponent(fileName)
 			.path
+	}
+
+	/// A new, empty directory for output files, which the test deletes.
+	private mutating func temporaryOutputDirectory() throws -> URL {
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		filesToDelete.append(outputDirectory)
+		return outputDirectory
 	}
 
 	/// Runs `generate` on `swiftFile` with the hand-written `manifest`.
