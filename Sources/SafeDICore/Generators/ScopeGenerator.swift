@@ -2808,7 +2808,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// destination, matching the type the binding had when the two were
 		/// unified through `??`. Erased nodes wrap both branches in the same
 		/// eraser, so they only need the annotation when that eraser is not
-		/// the property type.
+		/// the unwrapped property type: `AnyService?` is erased by `AnyService`,
+		/// which the override also returns.
 		var overriddenBindingTypeAnnotation: String {
 			let defaultBranchType = if erasedToConcreteExistential {
 				concreteExistentialType

@@ -222,3 +222,5 @@ Everything SafeDI produces must be identical on every run over the same inputs: 
   | `@Instantiated(erasedToConcreteExistential: true) let x: ErasedInstantiator<A, AnyP>` | `.erasedInstantiator` | `false` | Yes. |
 
   When reasoning about whether an erased node can appear on a pruned back-edge, check `propertyType.isConstant` — don't short-circuit on the erasure flag.
+
+  An optional erased constant is wrapped by the unwrapped property type — `let service: AnyService?` is assigned `AnyService(…)` — at both sites of `ScopeGenerator`'s `.constant` branch and in `MockParameterNode.concreteExistentialType`, as the Instantiator and `LazilyInstantiated` branches and `aliasDeclaration` already do. `TypeDescription.unwrapped` leaves the long-hand `Optional<AnyService>` (a `.simple` type) and `AnyService!` as they are, so those spellings still generate an eraser that does not compile (deferred).
