@@ -48,21 +48,8 @@ public enum AccessLevel: Codable, Hashable, Sendable {
 		}
 	}
 
-	/// The modifier that sets this level, as source spells it.
+	/// The modifier that sets this level, as source spells it, which is the name of its case.
 	public var spelling: String {
-		switch self {
-		case .open:
-			"open"
-		case .public:
-			"public"
-		case .package:
-			"package"
-		case .internal:
-			"internal"
-		case .fileprivate:
-			"fileprivate"
-		case .private:
-			"private"
-		}
+		"\(self)"
 	}
 }
