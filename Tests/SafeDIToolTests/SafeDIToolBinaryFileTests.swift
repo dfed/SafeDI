@@ -834,8 +834,9 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	/// A project whose cache holds every shape the cache can hold: each kind of type description, dependency
-	/// source, declaration, and access level, imports kept as segments, files whose scans consulted compilation
-	/// conditions, and files reached through `additionalDirectoriesToInclude`.
+	/// source, declaration, and access level, a mock declared in an extension, a declaration nested in others,
+	/// imports kept as segments, files whose scans consulted compilation conditions, and files reached through
+	/// `additionalDirectoriesToInclude`.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	private mutating func scannedKitchenSinkProject() async throws -> ScannedProject {
 		let additionalDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
@@ -999,6 +1000,15 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			package extension Barn {
 			    static func mock() -> Barn {
 			        Barn()
+			    }
+			}
+
+			public enum Farm {
+			    struct Field {
+			        @Instantiable
+			        public struct Scarecrow: Instantiable {
+			            public init() {}
+			        }
 			    }
 			}
 			""",

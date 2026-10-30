@@ -157,6 +157,7 @@ public final class FileVisitor: SyntaxVisitor {
 		// Enums can't be instantiable because they can't have `let` properties.
 		// However, they can have nested types within them that are instantiable.
 		parentType = typeDefined(named: node.name.text)
+		enclosingAccess.append(node.modifiers.access(introducedBy: node.enumKeyword, sourceLocationConverter: sourceLocationConverter))
 		return .visitChildren
 	}
 
@@ -168,6 +169,7 @@ public final class FileVisitor: SyntaxVisitor {
 		let instantiableVisitor = InstantiableVisitor(
 			declarationType: .extensionDecl,
 			parentType: nil,
+			enclosingAccess: [],
 			conditionalCompilation: .evaluate(conditionalCompilationEvaluator),
 			sourceLocationConverter: sourceLocationConverter,
 		)
@@ -189,6 +191,7 @@ public final class FileVisitor: SyntaxVisitor {
 
 		// Extensions are always top-level.
 		parentType = node.extendedType.typeDescription
+		enclosingAccess = [node.modifiers.access(introducedBy: node.extensionKeyword, sourceLocationConverter: sourceLocationConverter)]
 
 		// Continue to find child types.
 		return .visitChildren
@@ -197,6 +200,7 @@ public final class FileVisitor: SyntaxVisitor {
 	public override func visitPost(_: ExtensionDeclSyntax) {
 		// Extensions are always top-level.
 		parentType = nil
+		enclosingAccess = []
 	}
 
 	// SwiftSyntax 602 and prior could not recover from certain parse errors, causing the remainder
@@ -247,6 +251,8 @@ public final class FileVisitor: SyntaxVisitor {
 	// MARK: Private
 
 	private var parentType: TypeDescription?
+	/// The access of each type or extension declaration enclosing the walk's position, outermost first.
+	private var enclosingAccess = [AccessDeclaration]()
 	private let conditionalCompilationEvaluator: ConditionalCompilationEvaluator
 	private let sourceLocationConverter: SourceLocationConverter?
 	/// The `#if` clauses the evaluator selected for scanning.
@@ -258,6 +264,7 @@ public final class FileVisitor: SyntaxVisitor {
 		let instantiableVisitor = InstantiableVisitor(
 			declarationType: .concreteDecl,
 			parentType: parentType,
+			enclosingAccess: enclosingAccess,
 			conditionalCompilation: .evaluate(conditionalCompilationEvaluator),
 			sourceLocationConverter: sourceLocationConverter,
 		)
@@ -274,6 +281,7 @@ public final class FileVisitor: SyntaxVisitor {
 
 		// Keep track of how nested we are.
 		parentType = definedType
+		enclosingAccess.append(node.modifiers.access(introducedBy: node.keyword, sourceLocationConverter: sourceLocationConverter))
 
 		// Continue to find child types.
 		return .visitChildren
@@ -290,6 +298,7 @@ public final class FileVisitor: SyntaxVisitor {
 
 	private func exitType() {
 		parentType = parentType?.popNested
+		enclosingAccess.removeLast()
 	}
 
 	/// Records each decision once, even when both this visitor and an `InstantiableVisitor` walk the block.

@@ -27,16 +27,20 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// - Parameters:
 	///   - declarationType: The kind of declaration this visitor walks.
 	///   - parentType: The type enclosing the walked declaration, if any.
+	///   - enclosingAccess: The access of each type or extension declaration enclosing the walked declaration in its
+	///     file, outermost first.
 	///   - conditionalCompilation: How `#if` blocks among the declaration's members are scanned. The macro scans every clause because the compiler has already selected the active one; SafeDITool evaluates them.
 	///   - sourceLocationConverter: A converter for the tree being walked. When provided, the declaration and each dependency record where they begin.
 	public init(
 		declarationType: DeclarationType,
 		parentType: TypeDescription? = nil,
+		enclosingAccess: [AccessDeclaration] = [],
 		conditionalCompilation: ConditionalCompilationHandling = .scanAllClauses,
 		sourceLocationConverter: SourceLocationConverter? = nil,
 	) {
 		self.declarationType = declarationType
 		self.parentType = parentType
+		self.enclosingAccess = enclosingAccess
 		self.conditionalCompilation = conditionalCompilation
 		self.sourceLocationConverter = sourceLocationConverter
 		super.init(viewMode: .sourceAccurate)
@@ -309,6 +313,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				dependencies: dependencies,
 				declarationType: .extensionType,
 				access: instantiableAccess,
+				enclosingAccess: enclosingAccess,
 				mockAttributes: mockAttributes,
 				generateMock: generateMock,
 				mockOnly: mockOnly,
@@ -502,6 +507,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						dependencies: dependencies,
 						declarationType: instantiableDeclarationType.asDeclarationType,
 						access: instantiableAccess,
+						enclosingAccess: enclosingAccess,
 						mockAttributes: mockAttributes,
 						generateMock: generateMock,
 						mockOnly: mockOnly,
@@ -531,6 +537,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						dependencies: [],
 						declarationType: .extensionType,
 						access: instantiableAccess,
+						enclosingAccess: enclosingAccess,
 						mockAttributes: mockAttributes,
 						generateMock: generateMock,
 						mockOnly: mockOnly,
@@ -571,6 +578,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	private let declarationType: DeclarationType
 	private let parentType: TypeDescription?
+	private let enclosingAccess: [AccessDeclaration]
 	private let conditionalCompilation: ConditionalCompilationHandling
 	private let sourceLocationConverter: SourceLocationConverter?
 	/// The `#if` clauses the evaluator selected for scanning.
