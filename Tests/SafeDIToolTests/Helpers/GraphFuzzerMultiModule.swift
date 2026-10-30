@@ -32,8 +32,10 @@ import Testing
 /// to, or fulfills with, the graph's `Value` and protocol types, and the extended class of the extension-based type –
 /// and each name is declared in one file, so the files form a reference graph. Its strongly connected components are
 /// found with Tarjan's algorithm, visiting files in their order, which lists each component after every component it
-/// refers to: a lazy cycle through instantiators is one component, so its types share a module, and the roots, which
-/// refer to most of the graph, come last. The components are then dealt out, in that order, to one to four modules
+/// refers to: a lazy cycle through instantiators is one component, so its types share a module, and a root's component
+/// follows those of the types its tree names. The roots are the first files, so the types no root reaches are visited
+/// after them and their components follow the roots', and a root need not be in the last module. The components are
+/// then dealt out, in that order, to one to four modules
 /// (`moduleNames`, in that order), as many as the graph's text chooses (`moduleCount(forComponentCount:of:)`, from
 /// `GraphFuzzerHash` of the fixture's description, so single-module graphs stay in the corpus), each a contiguous run
 /// of components, so every reference points into the same module or an earlier one. Every file keeps its content and
