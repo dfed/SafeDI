@@ -858,30 +858,32 @@ struct SafeDIToolGraphFuzzerTests {
 
 	// MARK: Seeds
 
-	/// The ordinary suite's batch: seeds 12, 25, 62, 582, 691, 705, 731, 930, and 2420, whose graphs the tool accepts,
+	/// The ordinary suite's batch: seeds 12, 25, 62, 582, 691, 705, 731, 930, 2420, and 2611, whose graphs the tool accepts,
 	/// with the same results under every `GraphFuzzerRenaming`, and which between them exercise every feature (seed 25's
 	/// graph has a chain of aliases through an `onlyIfAvailable` alias; seed 731's has a chain through an
 	/// `onlyIfAvailable` alias of a sibling's optional form; seed 2420's has such a chain through a child scope; the graphs of
 	/// seeds 582 and 705 receive a constant of a type that is not `@Instantiable` beneath the type that instantiates it;
-	/// seed 12's mocked owner of such a constant receives a type that receives it as a `SendableLazilyInstantiated`), and
-	/// seeds 14 and 4224, whose graphs it rejects (seed 4224's with the dependency cycle through a chain through a child
-	/// scope, because the sibling's type receives the other sibling). It is small because compiling generated code is
-	/// what the fuzzer costs; ci.yml fuzzes the whole corpus on every pull request. Compiling the batch is one `swiftc`
-	/// invocation when nothing fails.
-	static let smokeSeeds: [UInt64] = [12, 14, 25, 62, 582, 691, 705, 731, 930, 2_420, 4_224]
+	/// the mocked owner of such a constant in seed 2611 receives a type that receives it as a `LazilyInstantiated`, and
+	/// in seed 12 lazily instantiates it as one wrapper while the type it receives receives the other kind), and
+	/// seeds 14, 4224, and 4516, whose graphs it rejects (seed 4224's with the dependency cycle through a chain through a
+	/// child scope, because the sibling's type receives the other sibling; seed 4516's because a declaration in the tree
+	/// of a dependency a mock builds beside the mocked type hides a receive beneath it). It is small because compiling
+	/// generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on every pull request. Compiling the batch
+	/// is one `swiftc` invocation when nothing fails.
+	static let smokeSeeds: [UInt64] = [12, 14, 25, 62, 582, 691, 705, 731, 930, 2_420, 2_611, 4_224, 4_516]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x5CF0ACBFA378099E
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xD0B87D8C48E2FAEA
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
-	static let corpusFixtureHash: UInt64 = 0x3DBA751EB5911B65
+	static let corpusFixtureHash: UInt64 = 0x0EC4BF145928F2B3
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
-	static let corpusAcceptedSeedCount = 2_309
-	static let corpusAcceptedSeedsSum: UInt64 = 0x6A13BFBEF0DFF3BA
+	static let corpusAcceptedSeedCount = 2_299
+	static let corpusAcceptedSeedsSum: UInt64 = 0x62F41F76B0229D38
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
@@ -890,25 +892,25 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "A mock's API follows the order of type names or labels: which back-edge of a lazy cycle loses its override, which promoted sibling is passed nil, and the order of overrides",
 			signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")],
 			seeds: [
-				3, 35, 45, 55, 77, 107, 114, 131, 157, 168, 209, 223, 233, 241, 277, 281,
-				309, 311, 364, 371, 381, 383, 390, 431, 434, 448, 473, 476, 512, 515, 545, 548, 567, 593,
-				595, 617, 630, 632, 680, 714, 732, 751, 768, 774, 785, 786, 808, 833,
-				836, 847, 886, 902, 903, 912, 940, 948, 956, 975, 987, 1_004, 1_029, 1_035, 1_042, 1_061, 1_064,
+				3, 35, 36, 45, 55, 77, 107, 114, 131, 157, 168, 209, 223, 233, 241, 281,
+				309, 311, 364, 371, 380, 381, 383, 390, 431, 434, 448, 450, 473, 476, 515, 545, 548, 567, 593,
+				595, 617, 630, 632, 680, 714, 728, 732, 751, 768, 774, 785, 786, 808, 833,
+				836, 847, 886, 903, 912, 940, 948, 975, 987, 1_004, 1_029, 1_035, 1_042, 1_044, 1_061, 1_064,
 				1_072, 1_075, 1_084, 1_092, 1_139, 1_140, 1_145, 1_147, 1_185, 1_215, 1_236, 1_289, 1_300, 1_322, 1_329, 1_335, 1_352, 1_362,
-				1_369, 1_372, 1_432, 1_433, 1_441, 1_453, 1_464, 1_492, 1_496, 1_504, 1_524, 1_531, 1_563, 1_567, 1_602, 1_633,
+				1_369, 1_372, 1_432, 1_433, 1_441, 1_453, 1_464, 1_492, 1_496, 1_504, 1_524, 1_525, 1_531, 1_535, 1_563, 1_567, 1_602, 1_633,
 				1_646, 1_664, 1_675, 1_695, 1_742, 1_781, 1_784, 1_804, 1_817, 1_853, 1_857, 1_867, 1_896,
-				1_938, 1_970, 1_972, 2_017, 2_051, 2_083, 2_084, 2_117, 2_123, 2_149, 2_152, 2_165, 2_201, 2_211,
-				2_234, 2_249, 2_270, 2_277, 2_287, 2_296, 2_316, 2_325, 2_335, 2_337, 2_348, 2_389, 2_403, 2_422, 2_430, 2_432,
-				2_437, 2_444, 2_456, 2_484, 2_485, 2_515, 2_518, 2_553, 2_555, 2_577, 2_606, 2_630, 2_637, 2_667, 2_704, 2_731, 2_741,
-				2_752, 2_791, 2_808, 2_835, 2_841, 2_845, 2_874, 2_902, 2_914, 2_916, 3_004, 3_023, 3_064,
+				1_938, 1_970, 1_972, 2_017, 2_051, 2_057, 2_083, 2_084, 2_123, 2_149, 2_152, 2_165, 2_201, 2_211,
+				2_234, 2_249, 2_270, 2_277, 2_287, 2_296, 2_316, 2_325, 2_335, 2_337, 2_348, 2_389, 2_403, 2_430, 2_432,
+				2_437, 2_444, 2_456, 2_484, 2_518, 2_553, 2_555, 2_577, 2_630, 2_637, 2_667, 2_704, 2_731, 2_741,
+				2_791, 2_808, 2_835, 2_841, 2_845, 2_874, 2_902, 2_914, 2_916, 3_004, 3_023, 3_064,
 				3_074, 3_075, 3_091, 3_132, 3_134, 3_180, 3_183, 3_215, 3_221, 3_225, 3_241, 3_252, 3_298, 3_306,
 				3_329, 3_344, 3_361, 3_397, 3_430, 3_439, 3_470, 3_491, 3_504, 3_506, 3_513, 3_526, 3_533, 3_534, 3_537, 3_577,
-				3_582, 3_588, 3_596, 3_600, 3_602, 3_604, 3_620, 3_645, 3_648, 3_661, 3_692, 3_699, 3_707, 3_715, 3_723, 3_741, 3_750, 3_775,
-				3_776, 3_805, 3_823, 3_843, 3_894, 3_915, 3_942, 4_044, 4_068, 4_102, 4_107, 4_110, 4_117, 4_122, 4_125, 4_156,
-				4_177, 4_191, 4_192, 4_196, 4_206, 4_213, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_360, 4_371,
+				3_582, 3_588, 3_596, 3_600, 3_602, 3_620, 3_645, 3_648, 3_661, 3_692, 3_699, 3_707, 3_715, 3_723, 3_741, 3_750, 3_775,
+				3_776, 3_805, 3_823, 3_843, 3_894, 3_915, 3_994, 4_044, 4_068, 4_102, 4_107, 4_110, 4_117, 4_122, 4_125, 4_156,
+				4_177, 4_191, 4_192, 4_196, 4_206, 4_213, 4_217, 4_227, 4_254, 4_260, 4_266, 4_281, 4_304, 4_344, 4_371,
 				4_378, 4_393, 4_404, 4_420, 4_424, 4_428, 4_496, 4_515, 4_534, 4_541, 4_545, 4_567, 4_613, 4_619, 4_634, 4_637, 4_640,
-				4_642, 4_648, 4_664, 4_666, 4_707, 4_716, 4_717, 4_729, 4_747, 4_775, 4_776, 4_781, 4_783, 4_786, 4_795, 4_834, 4_859,
-				4_904, 4_918, 4_922, 4_944, 4_947, 4_955, 4_963, 4_996,
+				4_642, 4_648, 4_664, 4_666, 4_707, 4_716, 4_717, 4_729, 4_775, 4_776, 4_781, 4_783, 4_786, 4_795, 4_834, 4_857, 4_859,
+				4_891, 4_904, 4_918, 4_922, 4_944, 4_947, 4_955, 4_963, 4_996,
 			],
 		),
 		GraphFuzzerKnownIssue(
@@ -921,7 +923,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "A type receives a label as one type while a type built inside it receives the label as another, and the mock rebinds the first under the label inside the receiver's builder function, where the second then reads it",
 			signatures: [.compilerError(containing: "cannot convert value of type")],
-			seeds: [1_525, 1_995],
+			seeds: [4_747],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "A required receive in the tree of a dependency a mock promotes is handed the mocked type's onlyIfAvailable alias of that property, which is optional",

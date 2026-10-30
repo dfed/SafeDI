@@ -1021,11 +1021,15 @@ enum GraphFuzzerGenerator {
 		/// graph is drawn as before.
 		///
 		/// Now and then, too, an owner with `generateMock: true` receives a type of the graph that no root reaches, that has
-		/// no forwarded properties, and that it does not instantiate, which its mock builds beside it, and that type
-		/// receives the constant: by value or as its `LazilyInstantiated` (or `SendableLazilyInstantiated`), required or
-		/// only if available. The owner's own properties are one instance in its mock, so the mock wraps the parameter it
-		/// takes for the constant rather than take the wrapper. `unbuildableDependencySiblingReceiverRandom` draws only for
-		/// these receives, so a graph without one is drawn as before.
+		/// no forwarded properties, and that it does not instantiate, which its mock builds beside it. Mostly that type
+		/// receives the constant, required or only if available: by value or as its `LazilyInstantiated` (or
+		/// `SendableLazilyInstantiated`), which the mock wraps the parameter it takes for the constant to make, since the
+		/// owner's own properties are one instance in its mock; or, in a mixed graph, the owner lazily instantiates the
+		/// constant as one wrapper and the type receives the other kind, which that parameter cannot make, so the mock takes
+		/// the instance as well. Now and then, instead, the type instantiates a type of the graph under the constant's label
+		/// and a type it instantiates receives the constant, which that declaration hides, as the tool must report.
+		/// `unbuildableDependencySiblingReceiverRandom` draws only for these receives, so a graph without one is drawn as
+		/// before.
 		private mutating func addingReceiversOfDependenciesMocksCannotBuild(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			let reachedNames = Self.namesReachedFromRoots(in: declarations)
 			let declarationIndexByName = Dictionary(uniqueKeysWithValues: declarations.enumerated().map { ($1.name, $0) })
@@ -1078,22 +1082,61 @@ enum GraphFuzzerGenerator {
 				}
 				guard !siblingTypeIndices.isEmpty else { return }
 				let siblingTypeIndex = unbuildableDependencySiblingReceiverRandom.element(of: siblingTypeIndices)
-				let wrapper = switch sendability {
-				case .nonSendable:
-					"LazilyInstantiated"
-				case .sendable:
-					"SendableLazilyInstantiated"
-				case .mixed:
-					unbuildableDependencySiblingReceiverRandom.percentChance(50) ? "SendableLazilyInstantiated" : "LazilyInstantiated"
-				}
-				let receivedType = unbuildableDependencySiblingReceiverRandom.percentChance(50) ? "\(wrapper)<\(unbuildableProperty.type)>" : unbuildableProperty.type
+				let siblingIndex = declarationIndexByName[typeName(siblingTypeIndex)]!
 				let isOnlyIfAvailable = unbuildableDependencySiblingReceiverRandom.percentChance(30)
-				declarations[declaringIndex].properties.append(PropertyDeclaration(attribute: "@Received", label: "t\(siblingTypeIndex)", type: typeName(siblingTypeIndex)))
-				declarations[declarationIndexByName[typeName(siblingTypeIndex)]!].properties.append(PropertyDeclaration(
-					attribute: isOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received",
-					label: unbuildableProperty.label,
-					type: isOnlyIfAvailable ? receivedType + "?" : receivedType,
-				))
+				let receiveAttribute = isOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received"
+				let variantRoll = unbuildableDependencySiblingReceiverRandom.integer(in: 0...99)
+				if variantRoll < 25 {
+					// The sibling instantiates a buildable type under the constant's label, and a type it instantiates
+					// receives the constant: that declaration hides it there, which the tool must reject.
+					let hidingTypeIndex = unbuildableDependencySiblingReceiverRandom.integer(in: 0...(typeCount - 1))
+					let receiverIndices = declarations[siblingIndex].properties
+						.filter { $0.attribute.hasPrefix("@Instantiated") }
+						.compactMap { declarationIndexByName[Self.builtTypeName(of: $0)] }
+						.filter { $0 != siblingIndex && declarations[$0].declaresHelperTypes && !declarations[$0].properties.contains { $0.label == unbuildableProperty.label } }
+					guard forwardedProperties[hidingTypeIndex] == nil, !receiverIndices.isEmpty else { return }
+					let receiverIndex = unbuildableDependencySiblingReceiverRandom.element(of: receiverIndices)
+					declarations[declaringIndex].properties.append(PropertyDeclaration(attribute: "@Received", label: "t\(siblingTypeIndex)", type: typeName(siblingTypeIndex)))
+					declarations[siblingIndex].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: unbuildableProperty.label, type: typeName(hidingTypeIndex)))
+					declarations[receiverIndex].properties.append(PropertyDeclaration(
+						attribute: receiveAttribute,
+						label: unbuildableProperty.label,
+						type: isOnlyIfAvailable ? unbuildableProperty.type + "?" : unbuildableProperty.type,
+					))
+				} else if variantRoll < 50, sendability == .mixed {
+					// The owner lazily instantiates the constant as one wrapper and the sibling receives the other kind, which
+					// the parameter the mock takes for the owner's wrapper cannot make.
+					let ownerWrapperIsSendable = unbuildableDependencySiblingReceiverRandom.percentChance(50)
+					guard let unbuildablePropertyIndex = declarations[declaringIndex].properties.firstIndex(where: { $0.label == unbuildableProperty.label }) else { return }
+					declarations[declaringIndex].properties[unbuildablePropertyIndex] = PropertyDeclaration(
+						attribute: unbuildableProperty.attribute,
+						label: unbuildableProperty.label,
+						type: "\(lazilyInstantiatedWrapper(isSendable: ownerWrapperIsSendable))<\(unbuildableProperty.type)>",
+					)
+					let receivedType = "\(lazilyInstantiatedWrapper(isSendable: !ownerWrapperIsSendable))<\(unbuildableProperty.type)>"
+					declarations[declaringIndex].properties.append(PropertyDeclaration(attribute: "@Received", label: "t\(siblingTypeIndex)", type: typeName(siblingTypeIndex)))
+					declarations[siblingIndex].properties.append(PropertyDeclaration(
+						attribute: receiveAttribute,
+						label: unbuildableProperty.label,
+						type: isOnlyIfAvailable ? receivedType + "?" : receivedType,
+					))
+				} else {
+					let wrapper = switch sendability {
+					case .nonSendable:
+						"LazilyInstantiated"
+					case .sendable:
+						"SendableLazilyInstantiated"
+					case .mixed:
+						unbuildableDependencySiblingReceiverRandom.percentChance(50) ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+					}
+					let receivedType = unbuildableDependencySiblingReceiverRandom.percentChance(50) ? "\(wrapper)<\(unbuildableProperty.type)>" : unbuildableProperty.type
+					declarations[declaringIndex].properties.append(PropertyDeclaration(attribute: "@Received", label: "t\(siblingTypeIndex)", type: typeName(siblingTypeIndex)))
+					declarations[siblingIndex].properties.append(PropertyDeclaration(
+						attribute: receiveAttribute,
+						label: unbuildableProperty.label,
+						type: isOnlyIfAvailable ? receivedType + "?" : receivedType,
+					))
+				}
 			}
 			for declaringIndex in declarations.indices {
 				guard let unbuildableProperty = declarations[declaringIndex].properties.first(where: {
@@ -1631,6 +1674,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// A receive of such a property as a `LazilyInstantiated` or `SendableLazilyInstantiated`, by a type a mocked owner
 	/// of the property receives, whose mock wraps the parameter it takes for the property.
 	case dependencyMockCannotBuildReceivedLazilyBesideItsMockedOwner
+	/// A mocked owner's lazily instantiated property of a type that is not `@Instantiable`, which a type the owner
+	/// receives receives as the other wrapper kind, which the owner's parameter cannot make.
+	case dependencyMockCannotBuildLazilyInstantiatedReceivedAsOtherKindBesideItsMockedOwner
 	/// A graph whose properties use both `Sendable` wrappers and wrappers that are not `Sendable`.
 	case sendableAndNonSendableWrappers
 	/// A type with `generateMock: true` on a cycle that an instantiator makes lazy.
@@ -1677,6 +1723,8 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		/// The properties of types that are not `@Instantiable` each type receives as a lazily instantiated wrapper,
 		/// spelled `label: Type` with the wrapped type, and the types each type receives.
 		var unbuildablePropertiesReceivedLazilyByTypeName = [String: Set<String>]()
+		/// The same receives, spelled `label: Wrapper<Type>`.
+		var unbuildableWrapperPropertiesReceivedByTypeName = [String: Set<String>]()
 		var receivedTypeNamesByTypeName = [String: Set<String>]()
 		for content in fixture.swiftFileContent {
 			var currentTypeName: String?
@@ -1753,6 +1801,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					if attribute == "@Received" || attribute == "@Received(onlyIfAvailable: true)", nonOptionalType.contains("Unbuildable"), let currentTypeName {
 						if let instanceType {
 							unbuildablePropertiesReceivedLazilyByTypeName[currentTypeName, default: []].insert("\(label): \(instanceType)")
+							unbuildableWrapperPropertiesReceivedByTypeName[currentTypeName, default: []].insert("\(label): \(nonOptionalType)")
 						} else {
 							unbuildablePropertiesReceivedByTypeName[currentTypeName, default: []].insert("\(label): \(nonOptionalType)")
 						}
@@ -1829,6 +1878,23 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 		}) {
 			features.insert(.dependencyMockCannotBuildReceivedLazilyBesideItsMockedOwner)
+		}
+		/// `label: Wrapper<Type>` with the other wrapper kind, or `nil` when `property` is not so spelled.
+		func otherWrapperKind(of property: String) -> String? {
+			if property.contains(": SendableLazilyInstantiated<") {
+				property.replacingOccurrences(of: ": SendableLazilyInstantiated<", with: ": LazilyInstantiated<")
+			} else if property.contains(": LazilyInstantiated<") {
+				property.replacingOccurrences(of: ": LazilyInstantiated<", with: ": SendableLazilyInstantiated<")
+			} else {
+				nil
+			}
+		}
+		if unbuildablePropertiesInstantiatedByTypeName.contains(where: { ownerName, instantiatedProperties in
+			mockedTypeNames.contains(ownerName) && receivedTypeNamesByTypeName[ownerName, default: []].contains { receivedTypeName in
+				!unbuildableWrapperPropertiesReceivedByTypeName[receivedTypeName, default: []].isDisjoint(with: instantiatedProperties.compactMap(otherWrapperKind(of:)))
+			}
+		}) {
+			features.insert(.dependencyMockCannotBuildLazilyInstantiatedReceivedAsOtherKindBesideItsMockedOwner)
 		}
 		return features
 	}
