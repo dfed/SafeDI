@@ -150,7 +150,7 @@ public struct InstantiableMacro: MemberMacro {
 					.flatMap(\.bindings)
 					.compactMap { binding in
 						IdentifierPatternSyntax(binding.pattern).flatMap { pattern in
-							binding.typeAnnotation.map { (label: pattern.identifier.text, type: $0.type) }
+							binding.typeAnnotation.map { (name: pattern.identifier, type: $0.type) }
 						}
 					},
 				fulfilledByParametersOf: memberDeclarations.compactMap { InitializerDeclSyntax($0)?.signature }
@@ -828,7 +828,7 @@ public struct InstantiableMacro: MemberMacro {
 				in: visitor.instantiateFunctions.flatMap { instantiateFunction in
 					instantiateFunction.syntax.signature.parameterClause.parameters
 						.filter { $0.defaultValue == nil }
-						.map { (label: ($0.secondName ?? $0.firstName).text, type: $0.type) }
+						.map { (name: $0.secondName ?? $0.firstName, type: $0.type) }
 				},
 				fulfilledByParametersOf: Self.mockFunctionSignatures(foundBy: visitor),
 				declaredAmong: Self.declarations(in: declaration.memberBlock.members),
@@ -1507,13 +1507,14 @@ public struct InstantiableMacro: MemberMacro {
 	/// label among `functionSignatures`, since SafeDI matches a parameter to a dependency by its spelled type. Within
 	/// the decorated declaration the qualified name names the same type, so the change is safe wherever it is made.
 	/// - Parameters:
-	///   - dependencies: The label of each dependency and the syntax of its type.
+	///   - dependencies: The name of each dependency – a property's, or a parameter's inner name – and the syntax of
+	///     its type.
 	///   - functionSignatures: The initializers and hand-written mocks whose parameters fulfill the dependencies.
 	///   - declarations: The members of the decorated declaration, with those in each clause of its `#if` blocks.
 	///   - enclosingType: The decorated type with every type that encloses it, which the fix-it writes before the
 	///     nested type's name.
 	private static func diagnoseUnqualifiedNestedTypes(
-		in dependencies: [(label: String, type: TypeSyntax)],
+		in dependencies: [(name: TokenSyntax, type: TypeSyntax)],
 		fulfilledByParametersOf functionSignatures: [FunctionSignatureSyntax],
 		declaredAmong declarations: [DeclSyntax],
 		enclosingType enclosingTypeDescription: TypeDescription,
@@ -1534,9 +1535,10 @@ public struct InstantiableMacro: MemberMacro {
 				within: enclosingTypeDescription,
 				amongInstantiableTypes: nestedInstantiableTypes,
 			) ?? declaredTypeDescription
+			let dependencyLabel = dependency.name.spelledAsParameterName
 			for nestedTypeName in nestedTypeNames where generatedTypeDescription.namesUnqualifiedType(where: { $0 == nestedTypeName }) {
 				let fulfillingParameterTypes = parameters
-					.filter { ($0.secondName ?? $0.firstName).text == dependency.label }
+					.filter { ($0.secondName ?? $0.firstName).spelledAsParameterName == dependencyLabel }
 					.map(\.type)
 					.filter { $0.typeDescription.namesUnqualifiedType(where: { $0 == nestedTypeName }) }
 				let qualifier = NestedTypeNameQualifier(typeName: nestedTypeName, enclosingType: enclosingType)
@@ -1545,7 +1547,7 @@ public struct InstantiableMacro: MemberMacro {
 					error: FixableInstantiableError.unqualifiedNestedType(
 						typeName: nestedTypeName,
 						enclosingTypeName: enclosingTypeName,
-						dependencyLabel: dependency.label,
+						dependencyLabel: dependency.name.text,
 					),
 					changes: ([dependency.type] + fulfillingParameterTypes).map { type in
 						.replace(

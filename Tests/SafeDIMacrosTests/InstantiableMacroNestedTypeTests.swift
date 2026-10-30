@@ -436,6 +436,61 @@ import Testing
 		}
 
 		@Test
+		func declaration_fixItQualifiesInitializerParameter_whenParameterNamesKeywordPropertyWithoutBackticks() {
+			// `default` names the property declared as `` `default` ``, so the parameter fulfills it.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public struct Config {}
+
+				    public init(default: Config) {
+				        self.default = `default`
+				    }
+
+				    @Forwarded let `default`: Config
+				}
+				""",
+				expandedSource: """
+				public final class Child: Instantiable {
+				    public struct Config {}
+
+				    public init(default: Config) {
+				        self.default = `default`
+				    }
+
+				    let `default`: Config
+
+				    public typealias ForwardedProperties = Config
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The generated code that builds or receives ``default`` lives in another type’s extension, where `Config`, declared in `Child`, does not resolve. Write it as `Child.Config`.",
+						line: 9,
+						column: 31,
+						severity: .warning,
+						fixIts: [FixItSpec(message: "Replace `Config` with `Child.Config`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Replace `Config` with `Child.Config`"],
+				fixedSource: """
+				@Instantiable
+				public final class Child: Instantiable {
+				    public struct Config {}
+
+				    public init(default: Child.Config) {
+				        self.default = `default`
+				    }
+
+				    @Forwarded let `default`: Child.Config
+				}
+				""",
+			)
+		}
+
+		@Test
 		func declaration_producesOneWarning_whenEachClauseOfIfConfigDeclaresNestedType() {
 			assertMacroExpansion(
 				"""
