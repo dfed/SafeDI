@@ -1001,8 +1001,9 @@ enum GraphFuzzerGenerator {
 		/// the second; and, usually, a receive of the last alias, required or `onlyIfAvailable`, on a type the alias's
 		/// type instantiates. A receiver that requires the last alias needs every alias in the chain created, so the
 		/// first alias's fulfilling property must be built before the receiver, which the rest of the graph can make
-		/// impossible. `aliasProperty` never aliases an optional property, so no other pass draws such a chain, and
-		/// `aliasChainRandom` draws only for this one, so every other graph is drawn as before.
+		/// impossible. `aliasProperty` never aliases an optional property, so no pass before this one draws such a
+		/// chain, and only `addingSiblingAliasChains`, which runs after it, draws one too. `aliasChainRandom` draws only
+		/// for this pass, so every other graph is drawn as before.
 		private mutating func addingAliasChains(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard aliasChainRandom.percentChance(10) else { return declarations }
 			var declarations = declarations
