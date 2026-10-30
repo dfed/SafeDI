@@ -21,13 +21,6 @@
 import SwiftSyntax
 
 extension DeclModifierListSyntax {
-	public var containsPublicOrOpen: Bool {
-		contains(where: { modifier in
-			modifier.name.text == "public"
-				|| modifier.name.text == "open"
-		})
-	}
-
 	public var staticModifier: Element? {
 		first(where: { modifier in
 			modifier.name.text == "static"
@@ -50,6 +43,32 @@ extension DeclModifierListSyntax {
 			modifierRange: accessModifier.flatMap { sourceLocationConverter?.sourceRange(of: $0.name) },
 			declarationStartLocation: sourceLocationConverter?.declarationLocation(for: (first?.name ?? keyword).positionAfterSkippingLeadingTrivia),
 		)
+	}
+}
+
+// MARK: - WithModifiersSyntax
+
+extension WithModifiersSyntax {
+	/// This declaration without the modifier that makes it `private` or `fileprivate`, which generated code, always in
+	/// a file of its own, can never use, together with the level that modifier set, or `nil` when no modifier does.
+	/// The token that followed the modifier – the next modifier, or `keyword`, which introduces the declaration, when
+	/// none follows – takes the modifier's leading trivia, so the declaration keeps its line and indentation.
+	public func removingPrivateOrFilePrivateModifier(keyword: WritableKeyPath<Self, TokenSyntax>) -> (declaration: Self, accessLevel: AccessLevel)? {
+		var remainingModifiers = Array(modifiers)
+		guard let (index, accessLevel) = remainingModifiers.enumerated().lazy.compactMap({ index, modifier in
+			AccessLevel(modifier.name.tokenKind).flatMap { $0.isPrivateOrFilePrivate ? (index, $0) : nil }
+		}).first else {
+			return nil
+		}
+		let removedModifier = remainingModifiers.remove(at: index)
+		var declaration = self
+		if index < remainingModifiers.count {
+			remainingModifiers[index].leadingTrivia = removedModifier.leadingTrivia + remainingModifiers[index].leadingTrivia
+		} else {
+			declaration[keyPath: keyword].leadingTrivia = removedModifier.leadingTrivia + declaration[keyPath: keyword].leadingTrivia
+		}
+		declaration.modifiers = DeclModifierListSyntax(remainingModifiers)
+		return (declaration, accessLevel)
 	}
 }
 

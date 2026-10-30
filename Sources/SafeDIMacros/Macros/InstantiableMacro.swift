@@ -433,56 +433,19 @@ public struct InstantiableMacro: MemberMacro {
 						))
 
 					case .inaccessibleInitializer:
-						let disallowedModifiers = Set([
-							"private",
-							"fileprivate",
-							"internal",
-							"package",
-						])
-						var fixedSyntax = syntaxToFix
-						fixedSyntax.modifiers = .init(fixedSyntax.modifiers.map {
-							if disallowedModifiers.contains($0.name.text) {
-								.init(
-									leadingTrivia: $0.leadingTrivia,
-									name: TokenSyntax(
-										TokenKind.keyword(.public),
-										presence: .present,
+						// Only a `private` or `fileprivate` initializer is inaccessible to generated code.
+						if let (fixedSyntax, accessLevel) = syntaxToFix.removingPrivateOrFilePrivateModifier(keyword: \.initKeyword) {
+							context.diagnose(Diagnostic(
+								node: Syntax(syntaxToFix),
+								error: FixableInstantiableError.missingRequiredInitializer(.isPrivateOrFilePrivate(accessLevel)),
+								changes: [
+									.replace(
+										oldNode: Syntax(syntaxToFix),
+										newNode: Syntax(fixedSyntax),
 									),
-									trailingTrivia: $0.trailingTrivia,
-								)
-							} else {
-								$0
-							}
-						})
-						if !fixedSyntax.modifiers.containsPublicOrOpen {
-							if syntaxToFix.modifiers.first != nil {
-								fixedSyntax.modifiers[fixedSyntax.modifiers.startIndex].leadingTrivia = []
-							}
-							fixedSyntax.modifiers.insert(.init(
-								leadingTrivia: fixedSyntax.modifiers.isEmpty ? .newline : [],
-								name: TokenSyntax(
-									TokenKind.keyword(.public),
-									presence: .present,
-								),
-								trailingTrivia: .space,
-							), at: fixedSyntax.modifiers.startIndex)
+								],
+							))
 						}
-						if let firstModifier = syntaxToFix.modifiers.first {
-							fixedSyntax.modifiers[fixedSyntax.modifiers.startIndex].leadingTrivia = firstModifier.leadingTrivia
-						} else {
-							fixedSyntax.modifiers[fixedSyntax.modifiers.startIndex].leadingTrivia = fixedSyntax.initKeyword.leadingTrivia
-							fixedSyntax.initKeyword.leadingTrivia = []
-						}
-						context.diagnose(Diagnostic(
-							node: Syntax(syntaxToFix),
-							error: FixableInstantiableError.missingRequiredInitializer(.isNotPublicOrOpen),
-							changes: [
-								.replace(
-									oldNode: Syntax(syntaxToFix),
-									newNode: Syntax(fixedSyntax),
-								),
-							],
-						))
 					}
 				} else {
 					var declarationWithInitializer = declaration
@@ -593,7 +556,7 @@ public struct InstantiableMacro: MemberMacro {
 				}
 			}
 
-			// Validate mock method if one exists: must be public, return Self or the type name, and have parameters for all dependencies.
+			// Validate mock method if one exists: must not be private or fileprivate, must return Self or the type name, and must have parameters for all dependencies.
 			if let mockInitializer = visitor.mockInitializer,
 			   let mockSyntax = visitor.mockFunctionSyntax
 			{
@@ -677,26 +640,12 @@ public struct InstantiableMacro: MemberMacro {
 						],
 					))
 				}
-				if !mockInitializer.access.level.isPublicOrOpen {
-					var fixedMockSyntax = mockSyntax
-					// Mock detection requires `static` or `class`, so modifiers.first is always non-nil.
-					let firstModifier = mockSyntax.modifiers.first
-					fixedMockSyntax.modifiers.insert(
-						DeclModifierSyntax(
-							leadingTrivia: firstModifier?.leadingTrivia ?? mockSyntax.funcKeyword.leadingTrivia,
-							name: .keyword(.public),
-							trailingTrivia: .space,
-						),
-						at: fixedMockSyntax.modifiers.startIndex,
-					)
-					if let firstModifier {
-						fixedMockSyntax.modifiers[fixedMockSyntax.modifiers.startIndex].leadingTrivia = firstModifier.leadingTrivia
-						let secondModifierIndex = fixedMockSyntax.modifiers.index(after: fixedMockSyntax.modifiers.startIndex)
-						fixedMockSyntax.modifiers[secondModifierIndex].leadingTrivia = []
-					}
+				// Any other access can suit the generated mocks that call the method; SafeDITool checks those, which it
+				// generates.
+				if let (fixedMockSyntax, accessLevel) = mockSyntax.removingPrivateOrFilePrivateModifier(keyword: \.funcKeyword) {
 					context.diagnose(Diagnostic(
 						node: Syntax(mockSyntax),
-						error: FixableInstantiableError.mockMethodNotPublic,
+						error: FixableInstantiableError.privateOrFilePrivateMockMethod(accessLevel),
 						changes: [
 							.replace(
 								oldNode: Syntax(mockSyntax),
@@ -843,7 +792,7 @@ public struct InstantiableMacro: MemberMacro {
 				))
 			}
 
-			// Validate mock() methods on extensions: must be public, return the extended type or one of its `fulfillingAdditionalTypes`, and be unique per return type.
+			// Validate mock() methods on extensions: must not be private or fileprivate, must return the extended type or one of its `fulfillingAdditionalTypes`, and must be unique per return type.
 			let extendedTypeDescription = extensionDeclaration.extendedType.typeDescription
 			let extendedTypeName = extendedTypeDescription.asSource
 			let extendedTypeStrippingGenerics = extendedTypeDescription.strippingGenerics
@@ -1038,25 +987,10 @@ public struct InstantiableMacro: MemberMacro {
 						],
 					))
 				}
-				if !mockFunction.modifiers.containsPublicOrOpen {
-					var fixedMockFunction = mockFunction
-					let firstModifier = mockFunction.modifiers.first
-					fixedMockFunction.modifiers.insert(
-						DeclModifierSyntax(
-							leadingTrivia: firstModifier?.leadingTrivia ?? mockFunction.funcKeyword.leadingTrivia,
-							name: .keyword(.public),
-							trailingTrivia: .space,
-						),
-						at: fixedMockFunction.modifiers.startIndex,
-					)
-					if let firstModifier {
-						fixedMockFunction.modifiers[fixedMockFunction.modifiers.startIndex].leadingTrivia = firstModifier.leadingTrivia
-						let secondModifierIndex = fixedMockFunction.modifiers.index(after: fixedMockFunction.modifiers.startIndex)
-						fixedMockFunction.modifiers[secondModifierIndex].leadingTrivia = []
-					}
+				if let (fixedMockFunction, accessLevel) = mockFunction.removingPrivateOrFilePrivateModifier(keyword: \.funcKeyword) {
 					context.diagnose(Diagnostic(
 						node: Syntax(mockFunction),
-						error: FixableInstantiableError.mockMethodNotPublic,
+						error: FixableInstantiableError.privateOrFilePrivateMockMethod(accessLevel),
 						changes: [
 							.replace(
 								oldNode: Syntax(mockFunction),

@@ -331,30 +331,32 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			instantiateFunctions.append(InstantiateFunction(syntax: node, initializer: initializer, dependencies: dependencies))
 		}
 
-		if !initializer.access.level.isPublicOrOpen || node.modifiers.staticModifier == nil {
+		if node.modifiers.staticModifier == nil {
 			var modifiedNode = node
-			modifiedNode.modifiers = DeclModifierListSyntax(
-				arrayLiteral:
-				DeclModifierSyntax(
-					name: TokenSyntax(
-						TokenKind.keyword(.public),
-						leadingTrivia: node.modifiers.first?.leadingTrivia ?? node.funcKeyword.leadingTrivia,
-						presence: .present,
-					),
-				),
-				DeclModifierSyntax(
-					name: TokenSyntax(
-						TokenKind.keyword(.static),
-						leadingTrivia: .space,
-						trailingTrivia: .space,
-						presence: .present,
-					),
-				),
-			)
-			modifiedNode.funcKeyword.leadingTrivia = []
+			let staticModifier = DeclModifierSyntax(name: .keyword(.static), trailingTrivia: .space)
+			if node.modifiers.isEmpty {
+				// The modifier takes the place of the keyword it precedes.
+				modifiedNode.modifiers = [staticModifier.with(\.leadingTrivia, node.funcKeyword.leadingTrivia)]
+				modifiedNode.funcKeyword.leadingTrivia = []
+			} else {
+				modifiedNode.modifiers.append(staticModifier)
+			}
 			diagnostics.append(Diagnostic(
 				node: node,
-				error: FixableInstantiableError.missingAttributes,
+				error: FixableInstantiableError.instantiateMethodNotStatic,
+				changes: [
+					.replace(
+						oldNode: Syntax(node),
+						newNode: Syntax(modifiedNode),
+					),
+				],
+			))
+		}
+		// Any other access can suit the code that calls the method; SafeDITool checks that code, which it generates.
+		if let (modifiedNode, accessLevel) = node.removingPrivateOrFilePrivateModifier(keyword: \.funcKeyword) {
+			diagnostics.append(Diagnostic(
+				node: node,
+				error: FixableInstantiableError.privateOrFilePrivateInstantiateMethod(accessLevel),
 				changes: [
 					.replace(
 						oldNode: Syntax(node),
@@ -646,7 +648,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 		instantiableType = nodeDeclarationType
 		processAttributes(node.attributes, on: macro)
-		processModifiers(node.modifiers, on: node)
+		processModifiers(on: node)
 		instantiableAccess = node.modifiers.access(introducedBy: node.keyword, sourceLocationConverter: sourceLocationConverter)
 
 		return .visitChildren
@@ -689,33 +691,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		processCustomMockName()
 	}
 
-	private func processModifiers(_: DeclModifierListSyntax, on node: some ConcreteDeclSyntaxProtocol) {
-		if !node.modifiers.containsPublicOrOpen {
-			let publicModifier = DeclModifierSyntax(
-				name: TokenSyntax(
-					TokenKind.keyword(.public),
-					leadingTrivia: node.modifiers.first?.leadingTrivia ?? .newline,
-					trailingTrivia: node.modifiers.first?.trailingTrivia ?? .space,
-					presence: .present,
-				),
-			)
-			var modifiedNode = node
-			if var firstModifier = modifiedNode.modifiers.first {
-				firstModifier.name.leadingTrivia = []
-				modifiedNode.modifiers.replaceSubrange(
-					modifiedNode.modifiers.startIndex..<modifiedNode.attributes.index(after: modifiedNode.attributes.startIndex),
-					with: [publicModifier, firstModifier],
-				)
-				modifiedNode.modifiers = modifiedNode.modifiers.filter {
-					$0.name.text != "internal" && $0.name.text != "fileprivate" && $0.name.text != "private"
-				}
-			} else {
-				modifiedNode.modifiers = [publicModifier]
-				modifiedNode.keyword.leadingTrivia = []
-			}
+	/// Reports a `private` or `fileprivate` type, which the code SafeDI generates in another file can never construct.
+	/// Any other access can suit the code that constructs the type; SafeDITool checks that code, which it generates.
+	private func processModifiers(on node: some ConcreteDeclSyntaxProtocol) {
+		if let (modifiedNode, accessLevel) = node.removingPrivateOrFilePrivateModifier(keyword: \.keyword) {
 			diagnostics.append(Diagnostic(
 				node: node,
-				error: FixableInstantiableError.missingPublicOrOpenAttribute,
+				error: FixableInstantiableError.privateOrFilePrivateType(accessLevel),
 				changes: [
 					.replace(
 						oldNode: Syntax(node),
