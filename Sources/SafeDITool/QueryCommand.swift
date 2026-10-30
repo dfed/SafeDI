@@ -74,30 +74,7 @@ struct QueryNeeds: AsyncParsableCommand {
 	/// Reads the modules and reports what each type needs.
 	/// Throws errors as-is so tests can inspect them; `run()` formats them.
 	func query() async throws -> QueryReport {
-		let includedModules = IncludedModule.modules(including: include, moduleInfo: moduleInfo)
-		guard !includedModules.isEmpty else {
-			throw QueryError.noModuleIncluded
-		}
-		let activeCompilationConditions = Set(activeCompilationConditions)
-
-		// Each module is read as `generate` reads it: a directory as a module's own files, with its own
-		// configuration, and a module info file as a dependent module's.
-		let parsedModules = try await withThrowingTaskGroup(
-			of: ParsedQueryModule.self,
-			returning: [ParsedQueryModule].self,
-		) { taskGroup in
-			for includedModule in includedModules {
-				taskGroup.addTask {
-					try await ParsedQueryModule(reading: includedModule, activeCompilationConditions: activeCompilationConditions)
-				}
-			}
-			var parsedModules = [ParsedQueryModule]()
-			for try await parsedModule in taskGroup {
-				parsedModules.append(parsedModule)
-			}
-			// Modules are combined in name order, whatever order their reads finished in.
-			return parsedModules.sorted { $0.includedModule.name < $1.includedModule.name }
-		}
+		let parsedModules = try await readIncludedModules()
 
 		// Every declaration the query reports was read from one of these files, under this spelling.
 		var attributionsByFilePath = [String: FileAttribution]()
@@ -199,6 +176,32 @@ struct QueryNeeds: AsyncParsableCommand {
 			typeReports.append(TypeReport(productionRequirements, mockReport: mockReport, attributionsByFilePath: attributionsByFilePath))
 		}
 		return QueryReport(types: typeReports)
+	}
+
+	/// The included modules, each read as `generate` reads it: a directory as a module's own files, with its own
+	/// configuration, and a module info file as a dependent module's. Ordered by name, whatever order their reads
+	/// finished in, which is the order their declarations are combined in.
+	func readIncludedModules() async throws -> [ParsedQueryModule] {
+		let includedModules = IncludedModule.modules(including: include, moduleInfo: moduleInfo)
+		guard !includedModules.isEmpty else {
+			throw QueryError.noModuleIncluded
+		}
+		let activeCompilationConditions = Set(activeCompilationConditions)
+		return try await withThrowingTaskGroup(
+			of: ParsedQueryModule.self,
+			returning: [ParsedQueryModule].self,
+		) { taskGroup in
+			for includedModule in includedModules {
+				taskGroup.addTask {
+					try await ParsedQueryModule(reading: includedModule, activeCompilationConditions: activeCompilationConditions)
+				}
+			}
+			var parsedModules = [ParsedQueryModule]()
+			for try await parsedModule in taskGroup {
+				parsedModules.append(parsedModule)
+			}
+			return parsedModules.sorted { $0.includedModule.name < $1.includedModule.name }
+		}
 	}
 
 	/// The names of the concrete types that contain `typeName` or that it contains, ignoring case – the likeliest
@@ -318,7 +321,7 @@ struct IncludedModule: Equatable {
 }
 
 /// A module `QueryNeeds` read.
-private struct ParsedQueryModule {
+struct ParsedQueryModule {
 	/// Reads the module as `generate` reads it.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	init(reading includedModule: IncludedModule, activeCompilationConditions: Set<String>) async throws {
@@ -362,9 +365,12 @@ private struct ParsedQueryModule {
 			} catch {
 				throw QueryError.moduleInfoNotReadable(path: path, reason: "\(error) \(BinaryFile.unreadableFileExplanation)")
 			}
-			// Every declaration the file holds belongs to the module, named as the build that wrote the file named it, if
-			// that build did. The query does not know the module's package.
-			moduleInfo = readModuleInfo.declaringEveryInstantiable(in: DeclaringModule(moduleName: readModuleInfo.moduleName ?? includedModule.name, packageName: nil))
+			// Every declaration the file holds belongs to the module, named, with its package, as the build that wrote the
+			// file named them, if that build did. The query checks no access, so it only carries them.
+			moduleInfo = readModuleInfo.declaringEveryInstantiable(in: DeclaringModule(
+				moduleName: readModuleInfo.moduleName ?? includedModule.name,
+				packageName: readModuleInfo.packageName,
+			))
 			// `parseModule` rejects a module with more than one configuration, so a module info file holds at most one.
 			configuration = moduleInfo.configurations.first
 			// A module info file names each file as the build that wrote it did, so the module's declarations are

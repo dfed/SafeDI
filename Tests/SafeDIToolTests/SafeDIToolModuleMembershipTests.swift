@@ -445,6 +445,38 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 		#expect(report.types.map { $0.modules.map(\.name) } == [[fileName]])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func queryNeeds_recordsModuleAndPackageModuleInfoRecords_whenModuleInfoIsWrittenWithBoth() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.instantiableContent(named: "Engine")],
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "EngineModule", "--package-name", "Engines"],
+		)
+
+		let parsedModules = try await QueryNeeds.parse(["Engine", "--module-info", output.moduleInfoOutputPath]).readIncludedModules()
+
+		#expect(parsedModules.map { Self.declaringModules(of: $0.moduleInfo.instantiables) } == [
+			["Engine": DeclaringModule(moduleName: "EngineModule", packageName: "Engines")],
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func queryNeeds_recordsModuleNamedByDirectoryWithoutPackage_whenModuleIsDirectory() async throws {
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Engine",
+			modules: [QueryTestModule("Engines", [Self.instantiableContent(named: "Engine")])],
+			filesToDelete: &filesToDelete,
+		)
+
+		let parsedModules = try await QueryNeeds.parse(["Engine", "--include", output.paths(of: "Engines")[0]]).readIncludedModules()
+
+		#expect(parsedModules.map { Self.declaringModules(of: $0.moduleInfo.instantiables) } == [
+			["Engine": DeclaringModule(moduleName: "Engines", packageName: nil)],
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
