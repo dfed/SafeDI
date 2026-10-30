@@ -732,6 +732,19 @@ struct SafeDIToolGraphFuzzerTests {
 			GraphFuzzerPartition.Module(name: "Gamma", fileIndices: [3], referencedModuleNames: [], dependencies: []),
 		])
 		#expect(partition.importedModuleNamesByFileIndex == [["Alpha"], [], [], []])
+	}
+
+	@Test
+	func partitionDescription_listsEachModuleWithItsDependenciesAndFilesImports_whenModulesDependOnOneAnother() {
+		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
+			Self.typeSource(named: "S12_Root0", arguments: "isRoot: true", properties: ["@Instantiated let t1: S12_T1"]),
+			Self.typeSource(named: "S12_T1", properties: ["@Instantiated let t2Builder: Instantiator<S12_T2>"]),
+			Self.typeSource(named: "S12_T2", properties: ["@Instantiated let t1Builder: Instantiator<S12_T1>"]),
+			Self.typeSource(named: "S12_T3", properties: []),
+		])
+
+		let partition = GraphFuzzerPartition.partition(of: fixture, moduleCount: 4)
+
 		#expect(partition.description == """
 		Alpha: S12_T1.swift, S12_T2.swift
 		Beta (depends on Alpha): S12_Root0.swift importing Alpha
@@ -917,7 +930,7 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func generatedModule_splitsCombinedFileIntoUnitsNamedAsThePluginNamesItsFiles() {
+	func generatedModule_splitsCombinedFileIntoUnitsNamedAsThePluginNamesItsFiles_whenFileHoldsATreeMocksAndConfigurations() {
 		var module = GraphFuzzerGeneratedModule(units: [:], importsByFileName: [:], warnings: [])
 
 		GraphFuzzerGeneratedModule.parsingGeneratedFile("""
@@ -1078,7 +1091,7 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func multiModuleDifference_namesFirstModuleAndUnitWhoseCodeDiffers() {
+	func multiModuleDifference_namesFirstModuleAndUnitWhoseCodeDiffers_whenUnitsOfSeveralModulesDiffer() {
 		let rootCode = "extension S12_Root0 {\n    public convenience init() {\n    }\n}"
 		let mockCode = "#if DEBUG\nextension S12_T1 {\n    static func mock() -> S12_T1 {\n    }\n}\n#endif"
 		let moduleInfoOutcome = GraphFuzzerMultiModuleOutcome(verdicts: [
