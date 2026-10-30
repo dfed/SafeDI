@@ -3789,6 +3789,10 @@ public actor DependencyTreeGenerator {
 					readWhileCreated[property] = .init(instantiable: instantiable, property: dependency.property, receivedLabel: receivedLabel, declarationLocation: dependency.declarationLocation)
 				}
 			}
+			// The instances of the lazily instantiated properties this type instantiates, which it always creates.
+			let instantiatedLazilyInstantiatedInstanceProperties = Set(
+				instantiable.dependencies.filter(\.isInstantiated).compactMap(\.lazilyInstantiatedInstanceProperty),
+			)
 			for dependency in instantiable.dependencies {
 				switch dependency.source {
 				case .instantiated, .forwarded:
@@ -3800,8 +3804,14 @@ public actor DependencyTreeGenerator {
 						recordRead(of: dependency.property, by: dependency, receivedLabel: dependency.property.label)
 					}
 				case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-					if !onlyIfAvailable, fulfillingProperty.propertyType.isConstant {
-						recordRead(of: propertyRead(by: fulfillingProperty), by: dependency, receivedLabel: fulfillingProperty.label)
+					let readProperty = propertyRead(by: fulfillingProperty)
+					// An `onlyIfAvailable` alias is the exception when it renames the instance of a lazily instantiated
+					// property this type instantiates: `orderedPropertiesToGenerate` builds an alias after the sibling
+					// that fulfills it, and validation rejects a tree that needs the alias first, so it always reads it.
+					if fulfillingProperty.propertyType.isConstant,
+					   !onlyIfAvailable || instantiatedLazilyInstantiatedInstanceProperties.contains(readProperty)
+					{
+						recordRead(of: readProperty, by: dependency, receivedLabel: fulfillingProperty.label)
 					}
 				}
 			}
