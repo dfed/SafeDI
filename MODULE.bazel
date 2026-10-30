@@ -22,6 +22,24 @@ bazel_dep(name = "apple_support", version = "1.24.2", repo_name = "build_bazel_a
 # requires, so this adds no new module to the resolved graph.
 bazel_dep(name = "bazel_skylib", version = "1.7.1")
 
+# The prebuilt SafeDITool toolchains name the execution platform each
+# binary runs on with `@platforms` constraints. 1.0.0 is the version the
+# module graph already resolves, so this adds no new module to it.
+bazel_dep(name = "platforms", version = "1.0.0")
+
+# `safedi_compile` takes SafeDITool from a toolchain. The `safeditool`
+# extension declares one toolchain per prebuilt SafeDITool that
+# `bazel/private/prebuilt_safeditool.bzl` names (none, outside a release's
+# source archive), registered first and gated on
+# `--@safedi//bazel:prefer_prebuilt_safeditool`. SafeDITool built from this
+# source tree is the fallback. See `bazel/extensions.bzl`.
+safeditool = use_extension("//bazel:extensions.bzl", "safeditool")
+use_repo(safeditool, "safeditool_toolchains")
+
+register_toolchains("@safeditool_toolchains//:all")
+
+register_toolchains("//bazel:safeditool_from_source_toolchain")
+
 # Translate SPM dependencies into Bazel targets. The resulting
 # @swiftpkg_* repos are referenced from per-module BUILD.bazel files.
 swift_deps = use_extension(

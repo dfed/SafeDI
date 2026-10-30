@@ -105,6 +105,14 @@ The macro accepts every `swift_library` attribute and declares two targets: the 
 
 A module that needs a shape the macro does not offer can declare the `safedi_compile` rule and its `swift_library` separately, adding `[":<rule name>"]` to the library’s `srcs` and giving the rule the library’s `defines` and `copts`; see [`bazel/safedi.bzl`](../bazel/safedi.bzl).
 
+`SafeDITool` runs as the prebuilt binary the SafeDI release publishes for the machine that runs the build – macOS arm64 or x86_64, or Linux x86_64 or arm64 – the same binary the `SafeDIGenerator` plugin and the Tuist plugin run. Bazel downloads it from the release’s GitHub assets the first time a build needs it – so that build needs network access to GitHub, or a [repository cache](https://bazel.build/run/build#repository-cache) that holds the binary – and checks it against the sha256 recorded in the release’s source archive. On any other machine, Bazel builds `SafeDITool` from source. To always build it from source, add this line to your `.bazelrc`:
+
+```
+common --@safedi//bazel:prefer_prebuilt_safeditool=false
+```
+
+A build that takes SafeDI from a checkout of its repository rather than from a release – through `local_path_override`, `git_override`, or an `archive_override` of a GitHub archive – always builds `SafeDITool` from that checkout, so the rule never runs a binary older than itself.
+
 ### Running SafeDITool yourself
 
 Your integration already has a `SafeDITool`. Run it to read its `--help`, [query what a type needs](#querying-what-a-type-needs), or print a `.safedi` file with `dump`.

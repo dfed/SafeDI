@@ -1,3 +1,52 @@
-"""Export safedi.bzl so downstream consumers can load `safedi_swift_library` and `safedi_compile`."""
+"""SafeDI's Bazel rule and the toolchains that hand it SafeDITool.
+
+Downstream consumers load `safedi_swift_library` and `safedi_compile` from
+`safedi.bzl`. See `extensions.bzl` for which SafeDITool a build runs.
+"""
+
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+load("//bazel/private:safeditool_toolchain.bzl", "safeditool_toolchain")
 
 exports_files(["safedi.bzl"])
+
+# The toolchains `safedi_compile` takes SafeDITool from.
+toolchain_type(
+    name = "safeditool_toolchain_type",
+    visibility = ["//visibility:public"],
+)
+
+# Whether `safedi_compile` runs a SafeDI release's prebuilt SafeDITool when
+# one runs on the execution platform. Set it to false to build SafeDITool
+# from source: `--@safedi//bazel:prefer_prebuilt_safeditool=false`. A build
+# of a checkout of the repository builds it from source either way.
+bool_flag(
+    name = "prefer_prebuilt_safeditool",
+    build_setting_default = True,
+    # Propagates the value from the target to the exec configuration, as
+    # protobuf's `prefer_prebuilt_protoc` does, so a `safedi_compile` built
+    # for a tool honors the value set on the command line.
+    scope = "universal",
+    visibility = ["//visibility:public"],
+)
+
+# The prebuilt toolchains, which the `safeditool` module extension declares
+# in its own repository, require this setting.
+config_setting(
+    name = "prefer_prebuilt_safeditool_set",
+    flag_values = {":prefer_prebuilt_safeditool": "true"},
+    visibility = ["//visibility:public"],
+)
+
+# SafeDITool built from this source tree. MODULE.bazel registers this
+# toolchain after the prebuilt ones, and it runs on any execution platform,
+# so it serves every build no prebuilt toolchain serves.
+safeditool_toolchain(
+    name = "safeditool_from_source",
+    safeditool = "//Sources/SafeDITool",
+)
+
+toolchain(
+    name = "safeditool_from_source_toolchain",
+    toolchain = ":safeditool_from_source",
+    toolchain_type = ":safeditool_toolchain_type",
+)

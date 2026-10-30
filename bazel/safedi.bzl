@@ -30,14 +30,34 @@ two artifacts:
     `@Instantiable` types declared in this module without re-parsing
     the sources.
 
-The rule shells out to `@safedi//Sources/SafeDITool:SafeDITool` (built
-from source by Bazel, cached across runs).
-
 This rule mirrors the Tuist plugin's `SafeDI.preCompileScript`
 helper, which writes the same two artifacts in one invocation. Doing
 both in one action is more efficient than splitting them across two
 rules — every leaf-with-mocks or producer-with-mocks would otherwise
 invoke SafeDITool twice on the same sources.
+
+## Which SafeDITool the rule runs
+
+The rule takes SafeDITool from the `@safedi//bazel:safeditool_toolchain_type`
+toolchain. A SafeDI release from the Bazel Central Registry registers a
+toolchain for each prebuilt SafeDITool binary the release uploads (macOS
+arm64 and x86_64, Linux x86_64 and arm64), so a build runs the release's
+binary for its execution platform: the binary the SwiftPM plugin and the
+Tuist plugin run. Bazel downloads it from the release's GitHub assets the
+first time a build needs it and checks it against the sha256 the
+release's source archive records. The rule runs
+`@safedi//Sources/SafeDITool:SafeDITool`, built from source, instead:
+
+  - when `--@safedi//bazel:prefer_prebuilt_safeditool=false` is set, for
+    example with `common --@safedi//bazel:prefer_prebuilt_safeditool=false`
+    in `.bazelrc`;
+  - on an execution platform no prebuilt binary runs on;
+  - always, when SafeDI comes from a checkout of its repository rather
+    than a release (`local_path_override`, `git_override`, or
+    `archive_override` of a GitHub archive), so the rule never runs a
+    binary older than itself. See `bazel/extensions.bzl`.
+
+Registering another toolchain of this type is not supported.
 
 ## Conditional compilation
 
@@ -78,6 +98,9 @@ report fails the build with a message naming it.
 
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
+
+# The toolchains that hand `safedi_compile` the SafeDITool it runs.
+_SAFEDITOOL_TOOLCHAIN_TYPE = Label("//bazel:safeditool_toolchain_type")
 
 SafeDIInfo = provider(
     doc = "Module info artifact (`.safedi`) emitted by `safedi_compile`.",
@@ -180,7 +203,8 @@ def _safedi_compile_impl(ctx):
         extra_inputs = [dependency_csv] + dependency_module_info_files
 
     ctx.actions.run(
-        executable = ctx.executable._safeditool,
+        executable = ctx.toolchains[_SAFEDITOOL_TOOLCHAIN_TYPE].safeditool,
+        toolchain = _SAFEDITOOL_TOOLCHAIN_TYPE,
         inputs = ctx.files.srcs + [input_csv] + extra_inputs,
         outputs = [combined, module_info],
         arguments = arguments,
@@ -231,11 +255,6 @@ automatically in the `dbg` and `fastbuild` compilation modes, and
 `swift_library.copts`. Each `-D` flag among them reports a compilation
 condition; other options are ignored.""",
         ),
-        "_safeditool": attr.label(
-            default = Label("//Sources/SafeDITool:SafeDITool"),
-            executable = True,
-            cfg = "exec",
-        ),
         "_swift_copts": attr.label(
             default = Label("@build_bazel_rules_swift//swift:copt"),
             providers = [BuildSettingInfo],
@@ -245,6 +264,7 @@ condition; other options are ignored.""",
             providers = [BuildSettingInfo],
         ),
     },
+    toolchains = [_SAFEDITOOL_TOOLCHAIN_TYPE],
 )
 
 def safedi_swift_library(

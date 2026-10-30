@@ -1,0 +1,2 @@
+# Implementation details of SafeDI's Bazel rule. Nothing outside SafeDI
+# loads these files: `//bazel:BUILD.bazel` and `//bazel:extensions.bzl` do.
