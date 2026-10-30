@@ -1780,12 +1780,12 @@ public actor DependencyTreeGenerator {
 		)
 		// The properties the mock is passed, which are in scope throughout its tree: those its tree receives that it
 		// neither builds – as a promoted property or one of its own, in some order – nor fulfills with the non-optional
-		// form of one it builds, nor reads from a lazily instantiated property it builds.
+		// form of one it builds, nor reads, optional or not, from a lazily instantiated property it builds.
 		let mockRootBuiltProperties = Set(mockRootScope.propertiesToGenerate.map(\.property))
 		let mockParameters = allReceived.filter { receivedProperty in
 			!mockRootBuiltProperties.contains(receivedProperty)
 				&& !mockRootBuiltProperties.contains(receivedProperty.asUnwrappedProperty)
-				&& !instancePropertiesOfLazilyInstantiatedProperties.contains(receivedProperty)
+				&& !instancePropertiesOfLazilyInstantiatedProperties.contains(receivedProperty.asUnwrappedProperty)
 		}
 		let mockRootEnclosingForwardedProperties = childrenRequiringEachOtherValidation.enclosingForwardedProperties(ofMockRootPassed: mockParameters)
 		let mockRootChildrenRequiringEachOther = Self.childrenRequiringEachOther(

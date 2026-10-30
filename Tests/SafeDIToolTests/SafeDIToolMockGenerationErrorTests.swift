@@ -2988,6 +2988,81 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsReceivedCycleError_whenPromotedLazilyInstantiatedPropertyReceivesSiblingThatRequiresOnlyIfAvailableAliasOfOptionalInstance() async {
+		// Home requires `tracker: LazilyInstantiated<Tracker>`, which the mock promotes, and Tracker receives Settings. Settings
+		// declares an `onlyIfAvailable` alias of `tracker: Tracker?`, which the mock reads from the promoted property rather
+		// than being passed it, so the alias that Leaf requires is created only after `tracker`: the siblings require each
+		// other, as they do in production.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Leaf.swift"]):7:5: error: Dependency cycle: @Instantiated `tracker: LazilyInstantiated<Tracker>` -> @Received `settings: Settings` -> @Received `tracker: Tracker?` -> @Received `tracker: LazilyInstantiated<Tracker>`. `tracker: LazilyInstantiated<Tracker>` is received while it is still being instantiated. `myTracker: Tracker?` renames `tracker: Tracker?` only if available, so a type that receives `myTracker` without `onlyIfAvailable` must be built after `tracker: Tracker?`. Receive `myTracker` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tracker: Tracker?` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(home: Home, settings: Settings) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let home: Home
+					    @Instantiated let settings: Settings
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Home: Instantiable {
+					    public init(tracker: LazilyInstantiated<Tracker>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let tracker: LazilyInstantiated<Tracker>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Settings: Instantiable {
+					    public init(myTracker: Tracker?, leaf: Leaf) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
+					    @Instantiated let leaf: Leaf
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Tracker: Instantiable {
+					    public init(settings: Settings) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let settings: Settings
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Leaf: Instantiable {
+					    public init(myTracker: Tracker?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let myTracker: Tracker?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_parseErrorWritesErrorStubToMockOutputs() async throws {
 		// When source has parse errors, mock outputs should get the error stub too
 		// (not be left stale or missing).
