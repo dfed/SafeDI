@@ -210,6 +210,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
 		instantiableType = node.extendedType.typeDescription
 		instantiableDeclarationLocation = declarationLocation(of: node)
+		recordAccess(of: node.modifiers, introducedBy: node.extensionKeyword)
 		if let instantiableMacro = node.attributes.instantiableMacro {
 			instantiableConstruction = .instantiateMethod
 			processAttributes(node.attributes, on: instantiableMacro)
@@ -306,7 +307,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				additionalInstantiables: additionalInstantiables,
 				dependencies: dependencies,
 				declarationType: .extensionType,
-				accessLevel: nil,
+				accessLevel: instantiableAccessLevel,
+				accessModifierRange: instantiableAccessModifierRange,
+				declarationStartLocation: instantiableDeclarationStartLocation,
 				mockAttributes: mockAttributes,
 				generateMock: generateMock,
 				mockOnly: mockOnly,
@@ -526,7 +529,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						additionalInstantiables: additionalInstantiables,
 						dependencies: [],
 						declarationType: .extensionType,
-						accessLevel: nil,
+						accessLevel: instantiableAccessLevel,
+						accessModifierRange: instantiableAccessModifierRange,
+						declarationStartLocation: instantiableDeclarationStartLocation,
 						mockAttributes: mockAttributes,
 						generateMock: generateMock,
 						mockOnly: mockOnly,
@@ -572,11 +577,12 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	/// The location of the decorated declaration, recorded when the declaration is visited with a converter.
 	private var instantiableDeclarationLocation: Dependency.DeclarationLocation?
-	/// The access level the decorated type declaration's modifiers spell, recorded when the type declaration is visited.
-	private var instantiableAccessLevel: AccessLevel?
+	/// The access level the decorated type declaration or extension spells, recorded when it is visited, before any
+	/// instantiable is built from it.
+	private var instantiableAccessLevel = AccessLevel.internal
 	/// The range of the modifier that sets `instantiableAccessLevel`, recorded when the declaration is visited with a converter.
 	private var instantiableAccessModifierRange: Dependency.SourceRange?
-	/// Where the decorated type declaration begins after its attributes, recorded when the declaration is visited with a converter.
+	/// Where the decorated declaration begins after its attributes, recorded when the declaration is visited with a converter.
 	private var instantiableDeclarationStartLocation: Dependency.DeclarationLocation?
 
 	/// Reports that `name`, which generated code binds or refers to, collides with `reservation`.
@@ -594,6 +600,14 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		sourceLocationConverter.map { sourceLocationConverter in
 			sourceLocationConverter.declarationLocation(for: node.positionAfterSkippingLeadingTrivia)
 		}
+	}
+
+	/// Records the access level that `modifiers`, the modifiers of the decorated declaration introduced by `keyword`, spell.
+	private func recordAccess(of modifiers: DeclModifierListSyntax, introducedBy keyword: TokenSyntax) {
+		let accessModifier = modifiers.accessModifier
+		instantiableAccessLevel = accessModifier?.accessLevel ?? .internal
+		instantiableAccessModifierRange = accessModifier.flatMap { sourceRange(of: $0.name) }
+		instantiableDeclarationStartLocation = sourceLocationConverter?.declarationLocation(for: modifiers.declarationStartPosition(introducedBy: keyword))
 	}
 
 	/// The range of `node`’s text, excluding its leading and trailing trivia, or `nil` without a converter.
@@ -629,10 +643,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		instantiableType = nodeDeclarationType
 		processAttributes(node.attributes, on: macro)
 		processModifiers(node.modifiers, on: node)
-		let accessModifier = node.modifiers.accessModifier
-		instantiableAccessLevel = accessModifier?.accessLevel ?? .internal
-		instantiableAccessModifierRange = accessModifier.flatMap { sourceRange(of: $0.name) }
-		instantiableDeclarationStartLocation = sourceLocationConverter?.declarationLocation(for: node.modifiers.declarationStartPosition(introducedBy: node.keyword))
+		recordAccess(of: node.modifiers, introducedBy: node.keyword)
 
 		return .visitChildren
 	}
