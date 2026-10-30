@@ -172,6 +172,7 @@ extension AttributeSyntax {
 		return firstLabeledExpression.expression
 	}
 
+	/// The name `fulfilledByDependencyNamed:` gives, in `spelledAsIdentifier` spelling.
 	public var fulfillingPropertyName: String? {
 		guard let fulfilledByDependencyNamed,
 		      let stringLiteral = StringLiteralExprSyntax(fulfilledByDependencyNamed),
@@ -180,7 +181,7 @@ extension AttributeSyntax {
 			return nil
 		}
 
-		return firstSegment.content.text
+		return firstSegment.content.text.spelledAsIdentifier
 	}
 
 	public var fulfilledByType: ExprSyntax? {

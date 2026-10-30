@@ -153,7 +153,7 @@ Every `@Instantiable`-decorated type must be:
 
 1. `public` or `open`
 
-2. Have a `public init(…)` or `open init(…)` that has a parameter for each of its injected properties
+2. Have a `public init(…)` or `open init(…)` that has a parameter for each of its injected properties. A name is the same name with or without backticks, so `` @Instantiated let `default`: Leaf `` takes `init(default: Leaf)`
 
 The `@Instantiable` macro guides developers through satisfying these requirements with code generation and build-time fix-its.
 

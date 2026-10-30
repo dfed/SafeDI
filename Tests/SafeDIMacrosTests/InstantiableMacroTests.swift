@@ -2086,6 +2086,76 @@ import Testing
 		}
 
 		@Test
+		func declaration_fixit_updatesRequiredInitializerKeepingAssignments_whenAssignmentsEscapeLabelsDifferently() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(
+						default: ReceivedA,
+						leaf: Leaf
+					) {
+				        self.default = `default`
+				        self.`leaf` = leaf
+				    }
+
+				    @Received let `default`: ReceivedA
+				    @Received let leaf: Leaf
+				    @Received let receivedB: ReceivedB
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(
+						default: ReceivedA,
+						leaf: Leaf
+					) {
+				        self.default = `default`
+				        self.`leaf` = leaf
+				    }
+
+				    let `default`: ReceivedA
+				    let leaf: Leaf
+				    let receivedB: ReceivedB
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
+						line: 3,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add arguments for receivedB: ReceivedB"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add arguments for receivedB: ReceivedB",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(
+						default: ReceivedA,
+						leaf: Leaf,
+						receivedB: ReceivedB
+					) {
+				        self.default = `default`
+				        self.`leaf` = leaf
+				        self.receivedB = receivedB
+				    }
+
+				    @Received let `default`: ReceivedA
+				    @Received let leaf: Leaf
+				    @Received let receivedB: ReceivedB
+				}
+				""",
+			)
+		}
+
+		@Test
 		func declaration_fixit_updatesRequiredInitializerWhenFirstDependencyMissingFromInitializerAndNonDependencyParameterExists() {
 			assertMacroExpansion(
 				"""
@@ -5658,6 +5728,58 @@ import Testing
 		}
 
 		@Test
+		func producesNoDiagnostic_whenDefaultExpressionReferencesSelfOnDependencyParameterWrittenWithoutBackticks() {
+			// `default` names the property declared as `` `default` ``, so the parameter is a dependency parameter.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyType: Instantiable {
+				    public init(default: Service = Self.makeService()) {
+				        self.default = `default`
+				    }
+				    public static func makeService() -> Service { Service() }
+				    @Instantiated let `default`: Service
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    public init(default: Service = Self.makeService()) {
+				        self.default = `default`
+				    }
+				    public static func makeService() -> Service { Service() }
+				    let `default`: Service
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func producesNoDiagnostic_whenDependencyParameterWrittenWithoutBackticksHasReservedArgumentLabel() {
+			// A dependency parameter's argument label is not a `mock()` parameter, so SafeDI reserves nothing for it.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyType: Instantiable {
+				    public init(safeDIBuilder default: Service = Service()) {
+				        self.default = `default`
+				    }
+				    @Instantiated let `default`: Service
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    public init(safeDIBuilder default: Service = Service()) {
+				        self.default = `default`
+				    }
+				    let `default`: Service
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func producesNoDiagnostic_whenDefaultExpressionReferencesFileScopedSymbol() {
 			// Module-scoped and file-scoped references are fine — they resolve
 			// the same way from any caller, including the generated override
@@ -7800,6 +7922,43 @@ import Testing
 		}
 
 		@Test
+		func declaration_fixItPassesArgumentUnderUnescapedLabel_whenMockOnlyTypeMissingMockMethodHasKeywordLabeledProperty() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true)
+				public struct ExampleService {
+				    @Received let `default`: Database
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let `default`: Database
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable(mockOnly: true) requires a `public static func mock(…) -> ExampleService` method.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Add `public static func mock(…) -> ExampleService` method"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(mockOnly: true)
+				public struct ExampleService {
+				    @Received let `default`: Database
+				public static func mock(`default`: Database) -> ExampleService {ExampleService(default: `default`)}
+
+
+				}
+				""",
+			)
+		}
+
+		@Test
 		func extension_throwsErrorWhenMockOnlyExtensionMissingMockMethod() {
 			assertMacroExpansion(
 				"""
@@ -8564,6 +8723,36 @@ import Testing
 				    }
 
 				    let my__safeDI_editor: Editor
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutIssue_whenPropertiesAndInitializerParametersAreEscapedDifferently() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(default: Editor, editor: Editor) {
+				        self.default = `default`
+				        self.editor = editor
+				    }
+
+				    @Instantiated let `default`: Editor
+				    @Instantiated let `editor`: Editor
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(default: Editor, editor: Editor) {
+				        self.default = `default`
+				        self.editor = editor
+				    }
+
+				    let `default`: Editor
+				    let `editor`: Editor
 				}
 				""",
 				macros: instantiableTestMacros,
