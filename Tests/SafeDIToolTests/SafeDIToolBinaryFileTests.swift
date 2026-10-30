@@ -560,12 +560,16 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func moduleInfo_readsBackEverythingGenerateWrote_whenOptionsNameModulePackageAndDependencies() async throws {
+	mutating func moduleInfo_readsBackEverythingGenerateWrote_whenModuleAndItsDependenciesAreNamed() async throws {
 		// Scan's cache never records a module, so only a module info file holds these fields with values: the module and
 		// its dependencies, and each declaration's module and package, and its hand-written mock's.
+		let upstream = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.upstreamServiceSource],
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Pantry"],
+		)
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
-				Self.upstreamServiceSource,
 				"""
 				@Instantiable
 				public struct Workshop: Instantiable {
@@ -584,8 +588,9 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 				}
 				""",
 			],
+			dependentModuleInfoPaths: [upstream.moduleInfoOutputPath],
 			filesToDelete: &filesToDelete,
-			moduleMembershipArguments: ["--module-name", "Kitchen", "--package-name", "Restaurant", "--dependency-module-names", "Pantry", "Cellar"],
+			moduleMembershipArguments: ["--module-name", "Kitchen", "--package-name", "Restaurant"],
 		)
 
 		#expect(reflectedDescription(of: output.moduleInfo) == reflectedDescription(of: output.generateOutput.module))

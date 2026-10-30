@@ -24,8 +24,8 @@ import Testing
 @testable import SafeDITool
 
 /// The module, and the package of that module, that `generate` records for each declaration it reads and for the
-/// module it generates code for: from `--module-name`, `--package-name` and `--dependency-module-names` in a run per
-/// module, and from the target graph the SafeDIGenerator plugin writes beside its input CSV otherwise.
+/// module it generates code for: from `--module-name`, `--package-name` and the modules dependent module info records
+/// in a run per module, and from the target graph the SafeDIGenerator plugin writes beside its input CSV otherwise.
 struct SafeDIToolModuleMembershipTests: ~Copyable {
 	// MARK: Initialization
 
@@ -110,6 +110,29 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 			"Middle": ["Pump": DeclaringModule(moduleName: "Middle", packageName: "Foundations")],
 			"App": ["App": DeclaringModule(moduleName: "App", packageName: "Application")],
 		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_recordsEachModuleDependentModuleInfoNamesOnce_whenDependentModuleInfoNamesModulesOrNone() async throws {
+		// Two files record `Zebra`, and one records no module, as a SafeDITool given no `--module-name` writes it.
+		var dependentModuleInfoPaths = [String]()
+		for (index, moduleName) in ["Zebra", "Apple", "Zebra", nil].enumerated() {
+			let dependency = try await executeSafeDIToolTest(
+				swiftFileContent: [Self.instantiableContent(named: "Dependency\(index)")],
+				filesToDelete: &filesToDelete,
+				moduleMembershipArguments: moduleName.map { ["--module-name", $0] } ?? [],
+			)
+			dependentModuleInfoPaths.append(dependency.moduleInfoOutputPath)
+		}
+
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.instantiableContent(named: "Consumer")],
+			dependentModuleInfoPaths: dependentModuleInfoPaths,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(ModuleIdentity(output.moduleInfo) == ModuleIdentity(moduleName: nil, packageName: nil, dependencyModuleNames: ["Apple", "Zebra"]))
 	}
 
 	@Test

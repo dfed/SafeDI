@@ -71,8 +71,24 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_writesModuleAndPackageToModuleInfo_whenOptionsNameModulePackageAndDependencies() async throws {
+	mutating func generate_writesModuleAndPackageToModuleInfo_whenModuleAndItsDependenciesAreNamed() async throws {
 		// The file is binary, so its contents are compared as `dump` prints them, with sorted keys.
+		var dependentModuleInfoPaths = [String]()
+		for (moduleName, typeName) in [("Roots", "Root"), ("Bark", "Bark")] {
+			let dependency = try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable
+					public struct \(typeName): Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				filesToDelete: &filesToDelete,
+				moduleMembershipArguments: ["--module-name", moduleName],
+			)
+			dependentModuleInfoPaths.append(dependency.moduleInfoOutputPath)
+		}
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -85,9 +101,10 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 				}
 				""",
 			],
+			dependentModuleInfoPaths: dependentModuleInfoPaths,
 			filesToDelete: &filesToDelete,
 			inputPathsRelativeToCurrentDirectory: true,
-			moduleMembershipArguments: ["--module-name", "Tree", "--package-name", "Forest", "--dependency-module-names", "Roots", "Bark"],
+			moduleMembershipArguments: ["--module-name", "Tree", "--package-name", "Forest"],
 		)
 
 		let leafPath = output.fixtures["Leaf.swift"].replacingOccurrences(of: "/", with: "\\/")

@@ -110,8 +110,8 @@ enum MultiModuleIntegration: CaseIterable {
 	/// Bazel's invocation of `generate` (`bazel/safedi.bzl`): one run per module, with no `scan`, reading a CSV
 	/// of the module's own files, writing one combined file and the module's `.safedi`, reading the `.safedi` of
 	/// each module in its `dependencies` (Bazel's rule lists a target's direct `deps`; a Tuist user lists modules
-	/// by name), naming the module, its package and those dependencies with `--module-name`, `--package-name` and
-	/// `--dependency-module-names`, and passing `--compiler-receives-input-paths-unchanged`. Tuist differs only by
+	/// by name), naming the module and its package with `--module-name` and `--package-name`, and passing
+	/// `--compiler-receives-input-paths-unchanged`. Tuist differs only by
 	/// omitting that flag and passing `$SRCROOT`-relative paths. The harness names the combined file `<module name>.swift`, where
 	/// Bazel names both outputs after the rule label and Tuist writes `SafeDIGenerated.swift`, and its CSV names
 	/// each file by the absolute, unresolved path the harness created it under, where Bazel's entries are
@@ -317,7 +317,6 @@ func executeSafeDIToolMultiModuleTest(
 				"--module-name", moduleName,
 				"--package-name", module.fixture.packageName,
 			] + activeCompilationConditionArguments
-				+ (module.fixture.dependencies.isEmpty ? [] : ["--dependency-module-names"] + module.fixture.dependencies)
 			if !module.fixture.dependencies.isEmpty {
 				let dependentModuleInfoFileCSV = moduleInfoDirectory.appendingPathComponent("\(moduleName)-dependencies.csv")
 				try module.fixture.dependencies

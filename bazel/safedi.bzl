@@ -70,11 +70,11 @@ report fails the build with a message naming it.
 ## Modules and packages
 
 `safedi_compile` tells SafeDITool the name of the Swift module that
-compiles its output (`module_name`), that module's package
-(`package_name`, which the compiler receives as `-package-name`), and
-the modules of its `deps`, and records them in the `.safedi`
-artifact, so a consumer knows which module and package declare each
-`@Instantiable` type. `safedi_swift_library` passes the module name
+compiles its output (`module_name`) and that module's package
+(`package_name`, which the compiler receives as `-package-name`).
+SafeDITool records them in the `.safedi` artifact, so a consumer knows
+which module and package declare each `@Instantiable` type, and
+records the modules its `deps` name as the module's dependencies. `safedi_swift_library` passes the module name
 its `swift_library` compiles: the `module_name` attribute, or the name
 rules_swift derives from the library's label. Give
 `safedi_swift_library` a `package_name` to compile the library with
@@ -97,7 +97,6 @@ SafeDIInfo = provider(
     doc = "Module info artifact (`.safedi`) emitted by `safedi_compile`.",
     fields = {
         "module_info": "The `.safedi` file describing this module's @Instantiable surface.",
-        "module_name": "The name of the Swift module that compiles the rule's output, or `None` when the rule was not told it.",
     },
 )
 
@@ -191,13 +190,6 @@ def _safedi_compile_impl(ctx):
         arguments += ["--module-name", ctx.attr.module_name]
     if ctx.attr.package_name:
         arguments += ["--package-name", ctx.attr.package_name]
-    dependency_module_names = [
-        dependency[SafeDIInfo].module_name
-        for dependency in ctx.attr.deps
-        if dependency[SafeDIInfo].module_name
-    ]
-    if dependency_module_names:
-        arguments += ["--dependency-module-names"] + dependency_module_names
     extra_inputs = []
     if dependency_module_info_files:
         dependency_csv = _write_csv(
@@ -223,10 +215,7 @@ def _safedi_compile_impl(ctx):
         # source. The `.safedi` rides through `SafeDIInfo` so other
         # `safedi_compile` rules can list this label in `deps`.
         DefaultInfo(files = depset([combined])),
-        SafeDIInfo(
-            module_info = module_info,
-            module_name = ctx.attr.module_name or None,
-        ),
+        SafeDIInfo(module_info = module_info),
     ]
 
 safedi_compile = rule(
@@ -268,9 +257,10 @@ condition; other options are ignored.""",
             doc = """The name of the Swift module that compiles this
 rule's output: the wrapped `swift_library`'s `module_name`, or the
 name rules_swift derives from that library's label.
-`safedi_swift_library` passes it. SafeDITool records it as the module
-that declares this module's `@Instantiable` types, and consumers of
-this rule as one of their dependencies.""",
+`safedi_swift_library` passes it. SafeDITool records it in the
+`.safedi` artifact as the module that declares this module's
+`@Instantiable` types, and consumers of this rule record it as one of
+their dependencies.""",
         ),
         "package_name": attr.string(
             default = "",

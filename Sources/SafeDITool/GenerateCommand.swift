@@ -56,11 +56,9 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project’s root module.") var dotFileOutput: String?
 
-	@Option(help: "The name of the module this run generates code for: the module that compiles the files the input CSV and '--include' name. Each of those files' declarations, and the '--module-info-output' file, record it, so a module that reads the file knows which module declares each type. Files reached through a #SafeDIConfiguration's additionalDirectoriesToInclude belong to another module. Without this option and the two that follow, a run with '--swift-manifest' or '--output-directory' reads the module of each file from the target graph the SafeDIGenerator plugin writes beside its input CSV.") var moduleName: String?
+	@Option(help: "The name of the module this run generates code for: the module that compiles the files the input CSV and '--include' name. Each of those files' declarations, and the '--module-info-output' file, record it, so a module that reads the file knows which module declares each type. Files reached through a #SafeDIConfiguration's additionalDirectoriesToInclude belong to another module. The '--module-info-output' file also records, as the modules this one depends on, the module each '--dependent-module-info-file-path' file records. Without this option, '--package-name', and dependent module info that names a module, a run with '--swift-manifest' or '--output-directory' reads the module of each file from the target graph the SafeDIGenerator plugin writes beside its input CSV.") var moduleName: String?
 
 	@Option(help: "The package of the module this run generates code for, as the compiler's '-package-name' names it, recorded as '--module-name' is. Omit it when the compiler receives no '-package-name'.") var packageName: String?
-
-	@Option(parsing: .upToNextOption, help: "The names of the modules that the module this run generates code for depends on directly, recorded in the '--module-info-output' file.") var dependencyModuleNames: [String] = []
 
 	@Flag(help: "States that the compiler is handed every input Swift file, including the files behind dependent module info, at exactly the path this tool is handed. Generated code then wraps each `@Received(fulfilledByDependencyNamed:ofType:)` assignment in a `#sourceLocation` directive naming that path, so the compiler reports a type mismatch at the declaration. Without this flag, and without a build tool plugin’s manifest, the assignment names the declaration in a comment instead, because the compiler warns at a directive whose path differs from the one it was handed.") var compilerReceivesInputPathsUnchanged = false
 
@@ -236,6 +234,9 @@ struct Generate: AsyncParsableCommand {
 		// Each declaration with the module that declares its file, as the build system tells this run, if it does.
 		let module = try moduleMembership(
 			readsTargetGraph: resolvedSwiftManifest != nil,
+			// The modules whose module info this run reads are the ones this module depends on directly, as the build
+			// system lists them, named as each file records its module.
+			dependencyModuleNames: Set(dependentModuleInfo.compactMap(\.moduleName)).sorted(),
 			inputFilePaths: inputFilePaths,
 			comparisonFilePaths: comparisonFilePaths,
 		).map { parsedModuleInfo.declared(by: $0) } ?? parsedModuleInfo
@@ -673,15 +674,18 @@ struct Generate: AsyncParsableCommand {
 		}
 	}
 
-	/// What the build system tells this run about modules, or `nil` when it tells nothing. The options, when any is given,
-	/// describe a build system that runs `generate` once per module. Otherwise a run with a manifest, which each of the
-	/// SafeDIGenerator plugin's runs is, reads the target graph the plugin writes beside its input CSV, when there is one.
+	/// What the build system tells this run about modules, or `nil` when it tells nothing. The options, and the module
+	/// names dependent module info records, when any is given, describe a build system that runs `generate` once per
+	/// module. Otherwise a run with a manifest, which each of the SafeDIGenerator plugin's runs is, reads the target
+	/// graph the plugin writes beside its input CSV, when there is one.
 	/// - Parameters:
 	///   - readsTargetGraph: Whether this run has a manifest, which it was given or scanned for itself.
+	///   - dependencyModuleNames: The modules the dependent module info this run reads records, sorted.
 	///   - inputFilePaths: The files the input CSV and `--include` name.
 	///   - comparisonFilePaths: How this run compares paths.
 	private func moduleMembership(
 		readsTargetGraph: Bool,
+		dependencyModuleNames: [String],
 		inputFilePaths: Set<String>,
 		comparisonFilePaths: ProjectFilePaths,
 	) throws -> ModuleMembership? {

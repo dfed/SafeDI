@@ -89,7 +89,7 @@ struct DeclaringModule: Hashable, Sendable {
 struct ModuleMembership: Sendable {
 	/// Every input file, and no other file, belongs to the module `generate` generates code for. The options that name
 	/// that module say this for a build system that runs `generate` once per module, such as the Bazel rule and the
-	/// Tuist plugin.
+	/// Tuist plugin, and the module info it hands `generate` names the modules that module depends on.
 	/// - Parameters:
 	///   - inputFilePaths: The files the input CSV and `--include` name, which are the module's own files. Files reached
 	///     through `#SafeDIConfiguration(additionalDirectoriesToInclude:)` belong to another module.
