@@ -594,6 +594,7 @@ An `Instantiator` creates a new instance each time it is asked for one. When you
 | Types further down the tree can receive | The instance | The `Instantiator` | The instance, or the `LazilyInstantiated` |
 | `Dependency` can have `@Forwarded` properties | No | Yes | No |
 | Can break a dependency cycle | No | Yes | No |
+| `Sendable` twin | – | [`SendableInstantiator<Dependency>`](#sendable-wrappers) | [`SendableLazilyInstantiated<Dependency>`](#sendable-wrappers) |
 
 ### Instantiator
 
@@ -613,13 +614,13 @@ public struct NotesApp: App, Instantiable {
 
 SafeDI generates a `ForwardedProperties` typealias for every `@Instantiable` type. This typealias is a tuple containing all properties decorated with `@Forwarded`. `Instantiator.instantiate(_:)` takes a `ForwardedProperties` argument, ensuring that you provide all required runtime dependencies when instantiating the type.
 
-An `Instantiator` is not `Sendable`: if you want to be able to share an instantiator across concurrency domains, use a [`SendableInstantiator`](../Sources/SafeDI/DelayedInstantiation/SendableInstantiator.swift). A `SendableInstantiator` builds its instances in a `@Sendable` function; see [`LazilyInstantiated`](#lazilyinstantiated) for what that requires of the instance’s subtree.
+An `Instantiator` is not `Sendable`. To share one across concurrency domains, use its [`Sendable` twin](#sendable-wrappers), `SendableInstantiator`.
 
 ### ErasedInstantiator
 
 For deferred instantiation of a type-erased dependency, use `ErasedInstantiator` — it combines the deferred construction of [`Instantiator`](#instantiator) with the `fulfilledByType` / `erasedToConcreteExistential` parameters covered in [Making protocols `@Instantiable`](#making-protocols-instantiable).
 
-The [`ErasedInstantiator`](../Sources/SafeDI/DelayedInstantiation/ErasedInstantiator.swift) type is how SafeDI enables instantiating any `@Instantiable` type when using type erasure. `ErasedInstantiator` has two generics. The first generic must match the type’s `ForwardedProperties` typealias. The second generic matches the type of the to-be-instantiated instance. An `ErasedInstantiator` is not `Sendable`: if you want to be able to share an erased instantiator across concurrency domains, use a [`SendableErasedInstantiator`](../Sources/SafeDI/DelayedInstantiation/SendableErasedInstantiator.swift). A `SendableErasedInstantiator` builds its instances in a `@Sendable` function; see [`LazilyInstantiated`](#lazilyinstantiated) for what that requires of the instance’s subtree.
+The [`ErasedInstantiator`](../Sources/SafeDI/DelayedInstantiation/ErasedInstantiator.swift) type is how SafeDI enables instantiating any `@Instantiable` type when using type erasure. `ErasedInstantiator` has two generics. The first generic must match the type’s `ForwardedProperties` typealias. The second generic matches the type of the to-be-instantiated instance. An `ErasedInstantiator` is not `Sendable`. To share one across concurrency domains, use its [`Sendable` twin](#sendable-wrappers), `SendableErasedInstantiator`.
 
 ```swift
 import SwiftUI
@@ -697,15 +698,22 @@ A `LazilyInstantiated` property accepts the same `fulfilledByType` and `erasedTo
 private let userService: LazilyInstantiated<AnyUserService>
 ```
 
-A `LazilyInstantiated` is not `Sendable`, and reads of `instance` are not synchronized. To share a lazily instantiated dependency across concurrency domains, use a [`SendableLazilyInstantiated`](../Sources/SafeDI/DelayedInstantiation/SendableLazilyInstantiated.swift), which creates its instance exactly once while holding a lock and requires the instance to be `Sendable`. It is available on macOS 15, iOS 18, tvOS 18, watchOS 11, and visionOS 2 and later; the generated code is not marked `@available`, so use it only in a module whose deployment targets are at least those versions.
-
-A `SendableInstantiator`, `SendableErasedInstantiator`, or `SendableLazilyInstantiated` builds its dependency in a `@Sendable` function, so what that dependency’s subtree receives from outside it must be `Sendable`, even when the receiving type is itself `Sendable`. `Instantiator`, `ErasedInstantiator`, and `LazilyInstantiated` are not: declare a wrapper the subtree receives from outside as its `Sendable` twin. Wrappers instantiated inside the same `Sendable` wrapper are fine. SafeDI reports an error at the receiving property, and generated mocks follow the same rule.
-
-That `@Sendable` function is synchronous and runs outside any actor, so every initializer it calls in the dependency’s subtree – and any `instantiate(…)` or hand-written mock method a generated mock calls there – must be callable synchronously outside any actor. The initializer’s isolation counts, not the type’s: a `@MainActor` class with a `nonisolated init` is fine when its stored properties are `Sendable`. SafeDI does not check this, and the generated code fails to compile otherwise; declare such an initializer `nonisolated`. `mockAttributes: "@MainActor"` does not help.
+A `LazilyInstantiated` is not `Sendable`, and reads of `instance` are not synchronized. To share one across concurrency domains, use its [`Sendable` twin](#sendable-wrappers), `SendableLazilyInstantiated`.
 
 SafeDI validates the dependency tree, not what an initializer does. Do not read `instance` from the initializer of the type that declares the `LazilyInstantiated` or `SendableLazilyInstantiated` property, or from any initializer that runs while that instance is being created, whether directly or through a callback: doing so produces undefined behavior. The guarantees each type provides are stated in the documentation of [`LazilyInstantiated`](../Sources/SafeDI/DelayedInstantiation/LazilyInstantiated.swift) and [`SendableLazilyInstantiated`](../Sources/SafeDI/DelayedInstantiation/SendableLazilyInstantiated.swift).
 
 In a [generated mock](#mock-generation), a lazily instantiated dependency is overridden like any other `@Instantiated` dependency: its `SafeDIOverrides` entry is a closure that returns the instance, and the mock calls that closure the first time the instance is read. A type’s generated mock therefore has the same parameters whether the dependencies it receives are lazily instantiated or not.
+
+### Sendable wrappers
+
+`Instantiator`, `ErasedInstantiator`, and `LazilyInstantiated` are not `Sendable`. To share one across concurrency domains, declare its `Sendable` twin: [`SendableInstantiator`](../Sources/SafeDI/DelayedInstantiation/SendableInstantiator.swift), [`SendableErasedInstantiator`](../Sources/SafeDI/DelayedInstantiation/SendableErasedInstantiator.swift), or [`SendableLazilyInstantiated`](../Sources/SafeDI/DelayedInstantiation/SendableLazilyInstantiated.swift). A `SendableLazilyInstantiated` creates its instance exactly once while holding a lock and requires the instance to be `Sendable`. It is available on macOS 15, iOS 18, tvOS 18, watchOS 11, and visionOS 2 and later; the generated code is not marked `@available`, so use it only in a module whose deployment targets are at least those versions.
+
+A `Sendable` wrapper builds its dependency in a `@Sendable` function, which places two requirements on the dependency’s subtree:
+
+- **What the subtree receives from outside it must be `Sendable`**, even when the receiving type is itself `Sendable`. Declare a wrapper the subtree receives from outside, or whose instance it receives, as its `Sendable` twin. Wrappers instantiated inside the same `Sendable` wrapper are fine. SafeDI reports an error at the receiving property.
+- **Every initializer the function calls must be callable synchronously outside any actor**, and so must an extension’s `instantiate(…)` and a hand-written mock method that a generated mock calls there. The initializer’s isolation counts, not the type’s: a `@MainActor` class with a `nonisolated init` is fine when its stored properties are `Sendable`. SafeDI does not check this, and the generated code fails to compile otherwise; declare such an initializer `nonisolated`. `mockAttributes: "@MainActor"` does not help.
+
+Generated mocks follow the same rules, and the `SafeDIMockConfiguration` of a type reached through a `Sendable` wrapper has `@Sendable` closure fields.
 
 ## Mock generation
 
@@ -904,7 +912,7 @@ LoggedInView.mock(safeDIOverrides: .init(
 
 `SafeDIMockConfiguration` exposes an optional override for each of the child’s own `@Instantiated` dependencies and each default-valued parameter of its `init` (or `instantiate(…)`), plus a trailing builder closure. Defaults come from the type’s hand-written `mock` method when it has one, and from its `init` (or `instantiate(…)`) otherwise. The builder’s parameters match the type’s hand-written `mock` method signature if one is defined, or its `init` parameters otherwise. When no builder is provided, the generated mock calls the type’s hand-written `mock` method or `init` directly.
 
-Closure fields on `SafeDIMockConfiguration` are plain (non-`@Sendable`) by default, so overrides can capture mutable non-`Sendable` test state. When a type is reached through a `SendableInstantiator`, `SendableErasedInstantiator`, or `SendableLazilyInstantiated` anywhere in the dependency graph, its `SafeDIMockConfiguration` is emitted with `@Sendable` closure fields instead so the overrides remain safe to invoke across isolation boundaries.
+Closure fields on `SafeDIMockConfiguration` are plain (non-`@Sendable`) by default, so overrides can capture mutable non-`Sendable` test state; a type reached through a [`Sendable` wrapper](#sendable-wrappers) gets `@Sendable` closure fields instead.
 
 A type gets its own `SafeDIOverrides` struct when at least one dependency belongs there: an `@Instantiated` dependency, a `@Received` dependency the mock can build because an `@Instantiable` declaration fulfills its type or a single concrete type is [erased to](#receiving-a-type-erased-dependency), or a `@Received(onlyIfAvailable: true)` dependency. Every other dependency is a flat `mock()` parameter. The table below shows where each kind lands and whether the caller has to supply it.
 
