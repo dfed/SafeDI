@@ -2555,7 +2555,7 @@ enum GraphFuzzerOracle {
 		let partition = GraphFuzzerPartition.partition(of: fixture)
 		var multiModuleRuns = [GraphFuzzerMultiModuleRuns]()
 		for renaming in multiModuleRenamings {
-			multiModuleRuns.append(try await GraphFuzzerMultiModuleProperty.runs(of: fixture, partition: partition, renaming: renaming))
+			await multiModuleRuns.append(try GraphFuzzerMultiModuleProperty.runs(of: fixture, partition: partition, renaming: renaming))
 		}
 		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
