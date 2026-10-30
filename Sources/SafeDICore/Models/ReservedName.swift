@@ -26,8 +26,8 @@
 /// Generated code spells each of these names through this type, so a name cannot be generated without being reserved.
 public enum ReservedName: Hashable, Sendable {
 	/// A name that begins with `builderFunctionNamePrefix`, the prefix of each builder function a generated `init()`
-	/// or `mock()` declares (`__safeDI_<label>`, next to the `let <label>` it builds) and of the locals a `@Sendable`
-	/// builder function captures.
+	/// or `mock()` declares (`__safeDI_<label>`, next to the `let <label>` it builds), of the locals a `@Sendable`
+	/// builder function captures, and of the local a `mock()` reads each `@Sendable` autoclosure parameter into.
 	case builderFunctionName
 	/// `mockOverridesParameterName`, the parameter through which a generated `mock()` takes its overrides. A mock
 	/// parameter of the same name redeclares it, and a binding of the same name in the mock's body hides it from the

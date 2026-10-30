@@ -6868,14 +6868,16 @@ struct SafeDIToolMockGenerationDisambiguationTests: ~Copyable {
 		    }
 
 		    static func mock(
-		        engine_Engine: Engine,
+		        engine_Engine: @autoclosure @escaping @Sendable () -> Engine,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Dashboard {
+		        let __safeDI_engine_Engine = engine_Engine
 		        func __safeDI_garage() -> Garage {
 		            let engine = if let safeDIBuilder = safeDIOverrides.garage.engine { safeDIBuilder() } else { Toolbox() }
 		            let __safeDI_carBuilder__safeDIBuilder = safeDIOverrides.garage.carBuilder
 		            @Sendable func __safeDI_carBuilder() -> Car {
-		                if let safeDIBuilder = __safeDI_carBuilder__safeDIBuilder { safeDIBuilder(engine_Engine) } else { Car(engine: engine_Engine) }
+		                let engine_Engine = __safeDI_engine_Engine()
+		                return if let safeDIBuilder = __safeDI_carBuilder__safeDIBuilder { safeDIBuilder(engine_Engine) } else { Car(engine: engine_Engine) }
 		            }
 		            let carBuilder = SendableInstantiator<Car>(__safeDI_carBuilder)
 		            return if let safeDIBuilder = safeDIOverrides.garage.safeDIBuilder { safeDIBuilder(engine, carBuilder) } else { Garage(engine: engine, carBuilder: carBuilder) }
