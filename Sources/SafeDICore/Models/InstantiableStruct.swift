@@ -143,7 +143,10 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public var mockDeclarationPackageName: String?
 	/// The module that declares this Instantiable: the name the compiler gives the module that compiles the declaration's
 	/// file. `nil` when SafeDITool does not know it, which is always the case for a declaration the visitors just walked:
-	/// SafeDITool records it when it reads a module, from what the build system tells it.
+	/// SafeDITool records it when it reads a module, from what the build system tells it. `query` records instead the
+	/// name it gives an included module, which can be several path components (`Home/Sources`) and need not be the
+	/// compiler's, so nothing may compare a name `query` records with one a build recorded: it serves only to group a
+	/// query's declarations by module.
 	public var moduleName: String?
 	/// The package of the module that declares this Instantiable, which decides where a `package` declaration is visible:
 	/// the name a build system hands the compiler as `-package-name`, or, under SwiftPM, the package's identity, of which
