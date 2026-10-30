@@ -2140,6 +2140,8 @@ struct SafeDIToolGraphFuzzerTests {
 		let isPartitioned = corpus.features.isEmpty
 		var partitionedCorpusHash = GraphFuzzerHash()
 		var graphCountByModuleCount = [Int](repeating: 0, count: GraphFuzzerPartition.moduleNames.count + 1)
+		// The graphs whose two integrations combine declarations in different orders: see `GraphFuzzerPartition.moduleNames`.
+		var deltaDependsOnGammaCount = 0
 		for seed in 0..<UInt64(corpus.seedCount) {
 			let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: corpus.features)
 			generatedCorpusHash.combine(fixture.description)
@@ -2147,6 +2149,9 @@ struct SafeDIToolGraphFuzzerTests {
 				let partition = GraphFuzzerPartition.partition(of: fixture)
 				partitionedCorpusHash.combine(partition.description)
 				graphCountByModuleCount[partition.modules.count] += 1
+				if partition.modules.last?.name == "Delta", partition.modules.last?.dependencies.contains("Gamma") == true {
+					deltaDependsOnGammaCount += 1
+				}
 			}
 			let reservedLabels = fixture.swiftFileContent.flatMap(GraphFuzzerSourceLine.lines(of:)).compactMap { line -> String? in
 				guard case let .property(_, label, _) = line, label.hasPrefix("__safeDI_") else { return nil }
@@ -2163,7 +2168,7 @@ struct SafeDIToolGraphFuzzerTests {
 			if partitionedCorpusHash.value != Self.corpusPartitionHash {
 				reportProblem("The partition of the graphs for seeds 0..<\(corpus.seedCount) across modules changed (partition hash \(Self.hexadecimal(partitionedCorpusHash.value)), pinned \(Self.hexadecimal(Self.corpusPartitionHash))). Re-derive the known issues and the pinned partition hashes.")
 			}
-			report.append("partitions " + graphCountByModuleCount.indices.dropFirst().map { "\($0):\(graphCountByModuleCount[$0])" }.joined(separator: " "))
+			report.append("partitions " + graphCountByModuleCount.indices.dropFirst().map { "\($0):\(graphCountByModuleCount[$0])" }.joined(separator: " ") + " delta-depends-on-gamma:\(deltaDependsOnGammaCount)")
 		}
 
 		var graphCount = 0
@@ -3141,7 +3146,8 @@ struct GraphFuzzerLongRunConfiguration {
 	/// runs each graph; `failure <seed> <kind>`, `known <seed> <reason>`, or `stale <seed> <reason>` for each
 	/// finding; `renamed <seed> <summary>` and `multimodule <seed> <summary>` for each renamed or partitioned run
 	/// that gives other results, whether or not the graph fails another way; `problem <text>` for anything wrong
-	/// with the run itself; `partitions …` with how many corpus graphs are split into each number of modules; and
+	/// with the run itself; `partitions …` with how many base corpus graphs are split into each number of modules and
+	/// how many have a `Delta` depending on `Gamma`, whose two integrations combine declarations in different orders; and
 	/// `completed …` at the end.
 	let reportPath: String?
 
