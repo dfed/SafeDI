@@ -691,7 +691,7 @@ struct Generate: AsyncParsableCommand {
 		comparisonFilePaths: ProjectFilePaths,
 	) throws -> ModuleMembership? {
 		if moduleName != nil || packageName != nil {
-			return ModuleMembership(
+			ModuleMembership(
 				moduleName: moduleName,
 				packageName: packageName,
 				inputFilePaths: Set(inputFilePaths.map(comparisonFilePaths.projectFilePath(of:))),
@@ -700,9 +700,9 @@ struct Generate: AsyncParsableCommand {
 		} else if let targetGraphInputSourcesFilePath,
 		          let targetGraph = try PluginTargetGraph(besideInputSourcesFileAt: targetGraphInputSourcesFilePath)
 		{
-			return ModuleMembership(targetGraph: targetGraph)
+			ModuleMembership(targetGraph: targetGraph)
 		} else {
-			return nil
+			nil
 		}
 	}
 
