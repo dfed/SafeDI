@@ -1229,6 +1229,52 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func multiModuleDifference_comparesFirstConsumerThatGenerates_whenAnEarlierConsumerIsSkipped() {
+		// `Beta` depends on `Alpha` but plans no output, so the plugin first reads `Alpha`'s files in `Gamma`'s generate.
+		let moduleInfoOutcome = GraphFuzzerMultiModuleOutcome(verdicts: [
+			.init(moduleName: "Alpha", kind: .rejected(diagnostics: "/a/<fixture-directory>/Graph/Sources/Alpha/S12_T7.swift:1:1: error: Found multiple @Instantiable types or extensions that fulfill `S12_T7Protocol`.")),
+		])
+		let pluginOutcome = GraphFuzzerMultiModuleOutcome(verdicts: [
+			.init(moduleName: "Alpha", kind: .skipped),
+			.init(moduleName: "Beta", kind: .skipped),
+			.init(moduleName: "Gamma", kind: .rejected(diagnostics: "/b/<fixture-directory>/Graph/Sources/Gamma/S12_Root0.swift:8:2: error: another")),
+		])
+
+		#expect(GraphFuzzerMultiModuleOutcome.difference(betweenModuleInfo: moduleInfoOutcome, andPlugin: pluginOutcome, modules: Self.chainOfModules(dependencies: [[], ["Alpha"], ["Alpha", "Beta"]])) == "the diagnostics of module Alpha (which .swiftPackagePlugin reports in module Gamma)")
+	}
+
+	@Test
+	func failure_reportsIntegrationsDiffer_whenPluginWritesADependencysRootAgainWithOtherCode() {
+		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
+			Self.typeSource(named: "S12_Root0", arguments: "isRoot: true", properties: ["@Instantiated let t1: S12_T1"]),
+			Self.typeSource(named: "S12_T1", properties: []),
+		])
+		let rootCode = "extension S12_Root0 {\n    public convenience init() {\n    }\n}"
+		let outcome = GraphFuzzerMultiModuleOutcome(verdicts: [
+			.init(moduleName: "Alpha", kind: .accepted(Self.generatedModule(units: [:]))),
+			.init(moduleName: "Beta", kind: .accepted(Self.generatedModule(units: ["S12_Root0+SafeDI.swift": rootCode]))),
+		])
+		let runs = GraphFuzzerMultiModuleRuns(
+			seed: 12,
+			partition: GraphFuzzerPartition.partition(of: fixture, moduleCount: 2),
+			renaming: nil,
+			moduleInfoOutcome: outcome,
+			pluginOutcome: outcome,
+			regeneratedRoots: [GraphFuzzerRegeneratedRoot(
+				consumerModuleName: "Beta",
+				declaringModuleName: "Alpha",
+				rootTypeName: "S12_Root0",
+				difference: "has Alpha's root S12_Root0 written again by the .swiftPackagePlugin integration in module Beta with other code than Alpha's own:\n\(rootCode)\n\nagainst\n\(rootCode)",
+			)],
+		)
+
+		let failure = runs.failure
+
+		#expect(failure?.kind == .integrationsDiffer)
+		#expect(failure.map { String($0.details.prefix { $0 != "\n" }) } == "Split into modules, the graph has Alpha's root S12_Root0 written again by the .swiftPackagePlugin integration in module Beta with other code than Alpha's own:")
+	}
+
+	@Test
 	func removingRegeneratedRoots_removesRootWithoutDifference_whenConsumerWritesDeclaringModulesRootAgainIdentically() {
 		let rootCode = "extension S12_Root0 {\n    public convenience init() {\n    }\n}"
 		var verdicts = [
