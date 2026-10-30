@@ -31,11 +31,12 @@ import Testing
 /// partition itself. Each file names the types it refers to – what it instantiates, receives, forwards, aliases, erases
 /// to, or fulfills with, the graph's `Value` and protocol types, and the extended class of the extension-based type –
 /// and each name is declared in one file, so the files form a reference graph. Its strongly connected components are
-/// found with Tarjan's algorithm, visiting files in their order, which lists each component after every component it
-/// refers to: a lazy cycle through instantiators is one component, so its types share a module, and a root's component
-/// follows those of the types its tree names. The roots are the first files, so the types no root reaches are visited
-/// after them and their components follow the roots', and a root need not be in the last module. The components are
-/// then dealt out, in that order, to one to four modules
+/// found with Tarjan's algorithm, visiting the helper types' file first and then the files in their order, which lists
+/// each component after every component it refers to: the helper types' file, which refers to nothing, is the first
+/// component; a lazy cycle through instantiators is one component, so its types share a module; and a root's component
+/// follows those of the types its tree names. The roots are the first files, so the types no root's file refers to,
+/// directly or through other files, are visited after them and their components follow the roots', and a root need
+/// not be in the last module. The components are then dealt out, in that order, to one to four modules
 /// (`moduleNames`, in that order), as many as the graph's text chooses (`moduleCount(forComponentCount:of:)`, from
 /// `GraphFuzzerHash` of the fixture's description, so single-module graphs stay in the corpus), each a contiguous run
 /// of components, so every reference points into the same module or an earlier one. Every file keeps its name and its
@@ -73,15 +74,15 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 
 	/// A file of the graph as the partition projects it: the fixture's files, less the declarations of the helper types
 	/// `Value` and `Unbuildable<n>`, which the generator writes into `Root0`'s file and which this projection moves into
-	/// a file of their own. Left there, every type naming them would be pulled into `Root0`'s component, and a root
-	/// would never be split from a type of its tree that forwards or receives them.
+	/// a file of their own. Left there, every type of `Root0`'s tree that names them, with the files between, would
+	/// share `Root0`'s component, so `Root0` could never be split from a type of its tree that forwards `lazyValue`.
 	struct ProjectedFile: Equatable, Sendable {
 		let name: String
 		let content: String
 	}
 
-	/// The name of the file the helper types are moved into, which refers to nothing, so that it lands in the first
-	/// module anything that names the helper types is in.
+	/// The name of the file the helper types are moved into. It refers to nothing and is visited first, so it is the
+	/// first component and always lands in `Alpha`.
 	static func helperFileName(of fixture: GraphFuzzerFixture) -> String {
 		"\(fixture.typeNamePrefix)Helpers.swift"
 	}
@@ -160,7 +161,9 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 				.sorted()
 		}
 
-		let components = stronglyConnectedComponents(ofFileCount: fileCount, referencedFileIndices: referencedFileIndices)
+		// The helper types' file is the last projected file, when there is one; visited first, it is the first component.
+		let helperFileIndex = projectedFiles.count > fixture.swiftFileContent.count ? projectedFiles.count - 1 : nil
+		let components = stronglyConnectedComponents(ofFileCount: fileCount, visitingFirst: helperFileIndex, referencedFileIndices: referencedFileIndices)
 		let moduleCount = requestedModuleCount.map { min(components.count, $0) } ?? moduleCount(forComponentCount: components.count, of: fixture)
 		var moduleIndexByFileIndex = [Int](repeating: 0, count: fileCount)
 		var fileIndicesByModule = [[Int]](repeating: [], count: moduleCount)
@@ -261,8 +264,9 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 	}
 
 	/// The strongly connected components of the files' reference graph, each increasing, listed after every
-	/// component they refer to, as Tarjan's algorithm lists them when it visits the files in order.
-	private static func stronglyConnectedComponents(ofFileCount fileCount: Int, referencedFileIndices: [[Int]]) -> [[Int]] {
+	/// component they refer to, as Tarjan's algorithm lists them when it visits the file at `firstFile`, if any, and
+	/// then the files in order.
+	private static func stronglyConnectedComponents(ofFileCount fileCount: Int, visitingFirst firstFile: Int?, referencedFileIndices: [[Int]]) -> [[Int]] {
 		var indexByFile = [Int?](repeating: nil, count: fileCount)
 		var lowLinkByFile = [Int](repeating: 0, count: fileCount)
 		var isOnStack = [Bool](repeating: false, count: fileCount)
@@ -295,7 +299,7 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 			}
 			components.append(component.sorted())
 		}
-		for file in 0..<fileCount where indexByFile[file] == nil {
+		for file in [firstFile].compactMap(\.self) + Array(0..<fileCount) where indexByFile[file] == nil {
 			visit(file)
 		}
 		return components
