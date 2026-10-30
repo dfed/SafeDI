@@ -1236,7 +1236,7 @@ A `.safedi` file is binary, and `SafeDITool` reads only those written by a `Safe
 
 For working reference implementations, see the Bazel rule and macro at [`bazel/safedi.bzl`](../bazel/safedi.bzl) and the Tuist plugin at [`TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift`](../TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift). Both invoke `generate --combined-output --module-info-output` per module and pass dependent modules' `.safedi` artifacts via `--dependent-module-info-file-path`.
 
-If you need one generated `.swift` per source file that declares a root instead of a single combined file, use `generate --swift-manifest` with a JSON manifest in the [`SafeDIToolManifest`](../Sources/SafeDICore/Models/SafeDIToolManifest.swift) format. Give each output its own file: SafeDITool rejects a manifest in which two outputs name one file, since one would overwrite the other. `--swift-manifest` and `--combined-output` are mutually exclusive — pick whichever maps better onto your build system’s output model.
+If you need one generated `.swift` per source file that declares a root instead of a single combined file, use `generate --swift-manifest` with a JSON manifest in the [`SafeDIToolManifest`](../Sources/SafeDICore/Models/SafeDIToolManifest.swift) format. Give each output its own file: SafeDITool rejects a manifest in which two outputs name one file, since one would overwrite the other, even through a symbolic link to its directory, and, on every platform, two outputs whose paths differ only in letter case. `--swift-manifest` and `--combined-output` are mutually exclusive — pick whichever maps better onto your build system’s output model.
 
 ## Example applications
 

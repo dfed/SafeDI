@@ -201,3 +201,58 @@ public struct ProjectFilePaths: Sendable {
 	private let rootPrefix: String
 	private let reportedProjectRootURL: URL
 }
+
+/// A file `generate` writes, as `OutputFilePaths` spells it. Two `OutputFilePath`s are equal when their paths differ
+/// only in letter case or Unicode normalization (`CaseInsensitiveFileName`), since a volume that ignores both, such
+/// as macOS's default, holds them as one file; SafeDI names its outputs apart under that comparison on every platform.
+public struct OutputFilePath: Hashable, Sendable {
+	fileprivate init(_ path: String) {
+		self.path = path
+		caseInsensitivePath = CaseInsensitiveFileName(path)
+	}
+
+	/// The path with its directory resolved, in the letter case the file system stores for the directory and the
+	/// caller wrote for the file's name.
+	public let path: String
+
+	public static func == (lhs: OutputFilePath, rhs: OutputFilePath) -> Bool {
+		lhs.caseInsensitivePath == rhs.caseInsensitivePath
+	}
+
+	public func hash(into hasher: inout Hasher) {
+		hasher.combine(caseInsensitivePath)
+	}
+
+	private let caseInsensitivePath: CaseInsensitiveFileName
+}
+
+/// How `generate` spells the files it writes, so that it can tell when two spellings name one file: each file's
+/// directory resolved with `realpath(3)`, once per spelling of the directory, joined with the file's name. The name
+/// itself is not resolved, so a file is spelled the same before and after it exists, which a normalized path is not
+/// on Apple platforms. A file whose directory does not exist keeps its normalized path: `generate` creates no
+/// directory, so nothing can be written there.
+public struct OutputFilePaths {
+	public init() {}
+
+	/// The comparable spelling of the output file at `path`, absolute or relative to the working directory.
+	public mutating func outputFilePath(of path: String) -> OutputFilePath {
+		// Made absolute against the working directory, so that a bare file name has a directory to resolve.
+		let directoryPath = (URL(fileURLWithPath: path).path as NSString).deletingLastPathComponent
+		let resolvedDirectoryPath: String?
+		if let cachedResolvedDirectoryPath = resolvedDirectoryPathsByDirectoryPath[directoryPath] {
+			resolvedDirectoryPath = cachedResolvedDirectoryPath
+		} else {
+			let resolvedFilePath = realpath(directoryPath, nil)
+			defer { free(resolvedFilePath) }
+			resolvedDirectoryPath = resolvedFilePath.map { String(cString: $0) }
+			resolvedDirectoryPathsByDirectoryPath.updateValue(resolvedDirectoryPath, forKey: directoryPath)
+		}
+		return if let resolvedDirectoryPath {
+			OutputFilePath((resolvedDirectoryPath as NSString).appendingPathComponent((path as NSString).lastPathComponent))
+		} else {
+			OutputFilePath(NormalizedFilePath(path).path)
+		}
+	}
+
+	private var resolvedDirectoryPathsByDirectoryPath = [String: String?]()
+}

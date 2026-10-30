@@ -575,6 +575,7 @@ struct Generate: AsyncParsableCommand {
 		case additionalMockNotInManifest(typeName: String)
 		case mockScopedFileListedUnderTwoSpellings(firstSpelling: String, secondSpelling: String)
 		case outputWrittenTwice(outputFilePath: String, firstOutput: ManifestOutput, secondOutput: ManifestOutput)
+		case outputWrittenTwiceIgnoringLetterCase(firstOutputFilePath: String, secondOutputFilePath: String, firstOutput: ManifestOutput, secondOutput: ManifestOutput)
 
 		var description: String {
 			switch self {
@@ -590,6 +591,8 @@ struct Generate: AsyncParsableCommand {
 				"The manifest’s mockScopedFilePaths lists one file as both '\(firstSpelling)' and '\(secondSpelling)'. A hand-written manifest must list each file once, spelled as its configurationFilePaths and mockGeneration spell it."
 			case let .outputWrittenTwice(outputFilePath, firstOutput, secondOutput):
 				"The manifest’s \(firstOutput) and its \(secondOutput) both write '\(outputFilePath)'. A hand-written manifest must name a different file for each."
+			case let .outputWrittenTwiceIgnoringLetterCase(firstOutputFilePath, secondOutputFilePath, firstOutput, secondOutput):
+				"The manifest’s \(firstOutput) and its \(secondOutput) write '\(firstOutputFilePath)' and '\(secondOutputFilePath)', which name one file on a volume that ignores letter case, as macOS’s does by default. A hand-written manifest must name a different file for each, ignoring letter case."
 			}
 		}
 
@@ -615,22 +618,34 @@ struct Generate: AsyncParsableCommand {
 	}
 
 	/// Throws when two of `manifest`'s outputs name one file, since the one written last would replace the
-	/// other's code. `scan` gives each output its own file, so only a hand-written manifest can do this. An
-	/// entry listed twice writes the same code twice, so it is not rejected here.
+	/// other's code: two spellings of one path, two paths through a symbolic link to one directory, or two paths that
+	/// differ only in letter case, which a volume that ignores letter case holds as one file. Like `scan`'s output
+	/// names, the last is rejected on every platform. `scan` gives each output its own file, so only a hand-written
+	/// manifest can do this. An entry listed twice writes the same code twice, so it is not rejected here.
 	private static func validateEachOutputIsWrittenOnce(by manifest: SafeDIToolManifest) throws {
 		let outputs: [(output: ManifestOutput, outputFilePath: String)] = manifest.dependencyTreeGeneration.map { (.dependencyTree(inputFilePath: $0.inputFilePath), $0.outputFilePath) }
 			+ manifest.mockGeneration.map { (.mock(inputFilePath: $0.inputFilePath), $0.outputFilePath) }
 			+ (manifest.mockConfigurationOutputFilePath.map { [(.mockConfiguration, $0)] } ?? [])
 		// Files are written at their paths relative to the working directory, so two spellings can name one file.
-		var outputsByFilePath = [NormalizedFilePath: (output: ManifestOutput, outputFilePath: String)]()
+		var outputFilePaths = OutputFilePaths()
+		var outputsByFilePath = [OutputFilePath: (output: ManifestOutput, outputFilePath: String, filePath: OutputFilePath)]()
 		for (output, outputFilePath) in outputs {
-			let filePath = NormalizedFilePath(outputFilePath)
+			let filePath = outputFilePaths.outputFilePath(of: outputFilePath)
 			if let firstOutput = outputsByFilePath[filePath] {
 				guard firstOutput.output == output else {
-					throw ManifestError.outputWrittenTwice(outputFilePath: firstOutput.outputFilePath, firstOutput: firstOutput.output, secondOutput: output)
+					if firstOutput.filePath.path == filePath.path {
+						throw ManifestError.outputWrittenTwice(outputFilePath: firstOutput.outputFilePath, firstOutput: firstOutput.output, secondOutput: output)
+					} else {
+						throw ManifestError.outputWrittenTwiceIgnoringLetterCase(
+							firstOutputFilePath: firstOutput.outputFilePath,
+							secondOutputFilePath: outputFilePath,
+							firstOutput: firstOutput.output,
+							secondOutput: output,
+						)
+					}
 				}
 			} else {
-				outputsByFilePath[filePath] = (output, outputFilePath)
+				outputsByFilePath[filePath] = (output, outputFilePath, filePath)
 			}
 		}
 	}
