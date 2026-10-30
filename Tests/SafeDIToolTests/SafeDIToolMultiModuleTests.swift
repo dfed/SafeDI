@@ -708,6 +708,61 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 		#expect(compilation.failure == nil)
 	}
 
+	// MARK: Tests – Macro errors
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func multiModuleTest_reportsMacroErrorInInputs_whenErasedInstantiatedPropertyTypeIsOptional(integration: MultiModuleIntegration) async throws {
+		// `generate` does not run the macros, so it still writes `AnyService?(Impl())` for this declaration, and the
+		// compiler reports that line as well. The module's own files fail without it, at the declaration, with the
+		// macro's error and its fix-it. The verifier stages each input with an import above it, hence line 8.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(
+					name: "App",
+					packageName: "Pipeline",
+					swiftFileContent: [
+						"""
+						public protocol ServiceProtocol {}
+						public struct AnyService: ServiceProtocol {
+						    public init(_ service: ServiceProtocol) {}
+						}
+						""",
+						"""
+						@Instantiable(isRoot: true)
+						public struct Root: Instantiable {
+						    public init(service: AnyService?) {
+						        self.service = service
+						    }
+
+						    @Instantiated(fulfilledByType: "Impl", erasedToConcreteExistential: true) let service: AnyService?
+						}
+						""",
+						"""
+						@Instantiable
+						public struct Impl: ServiceProtocol, Instantiable {
+						    public init() {}
+						}
+						""",
+					],
+				),
+			],
+			integration: integration,
+			compileVerification: .returningOutcomeOnly,
+			filesToDelete: &filesToDelete,
+		)
+
+		guard compileVerificationIsEnabled else { return }
+		let compilation = try #require(output.compilation)
+		let failure = try #require(compilation.failure)
+		#expect(failure.moduleName == "App")
+		guard case let .inputsFailedOnTheirOwn(inputsOnlyResult) = failure.failure else {
+			Issue.record("Expected App's inputs to fail on their own, but its failure is \(String(describing: failure.failure)).")
+			return
+		}
+		#expect(inputsOnlyResult.stderr.contains("Root.swift:8:92: error: SafeDI always creates an @Instantiated property, so its type must not be optional. Declare `service: AnyService`, or receive it with `@Received(onlyIfAvailable: true)` where it may be absent. (from macro 'Instantiated')"), "Unexpected compiler output \(inputsOnlyResult.stderr)")
+	}
+
 	// MARK: Private
 
 	/// The lines a generated file repeats for a fixture's `import <moduleName>`.

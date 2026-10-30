@@ -23,6 +23,9 @@ import SwiftDiagnostics
 public enum FixableInjectableError: DiagnosticError {
 	case unexpectedMutable
 	case onlyIfAvailableNotOptionalSpelledWithQuestionMark
+	/// An `@Instantiated` property's type, or the type a SafeDI wrapper in it builds, is optional.
+	/// `nonOptionalDeclaration` is the property declared without the optionality, such as `service: Service`.
+	case instantiatedPropertyTypeIsOptional(nonOptionalDeclaration: String)
 
 	public var description: String {
 		switch self {
@@ -30,6 +33,8 @@ public enum FixableInjectableError: DiagnosticError {
 			"A dependency cannot be a `var` unless a property wrapper decorates it: SafeDI does not pass changes to a dependency on to the types that receive it. Declare it with `let`."
 		case .onlyIfAvailableNotOptionalSpelledWithQuestionMark:
 			"The type of a property received with `onlyIfAvailable: true` must be optional, spelled with `?`."
+		case let .instantiatedPropertyTypeIsOptional(nonOptionalDeclaration):
+			"SafeDI always creates an @Instantiated property, so its type must not be optional. Declare `\(nonOptionalDeclaration)`, or receive it with `@Received(onlyIfAvailable: true)` where it may be absent."
 		}
 	}
 
@@ -48,7 +53,8 @@ public enum FixableInjectableError: DiagnosticError {
 			diagnosticID = MessageID(domain: "\(Self.self)", id: error.description)
 			severity = switch error {
 			case .unexpectedMutable,
-			     .onlyIfAvailableNotOptionalSpelledWithQuestionMark:
+			     .onlyIfAvailableNotOptionalSpelledWithQuestionMark,
+			     .instantiatedPropertyTypeIsOptional:
 				.error
 			}
 			message = error.description
@@ -68,6 +74,8 @@ public enum FixableInjectableError: DiagnosticError {
 				"Replace `var` with `let`"
 			case .onlyIfAvailableNotOptionalSpelledWithQuestionMark:
 				"Mark the type as optional using `?`"
+			case let .instantiatedPropertyTypeIsOptional(nonOptionalDeclaration):
+				"Declare `\(nonOptionalDeclaration)`"
 			}
 			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
 		}

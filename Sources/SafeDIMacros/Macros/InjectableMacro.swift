@@ -118,6 +118,27 @@ public struct InjectableMacro: PeerMacro {
 			}
 		}
 
+		if variableDecl.attributes.instantiatedMacro != nil {
+			for binding in variableDecl.bindings {
+				if let type = binding.typeAnnotation?.type,
+				   let nonOptionalType = Self.nonOptional(instantiatedPropertyType: type)
+				{
+					context.diagnose(Diagnostic(
+						node: type,
+						error: FixableInjectableError.instantiatedPropertyTypeIsOptional(
+							nonOptionalDeclaration: "\(binding.pattern.trimmedDescription): \(nonOptionalType.trimmedDescription)",
+						),
+						changes: [
+							.replace(
+								oldNode: Syntax(type),
+								newNode: Syntax(nonOptionalType),
+							),
+						],
+					))
+				}
+			}
+		}
+
 		if variableDecl.bindingSpecifier.text != TokenSyntax.keyword(.let).text,
 		   // If there is only one attribute, we know the variable is not decorated with a property wrapper.
 		   variableDecl.attributes.count == 1
@@ -141,6 +162,65 @@ public struct InjectableMacro: PeerMacro {
 		// This macro purposefully does not expand.
 		// This macro serves as a decorator, nothing more.
 		return []
+	}
+
+	/// `type`, the type of an `@Instantiated` property, without the optionality SafeDI cannot give it, or `nil` when it
+	/// has none. SafeDI always creates the property, so neither its type nor the type a SafeDI wrapper builds, such as
+	/// the `X` of `Instantiator<X>`, may be optional.
+	private static func nonOptional(instantiatedPropertyType type: TypeSyntax) -> TypeSyntax? {
+		let unwrappedType = withoutOptionality(type)
+		let nonOptionalType = unwrappedType ?? type
+		guard let identifierType = IdentifierTypeSyntax(nonOptionalType),
+		      let genericArgumentClause = identifierType.genericArgumentClause
+		else {
+			return unwrappedType
+		}
+		let builtTypeIndex: Int? = switch nonOptionalType.typeDescription.propertyType {
+		case .constant:
+			nil
+		case .instantiator, .sendableInstantiator, .lazilyInstantiated, .sendableLazilyInstantiated:
+			0
+		case .erasedInstantiator, .sendableErasedInstantiator:
+			1
+		}
+		var arguments = Array(genericArgumentClause.arguments)
+		guard let builtTypeIndex,
+		      builtTypeIndex < arguments.count,
+		      let builtType = TypeSyntax(arguments[builtTypeIndex].argument),
+		      let nonOptionalBuiltType = withoutOptionality(builtType)
+		else {
+			return unwrappedType
+		}
+		arguments[builtTypeIndex] = arguments[builtTypeIndex].with(\.argument, .type(nonOptionalBuiltType))
+		return TypeSyntax(identifierType.with(
+			\.genericArgumentClause,
+			genericArgumentClause.with(\.arguments, GenericArgumentListSyntax(arguments)),
+		))
+	}
+
+	/// `type` with every optional spelling around it removed (`X?`, `X!`, and `Optional<X>`), or `nil` when it is
+	/// not optional. The result keeps `type`'s surrounding trivia.
+	private static func withoutOptionality(_ type: TypeSyntax) -> TypeSyntax? {
+		let wrappedType: TypeSyntax? = if let optionalType = OptionalTypeSyntax(type) {
+			optionalType.wrappedType
+		} else if let implicitlyUnwrappedOptionalType = ImplicitlyUnwrappedOptionalTypeSyntax(type) {
+			implicitlyUnwrappedOptionalType.wrappedType
+		} else if let identifierType = IdentifierTypeSyntax(type),
+		          identifierType.name.text == "Optional",
+		          let genericArguments = identifierType.genericArgumentClause?.arguments,
+		          genericArguments.count == 1
+		{
+			genericArguments.first.flatMap { TypeSyntax($0.argument) }
+		} else {
+			nil
+		}
+		guard let wrappedType else {
+			return nil
+		}
+		let unwrappedType = wrappedType
+			.with(\.leadingTrivia, type.leadingTrivia)
+			.with(\.trailingTrivia, type.trailingTrivia)
+		return withoutOptionality(unwrappedType) ?? unwrappedType
 	}
 
 	// MARK: - InjectableError

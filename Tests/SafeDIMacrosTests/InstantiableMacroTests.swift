@@ -539,7 +539,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_throwsError_whenRootRenamesInstanceOfItsOwnLazilyInstantiatedPropertyOfOptionalType() {
+		func declaration_throwsErrors_whenInstantiatedLazilyInstantiatedCreatesOptionalTypeAndRootRenamesItsInstance() {
 			assertMacroExpansion(
 				"""
 				@Instantiable(isRoot: true)
@@ -564,6 +564,13 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
+						message: "SafeDI always creates an @Instantiated property, so its type must not be optional. Declare `service: LazilyInstantiated<Service>`, or receive it with `@Received(onlyIfAvailable: true)` where it may be absent.",
+						line: 7,
+						column: 32,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Declare `service: LazilyInstantiated<Service>`")],
+					),
+					DiagnosticSpec(
 						message: """
 						`Root` is declared with `isRoot: true`, so no other type passes it dependencies, but it needs `other: Service?` from outside it. Declare each as @Instantiated, or as `@Received(fulfilledByDependencyNamed:ofType:)` naming an @Instantiated property of `Root`, or remove `isRoot: true` and instantiate `Root` from another type.
 						""",
@@ -573,6 +580,18 @@ import Testing
 					),
 				],
 				macros: instantiableTestMacros,
+				applyFixIts: ["Declare `service: LazilyInstantiated<Service>`"],
+				fixedSource: """
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(service: LazilyInstantiated<Service?>, other: Service?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let service: LazilyInstantiated<Service>
+				    @Received(fulfilledByDependencyNamed: "service", ofType: Service?.self) let other: Service?
+				}
+				""",
 			)
 		}
 

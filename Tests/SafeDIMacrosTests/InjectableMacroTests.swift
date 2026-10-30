@@ -210,6 +210,75 @@ import Testing
 			)
 		}
 
+		@Test
+		func expansion_expandsWithoutIssue_whenErasedInstantiatorForwardsOptionalType() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "DefaultService", erasedToConcreteExistential: true) let serviceBuilder: ErasedInstantiator<String?, AnyService>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let serviceBuilder: ErasedInstantiator<String?, AnyService>
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenInstantiatedGenericTypeHasOptionalArgument() {
+			// Only the type a SafeDI wrapper builds must not be optional: `Cache` is the type SafeDI builds.
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated let cache: Cache<Service?>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let cache: Cache<Service?>
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenForwardedPropertyTypeIsOptional() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Forwarded let name: String?
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let name: String?
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenReceivedPropertyTypeIsOptional() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Received let service: Service?
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let service: Service?
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
 		// MARK: Fixit Tests
 
 		@Test
@@ -292,6 +361,390 @@ import Testing
 				}
 				"""#,
 				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingOptionality_whenInstantiatedPropertyTypeIsOptional() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated let service: Service?
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let service: Service?
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "SafeDI always creates an @Instantiated property, so its type must not be optional. Declare `service: Service`, or receive it with `@Received(onlyIfAvailable: true)` where it may be absent.",
+						line: 2,
+						column: 32,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Declare `service: Service`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Declare `service: Service`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated let service: Service
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingOptionality_whenInstantiatedPropertyFulfilledByTypeIsOptional() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "DefaultService") let service: ServiceProtocol?
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let service: ServiceProtocol?
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "SafeDI always creates an @Instantiated property, so its type must not be optional. Declare `service: ServiceProtocol`, or receive it with `@Received(onlyIfAvailable: true)` where it may be absent.",
+						line: 2,
+						column: 67,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Declare `service: ServiceProtocol`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Declare `service: ServiceProtocol`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "DefaultService") let service: ServiceProtocol
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingOptionality_whenErasedInstantiatedPropertyTypeIsOptional() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "DefaultService", erasedToConcreteExistential: true) let service: AnyService?
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let service: AnyService?
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "SafeDI always creates an @Instantiated property, so its type must not be optional. Declare `service: AnyService`, or receive it with `@Received(onlyIfAvailable: true)` where it may be absent.",
+						line: 2,
+						column: 102,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Declare `service: AnyService`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Declare `service: AnyService`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "DefaultService", erasedToConcreteExistential: true) let service: AnyService
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingOptionality_whenInstantiatedPropertyTypeIsImplicitlyUnwrappedOptional() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated let service: Service!
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let service: Service!
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "SafeDI always creates an @Instantiated property, so its type must not be optional. Declare `service: Service`, or receive it with `@Received(onlyIfAvailable: true)` where it may be absent.",
+						line: 2,
+						column: 32,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Declare `service: Service`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Declare `service: Service`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated let service: Service
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingOptionality_whenInstantiatedPropertyTypeIsSpelledAsOptionalOfType() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated let service: Optional<Service>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let service: Optional<Service>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "SafeDI always creates an @Instantiated property, so its type must not be optional. Declare `service: Service`, or receive it with `@Received(onlyIfAvailable: true)` where it may be absent.",
+						line: 2,
+						column: 32,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Declare `service: Service`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Declare `service: Service`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated let service: Service
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingOptionality_whenInstantiatedInstantiatorIsOptional() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated let serviceBuilder: Instantiator<Service>?
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let serviceBuilder: Instantiator<Service>?
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "SafeDI always creates an @Instantiated property, so its type must not be optional. Declare `serviceBuilder: Instantiator<Service>`, or receive it with `@Received(onlyIfAvailable: true)` where it may be absent.",
+						line: 2,
+						column: 39,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Declare `serviceBuilder: Instantiator<Service>`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Declare `serviceBuilder: Instantiator<Service>`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated let serviceBuilder: Instantiator<Service>
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingOptionality_whenInstantiatedLazilyInstantiatedIsOptional() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated let service: LazilyInstantiated<Service>?
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let service: LazilyInstantiated<Service>?
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "SafeDI always creates an @Instantiated property, so its type must not be optional. Declare `service: LazilyInstantiated<Service>`, or receive it with `@Received(onlyIfAvailable: true)` where it may be absent.",
+						line: 2,
+						column: 32,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Declare `service: LazilyInstantiated<Service>`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Declare `service: LazilyInstantiated<Service>`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated let service: LazilyInstantiated<Service>
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingOptionality_whenInstantiatedErasedInstantiatorIsOptional() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "DefaultService", erasedToConcreteExistential: true) let serviceBuilder: ErasedInstantiator<(), AnyService>?
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let serviceBuilder: ErasedInstantiator<(), AnyService>?
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "SafeDI always creates an @Instantiated property, so its type must not be optional. Declare `serviceBuilder: ErasedInstantiator<(), AnyService>`, or receive it with `@Received(onlyIfAvailable: true)` where it may be absent.",
+						line: 2,
+						column: 109,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Declare `serviceBuilder: ErasedInstantiator<(), AnyService>`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Declare `serviceBuilder: ErasedInstantiator<(), AnyService>`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "DefaultService", erasedToConcreteExistential: true) let serviceBuilder: ErasedInstantiator<(), AnyService>
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingOptionality_whenInstantiatorBuildsOptionalType() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated let serviceBuilder: Instantiator<Service?>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let serviceBuilder: Instantiator<Service?>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "SafeDI always creates an @Instantiated property, so its type must not be optional. Declare `serviceBuilder: Instantiator<Service>`, or receive it with `@Received(onlyIfAvailable: true)` where it may be absent.",
+						line: 2,
+						column: 39,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Declare `serviceBuilder: Instantiator<Service>`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Declare `serviceBuilder: Instantiator<Service>`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated let serviceBuilder: Instantiator<Service>
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingOptionality_whenLazilyInstantiatedCreatesOptionalType() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated let service: LazilyInstantiated<Service?>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let service: LazilyInstantiated<Service?>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "SafeDI always creates an @Instantiated property, so its type must not be optional. Declare `service: LazilyInstantiated<Service>`, or receive it with `@Received(onlyIfAvailable: true)` where it may be absent.",
+						line: 2,
+						column: 32,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Declare `service: LazilyInstantiated<Service>`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Declare `service: LazilyInstantiated<Service>`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated let service: LazilyInstantiated<Service>
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingOptionality_whenErasedInstantiatorBuildsOptionalType() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "DefaultService", erasedToConcreteExistential: true) let serviceBuilder: ErasedInstantiator<(), AnyService?>
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let serviceBuilder: ErasedInstantiator<(), AnyService?>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "SafeDI always creates an @Instantiated property, so its type must not be optional. Declare `serviceBuilder: ErasedInstantiator<(), AnyService>`, or receive it with `@Received(onlyIfAvailable: true)` where it may be absent.",
+						line: 2,
+						column: 109,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Declare `serviceBuilder: ErasedInstantiator<(), AnyService>`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Declare `serviceBuilder: ErasedInstantiator<(), AnyService>`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated(fulfilledByType: "DefaultService", erasedToConcreteExistential: true) let serviceBuilder: ErasedInstantiator<(), AnyService>
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItRemovingOptionality_whenOptionalInstantiatorBuildsOptionalType() {
+			assertMacroExpansion(
+				"""
+				public struct ExampleService {
+				    @Instantiated let serviceBuilder: Instantiator<Service?>?
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let serviceBuilder: Instantiator<Service?>?
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "SafeDI always creates an @Instantiated property, so its type must not be optional. Declare `serviceBuilder: Instantiator<Service>`, or receive it with `@Received(onlyIfAvailable: true)` where it may be absent.",
+						line: 2,
+						column: 39,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Declare `serviceBuilder: Instantiator<Service>`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Declare `serviceBuilder: Instantiator<Service>`"],
+				fixedSource: """
+				public struct ExampleService {
+				    @Instantiated let serviceBuilder: Instantiator<Service>
+				}
+				""",
 			)
 		}
 
