@@ -101,9 +101,7 @@ func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable]) 
 			additionalInstantiables: normalizedAdditionalInstantiables,
 			dependencies: normalizedDependencies,
 			declarationType: unnormalizedInstantiable.declarationType,
-			accessLevel: unnormalizedInstantiable.accessLevel,
-			accessModifierRange: unnormalizedInstantiable.accessModifierRange,
-			declarationStartLocation: unnormalizedInstantiable.declarationStartLocation,
+			access: unnormalizedInstantiable.access,
 			mockAttributes: unnormalizedInstantiable.mockAttributes,
 			generateMock: unnormalizedInstantiable.generateMock,
 			mockOnly: unnormalizedInstantiable.mockOnly,
@@ -118,6 +116,7 @@ func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable]) 
 			mockReturnType: unnormalizedInstantiable.mockReturnType.map { normalized($0) ?? $0 },
 			customMockName: unnormalizedInstantiable.customMockName,
 			mockDeclarationLocation: unnormalizedInstantiable.mockDeclarationLocation,
+			mockDeclarationAccess: unnormalizedInstantiable.mockDeclarationAccess,
 			declarationLocation: unnormalizedInstantiable.declarationLocation,
 		)
 		normalized.sourceFilePath = unnormalizedInstantiable.sourceFilePath

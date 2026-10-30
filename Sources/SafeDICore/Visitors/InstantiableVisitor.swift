@@ -210,7 +210,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
 		instantiableType = node.extendedType.typeDescription
 		instantiableDeclarationLocation = declarationLocation(of: node)
-		recordAccess(of: node.modifiers, introducedBy: node.extensionKeyword)
+		instantiableAccess = node.modifiers.access(introducedBy: node.extensionKeyword, sourceLocationConverter: sourceLocationConverter)
 		if let instantiableMacro = node.attributes.instantiableMacro {
 			instantiableConstruction = .instantiateMethod
 			processAttributes(node.attributes, on: instantiableMacro)
@@ -232,6 +232,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				mockInitializer = Initializer(node, sourceLocationConverter: sourceLocationConverter)
 				mockReturnType = node.signature.returnClause?.type.typeDescription
 				mockDeclarationLocation = declarationLocation(of: node)
+				mockDeclarationAccess = instantiableAccess
 				mockFunctionSyntax = node
 			}
 		}
@@ -307,9 +308,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				additionalInstantiables: additionalInstantiables,
 				dependencies: dependencies,
 				declarationType: .extensionType,
-				accessLevel: instantiableAccessLevel,
-				accessModifierRange: instantiableAccessModifierRange,
-				declarationStartLocation: instantiableDeclarationStartLocation,
+				access: instantiableAccess,
 				mockAttributes: mockAttributes,
 				generateMock: generateMock,
 				mockOnly: mockOnly,
@@ -317,12 +316,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				mockReturnType: mockReturnType,
 				customMockName: customMockName,
 				mockDeclarationLocation: mockDeclarationLocation,
+				mockDeclarationAccess: mockDeclarationAccess,
 				declarationLocation: instantiableDeclarationLocation,
 			))
 			instantiateFunctions.append(InstantiateFunction(syntax: node, initializer: initializer, dependencies: dependencies))
 		}
 
-		if !initializer.accessLevel.isPublicOrOpen || node.modifiers.staticModifier == nil {
+		if !initializer.access.level.isPublicOrOpen || node.modifiers.staticModifier == nil {
 			var modifiedNode = node
 			modifiedNode.modifiers = DeclModifierListSyntax(
 				arrayLiteral:
@@ -417,6 +417,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var mockFunctionSyntax: FunctionDeclSyntax?
 	/// Where `mockFunctionSyntax` begins, recorded when the declaration is visited with a converter.
 	public private(set) var mockDeclarationLocation: Dependency.DeclarationLocation?
+	/// The access of the declaration that declares `mockFunctionSyntax`, recorded when the mock method is visited.
+	public private(set) var mockDeclarationAccess: AccessDeclaration?
 	public private(set) var duplicateMockFunctionSyntaxes = [FunctionDeclSyntax]()
 	/// The `instantiate(…)` methods of an extension that declare a return type, in source order.
 	public private(set) var instantiateFunctions = [InstantiateFunction]()
@@ -499,9 +501,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						additionalInstantiables: additionalInstantiables,
 						dependencies: dependencies,
 						declarationType: instantiableDeclarationType.asDeclarationType,
-						accessLevel: instantiableAccessLevel,
-						accessModifierRange: instantiableAccessModifierRange,
-						declarationStartLocation: instantiableDeclarationStartLocation,
+						access: instantiableAccess,
 						mockAttributes: mockAttributes,
 						generateMock: generateMock,
 						mockOnly: mockOnly,
@@ -509,6 +509,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						mockReturnType: mockReturnType,
 						customMockName: customMockName,
 						mockDeclarationLocation: mockDeclarationLocation,
+						mockDeclarationAccess: mockDeclarationAccess,
 						declarationLocation: instantiableDeclarationLocation,
 					),
 				]
@@ -529,9 +530,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						additionalInstantiables: additionalInstantiables,
 						dependencies: [],
 						declarationType: .extensionType,
-						accessLevel: instantiableAccessLevel,
-						accessModifierRange: instantiableAccessModifierRange,
-						declarationStartLocation: instantiableDeclarationStartLocation,
+						access: instantiableAccess,
 						mockAttributes: mockAttributes,
 						generateMock: generateMock,
 						mockOnly: mockOnly,
@@ -539,6 +538,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						mockReturnType: mockReturnType,
 						customMockName: customMockName,
 						mockDeclarationLocation: mockDeclarationLocation,
+						mockDeclarationAccess: mockDeclarationAccess,
 						declarationLocation: instantiableDeclarationLocation,
 					),
 				]
@@ -553,6 +553,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 					patched.mockInitializer = mockInitializer
 					patched.mockReturnType = mockReturnType
 					patched.mockDeclarationLocation = mockDeclarationLocation
+					patched.mockDeclarationAccess = mockDeclarationAccess
 					return patched
 				}
 			}
@@ -577,13 +578,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	/// The location of the decorated declaration, recorded when the declaration is visited with a converter.
 	private var instantiableDeclarationLocation: Dependency.DeclarationLocation?
-	/// The access level the decorated type declaration or extension spells, recorded when it is visited, before any
-	/// instantiable is built from it.
-	private var instantiableAccessLevel = AccessLevel.internal
-	/// The range of the modifier that sets `instantiableAccessLevel`, recorded when the declaration is visited with a converter.
-	private var instantiableAccessModifierRange: Dependency.SourceRange?
-	/// Where the decorated declaration begins after its attributes, recorded when the declaration is visited with a converter.
-	private var instantiableDeclarationStartLocation: Dependency.DeclarationLocation?
+	/// The access the decorated type declaration or extension spells, recorded when it is visited, before any
+	/// instantiable or mock method is found in it.
+	private var instantiableAccess = AccessDeclaration(level: .internal)
 
 	/// Reports that `name`, which generated code binds or refers to, collides with `reservation`.
 	/// No fix-it is offered: SafeDI matches dependencies by label, so a new name could fulfill, or be fulfilled
@@ -600,14 +597,6 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		sourceLocationConverter.map { sourceLocationConverter in
 			sourceLocationConverter.declarationLocation(for: node.positionAfterSkippingLeadingTrivia)
 		}
-	}
-
-	/// Records the access level that `modifiers`, the modifiers of the decorated declaration introduced by `keyword`, spell.
-	private func recordAccess(of modifiers: DeclModifierListSyntax, introducedBy keyword: TokenSyntax) {
-		let accessModifier = modifiers.accessModifier
-		instantiableAccessLevel = accessModifier?.accessLevel ?? .internal
-		instantiableAccessModifierRange = accessModifier.flatMap { sourceRange(of: $0.name) }
-		instantiableDeclarationStartLocation = sourceLocationConverter?.declarationLocation(for: modifiers.declarationStartPosition(introducedBy: keyword))
 	}
 
 	/// The range of `node`’s text, excluding its leading and trailing trivia, or `nil` without a converter.
@@ -643,7 +632,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		instantiableType = nodeDeclarationType
 		processAttributes(node.attributes, on: macro)
 		processModifiers(node.modifiers, on: node)
-		recordAccess(of: node.modifiers, introducedBy: node.keyword)
+		instantiableAccess = node.modifiers.access(introducedBy: node.keyword, sourceLocationConverter: sourceLocationConverter)
 
 		return .visitChildren
 	}

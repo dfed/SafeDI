@@ -994,6 +994,13 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			        Garage()
 			    }
 			}
+
+			@Instantiable(mockOnly: true)
+			package extension Barn {
+			    static func mock() -> Barn {
+			        Barn()
+			    }
+			}
 			""",
 		])
 	}
@@ -1169,6 +1176,7 @@ extension ConditionalCompilationDecision: BinarySample {}
 extension SafeDIConfiguration: BinarySample {}
 extension Instantiable: BinarySample {}
 extension Instantiable.DeclarationType: BinarySample {}
+extension AccessDeclaration: BinarySample {}
 extension AccessLevel: BinarySample {}
 extension Initializer: BinarySample {}
 extension Initializer.Argument: BinarySample {}

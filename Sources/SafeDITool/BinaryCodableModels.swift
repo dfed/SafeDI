@@ -388,9 +388,7 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("additionalInstantiables", \.additionalInstantiables),
 				BinaryLayoutField("dependencies", \.dependencies),
 				BinaryLayoutField("declarationType", \.declarationType),
-				BinaryLayoutField("accessLevel", \.accessLevel),
-				BinaryLayoutField("accessModifierRange", \.accessModifierRange),
-				BinaryLayoutField("declarationStartLocation", \.declarationStartLocation),
+				BinaryLayoutField("access", \.access),
 				BinaryLayoutField("mockAttributes", \.mockAttributes),
 				BinaryLayoutField("generateMock", \.generateMock),
 				BinaryLayoutField("mockOnly", \.mockOnly),
@@ -398,6 +396,7 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("mockReturnType", \.mockReturnType),
 				BinaryLayoutField("customMockName", \.customMockName),
 				BinaryLayoutField("mockDeclarationLocation", \.mockDeclarationLocation),
+				BinaryLayoutField("mockDeclarationAccess", \.mockDeclarationAccess),
 				BinaryLayoutField("declarationLocation", \.declarationLocation),
 				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
 			],
@@ -414,9 +413,7 @@ extension Instantiable: BinarySchemaMember {
 			additionalInstantiables: reader.read() as [TypeDescription],
 			dependencies: reader.read(),
 			declarationType: reader.read(),
-			accessLevel: reader.read(),
-			accessModifierRange: reader.read() as Dependency.SourceRange?,
-			declarationStartLocation: reader.read() as Dependency.DeclarationLocation?,
+			access: reader.read(),
 			mockAttributes: reader.read(),
 			generateMock: reader.read(),
 			mockOnly: reader.read(),
@@ -424,6 +421,7 @@ extension Instantiable: BinarySchemaMember {
 			mockReturnType: reader.read() as TypeDescription?,
 			customMockName: reader.read() as String?,
 			mockDeclarationLocation: reader.read() as Dependency.DeclarationLocation?,
+			mockDeclarationAccess: reader.read() as AccessDeclaration?,
 			declarationLocation: reader.read() as Dependency.DeclarationLocation?,
 		)
 		sourceFilePath = try reader.read() as String?
@@ -438,9 +436,7 @@ extension Instantiable: BinarySchemaMember {
 			writer.write(additionalInstantiables)
 			writer.write(dependencies)
 			writer.write(declarationType)
-			writer.write(accessLevel)
-			writer.write(accessModifierRange)
-			writer.write(declarationStartLocation)
+			writer.write(access)
 			writer.write(mockAttributes)
 			writer.write(generateMock)
 			writer.write(mockOnly)
@@ -448,6 +444,7 @@ extension Instantiable: BinarySchemaMember {
 			writer.write(mockReturnType)
 			writer.write(customMockName)
 			writer.write(mockDeclarationLocation)
+			writer.write(mockDeclarationAccess)
 			writer.write(declarationLocation)
 			writer.write(sourceFilePath)
 		}
@@ -487,6 +484,33 @@ extension Instantiable.DeclarationType: BinarySchemaMember {
 		case actorType
 		case structType
 		case extensionType
+	}
+}
+
+extension AccessDeclaration: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("level", \.level),
+				BinaryLayoutField("modifierRange", \.modifierRange),
+				BinaryLayoutField("declarationStartLocation", \.declarationStartLocation),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(
+			level: reader.read(),
+			modifierRange: reader.read() as Dependency.SourceRange?,
+			declarationStartLocation: reader.read() as Dependency.DeclarationLocation?,
+		)
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(level)
+		writer.write(modifierRange)
+		writer.write(declarationStartLocation)
 	}
 }
 
@@ -531,9 +555,7 @@ extension Initializer: BinarySchemaMember {
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
-				BinaryLayoutField("accessLevel", \.accessLevel),
-				BinaryLayoutField("accessModifierRange", \.accessModifierRange),
-				BinaryLayoutField("declarationStartLocation", \.declarationStartLocation),
+				BinaryLayoutField("access", \.access),
 				BinaryLayoutField("isOptional", \.isOptional),
 				BinaryLayoutField("isAsync", \.isAsync),
 				BinaryLayoutField("doesThrow", \.doesThrow),
@@ -547,9 +569,7 @@ extension Initializer: BinarySchemaMember {
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
-			accessLevel: reader.read(),
-			accessModifierRange: reader.read() as Dependency.SourceRange?,
-			declarationStartLocation: reader.read() as Dependency.DeclarationLocation?,
+			access: reader.read(),
 			isOptional: reader.read(),
 			isAsync: reader.read(),
 			doesThrow: reader.read(),
@@ -560,9 +580,7 @@ extension Initializer: BinarySchemaMember {
 	}
 
 	func write(to writer: inout BinaryWriter) {
-		writer.write(accessLevel)
-		writer.write(accessModifierRange)
-		writer.write(declarationStartLocation)
+		writer.write(access)
 		writer.write(isOptional)
 		writer.write(isAsync)
 		writer.write(doesThrow)
