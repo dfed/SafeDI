@@ -3093,6 +3093,33 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_writesErrorStubToMockConfigurationOutput_whenSourceHasParseErrors() async throws {
+		// A planned output left unwritten would be missing from a clean build, or keep an earlier build's code.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true, generateMock: true)
+				public struct Root: Instantiable {
+				    public init() {}
+
+				    :::brokenSyntax
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			// Fixture intentionally contains `:::brokenSyntax` to exercise the parse-error stub path
+			skipCompileVerification: true,
+		)
+
+		// The stub names the fixture's path, which depends on where the test runs, so compare it with the
+		// dependency tree's stub, which the test above checks.
+		let rootDependencyTree = try #require(output.dependencyTreeFiles["Root+SafeDI.swift"])
+		#expect(output.mockConfigurationFile == rootDependencyTree)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenNonRootInstantiatedPropertyHasForwardedArgument() async {
 		// Parent is NOT a root — only generateMock: true. Child has @Forwarded.
 		// Production validation never sees this graph (no root entry point),

@@ -267,11 +267,9 @@ struct Generate: AsyncParsableCommand {
 				if let combinedOutput {
 					try errorContent.write(toPath: combinedOutput)
 				} else if let manifest {
-					for entry in manifest.dependencyTreeGeneration {
-						try errorContent.write(toPath: entry.outputFilePath)
-					}
-					for entry in manifest.mockGeneration {
-						try errorContent.write(toPath: entry.outputFilePath)
+					// Every planned output, so that none is missing or keeps the code of an earlier build.
+					for outputFilePath in (manifest.dependencyTreeGeneration + manifest.mockGeneration).map(\.outputFilePath) + [manifest.mockConfigurationOutputFilePath].compactMap(\.self) {
+						try errorContent.write(toPath: outputFilePath)
 					}
 				}
 			} else {
