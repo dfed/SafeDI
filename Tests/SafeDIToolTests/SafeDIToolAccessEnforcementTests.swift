@@ -929,6 +929,85 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}
 	}
 
+	// MARK: Tests – Roots another module declares
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_leavesDependencysRootWithoutCode_whenItsTreeConstructsInternalType() async throws {
+		// The plugin's CSV for `App` lists `Feature`'s files, so `App` plans a file for `Feature`'s root too. `App`
+		// cannot construct `Feature`'s internal types, so it leaves the file without code and reports nothing:
+		// `Feature` generates the root and reports any problem with it.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.feature(inPackage: "Shop", declaring: Self.internalServiceWithPackageInitializer, alongside: """
+				@Instantiable(isRoot: true)
+				final class FeatureRoot: Instantiable {
+				    init(service: Service) {
+				        self.service = service
+				    }
+				    @Instantiated let service: Service
+				}
+				"""),
+				Self.app(inPackage: "Shop", declaring: Self.appRootIndependentOfFeature),
+			],
+			integration: .swiftPackagePlugin,
+			filesToDelete: &filesToDelete,
+		)
+
+		let featureRootCode = """
+		extension FeatureRoot {
+		    public convenience init() {
+		        let service = Service()
+		        self.init(service: service)
+		    }
+		}
+		"""
+		#expect(try #require(output.modules["Feature"]).generatedFiles == ["FeatureRoot+SafeDI.swift": generatedFileHeader + featureRootCode])
+		#expect(try #require(output.modules["App"]).generatedFiles["FeatureRoot+SafeDI.swift"] == generatedFileHeader + Self.importBlock("Feature") + "\n\n")
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_generatesDependencysRootAsItsModuleDoes_whenItsTreeConstructsOnlyPublicTypes() async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.feature(
+					inPackage: "Shop",
+					declaring: """
+					@Instantiable
+					public final class Service: Instantiable {
+					    public init() {}
+					}
+					""",
+					alongside: """
+					@Instantiable(isRoot: true)
+					public final class FeatureRoot: Instantiable {
+					    public init(service: Service) {
+					        self.service = service
+					    }
+					    @Instantiated let service: Service
+					}
+					""",
+				),
+				Self.app(inPackage: "Shop", declaring: Self.appRootIndependentOfFeature),
+			],
+			integration: .swiftPackagePlugin,
+			filesToDelete: &filesToDelete,
+		)
+
+		let featureRootCode = """
+		extension FeatureRoot {
+		    public convenience init() {
+		        let service = Service()
+		        self.init(service: service)
+		    }
+		}
+		"""
+		#expect(try #require(output.modules["Feature"]).generatedFiles == ["FeatureRoot+SafeDI.swift": generatedFileHeader + featureRootCode])
+		#expect(try #require(output.modules["App"]).generatedFiles["FeatureRoot+SafeDI.swift"] == generatedFileHeader + Self.importBlock("Feature") + "\n\n" + featureRootCode)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -939,6 +1018,16 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	@Instantiable
 	final class Service: Instantiable {
 	    package init() {}
+	}
+	"""
+
+	/// A root in `App` that constructs nothing of `Feature`'s.
+	private static let appRootIndependentOfFeature = """
+	import Feature
+
+	@Instantiable(isRoot: true)
+	final class Root: Instantiable {
+	    init() {}
 	}
 	"""
 

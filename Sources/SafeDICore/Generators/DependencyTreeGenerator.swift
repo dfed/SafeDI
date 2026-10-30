@@ -1751,30 +1751,47 @@ public actor DependencyTreeGenerator {
 		constructsOnlyPublicDeclarations ? nil : emittingModule
 	}
 
-	/// The roots whose trees this module generates code for, from `rootScopes`, the module's roots in type order, once
-	/// every construction in their trees is known to compile in the module, which throws an error for each
-	/// construction that does not.
+	/// The roots whose trees this module generates code for, from `rootScopes`, the module's roots in type order. A
+	/// root declared in one of the module's own files is generated once every construction in its tree is known to
+	/// compile in the module, which throws an error for each construction that does not. A root declared elsewhere –
+	/// a build tool plugin's input includes the files of the modules a module depends on – is generated, as its own
+	/// module generates it, only when its tree constructs `public` and `open` declarations alone, which every module
+	/// can construct. Otherwise its file is left without code, and nothing is reported: the module that declares the
+	/// root reports what keeps it from compiling.
 	private func rootScopesThisModuleGenerates(
 		from rootScopes: [(typeDescription: TypeDescription, scope: Scope)],
 	) throws -> [(typeDescription: TypeDescription, scope: Scope)] {
 		guard let emittingModule = emittingModuleToCheck else { return rootScopes }
+		var rootScopesToGenerate = [(typeDescription: TypeDescription, scope: Scope)]()
 		var inaccessibleConstructions = [DependencyTreeGeneratorError.InaccessibleConstruction]()
 		for rootScope in rootScopes {
-			inaccessibleConstructions += Self.inaccessibleConstructions(
-				Self.constructions(
-					inTreeRootedAt: rootScope.scope,
-					rootIsConstructedWithMockMethod: false,
-					rootReferenceLocation: rootScope.scope.instantiable.declarationLocation,
-					isMock: false,
-					emittingModule: emittingModule,
-				),
-				from: emittingModule,
-			)
+			let rootInstantiable = rootScope.scope.instantiable
+			if rootInstantiable.sourceFilePath.map(emittingModule.isOwnFile) ?? false {
+				inaccessibleConstructions += Self.inaccessibleConstructions(
+					Self.constructions(
+						inTreeRootedAt: rootScope.scope,
+						rootIsConstructedWithMockMethod: false,
+						rootReferenceLocation: rootInstantiable.declarationLocation,
+						isMock: false,
+						emittingModule: emittingModule,
+					),
+					from: emittingModule,
+				)
+				rootScopesToGenerate.append(rootScope)
+			} else if Self.constructions(
+				inTreeRootedAt: rootScope.scope,
+				rootIsConstructedWithMockMethod: false,
+				rootReferenceLocation: nil,
+				isMock: false,
+				emittingModule: emittingModule,
+			).allSatisfy({ Self.isPubliclyConstructible($0.instantiable, withMockMethod: $0.usesMockMethod) }) {
+				rootScopesToGenerate.append(rootScope)
+			}
 		}
 		guard inaccessibleConstructions.isEmpty else {
 			throw DependencyTreeGeneratorError.inaccessibleConstructions(inaccessibleConstructions)
 		}
-		return rootScopes
+		return rootScopesToGenerate
 	}
 
 	/// Whether code in every module can construct `instantiable` with its hand-written mock method when
