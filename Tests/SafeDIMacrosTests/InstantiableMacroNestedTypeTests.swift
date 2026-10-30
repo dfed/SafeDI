@@ -308,62 +308,325 @@ import Testing
 		}
 
 		@Test
-		func declaration_producesWarningForEachNestedType_whenPropertyTypeNamesSeveralNestedTypesUnqualified() {
+		func declaration_producesOneWarningThatQualifiesEveryNestedType_whenPropertyTypeNamesSeveralNestedTypes() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public struct Zeta {}
+				    public struct Alpha {}
+
+				    public init(pair: (Zeta, Alpha)) {
+				        self.pair = pair
+				    }
+
+				    @Received let pair: (Zeta, Alpha)
+				}
+				""",
+				expandedSource: """
+				public final class Child: Instantiable {
+				    public struct Zeta {}
+				    public struct Alpha {}
+
+				    public init(pair: (Zeta, Alpha)) {
+				        self.pair = pair
+				    }
+
+				    let pair: (Zeta, Alpha)
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The generated code that builds or receives `pair` lives in another type’s extension, where `Alpha` and `Zeta`, declared in `Child`, do not resolve. Write them as `Child.Alpha` and `Child.Zeta`.",
+						line: 10,
+						column: 25,
+						severity: .warning,
+						fixIts: [FixItSpec(message: "Replace `Alpha` with `Child.Alpha` and `Zeta` with `Child.Zeta`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Replace `Alpha` with `Child.Alpha` and `Zeta` with `Child.Zeta`"],
+				fixedSource: """
+				@Instantiable
+				public final class Child: Instantiable {
+				    public struct Zeta {}
+				    public struct Alpha {}
+
+				    public init(pair: (Child.Zeta, Child.Alpha)) {
+				        self.pair = pair
+				    }
+
+				    @Received let pair: (Child.Zeta, Child.Alpha)
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_producesWarningListingEveryNestedType_whenPropertyTypeNamesThreeNestedTypes() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public struct Alpha {}
+				    public struct Box<Value> {}
+				    public struct Zeta {}
+
+				    public init(box: Box<(Alpha, Zeta)>) {
+				        self.box = box
+				    }
+
+				    @Received let box: Box<(Alpha, Zeta)>
+				}
+				""",
+				expandedSource: """
+				public final class Child: Instantiable {
+				    public struct Alpha {}
+				    public struct Box<Value> {}
+				    public struct Zeta {}
+
+				    public init(box: Box<(Alpha, Zeta)>) {
+				        self.box = box
+				    }
+
+				    let box: Box<(Alpha, Zeta)>
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The generated code that builds or receives `box` lives in another type’s extension, where `Alpha`, `Box`, and `Zeta`, declared in `Child`, do not resolve. Write them as `Child.Alpha`, `Child.Box`, and `Child.Zeta`.",
+						line: 11,
+						column: 24,
+						severity: .warning,
+						fixIts: [FixItSpec(message: "Replace `Alpha` with `Child.Alpha`, `Box` with `Child.Box`, and `Zeta` with `Child.Zeta`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Replace `Alpha` with `Child.Alpha`, `Box` with `Child.Box`, and `Zeta` with `Child.Zeta`"],
+				fixedSource: """
+				@Instantiable
+				public final class Child: Instantiable {
+				    public struct Alpha {}
+				    public struct Box<Value> {}
+				    public struct Zeta {}
+
+				    public init(box: Child.Box<(Child.Alpha, Child.Zeta)>) {
+				        self.box = box
+				    }
+
+				    @Received let box: Child.Box<(Child.Alpha, Child.Zeta)>
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_producesWarningThatQualifiesNestedType_whenPropertyNamesNestedTypeThroughSelf() {
+			// In another type’s extension, `Self` names that type, so `Self.Config` does not resolve there either. A class
+			// cannot spell a stored property’s type through `Self`, so the type is a struct.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public struct Config {}
+
+				    public init(config: Self.Config) {
+				        self.config = config
+				    }
+
+				    @Forwarded let config: Self.Config
+				}
+				""",
+				expandedSource: """
+				public struct Child: Instantiable {
+				    public struct Config {}
+
+				    public init(config: Self.Config) {
+				        self.config = config
+				    }
+
+				    let config: Self.Config
+
+				    public typealias ForwardedProperties = Self.Config
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The generated code that builds or receives `config` lives in another type’s extension, where `Self.Config`, declared in `Child`, does not resolve. Write it as `Child.Config`.",
+						line: 9,
+						column: 28,
+						severity: .warning,
+						fixIts: [FixItSpec(message: "Replace `Self.Config` with `Child.Config`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Replace `Self.Config` with `Child.Config`"],
+				fixedSource: """
+				@Instantiable
+				public struct Child: Instantiable {
+				    public struct Config {}
+
+				    public init(config: Child.Config) {
+				        self.config = config
+				    }
+
+				    @Forwarded let config: Child.Config
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_fixItQualifiesAliasOfType_whenAliasPropertyNamesNestedTypeUnqualified() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
 				public final class Child: Instantiable {
 				    public struct Config {}
-				    public struct Box<Value> {}
 
-				    public init(box: Box<Config>) {
-				        self.box = box
+				    public init(configuration: Config) {
+				        self.configuration = configuration
 				    }
 
-				    @Received let box: Box<Config>
+				    @Received(fulfilledByDependencyNamed: "config", ofType: Config.self) let configuration: Config
 				}
 				""",
 				expandedSource: """
 				public final class Child: Instantiable {
 				    public struct Config {}
-				    public struct Box<Value> {}
 
-				    public init(box: Box<Config>) {
-				        self.box = box
+				    public init(configuration: Config) {
+				        self.configuration = configuration
 				    }
 
-				    let box: Box<Config>
+				    let configuration: Config
 				}
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The generated code that builds or receives `box` lives in another type’s extension, where `Box`, declared in `Child`, does not resolve. Write it as `Child.Box`.",
-						line: 10,
-						column: 24,
-						severity: .warning,
-						fixIts: [FixItSpec(message: "Replace `Box` with `Child.Box`")],
-					),
-					DiagnosticSpec(
-						message: "The generated code that builds or receives `box` lives in another type’s extension, where `Config`, declared in `Child`, does not resolve. Write it as `Child.Config`.",
-						line: 10,
-						column: 24,
+						message: "The generated code that builds or receives `configuration` lives in another type’s extension, where `Config`, declared in `Child`, does not resolve. Write it as `Child.Config`.",
+						line: 9,
+						column: 93,
 						severity: .warning,
 						fixIts: [FixItSpec(message: "Replace `Config` with `Child.Config`")],
 					),
 				],
 				macros: instantiableTestMacros,
-				applyFixIts: ["Replace `Box` with `Child.Box`"],
+				applyFixIts: ["Replace `Config` with `Child.Config`"],
 				fixedSource: """
 				@Instantiable
 				public final class Child: Instantiable {
 				    public struct Config {}
-				    public struct Box<Value> {}
 
-				    public init(box: Child.Box<Config>) {
-				        self.box = box
+				    public init(configuration: Child.Config) {
+				        self.configuration = configuration
 				    }
 
-				    @Received let box: Child.Box<Config>
+				    @Received(fulfilledByDependencyNamed: "config", ofType: Child.Config.self) let configuration: Child.Config
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_producesWarningAtAliasOfType_whenOnlyOfTypeNamesNestedTypeUnqualified() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public struct Config {}
+
+				    public init(configuration: Child.Config) {
+				        self.configuration = configuration
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "config", ofType: Config.self) let configuration: Child.Config
+				}
+				""",
+				expandedSource: """
+				public final class Child: Instantiable {
+				    public struct Config {}
+
+				    public init(configuration: Child.Config) {
+				        self.configuration = configuration
+				    }
+
+				    let configuration: Child.Config
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The generated code that builds or receives `configuration` lives in another type’s extension, where `Config`, declared in `Child`, does not resolve. Write it as `Child.Config`.",
+						line: 9,
+						column: 61,
+						severity: .warning,
+						fixIts: [FixItSpec(message: "Replace `Config` with `Child.Config`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Replace `Config` with `Child.Config`"],
+				fixedSource: """
+				@Instantiable
+				public final class Child: Instantiable {
+				    public struct Config {}
+
+				    public init(configuration: Child.Config) {
+				        self.configuration = configuration
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "config", ofType: Child.Config.self) let configuration: Child.Config
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_fixItQualifiesAliasOfType_whenAliasPropertyNamesNestedTypeThroughSelf() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct Child: Instantiable {
+				    public struct Config {}
+
+				    public init(configuration: Self.Config) {
+				        self.configuration = configuration
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "config", ofType: Self.Config.self) let configuration: Self.Config
+				}
+				""",
+				expandedSource: """
+				public struct Child: Instantiable {
+				    public struct Config {}
+
+				    public init(configuration: Self.Config) {
+				        self.configuration = configuration
+				    }
+
+				    let configuration: Self.Config
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The generated code that builds or receives `configuration` lives in another type’s extension, where `Self.Config`, declared in `Child`, does not resolve. Write it as `Child.Config`.",
+						line: 9,
+						column: 98,
+						severity: .warning,
+						fixIts: [FixItSpec(message: "Replace `Self.Config` with `Child.Config`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Replace `Self.Config` with `Child.Config`"],
+				fixedSource: """
+				@Instantiable
+				public struct Child: Instantiable {
+				    public struct Config {}
+
+				    public init(configuration: Child.Config) {
+				        self.configuration = configuration
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "config", ofType: Child.Config.self) let configuration: Child.Config
 				}
 				""",
 			)

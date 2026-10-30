@@ -1748,6 +1748,34 @@ struct TypeDescriptionTests {
 		#expect(!typeDescription.containsSelf)
 	}
 
+	// MARK: - namesType
+
+	@Test
+	func namesType_namesEveryPathTheTypesPathStartsWith_whenTypeIsNestedTwoLevels() throws {
+		let visitor = MemberTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: Child.Config.Options"))
+		let typeDescription = try #require(visitor.nestedType)
+		var namedPaths = [[String]]()
+		_ = typeDescription.namesType(where: {
+			namedPaths.append($0)
+			return false
+		})
+		#expect(namedPaths == [["Child"], ["Child", "Config"], ["Child", "Config", "Options"]])
+	}
+
+	@Test
+	func namesType_namesNoPathThroughParent_whenParentIsNotNamedType() throws {
+		let visitor = MemberTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: "var x: [Config].Element"))
+		let typeDescription = try #require(visitor.nestedType)
+		var namedPaths = [[String]]()
+		_ = typeDescription.namesType(where: {
+			namedPaths.append($0)
+			return false
+		})
+		#expect(namedPaths == [["Config"]])
+	}
+
 	// MARK: - replacingInstantiatedType
 
 	@Test
