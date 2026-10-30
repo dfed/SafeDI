@@ -182,8 +182,10 @@ public struct InstantiableMacro: MemberMacro {
 				let inheritedDependencies = visitor.dependencies.filter {
 					switch $0.source {
 					case let .aliased(fulfillingProperty, _, _):
-						// Aliased properties must not be inherited from elsewhere.
-						!visitor.dependencies.contains { $0.property == fulfillingProperty }
+						// Aliased properties must not be inherited from elsewhere. A property this type declares
+						// fulfills one (a received property is reported itself), and so does the instance of a
+						// lazily instantiated property it instantiates or renames, as in `Scope.createdProperties`.
+						!visitor.dependencies.contains { $0.receivableProperties.contains(fulfillingProperty) }
 					case .instantiated:
 						false
 					case .forwarded, .received:
