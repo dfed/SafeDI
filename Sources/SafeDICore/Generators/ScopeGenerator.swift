@@ -1779,11 +1779,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// tree's bindings, after the wrappers. The mock builds no node for the instance itself beside a received
 		// wrapper, which it promotes instead, so that node is a wrapper of the other kind, such as a
 		// `SendableLazilyInstantiated<X>` the tree requires beside an `onlyIfAvailable` `LazilyInstantiated<X>?`.
+		// An instance the mocked type instantiates and the mock cannot build does provide it, and the wrapper is made
+		// from it: `mock()` takes that instance as a parameter, which is in scope before any binding, so the dependency
+		// and the wrapper are one instance, as when the mock builds the dependency as the wrapper.
+		let mockedTypeUncoveredDependencies = Self.uncoveredInstantiatedDependencies(ofMockedType: instantiable, treePropertyNodes: treePropertyNodes)
+		let mockedTypeUncoveredProperties = Set(mockedTypeUncoveredDependencies.map(\.property))
 		let lazilyInstantiatedReceivedProperties = receivedProperties
 			.filter {
 				$0.typeDescription.lazilyInstantiatedInstanceType != nil
 					&& !isProvidedByTree($0)
-					&& !isProvidedByTree($0.asValidatedForDependencyCycles)
+					&& (!isProvidedByTree($0.asValidatedForDependencyCycles) || mockedTypeUncoveredProperties.contains($0.asValidatedForDependencyCycles.asUnwrappedProperty))
 					&& !isFulfilledByForwardedProperty($0)
 			}
 			.sorted()
@@ -1858,7 +1863,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		var uncoveredDependencies = UncoveredDependencies()
 		// Collect uncovered @Instantiated deps from the root type.
-		for dependency in Self.uncoveredInstantiatedDependencies(ofMockedType: instantiable, treePropertyNodes: treePropertyNodes) {
+		for dependency in mockedTypeUncoveredDependencies {
 			uncoveredDependencies.add(dependency, isHiddenWhereReferenced: false)
 		}
 		// Also collect uncovered @Instantiated deps from child types in the tree.
@@ -1970,6 +1975,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let flatReceivedProperties = parameters.flatReceivedProperties
 		let onlyIfAvailableReceivedProperties = parameters.onlyIfAvailableReceivedProperties
 		let flatUncoveredParameters = parameters.flatUncoveredParameters
+		// The mocked type declares these for its whole tree: `mock()` takes each as a parameter.
+		let mockedTypeUncoveredDependencies = Self.uncoveredInstantiatedDependencies(ofMockedType: instantiable, treePropertyNodes: treePropertyNodes)
 		let lazilyInstantiatedReceivedProperties = parameters.lazilyInstantiatedReceivedProperties
 		let lazilyInstantiatedPropertyByInstanceBesideForwardedProperty = parameters.lazilyInstantiatedPropertyByInstanceBesideForwardedProperty
 
@@ -2080,6 +2087,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// The parameter may be named apart from its label.
 			if let instanceName = flatReceivedNameByProperty[instanceProperty] {
 				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(wrapperTypeSource) { \(instanceName) }")
+			} else if mockedTypeUncoveredDependencies.contains(where: { $0.property == instanceProperty }),
+			          let uncoveredParameter = flatUncoveredParameters.first(where: { $0.property == instanceProperty })
+			{
+				// The instance is the parameter of a dependency the mocked type instantiates, which is always passed.
+				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(wrapperTypeSource) { \(uncoveredParameter.label) }")
 			} else if let instanceName = flatReceivedNameByProperty[optionalInstanceProperty] {
 				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(instanceName).map { instance in \(wrapperTypeSource) { instance } }")
 			} else {
@@ -2248,7 +2260,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// alias of one, is handed the parameter the mocked type is passed. Nothing in the tree receives one from above,
 		// so no parameter, override, or wrapper the mock binds for a receiver shares its label and type.
 		treeDisambiguationMap = Self.routingReceives(
-			of: Self.uncoveredInstantiatedDependencies(ofMockedType: instantiable, treePropertyNodes: treePropertyNodes),
+			of: mockedTypeUncoveredDependencies,
 			toParametersNamed: uncoveredDependencyNameMap,
 			in: treeDisambiguationMap,
 		)

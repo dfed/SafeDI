@@ -569,6 +569,45 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenLazilyInstantiatedReceivedPropertyIsHiddenByDependencyOfMockedTypeTheMockCannotBuild() async {
+		// `Feed` is built inside `Screen`, beneath the `session: Session` that `Screen` instantiates and the mock takes as
+		// a parameter, which hides `session: LazilyInstantiated<Session>` there, as in production.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Feed.swift"]):4:5: error: @Received property `session: LazilyInstantiated<Session>` is hidden in chain: Screen -> Feed. `Screen` declares `session: Session` with the same label, so the types below `Screen` receive `session: Session` instead. Give `session: Session` on `Screen` a different label to fix.
+				\(fixtures["Screen.swift"]):6:5: note: `session: Session` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public final class Session {}
+
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(session: Session, feed: Feed) { self.session = session; self.feed = feed }
+					    @Instantiated let session: Session
+					    @Instantiated let feed: Feed
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Feed: Instantiable {
+					    public init(session: LazilyInstantiated<Session>) { self.session = session }
+					    @Received let session: LazilyInstantiated<Session>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenTypeBuiltInsidePromotedDependencyReceivesForwardedPropertyThatInstantiatorOfItsLabelHides() async {
 		// The mock passes `Feed` the `Instantiator<Session>` it builds under the label `session`, inside the function that
 		// also builds `Row`, where the label then names the `Instantiator` rather than the forwarded `session`. Production
