@@ -372,8 +372,12 @@ struct Generate: AsyncParsableCommand {
 					}
 				}
 				// Only the configuration these conditions select is judged: `scan` lists the mocks of every
-				// configuration, and those of the others are written without code.
-				try sourceConfiguration?.validateAdditionalMocksToGenerate(fulfilledBy: typeDescriptionToFulfillingInstantiableMap)
+				// configuration, and those of the others are written without code. So is the mock of a listed
+				// type that is declared only in clauses these conditions leave inactive.
+				try sourceConfiguration?.validateAdditionalMocksToGenerate(
+					fulfilledBy: typeDescriptionToFulfillingInstantiableMap,
+					orDeclaredAmong: Set(dependentModuleInfo.flatMap(\.instantiableTypeNamesInAnyClause) + module.instantiableTypeNamesInAnyClause),
+				)
 
 				// Accumulate every emission as a `(destination, header, body)`
 				// triple. `destination == nil` means the write is combined-
@@ -928,17 +932,25 @@ struct Generate: AsyncParsableCommand {
 }
 
 extension SafeDIConfiguration {
-	/// Throws when an `additionalMocksToGenerate` entry names no type an `@Instantiable` declaration declares, whose
-	/// mock can then never be generated. Mock generation matches an entry to the declared type that the entry spells
-	/// exactly, so each error also names the declared types that differ from the entry only in leading components,
-	/// and the declared type that fulfills the entry when an `@Instantiable` fulfills it as an additional type.
+	/// Throws when an `additionalMocksToGenerate` entry names no type an `@Instantiable` declaration declares in any
+	/// clause of any `#if` block, whose mock can then never be generated. An entry that names a type declared only in
+	/// clauses the conditions leave inactive is no mistake: its mock's file is written without code, as the file of
+	/// any other declaration the conditions leave inactive is. Mock generation matches an entry to the declared type
+	/// that the entry spells exactly, so each error also names the declared types that differ from the entry only in
+	/// leading components, and the declared type that fulfills the entry when an `@Instantiable` fulfills it as an
+	/// additional type.
 	///
-	/// - Parameter typeDescriptionToFulfillingInstantiableMap: Every type the `@Instantiable` declarations SafeDI read
-	///   fulfill, mapped to the declaration that fulfills it.
+	/// - Parameters:
+	///   - typeDescriptionToFulfillingInstantiableMap: Every type the active `@Instantiable` declarations SafeDI read
+	///     fulfill, mapped to the declaration that fulfills it.
+	///   - instantiableTypeNamesInAnyClause: The type each `@Instantiable` declaration SafeDI read declares, whether
+	///     or not the conditions leave the declaration active.
 	func validateAdditionalMocksToGenerate(
 		fulfilledBy typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
+		orDeclaredAmong instantiableTypeNamesInAnyClause: Set<String>,
 	) throws(AdditionalMocksNameNoInstantiableError) {
 		let declaredTypeNames = Set(typeDescriptionToFulfillingInstantiableMap.values.map(\.concreteInstantiable.asSource))
+			.union(instantiableTypeNamesInAnyClause)
 		let undeclaredTypeNames = Set(additionalMocksToGenerate).subtracting(declaredTypeNames).sorted()
 		guard !undeclaredTypeNames.isEmpty else { return }
 		throw AdditionalMocksNameNoInstantiableError(sourceDiagnostics: undeclaredTypeNames.map { typeName in

@@ -34,8 +34,9 @@ import SwiftSyntax
 /// which parallel parsing finished the files or by how `generate` assembled the module, so the module info
 /// `generate` writes for the same files is the same bytes every time.
 struct ModuleInfo: Codable {
-	/// A module with `imports`, `mockImports`, `filesWithUnexpectedNodes`, and `conditionalCompilationDecisions`
-	/// sorted, whatever order they are given in, and all but `filesWithUnexpectedNodes` without duplicates.
+	/// A module with `imports`, `mockImports`, `filesWithUnexpectedNodes`, `conditionalCompilationDecisions`, and
+	/// `instantiableTypeNamesInAnyClause` sorted, whatever order they are given in, and all but
+	/// `filesWithUnexpectedNodes` without duplicates.
 	init(
 		imports: [ImportStatement],
 		mockImports: [ImportStatement],
@@ -43,6 +44,7 @@ struct ModuleInfo: Codable {
 		configurations: [SafeDIConfiguration],
 		filesWithUnexpectedNodes: [String]?,
 		conditionalCompilationDecisions: [ConditionalCompilationDecision],
+		instantiableTypeNamesInAnyClause: [String],
 	) {
 		self.imports = imports.sortedWithoutDuplicates()
 		self.mockImports = mockImports.sortedWithoutDuplicates()
@@ -50,6 +52,7 @@ struct ModuleInfo: Codable {
 		self.configurations = configurations
 		self.filesWithUnexpectedNodes = filesWithUnexpectedNodes?.sorted()
 		self.conditionalCompilationDecisions = Set(conditionalCompilationDecisions).sorted()
+		self.instantiableTypeNamesInAnyClause = Set(instantiableTypeNamesInAnyClause).sorted()
 	}
 
 	/// The imports generated dependency-tree code needs, from every file that declares SafeDI content,
@@ -70,6 +73,12 @@ struct ModuleInfo: Codable {
 	/// How each `#if` condition guarding SafeDI declarations was evaluated, sorted and without duplicates.
 	/// Generated code asserts these at compile time.
 	let conditionalCompilationDecisions: [ConditionalCompilationDecision]
+	/// The type each `@Instantiable` declaration in the module's files declares, in any clause of any `#if` block
+	/// whatever the conditions, sorted and without duplicates. Unlike `instantiables`, these include the declarations
+	/// the conditions leave inactive, so `generate` can tell an `additionalMocksToGenerate` entry that names such a
+	/// type, whose mock file it writes without code, from one that names no type at all. They are the same whatever
+	/// the conditions, which is why scan's cache needs no condition to reuse them.
+	let instantiableTypeNamesInAnyClause: [String]
 }
 
 /// A module's parsed input files together with the configuration that governed the parse.
@@ -452,6 +461,7 @@ extension ModuleInfo {
 			configurations: configurations,
 			filesWithUnexpectedNodes: filesWithUnexpectedNodes.map { $0 + (additionalModuleInfo.filesWithUnexpectedNodes ?? []) } ?? additionalModuleInfo.filesWithUnexpectedNodes,
 			conditionalCompilationDecisions: conditionalCompilationDecisions + additionalModuleInfo.conditionalCompilationDecisions,
+			instantiableTypeNamesInAnyClause: instantiableTypeNamesInAnyClause + additionalModuleInfo.instantiableTypeNamesInAnyClause,
 		)
 	}
 
@@ -467,6 +477,7 @@ extension ModuleInfo {
 			configurations: (configurations + addedModuleInfo.configurations).sortedByDeclaration(),
 			filesWithUnexpectedNodes: filesWithUnexpectedNodes.map { $0 + (addedModuleInfo.filesWithUnexpectedNodes ?? []) } ?? addedModuleInfo.filesWithUnexpectedNodes,
 			conditionalCompilationDecisions: conditionalCompilationDecisions + addedModuleInfo.conditionalCompilationDecisions,
+			instantiableTypeNamesInAnyClause: instantiableTypeNamesInAnyClause + addedModuleInfo.instantiableTypeNamesInAnyClause,
 		)
 	}
 
@@ -482,6 +493,7 @@ extension ModuleInfo {
 			configurations: fileScans.flatMap(\.configurations),
 			filesWithUnexpectedNodes: filesWithUnexpectedNodes.isEmpty ? nil : filesWithUnexpectedNodes,
 			conditionalCompilationDecisions: fileScans.flatMap(\.conditionalCompilationDecisions),
+			instantiableTypeNamesInAnyClause: fileScans.flatMap(\.outputFileDeclarations.instantiableTypeNames),
 		)
 	}
 }
