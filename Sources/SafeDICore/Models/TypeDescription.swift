@@ -907,7 +907,7 @@ extension TypeSyntax {
 		} else if let typeIdentifier = TupleTypeSyntax(self) {
 			let elements = typeIdentifier.elements.map {
 				TypeDescription.TupleElement(
-					label: $0.secondName?.text ?? $0.firstName?.text,
+					label: ($0.secondName ?? $0.firstName)?.spelledAsParameterName,
 					$0.type.typeDescription,
 				)
 			}
@@ -999,7 +999,7 @@ extension ExprSyntax {
 			} else {
 				.tuple(tupleElements.map {
 					TypeDescription.TupleElement(
-						label: $0.label?.text,
+						label: $0.label?.spelledAsParameterName,
 						$0.expression.typeDescription,
 					)
 				})

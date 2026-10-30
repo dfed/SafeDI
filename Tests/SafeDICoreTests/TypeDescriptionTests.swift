@@ -418,6 +418,19 @@ struct TypeDescriptionTests {
 	}
 
 	@Test
+	func typeDescription_whenCalledOnATypeSyntaxNodeRepresentingATupleTypeSyntaxWithLabelsEscapedEitherWay_spellsLabelsAsDeclarationsDo() throws {
+		let content = """
+		var tuple: (default: Int, `string`: String)
+		"""
+
+		let visitor = TupleTypeSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+
+		let typeDescription = try #require(visitor.tupleTypeIdentifier)
+		#expect(typeDescription.asSource == "(`default`: Int, string: String)")
+	}
+
+	@Test
 	func typeDescription_whenCalledOnATypeSyntaxNodeRepresentingASingleElementTupleTypeSyntax_findsTheType() throws {
 		let content = """
 		var tupleWrappedString: (String)
@@ -654,6 +667,17 @@ struct TypeDescriptionTests {
 		let typeDescription = try #require(visitor.typeDescription)
 		#expect(!typeDescription.isUnknown, "Type description is not of known type!")
 		#expect(typeDescription.asSource == "(int: Int, string: String)")
+	}
+
+	@Test
+	func typeDescription_whenCalledOnAExprSyntaxNodeRepresentingATupleTypeWithLabelsEscapedEitherWay_spellsLabelsAsDeclarationsDo() throws {
+		let content = """
+		let test: Any.Type = (default: Int, `string`: String).self
+		"""
+		let visitor = MemberAccessExprSyntaxVisitor(viewMode: .sourceAccurate)
+		visitor.walk(Parser.parse(source: content))
+		let typeDescription = try #require(visitor.typeDescription)
+		#expect(typeDescription.asSource == "(`default`: Int, string: String)")
 	}
 
 	@Test

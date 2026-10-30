@@ -608,7 +608,7 @@ public struct InstantiableMacro: MemberMacro {
 					fixedMockSyntax.signature.parameterClause.parameters = FunctionParameterListSyntax(
 						mockSyntax.signature.parameterClause.parameters.map { parameter in
 							var fixedParameter = parameter
-							let parameterLabel = parameter.secondName?.text ?? parameter.firstName.text
+							let parameterLabel = (parameter.secondName ?? parameter.firstName).spelledAsParameterName
 							if nonDependencyLabelsWithoutDefaults.contains(parameterLabel),
 							   fixedParameter.defaultValue == nil
 							{
@@ -970,7 +970,7 @@ public struct InstantiableMacro: MemberMacro {
 					fixedMock.signature.parameterClause.parameters = FunctionParameterListSyntax(
 						mockFunction.signature.parameterClause.parameters.map { parameter in
 							var fixedParameter = parameter
-							let parameterLabel = parameter.secondName?.text ?? parameter.firstName.text
+							let parameterLabel = (parameter.secondName ?? parameter.firstName).spelledAsParameterName
 							if nonDependencyLabelsWithoutDefaults.contains(parameterLabel),
 							   fixedParameter.defaultValue == nil
 							{
@@ -1365,7 +1365,7 @@ public struct InstantiableMacro: MemberMacro {
 				let labelsInUse = dependencyLabels.union(
 					parameters.lazy
 						.filter { $0.id != parameter.id }
-						.map(\.firstName.text),
+						.map(\.firstName.spelledAsParameterName),
 				)
 				if let fixedParameter = renamingReservedLabel(of: parameter, reservedAs: reservation, labelsInUse: labelsInUse) {
 					context.diagnose(Diagnostic(

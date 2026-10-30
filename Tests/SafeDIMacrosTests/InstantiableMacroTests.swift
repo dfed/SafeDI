@@ -6662,6 +6662,86 @@ import Testing
 		}
 
 		@Test
+		func declaration_fixit_addsDefaultValueToBacktickedNonDependencyMockParameter_whenMockOnlyTypeMockLacksDefault() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true)
+				public struct ExampleService {
+				    @Received let dependency: Dependency
+
+				    public static func mock(dependency: Dependency, `extra`: Bool) -> ExampleService {
+				        fatalError()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    let dependency: Dependency
+
+				    public static func mock(dependency: Dependency, `extra`: Bool) -> ExampleService {
+				        fatalError()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This `mock()` method’s parameter `extra: Bool` does not correspond to a dependency, so it must have a default value.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add default values to `mock()` non-dependency parameters for extra: Bool"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(mockOnly: true)
+				public struct ExampleService {
+				    @Received let dependency: Dependency
+
+				    public static func mock(dependency: Dependency, `extra`: Bool = <#default#>) -> ExampleService {
+				        fatalError()
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_fixit_addsDefaultValueToBacktickedNonDependencyMockParameter_whenMockOnlyExtensionMockLacksDefault() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true)
+				extension ExternalService {
+				    public static func mock(`extra`: Bool) -> ExternalService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension ExternalService {
+				    public static func mock(`extra`: Bool) -> ExternalService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This `mock()` method’s parameter `extra: Bool` does not correspond to a dependency, so it must have a default value.",
+						line: 3,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add default values to `mock()` non-dependency parameters for extra: Bool"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(mockOnly: true)
+				extension ExternalService {
+				    public static func mock(`extra`: Bool = <#default#>) -> ExternalService { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
 		func mockMethodWithPartialDependenciesProducesFixItPreservingExistingParameters() {
 			// mock() already has depA but is missing depB.
 			// Fix-it should reorder: depA first, then add depB, preserving existing extra default params.
@@ -8939,6 +9019,32 @@ import Testing
 						message: "`__safeDI_retryCount` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
 						line: 3,
 						column: 38,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesReservedNameDiagnosticWithoutFixit_whenLabelWithoutReservedPrefixIsAnotherParameterLabelInBackticks() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(`retryCount`: Int = 3, __safeDI_retryCount: Int = 3) {}
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(`retryCount`: Int = 3, __safeDI_retryCount: Int = 3) {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`__safeDI_retryCount` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
+						line: 3,
+						column: 40,
 						severity: .error,
 					),
 				],
