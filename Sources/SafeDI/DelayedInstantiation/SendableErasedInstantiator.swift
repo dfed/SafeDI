@@ -23,6 +23,14 @@
 ///
 /// This instantiator can be used to instantiate types across concurrency domains.
 ///
+/// SafeDI creates each instance in a `@Sendable` function, so every initializer that function calls, anywhere in
+/// the instance’s subtree, must be callable synchronously outside any actor, as must an extension’s
+/// `instantiate(…)` and a hand-written mock method that a generated mock calls: a `@MainActor` class with a
+/// `nonisolated init` is fine when its stored properties are `Sendable`, but a `@MainActor init` is not, whatever
+/// the type’s own isolation. What the instance’s type, and every type in its subtree, receives from outside it must
+/// be `Sendable` too, even when that type is itself `Sendable`, such as an actor; in a generated mock, so must the
+/// subtree’s labeled default-valued initializer arguments and the dependencies in it that `mock()` takes as parameters.
+///
 /// - SeeAlso: `Instantiator`
 /// - SeeAlso: `SendableInstantiator`
 /// - SeeAlso: `ErasedInstantiator`
