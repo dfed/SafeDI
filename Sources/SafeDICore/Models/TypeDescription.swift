@@ -780,30 +780,38 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	/// would resolve against the caller's scope if the default were promoted
 	/// onto another type's `SafeDIOverrides` struct.
 	public var containsSelf: Bool {
+		namesUnqualifiedType(where: { $0 == "Self" })
+	}
+
+	/// Whether the receiver names a type without qualifying it, wherever in the receiver that name sits, for a name
+	/// that satisfies `predicate`. `Config?`, `[String: Config]`, `Box<Config>`, `(Config) -> Void`, and
+	/// `Config.Options` each name `Config` unqualified; `Child.Config` names only `Child` unqualified. The text of an
+	/// `unknown` type is not inspected.
+	public func namesUnqualifiedType(where predicate: (String) -> Bool) -> Bool {
 		switch self {
 		case let .simple(name, generics):
-			name == "Self" || generics.contains(where: \.containsSelf)
+			predicate(name) || generics.contains(where: { $0.namesUnqualifiedType(where: predicate) })
 		case let .nested(_, parentType, generics):
-			parentType.containsSelf || generics.contains(where: \.containsSelf)
+			parentType.namesUnqualifiedType(where: predicate) || generics.contains(where: { $0.namesUnqualifiedType(where: predicate) })
 		case let .any(wrapped),
 		     let .implicitlyUnwrappedOptional(wrapped),
 		     let .optional(wrapped),
 		     let .some(wrapped):
-			wrapped.containsSelf
+			wrapped.namesUnqualifiedType(where: predicate)
 		case let .array(element):
-			element.containsSelf
+			element.namesUnqualifiedType(where: predicate)
 		case let .dictionary(key, value):
-			key.containsSelf || value.containsSelf
+			key.namesUnqualifiedType(where: predicate) || value.namesUnqualifiedType(where: predicate)
 		case let .tuple(elements):
-			elements.contains(where: \.typeDescription.containsSelf)
+			elements.contains(where: { $0.typeDescription.namesUnqualifiedType(where: predicate) })
 		case let .composition(elements):
-			elements.contains(where: \.containsSelf)
+			elements.contains(where: { $0.namesUnqualifiedType(where: predicate) })
 		case let .closure(arguments, _, _, returnType):
-			arguments.contains(where: \.containsSelf) || returnType.containsSelf
+			arguments.contains(where: { $0.namesUnqualifiedType(where: predicate) }) || returnType.namesUnqualifiedType(where: predicate)
 		case let .metatype(wrapped, _):
-			wrapped.containsSelf
+			wrapped.namesUnqualifiedType(where: predicate)
 		case let .attributed(wrapped, _, _):
-			wrapped.containsSelf
+			wrapped.namesUnqualifiedType(where: predicate)
 		case .unknown, .void:
 			false
 		}

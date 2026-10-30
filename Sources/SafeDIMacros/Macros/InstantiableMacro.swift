@@ -142,6 +142,24 @@ public struct InstantiableMacro: MemberMacro {
 				context.diagnose(diagnostic)
 			}
 
+			let memberDeclarations = Self.declarations(in: declaration.memberBlock.members)
+			Self.diagnoseUnqualifiedNestedTypes(
+				in: memberDeclarations
+					.compactMap { VariableDeclSyntax($0) }
+					.filter { !$0.attributes.dependencySources.isEmpty }
+					.flatMap(\.bindings)
+					.compactMap { binding in
+						IdentifierPatternSyntax(binding.pattern).flatMap { pattern in
+							binding.typeAnnotation.map { (label: pattern.identifier.text, type: $0.type) }
+						}
+					},
+				fulfilledByParametersOf: memberDeclarations.compactMap { InitializerDeclSyntax($0)?.signature }
+					+ Self.mockFunctionSignatures(foundBy: visitor),
+				declaredAmong: memberDeclarations,
+				enclosingType: TypeSyntax(IdentifierTypeSyntax(name: concreteDeclaration.name.trimmed)),
+				context: context,
+			)
+
 			if isMockOnly,
 			   let instantiableMacro = declaration.attributes.instantiableMacro,
 			   instantiableMacro.generateMockValue
@@ -805,6 +823,19 @@ public struct InstantiableMacro: MemberMacro {
 				context.diagnose(diagnostic)
 			}
 
+			// Each parameter of `instantiate(…)` without a default value is a dependency, as `InstantiableVisitor` finds.
+			Self.diagnoseUnqualifiedNestedTypes(
+				in: visitor.instantiateFunctions.flatMap { instantiateFunction in
+					instantiateFunction.syntax.signature.parameterClause.parameters
+						.filter { $0.defaultValue == nil }
+						.map { (label: ($0.secondName ?? $0.firstName).text, type: $0.type) }
+				},
+				fulfilledByParametersOf: Self.mockFunctionSignatures(foundBy: visitor),
+				declaredAmong: Self.declarations(in: declaration.memberBlock.members),
+				enclosingType: extensionDeclaration.extendedType.trimmed,
+				context: context,
+			)
+
 			// Validate mockOnly on extensions.
 			if isMockOnly,
 			   let instantiableMacro = declaration.attributes.instantiableMacro,
@@ -1461,6 +1492,90 @@ public struct InstantiableMacro: MemberMacro {
 		}
 	}
 
+	/// Diagnoses each dependency whose type names, unqualified, a type declared among `declarations` where generated
+	/// code would spell it so. Generated code spells a dependency's type as its declaration does, and the code that
+	/// builds or receives the dependency for another type – that type's initializer, an `Instantiator`'s builder, or
+	/// that type's `mock()` – lives in an extension of that other type, where a type nested in `enclosingType` is not
+	/// in scope. SafeDI qualifies a nested type that an `@Instantiable` declaration fulfills where it is the
+	/// dependency's type or the type a wrapper such as `Instantiator` builds, as
+	/// `TypeDescription.qualifyingInstantiatedType(within:amongInstantiableTypes:)` does for SafeDITool, so the name
+	/// is not diagnosed there. The diagnostic is a warning because the declaration compiles while only its own
+	/// `mock()`, which lives in an extension of `enclosingType`, names the type.
+	///
+	/// The fix-it qualifies the name in the dependency's type and in the type of each parameter with the dependency's
+	/// label among `functionSignatures`, since SafeDI matches a parameter to a dependency by its spelled type. Within
+	/// the decorated declaration the qualified name names the same type, so the change is safe wherever it is made.
+	/// - Parameters:
+	///   - dependencies: The label of each dependency and the syntax of its type.
+	///   - functionSignatures: The initializers and hand-written mocks whose parameters fulfill the dependencies.
+	///   - declarations: The members of the decorated declaration, with those in each clause of its `#if` blocks.
+	///   - enclosingType: The decorated type, which the fix-it writes before the nested type's name.
+	private static func diagnoseUnqualifiedNestedTypes(
+		in dependencies: [(label: String, type: TypeSyntax)],
+		fulfilledByParametersOf functionSignatures: [FunctionSignatureSyntax],
+		declaredAmong declarations: [DeclSyntax],
+		enclosingType: TypeSyntax,
+		context: some MacroExpansionContext,
+	) {
+		let nestedTypes = declarations.compactMap(\.nestedTypeDeclaration)
+		// Sorted so that a type naming several nested types is diagnosed in the same order every time.
+		let nestedTypeNames = Set(nestedTypes.map(\.name)).sorted()
+		let enclosingTypeDescription = enclosingType.typeDescription
+		let nestedInstantiableTypes = Set(nestedTypes.filter(\.isInstantiable).map {
+			TypeDescription.nested(name: $0.name, parentType: enclosingTypeDescription)
+		})
+		let enclosingTypeName = enclosingTypeDescription.asSource
+		let parameters = functionSignatures.flatMap(\.parameterClause.parameters)
+		for dependency in dependencies {
+			let declaredTypeDescription = dependency.type.typeDescription
+			let generatedTypeDescription = declaredTypeDescription.qualifyingInstantiatedType(
+				within: enclosingTypeDescription,
+				amongInstantiableTypes: nestedInstantiableTypes,
+			) ?? declaredTypeDescription
+			for nestedTypeName in nestedTypeNames where generatedTypeDescription.namesUnqualifiedType(where: { $0 == nestedTypeName }) {
+				let fulfillingParameterTypes = parameters
+					.filter { ($0.secondName ?? $0.firstName).text == dependency.label }
+					.map(\.type)
+					.filter { $0.typeDescription.namesUnqualifiedType(where: { $0 == nestedTypeName }) }
+				let qualifier = NestedTypeNameQualifier(typeName: nestedTypeName, enclosingType: enclosingType)
+				context.diagnose(Diagnostic(
+					node: dependency.type,
+					error: FixableInstantiableError.unqualifiedNestedType(
+						typeName: nestedTypeName,
+						enclosingTypeName: enclosingTypeName,
+						dependencyLabel: dependency.label,
+					),
+					changes: ([dependency.type] + fulfillingParameterTypes).map { type in
+						.replace(
+							oldNode: Syntax(type),
+							newNode: qualifier.rewrite(type),
+						)
+					},
+				))
+			}
+		}
+	}
+
+	/// The signatures of the hand-written mocks that `visitor` found, whose parameters fulfill the dependencies as an
+	/// initializer's do.
+	private static func mockFunctionSignatures(foundBy visitor: InstantiableVisitor) -> [FunctionSignatureSyntax] {
+		([visitor.mockFunctionSyntax].compactMap(\.self) + visitor.duplicateMockFunctionSyntaxes).map(\.signature)
+	}
+
+	/// The declarations among `members`, with those in every clause of each `#if` block among them, as
+	/// `InstantiableVisitor` scans the clauses of a declaration the macro decorates.
+	private static func declarations(in members: MemberBlockItemListSyntax) -> [DeclSyntax] {
+		members.flatMap { member in
+			if let ifConfigDeclaration = IfConfigDeclSyntax(member.decl) {
+				ifConfigDeclaration.clauses
+					.compactMap { $0.elements?.as(MemberBlockItemListSyntax.self) }
+					.flatMap(declarations(in:))
+			} else {
+				[member.decl]
+			}
+		}
+	}
+
 	private static func generateForwardedProperties(
 		from forwardedProperties: [Property],
 	) -> [DeclSyntax] {
@@ -1797,6 +1912,24 @@ extension TypeDescription {
 	}
 }
 
+// MARK: - DeclSyntax
+
+extension DeclSyntax {
+	/// The name of the type this declares – a struct, class, actor, enum, protocol, or type alias – and whether
+	/// `@Instantiable` decorates it, or `nil` when this declares no type.
+	fileprivate var nestedTypeDeclaration: (name: String, isInstantiable: Bool)? {
+		guard isProtocol(DeclGroupSyntax.self) || `is`(TypeAliasDeclSyntax.self),
+		      let typeDeclaration = asProtocol(NamedDeclSyntax.self)
+		else {
+			return nil
+		}
+		return (
+			name: typeDeclaration.name.text,
+			isInstantiable: asProtocol(WithAttributesSyntax.self)?.attributes.instantiableMacro != nil,
+		)
+	}
+}
+
 // MARK: Initializer
 
 extension Initializer {
@@ -1878,4 +2011,33 @@ private final class AttributeRewriter: SyntaxRewriter {
 		}
 		return node
 	}
+}
+
+// MARK: - NestedTypeNameQualifier
+
+/// Writes each unqualified use of a nested type's name with the type that declares it: `[Config]` becomes
+/// `[Child.Config]` and `Config.Options` becomes `Child.Config.Options`, while `Child.Config` is unchanged.
+private final class NestedTypeNameQualifier: SyntaxRewriter {
+	init(typeName: String, enclosingType: TypeSyntax) {
+		self.typeName = typeName
+		self.enclosingType = enclosingType
+		super.init(viewMode: .sourceAccurate)
+	}
+
+	override func visit(_ node: IdentifierTypeSyntax) -> TypeSyntax {
+		guard node.name.text == typeName else {
+			return super.visit(node)
+		}
+		var qualifiedType = MemberTypeSyntax(
+			baseType: enclosingType,
+			name: node.name.trimmed,
+			genericArgumentClause: node.genericArgumentClause.map { visit($0) },
+		)
+		qualifiedType.leadingTrivia = node.leadingTrivia
+		qualifiedType.trailingTrivia = node.trailingTrivia
+		return TypeSyntax(qualifiedType)
+	}
+
+	private let typeName: String
+	private let enclosingType: TypeSyntax
 }
