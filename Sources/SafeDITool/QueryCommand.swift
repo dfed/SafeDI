@@ -335,7 +335,8 @@ private struct ParsedQueryModule {
 				configurationFilePaths: Set(filePaths.map(\.path)),
 				activeCompilationConditions: activeCompilationConditions,
 			)
-			moduleInfo = parsed.module.moduleInfo
+			// Every file the directory holds belongs to the module, whose package the query does not know.
+			moduleInfo = parsed.module.moduleInfo.declaringEveryInstantiable(in: DeclaringModule(moduleName: includedModule.name, packageName: nil))
 			configuration = parsed.module.configuration
 			// Each file is reported under the `--include` argument that named the module, as that argument was given.
 			fileAttributions = filePaths.sorted().map { filePath in
@@ -355,11 +356,15 @@ private struct ParsedQueryModule {
 			}
 			// A file that cannot be opened reports the file system's error as `generate` does.
 			let data = try Data(contentsOf: path.asFileURL)
+			let readModuleInfo: ModuleInfo
 			do {
-				moduleInfo = try ModuleInfo(moduleInfoData: data)
+				readModuleInfo = try ModuleInfo(moduleInfoData: data)
 			} catch {
 				throw QueryError.moduleInfoNotReadable(path: path, reason: "\(error) \(BinaryFile.unreadableFileExplanation)")
 			}
+			// Every declaration the file holds belongs to the module, named as the build that wrote the file named it, if
+			// that build did. The query does not know the module's package.
+			moduleInfo = readModuleInfo.declaringEveryInstantiable(in: DeclaringModule(moduleName: readModuleInfo.moduleName ?? includedModule.name, packageName: nil))
 			// `parseModule` rejects a module with more than one configuration, so a module info file holds at most one.
 			configuration = moduleInfo.configurations.first
 			// A module info file names each file as the build that wrote it did, so the module's declarations are

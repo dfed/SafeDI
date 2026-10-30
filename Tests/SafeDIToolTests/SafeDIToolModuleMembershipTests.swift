@@ -393,6 +393,25 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 		#expect(membership.dependencyModuleNames == ["ChildAModule", "ChildBModule", "ChildCModule", "SafeDI", "SharedModule"])
 	}
 
+	// MARK: Tests – Query
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func queryNeeds_namesModuleByModuleInfoFileName_whenModuleInfoRecordsAnotherModuleName() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.instantiableContent(named: "Engine")],
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "EngineModule"],
+		)
+		#expect(output.moduleInfo.moduleName == "EngineModule")
+
+		let report = try await QueryNeeds.parse(["Engine", "--module-info", output.moduleInfoOutputPath]).query()
+
+		// A module info file is named after its file, as before it recorded the name of its module.
+		let fileName = ((output.moduleInfoOutputPath as NSString).lastPathComponent as NSString).deletingPathExtension
+		#expect(report.types.map { $0.modules.map(\.name) } == [[fileName]])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

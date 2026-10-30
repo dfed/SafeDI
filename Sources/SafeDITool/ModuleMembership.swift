@@ -170,6 +170,17 @@ extension ModuleInfo {
 		)
 	}
 
+	/// This module with every declaration declared in `declaringModule`, as `query` reads a module: every file it reads
+	/// belongs to the module that names the file.
+	func declaringEveryInstantiable(in declaringModule: DeclaringModule) -> ModuleInfo {
+		replacing(
+			instantiables: instantiables.map { $0.declared(in: declaringModule) },
+			moduleName: moduleName,
+			packageName: packageName,
+			dependencyModuleNames: dependencyModuleNames,
+		)
+	}
+
 	/// This module with `instantiables`, generated code for the module `moduleName` names.
 	private func replacing(
 		instantiables: [Instantiable],
