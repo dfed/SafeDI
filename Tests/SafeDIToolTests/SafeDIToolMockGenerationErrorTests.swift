@@ -3368,6 +3368,496 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTypeInTreeOfLazilyInstantiatedPropertyPromotedForRequiredOptionalInstanceRequiresOnlyIfAvailableAliasOfOptionalInstance() async {
+		// Settings requires `tracker: Tracker?`, so the mock promotes `tracker: LazilyInstantiated<Tracker>`, whose tree
+		// declares an `onlyIfAvailable` alias of `tracker: Tracker?`. The alias is not created while `tracker` is being
+		// built, so Leaf's required receive of it is a cycle, as it is in production.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Leaf.swift"]):7:5: error: Dependency cycle: @Instantiated `tracker: Tracker` -> @Received `myTracker: Tracker?` -> @Received `tracker: Tracker`. `tracker: Tracker` is received while it is still being instantiated. `myTracker: Tracker?` renames `tracker: Tracker?` only if available, so a type that receives `myTracker` without `onlyIfAvailable` must be built after `tracker: Tracker?`. Receive `myTracker` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tracker: Tracker?` cannot be built first. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `tracker: LazilyInstantiated<Tracker>` is validated as `tracker: Tracker`.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(home: Home, settings: Settings) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let home: Home
+					    @Instantiated let settings: Settings
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Home: Instantiable {
+					    public init(tracker: LazilyInstantiated<Tracker>?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(onlyIfAvailable: true) let tracker: LazilyInstantiated<Tracker>?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Settings: Instantiable {
+					    public init(tracker: Tracker?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let tracker: Tracker?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Tracker: Instantiable {
+					    public init(inner: Inner) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let inner: Inner
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Inner: Instantiable {
+					    public init(myTracker: Tracker?, leaf: Leaf) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
+					    @Instantiated let leaf: Leaf
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Leaf: Instantiable {
+					    public init(myTracker: Tracker?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let myTracker: Tracker?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTypeInTreeOfLazilyInstantiatedPropertyPromotedForRequiredInstanceRequiresOnlyIfAvailableAliasOfOptionalInstance() async {
+		// Settings requires `tracker: Tracker`, so the mock promotes `tracker: LazilyInstantiated<Tracker>`, whose tree
+		// declares an `onlyIfAvailable` alias of `tracker: Tracker?`. The alias is not created while `tracker` is being
+		// built, so Leaf's required receive of it is a cycle, as it is in production.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Leaf.swift"]):7:5: error: Dependency cycle: @Instantiated `tracker: Tracker` -> @Received `myTracker: Tracker?` -> @Received `tracker: Tracker`. `tracker: Tracker` is received while it is still being instantiated. `myTracker: Tracker?` renames `tracker: Tracker?` only if available, so a type that receives `myTracker` without `onlyIfAvailable` must be built after `tracker: Tracker?`. Receive `myTracker` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tracker: Tracker?` cannot be built first. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `tracker: LazilyInstantiated<Tracker>` is validated as `tracker: Tracker`.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(home: Home, settings: Settings) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let home: Home
+					    @Instantiated let settings: Settings
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Home: Instantiable {
+					    public init(tracker: LazilyInstantiated<Tracker>?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(onlyIfAvailable: true) let tracker: LazilyInstantiated<Tracker>?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Settings: Instantiable {
+					    public init(tracker: Tracker) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let tracker: Tracker
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Tracker: Instantiable {
+					    public init(inner: Inner) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let inner: Inner
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Inner: Instantiable {
+					    public init(myTracker: Tracker?, leaf: Leaf) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
+					    @Instantiated let leaf: Leaf
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Leaf: Instantiable {
+					    public init(myTracker: Tracker?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let myTracker: Tracker?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTypeInTreeOfPromotedLazilyInstantiatedPropertyRequiresOnlyIfAvailableAliasOfOptionalInstance() async {
+		// Home requires `tracker: LazilyInstantiated<Tracker>`, which the mock promotes, and nothing receives the instance.
+		// The wrapper's tree declares an `onlyIfAvailable` alias of `tracker: Tracker?`, which is not created while
+		// `tracker` is being built, so Leaf's required receive of it is a cycle, as it is in production.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Leaf.swift"]):7:5: error: Dependency cycle: @Instantiated `tracker: Tracker` -> @Received `myTracker: Tracker?` -> @Received `tracker: Tracker`. `tracker: Tracker` is received while it is still being instantiated. `myTracker: Tracker?` renames `tracker: Tracker?` only if available, so a type that receives `myTracker` without `onlyIfAvailable` must be built after `tracker: Tracker?`. Receive `myTracker` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tracker: Tracker?` cannot be built first. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `tracker: LazilyInstantiated<Tracker>` is validated as `tracker: Tracker`.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(home: Home) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let home: Home
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Home: Instantiable {
+					    public init(tracker: LazilyInstantiated<Tracker>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let tracker: LazilyInstantiated<Tracker>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Tracker: Instantiable {
+					    public init(inner: Inner) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let inner: Inner
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Inner: Instantiable {
+					    public init(myTracker: Tracker?, leaf: Leaf) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
+					    @Instantiated let leaf: Leaf
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Leaf: Instantiable {
+					    public init(myTracker: Tracker?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let myTracker: Tracker?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTypeInTreeOfMockedTypesLazilyInstantiatedPropertyRequiresOnlyIfAvailableAliasOfOptionalInstance() async {
+		// The mocked type declares `tracker: LazilyInstantiated<Tracker>` itself, so production's walk over its own tree
+		// reports the cycle that the tests above expect of a promoted `LazilyInstantiated`, with the same diagnostic.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Leaf.swift"]):7:5: error: Dependency cycle: @Instantiated `tracker: Tracker` -> @Received `myTracker: Tracker?` -> @Received `tracker: Tracker`. `tracker: Tracker` is received while it is still being instantiated. `myTracker: Tracker?` renames `tracker: Tracker?` only if available, so a type that receives `myTracker` without `onlyIfAvailable` must be built after `tracker: Tracker?`. Receive `myTracker` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tracker: Tracker?` cannot be built first. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `tracker: LazilyInstantiated<Tracker>` is validated as `tracker: Tracker`.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(tracker: LazilyInstantiated<Tracker>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let tracker: LazilyInstantiated<Tracker>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Tracker: Instantiable {
+					    public init(inner: Inner) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let inner: Inner
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Inner: Instantiable {
+					    public init(myTracker: Tracker?, leaf: Leaf) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
+					    @Instantiated let leaf: Leaf
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Leaf: Instantiable {
+					    public init(myTracker: Tracker?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let myTracker: Tracker?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTypeInTreeOfPromotedTypesLazilyInstantiatedPropertyRequiresOnlyIfAvailableAliasOfOptionalInstanceThatMockIsAlsoPassed() async {
+		// The mock promotes A, whose own `tracker: LazilyInstantiated<Tracker>` has a tree that declares an `onlyIfAvailable`
+		// alias of `tracker: Tracker?`. The mock is also passed a `tracker: Tracker?` for Other, but inside A the label names
+		// A's dependency, still being built, so the alias is not created and Leaf's required receive of it is a cycle.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Leaf.swift"]):7:5: error: Dependency cycle: @Instantiated `tracker: Tracker` -> @Received `myTracker: Tracker?` -> @Received `tracker: Tracker`. `tracker: Tracker` is received while it is still being instantiated. `myTracker: Tracker?` renames `tracker: Tracker?` only if available, so a type that receives `myTracker` without `onlyIfAvailable` must be built after `tracker: Tracker?`. Receive `myTracker` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tracker: Tracker?` cannot be built first. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `tracker: LazilyInstantiated<Tracker>` is validated as `tracker: Tracker`.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(home: Home, other: Other) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let home: Home
+					    @Instantiated let other: Other
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Home: Instantiable {
+					    public init(a: A) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let a: A
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Other: Instantiable {
+					    public init(tracker: Tracker?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(onlyIfAvailable: true) let tracker: Tracker?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable {
+					    public init(tracker: LazilyInstantiated<Tracker>) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let tracker: LazilyInstantiated<Tracker>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Tracker: Instantiable {
+					    public init(inner: Inner) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let inner: Inner
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Inner: Instantiable {
+					    public init(myTracker: Tracker?, leaf: Leaf) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
+					    @Instantiated let leaf: Leaf
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Leaf: Instantiable {
+					    public init(myTracker: Tracker?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let myTracker: Tracker?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenTypeInTreeOfPromotedTypesPropertyRequiresOnlyIfAvailableAliasOfItsOptionalFormThatMockIsAlsoPassed() async {
+		// The constant twin of the test above: the alias of `tracker: Tracker?` is not created inside the tree that builds
+		// `tracker: Tracker`, whatever the mock is passed for Other.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Leaf.swift"]):7:5: error: Dependency cycle: @Instantiated `tracker: Tracker` -> @Received `myTracker: Tracker?` -> @Received `tracker: Tracker`. `tracker: Tracker` is received while it is still being instantiated. `myTracker: Tracker?` renames `tracker: Tracker?` only if available, so a type that receives `myTracker` without `onlyIfAvailable` must be built after `tracker: Tracker?`. Receive `myTracker` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `tracker: Tracker?` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(home: Home, other: Other) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let home: Home
+					    @Instantiated let other: Other
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Home: Instantiable {
+					    public init(a: A) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let a: A
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Other: Instantiable {
+					    public init(tracker: Tracker?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(onlyIfAvailable: true) let tracker: Tracker?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class A: Instantiable {
+					    public init(tracker: Tracker) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let tracker: Tracker
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Tracker: Instantiable {
+					    public init(inner: Inner) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Instantiated let inner: Inner
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Inner: Instantiable {
+					    public init(myTracker: Tracker?, leaf: Leaf) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received(fulfilledByDependencyNamed: "tracker", ofType: Tracker?.self, onlyIfAvailable: true) let myTracker: Tracker?
+					    @Instantiated let leaf: Leaf
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Leaf: Instantiable {
+					    public init(myTracker: Tracker?) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+
+					    @Received let myTracker: Tracker?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsErrorAtDeclaration_whenGeneratedMockRootDeclaresErasedInstantiatorWithIncorrectFirstGeneric() async {
 		// Parent is not a root, so only its generated mock builds `childBuilder`.
 		await assertThrowsError(

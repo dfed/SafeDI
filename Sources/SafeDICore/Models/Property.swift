@@ -261,6 +261,15 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// The forms in which a property a mock's tree receives, as dependency cycle validation sees it, is on the mock's
+	/// instantiation stack while it is being built: as itself, unwrapped, and as the optional form of that. A mock
+	/// promotes a received optional property as the non-optional value it builds, and its generated code passes an
+	/// `onlyIfAvailable` receive of either form `nil` inside the tree that builds the other.
+	var formsOnMockInstantiationStack: [Property] {
+		let unwrappedProperty = asUnwrappedProperty
+		return [self, unwrappedProperty, Property(label: unwrappedProperty.label, typeDescription: .optional(unwrappedProperty.typeDescription))]
+	}
+
 	// MARK: PropertyType
 
 	public enum PropertyType: CaseIterable {

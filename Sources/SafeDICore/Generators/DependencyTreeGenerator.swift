@@ -2108,6 +2108,19 @@ public actor DependencyTreeGenerator {
 			for dependency in scope.instantiable.dependencies where !dependency.isForwarded {
 				let declaredPropertyForDependency = dependency.source.fulfillingProperty ?? dependency.property
 				let propertyForDependency = declaredPropertyForDependency.asValidatedForDependencyCycles
+				guard dependency.canCloseDependencyCycle else {
+					// An `onlyIfAvailable` dependency is passed `nil` instead (`Dependency.canCloseDependencyCycle`). An
+					// alias passed `nil` is not created; a required receive of it is reported by the walk that follows,
+					// which finds the alias's fulfilling property being built in the same forms generation does: an alias
+					// of `x: X?` is passed `nil` inside the tree that builds `x: X`, such as the instance of a
+					// `LazilyInstantiated<X>` this walk holds as `x: X`.
+					if case .aliased(_, _, onlyIfAvailable: true) = dependency.source,
+					   propertyForDependency.formsOnMockInstantiationStack.contains(where: propertyStack.contains)
+					{
+						declaresOnlyIfAvailableAliasOfPropertyBeingBuilt = true
+					}
+					continue
+				}
 				// A mock promotes a received optional property as the non-optional value it builds, so a receive of the
 				// non-optional form inside the tree it builds reaches it too.
 				let receivedForms: [Property] = if dependency.isInstantiated {
@@ -2116,14 +2129,6 @@ public actor DependencyTreeGenerator {
 					[propertyForDependency, Property(label: propertyForDependency.label, typeDescription: .optional(propertyForDependency.typeDescription))]
 				}
 				guard let cycleIndex = propertyStack.firstIndex(where: receivedForms.contains) else {
-					continue
-				}
-				guard dependency.canCloseDependencyCycle else {
-					// An `onlyIfAvailable` dependency is passed `nil` instead (`Dependency.canCloseDependencyCycle`). An
-					// alias passed `nil` is not created; a required receive of it is reported by the walk that follows.
-					if case .aliased(_, _, onlyIfAvailable: true) = dependency.source {
-						declaresOnlyIfAvailableAliasOfPropertyBeingBuilt = true
-					}
 					continue
 				}
 				let propertiesInCycle = [propertyForDependency] + propertyStack[0...cycleIndex]
@@ -4270,11 +4275,10 @@ public actor DependencyTreeGenerator {
 		/// stack: as itself, unwrapped, and – in a mock, which promotes a received optional property as the
 		/// non-optional value it builds – as the optional property promoted to build it.
 		func formsOnStack(of validatedFulfillingProperty: Property) -> [Property] {
-			let unwrappedProperty = validatedFulfillingProperty.asUnwrappedProperty
-			return if cyclesOnly {
-				[validatedFulfillingProperty, unwrappedProperty, Property(label: unwrappedProperty.label, typeDescription: .optional(unwrappedProperty.typeDescription))]
+			if cyclesOnly {
+				validatedFulfillingProperty.formsOnMockInstantiationStack
 			} else {
-				[validatedFulfillingProperty, unwrappedProperty]
+				[validatedFulfillingProperty, validatedFulfillingProperty.asUnwrappedProperty]
 			}
 		}
 		/// The fulfilling properties of the `onlyIfAvailable` aliases already walked by
