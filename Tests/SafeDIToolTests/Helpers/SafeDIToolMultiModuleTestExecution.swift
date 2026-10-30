@@ -181,13 +181,16 @@ struct MultiModuleTestOutput {
 
 /// An error thrown by `executeSafeDIToolMultiModuleTest` when a module's `generate` fails. Carries the fixture
 /// paths of every module the tool ran for, the failing one included, so diagnostics that cite those paths can
-/// be asserted in full.
+/// be asserted in full, and the output of every module processed before the failing one.
 struct SafeDIToolMultiModuleTestError: Error, CustomStringConvertible {
 	let underlyingError: any Error
 	/// The module whose `generate` failed.
 	let moduleName: String
 	/// The fixtures of every module the tool ran for, by module name.
 	let fixtures: [String: FixturePaths]
+	/// The output of each module processed before the failing one, by module name: the harness stops at the
+	/// first module whose `generate` fails, so the modules after it have none.
+	let outputs: [String: ModuleTestOutput]
 
 	var description: String {
 		"\(underlyingError)"
@@ -383,7 +386,7 @@ func executeSafeDIToolMultiModuleTest(
 			} catch {
 				var fixturesByModuleName = outputs.mapValues(\.fixtures)
 				fixturesByModuleName[moduleName] = fixtures
-				throw SafeDIToolMultiModuleTestError(underlyingError: error, moduleName: moduleName, fixtures: fixturesByModuleName)
+				throw SafeDIToolMultiModuleTestError(underlyingError: error, moduleName: moduleName, fixtures: fixturesByModuleName, outputs: outputs)
 			}
 		}
 
