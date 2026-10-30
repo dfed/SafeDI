@@ -494,6 +494,30 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func queryNeeds_recordsModuleNamedByModuleInfoFileWithoutPackage_whenModuleInfoRecordsNoModule() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				Self.instantiableContent(named: "Engine"),
+				Self.instantiableContent(named: "Pump"),
+			],
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.moduleInfo.moduleName == nil)
+
+		let parsedModules = try await QueryNeeds.parse(["Engine", "--module-info", output.moduleInfoOutputPath]).readIncludedModules()
+
+		// A module info file is named after its file, without its extension.
+		let fileName = ((output.moduleInfoOutputPath as NSString).lastPathComponent as NSString).deletingPathExtension
+		#expect(parsedModules.map { Self.declaringModules(of: $0.moduleInfo.instantiables) } == [
+			[
+				"Engine": DeclaringModule(moduleName: fileName, packageName: nil),
+				"Pump": DeclaringModule(moduleName: fileName, packageName: nil),
+			],
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func queryNeeds_recordsModuleNamedByDirectoryWithoutPackage_whenModuleIsDirectory() async throws {
 		let output = try await executeSafeDIToolQuery(
 			typeName: "Engine",
