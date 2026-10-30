@@ -225,14 +225,14 @@ public struct Initializer: Codable, Hashable, Sendable {
 		try createDependencyAndArgumentBinding(given: dependencies)
 			.map {
 				if let unavailableProperties, unavailableProperties.contains($0.dependency.property) {
-					"\($0.argument.label): nil"
+					"\($0.argument.label.spelledAsArgumentLabel): nil"
 				} else if !lazilyInstantiatedInstanceProperties.isEmpty,
 				          $0.dependency.source.isReceived,
 				          lazilyInstantiatedInstanceProperties.contains($0.dependency.property.asUnwrappedProperty)
 				{
-					"\($0.argument.label): \($0.argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+					"\($0.argument.label.spelledAsArgumentLabel): \($0.argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
 				} else {
-					"\($0.argument.label): \($0.argument.innerLabel)"
+					"\($0.argument.label.spelledAsArgumentLabel): \($0.argument.innerLabel)"
 				}
 			}
 			.joined(separator: ", ")
@@ -250,12 +250,12 @@ public struct Initializer: Codable, Hashable, Sendable {
 		for argument in arguments {
 			if let dependency = dependencies.first(where: argument.isFulfilled(by:)) {
 				if let unavailableProperties, unavailableProperties.contains(dependency.property) {
-					parts.append("\(argument.label): nil")
+					parts.append("\(argument.label.spelledAsArgumentLabel): nil")
 				} else {
-					parts.append("\(argument.label): \(argument.innerLabel)")
+					parts.append("\(argument.label.spelledAsArgumentLabel): \(argument.innerLabel)")
 				}
 			} else if argument.hasDefaultValue, argument.label != "_" {
-				parts.append("\(argument.label): \(argument.label)")
+				parts.append("\(argument.label.spelledAsArgumentLabel): \(argument.label)")
 			}
 			// Arguments that don't match a dependency and have no default are
 			// caught by validate(fulfilling:) before mock code gen runs.
@@ -323,11 +323,11 @@ public struct Initializer: Codable, Hashable, Sendable {
 
 		public init(_ node: FunctionParameterSyntax) {
 			if let secondName = node.secondName {
-				outerLabel = node.firstName.text
-				innerLabel = secondName.text
+				outerLabel = node.firstName.spelledAsParameterName
+				innerLabel = secondName.spelledAsParameterName
 			} else {
 				outerLabel = nil
-				innerLabel = node.firstName.text
+				innerLabel = node.firstName.spelledAsParameterName
 			}
 			typeDescription = node.type.typeDescription
 			defaultValueExpression = node.defaultValue?.value.trimmedDescription

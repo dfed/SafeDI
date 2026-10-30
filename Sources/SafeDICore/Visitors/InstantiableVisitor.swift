@@ -128,7 +128,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				dependencies.append(
 					Dependency(
 						property: Property(
-							label: identifier.text,
+							label: identifier.text.spelledAsIdentifier,
 							typeDescription: type.typeDescription,
 						),
 						source: dependencySource,

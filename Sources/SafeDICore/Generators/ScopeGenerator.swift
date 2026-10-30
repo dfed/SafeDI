@@ -1253,7 +1253,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The name of the builder function for a property bound as `name`, which in a mock is the
 	/// property's sibling-disambiguated label.
 	private static func functionName(toBuildPropertyNamed name: String) -> String {
-		"\(ReservedName.builderFunctionNamePrefix)\(name)"
+		"\(ReservedName.builderFunctionNamePrefix)\(name)".spelledAsJoinedIdentifier
 	}
 
 	/// The names generated code refers to builder functions by, where they differ from `functionName(toBuild:)`.
@@ -1426,9 +1426,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let forwardedArguments = forwardedProperties
 					.map {
 						if forwardedPropertiesHaveLabels {
-							"\($0.label): $0.\($0.label)"
+							"\($0.label.spelledAsArgumentLabel): $0.\($0.label)"
 						} else {
-							"\($0.label): $0"
+							"\($0.label.spelledAsArgumentLabel): $0"
 						}
 					}
 					.joined(separator: ", ")
@@ -2073,7 +2073,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let lazilyInstantiatedInstanceProperties = lazilyInstantiatedPropertiesToBind.map(\.asValidatedForDependencyCycles)
 		let lazilyInstantiatedBindingNames = Self.namesApart(
 			preferredNames: lazilyInstantiatedPropertiesToBind.map { lazilyInstantiatedProperty in
-				"\(lazilyInstantiatedProperty.label)_\(lazilyInstantiatedProperty.propertyType.isSendable ? "sendableLazilyInstantiated" : "lazilyInstantiated")"
+				"\(lazilyInstantiatedProperty.label)_\(lazilyInstantiatedProperty.propertyType.isSendable ? "sendableLazilyInstantiated" : "lazilyInstantiated")".spelledAsJoinedIdentifier
 			},
 			typeDescriptions: lazilyInstantiatedInstanceProperties.map(\.typeDescription),
 			namesInScope: Set(allFlatLabels)
@@ -2404,13 +2404,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						withInstanceOfType: dependency.property.typeDescription.unwrapped,
 						disambiguationMap: disambiguationMap,
 					)?.name ?? argument.innerLabel
-					parts.append("\(argument.label): \(resolved).\(Dependency.lazilyInstantiatedInstancePropertyName)")
+					parts.append("\(argument.label.spelledAsArgumentLabel): \(resolved).\(Dependency.lazilyInstantiatedInstancePropertyName)")
 				} else {
 					let resolved = disambiguationMap[argument.innerLabel]?[dependency.property.typeDescription] ?? argument.innerLabel
-					parts.append("\(argument.label): \(resolved)")
+					parts.append("\(argument.label.spelledAsArgumentLabel): \(resolved)")
 				}
 			} else if argument.hasDefaultValue, argument.label != "_" {
-				parts.append("\(argument.label): \(argument.label)")
+				parts.append("\(argument.label.spelledAsArgumentLabel): \(argument.label)")
 			}
 		}
 		return parts.joined(separator: ", ")
@@ -2895,7 +2895,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 			)
 			let labeledArguments = zip(surfacedArguments, arguments)
-				.map { $0.0.label == "_" ? $0.1 : "\($0.0.label): \($0.1)" }
+				.map { $0.0.label == "_" ? $0.1 : "\($0.0.label.spelledAsArgumentLabel): \($0.1)" }
 				.joined(separator: ", ")
 			if methodName == "init" {
 				return "\(concreteType.asSource)(\(labeledArguments))"
@@ -3545,9 +3545,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 							&& suffixesPerEntryKeepingItsName[otherIndex][position] == suffixes[position]
 					}
 			}.map { suffixes[$0] } ?? suffixes[suffixes.count - 1]
-			var name = "\(entries[index].label)_\(suffix)"
+			var name = "\(entries[index].label)_\(suffix)".spelledAsJoinedIdentifier
 			while takenNames.contains(name) {
-				name += "_"
+				name = "\(name)_".spelledAsJoinedIdentifier
 			}
 			takenNames.insert(name)
 			return name
@@ -3791,7 +3791,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Records that `expression` is read into a local named after the
 		/// outermost `@Sendable` function, and returns that local's name.
 		func extract(_ expression: String, localNameSuffix: String) -> String {
-			let localName = "\(functionName)__\(localNameSuffix)"
+			let localName = "\(functionName)__\(localNameSuffix)".spelledAsJoinedIdentifier
 			extractions.append((localName: localName, expression: expression))
 			return localName
 		}
@@ -4091,9 +4091,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			guard case let .alias(alias) = item,
 			      redeclaredNames.contains(alias.property.label)
 			else { return item }
-			var bindingName = "\(alias.property.label)_\(alias.property.typeDescription.simplified.asIdentifier)"
+			var bindingName = "\(alias.property.label)_\(alias.property.typeDescription.simplified.asIdentifier)".spelledAsJoinedIdentifier
 			while !takenNames.insert(bindingName).inserted {
-				bindingName += "_"
+				bindingName = "\(bindingName)_".spelledAsJoinedIdentifier
 			}
 			bindingNames[alias.property.label, default: [:]][alias.property.typeDescription] = bindingName
 			return .alias(MockAliasNode(
@@ -4283,9 +4283,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let forwardedArguments = forwardedProperties
 			.map {
 				if forwardedPropertiesHaveLabels {
-					"\($0.label): $0.\($0.label)"
+					"\($0.label.spelledAsArgumentLabel): $0.\($0.label)"
 				} else {
-					"\($0.label): $0"
+					"\($0.label.spelledAsArgumentLabel): $0"
 				}
 			}
 			.joined(separator: ", ")

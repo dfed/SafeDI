@@ -398,7 +398,7 @@ public struct InstantiableMacro: MemberMacro {
 								if splitStatement.count > 2,
 								   splitStatement[0] == "self",
 								   splitStatement[2] == "=",
-								   let property = propertyLabelToPropertyMap[String(splitStatement[1])]
+								   let property = propertyLabelToPropertyMap[String(splitStatement[1]).spelledAsIdentifier]
 								{
 									existingPropertyAssignment[property] = statement
 								} else {
@@ -608,7 +608,7 @@ public struct InstantiableMacro: MemberMacro {
 					fixedMockSyntax.signature.parameterClause.parameters = FunctionParameterListSyntax(
 						mockSyntax.signature.parameterClause.parameters.map { parameter in
 							var fixedParameter = parameter
-							let parameterLabel = parameter.secondName?.text ?? parameter.firstName.text
+							let parameterLabel = (parameter.secondName ?? parameter.firstName).spelledAsParameterName
 							if nonDependencyLabelsWithoutDefaults.contains(parameterLabel),
 							   fixedParameter.defaultValue == nil
 							{
@@ -970,7 +970,7 @@ public struct InstantiableMacro: MemberMacro {
 					fixedMock.signature.parameterClause.parameters = FunctionParameterListSyntax(
 						mockFunction.signature.parameterClause.parameters.map { parameter in
 							var fixedParameter = parameter
-							let parameterLabel = parameter.secondName?.text ?? parameter.firstName.text
+							let parameterLabel = (parameter.secondName ?? parameter.firstName).spelledAsParameterName
 							if nonDependencyLabelsWithoutDefaults.contains(parameterLabel),
 							   fixedParameter.defaultValue == nil
 							{
@@ -1326,8 +1326,8 @@ public struct InstantiableMacro: MemberMacro {
 		for parameter in functionSyntax.parameterClause.parameters {
 			guard let defaultValue = parameter.defaultValue?.value else { continue }
 			let firstName = parameter.firstName.text
-			let innerLabel = parameter.secondName?.text ?? firstName
-			guard !dependencyLabels.contains(innerLabel) else { continue }
+			let innerName = parameter.secondName ?? parameter.firstName
+			guard !dependencyLabels.contains(innerName.spelledAsParameterName) else { continue }
 			// `_`-labeled non-dependency defaults are elided from the mock
 			// call site, so the default is evaluated in the callee's scope.
 			guard firstName != "_" else { continue }
@@ -1337,7 +1337,7 @@ public struct InstantiableMacro: MemberMacro {
 			context.diagnose(Diagnostic(
 				node: Syntax(parameter),
 				message: FixableInstantiableError.calleeScopeReferenceInDefaultExpression(
-					parameterLabel: innerLabel,
+					parameterLabel: innerName.text,
 					typeName: typeName,
 				).diagnostic,
 			))
@@ -1357,7 +1357,7 @@ public struct InstantiableMacro: MemberMacro {
 		let dependencyLabels = Set(dependencies.map(\.property.label))
 		let parameters = functionSyntax.parameterClause.parameters
 		for parameter in parameters where parameter.defaultValue != nil
-			&& !dependencyLabels.contains((parameter.secondName ?? parameter.firstName).text)
+			&& !dependencyLabels.contains((parameter.secondName ?? parameter.firstName).spelledAsParameterName)
 		{
 			let label = parameter.firstName
 			if let reservation = ReservedName(reserving: label.text) {
@@ -1365,7 +1365,7 @@ public struct InstantiableMacro: MemberMacro {
 				let labelsInUse = dependencyLabels.union(
 					parameters.lazy
 						.filter { $0.id != parameter.id }
-						.map(\.firstName.text),
+						.map(\.firstName.spelledAsParameterName),
 				)
 				if let fixedParameter = renamingReservedLabel(of: parameter, reservedAs: reservation, labelsInUse: labelsInUse) {
 					context.diagnose(Diagnostic(
@@ -1648,7 +1648,7 @@ public struct InstantiableMacro: MemberMacro {
 		// `TypeName.instantiate(dep1: dep1, dep2: dep2)` for extension types.
 		let argumentList = dependencies.enumerated().map { index, dependency in
 			let trailingComma = index < dependencies.count - 1 ? ", " : ""
-			return "\(dependency.property.label): \(dependency.property.label)\(trailingComma)"
+			return "\(dependency.property.label.spelledAsArgumentLabel): \(dependency.property.label)\(trailingComma)"
 		}.joined()
 		let construction = if isExtension {
 			"\(typeName).\(InstantiableVisitor.instantiateMethodName)(\(argumentList))"

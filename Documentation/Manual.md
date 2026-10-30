@@ -153,7 +153,7 @@ Every `@Instantiable`-decorated type must be:
 
 1. `public` or `open`
 
-2. Have a `public init(…)` or `open init(…)` that has a parameter for each of its injected properties
+2. Have a `public init(…)` or `open init(…)` that has a parameter for each of its injected properties. A name is the same name with or without backticks, so `` @Instantiated let `default`: Leaf `` takes `init(default: Leaf)`
 
 The `@Instantiable` macro guides developers through satisfying these requirements with code generation and build-time fix-its.
 
@@ -1310,7 +1310,7 @@ Name each type as `additionalMocksToGenerate` names it: by its own name, such as
 
 #### The JSON report
 
-Pass `--json` for the same report as JSON, for a script that assembles the app. The root object carries a `formatVersion`, which a script checks before reading further. It is `0` while the command is in beta, when the shape may change in any release without raising it, so a script that needs a stable shape pins the SafeDI release instead; `1` will be the first stable format, raised from then on when a key is renamed, removed, or changes meaning, and not when a key is added. Keys are sorted. Every array is present, empty when there is nothing to list; a key whose value is optional – `defaultExpression`, `methodName`, `erasure`, `generatedIn`, `filePath`, and one of `mock` or `noMock` – is left out when it has no value, never set to `null`. For `Feature` with `generateMock: true` in `Sources/FeatureModule`, which forwards a `user` and a `config` and receives an `Analytics` nothing declares, where a `mockOnly` extension in `Sources/ConfigMocks` gives `Config` a `mock()`:
+Pass `--json` for the same report as JSON, for a script that assembles the app. The root object carries a `formatVersion`, which a script checks before reading further. It is `0` while the command is in beta, when the shape may change in any release without raising it, so a script that needs a stable shape pins the SafeDI release instead; `1` will be the first stable format, raised from then on when a key is renamed, removed, or changes meaning, and not when a key is added. Keys are sorted. Every array is present, empty when there is nothing to list; a key whose value is optional – `defaultExpression`, `methodName`, `erasure`, `generatedIn`, `filePath`, and one of `mock` or `noMock` – is left out when it has no value, never set to `null`. A `label` is spelled as the generated `mock()` declares it, in backticks only where Swift requires them: a keyword reads `` `default` ``, and a name a declaration escaped without need, such as `` `user` ``, reads `user`. For `Feature` with `generateMock: true` in `Sources/FeatureModule`, which forwards a `user` and a `config` and receives an `Analytics` nothing declares, where a `mockOnly` extension in `Sources/ConfigMocks` gives `Config` a `mock()`:
 
 ```json
 {

@@ -285,6 +285,66 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_reportsLabelsAsGeneratedMockDeclaresThem_whenDeclarationsEscapeLabels() async throws {
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Feature",
+			modules: [
+				QueryTestModule("FeatureModule", [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Feature: Instantiable {
+					    public init(default: User, config: Config) {
+					        self.default = `default`
+					        self.config = config
+					    }
+					    @Forwarded private let `default`: User
+					    @Forwarded private let `config`: Config
+					}
+					""",
+				]),
+				QueryTestModule("ModelsModule", [
+					"""
+					public struct User {
+					    public init() {}
+					}
+					public struct Config {
+					    public init() {}
+					}
+					""",
+				]),
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.formatted == """
+		`Feature` is built from declarations in 1 module:
+
+		FeatureModule
+		  @Instantiable Feature
+
+		@Forwarded parameters of `Feature`:
+		  `default`: User
+		  config: Config
+
+		Dependencies of `Feature` no @Instantiable declaration fulfills:
+		  (none)
+
+		`Feature.mock()` is generated in FeatureModule from the same declarations.
+
+		Required @Forwarded parameters of `Feature.mock()`:
+		  `default`: User
+		  config: Config
+
+		Defaulted @Forwarded parameters of `Feature.mock()`:
+		  (none)
+
+		Required parameters of `Feature.mock()` that no @Instantiable declaration removes:
+		  (none)
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func query_reportsForwardedParameterAsDefaulted_whenHandWrittenMockOfMockedTypeDefaultsIt() async throws {
 		let output = try await executeSafeDIToolQuery(
 			typeName: "Feature",

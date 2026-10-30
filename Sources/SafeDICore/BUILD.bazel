@@ -17,6 +17,7 @@ swift_library(
     visibility = ["//visibility:public"],
     deps = [
         "@swiftpkg_swift_syntax//:SwiftDiagnostics",
+        "@swiftpkg_swift_syntax//:SwiftParser",
         "@swiftpkg_swift_syntax//:SwiftSyntax",
         "@swiftpkg_swift_syntax//:SwiftSyntaxBuilder",
     ],
