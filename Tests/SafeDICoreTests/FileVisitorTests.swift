@@ -1252,4 +1252,225 @@ struct FileVisitorTests {
 			),
 		])
 	}
+
+	@Test
+	func walk_recordsAccessLevelOfEachTypeDeclaration_whenTypesSpellEveryAccessLevel() {
+		let syntaxTree = Parser.parse(source: """
+		@Instantiable
+		open class OpenType: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public struct PublicType: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		package struct PackageType: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		internal struct InternalType: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		fileprivate struct FileprivateType: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		private struct PrivateType: Instantiable {
+		    public init() {}
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.instantiables.map(\.accessLevel) == [.open, .public, .package, .internal, .fileprivate, .private])
+		#expect(fileVisitor.instantiables.map(\.accessModifierRange) == [
+			Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 5),
+			Dependency.SourceRange(startLine: 7, startColumn: 1, endLine: 7, endColumn: 7),
+			Dependency.SourceRange(startLine: 12, startColumn: 1, endLine: 12, endColumn: 8),
+			Dependency.SourceRange(startLine: 17, startColumn: 1, endLine: 17, endColumn: 9),
+			Dependency.SourceRange(startLine: 22, startColumn: 1, endLine: 22, endColumn: 12),
+			Dependency.SourceRange(startLine: 27, startColumn: 1, endLine: 27, endColumn: 8),
+		])
+		#expect(fileVisitor.instantiables.map(\.declarationStartLocation) == [
+			Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+			Dependency.DeclarationLocation(filePath: "File.swift", line: 7, column: 1),
+			Dependency.DeclarationLocation(filePath: "File.swift", line: 12, column: 1),
+			Dependency.DeclarationLocation(filePath: "File.swift", line: 17, column: 1),
+			Dependency.DeclarationLocation(filePath: "File.swift", line: 22, column: 1),
+			Dependency.DeclarationLocation(filePath: "File.swift", line: 27, column: 1),
+		])
+	}
+
+	@Test
+	func walk_recordsInternalAccessLevelWithoutModifierRange_whenTypeSpellsNoAccessModifier() {
+		let syntaxTree = Parser.parse(source: """
+		@Instantiable
+		struct ImplicitType: Instantiable {
+		    public init() {}
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.instantiables.map(\.accessLevel) == [.internal])
+		#expect(fileVisitor.instantiables.map(\.accessModifierRange) == [nil])
+		#expect(fileVisitor.instantiables.map(\.declarationStartLocation) == [
+			Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+		])
+	}
+
+	@Test
+	func walk_recordsDeclarationStartAtFirstModifierAfterAttributes_whenAccessModifierFollowsAnotherModifier() {
+		let syntaxTree = Parser.parse(source: """
+		@Instantiable @MainActor final public class FinalType: Instantiable {
+		    public init() {}
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.instantiables.map(\.accessLevel) == [.public])
+		#expect(fileVisitor.instantiables.map(\.accessModifierRange) == [
+			Dependency.SourceRange(startLine: 1, startColumn: 32, endLine: 1, endColumn: 38),
+		])
+		#expect(fileVisitor.instantiables.map(\.declarationStartLocation) == [
+			Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 26),
+		])
+	}
+
+	@Test
+	func walk_ignoresModifierWithDetail_whenTypeSpellsSetterAccessModifier() {
+		let syntaxTree = Parser.parse(source: """
+		@Instantiable
+		private(set) struct SetterType: Instantiable {
+		    public init() {}
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.instantiables.map(\.accessLevel) == [.internal])
+		#expect(fileVisitor.instantiables.map(\.accessModifierRange) == [nil])
+		#expect(fileVisitor.instantiables.map(\.declarationStartLocation) == [
+			Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+		])
+	}
+
+	@Test
+	func walk_recordsAccessLevelOfEachMockMethod_whenMockMethodsSpellAccessModifiers() {
+		let syntaxTree = Parser.parse(source: """
+		@Instantiable
+		open class OpenService: Instantiable {
+		    public init() {}
+
+		    open class func mock() -> OpenService {
+		        OpenService()
+		    }
+		}
+
+		@Instantiable
+		public struct PackageService: Instantiable {
+		    public init() {}
+
+		    package static func mock() -> PackageService {
+		        PackageService()
+		    }
+		}
+
+		@Instantiable
+		public struct PrivateService: Instantiable {
+		    public init() {}
+
+		    private static func mock() -> PrivateService {
+		        PrivateService()
+		    }
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.instantiables.map(\.mockInitializer?.accessLevel) == [.open, .package, .private])
+		#expect(fileVisitor.instantiables.map(\.mockInitializer?.accessModifierRange) == [
+			Dependency.SourceRange(startLine: 5, startColumn: 5, endLine: 5, endColumn: 9),
+			Dependency.SourceRange(startLine: 14, startColumn: 5, endLine: 14, endColumn: 12),
+			Dependency.SourceRange(startLine: 23, startColumn: 5, endLine: 23, endColumn: 12),
+		])
+		#expect(fileVisitor.instantiables.map(\.mockInitializer?.declarationStartLocation) == [
+			Dependency.DeclarationLocation(filePath: "File.swift", line: 5, column: 5),
+			Dependency.DeclarationLocation(filePath: "File.swift", line: 14, column: 5),
+			Dependency.DeclarationLocation(filePath: "File.swift", line: 23, column: 5),
+		])
+	}
+
+	@Test
+	func walk_recordsInternalAccessLevelWithoutModifierRange_whenMockMethodSpellsNoAccessModifier() {
+		let syntaxTree = Parser.parse(source: """
+		@Instantiable
+		public struct Service: Instantiable {
+		    public init() {}
+
+		    static func mock() -> Service {
+		        Service()
+		    }
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.instantiables.map(\.mockInitializer?.accessLevel) == [.internal])
+		#expect(fileVisitor.instantiables.map(\.mockInitializer?.accessModifierRange) == [nil])
+		#expect(fileVisitor.instantiables.map(\.mockInitializer?.declarationStartLocation) == [
+			Dependency.DeclarationLocation(filePath: "File.swift", line: 5, column: 5),
+		])
+	}
+
+	@Test
+	func walk_recordsAccessLevelOfEachInstantiateMethod_whenInstantiateMethodsSpellAccessModifiers() {
+		let syntaxTree = Parser.parse(source: """
+		@Instantiable
+		extension FileprivateService: Instantiable {
+		    fileprivate static func instantiate() -> FileprivateService {
+		        FileprivateService()
+		    }
+		}
+
+		@Instantiable
+		extension PackageService: Instantiable {
+		    package static func instantiate() -> PackageService {
+		        PackageService()
+		    }
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.instantiables.map(\.initializer?.accessLevel) == [.fileprivate, .package])
+		#expect(fileVisitor.instantiables.map(\.initializer?.accessModifierRange) == [
+			Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 16),
+			Dependency.SourceRange(startLine: 10, startColumn: 5, endLine: 10, endColumn: 12),
+		])
+		#expect(fileVisitor.instantiables.map(\.initializer?.declarationStartLocation) == [
+			Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
+			Dependency.DeclarationLocation(filePath: "File.swift", line: 10, column: 5),
+		])
+	}
+
+	@Test
+	func walk_recordsInternalAccessLevelWithoutModifierRange_whenInstantiateMethodSpellsNoAccessModifier() {
+		let syntaxTree = Parser.parse(source: """
+		@Instantiable
+		extension Service: Instantiable {
+		    static func instantiate() -> Service {
+		        Service()
+		    }
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.instantiables.map(\.initializer?.accessLevel) == [.internal])
+		#expect(fileVisitor.instantiables.map(\.initializer?.accessModifierRange) == [nil])
+		#expect(fileVisitor.instantiables.map(\.initializer?.declarationStartLocation) == [
+			Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
+		])
+	}
 }
