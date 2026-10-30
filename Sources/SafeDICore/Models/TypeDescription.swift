@@ -845,6 +845,11 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// The type literal that names this type, as `@Received(ofType:)` takes it: `Service.self`, or `(any Service).self`.
+	var asTypeLiteralSource: String {
+		"\(wrappedIfAmbiguous.asSource).self"
+	}
+
 	/// A representation of this type that may be wrapped in a single element tuple to ensure cohesiveness of the type description.
 	private var wrappedIfAmbiguous: Self {
 		switch self {

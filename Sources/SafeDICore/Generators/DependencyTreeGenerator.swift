@@ -911,6 +911,9 @@ public actor DependencyTreeGenerator {
 		/// Reported at each `@Received` declaration whose dependency a closer ancestor hides, with a note at the
 		/// hiding declaration. See `HiddenReceivedProperty`.
 		case hiddenReceivedProperties([HiddenReceivedProperty])
+		/// Reported at each `@Received(fulfilledByDependencyNamed:ofType:)` declaration whose label its own type declares
+		/// with another type, with a note at that declaration. See `RenameContradictingOwnProperty`.
+		case renamesContradictingOwnProperties([RenameContradictingOwnProperty])
 		/// Reported at a `@Received` declaration in the tree of a dependency a mock builds beside the mocked type, which
 		/// the mocked type's forwarded property fulfills but another receive of its label hides, with a note at that
 		/// receive. See `ForwardedPropertyHiddenInPromotedTree`.
@@ -1010,6 +1013,11 @@ public actor DependencyTreeGenerator {
 					.flatMap(\.self)
 			case let .hiddenReceivedProperties(hiddenReceivedProperties):
 				hiddenReceivedProperties
+					.map(\.sourceDiagnostics)
+					.sorted { SourceDiagnostic.precedesInSourceOrder($0[0], $1[0]) }
+					.flatMap(\.self)
+			case let .renamesContradictingOwnProperties(renamesContradictingOwnProperties):
+				renamesContradictingOwnProperties
 					.map(\.sourceDiagnostics)
 					.sorted { SourceDiagnostic.precedesInSourceOrder($0[0], $1[0]) }
 					.flatMap(\.self)
@@ -1388,6 +1396,41 @@ public actor DependencyTreeGenerator {
 						severity: .note,
 						location: hidingDeclaration.declarationLocation,
 						message: "`\(hidingProperty)` is declared here",
+					),
+				]
+			}
+		}
+
+		/// A rename whose `fulfilledByDependencyNamed:` label its own type also declares – as a property it instantiates
+		/// or forwards, or as another rename – with a type that the rename's `ofType:` does not name. A rename refers to
+		/// the property of that name on its own type, so it cannot name a property of another type further up the tree.
+		struct RenameContradictingOwnProperty: Hashable {
+			/// The rename, as declared.
+			let aliasProperty: Property
+			/// The property the rename's `fulfilledByDependencyNamed:` and `ofType:` name.
+			let fulfillingProperty: Property
+			let declarationLocation: Dependency.DeclarationLocation?
+			/// The property of the rename's label that `renamingType` declares.
+			let ownProperty: Property
+			let ownPropertyDeclarationLocation: Dependency.DeclarationLocation?
+			let renamingType: TypeDescription
+
+			/// An `error:` line that names the type's own property, since Xcode drops notes from build-tool output, and a
+			/// `note:` at that property's declaration so command-line builds can navigate to it.
+			var sourceDiagnostics: [SourceDiagnostic] {
+				let ownPropertyTypeLiteral = ownProperty.typeDescription.asTypeLiteralSource
+				let ownProperty = ownProperty.asSource
+				let fulfillingProperty = fulfillingProperty.asSource
+				return [
+					SourceDiagnostic(
+						severity: .error,
+						location: declarationLocation,
+						message: "@\(Dependency.Source.receivedRawValue)(fulfilledByDependencyNamed:ofType:) property `\(aliasProperty.asSource)` renames `\(fulfillingProperty)`, but `\(renamingType.asSource)` declares `\(ownProperty)`, and a rename refers to the property of that name on its own type. Write `ofType: \(ownPropertyTypeLiteral)` to rename `\(ownProperty)`, or give `\(ownProperty)` on `\(renamingType.asSource)` a different label to rename `\(fulfillingProperty)` from further up the tree.",
+					),
+					SourceDiagnostic(
+						severity: .note,
+						location: ownPropertyDeclarationLocation,
+						message: "`\(ownProperty)` is declared here",
 					),
 				]
 			}
@@ -2564,6 +2607,12 @@ public actor DependencyTreeGenerator {
 					let walkedScopeIndex = walkedScopes.count - 1
 					if let aliasesFulfillingOneAnother = aliasesFulfillingOneAnother(in: scope) {
 						throw aliasesFulfillingOneAnother.error
+					} else if case let renamesContradictingOwnProperties = renamesContradictingOwnProperties(in: scope),
+					          !renamesContradictingOwnProperties.isEmpty
+					{
+						// The walk in `validatePropertiesAreFulfillable` reports these for every scope it reaches, so only a
+						// scope in the tree of a dependency a mock promotes, which that walk does not reach, reports them here.
+						throw DependencyTreeGeneratorError.renamesContradictingOwnProperties(renamesContradictingOwnProperties)
 					} else if let childrenRequiringEachOther = childrenRequiringEachOther(
 						in: scope,
 						enclosingProvidedProperties: validatedScope.enclosingProvidedProperties,
@@ -2673,6 +2722,42 @@ public actor DependencyTreeGenerator {
 			}
 		}
 		return nil
+	}
+
+	/// The renames of `scope`'s type, in declaration order, whose `fulfilledByDependencyNamed:` label the type also
+	/// declares – as a property it instantiates or forwards, or as another rename – with a type their `ofType:` does
+	/// not name. A rename refers to the property of that name on its own type. One whose `ofType:` names that
+	/// property is built after it and assigned from it; one that names another type would be assigned from whichever
+	/// declaration of its label is in scope where it is built, which depends on the order of the type's declarations.
+	/// So `ofType:` must name the type's property exactly, or, when it is lazily instantiated, the instance it offers
+	/// by value. A rename of its own label refers to no other property.
+	private static func renamesContradictingOwnProperties(
+		in scope: Scope,
+	) -> [DependencyTreeGeneratorError.RenameContradictingOwnProperty] {
+		var ownDependencyByLabel = [String: Dependency]()
+		for dependency in scope.instantiable.dependencies {
+			switch dependency.source {
+			case .instantiated, .forwarded, .aliased:
+				ownDependencyByLabel[dependency.property.label] = dependency
+			case .received:
+				continue
+			}
+		}
+		return scope.instantiable.dependencies.compactMap { dependency in
+			guard case let .aliased(fulfillingProperty, _, _) = dependency.source,
+			      let ownDependency = ownDependencyByLabel[fulfillingProperty.label],
+			      ownDependency != dependency,
+			      !ownDependency.receivableProperties.contains(fulfillingProperty)
+			else { return nil }
+			return DependencyTreeGeneratorError.RenameContradictingOwnProperty(
+				aliasProperty: dependency.property,
+				fulfillingProperty: fulfillingProperty,
+				declarationLocation: dependency.declarationLocation,
+				ownProperty: ownDependency.property,
+				ownPropertyDeclarationLocation: ownDependency.declarationLocation,
+				renamingType: scope.instantiable.concreteInstantiable,
+			)
+		}
 	}
 
 	/// A scope whose tree `requiredReceiver` has searched for a receiver of a property, given the properties the
@@ -4120,6 +4205,7 @@ public actor DependencyTreeGenerator {
 	) throws {
 		var unfulfillableProperties = Set<DependencyTreeGeneratorError.UnfulfillableProperty>()
 		var hiddenReceivedProperties = Set<DependencyTreeGeneratorError.HiddenReceivedProperty>()
+		var renamesContradictingOwnProperties = Set<DependencyTreeGeneratorError.RenameContradictingOwnProperty>()
 		/// The properties a scope of `typeDescriptionToScopeMap` builds – instantiates, or renames another property to –
 		/// as cycle validation sees them. Most walks never ask, so the set is built the first time one does.
 		lazy var propertiesBuiltByAScope: Set<Property> = {
@@ -4307,7 +4393,8 @@ public actor DependencyTreeGenerator {
 		/// - Parameters:
 		///   - validatesCycles: Whether to validate the tree for dependency cycles and unfulfillable received
 		///     properties. `false` only for a tree validated for hidden received dependencies alone.
-		///   - validatesHiddenProperties: Whether to record received dependencies a closer declaration hides.
+		///   - validatesHiddenProperties: Whether to record received dependencies a closer declaration hides, and renames
+		///     that name another type than their own type's property of their label.
 		func validatePropertiesAreFulfillable(
 			inTreeRootedAt rootScope: ValidatedRootScope,
 			validatesCycles: Bool,
@@ -4604,6 +4691,8 @@ public actor DependencyTreeGenerator {
 			}
 
 			if validatesHiddenProperties {
+				// A rename of a label this scope's type declares refers to that declaration, before any ancestor's.
+				renamesContradictingOwnProperties.formUnion(Self.renamesContradictingOwnProperties(in: scope))
 				// The generated code passes a received dependency by its label, which resolves to the closest
 				// ancestor's declaration of that label. A different property there is passed in its place.
 				for dependency in scope.instantiable.dependencies {
@@ -4816,6 +4905,11 @@ public actor DependencyTreeGenerator {
 			)
 		}
 
+		// A rename that names another type than its own type's property of its label is not received from above, so
+		// neither its absence there nor a closer declaration of its label is what is wrong with it.
+		if !renamesContradictingOwnProperties.isEmpty {
+			throw DependencyTreeGeneratorError.renamesContradictingOwnProperties(Array(renamesContradictingOwnProperties))
+		}
 		if !unfulfillableProperties.isEmpty {
 			throw DependencyTreeGeneratorError.unfulfillableProperties(Array(unfulfillableProperties))
 		}

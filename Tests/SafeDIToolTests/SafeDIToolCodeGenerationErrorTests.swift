@@ -927,6 +927,329 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsError_whenRenameDeclaredAfterInstantiatedPropertyOfItsLabelNamesAnotherType() async {
+		// Root's `x: X2` would fulfill the rename, but Child's own `x: X` is the property the rename refers to.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):5:5: error: @Received(fulfilledByDependencyNamed:ofType:) property `vendor: Vendor` renames `x: X2`, but `Child` declares `x: X`, and a rename refers to the property of that name on its own type. Write `ofType: X.self` to rename `x: X`, or give `x: X` on `Child` a different label to rename `x: X2` from further up the tree.
+				\(fixtures["Child.swift"]):4:5: note: `x: X` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol Vendor {}
+
+					@Instantiable
+					public final class X: Vendor, Instantiable { public init() {} }
+					""",
+					"""
+					@Instantiable
+					public final class X2: Vendor, Instantiable { public init() {} }
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(x: X, vendor: Vendor) { self.x = x; self.vendor = vendor }
+					    @Instantiated let x: X
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X2.self) let vendor: Vendor
+					}
+					""",
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(x: X2, child: Child) { self.x = x; self.child = child }
+					    @Instantiated let x: X2
+					    @Instantiated let child: Child
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsError_whenRenameDeclaredBeforeInstantiatedPropertyOfItsLabelNamesAnotherType() async {
+		// As above, with the rename declared first.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):4:5: error: @Received(fulfilledByDependencyNamed:ofType:) property `vendor: Vendor` renames `x: X2`, but `Child` declares `x: X`, and a rename refers to the property of that name on its own type. Write `ofType: X.self` to rename `x: X`, or give `x: X` on `Child` a different label to rename `x: X2` from further up the tree.
+				\(fixtures["Child.swift"]):5:5: note: `x: X` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol Vendor {}
+
+					@Instantiable
+					public final class X: Vendor, Instantiable { public init() {} }
+					""",
+					"""
+					@Instantiable
+					public final class X2: Vendor, Instantiable { public init() {} }
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(x: X, vendor: Vendor) { self.x = x; self.vendor = vendor }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X2.self) let vendor: Vendor
+					    @Instantiated let x: X
+					}
+					""",
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(x: X2, child: Child) { self.x = x; self.child = child }
+					    @Instantiated let x: X2
+					    @Instantiated let child: Child
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorNamingTheTypesOwnProperty_whenRenameNamesAnotherTypeThanInstantiatedPropertyOfItsLabelThatNoAncestorDeclares() async {
+		// The rename is reported as contradicting Child's own `x: X`, not as unfulfillable: declaring `x: X2` on
+		// Root, which an unfulfillable error would suggest, would not fulfill it.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):5:5: error: @Received(fulfilledByDependencyNamed:ofType:) property `vendor: Vendor` renames `x: X2`, but `Child` declares `x: X`, and a rename refers to the property of that name on its own type. Write `ofType: X.self` to rename `x: X`, or give `x: X` on `Child` a different label to rename `x: X2` from further up the tree.
+				\(fixtures["Child.swift"]):4:5: note: `x: X` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol Vendor {}
+
+					@Instantiable
+					public final class X: Vendor, Instantiable { public init() {} }
+					""",
+					"""
+					@Instantiable
+					public final class X2: Vendor, Instantiable { public init() {} }
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(x: X, vendor: Vendor) { self.x = x; self.vendor = vendor }
+					    @Instantiated let x: X
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X2.self) let vendor: Vendor
+					}
+					""",
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsError_whenRenameNamesNonOptionalFormOfForwardedPropertyOfItsLabel() async {
+		// Root's `user: User` would fulfill the rename, but Child's own `user: User?` is the property the rename
+		// refers to, and a `User?` cannot be assigned to a `UserVendor`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):5:5: error: @Received(fulfilledByDependencyNamed:ofType:) property `vendor: UserVendor` renames `user: User`, but `Child` declares `user: User?`, and a rename refers to the property of that name on its own type. Write `ofType: User?.self` to rename `user: User?`, or give `user: User?` on `Child` a different label to rename `user: User` from further up the tree.
+				\(fixtures["Child.swift"]):4:5: note: `user: User?` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol UserVendor {}
+
+					@Instantiable
+					public final class User: UserVendor, Instantiable { public init() {} }
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(user: User?, vendor: UserVendor) { self.user = user; self.vendor = vendor }
+					    @Forwarded let user: User?
+					    @Received(fulfilledByDependencyNamed: "user", ofType: User.self) let vendor: UserVendor
+					}
+					""",
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(user: User, childBuilder: Instantiator<Child>) { self.user = user; self.childBuilder = childBuilder }
+					    @Instantiated let user: User
+					    @Instantiated let childBuilder: Instantiator<Child>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsErrorNamingTheTypesOwnProperty_whenRenameNamesOptionalFormOfInstantiatedPropertyOfItsLabelThatNoAncestorDeclares() async {
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):5:5: error: @Received(fulfilledByDependencyNamed:ofType:) property `maybe: X?` renames `x: X?`, but `Child` declares `x: X`, and a rename refers to the property of that name on its own type. Write `ofType: X.self` to rename `x: X`, or give `x: X` on `Child` a different label to rename `x: X?` from further up the tree.
+				\(fixtures["Child.swift"]):4:5: note: `x: X` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable
+					public final class X: Instantiable { public init() {} }
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(x: X, maybe: X?) { self.x = x; self.maybe = maybe }
+					    @Instantiated let x: X
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X?.self) let maybe: X?
+					}
+					""",
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Instantiated let child: Child
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsError_whenRenameNamesOptionalFormOfInstantiatedPropertyOfItsLabelThatAncestorReceives() async {
+		// Middle's `x: X?`, which Root's `x: X` fulfills, would fulfill the rename, but Child's own `x: X` is the property
+		// the rename refers to.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):5:5: error: @Received(fulfilledByDependencyNamed:ofType:) property `maybe: X?` renames `x: X?`, but `Child` declares `x: X`, and a rename refers to the property of that name on its own type. Write `ofType: X.self` to rename `x: X`, or give `x: X` on `Child` a different label to rename `x: X?` from further up the tree.
+				\(fixtures["Child.swift"]):4:5: note: `x: X` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable
+					public final class X: Instantiable { public init() {} }
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(x: X, maybe: X?) { self.x = x; self.maybe = maybe }
+					    @Instantiated let x: X
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X?.self) let maybe: X?
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Middle: Instantiable {
+					    public init(x: X?, child: Child) { self.x = x; self.child = child }
+					    @Received(onlyIfAvailable: true) let x: X?
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(x: X, middle: Middle) { self.x = x; self.middle = middle }
+					    @Instantiated let x: X
+					    @Instantiated let middle: Middle
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsError_whenRenameNamesAnotherTypeThanRenameOfItsLabelOnSameType() async {
+		// Root's `y: X2` would fulfill the second rename, but Child's own rename `y: any Vendor` is the property it
+		// refers to.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):6:5: error: @Received(fulfilledByDependencyNamed:ofType:) property `z: Vendor` renames `y: X2`, but `Child` declares `y: any Vendor`, and a rename refers to the property of that name on its own type. Write `ofType: (any Vendor).self` to rename `y: any Vendor`, or give `y: any Vendor` on `Child` a different label to rename `y: X2` from further up the tree.
+				\(fixtures["Child.swift"]):5:5: note: `y: any Vendor` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol Vendor {}
+
+					@Instantiable
+					public final class X: Vendor, Instantiable { public init() {} }
+					""",
+					"""
+					@Instantiable
+					public final class X2: Vendor, Instantiable { public init() {} }
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(x: X, y: any Vendor, z: Vendor) { self.x = x; self.y = y; self.z = z }
+					    @Instantiated let x: X
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self) let y: any Vendor
+					    @Received(fulfilledByDependencyNamed: "y", ofType: X2.self) let z: Vendor
+					}
+					""",
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(y: X2, child: Child) { self.y = y; self.child = child }
+					    @Instantiated let y: X2
+					    @Instantiated let child: Child
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithInstantiatedPropertyWithForwardedArgument_throwsError() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
@@ -8464,12 +8787,12 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithRequiredReceiveOfUnavailableOnlyIfAvailableAlias_throwsErrorWhenEnclosingScopeProvidesTheAliasPropertyAsOnlyIfAvailableAliasOfSiblingThatReceivesTheReceiversAncestor() async {
 		// D requires C's `onlyIfAvailable` alias `y` of `q: X?`, which nothing provides, so D is handed P's `y: X?`, an
-		// `onlyIfAvailable` alias of `x: X?`, which must then be created, after `x`, before `b`; but X requires `b`. The
+		// `onlyIfAvailable` alias of `x: X`, which must then be created, after `x`, before `b`; but X requires `b`. The
 		// hint is for P's alias, which the chain passes through.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `y: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. `y: X?` renames `x: X?` only if available, so a type that receives `y` without `onlyIfAvailable` must be built after `x: X?`. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X?` cannot be built first.
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `y: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. `y: X?` renames `x: X` only if available, so a type that receives `y` without `onlyIfAvailable` must be built after `x: X`. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X` cannot be built first.
 				"""
 			},
 		) {
@@ -8488,7 +8811,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					    public init(b: B, x: X, y: X?) { self.b = b; self.x = x; self.y = y }
 					    @Instantiated let b: B
 					    @Instantiated let x: X
-					    @Received(fulfilledByDependencyNamed: "x", ofType: X?.self, onlyIfAvailable: true) let y: X?
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let y: X?
 					}
 					""",
 					"""
@@ -8535,7 +8858,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["D.swift"]):4:5: error: Dependency cycle: @Instantiated `x: X` -> @Received `b: B` -> @Received `y: X?` -> @Received `x: X`. `x: X` is received while it is still being instantiated. `y: X?` renames `x: X?` only if available, so a type that receives `y` without `onlyIfAvailable` must be built after `x: X?`. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X?` cannot be built first. `y: X?` renames `q: X?` only if available, and an enclosing type declares `y: X?`, so a type that receives `y` without `onlyIfAvailable` is handed `y: X?` where `q: X?` cannot be built first and must be built after it. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where neither can be built first.
+				\(fixtures["D.swift"]):4:5: error: Dependency cycle: @Instantiated `x: X` -> @Received `b: B` -> @Received `y: X?` -> @Received `x: X`. `x: X` is received while it is still being instantiated. `y: X?` renames `x: X` only if available, so a type that receives `y` without `onlyIfAvailable` must be built after `x: X`. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X` cannot be built first. `y: X?` renames `q: X?` only if available, and an enclosing type declares `y: X?`, so a type that receives `y` without `onlyIfAvailable` is handed `y: X?` where `q: X?` cannot be built first and must be built after it. Receive `y` with `@Received(onlyIfAvailable: true)` to be passed `nil` where neither can be built first.
 				"""
 			},
 		) {
@@ -8554,7 +8877,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					    public init(x: X, b: B, y: X?) { self.x = x; self.b = b; self.y = y }
 					    @Instantiated let x: X
 					    @Instantiated let b: B
-					    @Received(fulfilledByDependencyNamed: "x", ofType: X?.self, onlyIfAvailable: true) let y: X?
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let y: X?
 					}
 					""",
 					"""

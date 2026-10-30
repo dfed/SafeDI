@@ -247,6 +247,92 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenMockedTypesRenameNamesAnotherTypeThanInstantiatedPropertyOfItsLabel() async {
+		// The mock would bind the rename to an `x_X2` it builds, where the mocked type's own `x: X` is the property the
+		// rename refers to.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):5:5: error: @Received(fulfilledByDependencyNamed:ofType:) property `vendor: Vendor` renames `x: X2`, but `Child` declares `x: X`, and a rename refers to the property of that name on its own type. Write `ofType: X.self` to rename `x: X`, or give `x: X` on `Child` a different label to rename `x: X2` from further up the tree.
+				\(fixtures["Child.swift"]):4:5: note: `x: X` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol Vendor {}
+
+					@Instantiable
+					public final class X: Vendor, Instantiable { public init() {} }
+					""",
+					"""
+					@Instantiable
+					public final class X2: Vendor, Instantiable { public init() {} }
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public final class Child: Instantiable {
+					    public init(x: X, vendor: Vendor) { self.x = x; self.vendor = vendor }
+					    @Instantiated let x: X
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X2.self) let vendor: Vendor
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenPromotedDependencysRenameNamesAnotherTypeThanInstantiatedPropertyOfItsLabel() async {
+		// Child is built only by Parent's mock, which promotes it.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):5:5: error: @Received(fulfilledByDependencyNamed:ofType:) property `vendor: Vendor` renames `x: X2`, but `Child` declares `x: X`, and a rename refers to the property of that name on its own type. Write `ofType: X.self` to rename `x: X`, or give `x: X` on `Child` a different label to rename `x: X2` from further up the tree.
+				\(fixtures["Child.swift"]):4:5: note: `x: X` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol Vendor {}
+
+					@Instantiable
+					public final class X: Vendor, Instantiable { public init() {} }
+					""",
+					"""
+					@Instantiable
+					public final class X2: Vendor, Instantiable { public init() {} }
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(x: X, vendor: Vendor) { self.x = x; self.vendor = vendor }
+					    @Instantiated let x: X
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X2.self) let vendor: Vendor
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public final class Parent: Instantiable {
+					    public init(child: Child) { self.child = child }
+					    @Received let child: Child
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenRequiredOptionalReceivedPropertyIsHiddenByPropertyOfAnotherTypeWithSameLabel() async {
 		// A required `analytics: Analytics?` resolves to a closer `analytics: Analytics`, but not to `Mid`'s
 		// `analytics: OtherAnalytics`.
