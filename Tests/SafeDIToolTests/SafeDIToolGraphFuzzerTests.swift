@@ -764,6 +764,30 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func partition_movesHelperTypesIntoTheirOwnFile_whenRootFileDeclaresThem() {
+		// The generator declares `Value` and `Unbuildable<n>` in `Root0`'s file. `T1` names `Value`, so left there, `T1`
+		// and `Root0` would refer to each other and share a module; moved, the helper file lands first and the root's
+		// module depends on `T1`'s.
+		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
+			Self.typeSource(named: "S12_Root0", arguments: "isRoot: true", properties: ["@Instantiated let t1: S12_T1"])
+				+ "\npublic final class S12_Value: Instantiable {}\n\npublic final class S12_Unbuildable0 {}\n",
+			Self.typeSource(named: "S12_T1", properties: ["@Received let items: Instantiator<S12_Value>"]),
+		])
+
+		let partition = GraphFuzzerPartition.partition(of: fixture, moduleCount: 3)
+
+		#expect(partition.fileNames == ["S12_Root0.swift", "S12_T1.swift", "S12_Helpers.swift"])
+		#expect(partition.modules == [
+			GraphFuzzerPartition.Module(name: "Alpha", fileIndices: [2], referencedModuleNames: [], dependencies: []),
+			GraphFuzzerPartition.Module(name: "Beta", fileIndices: [1], referencedModuleNames: ["Alpha"], dependencies: ["Alpha"]),
+			GraphFuzzerPartition.Module(name: "Gamma", fileIndices: [0], referencedModuleNames: ["Beta"], dependencies: ["Alpha", "Beta"]),
+		])
+		let modules = partition.moduleFixtures(of: fixture)
+		#expect(modules.map(\.swiftFileContent) == [[], ["import Alpha\n\n" + fixture.swiftFileContent[1]], ["import Beta\n\n" + Self.typeSource(named: "S12_Root0", arguments: "isRoot: true", properties: ["@Instantiated let t1: S12_T1"])]])
+		#expect(modules.map(\.swiftFileContentByFilePath) == [["S12_Helpers.swift": "public final class S12_Value: Instantiable {}\n\npublic final class S12_Unbuildable0 {}\n"], [:], [:]])
+	}
+
+	@Test
 	func moduleFixtures_prependImportOfEachReferencedModule_andKeepOtherFilesUnchanged() {
 		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
 			Self.typeSource(named: "S12_Root0", arguments: "isRoot: true", properties: ["@Instantiated let t1: S12_T1", "@Instantiated let t2: S12_T2"]),
@@ -1315,8 +1339,9 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// The `GraphFuzzerPartition` of the smoke and known-issue seeds' graphs, as `partitionHash(forSeeds:)` hashes
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
-	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x267B6FD7B867A116
+	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
+	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x3F378F957E15ED8E
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -1324,7 +1349,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	static let corpusFixtureHash: UInt64 = 0x0EC4BF145928F2B3
 
-	static let corpusPartitionHash: UInt64 = 0x7AC8E472DBF5CD06
+	static let corpusPartitionHash: UInt64 = 0x4B5B481D2F731BD4
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
