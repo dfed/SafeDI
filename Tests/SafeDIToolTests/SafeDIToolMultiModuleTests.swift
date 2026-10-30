@@ -302,6 +302,70 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func multiModuleTest_reportsDuplicateProviderWhereGenerateFirstReadsIt_whenDeclaringModulePlansNoOutput(integration: MultiModuleIntegration) async {
+		// `Core` declares two types fulfilling one protocol but no root and no mock, so the plugin plans no output for
+		// it and runs no `generate` there: the defect is reported where a module that depends on it first generates,
+		// with the same diagnostics, while Bazel's invocation, which runs `generate` for every module, reports it in
+		// `Core`. This pins that behaviour as it is today; the graph fuzzer's multi-module property relies on it.
+		let expectedModuleName = switch integration {
+		case .moduleInfo:
+			"Core"
+		case .swiftPackagePlugin:
+			"App"
+		}
+		await assertThrowsMultiModuleError(inModule: expectedModuleName, diagnostics: { fixtures in
+			func path(of fileName: String) -> String {
+				switch integration {
+				case .moduleInfo:
+					fixtures["Core"]![fileName]
+				case .swiftPackagePlugin:
+					NormalizedFilePath(fixtures["Core"]!.compilerPath(of: fileName)).path
+				}
+			}
+			let message = "error: Found multiple @Instantiable types or extensions that fulfill `Powertrain`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `Powertrain` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
+			return """
+			\(path(of: "Engine.swift")):1:1: \(message)
+			\(path(of: "Motor.swift")):1:1: \(message)
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Core",
+						packageName: "Pipeline",
+						swiftFileContent: [
+							"""
+							@Instantiable(fulfillingAdditionalTypes: [Powertrain.self])
+							public final class Engine: Instantiable, Powertrain {
+							    public init() {}
+							}
+
+							public protocol Powertrain: AnyObject {}
+							""",
+							"""
+							@Instantiable(fulfillingAdditionalTypes: [Powertrain.self])
+							public final class Motor: Instantiable, Powertrain {
+							    public init() {}
+							}
+							""",
+						],
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Pipeline",
+						swiftFileContent: [Self.rootInstantiatingEngineContent],
+						dependencies: ["Core"],
+					),
+				],
+				integration: integration,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func multiModuleTest_referencesAliasDeclarationByDirective_whenAliasIsFulfilledByDependencyType(integration: MultiModuleIntegration) async throws {
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [

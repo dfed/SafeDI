@@ -1484,7 +1484,10 @@ struct GraphFuzzerLongRunConfiguration {
 	let startingSeed: UInt64
 	/// A file the run appends its progress to, which `graph-fuzzer.yml` reads: `seed <n>` before the tool first
 	/// runs each graph; `failure <seed> <kind>`, `known <seed> <reason>`, or `stale <seed> <reason>` for each
-	/// finding; `problem <text>` for anything wrong with the run itself; and `completed …` at the end.
+	/// finding; `renamed <seed> <summary>` and `multimodule <seed> <summary>` for each renamed or partitioned run
+	/// that gives other results, whether or not the graph fails another way; `problem <text>` for anything wrong
+	/// with the run itself; `partitions …` with how many corpus graphs are split into each number of modules; and
+	/// `completed …` at the end.
 	let reportPath: String?
 
 	/// `nil` unless `SAFEDI_GRAPH_FUZZER_ITERATIONS` is set: to a count of seeds, or to `corpus` for
