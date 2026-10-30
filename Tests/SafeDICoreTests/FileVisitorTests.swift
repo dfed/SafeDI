@@ -357,7 +357,7 @@ struct FileVisitorTests {
 					modifierRange: Dependency.SourceRange(startLine: 6, startColumn: 5, endLine: 6, endColumn: 11),
 					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 6, column: 5),
 				),
-				enclosingAccess: [
+				enclosingTypeAccess: [
 					AccessDeclaration(
 						level: .public,
 						modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 7),
@@ -423,12 +423,10 @@ struct FileVisitorTests {
 					modifierRange: Dependency.SourceRange(startLine: 5, startColumn: 5, endLine: 5, endColumn: 11),
 					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 5, column: 5),
 				),
-				enclosingAccess: [
-					AccessDeclaration(
-						level: .internal,
-						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
-					),
-				],
+				enclosingExtensionAccess: AccessDeclaration(
+					level: .internal,
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 4, column: 5),
 			),
 		])
@@ -499,12 +497,10 @@ struct FileVisitorTests {
 					modifierRange: Dependency.SourceRange(startLine: 5, startColumn: 5, endLine: 5, endColumn: 11),
 					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 5, column: 5),
 				),
-				enclosingAccess: [
-					AccessDeclaration(
-						level: .internal,
-						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
-					),
-				],
+				enclosingExtensionAccess: AccessDeclaration(
+					level: .internal,
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 4, column: 5),
 			),
 			Instantiable(
@@ -526,12 +522,10 @@ struct FileVisitorTests {
 					modifierRange: Dependency.SourceRange(startLine: 9, startColumn: 5, endLine: 9, endColumn: 11),
 					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 5),
 				),
-				enclosingAccess: [
-					AccessDeclaration(
-						level: .internal,
-						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
-					),
-				],
+				enclosingExtensionAccess: AccessDeclaration(
+					level: .internal,
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 8, column: 5),
 			),
 			Instantiable(
@@ -553,12 +547,10 @@ struct FileVisitorTests {
 					modifierRange: Dependency.SourceRange(startLine: 13, startColumn: 5, endLine: 13, endColumn: 11),
 					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 13, column: 5),
 				),
-				enclosingAccess: [
-					AccessDeclaration(
-						level: .internal,
-						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
-					),
-				],
+				enclosingExtensionAccess: AccessDeclaration(
+					level: .internal,
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 12, column: 5),
 			),
 		])
@@ -596,7 +588,7 @@ struct FileVisitorTests {
 					modifierRange: Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 11),
 					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
 				),
-				enclosingAccess: [
+				enclosingTypeAccess: [
 					AccessDeclaration(
 						level: .public,
 						modifierRange: Dependency.SourceRange(startLine: 1, startColumn: 1, endLine: 1, endColumn: 7),
@@ -968,7 +960,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .structType,
 				access: declarationAccess[1],
-				enclosingAccess: Array(declarationAccess.prefix(1)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(1)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 5),
 			),
 			Instantiable(
@@ -991,7 +983,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .actorType,
 				access: declarationAccess[2],
-				enclosingAccess: Array(declarationAccess.prefix(2)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(2)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 6, column: 9),
 			),
 			Instantiable(
@@ -1014,7 +1006,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .classType,
 				access: declarationAccess[3],
-				enclosingAccess: Array(declarationAccess.prefix(3)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(3)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 10, column: 13),
 			),
 			Instantiable(
@@ -1037,7 +1029,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .actorType,
 				access: declarationAccess[4],
-				enclosingAccess: Array(declarationAccess.prefix(4)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(4)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 14, column: 17),
 			),
 			Instantiable(
@@ -1060,7 +1052,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .classType,
 				access: declarationAccess[5],
-				enclosingAccess: Array(declarationAccess.prefix(5)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(5)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 18, column: 21),
 			),
 			Instantiable(
@@ -1083,7 +1075,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .structType,
 				access: declarationAccess[6],
-				enclosingAccess: Array(declarationAccess.prefix(6)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(6)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 22, column: 25),
 			),
 			Instantiable(
@@ -1106,7 +1098,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .classType,
 				access: declarationAccess[7],
-				enclosingAccess: Array(declarationAccess.prefix(7)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(7)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 26, column: 29),
 			),
 			Instantiable(
@@ -1129,7 +1121,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .actorType,
 				access: declarationAccess[8],
-				enclosingAccess: Array(declarationAccess.prefix(8)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(8)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 30, column: 33),
 			),
 			Instantiable(
@@ -1152,7 +1144,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .actorType,
 				access: declarationAccess[9],
-				enclosingAccess: Array(declarationAccess.prefix(9)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(9)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 34, column: 37),
 			),
 			Instantiable(
@@ -1175,7 +1167,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .structType,
 				access: declarationAccess[10],
-				enclosingAccess: Array(declarationAccess.prefix(10)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(10)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 38, column: 41),
 			),
 			Instantiable(
@@ -1198,7 +1190,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .structType,
 				access: declarationAccess[11],
-				enclosingAccess: Array(declarationAccess.prefix(11)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(11)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 42, column: 45),
 			),
 			Instantiable(
@@ -1221,7 +1213,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .classType,
 				access: declarationAccess[12],
-				enclosingAccess: Array(declarationAccess.prefix(12)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(12)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 46, column: 49),
 			),
 			Instantiable(
@@ -1244,7 +1236,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .classType,
 				access: declarationAccess[13],
-				enclosingAccess: Array(declarationAccess.prefix(13)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(13)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 50, column: 53),
 			),
 			Instantiable(
@@ -1267,7 +1259,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .classType,
 				access: declarationAccess[14],
-				enclosingAccess: Array(declarationAccess.prefix(14)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(14)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 54, column: 57),
 			),
 			Instantiable(
@@ -1290,7 +1282,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .classType,
 				access: declarationAccess[15],
-				enclosingAccess: Array(declarationAccess.prefix(15)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(15)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 58, column: 61),
 			),
 			Instantiable(
@@ -1313,7 +1305,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .classType,
 				access: declarationAccess[16],
-				enclosingAccess: Array(declarationAccess.prefix(16)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(16)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 62, column: 65),
 			),
 			Instantiable(
@@ -1336,7 +1328,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .classType,
 				access: declarationAccess[17],
-				enclosingAccess: Array(declarationAccess.prefix(17)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(17)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 66, column: 69),
 			),
 			Instantiable(
@@ -1359,7 +1351,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .classType,
 				access: declarationAccess[18],
-				enclosingAccess: Array(declarationAccess.prefix(18)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(18)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 70, column: 73),
 			),
 			Instantiable(
@@ -1382,7 +1374,7 @@ struct FileVisitorTests {
 				dependencies: [],
 				declarationType: .classType,
 				access: declarationAccess[19],
-				enclosingAccess: Array(declarationAccess.prefix(19)),
+				enclosingTypeAccess: Array(declarationAccess.prefix(19)),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 74, column: 77),
 			),
 		])
@@ -1879,7 +1871,7 @@ struct FileVisitorTests {
 	}
 
 	@Test
-	func walk_recordsEnclosingAccess_whenTypeIsNestedInEnumSpellingNoAccessModifier() {
+	func walk_recordsEnclosingTypeAccess_whenTypeIsNestedInEnumSpellingNoAccessModifier() {
 		let syntaxTree = Parser.parse(source: """
 		enum Namespace {
 		    @Instantiable
@@ -1890,7 +1882,7 @@ struct FileVisitorTests {
 		""")
 		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
 		fileVisitor.walk(syntaxTree)
-		#expect(fileVisitor.instantiables.map(\.enclosingAccess) == [
+		#expect(fileVisitor.instantiables.map(\.enclosingTypeAccess) == [
 			[
 				AccessDeclaration(
 					level: .internal,
@@ -1898,10 +1890,11 @@ struct FileVisitorTests {
 				),
 			],
 		])
+		#expect(fileVisitor.instantiables.map(\.enclosingExtensionAccess) == [nil])
 	}
 
 	@Test
-	func walk_recordsEnclosingAccess_whenTypeIsNestedInExtensionSpellingAccessModifier() {
+	func walk_recordsEnclosingExtensionAccess_whenTypeIsDeclaredDirectlyInExtensionSpellingAccessModifier() {
 		let syntaxTree = Parser.parse(source: """
 		public extension Outer {
 		    @Instantiable
@@ -1912,19 +1905,18 @@ struct FileVisitorTests {
 		""")
 		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
 		fileVisitor.walk(syntaxTree)
-		#expect(fileVisitor.instantiables.map(\.enclosingAccess) == [
-			[
-				AccessDeclaration(
-					level: .public,
-					modifierRange: Dependency.SourceRange(startLine: 1, startColumn: 1, endLine: 1, endColumn: 7),
-					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
-				),
-			],
+		#expect(fileVisitor.instantiables.map(\.enclosingExtensionAccess) == [
+			AccessDeclaration(
+				level: .public,
+				modifierRange: Dependency.SourceRange(startLine: 1, startColumn: 1, endLine: 1, endColumn: 7),
+				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+			),
 		])
+		#expect(fileVisitor.instantiables.map(\.enclosingTypeAccess) == [[]])
 	}
 
 	@Test
-	func walk_recordsEnclosingAccessOutermostFirst_whenTypeIsNestedTwoLevelsDeep() {
+	func walk_recordsEnclosingTypeAccessOutermostFirst_whenTypeIsNestedTwoLevelsDeep() {
 		let syntaxTree = Parser.parse(source: """
 		public enum Outer {
 		    struct Middle {
@@ -1937,7 +1929,7 @@ struct FileVisitorTests {
 		""")
 		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
 		fileVisitor.walk(syntaxTree)
-		#expect(fileVisitor.instantiables.map(\.enclosingAccess) == [
+		#expect(fileVisitor.instantiables.map(\.enclosingTypeAccess) == [
 			[
 				AccessDeclaration(
 					level: .public,
