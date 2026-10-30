@@ -3,6 +3,12 @@ load("@build_bazel_rules_swift//swift:swift.bzl", "swift_binary")
 swift_binary(
     name = "SafeDITool",
     srcs = glob(["**/*.swift"]),
+    # The module name SwiftPM gives the tool. A `.safedi` file's schema
+    # fingerprint includes the module name of each type it stores, so
+    # without it rules_swift would name the module after the label
+    # (`Sources_SafeDITool_SafeDITool`), and this binary's `.safedi` files
+    # could not be read by SafeDITool built any other way, nor theirs by it.
+    module_name = "SafeDITool",
     visibility = ["//visibility:public"],
     deps = [
         "//Sources/SafeDICore",
