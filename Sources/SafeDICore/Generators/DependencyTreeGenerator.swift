@@ -1790,7 +1790,7 @@ public actor DependencyTreeGenerator {
 		)
 		try validatePropertiesAreFulfillable(
 			onRootScopes: mockRootChildrenRequiringEachOther != nil || declaresOnlyIfAvailableAliasOfPropertyBeingBuilt
-				? [ValidatedRootScope(scope: mockRootScope, boundProperties: allReceived)]
+				? [ValidatedRootScope(scope: mockRootScope, boundProperties: allReceived, isMock: !instantiable.isRoot)]
 				: [],
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 			cyclesOnly: true,
@@ -3967,7 +3967,7 @@ public actor DependencyTreeGenerator {
 		// Every tree is validated, and the errors are reported in source order, so neither depends on the order of the
 		// trees; they are validated in type order regardless. A root receives nothing, so its tree binds nothing above
 		// its own properties.
-		var rootScopes = rootInstantiables.sorted().compactMap { typeDescriptionToScopeMap[$0] }.map { ValidatedRootScope(scope: $0, boundProperties: []) }
+		var rootScopes = rootInstantiables.sorted().compactMap { typeDescriptionToScopeMap[$0] }.map { ValidatedRootScope(scope: $0, boundProperties: [], isMock: false) }
 		// When checking cycles only (mock validation), also validate non-root types
 		// that have generateMock enabled — they bypass root entry points. Each one's
 		// mock binds every property its tree receives from above it.
@@ -3980,13 +3980,13 @@ public actor DependencyTreeGenerator {
 				// A type whose hand-written mock is not passed some of its dependencies has two scopes, which only
 				// identity tells apart: the full one first, then the one its hand-written mock builds.
 				.sorted { ($0.instantiable.concreteInstantiable, $0.dependenciesLeftOut.count) < ($1.instantiable.concreteInstantiable, $1.dependenciesLeftOut.count) }
-				.map { scope in ValidatedRootScope(scope: scope, boundProperties: Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received) }
+				.map { scope in ValidatedRootScope(scope: scope, boundProperties: Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received, isMock: true) }
 		}
 		try validatePropertiesAreFulfillable(
 			onRootScopes: rootScopes,
 			additionalMockRootScopes: additionalMockRootScopes
 				.sorted { $0.instantiable.concreteInstantiable < $1.instantiable.concreteInstantiable }
-				.map { scope in ValidatedRootScope(scope: scope, boundProperties: Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received) },
+				.map { scope in ValidatedRootScope(scope: scope, boundProperties: Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received, isMock: !scope.instantiable.isRoot) },
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 			cyclesOnly: cyclesOnly,
 		)
@@ -4028,6 +4028,11 @@ public actor DependencyTreeGenerator {
 		/// parameters, or `SafeDIOverrides` entries — which enclose its whole tree. Empty for a
 		/// root of the dependency tree, which receives nothing.
 		let boundProperties: Set<Property>
+		/// Whether the tree is validated as the tree of a mock that promotes what its tree receives from above it: the
+		/// mock of a type that is not a root of the dependency tree. A root receives nothing, so a mock of it promotes
+		/// nothing and builds its production tree, and the validation of mocks, which walks every root's tree, validates
+		/// a root's tree as production too.
+		let isMock: Bool
 	}
 
 	/// A scope that `validatePropertiesAreFulfillable` has yet to validate, with what the scopes it is built inside
@@ -4060,8 +4065,9 @@ public actor DependencyTreeGenerator {
 		let receivedPropertyStack: [Property]
 		/// The instantiation stack of the scope that declares the last alias the receive requires.
 		let lastAliasDeclaringInstantiationStack: [Property]
-		/// The properties the mock root forwards, which the walk does not follow unless a scope builds them.
-		let mockRootForwardedProperties: Set<Property>
+		/// The properties the mock root forwards, which the walk does not follow unless a scope builds them, or `nil`
+		/// for a tree validated as production.
+		let mockRootForwardedProperties: Set<Property>?
 	}
 
 	/// A scope whose required received properties `validateNoCycleInReceivedProperties` is walking.
@@ -4116,9 +4122,10 @@ public actor DependencyTreeGenerator {
 		/// another property to it, wherever that scope is, since a receive of it may resolve there. A mock also builds
 		/// what it promotes: a property its root does not forward and that the mock can build. A property that nothing
 		/// builds or forwards is provided by nothing at all, which validation reports where it is received.
-		/// - Parameter mockRootForwardedProperties: The properties the mock root forwards, or none outside a mock.
-		func isHanded(_ receivedProperty: Property, from receivedPropertyScope: Scope, mockRootForwardedProperties: Set<Property>) -> Bool {
-			if cyclesOnly, !mockRootForwardedProperties.contains(receivedProperty), Self.mockCanBuild(receivedProperty, from: receivedPropertyScope) {
+		/// - Parameter mockRootForwardedProperties: The properties the mock root forwards, or `nil` for a tree validated as
+		///   production (see `ValidatedRootScope.isMock`), whose root promotes nothing.
+		func isHanded(_ receivedProperty: Property, from receivedPropertyScope: Scope, mockRootForwardedProperties: Set<Property>?) -> Bool {
+			if let mockRootForwardedProperties, !mockRootForwardedProperties.contains(receivedProperty), Self.mockCanBuild(receivedProperty, from: receivedPropertyScope) {
 				false
 			} else {
 				!propertiesBuiltByAScope.contains(receivedProperty)
@@ -4153,7 +4160,7 @@ public actor DependencyTreeGenerator {
 			property: Property,
 			instantiationStack: [Property],
 			lazilyInstantiatedDeclarations: [Property: Property],
-			mockRootForwardedProperties: Set<Property>,
+			mockRootForwardedProperties: Set<Property>?,
 		) throws {
 			// Most scopes require no received property.
 			guard !requiredReceivedProperties.isEmpty else { return }
@@ -4295,7 +4302,7 @@ public actor DependencyTreeGenerator {
 				propertyStack: [],
 				lazilyInstantiatedDeclarations: [:],
 			)]
-			let mockRootForwardedProperties: Set<Property> = cyclesOnly ? rootScope.scope.instantiable.forwardedReceivableProperties : []
+			let mockRootForwardedProperties: Set<Property>? = rootScope.isMock ? rootScope.scope.instantiable.forwardedReceivableProperties : nil
 			while let scopeToValidate = scopesToValidate.popLast() {
 				try validatePropertiesAreFulfillable(
 					on: scopeToValidate,
@@ -4313,15 +4320,15 @@ public actor DependencyTreeGenerator {
 		/// - Parameters:
 		///   - scopeToValidate: The scope, with what the scopes it is built inside give it.
 		///   - boundProperties: The received properties the tree's mock binds. See `ValidatedRootScope`.
-		///   - mockRootForwardedProperties: The properties the tree's mock root forwards, or none outside a mock. See
-		///     `isHanded`.
+		///   - mockRootForwardedProperties: The properties the tree's mock root forwards, or `nil` for a tree validated
+		///     as production. See `isHanded`.
 		///   - validatesCycles: See `validatePropertiesAreFulfillable(inTreeRootedAt:validatesCycles:validatesHiddenProperties:)`.
 		///   - validatesHiddenProperties: See `validatePropertiesAreFulfillable(inTreeRootedAt:validatesCycles:validatesHiddenProperties:)`.
 		///   - root: The type at the root of the tree.
 		func validatePropertiesAreFulfillable(
 			on scopeToValidate: ScopeToValidate,
 			boundProperties: Set<Property>,
-			mockRootForwardedProperties: Set<Property>,
+			mockRootForwardedProperties: Set<Property>?,
 			validatesCycles: Bool,
 			validatesHiddenProperties: Bool,
 			root: TypeDescription,
