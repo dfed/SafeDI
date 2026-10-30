@@ -95,7 +95,7 @@ struct InstantiableVisitorTests {
 		of _: Declaration.Type,
 		in syntaxTree: SourceFileSyntax,
 	) throws -> InstantiableVisitor {
-		let declaration = try #require(syntaxTree.statements.first?.item.as(Declaration.self))
+		let declaration = try #require(syntaxTree.statements.first.flatMap { Syntax($0.item).as(Declaration.self) })
 		let visitor = InstantiableVisitor(
 			declarationType: .concreteDecl,
 			sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree),
