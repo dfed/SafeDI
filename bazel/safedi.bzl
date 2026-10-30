@@ -67,6 +67,20 @@ custom Swift toolchain. The generated code asserts every decision a
 condition made, so a condition the build defines but the rule does not
 report fails the build with a message naming it.
 
+## Modules and packages
+
+`safedi_compile` tells SafeDITool the name of the Swift module that
+compiles its output (`module_name`) and that module's package
+(`package_name`, which the compiler receives as `-package-name`).
+SafeDITool records them in the `.safedi` artifact, so a consumer knows
+which module and package declare each `@Instantiable` type, and
+records the module each `deps` entry's `.safedi` names as one of the
+module's dependencies. `safedi_swift_library` passes the module name
+its `swift_library` compiles: the `module_name` attribute, or the name
+rules_swift derives from the library's label. Give
+`safedi_swift_library` a `package_name` to compile the library with
+`-package-name`, which `package` declarations need.
+
 ## Unsupported SafeDI features
 
 - `#SafeDIConfiguration(additionalDirectoriesToInclude:)` is **not
@@ -77,6 +91,7 @@ report fails the build with a message naming it.
 """
 
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load("@build_bazel_rules_swift//swift:module_name.bzl", "derive_swift_module_name")
 load("@build_bazel_rules_swift//swift:swift.bzl", "swift_library")
 
 SafeDIInfo = provider(
@@ -169,6 +184,13 @@ def _safedi_compile_impl(ctx):
         active_compilation_conditions.append("NDEBUG")
     if active_compilation_conditions:
         arguments += ["--active-compilation-conditions"] + active_compilation_conditions
+
+    # The module and package that declare this module's `@Instantiable`
+    # types, which SafeDITool records in the `.safedi` artifact.
+    if ctx.attr.module_name:
+        arguments += ["--module-name", ctx.attr.module_name]
+    if ctx.attr.package_name:
+        arguments += ["--package-name", ctx.attr.package_name]
     extra_inputs = []
     if dependency_module_info_files:
         dependency_csv = _write_csv(
@@ -231,6 +253,23 @@ automatically in the `dbg` and `fastbuild` compilation modes, and
 `swift_library.copts`. Each `-D` flag among them reports a compilation
 condition; other options are ignored.""",
         ),
+        "module_name": attr.string(
+            default = "",
+            doc = """The name of the Swift module that compiles this
+rule's output: the wrapped `swift_library`'s `module_name`, or the
+name rules_swift derives from that library's label.
+`safedi_swift_library` passes it. SafeDITool records it in the
+`.safedi` artifact as the module that declares this module's
+`@Instantiable` types, and consumers of this rule record it as one of
+their dependencies. Without it, SafeDITool records no module for this
+rule's declarations, and consumers record no dependency on it.""",
+        ),
+        "package_name": attr.string(
+            default = "",
+            doc = """The `package_name` of the wrapped `swift_library`,
+which the compiler receives as `-package-name`. Leave it empty when
+the library has none.""",
+        ),
         "_safeditool": attr.label(
             default = Label("//Sources/SafeDITool:SafeDITool"),
             executable = True,
@@ -253,6 +292,7 @@ def safedi_swift_library(
         safedi_deps = [],
         defines = [],
         copts = [],
+        package_name = None,
         tags = None,
         testonly = None,
         visibility = None,
@@ -279,12 +319,16 @@ def safedi_swift_library(
         defines: Passed to both targets.
         copts: Passed to both targets. `safedi_compile` reads only the
             `-D` flags.
+        package_name: The package the `swift_library` belongs to, which
+            the compiler receives as `-package-name` and which
+            `package` declarations need. Passed to both targets.
         tags: Passed to both targets.
         testonly: Passed to both targets.
         visibility: Passed to both targets, because a module that
             depends on this library also depends on `<name>_safedi`.
         target_compatible_with: Passed to both targets.
-        **kwargs: Passed to the `swift_library`.
+        **kwargs: Passed to the `swift_library`. `safedi_compile` also
+            reads its `module_name`.
     """
     safedi_name = name + "_safedi"
     safedi_compile(
@@ -293,6 +337,10 @@ def safedi_swift_library(
         deps = safedi_deps,
         defines = defines,
         copts = copts,
+        # The module the `swift_library` below compiles, named as
+        # rules_swift names it.
+        module_name = kwargs.get("module_name") or derive_swift_module_name(native.package_name(), name),
+        package_name = package_name,
         tags = tags,
         testonly = testonly,
         visibility = visibility,
@@ -303,6 +351,7 @@ def safedi_swift_library(
         srcs = srcs + [":" + safedi_name],
         defines = defines,
         copts = copts,
+        package_name = package_name,
         tags = tags,
         testonly = testonly,
         visibility = visibility,

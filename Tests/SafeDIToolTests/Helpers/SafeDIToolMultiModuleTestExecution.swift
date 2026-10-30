@@ -110,8 +110,9 @@ enum MultiModuleIntegration: CaseIterable {
 	/// Bazel's invocation of `generate` (`bazel/safedi.bzl`): one run per module, with no `scan`, reading a CSV
 	/// of the module's own files, writing one combined file and the module's `.safedi`, reading the `.safedi` of
 	/// each module in its `dependencies` (Bazel's rule lists a target's direct `deps`; a Tuist user lists modules
-	/// by name), and passing `--compiler-receives-input-paths-unchanged`. Tuist differs only by omitting that flag
-	/// and passing `$SRCROOT`-relative paths. The harness names the combined file `<module name>.swift`, where
+	/// by name), naming the module and its package with `--module-name` and `--package-name`, and passing
+	/// `--compiler-receives-input-paths-unchanged`. Tuist differs only by
+	/// omitting that flag and passing `$SRCROOT`-relative paths. The harness names the combined file `<module name>.swift`, where
 	/// Bazel names both outputs after the rule label and Tuist writes `SafeDIGenerated.swift`, and its CSV names
 	/// each file by the absolute, unresolved path the harness created it under, where Bazel's entries are
 	/// execroot-relative and Tuist's `$SRCROOT`-relative: that changes only the text of `#sourceLocation`
@@ -125,7 +126,10 @@ enum MultiModuleIntegration: CaseIterable {
 	/// command only then. Each reads one CSV holding the module's own files and every transitive first-party
 	/// dependency's files – a checkout package's are left out – each relative to the module's package directory
 	/// when it lies inside it and spelled whole otherwise, with only the module's own files mock-scoped, the
-	/// package directory reported with its symbolic links resolved, and no `.safedi` anywhere. The build system
+	/// package directory reported with its symbolic links resolved, and no `.safedi` anywhere. Beside the CSV lies
+	/// the target graph the plugin writes: the module and each module whose files the CSV lists, with its package
+	/// (the fixture's package name, which stands in for SwiftPM's package identity), its files spelled as the CSV
+	/// spells them, and the modules it depends on directly. The build system
 	/// spells a file to the compiler as the reported package directory joined with the CSV's relative path
 	/// (`FixturePaths.compilerPath(of:)`): an alias's declaration is referenced by a `#sourceLocation` directive
 	/// naming that spelling, a found additional file outside the package is listed by its normalized path, and a
@@ -163,6 +167,9 @@ struct ModuleTestOutput {
 	/// The Swift files in the module's output directory, by name: under `.swiftPackagePlugin` the manifest's
 	/// outputs, and under `.moduleInfo` the one combined file, `<module name>.swift`.
 	let generatedFiles: [String: String]
+	/// What `generate` read, when it ran: the module it generated code for, whose declarations under
+	/// `.swiftPackagePlugin` include those of every module the CSV lists, and the dependent modules' `.safedi`.
+	let generateOutput: Generate.Output?
 }
 
 /// What `executeSafeDIToolMultiModuleTest` produced: each module's output and, when the modules were compiled,
@@ -307,6 +314,8 @@ func executeSafeDIToolMultiModuleTest(
 				"--combined-output", outputDirectory.appendingPathComponent("\(moduleName).swift").path,
 				"--module-info-output", output.path,
 				"--compiler-receives-input-paths-unchanged",
+				"--module-name", moduleName,
+				"--package-name", module.fixture.packageName,
 			] + activeCompilationConditionArguments
 			if !module.fixture.dependencies.isEmpty {
 				let dependentModuleInfoFileCSV = moduleInfoDirectory.appendingPathComponent("\(moduleName)-dependencies.csv")
@@ -329,11 +338,18 @@ func executeSafeDIToolMultiModuleTest(
 			inputSwiftFilePaths = module.swiftFiles.map(csvEntry(of:))
 			compilerSwiftFilePaths = inputSwiftFilePaths.map { "\(reportedPackageDirectory)/\($0)" }
 			// As the plugin's `sourceModuleRecursiveDependencies`: every transitive dependency not under `checkouts`.
-			let csvEntries = inputSwiftFilePaths + module.transitiveDependencies
+			let firstPartyDependencies = module.transitiveDependencies
 				.map { writtenModulesByName[$0]! }
 				.filter { !$0.fixture.isCheckoutPackage }
-				.flatMap { $0.swiftFiles.map(csvEntry(of:)) }
+			let csvEntries = inputSwiftFilePaths + firstPartyDependencies.flatMap { $0.swiftFiles.map(csvEntry(of:)) }
 			try csvEntries.joined(separator: ",").write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+			// As the plugin's `writeTargetGraph`, beside the CSV.
+			let encoder = JSONEncoder()
+			encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+			try encoder.encode(PluginTargetGraph(
+				target: module.graphTarget(spellingFilesAs: csvEntry(of:)),
+				dependencyTargets: firstPartyDependencies.map { $0.graphTarget(spellingFilesAs: csvEntry(of:)) }.sorted { $0.moduleName < $1.moduleName },
+			)).write(to: URL(fileURLWithPath: swiftFileCSV.path + PluginTargetGraph.fileNameSuffix))
 			let manifestFile = fixtureRoot.appendingPathComponent("Manifests").appendingPathComponent("\(moduleName).json")
 			try FileManager.default.createDirectory(at: manifestFile.deletingLastPathComponent(), withIntermediateDirectories: true)
 			// The scan cache lies under `fixtureRoot`, which is already registered for deletion.
@@ -373,13 +389,13 @@ func executeSafeDIToolMultiModuleTest(
 		}
 		let fixtures = FixturePaths(fileNames: module.fileNames, paths: inputSwiftFilePaths, compilerPaths: compilerSwiftFilePaths)
 
-		var warnings = [SourceDiagnostic]()
+		var generateOutput: Generate.Output?
 		if let generateArguments {
 			let tool = try Generate.parse(generateArguments)
 			// Call `generate()` rather than `run()`: `run()` prints located errors in compiler format and
 			// rethrows them as an `ExitCode`, which would hide the error from the assertion helpers.
 			do {
-				warnings = try await tool.generate()
+				generateOutput = try await tool.generate()
 			} catch {
 				var fixturesByModuleName = outputs.mapValues(\.fixtures)
 				fixturesByModuleName[moduleName] = fixtures
@@ -397,8 +413,9 @@ func executeSafeDIToolMultiModuleTest(
 			moduleInfoOutputPath: moduleInfoOutput?.path,
 			scanManifest: scanManifest,
 			fixtures: fixtures,
-			warnings: warnings,
+			warnings: generateOutput?.warnings ?? [],
 			generatedFiles: try generatedSwiftFiles(in: outputDirectory),
+			generateOutput: generateOutput,
 		)
 	}
 
@@ -469,6 +486,17 @@ private struct WrittenModule {
 	/// The names of every module this one depends on, directly or through another, in the order the modules
 	/// were given.
 	let transitiveDependencies: [String]
+
+	/// The module as the plugin's target graph describes it: its files, each spelled by `csvEntry` as the CSV spells
+	/// it, sorted, and the modules it depends on directly, sorted.
+	func graphTarget(spellingFilesAs csvEntry: (URL) -> String) -> PluginTargetGraph.Target {
+		PluginTargetGraph.Target(
+			moduleName: fixture.name,
+			packageID: fixture.packageName,
+			sourceFilePaths: swiftFiles.map(csvEntry).sorted(),
+			dependencyModuleNames: fixture.dependencies.sorted(),
+		)
+	}
 }
 
 /// The transitive dependencies of each of `modules`, by module name, each in the order the modules were given.
