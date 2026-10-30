@@ -142,11 +142,13 @@ SafeDI writes its output into the build directory rather than your source tree. 
 | Tuist (`SafeDITuist` plugin) | `$(DERIVED_FILE_DIR)/SafeDIGenerated.swift` for each target, under the target’s intermediates in DerivedData |
 | Custom build system | Wherever your `generate` invocation points `--combined-output` or the manifest’s output paths |
 
-The plugin-based integrations name files `<File>+SafeDI.swift` for the dependency trees of the roots a source file `<File>.swift` declares, `<File>+SafeDIMock.swift` for the mocks of the `generateMock: true` types it declares, `<Type>+SafeDIMock.swift` for each type a `#SafeDIConfiguration` lists in `additionalMocksToGenerate`, and `SafeDIMockConfiguration.swift` for the shared mock configuration. Files whose names would match, ignoring letter case, are prefixed with as many enclosing directories as tell them apart (`FeatureA_Root+SafeDI.swift`), then suffixed `_2`, `_3`, … if a name still matches. The quickest way to locate them in any layout is:
+The quickest way to locate them in any layout is:
 
 ```bash
 find . -name '*+SafeDI*.swift' -not -path '*/checkouts/*'
 ```
+
+The plugin-based integrations name files `<File>+SafeDI.swift` for the dependency trees of the roots a source file `<File>.swift` declares, `<File>+SafeDIMock.swift` for the mocks of the `generateMock: true` types it declares, `<Type>+SafeDIMock.swift` for each type a `#SafeDIConfiguration` lists in `additionalMocksToGenerate`, and `SafeDIMockConfiguration.swift` for the shared mock configuration. Files whose names would match, ignoring letter case, are prefixed with as many enclosing directories as tell them apart (`FeatureA_Root+SafeDI.swift`), then suffixed `_2`, `_3`, … if a name still matches. A generated file that holds only compile-time assertions belongs to a declaration the build’s conditions leave inactive (see [Declarations that decide which files SafeDI generates](#declarations-that-decide-which-files-safedi-generates)).
 
 ## Macros
 
@@ -174,7 +176,9 @@ Every `@Instantiable`-decorated type must be:
 
 2. Have a `public init(…)` or `open init(…)` that has a parameter for each of its injected properties.
 
-The `@Instantiable` macro guides developers through satisfying these requirements with code generation and build-time fix-its.
+3. Spell a nested type in a decorated property’s type with its enclosing types, such as `@Forwarded let configuration: Feature.Configuration`: generated code is in an extension where the members of `Feature` are not in scope, and the `@Instantiable` macro warns, with a fix-it, when a type declared inside the decorated type is spelled without it. SafeDI itself qualifies a nested type that an `@Instantiable` declaration fulfills.
+
+The `@Instantiable` macro guides developers through satisfying the first two requirements with code generation and build-time fix-its.
 
 Here is a sample `LoggedInView` implementation that is `@Instantiable`. It is annotated with each of the three dependency-kind macros — `@Forwarded`, `@Received`, and `@Instantiated` — that together describe how dependencies enter a SafeDI scope:
 
@@ -412,12 +416,6 @@ Property declarations within `@Instantiable` types decorated with [`@Forwarded`]
 
 A `@Forwarded` property is forwarded into the SafeDI dependency tree by an [`Instantiator`](#instantiator)’s `instantiate(_:)` function that creates an instance of the property’s enclosing type.
 
-A forwarded value comes from outside the tree, so SafeDI does not follow the `@Received` dependencies of its type.
-
-Forwarded property types do not need to be decorated with the `@Instantiable` macro.
-
-In a decorated property’s type, spell a nested type with its enclosing types, such as `@Forwarded let configuration: Feature.Configuration`: generated code is in an extension where the members of `Feature` are not in scope, and the `@Instantiable` macro warns, with a fix-it, when a type declared inside the decorated type is spelled without it. SafeDI itself qualifies a nested type that an `@Instantiable` declaration fulfills.
-
 The [Macros intro](#macros) shows a `LoggedInView` with a `@Forwarded user: User`. The parent side — the root that actually passes the authenticated user in — uses the child’s `Instantiator` to forward the value:
 
 ```swift
@@ -440,9 +438,13 @@ public struct NotesApp: App, Instantiable {
 }
 ```
 
+With more than one `@Forwarded` property, `instantiate(_:)` takes them as one tuple, the generated `ForwardedProperties` typealias (see [Instantiator](#instantiator)).
+
+Forwarded property types do not need to be decorated with the `@Instantiable` macro. A forwarded value comes from outside the tree, so SafeDI does not follow the `@Received` dependencies of its type.
+
 ### @Received
 
-Property declarations within `@Instantiable` types decorated with [`@Received`](../Sources/SafeDI/Decorators/Received.swift) are injected into the enclosing type’s initializer. Received properties must be `@Instantiated` or `@Forwarded` by an object higher up in the dependency tree. A `@Received` property is fulfilled by the `@Instantiated` or `@Forwarded` property further up the tree that shares its name and type. SafeDI ignores `any` when it matches types, so `any SessionsApi` and `SessionsApi` are one type, in renames and `fulfillingAdditionalTypes` too. If no such property exists, the build fails.
+Property declarations within `@Instantiable` types decorated with [`@Received`](../Sources/SafeDI/Decorators/Received.swift) are injected into the enclosing type’s initializer. A `@Received` property is fulfilled by the nearest `@Instantiated` or `@Forwarded` property above it with the same name and type; if there is none, the build fails.
 
 Continuing the [Macros intro](#macros) example: `LoggedInView` has a `@Forwarded user: User` and an `@Instantiated noteStorage: NoteStorage`. `NoteStorage` can `@Received` the same `user` instance from anywhere in the subtree below `LoggedInView`:
 
@@ -466,13 +468,11 @@ public class NoteStorage: Instantiable {
 }
 ```
 
+SafeDI ignores `any` when it matches types, so `any SessionsApi` and `SessionsApi` are one type, in renames and `fulfillingAdditionalTypes` too.
+
 #### Renaming and retyping dependencies
 
 Use `@Received(fulfilledByDependencyNamed:ofType:)` to give a dependency an additional name and type. The dependency is the property of that name that the declaring type instantiates, forwards, or itself renames, or, when the declaring type has none, the one a type above it instantiates or forwards. Types further down the tree can then `@Received` the same instance under either name and type.
-
-SafeDI does not check that the retyped property can be fulfilled by the original type; the Swift compiler checks the generated assignment and reports a mismatch at the `@Received` declaration, or in the generated file beside a comment naming it, depending on the build integration (see [Custom build system integration](#custom-build-system-integration)).
-
-A rename can also be fulfilled by another rename declared on the same type, as long as the renames do not form a cycle. The rename’s `ofType:` must name exactly the renamed property’s type, or a `LazilyInstantiated` property’s instance type.
 
 Here, a parent instantiates a read-write `UserManager` and also renames the object to make it available a `UserVendor`. A child receives the same instance as the read-only `UserVendor`:
 
@@ -494,6 +494,8 @@ public struct ProfileView: Instantiable {
 ```
 
 To receive the renamed dependency inside a type-erasing wrapper, add `erasedToConcreteExistential: true`, which wraps it as [`@Instantiated` erasure](#making-protocols-instantiable) does: a property `userVendor: AnyUserVendor` is assigned `AnyUserVendor(userManager)`. With `onlyIfAvailable: true` the property is optional, and the type it wraps does the wrapping: a property `userVendor: AnyUserVendor?` is assigned `AnyUserVendor(userManager)` too.
+
+A rename can also be fulfilled by another rename declared on the same type, as long as the renames do not form a cycle. The rename’s `ofType:` must name exactly the renamed property’s type, or a `LazilyInstantiated` property’s instance type. SafeDI does not check that the retyped property can be fulfilled by the original type; the Swift compiler checks the generated assignment and reports a mismatch at the `@Received` declaration, or in the generated file beside a comment naming it, depending on the build integration (see [Custom build system integration](#custom-build-system-integration)).
 
 The renamed property may keep the original label, but below it that label then names the renamed type. Give the renamed property a label of its own when anything below receives the original; the same holds for an `@Instantiated` or `@Forwarded` property that reuses a label from higher in the tree.
 
@@ -614,13 +616,13 @@ public struct NotesApp: App, Instantiable {
 
 SafeDI generates a `ForwardedProperties` typealias for every `@Instantiable` type. This typealias is a tuple containing all properties decorated with `@Forwarded`. `Instantiator.instantiate(_:)` takes a `ForwardedProperties` argument, ensuring that you provide all required runtime dependencies when instantiating the type.
 
+An `Instantiator` is also how types create one another: SafeDI accepts a dependency cycle only when the dependency that closes it is an `@Instantiated` `Instantiator` or `ErasedInstantiator`, or a `Sendable` twin, which builds its type each time it is called.
+
 An `Instantiator` is not `Sendable`. To share one across concurrency domains, use its [`Sendable` twin](#sendable-wrappers), `SendableInstantiator`.
 
 ### ErasedInstantiator
 
-For deferred instantiation of a type-erased dependency, use `ErasedInstantiator` — it combines the deferred construction of [`Instantiator`](#instantiator) with the `fulfilledByType` / `erasedToConcreteExistential` parameters covered in [Making protocols `@Instantiable`](#making-protocols-instantiable).
-
-The [`ErasedInstantiator`](../Sources/SafeDI/DelayedInstantiation/ErasedInstantiator.swift) type is how SafeDI enables instantiating any `@Instantiable` type when using type erasure. `ErasedInstantiator` has two generics. The first generic must match the type’s `ForwardedProperties` typealias. The second generic matches the type of the to-be-instantiated instance. An `ErasedInstantiator` is not `Sendable`. To share one across concurrency domains, use its [`Sendable` twin](#sendable-wrappers), `SendableErasedInstantiator`.
+For deferred instantiation of a type-erased dependency, use an [`ErasedInstantiator`](../Sources/SafeDI/DelayedInstantiation/ErasedInstantiator.swift), which combines the deferred construction of [`Instantiator`](#instantiator) with the `fulfilledByType` and `erasedToConcreteExistential` parameters covered in [Making protocols `@Instantiable`](#making-protocols-instantiable). `ErasedInstantiator` has two generics: the first must match the built type’s `ForwardedProperties` typealias, and the second matches the type of the to-be-instantiated instance.
 
 ```swift
 import SwiftUI
@@ -646,6 +648,8 @@ public struct ParentView: View, Instantiable {
 ```
 
 An `@Instantiated` erased instantiator must name the type it builds with `fulfilledByType`. An `@Received` or `@Forwarded` one is handed in rather than built, so it names no type: a type below `ParentView` can declare `@Received let childViewBuilder: ErasedInstantiator<(), AnyView>` to receive the instantiator `ParentView` creates. As with any received dependency, the label and the full type must match.
+
+An `ErasedInstantiator` is not `Sendable`. To share one across concurrency domains, use its [`Sendable` twin](#sendable-wrappers), `SendableErasedInstantiator`.
 
 ### LazilyInstantiated
 
@@ -1105,7 +1109,7 @@ public struct DebugMenu: Instantiable { … }
 
 ## Comparing SafeDI and Manual Injection: Key Differences
 
-SafeDI is designed to be simple to adopt and minimize architectural changes required to get the benefits of a compile-time safe DI system. Despite this design goal, there are a few key differences between projects that utilize SafeDI and projects that don’t. As the benefits of this system are clearly outlined in the [Features](../README.md#features) section above, this section outlines the pattern changes required to utilize a DI system like SafeDI.
+SafeDI is designed to be simple to adopt and minimize architectural changes required to get the benefits of a compile-time safe DI system. Despite this design goal, there are a few key differences between projects that utilize SafeDI and projects that don’t. As the benefits of this system are outlined in the README’s [Features](../README.md#features) section, this section outlines the pattern changes required to utilize a DI system like SafeDI.
 
 ### Instantiating objects
 
