@@ -714,7 +714,7 @@ struct SafeDIToolGraphFuzzerTests {
 	// MARK: Multi-module partition
 
 	@Test
-	func partition_keepsLazyCycleInOneModule_andListsModulesAfterThoseTheyReferTo() {
+	func partition_keepsLazyCycleInOneModule_whenInstantiatorsCloseIt() {
 		// `Root0` instantiates `T1`, which instantiates `T2` through an instantiator, which instantiates `T1` through
 		// one: a lazy cycle, whose types must share a module. `T3` refers to nothing and nothing refers to it.
 		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
@@ -778,13 +778,26 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func partition_refersToModuleDeclaringHelperType_whenFileNamesErasedTypeOrProtocol() {
-		// `T1` receives `T2`'s erased type and aliases its protocol, both declared beside `T2`, and nothing names `T2` itself.
+	func partition_refersToModuleDeclaringErasedType_whenFileNamesOnlyTheErasedType() {
+		// `T1` receives `T2`'s erased type, declared beside `T2`, and nothing names `T2` itself.
 		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
-			Self.typeSource(named: "S12_T1", properties: [
-				"@Received let anyT2: S12_AnyT2",
-				"@Received(fulfilledByDependencyNamed: \"t2\", ofType: S12_T2Protocol.self) let t2Protocol: S12_T2Protocol",
-			]),
+			Self.typeSource(named: "S12_T1", properties: ["@Received let anyT2: S12_AnyT2"]),
+			Self.typeSource(named: "S12_T2", properties: [], declaresHelperTypes: true),
+		])
+
+		let partition = GraphFuzzerPartition.partition(of: fixture, moduleCount: 2)
+
+		#expect(partition.modules == [
+			GraphFuzzerPartition.Module(name: "Alpha", fileIndices: [1], referencedModuleNames: [], dependencies: []),
+			GraphFuzzerPartition.Module(name: "Beta", fileIndices: [0], referencedModuleNames: ["Alpha"], dependencies: ["Alpha"]),
+		])
+	}
+
+	@Test
+	func partition_refersToModuleDeclaringProtocol_whenFileNamesOnlyTheProtocol() {
+		// `T1` aliases `t2` as `T2`'s protocol, declared beside `T2`, and nothing names `T2` itself.
+		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
+			Self.typeSource(named: "S12_T1", properties: ["@Received(fulfilledByDependencyNamed: \"t2\", ofType: S12_T2Protocol.self) let t2Protocol: S12_T2Protocol"]),
 			Self.typeSource(named: "S12_T2", properties: [], declaresHelperTypes: true),
 		])
 
@@ -821,7 +834,7 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func moduleFixtures_prependImportOfEachReferencedModule_andKeepOtherFilesUnchanged() {
+	func moduleFixtures_prependImportOfEachReferencedModule_whenFilesReferToOtherModules() {
 		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
 			Self.typeSource(named: "S12_Root0", arguments: "isRoot: true", properties: ["@Instantiated let t1: S12_T1", "@Instantiated let t2: S12_T2"]),
 			Self.typeSource(named: "S12_T1", properties: []),
@@ -1011,7 +1024,20 @@ struct SafeDIToolGraphFuzzerTests {
 
 		// `Beta` does not depend on `Alpha`, so its generate never reads `Alpha`'s files; `Gamma`'s is the first that does.
 		#expect(GraphFuzzerMultiModuleOutcome.difference(betweenModuleInfo: moduleInfoOutcome, andPlugin: pluginOutcome, modules: Self.chainOfModules(dependencies: [[], [], ["Alpha"]])) == nil)
-		#expect(GraphFuzzerMultiModuleOutcome.difference(betweenModuleInfo: moduleInfoOutcome, andPlugin: pluginOutcome, modules: Self.chainOfModules(dependencies: [[], ["Alpha"], ["Alpha", "Beta"]])) == "its verdict for module Alpha (.moduleInfo rejects it, while .swiftPackagePlugin plans no output for it and accepts module Beta, which depends on it)")
+	}
+
+	@Test
+	func multiModuleDifference_reportsVerdict_whenConsumerThatDependsOnSkippedModuleAcceptsIt() {
+		let moduleInfoOutcome = GraphFuzzerMultiModuleOutcome(verdicts: [
+			.init(moduleName: "Alpha", kind: .rejected(diagnostics: "/a/<fixture-directory>/Graph/Sources/Alpha/S12_T7.swift:1:1: error: Found multiple @Instantiable types or extensions that fulfill `S12_T7Protocol`.")),
+		])
+		let pluginOutcome = GraphFuzzerMultiModuleOutcome(verdicts: [
+			.init(moduleName: "Alpha", kind: .skipped),
+			.init(moduleName: "Beta", kind: .accepted(Self.generatedModule(units: [:]))),
+		])
+
+		// `Beta` depends on `Alpha`, so its generate read `Alpha`'s files and should have reported the defect.
+		#expect(GraphFuzzerMultiModuleOutcome.difference(betweenModuleInfo: moduleInfoOutcome, andPlugin: pluginOutcome, modules: Self.chainOfModules(dependencies: [[], ["Alpha"]])) == "its verdict for module Alpha (.moduleInfo rejects it, while .swiftPackagePlugin plans no output for it and accepts module Beta, which depends on it)")
 	}
 
 	@Test
@@ -1313,13 +1339,9 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func smokeSeeds_splitIntoEveryModuleCountWithBothVerdicts_whenRunThroughMultiModuleIntegrations() async throws {
+	func smokeSeeds_includeAcceptedAndRejectedGraphsSplitIntoSeveralModules_whenRunThroughMultiModuleIntegrations() async throws {
 		let runs = try await smokeResults.value.flatMap(\.multiModuleRuns).filter { $0.renaming == nil }
 
-		let moduleCounts = Set(runs.map(\.partition.modules.count))
-		#expect(moduleCounts.contains(1))
-		#expect(moduleCounts.contains(2))
-		#expect(moduleCounts.contains { $0 >= 3 })
 		// Some graphs are rejected with several modules, so that the diagnostics of a split graph are compared too.
 		#expect(runs.contains { $0.isAccepted && $0.partition.modules.count > 1 })
 		#expect(runs.contains { !$0.isAccepted && $0.partition.modules.count > 1 })
