@@ -389,7 +389,8 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("dependencies", \.dependencies),
 				BinaryLayoutField("declarationType", \.declarationType),
 				BinaryLayoutField("access", \.access),
-				BinaryLayoutField("enclosingAccess", \.enclosingAccess),
+				BinaryLayoutField("enclosingTypeAccess", \.enclosingTypeAccess),
+				BinaryLayoutField("enclosingExtensionAccess", \.enclosingExtensionAccess),
 				BinaryLayoutField("mockAttributes", \.mockAttributes),
 				BinaryLayoutField("generateMock", \.generateMock),
 				BinaryLayoutField("mockOnly", \.mockOnly),
@@ -415,7 +416,8 @@ extension Instantiable: BinarySchemaMember {
 			dependencies: reader.read(),
 			declarationType: reader.read(),
 			access: reader.read(),
-			enclosingAccess: reader.read(),
+			enclosingTypeAccess: reader.read(),
+			enclosingExtensionAccess: reader.read() as AccessDeclaration?,
 			mockAttributes: reader.read(),
 			generateMock: reader.read(),
 			mockOnly: reader.read(),
@@ -439,7 +441,8 @@ extension Instantiable: BinarySchemaMember {
 			writer.write(dependencies)
 			writer.write(declarationType)
 			writer.write(access)
-			writer.write(enclosingAccess)
+			writer.write(enclosingTypeAccess)
+			writer.write(enclosingExtensionAccess)
 			writer.write(mockAttributes)
 			writer.write(generateMock)
 			writer.write(mockOnly)

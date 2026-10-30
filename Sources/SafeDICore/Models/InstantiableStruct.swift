@@ -29,7 +29,8 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		dependencies: [Dependency],
 		declarationType: DeclarationType,
 		access: AccessDeclaration,
-		enclosingAccess: [AccessDeclaration] = [],
+		enclosingTypeAccess: [AccessDeclaration] = [],
+		enclosingExtensionAccess: AccessDeclaration? = nil,
 		mockAttributes: String = "",
 		generateMock: Bool = false,
 		mockOnly: Bool = false,
@@ -47,7 +48,8 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		self.dependencies = dependencies
 		self.declarationType = declarationType
 		self.access = access
-		self.enclosingAccess = enclosingAccess
+		self.enclosingTypeAccess = enclosingTypeAccess
+		self.enclosingExtensionAccess = enclosingExtensionAccess
 		self.mockAttributes = mockAttributes
 		self.generateMock = generateMock
 		self.mockOnly = mockOnly
@@ -83,12 +85,19 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// declared in another declaration that is merged into this one, so the access of the declaration that declares
 	/// it is `mockDeclarationAccess`, and the access spelled on the method itself is on `mockInitializer`.
 	public let access: AccessDeclaration
-	/// The access spelled on each type or extension declaration in the file that encloses the declaration this
-	/// Instantiable was found on, outermost first. Empty for a top-level declaration, and for an extension-based
-	/// Instantiable: an extension is declared at file scope, so its extended type is not declared around it. When
-	/// access is checked, each entry caps the declaration's effective access, and the extended type of an enclosing
-	/// extension, which is declared elsewhere, has an access that is unknown.
-	public let enclosingAccess: [AccessDeclaration]
+	/// The access spelled on each class, actor, struct, and enum declaration in the file that encloses the declaration
+	/// this Instantiable was found on, outermost first. Each caps the declaration's effective access. Empty when no
+	/// type declaration encloses it, which is always the case for an extension-based Instantiable, whose own `access`
+	/// is the extension's.
+	public let enclosingTypeAccess: [AccessDeclaration]
+	/// The access spelled on the extension that encloses the declaration this Instantiable was found on, if one does.
+	/// An extension is declared at file scope, so it can only be outermost. Unlike an enclosing type, it caps nothing:
+	/// it is only the default access of the one declaration directly inside it – the first entry of
+	/// `enclosingTypeAccess`, or this declaration when that list is empty – when that declaration spells no access
+	/// modifier (its `modifierRange` is `nil`), with `fileprivate` as a `private` extension's default. The extended
+	/// type's own access is declared elsewhere and unknown to the tool. `nil` for an extension-based Instantiable, whose
+	/// own `access` is the extension's.
+	public let enclosingExtensionAccess: AccessDeclaration?
 	/// Attributes to add to the generated `mock()` method (e.g. `"@MainActor"`).
 	public let mockAttributes: String
 	/// Whether to generate a `mock()` method for this type.
