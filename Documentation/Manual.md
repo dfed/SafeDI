@@ -105,11 +105,22 @@ The macro accepts every `swift_library` attribute and declares two targets: the 
 
 A module that needs a shape the macro does not offer can declare the `safedi_compile` rule and its `swift_library` separately, adding `[":<rule name>"]` to the library’s `srcs` and giving the rule the library’s `defines` and `copts`; see [`bazel/safedi.bzl`](../bazel/safedi.bzl).
 
+### Running SafeDITool yourself
+
+Your integration already has a `SafeDITool`. Run it to read its `--help`, [query what a type needs](#querying-what-a-type-needs), or print a `.safedi` file with `dump`; only that build of it reads the `.safedi` files your build writes.
+
+- **Swift package:** `.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool` from the package’s directory, or `swift run SafeDITool` with the `sourceBuild` trait; writes no `.safedi` files.
+- **Xcode project:** `SourcePackages/artifacts/safedi/SafeDIToolBinary/…` in the project’s derived data, or `.safedi/<version>/safeditool` once [installed](#installing-the-prebuilt-safeditool-binary); writes no `.safedi` files.
+- **Bazel:** `bazel run @safedi//Sources/SafeDITool:SafeDITool -- <arguments>` from the workspace root, with absolute paths; writes `bazel-bin/<package>/<name>_safedi.safedi`.
+- **Tuist:** `Tuist/.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool` from the project’s directory; writes `$BUILT_PRODUCTS_DIR/SafeDI/<module>.safedi`.
+
+On an Intel Mac, the bundle’s directory is `SafeDITool-macos-x86_64`.
+
 ### Additional configurations
 
 `SafeDITool` is designed to integrate into projects of any size or shape. Our [Releases](https://github.com/dfed/SafeDI/releases) page ships a prebuilt, codesigned `SafeDITool.artifactbundle.zip` that can be downloaded and driven directly from a pre-build script — see the embedded shell in [`TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift`](../TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift) for a working reference (it locates the binary via SPM, runs `generate --combined-output` for fixed-path Swift output, and supports the cross-module `.safedi` module-info handoff). For a non-SPM build system, swap the binary-location lookup for a `curl` of the artifact bundle. Set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script. Pass the target's active compilation conditions to `generate --active-compilation-conditions`, or its `SWIFT_ACTIVE_COMPILATION_CONDITIONS` and `OTHER_SWIFT_FLAGS` build settings to `generate --build-setting-active-compilation-conditions` and `--build-setting-other-swift-flags`, so SafeDITool scans the same `#if` clauses the compiler compiles; see [Conditional compilation](#conditional-compilation).
 
-`SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Run the `SafeDITool` your integration has, as described under [Querying what a type needs](#querying-what-a-type-needs), with `--help` to see documentation of the tool’s supported arguments.
+`SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Run `SafeDITool` with `--help`, as [Running SafeDITool yourself](#running-safeditool-yourself) describes for your integration, to see documentation of the tool’s supported arguments.
 
 ### Finding the generated code
 
@@ -1224,7 +1235,7 @@ safeditool generate App.csv \
   --dependent-module-info-file-path deps.csv
 ```
 
-Given the same input files, `generate` writes the same `.safedi` bytes every time, so a build cache keyed on them stays warm. `query needs --module-info` reads the same files, so a project that writes them can [query what a type needs](#querying-what-a-type-needs) with the `SafeDITool` its build runs, without parsing its sources again. A `.safedi` file names each file by the path the input CSV gives it, so a CSV of relative paths, like those the Bazel rule and the Tuist plugin write, keeps absolute paths out of it.
+Given the same input files, `generate` writes the same `.safedi` bytes every time, so a build cache keyed on them stays warm. `query needs --module-info` reads the same files, so a project that writes them can [query what a type needs](#querying-what-a-type-needs) with [the `SafeDITool` its build runs](#running-safeditool-yourself), without parsing its sources again. A `.safedi` file names each file by the path the input CSV gives it, so a CSV of relative paths, like those the Bazel rule and the Tuist plugin write, keeps absolute paths out of it.
 
 A `.safedi` file is binary, and `SafeDITool` reads only those written by a `SafeDITool` that lays them out the same way. After upgrading SafeDI, regenerate each producer’s `.safedi` before its consumers run: a consumer handed one it cannot read fails with an error that names the file.
 
@@ -1255,11 +1266,11 @@ Generated code names an aliased dependency’s `@Received` declaration in a `#so
 
 Diagnostics are the exception: `SafeDITool` resolves a relative input path against its working directory before printing an error, so the location in the build log is one an editor can open. Under Bazel that working directory is the action’s sandbox, so a diagnostic there names the sandbox copy of the source file.
 
-Run the `SafeDITool` your integration has, as described under [Querying what a type needs](#querying-what-a-type-needs), with `--help`, `scan --help`, or `generate --help` to see documentation of all supported arguments, `query needs --help` for the command that reports what types need (in beta), and `dump --help` for the command that prints a `.safedi` file, or the cache `scan` writes beside its manifest, as JSON.
+Run `SafeDITool`, as [Running SafeDITool yourself](#running-safeditool-yourself) describes for your integration, with `--help`, `scan --help`, or `generate --help` to see documentation of all supported arguments, `query needs --help` for the command that [reports what types need](#querying-what-a-type-needs) (in beta), and `dump --help` for the command that prints a `.safedi` file, or the cache `scan` writes beside its manifest, as JSON.
 
 ## Introspecting a SafeDI tree
 
-You can create a [GraphViz DOT file](https://graphviz.org/doc/info/lang.html) to introspect a SafeDI dependency tree by running `generate` with the `--dot-file-output` parameter, using the `SafeDITool` your integration has, as described under [Querying what a type needs](#querying-what-a-type-needs). This command will create a `DOT` file that you can pipe into `GraphViz`’s `dot` command to create a pdf.
+You can create a [GraphViz DOT file](https://graphviz.org/doc/info/lang.html) to introspect a SafeDI dependency tree by running `SafeDITool generate` with the `--dot-file-output` parameter, as [Running SafeDITool yourself](#running-safeditool-yourself) describes for your integration. This command will create a `DOT` file that you can pipe into `GraphViz`’s `dot` command to create a pdf.
 
 Once you have the dot file, you can run:
 ```bash
@@ -1272,24 +1283,16 @@ You can find instructions for how to install the `dot` command [here](https://gr
 
 > `query needs` is in beta. Its options, text, and JSON may change in any release; the JSON’s `formatVersion` is `0` until the format is stable.
 
-A focused app – one that builds a single feature with mock data instead of the whole product – needs only the modules that feature needs. `SafeDITool query needs` names them. Run it with the `SafeDITool` your integration already has, and give it one or more `@Instantiable` types and the directories of the project’s modules, as `generate --include` takes them. A package that uses the `SafeDIGenerator` plugin has the prebuilt binary its package resolution downloaded, in the bundle’s directory for the host (`SafeDITool-macos-arm64` on an Apple silicon Mac):
+A focused app – one that builds a single feature with mock data instead of the whole product – needs only the modules that feature needs. `SafeDITool query needs` names them. Run `SafeDITool` as [Running SafeDITool yourself](#running-safeditool-yourself) describes, and give it one or more `@Instantiable` types and the directories of the project’s modules, as `generate --include` takes them. In a Swift package:
 
 ```bash
 .build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool query needs HomeFeature SettingsFeature --include Sources/Foundations Sources/Services Sources/HomeFeature Sources/SettingsFeature --active-compilation-conditions DEBUG
 ```
 
-An Xcode project has the same bundle under `SourcePackages/artifacts/safedi/SafeDIToolBinary` in its derived data, and the binary that [installing the prebuilt SafeDITool binary](#installing-the-prebuilt-safeditool-binary) puts in `.safedi/<version>/safeditool`. A package that depends on SafeDI with the `sourceBuild` trait runs `swift run SafeDITool query needs …` instead; with the default `prebuilt` trait, `swift run` finds no `SafeDITool` to run.
-
-A project whose build already writes `.safedi` [module info files](#custom-build-system-integration) – a Bazel or Tuist project, or any other that runs `generate --module-info-output` per module – can name those files with `--module-info`, instead of or alongside directories, and skip parsing the sources. A `.safedi` file is read only by the same build of SafeDITool that wrote it (SwiftPM-built tools read SwiftPM-written files, Bazel-built tools Bazel-written ones), because the file’s schema fingerprint includes the tool’s module name. A Bazel project runs the `SafeDITool` its `safedi_swift_library` targets build, from the workspace root, naming each file by its absolute path, since `bazel run` starts the tool in its runfiles directory:
+A project whose build already writes `.safedi` [module info files](#custom-build-system-integration) – a Bazel or Tuist project, or any other that runs `generate --module-info-output` per module – can name those files with `--module-info`, instead of or alongside directories, and skip parsing the sources. In a Bazel project:
 
 ```bash
 bazel run @safedi//Sources/SafeDITool:SafeDITool -- query needs HomeFeature --module-info "$PWD"/bazel-bin/Modules/Foundations/Foundations_safedi.safedi "$PWD"/bazel-bin/Modules/Services/Services_safedi.safedi "$PWD"/bazel-bin/Modules/HomeFeature/HomeFeature_safedi.safedi
-```
-
-A Tuist project runs the prebuilt binary the `SafeDITuist` helper runs, from the project’s directory, on the files the helper writes to `SafeDI` in the build’s products directory, which `xcodebuild -showBuildSettings` reports as `BUILT_PRODUCTS_DIR`:
-
-```bash
-Tuist/.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool query needs HomeFeature --module-info "$BUILT_PRODUCTS_DIR"/SafeDI/Foundations.safedi "$BUILT_PRODUCTS_DIR"/SafeDI/Services.safedi "$BUILT_PRODUCTS_DIR"/SafeDI/HomeFeature.safedi
 ```
 
 Each file is a module holding the declarations its build read, under that build’s compilation conditions, so `--active-compilation-conditions` applies only to the directories. A module info file is named after the file without its `.safedi` extension and without the `_safedi` the Bazel macro appends (`HomeFeature_safedi.safedi` is the module `HomeFeature`), and, when that reads like another module’s name, after as many trailing path components as tell them apart, as directories are; a file whose path reads the same as a directory’s (`Home.safedi` beside `Home`) is named by its file name as spelled. Its declarations are attributed to it by the paths the file records, which are the paths the build that wrote it handed to `generate`, and the report spells them that way: relative to that build’s working directory for a Bazel or Tuist build, so a declaration’s file opens from where that build ran rather than from where the query ran. A file written by another version of SafeDI cannot be read, and the query says so and names the file, as `generate` does.
