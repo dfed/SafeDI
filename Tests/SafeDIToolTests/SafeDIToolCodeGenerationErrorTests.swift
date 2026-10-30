@@ -4752,7 +4752,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		let otherOutputFilePath = outputDirectory.appendingPathComponent("a.swift").path
 
 		await assertThrowsError(
-			"The manifest’s dependencyTreeGeneration entry for '\(swiftFile.relativePath)' and its mockGeneration entry for '\(swiftFile.relativePath)' write '\(outputFilePath)' and '\(otherOutputFilePath)', which name one file on a volume that ignores letter case, as macOS’s does by default. A hand-written manifest must name a different file for each, ignoring letter case.",
+			"The manifest’s dependencyTreeGeneration entry for '\(swiftFile.relativePath)' and its mockGeneration entry for '\(swiftFile.relativePath)' write '\(outputFilePath)' and '\(otherOutputFilePath)', which name one file on a volume that ignores letter case or Unicode normalization, as macOS’s does by default. A hand-written manifest must name a different file for each, ignoring letter case.",
 		) {
 			try await generate(swiftFile, manifest: SafeDIToolManifest(
 				dependencyTreeGeneration: [.init(inputFilePath: swiftFile.relativePath, outputFilePath: outputFilePath)],

@@ -38,11 +38,14 @@ public func outputFileNames(forFilesAt inputFilePaths: [String]) -> [String] {
 /// Compute output file names for mock generation output files: one for each input file, named as
 /// `outputFileNames(forFilesAt:)` names it, and one for each type `additionalMocksToGenerate` lists.
 ///
-/// A listed type's mock is named after the type unless that name is a file's, or another listed type's whose name
-/// sorts first, ignoring letter case and Unicode normalization: then, in type name order, it takes the type name
-/// followed by the smallest `_2`, `_3`, … that no other mock's name uses, so `Service` beside `Service.swift` (or
-/// `service.swift`) gets `Service_2+SafeDIMock.swift`. Listing a type therefore never renames a file's mock, and the
-/// result depends only on the set of input paths and the set of type names, not their order.
+/// A listed type's mock is named after the type unless that name is a file's, or that of a listed type that comes
+/// before it in type name order: then, in type name order, it takes the type name followed by the smallest `_2`,
+/// `_3`, … that no other mock's name uses, so `Service` beside `Service.swift` (or `service.swift`) gets
+/// `Service_2+SafeDIMock.swift`. Names are compared ignoring letter case and Unicode normalization; type name order
+/// does not ignore letter case, so of the listed types `Service` and `service`, `service` gets
+/// `service_2+SafeDIMock.swift`.
+/// Listing a type therefore never renames a file's mock, and the result depends only on the set of input paths and
+/// the set of type names, not their order.
 public func mockOutputFileNames(
 	forFilesAt inputFilePaths: [String],
 	additionalMocksToGenerate: [String],

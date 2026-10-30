@@ -592,7 +592,7 @@ struct Generate: AsyncParsableCommand {
 			case let .outputWrittenTwice(outputFilePath, firstOutput, secondOutput):
 				"The manifest’s \(firstOutput) and its \(secondOutput) both write '\(outputFilePath)'. A hand-written manifest must name a different file for each."
 			case let .outputWrittenTwiceIgnoringLetterCase(firstOutputFilePath, secondOutputFilePath, firstOutput, secondOutput):
-				"The manifest’s \(firstOutput) and its \(secondOutput) write '\(firstOutputFilePath)' and '\(secondOutputFilePath)', which name one file on a volume that ignores letter case, as macOS’s does by default. A hand-written manifest must name a different file for each, ignoring letter case."
+				"The manifest’s \(firstOutput) and its \(secondOutput) write '\(firstOutputFilePath)' and '\(secondOutputFilePath)', which name one file on a volume that ignores letter case or Unicode normalization, as macOS’s does by default. A hand-written manifest must name a different file for each, ignoring letter case."
 			}
 		}
 
