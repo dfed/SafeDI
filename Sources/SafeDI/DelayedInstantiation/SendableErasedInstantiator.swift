@@ -23,6 +23,12 @@
 ///
 /// This instantiator can be used to instantiate types across concurrency domains.
 ///
+/// SafeDI creates each instance in a `@Sendable` function, so every initializer that function calls, anywhere in
+/// the instance’s subtree, must be callable synchronously outside any actor: a `@MainActor` class with a
+/// `nonisolated init` is fine, but a `@MainActor init` is not, whatever the type’s own isolation. What the
+/// instance’s type, and every type in its subtree, receives from outside it must be `Sendable` too, even when that
+/// type is itself `Sendable`, such as an actor. Where an initializer cannot be `nonisolated`, use `ErasedInstantiator`.
+///
 /// - SeeAlso: `Instantiator`
 /// - SeeAlso: `SendableInstantiator`
 /// - SeeAlso: `ErasedInstantiator`

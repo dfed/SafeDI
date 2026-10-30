@@ -33,6 +33,12 @@ import Synchronization
 /// Guarantees: `instance` is created exactly once, by the closure this type was created with, and every
 /// read, from any concurrency domain, returns that same instance.
 ///
+/// SafeDI creates the instance in a `@Sendable` function, so every initializer that function calls, anywhere in
+/// the instance’s subtree, must be callable synchronously outside any actor: a `@MainActor` class with a
+/// `nonisolated init` is fine, but a `@MainActor init` is not, whatever the type’s own isolation. What the
+/// instance’s type, and every type in its subtree, receives from outside it must be `Sendable` too, even when that
+/// type is itself `Sendable`, such as an actor. Where an initializer cannot be `nonisolated`, use `LazilyInstantiated`.
+///
 /// SafeDI rejects a dependency tree in which creating the instance would require the instance. It does not
 /// inspect what initializers do. Do not read `instance` from the initializer of the type that declares the
 /// `SendableLazilyInstantiated` property, or from any initializer that runs while the instance is being created,
