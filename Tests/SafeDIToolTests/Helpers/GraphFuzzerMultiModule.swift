@@ -318,9 +318,9 @@ struct GraphFuzzerGeneratedModule: Equatable, Sendable {
 	/// The generated extensions' code by unit name, each with every path under the fixture root reduced to
 	/// `<fixture-directory>/…`, so that both integrations' `#sourceLocation` directives read the same.
 	var units: [String: String]
-	/// The `import` lines of the generated files' headers, sorted and unique, or `nil` when the integration wrote no
-	/// file for the module (the plugin adds no build command for a module whose manifest plans no output).
-	var imports: [String]?
+	/// The `import` lines of each generated file's header, sorted and unique, by file name: the plugin's files each
+	/// carry their own header, and the module-info integration's one combined file carries one.
+	var importsByFileName: [String: [String]]
 	var warnings: [String]
 
 	/// The name of the unit `<Type>+SafeDI.swift` names, when it is one.
@@ -329,10 +329,10 @@ struct GraphFuzzerGeneratedModule: Equatable, Sendable {
 		return String(unitName.dropLast(dependencyTreeUnitSuffix.count))
 	}
 
-	/// The units of one generated file, which may be the combined file.
-	static func parsingGeneratedFile(_ code: String, into module: inout GraphFuzzerGeneratedModule) {
+	/// Adds the units and the header imports of one generated file, which may be the combined file, named `fileName`.
+	static func parsingGeneratedFile(_ code: String, named fileName: String, into module: inout GraphFuzzerGeneratedModule) {
 		let lines = code.split(separator: "\n", omittingEmptySubsequences: false)
-		var imports = module.imports ?? []
+		var imports = [String]()
 		var index = 0
 		var condition: String?
 		var unparsedLines = [Substring]()
@@ -410,7 +410,7 @@ struct GraphFuzzerGeneratedModule: Equatable, Sendable {
 		if !unparsedLines.isEmpty {
 			append(unitNamed: Self.unparsedUnitName, code: unparsedLines.joined(separator: "\n"))
 		}
-		module.imports = Array(Set(imports)).sorted()
+		module.importsByFileName[fileName] = Array(Set(imports)).sorted()
 	}
 
 	private static let dependencyTreeUnitSuffix = "+SafeDI.swift"
@@ -452,7 +452,9 @@ struct GraphFuzzerMultiModuleOutcome: Equatable, Sendable {
 
 	/// The first aspect in which the module-info integration's outcome and the plugin's differ, or `nil` when
 	/// they agree, module by module in dependency order: a module both generated must have the same generated units,
-	/// each byte for byte, the same imports in its generated files, and the same warnings; a module the plugin skipped
+	/// each byte for byte, the imports of the combined file in each of the plugin's files (the plugin's dependency-tree
+	/// and mock files import what each kind needs, which differs only through `#if`-guarded imports, which no fuzzer
+	/// graph has, so one file lacking an import is not covered by another having it), and the same warnings; a module the plugin skipped
 	/// must generate nothing under the module-info integration; and a module the module-info integration rejects must
 	/// be rejected with the same diagnostics (compared as `GraphFuzzerToolOutcome.difference` compares them) by the
 	/// plugin – at the module itself when the plugin runs `generate` for it, and otherwise at the first module after
@@ -532,8 +534,12 @@ struct GraphFuzzerMultiModuleOutcome: Equatable, Sendable {
 			}
 			return "the \(kind) of module \(moduleName), in \(unitName)"
 		}
-		if let imports = module.imports, let otherImports = otherModule.imports, imports != otherImports {
-			return "the imports of module \(moduleName)'s generated code (\(imports.joined(separator: "; ")) under .moduleInfo, \(otherImports.joined(separator: "; ")) under .swiftPackagePlugin)"
+		// The combined file imports what the dependency trees and the mocks need together, and the plugin's files
+		// each import what their kind needs, which differs only through `#if`-guarded imports, which no fuzzer graph
+		// has: so every one of the plugin's files must import exactly what the combined file imports.
+		let expectedImports = module.importsByFileName.sorted { $0.key < $1.key }.first?.value ?? []
+		for (fileName, imports) in otherModule.importsByFileName.sorted(by: { $0.key < $1.key }) where imports != expectedImports {
+			return "the imports of module \(moduleName)'s generated file \(fileName) (\(imports.joined(separator: "; ")) under .swiftPackagePlugin, against \(expectedImports.joined(separator: "; ")) under .moduleInfo)"
 		}
 		guard module.warnings.sorted() == otherModule.warnings.sorted() else {
 			return "the warnings of module \(moduleName)"
@@ -556,7 +562,8 @@ struct GraphFuzzerMultiModuleOutcome: Equatable, Sendable {
 			case let .rejected(diagnostics):
 				"module \(verdict.moduleName): rejected:\n\(diagnostics)"
 			case let .accepted(module):
-				"module \(verdict.moduleName), \(module.imports.map { $0.isEmpty ? "no imports" : $0.joined(separator: "; ") } ?? "no generated file"), warnings \(module.warnings):\n"
+				"module \(verdict.moduleName), warnings \(module.warnings):\n"
+					+ module.importsByFileName.keys.sorted().map { "// \($0) imports \(module.importsByFileName[$0, default: []].joined(separator: "; "))\n" }.joined()
 					+ module.units.keys.sorted().map { "// \($0)\n\(module.units[$0, default: ""])" }.joined(separator: "\n")
 			}
 		}.joined(separator: "\n")
@@ -692,9 +699,9 @@ enum GraphFuzzerMultiModuleProperty {
 				verdicts.append(GraphFuzzerMultiModuleOutcome.ModuleVerdict(moduleName: module.name, kind: .skipped))
 				continue
 			}
-			var generatedModule = GraphFuzzerGeneratedModule(units: [:], imports: nil, warnings: moduleOutput.warnings.map { reducingFixtureRootPaths(in: "\($0)") })
+			var generatedModule = GraphFuzzerGeneratedModule(units: [:], importsByFileName: [:], warnings: moduleOutput.warnings.map { reducingFixtureRootPaths(in: "\($0)") })
 			for fileName in moduleOutput.generatedFiles.keys.sorted() {
-				GraphFuzzerGeneratedModule.parsingGeneratedFile(reducingFixtureRootPaths(in: moduleOutput.generatedFiles[fileName, default: ""]), into: &generatedModule)
+				GraphFuzzerGeneratedModule.parsingGeneratedFile(reducingFixtureRootPaths(in: moduleOutput.generatedFiles[fileName, default: ""]), named: fileName, into: &generatedModule)
 			}
 			generatedModulesByName[module.name] = generatedModule
 			verdicts.append(GraphFuzzerMultiModuleOutcome.ModuleVerdict(moduleName: module.name, kind: .accepted(generatedModule)))
