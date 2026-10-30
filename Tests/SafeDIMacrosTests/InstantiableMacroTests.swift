@@ -9933,6 +9933,132 @@ import Testing
 		}
 
 		@Test
+		func declaration_producesWarningThatQualifiesNestedTypeWithEnclosingTypes_whenDecoratedTypeIsNested() {
+			assertMacroExpansion(
+				"""
+				public enum Feature {
+				    @Instantiable
+				    public final class Child: Instantiable {
+				        public struct Config {}
+
+				        public init(config: Config) {
+				            self.config = config
+				        }
+
+				        @Forwarded let config: Config
+				    }
+				}
+				""",
+				expandedSource: """
+				public enum Feature {
+				    public final class Child: Instantiable {
+				        public struct Config {}
+
+				        public init(config: Config) {
+				            self.config = config
+				        }
+
+				        let config: Config
+
+				        public typealias ForwardedProperties = Config
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The generated code that builds or receives `config` lives in another type’s extension, where `Config`, declared in `Feature.Child`, does not resolve. Write it as `Feature.Child.Config`.",
+						line: 10,
+						column: 32,
+						severity: .warning,
+						fixIts: [FixItSpec(message: "Replace `Config` with `Feature.Child.Config`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Replace `Config` with `Feature.Child.Config`"],
+				fixedSource: """
+				public enum Feature {
+				    @Instantiable
+				    public final class Child: Instantiable {
+				        public struct Config {}
+
+				        public init(config: Feature.Child.Config) {
+				            self.config = config
+				        }
+
+				        @Forwarded let config: Feature.Child.Config
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_producesWarningThatQualifiesNestedTypeWithEnclosingTypes_whenDecoratedTypeIsNestedInTypeDeclaredInExtension() {
+			assertMacroExpansion(
+				"""
+				extension Feature {
+				    public struct Screen {
+				        @Instantiable
+				        public final class Child: Instantiable {
+				            public struct Config {}
+
+				            public init(config: Config) {
+				                self.config = config
+				            }
+
+				            @Forwarded let config: Config
+				        }
+				    }
+				}
+				""",
+				expandedSource: """
+				extension Feature {
+				    public struct Screen {
+				        public final class Child: Instantiable {
+				            public struct Config {}
+
+				            public init(config: Config) {
+				                self.config = config
+				            }
+
+				            let config: Config
+
+				            public typealias ForwardedProperties = Config
+				        }
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The generated code that builds or receives `config` lives in another type’s extension, where `Config`, declared in `Feature.Screen.Child`, does not resolve. Write it as `Feature.Screen.Child.Config`.",
+						line: 11,
+						column: 36,
+						severity: .warning,
+						fixIts: [FixItSpec(message: "Replace `Config` with `Feature.Screen.Child.Config`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Replace `Config` with `Feature.Screen.Child.Config`"],
+				fixedSource: """
+				extension Feature {
+				    public struct Screen {
+				        @Instantiable
+				        public final class Child: Instantiable {
+				            public struct Config {}
+
+				            public init(config: Feature.Screen.Child.Config) {
+				                self.config = config
+				            }
+
+				            @Forwarded let config: Feature.Screen.Child.Config
+				        }
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
 		func declaration_producesWarningThatQualifiesNestedInstantiableType_whenPropertyTypeNamesItWhereSafeDIDoesNotQualifyIt() {
 			assertMacroExpansion(
 				"""

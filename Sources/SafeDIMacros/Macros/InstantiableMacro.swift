@@ -156,7 +156,7 @@ public struct InstantiableMacro: MemberMacro {
 				fulfilledByParametersOf: memberDeclarations.compactMap { InitializerDeclSyntax($0)?.signature }
 					+ Self.mockFunctionSignatures(foundBy: visitor),
 				declaredAmong: memberDeclarations,
-				enclosingType: TypeSyntax(IdentifierTypeSyntax(name: concreteDeclaration.name.trimmed)),
+				enclosingType: Self.qualifiedType(named: concreteDeclaration.name.text, in: context),
 				context: context,
 			)
 
@@ -832,7 +832,8 @@ public struct InstantiableMacro: MemberMacro {
 				},
 				fulfilledByParametersOf: Self.mockFunctionSignatures(foundBy: visitor),
 				declaredAmong: Self.declarations(in: declaration.memberBlock.members),
-				enclosingType: extensionDeclaration.extendedType.trimmed,
+				// An extension is declared at file scope, so it spells the type it extends with every enclosing type.
+				enclosingType: extensionDeclaration.extendedType.typeDescription,
 				context: context,
 			)
 
@@ -1509,22 +1510,23 @@ public struct InstantiableMacro: MemberMacro {
 	///   - dependencies: The label of each dependency and the syntax of its type.
 	///   - functionSignatures: The initializers and hand-written mocks whose parameters fulfill the dependencies.
 	///   - declarations: The members of the decorated declaration, with those in each clause of its `#if` blocks.
-	///   - enclosingType: The decorated type, which the fix-it writes before the nested type's name.
+	///   - enclosingType: The decorated type with every type that encloses it, which the fix-it writes before the
+	///     nested type's name.
 	private static func diagnoseUnqualifiedNestedTypes(
 		in dependencies: [(label: String, type: TypeSyntax)],
 		fulfilledByParametersOf functionSignatures: [FunctionSignatureSyntax],
 		declaredAmong declarations: [DeclSyntax],
-		enclosingType: TypeSyntax,
+		enclosingType enclosingTypeDescription: TypeDescription,
 		context: some MacroExpansionContext,
 	) {
 		let nestedTypes = declarations.compactMap(\.nestedTypeDeclaration)
 		// Sorted so that a type naming several nested types is diagnosed in the same order every time.
 		let nestedTypeNames = Set(nestedTypes.map(\.name)).sorted()
-		let enclosingTypeDescription = enclosingType.typeDescription
 		let nestedInstantiableTypes = Set(nestedTypes.filter(\.isInstantiable).map {
 			TypeDescription.nested(name: $0.name, parentType: enclosingTypeDescription)
 		})
 		let enclosingTypeName = enclosingTypeDescription.asSource
+		let enclosingType = TypeSyntax(IdentifierTypeSyntax(name: .identifier(enclosingTypeName)))
 		let parameters = functionSignatures.flatMap(\.parameterClause.parameters)
 		for dependency in dependencies {
 			let declaredTypeDescription = dependency.type.typeDescription
@@ -1554,6 +1556,27 @@ public struct InstantiableMacro: MemberMacro {
 				))
 			}
 		}
+	}
+
+	/// The type named `name` that the macro decorates, with each type that encloses it, as code outside them spells
+	/// it: `Feature.Child` for a `Child` declared in `enum Feature`. The macro's lexical context lists the declarations
+	/// enclosing the decorated one, innermost first; an extension among them is declared at file scope, so it is the
+	/// outermost and spells its extended type in full.
+	private static func qualifiedType(named name: String, in context: some MacroExpansionContext) -> TypeDescription {
+		var enclosingType: TypeDescription?
+		// A type declared in a function cannot be named outside it, so the types around that function do not qualify it.
+		for lexicalContext in context.lexicalContext.prefix(while: { $0.isProtocol(DeclGroupSyntax.self) }).reversed() {
+			if let extensionDeclaration = ExtensionDeclSyntax(lexicalContext) {
+				enclosingType = extensionDeclaration.extendedType.typeDescription
+			} else if let typeDeclaration = lexicalContext.asProtocol(NamedDeclSyntax.self) {
+				enclosingType = enclosingType.map {
+					.nested(name: typeDeclaration.name.text, parentType: $0)
+				} ?? .simple(name: typeDeclaration.name.text)
+			}
+		}
+		return enclosingType.map {
+			.nested(name: name, parentType: $0)
+		} ?? .simple(name: name)
 	}
 
 	/// The signatures of the hand-written mocks that `visitor` found, whose parameters fulfill the dependencies as an
