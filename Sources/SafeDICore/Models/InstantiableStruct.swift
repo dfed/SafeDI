@@ -39,7 +39,11 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		customMockName: String? = nil,
 		mockDeclarationLocation: Dependency.DeclarationLocation? = nil,
 		mockDeclarationAccess: AccessDeclaration? = nil,
+		mockDeclarationModuleName: String? = nil,
+		mockDeclarationPackageName: String? = nil,
 		declarationLocation: Dependency.DeclarationLocation? = nil,
+		moduleName: String? = nil,
+		packageName: String? = nil,
 	) {
 		instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
 		self.declarationLocation = declarationLocation
@@ -58,6 +62,10 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		self.customMockName = customMockName
 		self.mockDeclarationLocation = mockDeclarationLocation
 		self.mockDeclarationAccess = mockDeclarationAccess
+		self.mockDeclarationModuleName = mockDeclarationModuleName
+		self.mockDeclarationPackageName = mockDeclarationPackageName
+		self.moduleName = moduleName
+		self.packageName = packageName
 	}
 
 	// MARK: Public
@@ -124,6 +132,22 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// whose members default to it (`fileprivate` for a `private` extension). Travels with `mockInitializer` when a
 	/// `mockOnly` declaration's mock is merged into a production entry. `nil` when there is no user-defined mock.
 	public var mockDeclarationAccess: AccessDeclaration?
+	/// The module that declares the user-defined mock method, as `moduleName` names a module, or `nil` when there is no
+	/// user-defined mock or SafeDITool does not know the module. A `mockOnly` declaration in a module of its own, such as
+	/// a test-support module, declares a mock the production declaration's module does not, so this travels with
+	/// `mockInitializer` when that declaration's mock is merged into a production entry.
+	public var mockDeclarationModuleName: String?
+	/// The package of the module that declares the user-defined mock method, as `packageName` names a package, or `nil`
+	/// when there is no user-defined mock or SafeDITool does not know the package. Travels with `mockInitializer` as
+	/// `mockDeclarationModuleName` does.
+	public var mockDeclarationPackageName: String?
+	/// The module that declares this Instantiable: the name the compiler gives the module that compiles the declaration's
+	/// file. `nil` when SafeDITool does not know it, which is always the case for a declaration the visitors just walked:
+	/// SafeDITool records it when it reads a module, from what the build system tells it.
+	public var moduleName: String?
+	/// The package of the module that declares this Instantiable: the name the compiler's `-package-name` gives it, which
+	/// decides where a `package` declaration is visible. `nil` when SafeDITool does not know it, as for `moduleName`.
+	public var packageName: String?
 
 	/// Returns a copy of this Instantiable with mock-related fields replaced by those from `mockProvider`.
 	/// Used when merging a production `@Instantiable` with a `mockOnly` declaration for the same type.
@@ -134,6 +158,8 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		merged.customMockName = mockProvider.customMockName
 		merged.mockDeclarationLocation = mockProvider.mockDeclarationLocation
 		merged.mockDeclarationAccess = mockProvider.mockDeclarationAccess
+		merged.mockDeclarationModuleName = mockProvider.mockDeclarationModuleName
+		merged.mockDeclarationPackageName = mockProvider.mockDeclarationPackageName
 		return merged
 	}
 
@@ -145,6 +171,8 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		instantiable.customMockName = nil
 		instantiable.mockDeclarationLocation = nil
 		instantiable.mockDeclarationAccess = nil
+		instantiable.mockDeclarationModuleName = nil
+		instantiable.mockDeclarationPackageName = nil
 		return instantiable
 	}
 
