@@ -198,11 +198,6 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 		}.joined(separator: "\n")
 	}
 
-	/// The module declaring each file, by file index.
-	var moduleNameByFileIndex: [Int: String] {
-		Dictionary(uniqueKeysWithValues: modules.flatMap { module in module.fileIndices.map { ($0, module.name) } })
-	}
-
 	/// The strongly connected components of the files' reference graph, each increasing, listed after every
 	/// component they refer to, as Tarjan's algorithm lists them when it visits the files in order.
 	private static func stronglyConnectedComponents(ofFileCount fileCount: Int, referencedFileIndices: [[Int]]) -> [[Int]] {
@@ -279,7 +274,11 @@ struct GraphFuzzerGeneratedModule: Equatable, Sendable {
 		var index = 0
 		var condition: String?
 		var unparsedLines = [Substring]()
+		/// Adds the unit under `name`, or under `name (2)`, `name (3)`, … when the name is taken: an extension emitted
+		/// twice is a defect worth seeing. Each of the plugin's files repeats the module's compile-time assertions,
+		/// which make one unit.
 		func append(unitNamed name: String, code: String) {
+			guard name != Self.assertionsUnitName || module.units[name] != code else { return }
 			var unitName = name
 			var repetition = 1
 			while module.units[unitName] != nil {
@@ -450,11 +449,8 @@ struct GraphFuzzerMultiModuleOutcome: Equatable, Sendable {
 				return "its verdict for module \(moduleName) (.moduleInfo ran no generate for it)"
 			}
 		}
-		// Every module the module-info integration reached agrees; it reached them all unless it rejected one, which
-		// returned above.
-		if let rejected = pluginOutcome.verdicts.first(where: { if case .rejected = $0.kind { true } else { false } }) {
-			return "its verdict for module \(rejected.moduleName) (.moduleInfo accepts it, .swiftPackagePlugin rejects it)"
-		}
+		// The module-info integration runs `generate` for every module, so it reached them all unless it rejected one,
+		// which returned above, and a module the plugin rejected was compared above too.
 		return nil
 	}
 
