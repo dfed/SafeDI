@@ -678,6 +678,431 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(GraphFuzzerFinding(failure: diagnosticsFailure, knownIssue: knownIssue) == .failure(diagnosticsFailure))
 	}
 
+	// MARK: Multi-module partition
+
+	@Test
+	func partition_keepsLazyCycleInOneModule_andListsModulesAfterThoseTheyReferTo() {
+		// `Root0` instantiates `T1`, which instantiates `T2` through an instantiator, which instantiates `T1` through
+		// one: a lazy cycle, whose types must share a module. `T3` refers to nothing and nothing refers to it.
+		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
+			Self.typeSource(named: "S12_Root0", arguments: "isRoot: true", properties: ["@Instantiated let t1: S12_T1"]),
+			Self.typeSource(named: "S12_T1", properties: ["@Instantiated let t2Builder: Instantiator<S12_T2>"]),
+			Self.typeSource(named: "S12_T2", properties: ["@Instantiated let t1Builder: Instantiator<S12_T1>"]),
+			Self.typeSource(named: "S12_T3", properties: []),
+		])
+
+		let partition = GraphFuzzerPartition.partition(of: fixture, moduleCount: 4)
+
+		#expect(partition.modules == [
+			GraphFuzzerPartition.Module(name: "Alpha", fileIndices: [1, 2], referencedModuleNames: [], dependencies: []),
+			GraphFuzzerPartition.Module(name: "Beta", fileIndices: [0], referencedModuleNames: ["Alpha"], dependencies: ["Alpha"]),
+			GraphFuzzerPartition.Module(name: "Gamma", fileIndices: [3], referencedModuleNames: [], dependencies: []),
+		])
+		#expect(partition.importedModuleNamesByFileIndex == [["Alpha"], [], [], []])
+		#expect(partition.description == """
+		Alpha: S12_T1.swift, S12_T2.swift
+		Beta (depends on Alpha): S12_Root0.swift importing Alpha
+		Gamma: S12_T3.swift
+		""")
+	}
+
+	@Test
+	func partition_listsEveryModuleATreeReachesAsDependency_whenModulesFormChain() {
+		// `Root0`'s tree reaches `T2` through `T1`, so `Root0`'s module must read `T2`'s `.safedi` as well as `T1`'s,
+		// as a Bazel user must list it, while its file imports only `T1`'s module.
+		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
+			Self.typeSource(named: "S12_Root0", arguments: "isRoot: true", properties: ["@Instantiated let t1: S12_T1"]),
+			Self.typeSource(named: "S12_T1", properties: ["@Instantiated let t2: S12_T2"]),
+			Self.typeSource(named: "S12_T2", properties: []),
+		])
+
+		let partition = GraphFuzzerPartition.partition(of: fixture, moduleCount: 3)
+
+		#expect(partition.modules == [
+			GraphFuzzerPartition.Module(name: "Alpha", fileIndices: [2], referencedModuleNames: [], dependencies: []),
+			GraphFuzzerPartition.Module(name: "Beta", fileIndices: [1], referencedModuleNames: ["Alpha"], dependencies: ["Alpha"]),
+			GraphFuzzerPartition.Module(name: "Gamma", fileIndices: [0], referencedModuleNames: ["Beta"], dependencies: ["Alpha", "Beta"]),
+		])
+		#expect(partition.importedModuleNamesByFileIndex == [["Beta"], ["Alpha"], []])
+	}
+
+	@Test
+	func partition_dealsComponentsOutToFewerModules_whenModuleCountIsBelowComponentCount() {
+		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
+			Self.typeSource(named: "S12_Root0", arguments: "isRoot: true", properties: ["@Instantiated let t1: S12_T1"]),
+			Self.typeSource(named: "S12_T1", properties: ["@Instantiated let t2: S12_T2"]),
+			Self.typeSource(named: "S12_T2", properties: []),
+		])
+
+		// The three components, `T2`, `T1`, and `Root0`, are dealt out in that order: the first two to `Alpha`.
+		#expect(GraphFuzzerPartition.partition(of: fixture, moduleCount: 2).modules == [
+			GraphFuzzerPartition.Module(name: "Alpha", fileIndices: [1, 2], referencedModuleNames: [], dependencies: []),
+			GraphFuzzerPartition.Module(name: "Beta", fileIndices: [0], referencedModuleNames: ["Alpha"], dependencies: ["Alpha"]),
+		])
+		#expect(GraphFuzzerPartition.partition(of: fixture, moduleCount: 1).modules == [
+			GraphFuzzerPartition.Module(name: "Alpha", fileIndices: [0, 1, 2], referencedModuleNames: [], dependencies: []),
+		])
+	}
+
+	@Test
+	func partition_refersToModuleDeclaringHelperType_whenFileNamesErasedTypeOrProtocol() {
+		// `T1` receives `T2`'s erased type and aliases its protocol, both declared beside `T2`, and nothing names `T2` itself.
+		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
+			Self.typeSource(named: "S12_T1", properties: [
+				"@Received let anyT2: S12_AnyT2",
+				"@Received(fulfilledByDependencyNamed: \"t2\", ofType: S12_T2Protocol.self) let t2Protocol: S12_T2Protocol",
+			]),
+			Self.typeSource(named: "S12_T2", properties: [], declaresHelperTypes: true),
+		])
+
+		let partition = GraphFuzzerPartition.partition(of: fixture, moduleCount: 2)
+
+		#expect(partition.modules == [
+			GraphFuzzerPartition.Module(name: "Alpha", fileIndices: [1], referencedModuleNames: [], dependencies: []),
+			GraphFuzzerPartition.Module(name: "Beta", fileIndices: [0], referencedModuleNames: ["Alpha"], dependencies: ["Alpha"]),
+		])
+	}
+
+	@Test
+	func moduleFixtures_prependImportOfEachReferencedModule_andKeepOtherFilesUnchanged() {
+		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
+			Self.typeSource(named: "S12_Root0", arguments: "isRoot: true", properties: ["@Instantiated let t1: S12_T1", "@Instantiated let t2: S12_T2"]),
+			Self.typeSource(named: "S12_T1", properties: []),
+			Self.typeSource(named: "S12_T2", properties: []),
+		])
+		let partition = GraphFuzzerPartition.partition(of: fixture, moduleCount: 3)
+
+		let modules = partition.moduleFixtures(of: fixture)
+
+		#expect(modules.map(\.name) == ["Alpha", "Beta", "Gamma"])
+		#expect(modules.map(\.packageName) == ["Graph", "Graph", "Graph"])
+		#expect(modules.map(\.dependencies) == [[], [], ["Alpha", "Beta"]])
+		#expect(modules.map(\.swiftFileContent) == [
+			[fixture.swiftFileContent[1]],
+			[fixture.swiftFileContent[2]],
+			["import Alpha\nimport Beta\n\n" + fixture.swiftFileContent[0]],
+		])
+		#expect(modules.map(\.swiftFileContentByFilePath) == [[:], [:], [:]])
+	}
+
+	@Test
+	func moduleFixtures_keepEachFileInItsModuleUnderRenamedNames_whenRenamingReversesTypeAndFileNames() {
+		let fixture = GraphFuzzerFixture(seed: 12, swiftFileContent: [
+			Self.typeSource(named: "S12_T1", properties: ["@Instantiated let t2: S12_T2"]),
+			Self.typeSource(named: "S12_T2", properties: []),
+		])
+		let partition = GraphFuzzerPartition.partition(of: fixture, moduleCount: 2)
+		let renaming = GraphFuzzerRenaming(reversesTypeNames: true, reversesLabels: false, reversesFileNames: true)
+
+		let modules = partition.moduleFixtures(of: fixture, renamedBy: renaming)
+
+		// `T2`, in `Alpha`, becomes `T7`, and `T1`, in `Beta`, becomes `T8`; the files are named to reverse their order.
+		#expect(modules.map(\.name) == ["Alpha", "Beta"])
+		#expect(modules.map(\.swiftFileContent) == [[], []])
+		#expect(modules[0].swiftFileContentByFilePath == ["F99_S12_T7.swift": Self.typeSource(named: "S12_T7", properties: [])])
+		#expect(modules[1].swiftFileContentByFilePath == ["F98_S12_T8.swift": "import Alpha\n\n" + Self.typeSource(named: "S12_T8", properties: ["@Instantiated let t2: S12_T7"])])
+	}
+
+	@Test
+	func moduleCount_variesWithTheGraph_acrossSmokeSeeds() {
+		// Chosen from the graph's text, so that single-module graphs stay in the corpus beside the others.
+		let moduleCounts = Set(Self.smokeSeeds.map { seed in
+			GraphFuzzerPartition.partition(of: GraphFuzzerGenerator.fixture(forSeed: seed)).modules.count
+		})
+
+		#expect(moduleCounts.contains(1))
+		#expect(moduleCounts.contains(2))
+		#expect(moduleCounts.contains { $0 >= 3 })
+		#expect(moduleCounts.allSatisfy { (1...GraphFuzzerPartition.moduleNames.count).contains($0) })
+	}
+
+	@Test
+	func partition_matchesReferenceHash_forSmokeAndKnownIssueSeeds() {
+		// The partition draws nothing from the seed, so a change to it changes neither the graphs nor the pins on
+		// them; this pins the partition itself, so a change to it is deliberate. The long run pins it for the corpus.
+		let seeds = Self.smokeSeeds + Self.knownIssues.flatMap(\.seeds)
+		#expect(Self.partitionHash(forSeeds: seeds) == Self.smokeAndKnownIssuePartitionHash)
+	}
+
+	@Test
+	func generatedModule_splitsCombinedFileIntoUnitsNamedAsThePluginNamesItsFiles() {
+		var module = GraphFuzzerGeneratedModule(units: [:], imports: nil, warnings: [])
+
+		GraphFuzzerGeneratedModule.parsingGeneratedFile("""
+		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+		// Any modifications made to this file will be overwritten on subsequent builds.
+		// Please refrain from editing this file directly.
+
+		#if canImport(Alpha)
+		import Alpha
+		#endif
+		#if canImport(Beta)
+		import Beta
+		#endif
+
+		extension S12_Root0 {
+		    public convenience init() {
+		        let t1 = S12_T1()
+		        self.init(t1: t1)
+		    }
+		}
+
+		#if DEBUG
+		extension S12_T1 {
+		    static func mock(
+		    ) -> S12_T1 {
+		        S12_T1()
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension S12_T1 {
+		    struct SafeDIMockConfiguration {
+		    }
+		}
+		#endif
+
+		#if DEBUG
+		extension S12_T2 {
+		    struct SafeDIMockConfiguration {
+		    }
+		}
+
+		extension S12_T3 {
+		    struct SafeDIMockConfiguration {
+		    }
+		}
+		#endif
+
+		""", into: &module)
+
+		#expect(module.imports == ["import Alpha", "import Beta"])
+		#expect(module.units == [
+			"S12_Root0+SafeDI.swift": """
+			extension S12_Root0 {
+			    public convenience init() {
+			        let t1 = S12_T1()
+			        self.init(t1: t1)
+			    }
+			}
+			""",
+			"S12_T1+SafeDIMock.swift": """
+			#if DEBUG
+			extension S12_T1 {
+			    static func mock(
+			    ) -> S12_T1 {
+			        S12_T1()
+			    }
+			}
+			#endif
+			""",
+			"S12_T1+SafeDIMockConfiguration.swift": """
+			#if DEBUG
+			extension S12_T1 {
+			    struct SafeDIMockConfiguration {
+			    }
+			}
+			#endif
+			""",
+			"S12_T2+SafeDIMockConfiguration.swift": """
+			#if DEBUG
+			extension S12_T2 {
+			    struct SafeDIMockConfiguration {
+			    }
+			}
+			#endif
+			""",
+			"S12_T3+SafeDIMockConfiguration.swift": """
+			#if DEBUG
+			extension S12_T3 {
+			    struct SafeDIMockConfiguration {
+			    }
+			}
+			#endif
+			""",
+		])
+	}
+
+	@Test
+	func generatedModule_unitesImportsAndUnitsOfSeveralFiles_whenParsedOneAfterAnother() {
+		var module = GraphFuzzerGeneratedModule(units: [:], imports: nil, warnings: [])
+
+		GraphFuzzerGeneratedModule.parsingGeneratedFile("#if canImport(Alpha)\nimport Alpha\n#endif\n\nextension S12_Root0 {\n}\n", into: &module)
+		GraphFuzzerGeneratedModule.parsingGeneratedFile("#if canImport(Alpha)\nimport Alpha\n#endif\n\n#if DEBUG\nextension S12_T1 {\n    static func mock() -> S12_T1 {\n    }\n}\n#endif\n", into: &module)
+		GraphFuzzerGeneratedModule.parsingGeneratedFile("#if canImport(Alpha)\nimport Alpha\n#endif\n", into: &module)
+
+		#expect(module.imports == ["import Alpha"])
+		#expect(module.units.keys.sorted() == ["S12_Root0+SafeDI.swift", "S12_T1+SafeDIMock.swift"])
+	}
+
+	@Test
+	func multiModuleDifference_isNil_whenPluginReportsSkippedModulesDiagnosticsAtFirstConsumerThatGenerates() {
+		let diagnostics = "/a/<fixture-directory>/Graph/Sources/Alpha/S12_T7.swift:1:1: error: Found multiple @Instantiable types or extensions that fulfill `S12_T7Protocol`."
+		let moduleInfoOutcome = GraphFuzzerMultiModuleOutcome(verdicts: [
+			.init(moduleName: "Alpha", kind: .rejected(diagnostics: diagnostics)),
+		])
+		let pluginOutcome = GraphFuzzerMultiModuleOutcome(verdicts: [
+			.init(moduleName: "Alpha", kind: .skipped),
+			.init(moduleName: "Beta", kind: .accepted(Self.generatedModule(units: [:]))),
+			.init(moduleName: "Gamma", kind: .rejected(diagnostics: "/b/<fixture-directory>/Graph/Sources/Alpha/S12_T7.swift:1:1: error: Found multiple @Instantiable types or extensions that fulfill `S12_T7Protocol`.")),
+		])
+
+		// `Beta` does not depend on `Alpha`, so its generate never reads `Alpha`'s files; `Gamma`'s is the first that does.
+		#expect(GraphFuzzerMultiModuleOutcome.difference(betweenModuleInfo: moduleInfoOutcome, andPlugin: pluginOutcome, modules: Self.chainOfModules(dependencies: [[], [], ["Alpha"]])) == nil)
+		#expect(GraphFuzzerMultiModuleOutcome.difference(betweenModuleInfo: moduleInfoOutcome, andPlugin: pluginOutcome, modules: Self.chainOfModules(dependencies: [[], ["Alpha"], ["Alpha", "Beta"]])) == "its verdict for module Alpha (.moduleInfo rejects it, while .swiftPackagePlugin plans no output for it and accepts module Beta, which depends on it)")
+	}
+
+	@Test
+	func multiModuleDifference_isNil_whenNoModuleThePluginGeneratesDependsOnTheModuleItSkipsAndModuleInfoRejects() {
+		let moduleInfoOutcome = GraphFuzzerMultiModuleOutcome(verdicts: [
+			.init(moduleName: "Alpha", kind: .accepted(Self.generatedModule(units: ["S12_Root0+SafeDI.swift": "extension S12_Root0 {\n}"]))),
+			.init(moduleName: "Beta", kind: .rejected(diagnostics: "/a/<fixture-directory>/Graph/Sources/Beta/S12_T7.swift:1:1: error: Found multiple")),
+		])
+		let pluginOutcome = GraphFuzzerMultiModuleOutcome(verdicts: [
+			.init(moduleName: "Alpha", kind: .accepted(Self.generatedModule(units: ["S12_Root0+SafeDI.swift": "extension S12_Root0 {\n}"]))),
+			.init(moduleName: "Beta", kind: .skipped),
+			.init(moduleName: "Gamma", kind: .accepted(Self.generatedModule(units: [:]))),
+		])
+
+		#expect(GraphFuzzerMultiModuleOutcome.difference(betweenModuleInfo: moduleInfoOutcome, andPlugin: pluginOutcome, modules: Self.chainOfModules(dependencies: [[], [], ["Alpha"]])) == nil)
+	}
+
+	@Test
+	func multiModuleDifference_namesFirstModuleAndUnitWhoseCodeDiffers() {
+		let rootCode = "extension S12_Root0 {\n    public convenience init() {\n    }\n}"
+		let mockCode = "#if DEBUG\nextension S12_T1 {\n    static func mock() -> S12_T1 {\n    }\n}\n#endif"
+		let moduleInfoOutcome = GraphFuzzerMultiModuleOutcome(verdicts: [
+			.init(moduleName: "Alpha", kind: .accepted(Self.generatedModule(units: ["S12_T1+SafeDIMock.swift": mockCode]))),
+			.init(moduleName: "Beta", kind: .accepted(Self.generatedModule(units: ["S12_Root0+SafeDI.swift": rootCode], imports: ["import Alpha"]))),
+		])
+		func pluginOutcome(mockCode: String, rootCode: String, imports: [String]) -> GraphFuzzerMultiModuleOutcome {
+			GraphFuzzerMultiModuleOutcome(verdicts: [
+				.init(moduleName: "Alpha", kind: .accepted(Self.generatedModule(units: ["S12_T1+SafeDIMock.swift": mockCode]))),
+				.init(moduleName: "Beta", kind: .accepted(Self.generatedModule(units: ["S12_Root0+SafeDI.swift": rootCode], imports: imports))),
+			])
+		}
+		let modules = Self.chainOfModules(dependencies: [[], ["Alpha"]])
+
+		#expect(GraphFuzzerMultiModuleOutcome.difference(betweenModuleInfo: moduleInfoOutcome, andPlugin: pluginOutcome(mockCode: mockCode, rootCode: rootCode, imports: ["import Alpha"]), modules: modules) == nil)
+		#expect(GraphFuzzerMultiModuleOutcome.difference(betweenModuleInfo: moduleInfoOutcome, andPlugin: pluginOutcome(mockCode: mockCode + "\n", rootCode: rootCode + "\n", imports: ["import Alpha"]), modules: modules) == "the generated mock code of module Alpha, in S12_T1+SafeDIMock.swift")
+		#expect(GraphFuzzerMultiModuleOutcome.difference(betweenModuleInfo: moduleInfoOutcome, andPlugin: pluginOutcome(mockCode: mockCode, rootCode: rootCode + "\n", imports: ["import Alpha"]), modules: modules) == "the generated dependency tree code of module Beta, in S12_Root0+SafeDI.swift")
+		#expect(GraphFuzzerMultiModuleOutcome.difference(betweenModuleInfo: moduleInfoOutcome, andPlugin: pluginOutcome(mockCode: mockCode, rootCode: rootCode, imports: []), modules: modules) == "the imports of module Beta's generated code (import Alpha under .moduleInfo,  under .swiftPackagePlugin)")
+	}
+
+	@Test
+	func multiModuleDifference_reportsModuleThePluginSkips_onlyWhenModuleInfoGeneratesCodeForIt() {
+		let modules = Self.chainOfModules(dependencies: [[]])
+		let pluginOutcome = GraphFuzzerMultiModuleOutcome(verdicts: [.init(moduleName: "Alpha", kind: .skipped)])
+
+		#expect(GraphFuzzerMultiModuleOutcome.difference(
+			betweenModuleInfo: GraphFuzzerMultiModuleOutcome(verdicts: [.init(moduleName: "Alpha", kind: .accepted(Self.generatedModule(units: [:])))]),
+			andPlugin: pluginOutcome,
+			modules: modules,
+		) == nil)
+		#expect(GraphFuzzerMultiModuleOutcome.difference(
+			betweenModuleInfo: GraphFuzzerMultiModuleOutcome(verdicts: [.init(moduleName: "Alpha", kind: .accepted(Self.generatedModule(units: ["S12_T1+SafeDIMock.swift": "#if DEBUG\nextension S12_T1 {\n}\n#endif"])))]),
+			andPlugin: pluginOutcome,
+			modules: modules,
+		) == "the generated units of module Alpha (S12_T1+SafeDIMock.swift under .moduleInfo, while .swiftPackagePlugin plans no output for it)")
+	}
+
+	@Test
+	func multiModuleDifference_reportsVerdict_whenOnlyOneIntegrationRejectsAModule() {
+		let modules = Self.chainOfModules(dependencies: [[], ["Alpha"]])
+		let accepted = GraphFuzzerMultiModuleOutcome(verdicts: [
+			.init(moduleName: "Alpha", kind: .accepted(Self.generatedModule(units: [:]))),
+			.init(moduleName: "Beta", kind: .accepted(Self.generatedModule(units: [:]))),
+		])
+		let rejectedBeta = GraphFuzzerMultiModuleOutcome(verdicts: [
+			.init(moduleName: "Alpha", kind: .accepted(Self.generatedModule(units: [:]))),
+			.init(moduleName: "Beta", kind: .rejected(diagnostics: "error")),
+		])
+
+		#expect(GraphFuzzerMultiModuleOutcome.difference(betweenModuleInfo: accepted, andPlugin: rejectedBeta, modules: modules) == "its verdict for module Beta (.moduleInfo accepts it, .swiftPackagePlugin rejects it)")
+		#expect(GraphFuzzerMultiModuleOutcome.difference(betweenModuleInfo: rejectedBeta, andPlugin: accepted, modules: modules) == "its verdict for module Beta (.moduleInfo rejects it, .swiftPackagePlugin accepts it)")
+		#expect(GraphFuzzerMultiModuleOutcome.difference(betweenModuleInfo: rejectedBeta, andPlugin: rejectedBeta, modules: modules) == nil)
+	}
+
+	@Test
+	func finding_isKnownIssue_whenIntegrationsDifferAsDocumented() {
+		let knownIssue = GraphFuzzerKnownIssue(
+			reason: "A shape whose mock differs between the integrations",
+			signatures: [.integrationsDiffer(containing: "the generated mock code")],
+			seeds: [12],
+		)
+		let failure = GraphFuzzerFailure(
+			seed: 12,
+			kind: .integrationsDiffer,
+			details: "Split into modules, the graph differs between the .moduleInfo and .swiftPackagePlugin integrations in the generated mock code of module Alpha, in S12_T0+SafeDIMock.swift.\nModules:\n…",
+		)
+		let verdictFailure = GraphFuzzerFailure(
+			seed: 12,
+			kind: .integrationsDiffer,
+			details: "Split into modules, the graph differs between the .moduleInfo and .swiftPackagePlugin integrations in its verdict for module Alpha.\nModules:\nthe generated mock code",
+		)
+
+		#expect(GraphFuzzerFinding(failure: failure, knownIssue: knownIssue) == .knownIssue(knownIssue, failure))
+		#expect(GraphFuzzerFinding(failure: verdictFailure, knownIssue: knownIssue) == .failure(verdictFailure))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func smokeSeeds_generateTheSameCodeUnderBothMultiModuleIntegrations_whenSplitAcrossModules() async throws {
+		for result in try await smokeResults.value {
+			#expect(result.multiModuleRuns.count == GraphFuzzerOracle.multiModuleRenamings.count)
+			for failure in result.multiModuleFailures {
+				Issue.record(failure.issueComment(fixture: result.fixture))
+			}
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func smokeSeeds_splitIntoEveryModuleCountWithBothVerdicts_whenRunThroughMultiModuleIntegrations() async throws {
+		let runs = try await smokeResults.value.flatMap(\.multiModuleRuns).filter { $0.renaming == nil }
+
+		let moduleCounts = Set(runs.map(\.partition.modules.count))
+		#expect(moduleCounts.contains(1))
+		#expect(moduleCounts.contains(2))
+		#expect(moduleCounts.contains { $0 >= 3 })
+		// Some graphs are rejected with several modules, so that the diagnostics of a split graph are compared too.
+		#expect(runs.contains { $0.isAccepted && $0.partition.modules.count > 1 })
+		#expect(runs.contains { !$0.isAccepted && $0.partition.modules.count > 1 })
+	}
+
+	/// The source of a `final class` `@Instantiable` type, as the generator emits one, with its helper types when asked.
+	private static func typeSource(named name: String, arguments: String? = nil, properties: [String], declaresHelperTypes: Bool = false) -> String {
+		var lines = [arguments.map { "@Instantiable(\($0))" } ?? "@Instantiable", "public final class \(name): Instantiable {"]
+		if properties.isEmpty {
+			lines.append("\tpublic init() {}")
+		} else {
+			let parameters = properties.map { $0.components(separatedBy: " let ")[1] }
+			lines.append("\tpublic init(\(parameters.joined(separator: ", "))) {")
+			lines += parameters.map { "\t\tself.\($0.prefix { $0 != ":" }) = \($0.prefix { $0 != ":" })" }
+			lines.append("\t}")
+			lines.append("")
+			lines += properties.map { "\t\($0)" }
+		}
+		lines.append("}")
+		if declaresHelperTypes {
+			let erasedName = name.replacingOccurrences(of: "_T", with: "_AnyT")
+			lines += ["", "public protocol \(name)Protocol: AnyObject {}", "", "public final class \(erasedName) {", "\tpublic init(_ value: \(name)) {", "\t\tself.value = value", "\t}", "", "\tpublic let value: \(name)", "}"]
+		}
+		return lines.joined(separator: "\n") + "\n"
+	}
+
+	private static func generatedModule(units: [String: String], imports: [String]? = [], warnings: [String] = []) -> GraphFuzzerGeneratedModule {
+		GraphFuzzerGeneratedModule(units: units, imports: imports, warnings: warnings)
+	}
+
+	/// Modules `Alpha`, `Beta`, … with the given dependencies, each a closure over the modules before it.
+	private static func chainOfModules(dependencies: [[String]]) -> [GraphFuzzerPartition.Module] {
+		dependencies.enumerated().map { index, dependencies in
+			GraphFuzzerPartition.Module(name: GraphFuzzerPartition.moduleNames[index], fileIndices: [index], referencedModuleNames: dependencies, dependencies: dependencies)
+		}
+	}
+
 	// MARK: Reproducibility
 
 	@Test
@@ -742,12 +1167,18 @@ struct SafeDIToolGraphFuzzerTests {
 			knownIssue.seeds.map { ($0, knownIssue) }
 		})
 
-		// Pin the whole corpus the long run covers, which the ordinary suite's hash covers only a sample of, and check
-		// that no graph uses a label beginning with `__safeDI_`, which the generated builder functions use.
+		// Pin the whole corpus the long run covers, which the ordinary suite's hash covers only a sample of, and the
+		// partition of every graph of it across modules, and check that no graph uses a label beginning with
+		// `__safeDI_`, which the generated builder functions use.
 		var generatedCorpusHash = GraphFuzzerHash()
+		var partitionedCorpusHash = GraphFuzzerHash()
+		var graphCountByModuleCount = [Int](repeating: 0, count: GraphFuzzerPartition.moduleNames.count + 1)
 		for seed in 0..<UInt64(Self.corpusSeedCount) {
 			let fixture = GraphFuzzerGenerator.fixture(forSeed: seed)
 			generatedCorpusHash.combine(fixture.description)
+			let partition = GraphFuzzerPartition.partition(of: fixture)
+			partitionedCorpusHash.combine(partition.description)
+			graphCountByModuleCount[partition.modules.count] += 1
 			let reservedLabels = fixture.swiftFileContent.flatMap(GraphFuzzerSourceLine.lines(of:)).compactMap { line -> String? in
 				guard case let .property(_, label, _) = line, label.hasPrefix("__safeDI_") else { return nil }
 				return label
@@ -759,6 +1190,10 @@ struct SafeDIToolGraphFuzzerTests {
 		if generatedCorpusHash.value != Self.corpusFixtureHash {
 			reportProblem("The generator's graphs for seeds 0..<\(Self.corpusSeedCount) changed (fixture hash \(Self.hexadecimal(generatedCorpusHash.value)), pinned \(Self.hexadecimal(Self.corpusFixtureHash))). Re-derive the known issues, smoke seeds, and pinned values.")
 		}
+		if partitionedCorpusHash.value != Self.corpusPartitionHash {
+			reportProblem("The partition of the graphs for seeds 0..<\(Self.corpusSeedCount) across modules changed (partition hash \(Self.hexadecimal(partitionedCorpusHash.value)), pinned \(Self.hexadecimal(Self.corpusPartitionHash))). Re-derive the known issues and the pinned partition hashes.")
+		}
+		report.append("partitions " + graphCountByModuleCount.indices.dropFirst().map { "\($0):\(graphCountByModuleCount[$0])" }.joined(separator: " "))
 
 		var graphCount = 0
 		var acceptedCount = 0
@@ -791,6 +1226,7 @@ struct SafeDIToolGraphFuzzerTests {
 								outcome: results[index].outcome,
 								failure: GraphFuzzerOracle.crossProcessFailure(of: results[index].fixture),
 								renamedGraphFailures: results[index].renamedGraphFailures,
+								multiModuleRuns: results[index].multiModuleRuns,
 							)
 						}
 						for result in results {
@@ -819,6 +1255,9 @@ struct SafeDIToolGraphFuzzerTests {
 							// Counted whether or not the graph also fails another way.
 							for renamedGraphFailure in result.renamedGraphFailures {
 								report.append("renamed \(seed) \(renamedGraphFailure.details.prefix { $0 != "\n" })")
+							}
+							for multiModuleFailure in result.multiModuleFailures {
+								report.append("multimodule \(seed) \(multiModuleFailure.details.prefix { $0 != "\n" })")
 							}
 							let finding = GraphFuzzerFinding(failure: result.failure, knownIssue: knownIssuesBySeed[seed])
 							if let reportLine = finding.reportLine(seed: seed) {
@@ -874,11 +1313,18 @@ struct SafeDIToolGraphFuzzerTests {
 
 	static let smokeAndKnownIssueFixtureHash: UInt64 = 0xD0B87D8C48E2FAEA
 
+	/// The `GraphFuzzerPartition` of the smoke and known-issue seeds' graphs, as `partitionHash(forSeeds:)` hashes
+	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
+	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate.
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x267B6FD7B867A116
+
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
 	static let corpusSeedCount = 5_000
 
 	static let corpusFixtureHash: UInt64 = 0x0EC4BF145928F2B3
+
+	static let corpusPartitionHash: UInt64 = 0x7AC8E472DBF5CD06
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
@@ -977,6 +1423,14 @@ struct SafeDIToolGraphFuzzerTests {
 		var hash = GraphFuzzerHash()
 		for seed in seeds {
 			hash.combine(GraphFuzzerGenerator.fixture(forSeed: seed).description)
+		}
+		return hash.value
+	}
+
+	static func partitionHash(forSeeds seeds: [UInt64]) -> UInt64 {
+		var hash = GraphFuzzerHash()
+		for seed in seeds {
+			hash.combine(GraphFuzzerPartition.partition(of: GraphFuzzerGenerator.fixture(forSeed: seed)).description)
 		}
 		return hash.value
 	}
