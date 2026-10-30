@@ -633,6 +633,58 @@ import Testing
 		}
 
 		@Test
+		func declaration_fixItQualifiesOnlyNestedTypeWithinAliasOfType_whenOfTypeTupleNamesNestedTypeAndAnotherType() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public struct Config {}
+
+				    public init(pair: (Child.Config, Int)) {
+				        self.pair = pair
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "configAndCount", ofType: (Config, Int).self) let pair: (Child.Config, Int)
+				}
+				""",
+				expandedSource: """
+				public final class Child: Instantiable {
+				    public struct Config {}
+
+				    public init(pair: (Child.Config, Int)) {
+				        self.pair = pair
+				    }
+
+				    let pair: (Child.Config, Int)
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The generated code that builds or receives `pair` lives in another type’s extension, where `Config`, declared in `Child`, does not resolve. Write it as `Child.Config`.",
+						line: 9,
+						column: 69,
+						severity: .warning,
+						fixIts: [FixItSpec(message: "Replace `Config` with `Child.Config`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Replace `Config` with `Child.Config`"],
+				fixedSource: """
+				@Instantiable
+				public final class Child: Instantiable {
+				    public struct Config {}
+
+				    public init(pair: (Child.Config, Int)) {
+				        self.pair = pair
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "configAndCount", ofType: (Child.Config, Int).self) let pair: (Child.Config, Int)
+				}
+				""",
+			)
+		}
+
+		@Test
 		func declaration_fixItQualifiesHandWrittenMockParameter_whenForwardedPropertyNamesNestedTypeUnqualified() {
 			assertMacroExpansion(
 				"""
