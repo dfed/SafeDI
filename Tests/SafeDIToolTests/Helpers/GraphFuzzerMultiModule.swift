@@ -38,9 +38,11 @@ import Testing
 /// then dealt out, in that order, to one to four modules
 /// (`moduleNames`, in that order), as many as the graph's text chooses (`moduleCount(forComponentCount:of:)`, from
 /// `GraphFuzzerHash` of the fixture's description, so single-module graphs stay in the corpus), each a contiguous run
-/// of components, so every reference points into the same module or an earlier one. Every file keeps its content and
-/// its name, with `import` lines for the modules it refers to added before it, so the renaming oracle's `rename` and
-/// `restore` apply unchanged (the module and package names hold no digit, and no index the renamings rewrite).
+/// of components, so every reference points into the same module or an earlier one. Every file keeps its name and its
+/// content, with `import` lines for the modules it refers to added before it, except that the helper types `Value` and
+/// `Unbuildable<n>`, which the generator declares in `Root0`'s file, move into a file of their own (`projectedFiles(of:)`),
+/// so the renaming oracle's `rename` and `restore` apply unchanged (the module, package and helper file names hold no
+/// digit but the seed's, and no index the renamings rewrite).
 ///
 /// A module's `dependencies` are every module whose declarations its `generate` must read: the modules its files
 /// refer to and, through them, the modules those refer to. That is what a Bazel user lists in `safedi_compile`'s
@@ -52,7 +54,7 @@ import Testing
 struct GraphFuzzerPartition: Equatable, Sendable {
 	struct Module: Equatable, Sendable {
 		let name: String
-		/// The indices of the module's files among the fixture's, increasing.
+		/// The indices of the module's files among the projected files (`projectedFiles(of:)`), increasing.
 		let fileIndices: [Int]
 		/// The modules whose declarations the module's files refer to, in module order.
 		let referencedModuleNames: [String]
@@ -63,10 +65,57 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 
 	/// The modules, in dependency order: each depends only on modules before it.
 	let modules: [Module]
-	/// The modules each file refers to, in module order, by file index: the `import` lines the file is given.
+	/// The modules each projected file refers to, in module order, by file index: the `import` lines the file is given.
 	let importedModuleNamesByFileIndex: [[String]]
-	/// The files' names, as `executeSafeDIToolTest` and `executeSafeDIToolMultiModuleTest` name them.
+	/// The projected files' names: the fixture's files' names, as `executeSafeDIToolTest` and
+	/// `executeSafeDIToolMultiModuleTest` name them, then `helperFileName` when the graph declares helper types.
 	let fileNames: [String]
+
+	/// A file of the graph as the partition projects it: the fixture's files, less the declarations of the helper types
+	/// `Value` and `Unbuildable<n>`, which the generator writes into `Root0`'s file and which this projection moves into
+	/// a file of their own. Left there, every type naming them would be pulled into `Root0`'s component, and a root
+	/// would never be split from a type of its tree that forwards or receives them.
+	struct ProjectedFile: Equatable, Sendable {
+		let name: String
+		let content: String
+	}
+
+	/// The name of the file the helper types are moved into, which refers to nothing, so that it lands in the first
+	/// module anything that names the helper types is in.
+	static func helperFileName(of fixture: GraphFuzzerFixture) -> String {
+		"\(fixture.typeNamePrefix)Helpers.swift"
+	}
+
+	/// `fixture`'s files as the partition projects them, each named as the harness names it, with the helper types'
+	/// declarations – one-line `public final class` declarations of `<prefix>Value` and `<prefix>Unbuildable<n>`, under
+	/// any letter a renaming moves the prefix to – moved out of the file declaring them, each with the blank line
+	/// before it, into a last file named `helperFileName(of:)`. A fixture that declares none projects to its own files.
+	static func projectedFiles(of fixture: GraphFuzzerFixture) -> [ProjectedFile] {
+		let helperExpression = try! NSRegularExpression(
+			pattern: "^public final class [A-Za-z]" + NSRegularExpression.escapedPattern(for: String(fixture.typeNamePrefix.dropFirst())) + "(?:Value|Unbuildable[0-9]+)(?::[^{]*)? \\{\\}$",
+		)
+		var projectedFiles = [ProjectedFile]()
+		var helperDeclarations = [String]()
+		for (fileName, content) in zip(fixture.fileNames, fixture.swiftFileContent) {
+			var keptLines = [Substring]()
+			for line in content.split(separator: "\n", omittingEmptySubsequences: false) {
+				let source = String(line)
+				if helperExpression.firstMatch(in: source, range: NSRange(location: 0, length: (source as NSString).length)) != nil {
+					helperDeclarations.append(source)
+					if keptLines.last?.isEmpty == true {
+						keptLines.removeLast()
+					}
+				} else {
+					keptLines.append(line)
+				}
+			}
+			projectedFiles.append(ProjectedFile(name: fileName, content: keptLines.joined(separator: "\n")))
+		}
+		if !helperDeclarations.isEmpty {
+			projectedFiles.append(ProjectedFile(name: helperFileName(of: fixture), content: helperDeclarations.joined(separator: "\n\n") + "\n"))
+		}
+		return projectedFiles
+	}
 
 	/// The names the modules take, in dependency order. Each holds no digit, so no renaming rewrites it. The two
 	/// integrations combine a module's declarations with its dependencies' in different orders: `generate` lists the
@@ -96,16 +145,17 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 				source.substring(with: $0.range(at: group))
 			}
 		}
-		let fileCount = fixture.swiftFileContent.count
+		let projectedFiles = projectedFiles(of: fixture)
+		let fileCount = projectedFiles.count
 		var declaringFileIndexByName = [String: Int]()
-		for (fileIndex, content) in fixture.swiftFileContent.enumerated() {
-			for name in matches(of: declarationExpression, in: content, group: 1) where declaringFileIndexByName[name] == nil {
+		for (fileIndex, file) in projectedFiles.enumerated() {
+			for name in matches(of: declarationExpression, in: file.content, group: 1) where declaringFileIndexByName[name] == nil {
 				declaringFileIndexByName[name] = fileIndex
 			}
 		}
 		// The files each file refers to, other than itself, increasing.
-		let referencedFileIndices: [[Int]] = fixture.swiftFileContent.enumerated().map { fileIndex, content in
-			Set(matches(of: referenceExpression, in: content, group: 0).compactMap { declaringFileIndexByName[$0] })
+		let referencedFileIndices: [[Int]] = projectedFiles.enumerated().map { fileIndex, file in
+			Set(matches(of: referenceExpression, in: file.content, group: 0).compactMap { declaringFileIndexByName[$0] })
 				.subtracting([fileIndex])
 				.sorted()
 		}
@@ -146,7 +196,7 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 				)
 			},
 			importedModuleNamesByFileIndex: importedModuleIndicesByFileIndex.map { $0.map { moduleNames[$0] } },
-			fileNames: fixture.fileNames,
+			fileNames: projectedFiles.map(\.name),
 		)
 	}
 
@@ -160,23 +210,28 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 	}
 
 	/// The module fixtures of `fixture` split by this partition, in dependency order, for
-	/// `executeSafeDIToolMultiModuleTest`. Each file is its content with an `import` line for each module it refers
-	/// to before it. With a `renaming`, the files are those of `fixture.renamed(by:)`, which lists them in reverse
-	/// order, named as `renaming.fileNames(of:)` names them.
+	/// `executeSafeDIToolMultiModuleTest`. Each file is its projected content with an `import` line for each module it
+	/// refers to before it; the helper types' file is named `helperFileName(of:)` explicitly, the rest after the type
+	/// each declares. With a `renaming`, the files are those of `fixture.renamed(by:)`, which lists the fixture's files
+	/// in reverse order, named as `renaming.fileNames(of:)` names them.
 	func moduleFixtures(of fixture: GraphFuzzerFixture, renamedBy renaming: GraphFuzzerRenaming? = nil) -> [ModuleFixture] {
 		let renamedFixture = renaming.map(fixture.renamed(by:)) ?? fixture
 		let renamedFileNames = renaming.flatMap { $0.fileNames(of: renamedFixture) }
-		let fileCount = fixture.swiftFileContent.count
+		let renamedProjectedFiles = Self.projectedFiles(of: renamedFixture)
+		let fixtureFileCount = fixture.swiftFileContent.count
 		func renamedIndex(ofFileAt fileIndex: Int) -> Int {
-			renaming == nil ? fileIndex : fileCount - 1 - fileIndex
+			renaming == nil || fileIndex >= fixtureFileCount ? fileIndex : fixtureFileCount - 1 - fileIndex
 		}
 		return modules.map { module in
 			var swiftFileContent = [String]()
 			var swiftFileContentByFilePath = [String: String]()
 			for fileIndex in module.fileIndices {
 				let importLines = importedModuleNamesByFileIndex[fileIndex].map { "import \($0)\n" }.joined()
-				let content = (importLines.isEmpty ? "" : importLines + "\n") + renamedFixture.swiftFileContent[renamedIndex(ofFileAt: fileIndex)]
-				if let renamedFileNames {
+				let renamedFile = renamedProjectedFiles[renamedIndex(ofFileAt: fileIndex)]
+				let content = (importLines.isEmpty ? "" : importLines + "\n") + renamedFile.content
+				if fileIndex >= fixtureFileCount {
+					swiftFileContentByFilePath[renamedFile.name] = content
+				} else if let renamedFileNames {
 					swiftFileContentByFilePath[renamedFileNames[renamedIndex(ofFileAt: fileIndex)]] = content
 				} else {
 					swiftFileContent.append(content)
