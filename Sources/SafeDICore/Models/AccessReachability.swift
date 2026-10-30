@@ -158,6 +158,18 @@ extension AccessLevel {
 		}
 	}
 
+	/// The modifier a fix-it gives a declaration so that it satisfies `requirement`.
+	static func spelling(satisfying requirement: AccessRequirement) -> String {
+		switch requirement {
+		case .internal:
+			AccessLevel.internal.spelling
+		case .package, .packageUnverified:
+			AccessLevel.package.spelling
+		case .public:
+			AccessLevel.public.spelling
+		}
+	}
+
 	/// The order of the levels, from the least permissive.
 	private var rank: Int {
 		switch self {
@@ -174,5 +186,134 @@ extension AccessLevel {
 		case .open:
 			5
 		}
+	}
+}
+
+/// A declaration whose access decides whether code can construct an `@Instantiable` type one way – with its
+/// initializer or `instantiate()` method, or with its hand-written mock method – with the level the declaration has by
+/// itself. The construction compiles where every one of these levels satisfies what the constructing code needs:
+/// together they are what `AccessLevel.effective(ofTypeDeclaredBy:)` and
+/// `AccessLevel.effective(ofMember:declaredIn:ofTypeWithEffectiveAccess:)` combine.
+struct AccessNeed: Hashable, Sendable {
+	/// What the declaration is.
+	enum Declaration: Hashable, Sendable {
+		/// The declaration of a type: the constructed type, or a type that encloses it in its file.
+		case type(TypeDescription)
+		/// The extension an extension-based `@Instantiable` is declared on, whose level bounds the methods that
+		/// construct the extended type.
+		case instantiableExtension
+		/// An extension that the declaration of a type directly inside it takes its level from, because that
+		/// declaration spells none: the constructed type, or the outermost type that encloses it in its file.
+		case extensionDeclaringType(TypeDescription)
+		/// An extension that a method constructing the type takes its level from, because the method spells none.
+		case extensionDeclaringMember(Member)
+		/// A method that constructs the type.
+		case member(Member)
+	}
+
+	/// A method that constructs an `@Instantiable` type.
+	enum Member: Hashable, Sendable {
+		case initializer
+		case instantiateMethod
+		case mockMethod(name: String)
+	}
+
+	let declaration: Declaration
+	/// What a fix-it edits to change the declaration's level.
+	let access: AccessDeclaration
+	/// The level the declaration has by itself, before the declarations enclosing it cap it.
+	let level: AccessLevel
+	/// Whether the declaration is in the module that declares the type's hand-written mock method, which can differ
+	/// from the module that declares the type. Only a mock method, or the extension it takes its level from, is.
+	let isDeclaredWithMockMethod: Bool
+}
+
+extension Instantiable {
+	/// The declarations whose access decides whether code can construct this type with its hand-written mock method
+	/// when `constructingWithMockMethod` is set and the type has one, and otherwise with its initializer or
+	/// `instantiate()` method: the type declarations that enclose the type in its file, outermost first, the type's
+	/// declaration, and the method. A declaration that takes its level from the extension it is directly inside is
+	/// represented by that extension. An extension-based `@Instantiable` declares no type, so its extension stands in
+	/// for the type when it spells a level, which is the bound `AccessLevel.effective(ofTypeDeclaredBy:)` takes.
+	func accessNeeds(constructingWithMockMethod: Bool) -> [AccessNeed] {
+		var accessNeeds = [AccessNeed]()
+		if declarationType.isExtension {
+			if access.spellsAccessModifier {
+				accessNeeds.append(AccessNeed(
+					declaration: .instantiableExtension,
+					access: access,
+					level: access.level.asDefaultOfExtensionMembers,
+					isDeclaredWithMockMethod: false,
+				))
+			}
+		} else {
+			// The types enclosing this one, outermost first, the type an enclosing extension extends among them. Those
+			// declared in this file are the innermost, one for each recorded access.
+			var enclosingTypes = [TypeDescription]()
+			var enclosingType = concreteInstantiable.popNested
+			while let type = enclosingType {
+				enclosingTypes.insert(type, at: 0)
+				enclosingType = type.popNested
+			}
+			let typeDeclarations = zip(enclosingTypeAccess, enclosingTypes.suffix(enclosingTypeAccess.count))
+				.map { (access: $0, type: $1) }
+				+ [(access: access, type: concreteInstantiable)]
+			for (index, typeDeclaration) in typeDeclarations.enumerated() {
+				// Only the outermost declaration in the file can be directly inside an extension.
+				let enclosingExtension = index == 0 ? enclosingExtensionAccess : nil
+				if !typeDeclaration.access.spellsAccessModifier, let enclosingExtension, enclosingExtension.spellsAccessModifier {
+					accessNeeds.append(AccessNeed(
+						declaration: .extensionDeclaringType(typeDeclaration.type),
+						access: enclosingExtension,
+						level: enclosingExtension.level.asDefaultOfExtensionMembers,
+						isDeclaredWithMockMethod: false,
+					))
+				} else {
+					accessNeeds.append(AccessNeed(
+						declaration: .type(typeDeclaration.type),
+						access: typeDeclaration.access,
+						level: AccessLevel.ownLevel(of: typeDeclaration.access, directlyInside: enclosingExtension),
+						isDeclaredWithMockMethod: false,
+					))
+				}
+			}
+		}
+
+		let member: AccessNeed.Member
+		let memberAccess: AccessDeclaration
+		let declaringDeclaration: AccessDeclaration
+		if constructingWithMockMethod, let mockInitializer {
+			member = .mockMethod(name: customMockName ?? InstantiableVisitor.mockMethodName)
+			memberAccess = mockInitializer.access
+			declaringDeclaration = mockDeclarationAccess ?? access
+		} else if let initializer {
+			member = declarationType.isExtension ? .instantiateMethod : .initializer
+			memberAccess = initializer.access
+			declaringDeclaration = access
+		} else {
+			// A type without a construction initializer is misconfigured, which the macro reports, and its generated
+			// construction is a placeholder that calls no method.
+			return accessNeeds
+		}
+		if !memberAccess.spellsAccessModifier, declaringDeclaration.isExtension, declaringDeclaration.spellsAccessModifier {
+			// The method takes its level from its extension, which is what must widen. The extension of an
+			// extension-based `@Instantiable` that declares the method already stands in for the type.
+			if !accessNeeds.contains(where: { $0.access == declaringDeclaration }) {
+				accessNeeds.append(AccessNeed(
+					declaration: .extensionDeclaringMember(member),
+					access: declaringDeclaration,
+					level: declaringDeclaration.level.asDefaultOfExtensionMembers,
+					isDeclaredWithMockMethod: constructingWithMockMethod,
+				))
+			}
+		} else {
+			accessNeeds.append(AccessNeed(
+				declaration: .member(member),
+				access: memberAccess,
+				level: AccessLevel.ownLevel(of: memberAccess, declaredIn: declaringDeclaration),
+				isDeclaredWithMockMethod: constructingWithMockMethod,
+			))
+		}
+		return accessNeeds
 	}
 }

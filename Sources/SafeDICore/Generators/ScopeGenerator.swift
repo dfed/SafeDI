@@ -34,7 +34,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		forwardedLazilyInstantiatedInstanceProperties: [Property],
 		erasedToConcreteExistential: Bool,
 		isPropertyCycle: Bool,
+		constructionComments: Scope.ConstructionComments,
 	) {
+		self.constructionComments = constructionComments
 		if let property {
 			scopeData = .property(
 				instantiable: instantiable,
@@ -348,6 +350,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		declaredLazilyInstantiatedInstanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding
 		self.property = property
 		aliasPropertyIsProvidedByEnclosingScope = isProvidedByEnclosingScope
+		// An alias constructs nothing.
+		constructionComments = Scope.ConstructionComments()
 	}
 
 	deinit {
@@ -868,6 +872,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// property unavailable. `false` for every other scope.
 	private let aliasPropertyIsProvidedByEnclosingScope: Bool
 	private let property: Property?
+	/// The comments the generated code ends the lines that construct this scope's type with.
+	private let constructionComments: Scope.ConstructionComments
 
 	private struct UnavailablePropertiesCacheKey: Hashable {
 		let unavailableProperties: Set<Property>
@@ -1414,6 +1420,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				concreteTypeName
 			}
 			let returnLineSansReturn = "\(instantiationDeclaration)(\(argumentList))"
+			// What ends the line that constructs the type, after the construction.
+			let constructionLineEnd = constructionComments.initializer.map { " \($0)" } ?? ""
 
 			let propertyType = property.propertyType
 			switch propertyType {
@@ -1460,7 +1468,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					"""
 					\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(concreteTypeName) {
 					\(generatedProperties.joined(separator: "\n"))
-					\(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
+					\(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)\(constructionLineEnd)
 					}
 
 					"""
@@ -1537,7 +1545,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				return """
 				\(functionDecorator)func \(functionName)() -> \(concreteTypeName) {
 				\(generatedProperties.joined(separator: "\n"))
-				\(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)
+				\(Self.standardIndent)\(generatedProperties.isEmpty ? "" : "return ")\(returnLineSansReturn)\(constructionLineEnd)
 				}
 				let \(property.label) = \(lazilyInstantiatedInstantiation)
 				"""
@@ -1570,7 +1578,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					"""
 					func \(functionName)() -> \(concreteTypeName) {
 					\(nonEmptyGeneratedProperties.joined(separator: "\n"))
-					\(Self.standardIndent)return \(returnLineSansReturn)
+					\(Self.standardIndent)return \(returnLineSansReturn)\(constructionLineEnd)
 					}
 
 					"""
@@ -1581,7 +1589,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					returnLineSansReturn
 				}
 				let initializer = if !hasGeneratedContent {
-					existentialWrappedReturn
+					existentialWrappedReturn + constructionLineEnd
 				} else if erasedToConcreteExistential {
 					"\(property.typeDescription.asSource)(\(functionName)())"
 				} else {
@@ -2137,7 +2145,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let code = """
 			extension \(typeName) {
 			    \(mockAttributesPrefix)static func mock() -> \(mockMethodReturnType) {
-			        \(construction)
+			        \(construction)\(mockRootConstructionLineEnd(instantiable: instantiable))
 			    }
 			}
 			"""
@@ -2348,7 +2356,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		} else {
 			"\(typeName)(\(returnArgumentList))"
 		}
-		lines.append("\(bodyIndent)return \(returnConstruction)")
+		lines.append("\(bodyIndent)return \(returnConstruction)\(mockRootConstructionLineEnd(instantiable: instantiable))")
 		lines.append("\(indent)}")
 		lines.append("}")
 
@@ -2578,6 +2586,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let sourceFilePath: String?
 		/// Where the hand-written mock `useMockInitializer` selects is declared, when the type has one.
 		let mockDeclarationLocation: Dependency.DeclarationLocation?
+		/// The comment that ends the line that constructs this node, or `nil` for none.
+		let constructionComment: String?
+		/// What ends the line that constructs this node, after the construction.
+		var constructionLineEnd: String {
+			constructionComment.map { " \($0)" } ?? ""
+		}
+
 		/// Forwarded properties on this type (relevant for Instantiator edges).
 		let forwardedProperties: Set<Property>
 		/// Set when this property's label repeats in the ancestor stack during
@@ -3236,6 +3251,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					concreteType: childInstantiable.concreteInstantiable,
 					sourceFilePath: childInstantiable.sourceFilePath,
 					mockDeclarationLocation: childInstantiable.mockDeclarationLocation,
+					constructionComment: useMockInitializer ? childGenerator.constructionComments.mockMethod : childGenerator.constructionComments.initializer,
 					forwardedProperties: forwardedProperties,
 					isPropertyCycle: isPropertyCycle,
 					cycleClosingProperties: childGenerator.cycleClosingProperties,
@@ -4024,13 +4040,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					lines.append("\(indent)func \(functionName)() -> \(propertyTypeName) {")
 					lines.append(contentsOf: receiverBindings)
 					lines.append(contentsOf: childBindings)
-					lines.append("\(innerIndent)return \(constructionExpression)")
+					lines.append("\(innerIndent)return \(constructionExpression)\(node.constructionLineEnd)")
 					lines.append("\(indent)}")
 					lines.append("\(indent)let \(outerBindingName): \(propertyTypeName) = \(functionName)()")
 				} else {
 					// Leaf constant node — flat binding, no scoping needed.
 					let typeAnnotation = overrideExpression == nil ? "" : node.overriddenBindingTypeAnnotation
-					lines.append("\(indent)let \(outerBindingName)\(typeAnnotation) = \(constructionExpression)")
+					lines.append("\(indent)let \(outerBindingName)\(typeAnnotation) = \(constructionExpression)\(node.constructionLineEnd)")
 				}
 			}
 		}
@@ -4382,7 +4398,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				overrideReachable: overridePathReachable,
 				handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
 			)
-			lines.append("\(innerIndent)\(returnKeyword)\(constructionExpression)")
+			lines.append("\(innerIndent)\(returnKeyword)\(constructionExpression)\(node.constructionLineEnd)")
 			lines.append("\(indent)}")
 		}
 
@@ -4404,6 +4420,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(indent)let \(outerBindingName) = \(instantiatorConstruction)")
 
 		return lines
+	}
+
+	/// What ends the line on which a mock root's `mock()` constructs the mocked type `instantiable`, after the
+	/// construction: the comment for its hand-written mock when it has one, which constructs it, and otherwise the
+	/// comment for its initializer or `instantiate()` method.
+	private func mockRootConstructionLineEnd(instantiable: Instantiable) -> String {
+		let comment = instantiable.mockInitializer != nil ? constructionComments.mockMethod : constructionComments.initializer
+		return comment.map { " \($0)" } ?? ""
 	}
 
 	private func wrapInConditionalCompilation(
