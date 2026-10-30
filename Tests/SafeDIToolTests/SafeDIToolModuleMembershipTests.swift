@@ -344,9 +344,275 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func targetGraph_attributesEveryFileOfInputCSV_whenCapturedFromExamplePackageBuild() throws {
+		// The files are created, under a directory of their own, because normalization drops a leading `/private` only
+		// from a path that names a file, as it did for the plugin.
+		let stageDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: stageDirectory, withIntermediateDirectories: true)
+		filesToDelete.append(stageDirectory)
+		let stage = try realPath(of: stageDirectory)
+		let placeholder = "$STAGE"
+		var inputSwiftFiles = [String]()
+		for entry in Self.capturedExampleInputSwiftFiles {
+			let isAbsolute = entry.hasPrefix(placeholder)
+			let file = URL(fileURLWithPath: isAbsolute ? stage + entry.dropFirst(placeholder.count) : "\(stage)/Example/\(entry)")
+			try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+			try "".write(to: file, atomically: true, encoding: .utf8)
+			inputSwiftFiles.append(isAbsolute ? NormalizedFilePath(file.path).path : entry)
+		}
+		let swiftFileCSV = stageDirectory.appendingPathComponent("InputSwiftFiles.csv")
+		try Self.capturedExampleTargetGraph
+			.replacingOccurrences(of: placeholder, with: stage)
+			.write(toFile: swiftFileCSV.path + PluginTargetGraph.fileNameSuffix, atomically: true, encoding: .utf8)
+
+		let targetGraph = try #require(try PluginTargetGraph(besideInputSourcesFileAt: swiftFileCSV.path))
+		// The plugin reports the package directory to `scan` as SwiftPM reports it, with a trailing `/`.
+		let projectFilePaths = ProjectFilePaths(projectRoot: "\(stage)/Example/")
+		let membership = ModuleMembership(targetGraph: targetGraph, projectFilePaths: projectFilePaths)
+
+		let declaringModules = inputSwiftFiles.map { membership.declaringModule(ofFileAt: projectFilePaths.projectFilePath(of: $0)) }
+		#expect(Dictionary(grouping: declaringModules, by: \.self).mapValues(\.count) == [
+			DeclaringModule(moduleName: "ChildAModule", packageName: "example"): 1,
+			DeclaringModule(moduleName: "ChildBModule", packageName: "example"): 1,
+			DeclaringModule(moduleName: "ChildCModule", packageName: "example"): 1,
+			DeclaringModule(moduleName: "GrandchildrenModule", packageName: "example"): 3,
+			DeclaringModule(moduleName: "RootModule", packageName: "example"): 3,
+			DeclaringModule(moduleName: "SafeDI", packageName: "safedi"): 11,
+			DeclaringModule(moduleName: "SafeDIMacros", packageName: "safedi"): 45,
+			DeclaringModule(moduleName: "SharedModule", packageName: "example"): 2,
+			DeclaringModule(moduleName: "SwiftSyntax509", packageName: "swift-syntax"): 1,
+			DeclaringModule(moduleName: "SwiftSyntax510", packageName: "swift-syntax"): 1,
+			DeclaringModule(moduleName: "SwiftSyntax600", packageName: "swift-syntax"): 1,
+			DeclaringModule(moduleName: "SwiftSyntax601", packageName: "swift-syntax"): 1,
+			DeclaringModule(moduleName: "SwiftSyntax602", packageName: "swift-syntax"): 1,
+			DeclaringModule(moduleName: "SwiftSyntax603", packageName: "swift-syntax"): 1,
+		])
+		#expect([membership.moduleName, membership.packageName] == ["RootModule", "example"])
+		#expect(membership.dependencyModuleNames == ["ChildAModule", "ChildBModule", "ChildCModule", "SafeDI", "SharedModule"])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// The input CSV the SafeDIGenerator plugin wrote for `RootModule` in a build of the Example Package Integration
+	/// (in a directory named `Example`) with SwiftPM's native backend on 2026-10-29, in order. `$STAGE` stands for the
+	/// directory that held the package and, beside it, the SafeDI package it depends on by path. The plugin names a file
+	/// inside the package relative to it, and any other by its normalized path, which drops a leading `/private`.
+	private static let capturedExampleInputSwiftFiles = [
+		"Sources/RootModule/EventLogger.swift",
+		"Sources/RootModule/LaunchRecorder.swift",
+		"Sources/RootModule/Root.swift",
+		"$STAGE/example-build-native/checkouts/swift-syntax/Sources/VersionMarkerModules/SwiftSyntax509/Empty.swift",
+		"$STAGE/example-build-native/checkouts/swift-syntax/Sources/VersionMarkerModules/SwiftSyntax510/Empty.swift",
+		"$STAGE/example-build-native/checkouts/swift-syntax/Sources/VersionMarkerModules/SwiftSyntax600/Empty.swift",
+		"$STAGE/example-build-native/checkouts/swift-syntax/Sources/VersionMarkerModules/SwiftSyntax601/Empty.swift",
+		"$STAGE/example-build-native/checkouts/swift-syntax/Sources/VersionMarkerModules/SwiftSyntax602/Empty.swift",
+		"$STAGE/example-build-native/checkouts/swift-syntax/Sources/VersionMarkerModules/SwiftSyntax603/Empty.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/Macros/InjectableMacro.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/Macros/InstantiableMacro.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/Macros/SafeDIConfigurationMacro.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Errors/DiagnosticError.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Errors/FixableInjectableError.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Errors/FixableInstantiableError.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Extensions/AttributeListSyntaxElementExtensions.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Extensions/AttributeListSyntaxExtensions.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Extensions/AttributeSyntaxExtensions.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Extensions/CollectionExtensions.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Extensions/DeclModifierListSyntaxExtensions.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Extensions/DiagnosticExtensions.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Extensions/ImportDeclSyntaxExtensions.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Extensions/PatternBindingSyntaxExtensions.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Generators/DependencyTreeGenerator.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Generators/ScopeGenerator.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/AccessDeclaration.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/AccessLevel.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/AliasDeclarationReferences.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/ConcreteDeclSyntaxProtocol.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/ConcreteDeclType.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/ConditionalCompilationDecision.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/Dependency.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/ImportStatement.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/Initializer.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/InstantiableStruct.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/OutputFileDeclarations.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/Property.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/ReservedName.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/SafeDIConfiguration.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/SafeDIToolManifest.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/Scope.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/SourceDiagnostic.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/TypeDescription.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/TypeRequirements.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Models/UnorderedEquatingCollection.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Utilities/DeferredRelease.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Utilities/FilePathSpelling.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Utilities/OutputFileNaming.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Visitors/ConditionalCompilationEvaluator.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Visitors/FileVisitor.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Visitors/InstantiableVisitor.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Visitors/SafeDIConfigurationVisitor.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDICore/Visitors/SafeDIContentDetector.swift",
+		"$STAGE/SafeDI/Sources/SafeDIMacros/SafeDIMacroPlugin.swift",
+		"$STAGE/SafeDI/Sources/SafeDI/Decorators/Forwarded.swift",
+		"$STAGE/SafeDI/Sources/SafeDI/Decorators/Instantiable.swift",
+		"$STAGE/SafeDI/Sources/SafeDI/Decorators/Instantiated.swift",
+		"$STAGE/SafeDI/Sources/SafeDI/Decorators/Received.swift",
+		"$STAGE/SafeDI/Sources/SafeDI/Decorators/SafeDIConfiguration.swift",
+		"$STAGE/SafeDI/Sources/SafeDI/DelayedInstantiation/ErasedInstantiator.swift",
+		"$STAGE/SafeDI/Sources/SafeDI/DelayedInstantiation/Instantiator.swift",
+		"$STAGE/SafeDI/Sources/SafeDI/DelayedInstantiation/LazilyInstantiated.swift",
+		"$STAGE/SafeDI/Sources/SafeDI/DelayedInstantiation/SendableErasedInstantiator.swift",
+		"$STAGE/SafeDI/Sources/SafeDI/DelayedInstantiation/SendableInstantiator.swift",
+		"$STAGE/SafeDI/Sources/SafeDI/DelayedInstantiation/SendableLazilyInstantiated.swift",
+		"Sources/SharedModule/SharedThing.swift",
+		"Sources/SharedModule/UserDefaults.swift",
+		"Sources/GrandchildrenModule/Grandchild C/GrandchildC.swift",
+		"Sources/GrandchildrenModule/GrandchildA.swift",
+		"Sources/GrandchildrenModule/GrandchildB.swift",
+		"Sources/ChildAModule/ChildA.swift",
+		"Sources/ChildBModule/ChildB.swift",
+		"Sources/ChildCModule/ChildC.swift",
+	]
+
+	/// The target graph the plugin wrote beside `capturedExampleInputSwiftFiles` in the same build. `$STAGE` stands for
+	/// the same directory as SwiftPM reported it, resolved, which kept its leading `/private`.
+	private static let capturedExampleTargetGraph = #"""
+	{
+	  "dependencyTargets" : [
+	    {
+	      "dependencyModuleNames" : [
+	        "GrandchildrenModule",
+	        "SafeDI",
+	        "SharedModule"
+	      ],
+	      "directoryPath" : "$STAGE\/Example\/Sources\/ChildAModule\/",
+	      "moduleName" : "ChildAModule",
+	      "packageID" : "example"
+	    },
+	    {
+	      "dependencyModuleNames" : [
+	        "GrandchildrenModule",
+	        "SafeDI",
+	        "SharedModule"
+	      ],
+	      "directoryPath" : "$STAGE\/Example\/Sources\/ChildBModule\/",
+	      "moduleName" : "ChildBModule",
+	      "packageID" : "example"
+	    },
+	    {
+	      "dependencyModuleNames" : [
+	        "GrandchildrenModule",
+	        "SafeDI",
+	        "SharedModule"
+	      ],
+	      "directoryPath" : "$STAGE\/Example\/Sources\/ChildCModule\/",
+	      "moduleName" : "ChildCModule",
+	      "packageID" : "example"
+	    },
+	    {
+	      "dependencyModuleNames" : [
+	        "SafeDI",
+	        "SharedModule"
+	      ],
+	      "directoryPath" : "$STAGE\/Example\/Sources\/GrandchildrenModule\/",
+	      "moduleName" : "GrandchildrenModule",
+	      "packageID" : "example"
+	    },
+	    {
+	      "dependencyModuleNames" : [
+	        "SafeDIMacros"
+	      ],
+	      "directoryPath" : "$STAGE\/SafeDI\/Sources\/SafeDI\/",
+	      "moduleName" : "SafeDI",
+	      "packageID" : "safedi"
+	    },
+	    {
+	      "dependencyModuleNames" : [
+	        "SwiftCompilerPlugin",
+	        "SwiftDiagnostics",
+	        "SwiftParser",
+	        "SwiftSyntax",
+	        "SwiftSyntaxBuilder",
+	        "SwiftSyntaxMacros"
+	      ],
+	      "directoryPath" : "$STAGE\/SafeDI\/Sources\/SafeDIMacros\/",
+	      "moduleName" : "SafeDIMacros",
+	      "packageID" : "safedi"
+	    },
+	    {
+	      "dependencyModuleNames" : [
+	        "SafeDI"
+	      ],
+	      "directoryPath" : "$STAGE\/Example\/Sources\/SharedModule\/",
+	      "moduleName" : "SharedModule",
+	      "packageID" : "example"
+	    },
+	    {
+	      "dependencyModuleNames" : [
+
+	      ],
+	      "directoryPath" : "$STAGE\/example-build-native\/checkouts\/swift-syntax\/Sources\/VersionMarkerModules\/SwiftSyntax509\/",
+	      "moduleName" : "SwiftSyntax509",
+	      "packageID" : "swift-syntax"
+	    },
+	    {
+	      "dependencyModuleNames" : [
+
+	      ],
+	      "directoryPath" : "$STAGE\/example-build-native\/checkouts\/swift-syntax\/Sources\/VersionMarkerModules\/SwiftSyntax510\/",
+	      "moduleName" : "SwiftSyntax510",
+	      "packageID" : "swift-syntax"
+	    },
+	    {
+	      "dependencyModuleNames" : [
+
+	      ],
+	      "directoryPath" : "$STAGE\/example-build-native\/checkouts\/swift-syntax\/Sources\/VersionMarkerModules\/SwiftSyntax600\/",
+	      "moduleName" : "SwiftSyntax600",
+	      "packageID" : "swift-syntax"
+	    },
+	    {
+	      "dependencyModuleNames" : [
+
+	      ],
+	      "directoryPath" : "$STAGE\/example-build-native\/checkouts\/swift-syntax\/Sources\/VersionMarkerModules\/SwiftSyntax601\/",
+	      "moduleName" : "SwiftSyntax601",
+	      "packageID" : "swift-syntax"
+	    },
+	    {
+	      "dependencyModuleNames" : [
+
+	      ],
+	      "directoryPath" : "$STAGE\/example-build-native\/checkouts\/swift-syntax\/Sources\/VersionMarkerModules\/SwiftSyntax602\/",
+	      "moduleName" : "SwiftSyntax602",
+	      "packageID" : "swift-syntax"
+	    },
+	    {
+	      "dependencyModuleNames" : [
+
+	      ],
+	      "directoryPath" : "$STAGE\/example-build-native\/checkouts\/swift-syntax\/Sources\/VersionMarkerModules\/SwiftSyntax603\/",
+	      "moduleName" : "SwiftSyntax603",
+	      "packageID" : "swift-syntax"
+	    }
+	  ],
+	  "target" : {
+	    "dependencyModuleNames" : [
+	      "ChildAModule",
+	      "ChildBModule",
+	      "ChildCModule",
+	      "SafeDI",
+	      "SharedModule"
+	    ],
+	    "directoryPath" : "$STAGE\/Example\/Sources\/RootModule\/",
+	    "moduleName" : "RootModule",
+	    "packageID" : "example"
+	  }
+	}
+	"""#
 
 	/// Two modules of the package `Foundations`, `Core` and `Middle`, and the module `App` of the package
 	/// `Application`, which depends on both. Every module generates code, so the plugin runs `generate` for each.

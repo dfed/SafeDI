@@ -58,6 +58,13 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			relativeTo: packageRoot,
 			to: inputSourcesFile,
 		)
+		// Every form of the `generate` command below reads it, to record the module and package that declare each file.
+		try writeTargetGraph(
+			of: sourceTarget,
+			dependencyTargets: sourceTarget.sourceModuleRecursiveDependencies,
+			in: context.package,
+			besideInputSourcesFile: inputSourcesFile,
+		)
 
 		let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
 
@@ -216,6 +223,63 @@ func writeInputSwiftFilesCSV(
 			atomically: true,
 			encoding: .utf8,
 		)
+}
+
+/// Writes the target graph of `target`, whose input CSV lists its own files and those of `dependencyTargets`, beside
+/// `inputSourcesFile`, for `generate` to read the module and package that declare each file.
+///
+/// The plugin API reports which package declares a target only by listing the package's targets, so each target's
+/// package is found among `package` and the packages it depends on, directly or through another. The API does not
+/// report which plugins a target applies, so the graph does not say whether a dependency target applies this one.
+func writeTargetGraph(
+	of target: SwiftSourceModuleTarget,
+	dependencyTargets: [SwiftSourceModuleTarget],
+	in package: Package,
+	besideInputSourcesFile inputSourcesFile: URL,
+) throws {
+	var packageIDsByTargetID = [String: Package.ID]()
+	var visitedPackageIDs = Set<Package.ID>()
+	var packagesToVisit = [package]
+	while let packageToVisit = packagesToVisit.popLast() {
+		if visitedPackageIDs.insert(packageToVisit.id).inserted {
+			for packageTarget in packageToVisit.targets {
+				packageIDsByTargetID[packageTarget.id] = packageToVisit.id
+			}
+			packagesToVisit += packageToVisit.dependencies.map(\.package)
+		}
+	}
+	func moduleName(of target: any Target) -> String {
+		(target as? any SourceModuleTarget)?.moduleName ?? target.name
+	}
+	func graphTarget(_ target: SwiftSourceModuleTarget) -> TargetGraph.Target {
+		TargetGraph.Target(
+			moduleName: target.moduleName,
+			packageID: packageIDsByTargetID[target.id],
+			directoryPath: target.directoryURL.path(percentEncoded: false),
+			dependencyModuleNames: Set(target.dependencies.flatMap { dependency in
+				switch dependency {
+				case let .target(dependencyTarget):
+					[moduleName(of: dependencyTarget)]
+				case let .product(product):
+					product.targets.map(moduleName(of:))
+				@unknown default:
+					[String]()
+				}
+			}).sorted(),
+		)
+	}
+	let targetGraph = TargetGraph(
+		target: graphTarget(target),
+		dependencyTargets: dependencyTargets.map(graphTarget).sorted {
+			($0.moduleName, $0.packageID ?? "", $0.directoryPath) < ($1.moduleName, $1.packageID ?? "", $1.directoryPath)
+		},
+	)
+	let encoder = JSONEncoder()
+	encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+	try encoder.encode(targetGraph).write(
+		to: URL(fileURLWithPath: inputSourcesFile.path(percentEncoded: false) + TargetGraph.fileNameSuffix),
+		options: .atomic,
+	)
 }
 
 extension Target {
