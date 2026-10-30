@@ -252,6 +252,30 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_recordsModuleWithoutPackage_whenTargetGraphFindsTargetsInNoPackage() async throws {
+		// The plugin writes no `packageID` for a target it finds in no package it is handed.
+		let project = try makePluginProject(
+			files: [
+				"Sources/App/AppRoot.swift": Self.rootContent,
+				"Sources/Core/Engine.swift": Self.instantiableContent(named: "Engine"),
+			],
+			targets: [
+				TargetDeclaration(moduleName: "App", packageID: nil, files: ["Sources/App/AppRoot.swift"], dependencyModuleNames: ["Core"]),
+				TargetDeclaration(moduleName: "Core", packageID: nil, files: ["Sources/Core/Engine.swift"]),
+			],
+		)
+
+		let generateOutput = try await project.scanAndGenerate(reportingProjectRoot: .resolved)
+
+		#expect(ModuleIdentity(generateOutput.module) == ModuleIdentity(moduleName: "App", packageName: nil, dependencyModuleNames: ["Core"]))
+		#expect(Self.declaringModules(of: generateOutput.module.instantiables) == [
+			"AppRoot": DeclaringModule(moduleName: "App", packageName: nil),
+			"Engine": DeclaringModule(moduleName: "Core", packageName: nil),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_recordsTargetListingEachFile_whenTargetDirectoryLiesInsideAnother() async throws {
 		// SwiftPM accepts a target whose directory lies inside another's when the outer target excludes it.
 		let project = try makePluginProject(
@@ -957,7 +981,7 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 
 	/// A target as the plugin's target graph describes it, with its files relative to the fixture directory.
 	private struct TargetDeclaration {
-		init(moduleName: String, packageID: String, files: [String], dependencyModuleNames: [String] = []) {
+		init(moduleName: String, packageID: String?, files: [String], dependencyModuleNames: [String] = []) {
 			self.moduleName = moduleName
 			self.packageID = packageID
 			self.files = files
@@ -965,7 +989,7 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 		}
 
 		let moduleName: String
-		let packageID: String
+		let packageID: String?
 		let files: [String]
 		let dependencyModuleNames: [String]
 	}
