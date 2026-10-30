@@ -23,7 +23,7 @@ jobs:
   # `swift-tools-version` at the top of
   # https://github.com/dfed/SafeDI/blob/main/Package.swift). SafeDITool
   # ships as a prebuilt that consumers run through the SafeDIGenerator
-  # plugin, so it has to handle source written for any Swift version
+  # plugin and the Bazel rule, so it has to handle source written for any Swift version
   # downstream consumers are on. Building against the latest
   # swift-syntax keeps the prebuilt tolerant of newer constructs;
   # an older build would parse-fail on newer consumer code.
@@ -322,21 +322,28 @@ jobs:
           git tag "${{ inputs.version }}"
           git push origin "${{ github.ref_name }}" --tags
 
-      # Produce a source tarball for the BCR entry. `git archive` from
-      # the just-created tag gives a reproducible archive whose contents
-      # are rooted at `SafeDI-<version>/` — matching `strip_prefix` in
-      # `.bcr/source.template.json`. We upload this as a release asset
-      # so BCR can reference a stable `releases/download/...` URL
-      # instead of GitHub's auto-generated `archive/...` URL (which
-      # BCR presubmit flags as unstable).
+      # Produce a source tarball for the BCR entry: `git archive` of the
+      # just-created tag, rooted at `SafeDI-<version>/` — matching
+      # `strip_prefix` in `.bcr/source.template.json` — with
+      # `bazel/private/prebuilt_safeditool.bzl` naming this release and
+      # the sha256 of each binary uploaded beside it. A Bazel build of
+      # the release runs those binaries, and the integrity the BCR
+      # records for the archive covers their hashes. The repository
+      # keeps that file empty, so a build of any checkout builds
+      # SafeDITool from source; see the script. We upload this as a
+      # release asset so BCR can reference a stable
+      # `releases/download/...` URL instead of GitHub's auto-generated
+      # `archive/...` URL (which BCR presubmit flags as unstable, and
+      # which holds the empty file). A dry run archives the release
+      # commit it did not tag and uploads the archive as an artifact.
       - name: Create source tarball
-        if: ${{ !inputs.dry-run }}
-        run: |
-          git archive \
-            --format=tar.gz \
-            --prefix="SafeDI-${{ inputs.version }}/" \
-            -o "SafeDI-${{ inputs.version }}.tar.gz" \
-            "${{ inputs.version }}"
+        run: ./Scripts/create-bazel-source-archive.sh "${{ inputs.version }}" . "${{ inputs.dry-run && 'HEAD' || inputs.version }}"
+      - name: Upload source tarball (dry run)
+        if: inputs.dry-run
+        uses: actions/upload-artifact@v7
+        with:
+          name: source-tarball
+          path: SafeDI-${{ inputs.version }}.tar.gz
 
       - name: Create GitHub Release
         if: ${{ !inputs.dry-run }}

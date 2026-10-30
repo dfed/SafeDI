@@ -105,13 +105,21 @@ The macro accepts every `swift_library` attribute and declares two targets: the 
 
 A module that needs a shape the macro does not offer can declare the `safedi_compile` rule and its `swift_library` separately, adding `[":<rule name>"]` to the library’s `srcs` and giving the rule the library’s `defines` and `copts`; see [`bazel/safedi.bzl`](../bazel/safedi.bzl).
 
+`SafeDITool` runs as the prebuilt binary the SafeDI release publishes for the machine that runs the build – macOS arm64 or x86_64, or Linux x86_64 or arm64 – the same binary the `SafeDIGenerator` plugin and the Tuist plugin run. Bazel downloads it from the release’s GitHub assets the first time a build needs it – so that build needs network access to GitHub, or a [repository cache](https://bazel.build/run/build#repository-cache) that holds the binary – and checks it against the sha256 recorded in the release’s source archive. On any other machine, Bazel builds `SafeDITool` from source. To always build it from source, add this line to your `.bazelrc`:
+
+```
+common --@safedi//bazel:prefer_prebuilt_safeditool=false
+```
+
+A build that takes SafeDI from a checkout of its repository rather than from a release – through `local_path_override`, `git_override`, or an `archive_override` of a GitHub archive – always builds `SafeDITool` from that checkout, so the rule never runs a binary older than itself.
+
 ### Running SafeDITool yourself
 
 Your integration already has a `SafeDITool`. Run it to read its `--help`, [query what a type needs](#querying-what-a-type-needs), or print a `.safedi` file with `dump`.
 
 - **Swift package:** `.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool` from the package’s directory, or `swift run SafeDITool` with the `sourceBuild` trait; writes no `.safedi` files.
 - **Xcode project:** `SourcePackages/artifacts/safedi/SafeDIToolBinary/…` in the project’s derived data, or `.safedi/<version>/safeditool` once [installed](#installing-the-prebuilt-safeditool-binary); writes no `.safedi` files.
-- **Bazel:** `bazel run @safedi//Sources/SafeDITool:SafeDITool -- <arguments>` from the workspace root, with absolute paths; writes `bazel-bin/<package>/<name>_safedi.safedi`.
+- **Bazel:** `bazel run @safedi//bazel:safeditool -- <arguments>` from the workspace root, with absolute paths, runs the `SafeDITool` your build runs, prebuilt or built from source; writes `bazel-bin/<package>/<name>_safedi.safedi`.
 - **Tuist:** `Tuist/.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool` from the project’s directory; writes `$BUILT_PRODUCTS_DIR/SafeDI/<module>.safedi`.
 
 On an Intel Mac, the bundle’s directory is `SafeDITool-macos-x86_64`.
@@ -1300,7 +1308,7 @@ A focused app – one that builds a single feature with mock data instead of the
 A project whose build already writes `.safedi` [module info files](#custom-build-system-integration) – a Bazel or Tuist project, or any other that runs `generate --module-info-output` per module – can name those files with `--module-info`, instead of or alongside directories, and skip parsing the sources. In a Bazel project:
 
 ```bash
-bazel run @safedi//Sources/SafeDITool:SafeDITool -- query needs HomeFeature --module-info "$PWD"/bazel-bin/Modules/Foundations/Foundations_safedi.safedi "$PWD"/bazel-bin/Modules/Services/Services_safedi.safedi "$PWD"/bazel-bin/Modules/HomeFeature/HomeFeature_safedi.safedi
+bazel run @safedi//bazel:safeditool -- query needs HomeFeature --module-info "$PWD"/bazel-bin/Modules/Foundations/Foundations_safedi.safedi "$PWD"/bazel-bin/Modules/Services/Services_safedi.safedi "$PWD"/bazel-bin/Modules/HomeFeature/HomeFeature_safedi.safedi
 ```
 
 Each file is a module holding the declarations its build read, under that build’s compilation conditions, so `--active-compilation-conditions` applies only to the directories. A module info file is named after the file without its `.safedi` extension and without the `_safedi` the Bazel macro appends (`HomeFeature_safedi.safedi` is the module `HomeFeature`), and, when that reads like another module’s name, after as many trailing path components as tell them apart, as directories are; a file whose path reads the same as a directory’s (`Home.safedi` beside `Home`) is named by its file name as spelled. Its declarations are attributed to it by the paths the file records, which are the paths the build that wrote it handed to `generate`, and the report spells them that way: relative to that build’s working directory for a Bazel or Tuist build, so a declaration’s file opens from where that build ran rather than from where the query ran. A file written by another version of SafeDI cannot be read, and the query says so and names the file, as `generate` does.

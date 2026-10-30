@@ -29,6 +29,14 @@
 #         uses macOS 14+ SwiftUI APIs (LoggedInView's onChange,
 #         NameEntryView's TextField init), so it can't compile
 #         lower. This is the example app's requirement, not SafeDI's.
+#   - --@safedi//bazel:prefer_prebuilt_safeditool=<value>
+#       bcr_test_module only, over both values (the pattern protobuf's
+#       presubmit uses for `prefer_prebuilt_protoc`). With `true`, the
+#       default, the example runs the release's prebuilt SafeDITool,
+#       whose sha256 the published source archive records; with `false`
+#       it runs SafeDITool built from source, the fallback toolchain.
+#       verify_safedi_build builds `@safedi//Sources/SafeDITool` from
+#       source whatever the flag says, so it does not need the matrix.
 matrix:
   platform: ["macos_arm64"]
   bazel: ["9.x"]
@@ -53,15 +61,17 @@ bcr_test_module:
   matrix:
     platform: ["macos_arm64"]
     bazel: ["9.x"]
+    prefer_prebuilt_safeditool: ["true", "false"]
   tasks:
     build_example:
-      name: "Build downstream example (${{ platform }}, Bazel ${{ bazel }})"
+      name: "Build downstream example (${{ platform }}, Bazel ${{ bazel }}, prefer_prebuilt_safeditool=${{ prefer_prebuilt_safeditool }})"
       platform: ${{ platform }}
       bazel: ${{ bazel }}
       build_flags:
         - "--repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1"
         - "--host_macos_minimum_os=11.0"
         - "--macos_minimum_os=14.0"
+        - "--@safedi//bazel:prefer_prebuilt_safeditool=${{ prefer_prebuilt_safeditool }}"
       build_targets:
         - "//Subproject:Subproject"
         - "//ExampleBazelIntegration:ExampleBazelIntegration"

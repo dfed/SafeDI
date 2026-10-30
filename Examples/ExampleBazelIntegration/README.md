@@ -28,9 +28,14 @@ toolchain). The SafeDI rules themselves are platform-agnostic.
   via `local_path_override` to the workspace root so the example
   tracks the working copy; downstream consumers would get SafeDI from
   the Bazel Central Registry instead.
-- **`SafeDITool` built from source by Bazel.** No prebuilt artifact
-  fetching — the tool is just another `swift_binary` target
-  (`@safedi//Sources/SafeDITool:SafeDITool`). Cached across runs.
+- **`SafeDITool` built from this checkout.** `safedi_compile` takes
+  SafeDITool from a toolchain. A SafeDI release from the Bazel Central
+  Registry runs the release's prebuilt binary for the build machine;
+  this example's `local_path_override` takes SafeDI from the checkout,
+  whose `bazel/private/prebuilt_safeditool.bzl` names no binaries, so
+  it builds `@safedi//Sources/SafeDITool:SafeDITool` from source and
+  tests the working copy's tool. CI checks that the generate step ran
+  that target.
 
 ## Build
 
@@ -57,7 +62,7 @@ no bump needed — just `git pull` the outer repo.
 | Cross-module handoff | `Subproject.safedi` in `$(BUILT_PRODUCTS_DIR)` consumed via script-phase input | `safedi_compile`'s `SafeDIInfo` provider; downstream modules list the producer's `<name>_safedi` label in `safedi_deps` |
 | Input enumeration | `FileListGlob` in `Project.swift` | `glob()` in `BUILD.bazel` |
 | Output enumeration | `SafeDITool scan` at `tuist generate` time → `.generated(…)` per-file entries | Single concatenated output file per module — no per-file enumeration needed |
-| SafeDITool acquisition | `tuist install` pulls via SafeDI's `prebuilt` trait | Built from source by Bazel; cached across runs |
+| SafeDITool acquisition | `tuist install` pulls via SafeDI's `prebuilt` trait | A toolchain: the release's prebuilt binary, or, for this example's `local_path_override`, built from source by Bazel |
 | Generated code location | `$(DERIVED_FILE_DIR)` (Xcode build sandbox) | `bazel-bin/…` (Bazel action sandbox) |
 
 Both end up at the same shape: generated Swift is a build artifact,

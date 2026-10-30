@@ -160,6 +160,68 @@ jobs:
             exit 1
           fi
 
+  bazel-source-archive-check:
+    name: Bazel Source Archive Check
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    # The publish workflow builds the source archive the BCR entry points
+    # at with Scripts/create-bazel-source-archive.sh, which writes the
+    # sha256 of each prebuilt SafeDITool into it. Run the script on
+    # stand-in binaries on every change, so it cannot rot unnoticed
+    # between releases, and check that the repository itself names no
+    # prebuilt SafeDITool: a checkout must build SafeDITool from source.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERSION: 99.99.99-test
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Verify the repository names no prebuilt SafeDITool
+        run: |
+          grep -qx 'SAFEDITOOL_RELEASE = None' bazel/private/prebuilt_safeditool.bzl
+          grep -qx 'SAFEDITOOL_SHA256 = {}' bazel/private/prebuilt_safeditool.bzl
+      - name: Create a source archive from stand-in binaries
+        run: |
+          mkdir "$RUNNER_TEMP/binaries"
+          for platform in linux-arm64 linux-x86_64 macos-arm64 macos-x86_64; do
+            echo "Stand-in for SafeDITool-$platform" > "$RUNNER_TEMP/binaries/SafeDITool-$platform"
+          done
+          ./Scripts/create-bazel-source-archive.sh "$VERSION" "$RUNNER_TEMP/binaries" HEAD
+      - name: Verify the archive names the stand-in binaries
+        run: |
+          {
+            echo "SAFEDITOOL_RELEASE = \"$VERSION\""
+            echo "SAFEDITOOL_SHA256 = {"
+            for platform in linux-arm64 linux-x86_64 macos-arm64 macos-x86_64; do
+              echo "    \"$platform\": \"$(sha256sum "$RUNNER_TEMP/binaries/SafeDITool-$platform" | cut -d ' ' -f 1)\","
+            done
+            echo "}"
+          } > "$RUNNER_TEMP/expected-values"
+          tar -xzOf "SafeDI-$VERSION.tar.gz" "SafeDI-$VERSION/bazel/private/prebuilt_safeditool.bzl" | grep -E '^(SAFEDITOOL_|    "|})' > "$RUNNER_TEMP/actual-values"
+          diff "$RUNNER_TEMP/expected-values" "$RUNNER_TEMP/actual-values"
+      - name: Verify the archive is git archive with only that file changed
+        # Same paths, modes, owners, modification times, and symbolic
+        # links as `git archive` writes, and the same content in every
+        # other file.
+        run: |
+          diff \
+            <(git archive --format=tar --prefix="SafeDI-$VERSION/" HEAD | tar -tvf - | grep -v ' SafeDI-[^ ]*/bazel/private/prebuilt_safeditool\.bzl$') \
+            <(tar -tvzf "SafeDI-$VERSION.tar.gz" | grep -v ' SafeDI-[^ ]*/bazel/private/prebuilt_safeditool\.bzl$')
+          mkdir "$RUNNER_TEMP/expected" "$RUNNER_TEMP/actual"
+          git archive --format=tar HEAD | tar -xf - -C "$RUNNER_TEMP/expected"
+          tar -xzf "SafeDI-$VERSION.tar.gz" -C "$RUNNER_TEMP/actual"
+          if diff -r "$RUNNER_TEMP/expected" "$RUNNER_TEMP/actual/SafeDI-$VERSION" > "$RUNNER_TEMP/differences"; then
+            echo "::error::The archive's bazel/private/prebuilt_safeditool.bzl is the repository's."
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/differences"
+          if grep -E '^(Only in|diff -r)' "$RUNNER_TEMP/differences" | grep -v -x "diff -r $RUNNER_TEMP/expected/bazel/private/prebuilt_safeditool.bzl $RUNNER_TEMP/actual/SafeDI-$VERSION/bazel/private/prebuilt_safeditool.bzl"; then
+            echo "::error::The archive differs from git archive in more than bazel/private/prebuilt_safeditool.bzl."
+            exit 1
+          fi
+
   xcodebuild:
     # The job name spells out the matrix value so the check names stay
     # exactly as branch protection lists them.
@@ -847,7 +909,10 @@ jobs:
     #
     # Keep `build_targets` aligned with `.bcr/presubmit.yml` so a
     # divergence is visible in review. If you change BCR's task list,
-    # update this job too.
+    # update this job too. BCR builds the example against the published
+    # source archive with `prefer_prebuilt_safeditool` both true and
+    # false; this job builds it against the checkout, which has no
+    # prebuilt toolchain, so it runs SafeDITool built from source.
     #
     # Pinned to Xcode 26.0 — matches BCR's `macos_arm64` runner
     # platform defined at https://github.com/bazelbuild/continuous-integration/blob/master/buildkite/bazelci.py
@@ -899,6 +964,28 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: (cd Examples/ExampleBazelIntegration && bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" //Subproject:Subproject //ExampleBazelIntegration:ExampleBazelIntegration)
+      # The example takes SafeDI from this checkout, whose
+      # `bazel/private/prebuilt_safeditool.bzl` names no prebuilt
+      # SafeDITool, so every SafeDI action must run the SafeDITool built
+      # from the checkout: a release's prebuilt binary may not accept the
+      # options this checkout's rule passes. A prebuilt binary's path is
+      # under the `safeditool` extension's repository instead. Kept out of
+      # the retry wrapper: the build above fetched everything the query
+      # reads, and a wrong tool is deterministic, not a flake.
+      - name: Verify the example ran the SafeDITool built from this checkout
+        working-directory: Examples/ExampleBazelIntegration
+        run: |
+          executables=$(bazelisk aquery --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" --output=jsonproto 'mnemonic("SafeDI", deps(//ExampleBazelIntegration:ExampleBazelIntegration))' | jq -r '.actions[].arguments[0]')
+          echo "The example's SafeDI actions run:"
+          echo "$executables"
+          if [ -z "$executables" ]; then
+            echo "::error::Found no SafeDI action in the example; the query in this step is out of date."
+            exit 1
+          fi
+          if grep -v -E '^bazel-out/[^/]+/bin/external/safedi\+/Sources/SafeDITool/SafeDITool$' <<< "$executables"; then
+            echo "::error::The example ran a SafeDITool other than //Sources/SafeDITool:SafeDITool built from this checkout."
+            exit 1
+          fi
       # Optimized builds define `NDEBUG` and no `DEBUG`, so the rule must report the
       # former, withhold the latter, and SafeDI must wire the example's
       # `#elseif NDEBUG` logger. The `_safedi` target is listed so
