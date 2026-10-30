@@ -762,11 +762,8 @@ enum GraphFuzzerMultiModuleProperty {
 		}
 
 		var verdicts = [GraphFuzzerMultiModuleOutcome.ModuleVerdict]()
-		for module in modules {
-			if let rejection, rejection.moduleName == module.name {
-				verdicts.append(rejection)
-				break
-			}
+		// The modules before the rejected one, or every module when none was rejected.
+		for module in modules.prefix(while: { $0.name != rejection?.moduleName }) {
 			// The harness processes every module up to the one it rejects, so a module without an output before that
 			// is a harness defect, not a verdict.
 			guard let moduleOutput = outputsByModuleName[module.name] else {
@@ -781,6 +778,9 @@ enum GraphFuzzerMultiModuleProperty {
 				GraphFuzzerGeneratedModule.parsingGeneratedFile(reducingFixtureRootPaths(in: moduleOutput.generatedFiles[fileName, default: ""]), named: fileName, into: &generatedModule)
 			}
 			verdicts.append(GraphFuzzerMultiModuleOutcome.ModuleVerdict(moduleName: module.name, kind: .accepted(generatedModule)))
+		}
+		if let rejection {
+			verdicts.append(rejection)
 		}
 		return GraphFuzzerMultiModuleOutcome(verdicts: verdicts)
 	}
