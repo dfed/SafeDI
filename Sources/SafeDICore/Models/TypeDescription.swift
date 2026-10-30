@@ -780,32 +780,57 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 	/// would resolve against the caller's scope if the default were promoted
 	/// onto another type's `SafeDIOverrides` struct.
 	public var containsSelf: Bool {
+		namesType(where: { $0.first == "Self" })
+	}
+
+	/// Whether the receiver names a type whose path satisfies `predicate`, wherever in the receiver that type sits. A
+	/// path is a named type's names from the outermost, such as `["Child", "Config"]` for `Child.Config<Int>`, and each
+	/// path a nested type's path starts with is named too: `Child.Config` names `["Child"]` and `["Child", "Config"]`.
+	/// So `$0.first == "Config"` finds `Config` named without qualification in `Config?`, `[String: Config]`,
+	/// `Box<Config>`, `(Config) -> Void`, and `Config.Options`, and not in `Child.Config`. The text of an `unknown`
+	/// type is not inspected.
+	public func namesType(where predicate: ([String]) -> Bool) -> Bool {
 		switch self {
 		case let .simple(name, generics):
-			name == "Self" || generics.contains(where: \.containsSelf)
-		case let .nested(_, parentType, generics):
-			parentType.containsSelf || generics.contains(where: \.containsSelf)
+			predicate([name]) || generics.contains(where: { $0.namesType(where: predicate) })
+		case let .nested(name, parentType, generics):
+			parentType.namesType(where: predicate)
+				|| (parentType.namePath.map { predicate($0 + [name]) } ?? false)
+				|| generics.contains(where: { $0.namesType(where: predicate) })
 		case let .any(wrapped),
 		     let .implicitlyUnwrappedOptional(wrapped),
 		     let .optional(wrapped),
 		     let .some(wrapped):
-			wrapped.containsSelf
+			wrapped.namesType(where: predicate)
 		case let .array(element):
-			element.containsSelf
+			element.namesType(where: predicate)
 		case let .dictionary(key, value):
-			key.containsSelf || value.containsSelf
+			key.namesType(where: predicate) || value.namesType(where: predicate)
 		case let .tuple(elements):
-			elements.contains(where: \.typeDescription.containsSelf)
+			elements.contains(where: { $0.typeDescription.namesType(where: predicate) })
 		case let .composition(elements):
-			elements.contains(where: \.containsSelf)
+			elements.contains(where: { $0.namesType(where: predicate) })
 		case let .closure(arguments, _, _, returnType):
-			arguments.contains(where: \.containsSelf) || returnType.containsSelf
+			arguments.contains(where: { $0.namesType(where: predicate) }) || returnType.namesType(where: predicate)
 		case let .metatype(wrapped, _):
-			wrapped.containsSelf
+			wrapped.namesType(where: predicate)
 		case let .attributed(wrapped, _, _):
-			wrapped.containsSelf
+			wrapped.namesType(where: predicate)
 		case .unknown, .void:
 			false
+		}
+	}
+
+	/// The names of a simple or nested type from the outermost, such as `["Child", "Config"]` for `Child.Config`, or
+	/// `nil` for any other type, such as the `[Config]` of `[Config].Element`.
+	private var namePath: [String]? {
+		switch self {
+		case let .simple(name, _):
+			[name]
+		case let .nested(name, parentType, _):
+			parentType.namePath.map { $0 + [name] }
+		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .void:
+			nil
 		}
 	}
 

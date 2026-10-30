@@ -410,7 +410,7 @@ A forwarded value comes from outside the tree, so SafeDI does not follow the `@R
 
 Forwarded property types do not need to be decorated with the `@Instantiable` macro.
 
-In a decorated property’s type, spell a type declared inside another type with its enclosing types, such as `@Forwarded let configuration: Feature.Configuration` for a `struct Configuration` inside `enum Feature`: generated code spells the property’s type as its declaration does, in an extension where the members of `Feature` are not in scope. The exception is a nested type that an `@Instantiable` declaration fulfills, written as the property’s type or as the type a wrapper such as `Instantiator<Service>` builds, which SafeDI qualifies itself.
+In a decorated property’s type, spell a type declared inside another type with its enclosing types, such as `@Forwarded let configuration: Feature.Configuration` for a `struct Configuration` inside `enum Feature`: generated code spells the property’s type as its declaration does, in an extension where the members of `Feature` are not in scope. The exception is a nested type that an `@Instantiable` declaration fulfills, written as the property’s type or as the type a wrapper such as `Instantiator<Service>` builds, which SafeDI qualifies itself. The `@Instantiable` macro warns, with a fix-it, when a decorated property names a type declared inside the decorated type without its enclosing type.
 
 The [Macros intro](#macros) shows a `LoggedInView` with a `@Forwarded user: User`. The parent side — the root that actually passes the authenticated user in — uses the child’s `Instantiator` to forward the value:
 

@@ -49,6 +49,9 @@ public enum FixableInstantiableError: DiagnosticError {
 	case calleeScopeReferenceInDefaultExpression(parameterLabel: String, typeName: String)
 	/// A name SafeDI binds, or refers to, in generated code collides with a name generated code introduces.
 	case reservedName(name: String, reservation: ReservedName)
+	/// A dependency's type names types declared inside the decorated declaration, each spelled as `spelling`, which code
+	/// SafeDI generates in another type's extension cannot resolve.
+	case unqualifiedNestedType(typeNames: [(spelling: String, qualifiedSpelling: String)], enclosingTypeName: String, dependencyLabel: String)
 
 	public enum MissingInitializer: Sendable {
 		case hasOnlyInjectableProperties
@@ -138,6 +141,12 @@ public enum FixableInstantiableError: DiagnosticError {
 			case let .constructedType(typeName):
 				"`\(name)` is reserved: generated code constructs the `\(typeName)` type by that name, and a name spelled the same would hide the type from it. Rename it."
 			}
+		case let .unqualifiedNestedType(typeNames, enclosingTypeName, dependencyLabel):
+			if typeNames.count == 1 {
+				"The generated code that builds or receives `\(dependencyLabel)` lives in another type’s extension, where \(typeNames.map { "`\($0.spelling)`" }.joinedAsList), declared in `\(enclosingTypeName)`, does not resolve. Write it as \(typeNames.map { "`\($0.qualifiedSpelling)`" }.joinedAsList)."
+			} else {
+				"The generated code that builds or receives `\(dependencyLabel)` lives in another type’s extension, where \(typeNames.map { "`\($0.spelling)`" }.joinedAsList), declared in `\(enclosingTypeName)`, do not resolve. Write them as \(typeNames.map { "`\($0.qualifiedSpelling)`" }.joinedAsList)."
+			}
 		}
 	}
 
@@ -183,6 +192,8 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .calleeScopeReferenceInDefaultExpression,
 			     .reservedName:
 				.error
+			case .unqualifiedNestedType:
+				.warning
 			}
 			message = error.description
 		}
@@ -264,12 +275,27 @@ public enum FixableInstantiableError: DiagnosticError {
 				case .mockOverridesParameter, .configurationBuilderProperty, .constructedType:
 					"Rename `\(name)`"
 				}
+			case let .unqualifiedNestedType(typeNames, _, _):
+				"Replace \(typeNames.map { "`\($0.spelling)` with `\($0.qualifiedSpelling)`" }.joinedAsList)"
 			}
 			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
 		}
 
 		let message: String
 		let fixItID: MessageID
+	}
+}
+
+// MARK: - [String]
+
+extension [String] {
+	/// The strings joined as a list in prose: `A`, `A and B`, or `A, B, and C`.
+	fileprivate var joinedAsList: String {
+		if count > 2 {
+			"\(dropLast().joined(separator: ", ")), and \(self[count - 1])"
+		} else {
+			joined(separator: " and ")
+		}
 	}
 }
 
