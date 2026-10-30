@@ -34,12 +34,11 @@ import Testing
 /// found with Tarjan's algorithm, visiting files in their order, which lists each component after every component it
 /// refers to: a lazy cycle through instantiators is one component, so its types share a module, and the roots, which
 /// refer to most of the graph, come last. The components are then dealt out, in that order, to one to four modules
-/// (`moduleNames`, in that order, so a module's name sorts as its position does), as many as the graph's text chooses
-/// (`moduleCount(forComponentCount:of:)`, from `GraphFuzzerHash` of the fixture's description, so single-module
-/// graphs stay in the corpus), each a contiguous run of components, so every reference points into the same module or
-/// an earlier one. Every file keeps its content and its name, with `import` lines for the modules it refers to added
-/// before it, so the renaming oracle's `rename` and `restore` apply unchanged (the module and package names hold no
-/// digit, and no index the renamings rewrite).
+/// (`moduleNames`, in that order), as many as the graph's text chooses (`moduleCount(forComponentCount:of:)`, from
+/// `GraphFuzzerHash` of the fixture's description, so single-module graphs stay in the corpus), each a contiguous run
+/// of components, so every reference points into the same module or an earlier one. Every file keeps its content and
+/// its name, with `import` lines for the modules it refers to added before it, so the renaming oracle's `rename` and
+/// `restore` apply unchanged (the module and package names hold no digit, and no index the renamings rewrite).
 ///
 /// A module's `dependencies` are every module whose declarations its `generate` must read: the modules its files
 /// refer to and, through them, the modules those refer to. That is what a Bazel user lists in `safedi_compile`'s
@@ -67,9 +66,15 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 	/// The files' names, as `executeSafeDIToolTest` and `executeSafeDIToolMultiModuleTest` name them.
 	let fileNames: [String]
 
-	/// The names the modules take, in dependency order. Each holds no digit, so no renaming rewrites it, and they
-	/// sort in dependency order, so the plugin integration, which parses every module's files in path order, meets
-	/// the modules' declarations in the order the module-info integration reads their `.safedi` files.
+	/// The names the modules take, in dependency order. Each holds no digit, so no renaming rewrites it. The two
+	/// integrations combine a module's declarations with its dependencies' in different orders: `generate` lists the
+	/// dependencies' `.safedi` files, which the module-info integration reads in path order, before the module's own
+	/// declarations, while the plugin integration parses every module's files in path order (`Sources/<Module>/…`),
+	/// the module's own among them. The first three names sort in dependency order, so for one to three modules the
+	/// orders agree; `Delta` sorts before `Gamma`, so in every four-module graph the plugin combines `Delta`'s own
+	/// declarations before `Gamma`'s where the module-info integration combines them after – deliberately, as a real
+	/// package's module directories sort arbitrarily against a Bazel build's `.safedi` paths, so a quarter of the corpus
+	/// checks that nothing SafeDI generates or reports depends on that order.
 	static let moduleNames = ["Alpha", "Beta", "Gamma", "Delta"]
 
 	/// The one package every module belongs to: the plugin integration spells each file relative to it.
