@@ -29,6 +29,12 @@ if [ $# -lt 2 ] || [ $# -gt 3 ]; then
     exit 1
 fi
 
+# `git archive --mtime`, which stamps the archive below, arrived in git 2.40.
+if [[ "$(git archive -h 2>&1 || true)" != *--mtime* ]]; then
+    echo "error: $(git --version) is older than 2.40, so its git archive has no --mtime." >&2
+    exit 1
+fi
+
 VERSION="$1"
 BINARY_DIRECTORY="$2"
 REF="${3:-$1}"
