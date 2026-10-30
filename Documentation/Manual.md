@@ -300,8 +300,6 @@ public struct NotesApp: App, Instantiable {
 | `erasedToConcreteExistential: false` | **Cast:** `FulfillingType as PropertyType` | `MyViewController` → `UIViewController` |
 | `erasedToConcreteExistential: true` | **Wrap:** `PropertyType(FulfillingType())` | `MyView` → `AnyView(MyView())` |
 
-The property type cannot be optional: SafeDI always creates an [`@Instantiated`](#instantiated) property, so the macro reports `userService: AnyUserService?` rather than wrapping it.
-
 #### Making external types `@Instantiable`
 
 Types that are declared outside of your project can be instantiated by SafeDI if there is an extension on the type decorated with the `@Instantiable` macro. Extensions decorated with this macro define how to instantiate the extended type via a `public static func instantiate(…) -> ExtendedType` function. This `instantiate(…)` function can receive dependencies instantiated or forwarded by objects further up the dependency tree by declaring these dependencies as parameters to the `instantiate(…)` function. A parameter with a default value is not a dependency, as for an initializer: SafeDI calls `instantiate(…)` without it, so its default applies even when an object further up the tree has a property with the same label and type, and a generated mock offers it as an override.
@@ -398,7 +396,7 @@ Each `@Instantiated` property is a distinct instance.
 
 `@Instantiated`-decorated properties must be an `@Instantiable` type, or a type listed in an `@Instantiable(fulfillingAdditionalTypes:)` declaration.
 
-SafeDI always creates an `@Instantiated` property, so its type cannot be optional. The `@Instantiated` macro reports an optional type, whether spelled `Service?`, `Service!`, or `Optional<Service>`, an optional wrapper such as `Instantiator<Service>?`, and a wrapper that builds an optional type such as `Instantiator<Service?>`, with a fix-it that removes the optionality. A type that may be built where the dependency is absent receives it with [`@Received(onlyIfAvailable: true)`](#conditionally-receiving-dependencies) instead.
+An `@Instantiated` property’s type cannot be optional, because SafeDI always creates it; a dependency that may be absent is received with [`@Received(onlyIfAvailable: true)`](#conditionally-receiving-dependencies).
 
 If the enclosing type is a SwiftUI `View`, keep in mind that `@Instantiated` objects are re-initialized each time the view is recreated by SwiftUI. You can find a deep dive on SwiftUI view lifecycles [here](https://www.donnywals.com/understanding-how-and-when-swiftui-decides-to-redraw-views/).
 
