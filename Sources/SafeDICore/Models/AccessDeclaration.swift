@@ -44,7 +44,8 @@ public struct AccessDeclaration: Codable, Hashable, Sendable {
 	public let declarationStartLocation: Dependency.DeclarationLocation?
 	/// Whether the declaration is an extension. A member of an extension that spells no access modifier defaults to
 	/// the extension's level (`fileprivate` for a `private` extension), and a member of a type declaration to
-	/// `internal`, whatever the type's level.
+	/// `internal`, whatever the type's level. Always `false` in `Instantiable.enclosingTypeAccess`, and always `true` in
+	/// `Instantiable.enclosingExtensionAccess`.
 	public let isExtension: Bool
 
 	/// Whether the declaration spells an access modifier. A declaration that spells none has the `internal` level, and
