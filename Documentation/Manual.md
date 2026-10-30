@@ -289,6 +289,8 @@ public struct NotesApp: App, Instantiable {
 | `erasedToConcreteExistential: false` | **Cast:** `FulfillingType as PropertyType` | `MyViewController` → `UIViewController` |
 | `erasedToConcreteExistential: true` | **Wrap:** `PropertyType(FulfillingType())` | `MyView` → `AnyView(MyView())` |
 
+When the property is optional, the type it wraps does the wrapping: a property `userService: AnyUserService?` is assigned `AnyUserService(DefaultUserService())`.
+
 #### Making external types `@Instantiable`
 
 Types that are declared outside of your project can be instantiated by SafeDI if there is an extension on the type decorated with the `@Instantiable` macro. Extensions decorated with this macro define how to instantiate the extended type via a `public static func instantiate(…) -> ExtendedType` function. This `instantiate(…)` function can receive dependencies instantiated or forwarded by objects further up the dependency tree by declaring these dependencies as parameters to the `instantiate(…)` function. A parameter with a default value is not a dependency, as for an initializer: SafeDI calls `instantiate(…)` without it, so its default applies even when an object further up the tree has a property with the same label and type, and a generated mock offers it as an override.

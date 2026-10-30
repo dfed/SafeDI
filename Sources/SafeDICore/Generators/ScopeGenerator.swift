@@ -1575,15 +1575,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 					"""
 				}
+				// An optional property is erased by the type it wraps, as an alias's property is
+				// (`aliasDeclaration`): `AnyService?` has no initializer that takes the concrete type.
+				// The binding is not annotated, so it holds the erased value, which the optional
+				// property's initializer argument and receivers take through optional promotion.
+				let existentialTypeSource = property.typeDescription.unwrapped.asSource
 				let existentialWrappedReturn = if erasedToConcreteExistential {
-					"\(property.typeDescription.asSource)(\(returnLineSansReturn))"
+					"\(existentialTypeSource)(\(returnLineSansReturn))"
 				} else {
 					returnLineSansReturn
 				}
 				let initializer = if !hasGeneratedContent {
 					existentialWrappedReturn
 				} else if erasedToConcreteExistential {
-					"\(property.typeDescription.asSource)(\(functionName)())"
+					"\(existentialTypeSource)(\(functionName)())"
 				} else {
 					"\(functionName)()"
 				}
@@ -2781,12 +2786,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// `AnyService` erasing `DefaultService`). Generated mock code wraps the
 		/// concrete value in this type: `AnyService(DefaultService(…))`.
 		/// Instantiator-family properties erase to the type they build, constant
-		/// properties to the property type itself.
+		/// properties to the property type itself, unwrapped when it is optional:
+		/// `AnyService?` has no initializer that takes the concrete type.
 		var concreteExistentialType: TypeDescription {
 			if isInstantiator {
 				typeDescription.unwrapped.asInstantiatedType
 			} else {
-				typeDescription
+				typeDescription.unwrapped
 			}
 		}
 
