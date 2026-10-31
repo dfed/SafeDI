@@ -25,10 +25,14 @@ import SwiftSyntax
 actor ScopeGenerator: CustomStringConvertible, Sendable {
 	// MARK: Initialization
 
+	/// - Parameter propertiesToDeclare: The properties the scope declares for the scopes it builds, which its
+	///   children therefore do not receive from its ancestors (see `Scope.propertiesToDeclare`). Empty for a
+	///   scope that closes a property cycle, which builds nothing.
 	init(
 		instantiable: Instantiable,
 		property: Property?,
 		propertiesToGenerate: [ScopeGenerator],
+		propertiesToDeclare: Set<Property>,
 		unavailableOptionalProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		forwardedLazilyInstantiatedInstanceProperties: [Property],
@@ -96,17 +100,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		self.buildsInSendableFunction = buildsInSendableFunction
 		self.cycleClosingPropertiesReferencedFromSendableFunction = cycleClosingPropertiesReferencedFromSendableFunction
-		// A lazily instantiated property also declares the property that receives its instance by value.
-		// This runs at every scope of every tree, so the set is filled without intermediate arrays.
-		var propertiesToDeclare = Set<Property>(minimumCapacity: propertiesToGenerate.count)
-		for child in propertiesToGenerate {
-			if let property = child.property {
-				propertiesToDeclare.insert(property)
-			}
-			if let instanceProperty = child.declaredLazilyInstantiatedInstanceProperty {
-				propertiesToDeclare.insert(instanceProperty)
-			}
-		}
 		self.propertiesToDeclare = propertiesToDeclare
 		// Nearly every scope declares no alias, and nearly every one that does declares no alias of another.
 		var aliasProperties = Set<Property>()
@@ -849,7 +842,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 	/// Properties that will be generated as `let` constants. Mutated only by `deinit`, which has the only access.
 	nonisolated(unsafe) private var propertiesToGenerate: [ScopeGenerator]
-	/// Properties that this scope declares as a `let` constant.
+	/// Properties that this scope declares as a `let` constant, and those its type instantiates that a mock is
+	/// passed instead (see `Scope.propertiesToDeclare`).
 	private let propertiesToDeclare: Set<Property>
 	/// The properties of this scope's `onlyIfAvailable` aliases that rename another alias this scope declares.
 	/// Each is not created where the alias it renames is not (see `uncreatedOnlyIfAvailableAliasesOfAliases`).
@@ -1785,11 +1779,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// tree's bindings, after the wrappers. The mock builds no node for the instance itself beside a received
 		// wrapper, which it promotes instead, so that node is a wrapper of the other kind, such as a
 		// `SendableLazilyInstantiated<X>` the tree requires beside an `onlyIfAvailable` `LazilyInstantiated<X>?`.
+		// An instance the mocked type instantiates and the mock cannot build does provide it, and the wrapper is made
+		// from it: `mock()` takes that instance as a parameter, which is in scope before any binding, so the dependency
+		// and the wrapper are one instance, as when the mock builds the dependency as the wrapper. The instance of a
+		// wrapper the mocked type instantiates and the mock cannot build provides only that wrapper: `mock()` takes the
+		// wrapper, which makes no wrapper of the other kind, so the mock takes the instance as well, as it builds a
+		// wrapper of the other kind beside a wrapper it builds.
+		let mockedTypeUncoveredDependencies = Self.uncoveredInstantiatedDependencies(ofMockedType: instantiable, treePropertyNodes: treePropertyNodes)
+		let mockedTypeUncoveredProperties = Set(mockedTypeUncoveredDependencies.map(\.property))
+		let mockedTypeUncoveredWrapperInstanceProperties = Set(mockedTypeUncoveredDependencies.compactMap(\.lazilyInstantiatedInstanceProperty))
+		/// Whether the tree provides `property` to the receives the caller of `mock()` would otherwise pass it to by
+		/// value: the instance a received wrapper is made from, or a received property itself.
+		func isProvidedByTreeByValue(_ property: Property) -> Bool {
+			isProvidedByTree(property) && !mockedTypeUncoveredWrapperInstanceProperties.contains(property.asUnwrappedProperty)
+		}
 		let lazilyInstantiatedReceivedProperties = receivedProperties
 			.filter {
 				$0.typeDescription.lazilyInstantiatedInstanceType != nil
 					&& !isProvidedByTree($0)
-					&& !isProvidedByTree($0.asValidatedForDependencyCycles)
+					&& (!isProvidedByTreeByValue($0.asValidatedForDependencyCycles) || mockedTypeUncoveredProperties.contains($0.asValidatedForDependencyCycles.asUnwrappedProperty))
 					&& !isFulfilledByForwardedProperty($0)
 			}
 			.sorted()
@@ -1853,8 +1861,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// A receive of a property the tree provides is handed that node: the mock root's own
 			// receive, or an alias's fulfilling property. A tree node with the label and another
 			// type does not provide it: the receivers are handed a parameter or an override of
-			// their own type, named apart from that node below.
-			guard !isProvidedByTree(receivedProperty) else { continue }
+			// their own type, named apart from that node below. Nor does the instance of a wrapper the
+			// mocked type instantiates and the mock cannot build provide a wrapper of the other kind.
+			guard !isProvidedByTreeByValue(receivedProperty) else { continue }
 			if onlyIfAvailableUnwrappedReceivedParameterProperties.contains(receivedProperty.asUnwrappedProperty) {
 				onlyIfAvailableReceivedProperties.append(receivedProperty)
 			} else {
@@ -1864,18 +1873,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		var uncoveredDependencies = UncoveredDependencies()
 		// Collect uncovered @Instantiated deps from the root type.
-		for dependency in instantiable.dependencies {
-			switch dependency.source {
-			case .instantiated:
-				// A dependency promoted to the root under the label, of another type, does not build it. The
-				// `LazilyInstantiated` the mock builds the dependency as, when the tree receives that, does.
-				guard !treePropertyNodes.contains(where: {
-					$0.property == dependency.property || $0.property.asLazilyInstantiatedInstanceProperty == dependency.property
-				}) else { continue }
-				uncoveredDependencies.add(dependency, isHiddenWhereReferenced: false)
-			case .received, .aliased, .forwarded:
-				break
-			}
+		for dependency in mockedTypeUncoveredDependencies {
+			uncoveredDependencies.add(dependency, isHiddenWhereReferenced: false)
 		}
 		// Also collect uncovered @Instantiated deps from child types in the tree.
 		// When a child has a custom mock method, its @Instantiated deps that aren't
@@ -1986,6 +1985,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let flatReceivedProperties = parameters.flatReceivedProperties
 		let onlyIfAvailableReceivedProperties = parameters.onlyIfAvailableReceivedProperties
 		let flatUncoveredParameters = parameters.flatUncoveredParameters
+		// The mocked type declares these for its whole tree: `mock()` takes each as a parameter.
+		let mockedTypeUncoveredDependencies = Self.uncoveredInstantiatedDependencies(ofMockedType: instantiable, treePropertyNodes: treePropertyNodes)
 		let lazilyInstantiatedReceivedProperties = parameters.lazilyInstantiatedReceivedProperties
 		let lazilyInstantiatedPropertyByInstanceBesideForwardedProperty = parameters.lazilyInstantiatedPropertyByInstanceBesideForwardedProperty
 
@@ -2096,6 +2097,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// The parameter may be named apart from its label.
 			if let instanceName = flatReceivedNameByProperty[instanceProperty] {
 				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(wrapperTypeSource) { \(instanceName) }")
+			} else if mockedTypeUncoveredDependencies.contains(where: { $0.property == instanceProperty }),
+			          let uncoveredParameter = flatUncoveredParameters.first(where: { $0.property == instanceProperty })
+			{
+				// The instance is the parameter of a dependency the mocked type instantiates, which is always passed.
+				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(wrapperTypeSource) { \(uncoveredParameter.label) }")
 			} else if let instanceName = flatReceivedNameByProperty[optionalInstanceProperty] {
 				lazilyInstantiatedBindings.append("\(bodyIndent)let \(bindingName) = \(instanceName).map { instance in \(wrapperTypeSource) { instance } }")
 			} else {
@@ -2260,6 +2266,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				siblingDisambiguationMap[label, default: [:]][typeDescription] = name
 			}
 		}
+		// The mocked type declares its own uncovered dependencies for its whole tree, so a receive of one there, and an
+		// alias of one, is handed the parameter the mocked type is passed. Nothing in the tree receives one from above,
+		// so no parameter, override, or wrapper the mock binds for a receiver shares its label and type.
+		treeDisambiguationMap = Self.routingReceives(
+			of: mockedTypeUncoveredDependencies,
+			toParametersNamed: uncoveredDependencyNameMap,
+			in: treeDisambiguationMap,
+		)
 		// The root's own receive of a wrapped lazily instantiated dependency is passed its binding by name too.
 		var returnDisambiguationMap = siblingDisambiguationMap
 		for (label, typeMap) in lazilyInstantiatedBindingNameMap {
@@ -3298,12 +3312,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) async {
 		for node in nodes {
 			let propertyChildren = node.propertyChildren
-			let childLabels = Set(propertyChildren.map(\.propertyLabel))
 			var uncoveredLabels = Set<String>()
-			for dependency in node.dependencies {
-				guard case .instantiated = dependency.source else { continue }
-				// Skip deps that are covered by a child node in the tree.
-				guard !childLabels.contains(dependency.property.label) else { continue }
+			for dependency in uncoveredInstantiatedDependencies(of: node) {
 				uncoveredLabels.insert(dependency.property.label)
 				uncoveredDependencies.add(
 					dependency,
@@ -3324,6 +3334,70 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				into: &uncoveredDependencies,
 			)
 		}
+	}
+
+	/// The `@Instantiated` dependencies of `node`'s type that the mock cannot build, which `mock()` takes as
+	/// parameters: those no property child of the node builds.
+	private static func uncoveredInstantiatedDependencies(of node: MockParameterNode) -> [Dependency] {
+		// Nearly every node builds every dependency it instantiates.
+		var childLabels: Set<String>?
+		return node.dependencies.filter { dependency in
+			switch dependency.source {
+			case .instantiated:
+				if childLabels == nil {
+					childLabels = Set(node.propertyChildren.map(\.propertyLabel))
+				}
+				return childLabels?.contains(dependency.property.label) == false
+			case .received, .aliased, .forwarded:
+				return false
+			}
+		}
+	}
+
+	/// The `@Instantiated` dependencies of the mocked type, `instantiable`, that the mock cannot build, which
+	/// `mock()` takes as parameters: those no node of the mock root's tree, `treePropertyNodes`, builds. A node
+	/// promoted to the root under a dependency's label, of another type, does not build it. The `LazilyInstantiated`
+	/// the mock builds the dependency as, when the tree receives that, does.
+	private static func uncoveredInstantiatedDependencies(
+		ofMockedType instantiable: Instantiable,
+		treePropertyNodes: [MockParameterNode],
+	) -> [Dependency] {
+		instantiable.dependencies.filter { dependency in
+			switch dependency.source {
+			case .instantiated:
+				!treePropertyNodes.contains(where: {
+					$0.property == dependency.property || $0.property.asLazilyInstantiatedInstanceProperty == dependency.property
+				})
+			case .received, .aliased, .forwarded:
+				false
+			}
+		}
+	}
+
+	/// `disambiguationMap` for the scopes built where the type that instantiates `uncoveredDependencies`, which the
+	/// mock cannot build, has declared them: inside the type's builder function, or throughout the tree of the mocked
+	/// type. As in production, where a receiver is handed the property the closest type above it declares, a receive
+	/// of one of them there is handed the `mock()` parameter the type is passed, not a renamed parameter or override of
+	/// the same label and type that an enclosing scope binds. A parameter that keeps its label is in scope there, as
+	/// the type's declaration would be. One that `uncoveredDependencyNames` names apart from its label is rebound under
+	/// the label by each receiver, as a renamed flat parameter is.
+	private static func routingReceives(
+		of uncoveredDependencies: [Dependency],
+		toParametersNamed uncoveredDependencyNames: [String: [TypeDescription: String]],
+		in disambiguationMap: [String: [TypeDescription: String]],
+	) -> [String: [TypeDescription: String]] {
+		guard !uncoveredDependencies.isEmpty else { return disambiguationMap }
+		var disambiguationMap = removingRenames(
+			hiddenByDeclarationsOf: [],
+			parameters: uncoveredDependencies.map(\.property),
+			from: disambiguationMap,
+		)
+		for dependency in uncoveredDependencies {
+			if let parameterName = uncoveredDependencyNames[dependency.property.label]?[dependency.property.typeDescription] {
+				disambiguationMap[dependency.property.label, default: [:]][dependency.property.typeDescription] = parameterName
+			}
+		}
+		return disambiguationMap
 	}
 
 	// MARK: SafeDIOverrides Generation
@@ -3984,12 +4058,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					// receiver bindings a place to live.
 					let propertyTypeName = node.instantiatedTypeDescription.asSource
 					let innerIndent = "\(indent)\(standardIndent)"
-					let functionDisambiguationMap = removingRenames(
-						hiddenByDeclarationsOf: node.children,
-						from: combinedDisambiguationMap,
+					// The node's own receives have labels of their own, which neither its declarations nor its uncovered
+					// dependencies share.
+					let uncoveredDependencies = uncoveredInstantiatedDependencies(of: node)
+					let functionDisambiguationMap = routingReceives(
+						of: uncoveredDependencies,
+						toParametersNamed: uncoveredDependencyNames,
+						in: removingRenames(
+							hiddenByDeclarationsOf: node.children,
+							from: combinedDisambiguationMap,
+						),
 					)
 					let functionLazilyInstantiatedBindingNames = removingRenames(
 						hiddenByDeclarationsOf: node.children,
+						parameters: uncoveredDependencies.map(\.property),
 						from: lazilyInstantiatedBindingNames,
 					)
 
@@ -4246,15 +4328,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	) async -> [String] {
 		let forwardedProperties = node.forwardedProperties.sorted()
 		let innerIndent = "\(indent)\(standardIndent)"
-		// The builder function's parameters and bindings hide the renames of their properties.
-		let builderDisambiguationMap = removingRenames(
-			hiddenByDeclarationsOf: node.children,
-			parameters: forwardedProperties,
-			from: flatParameterDisambiguationMap,
+		// The builder function's parameters and bindings hide the renames of their properties, and so do the dependencies
+		// the node's type instantiates that the mock cannot build. The node's own receives have labels of their own.
+		let uncoveredDependencies = uncoveredInstantiatedDependencies(of: node)
+		let builderDisambiguationMap = routingReceives(
+			of: uncoveredDependencies,
+			toParametersNamed: uncoveredDependencyNames,
+			in: removingRenames(
+				hiddenByDeclarationsOf: node.children,
+				parameters: forwardedProperties,
+				from: flatParameterDisambiguationMap,
+			),
 		)
 		let builderLazilyInstantiatedBindingNames = removingRenames(
 			hiddenByDeclarationsOf: node.children,
-			parameters: forwardedProperties,
+			parameters: forwardedProperties + uncoveredDependencies.map(\.property),
 			from: lazilyInstantiatedBindingNames,
 		)
 

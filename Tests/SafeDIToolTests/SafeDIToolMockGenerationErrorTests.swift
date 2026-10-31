@@ -569,6 +569,247 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenLazilyInstantiatedReceivedPropertyIsHiddenByDependencyOfMockedTypeTheMockCannotBuild() async {
+		// `Feed` is built inside `Screen`, beneath the `session: Session` that `Screen` instantiates and the mock takes as
+		// a parameter, which hides `session: LazilyInstantiated<Session>` there, as in production.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Feed.swift"]):4:5: error: @Received property `session: LazilyInstantiated<Session>` is hidden in chain: Screen -> Feed. `Screen` declares `session: Session` with the same label, so the types below `Screen` receive `session: Session` instead. Give `session: Session` on `Screen` a different label to fix.
+				\(fixtures["Screen.swift"]):6:5: note: `session: Session` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public final class Session {}
+
+					@Instantiable(generateMock: true)
+					public final class Screen: Instantiable {
+					    public init(session: Session, feed: Feed) { self.session = session; self.feed = feed }
+					    @Instantiated let session: Session
+					    @Instantiated let feed: Feed
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Feed: Instantiable {
+					    public init(session: LazilyInstantiated<Session>) { self.session = session }
+					    @Received let session: LazilyInstantiated<Session>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenReceivedPropertyBeneathPromotedDependencyIsHiddenByItsDeclarationOfAnotherType() async {
+		// `Car` is built inside the `Garage` that `Dashboard` receives, which the mock builds beside `Dashboard`, beneath the
+		// `userService: Profile` that `Garage` instantiates, which hides `userService: UserService` there, as in production
+		// wherever `Garage` is built.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Car.swift"]):4:5: error: @Received property `userService: UserService` is hidden in chain: Garage -> Car. `Garage` declares `userService: Profile` with the same label, so the types below `Garage` receive `userService: Profile` instead. Give `userService: Profile` on `Garage` a different label to fix.
+				\(fixtures["Garage.swift"]):4:5: note: `userService: Profile` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public final class UserService {}
+
+					@Instantiable
+					public final class Profile: Instantiable {
+					    public init() {}
+					}
+
+					@Instantiable(generateMock: true)
+					public struct Dashboard: Instantiable {
+					    public init(userService: UserService, garage: Garage) { self.userService = userService; self.garage = garage }
+					    @Instantiated let userService: UserService
+					    @Received let garage: Garage
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Garage: Instantiable {
+					    public init(userService: Profile, car: Car) { self.userService = userService; self.car = car }
+					    @Instantiated let userService: Profile
+					    @Instantiated let car: Car
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Car: Instantiable {
+					    public init(userService: UserService) { self.userService = userService }
+					    @Received let userService: UserService
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenLazilyInstantiatedReceivedPropertyBeneathPromotedDependencyIsHiddenByItsDependencyTheMockCannotBuild() async {
+		// `Car` is built inside the `Garage` that `Dashboard` receives, which the mock builds beside `Dashboard`, beneath the
+		// `userService: UserService` that `Garage` instantiates, which hides `userService: LazilyInstantiated<UserService>`
+		// there, as in production wherever `Garage` is built.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Car.swift"]):4:5: error: @Received property `userService: LazilyInstantiated<UserService>` is hidden in chain: Garage -> Car. `Garage` declares `userService: UserService` with the same label, so the types below `Garage` receive `userService: UserService` instead. Give `userService: UserService` on `Garage` a different label to fix.
+				\(fixtures["Garage.swift"]):4:5: note: `userService: UserService` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public final class UserService {}
+
+					@Instantiable(generateMock: true)
+					public struct Dashboard: Instantiable {
+					    public init(userService: UserService, garage: Garage) { self.userService = userService; self.garage = garage }
+					    @Instantiated let userService: UserService
+					    @Received let garage: Garage
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Garage: Instantiable {
+					    public init(userService: UserService, car: Car) { self.userService = userService; self.car = car }
+					    @Instantiated let userService: UserService
+					    @Instantiated let car: Car
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Car: Instantiable {
+					    public init(userService: LazilyInstantiated<UserService>) { self.userService = userService }
+					    @Received let userService: LazilyInstantiated<UserService>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenLazilyInstantiatedReceivedPropertyBeneathPromotedDependencyIsHiddenByItsDeclarationOfAnotherType() async {
+		// `Car` is built inside the `Garage` that `Dashboard` receives, which the mock builds beside `Dashboard`, beneath the
+		// `userService: Profile` that `Garage` instantiates, which hides `userService: LazilyInstantiated<UserService>` there,
+		// as in production wherever `Garage` is built.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Car.swift"]):4:5: error: @Received property `userService: LazilyInstantiated<UserService>` is hidden in chain: Garage -> Car. `Garage` declares `userService: Profile` with the same label, so the types below `Garage` receive `userService: Profile` instead. Give `userService: Profile` on `Garage` a different label to fix.
+				\(fixtures["Garage.swift"]):4:5: note: `userService: Profile` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public final class UserService {}
+
+					@Instantiable
+					public final class Profile: Instantiable {
+					    public init() {}
+					}
+
+					@Instantiable(generateMock: true)
+					public struct Dashboard: Instantiable {
+					    public init(userService: UserService, garage: Garage) { self.userService = userService; self.garage = garage }
+					    @Instantiated let userService: UserService
+					    @Received let garage: Garage
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Garage: Instantiable {
+					    public init(userService: Profile, car: Car) { self.userService = userService; self.car = car }
+					    @Instantiated let userService: Profile
+					    @Instantiated let car: Car
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Car: Instantiable {
+					    public init(userService: LazilyInstantiated<UserService>) { self.userService = userService }
+					    @Received let userService: LazilyInstantiated<UserService>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsError_whenSendableLazilyInstantiatedReceivedPropertyBeneathPromotedDependencyIsHiddenByItsLazilyInstantiatedDeclaration() async {
+		// `Car` is built inside the `Garage` that `Dashboard` receives, which the mock builds beside `Dashboard`, beneath the
+		// `userService: LazilyInstantiated<UserService>` that `Garage` instantiates, which hides
+		// `userService: SendableLazilyInstantiated<UserService>` there, as in production wherever `Garage` is built.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Car.swift"]):4:5: error: @Received property `userService: SendableLazilyInstantiated<UserService>` is hidden in chain: Garage -> Car. `Garage` declares `userService: LazilyInstantiated<UserService>` with the same label, so the types below `Garage` receive `userService: LazilyInstantiated<UserService>` instead. Give `userService: LazilyInstantiated<UserService>` on `Garage` a different label to fix.
+				\(fixtures["Garage.swift"]):4:5: note: `userService: LazilyInstantiated<UserService>` is declared here
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public final class UserService: Sendable {}
+
+					@Instantiable(generateMock: true)
+					public struct Dashboard: Instantiable {
+					    public init(userService: UserService, garage: Garage) { self.userService = userService; self.garage = garage }
+					    @Instantiated let userService: UserService
+					    @Received let garage: Garage
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Garage: Instantiable {
+					    public init(userService: LazilyInstantiated<UserService>, car: Car) { self.userService = userService; self.car = car }
+					    @Instantiated let userService: LazilyInstantiated<UserService>
+					    @Instantiated let car: Car
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Car: Instantiable {
+					    public init(userService: SendableLazilyInstantiated<UserService>) { self.userService = userService }
+					    @Received let userService: SendableLazilyInstantiated<UserService>
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenTypeBuiltInsidePromotedDependencyReceivesForwardedPropertyThatInstantiatorOfItsLabelHides() async {
 		// The mock passes `Feed` the `Instantiator<Session>` it builds under the label `session`, inside the function that
 		// also builds `Row`, where the label then names the `Instantiator` rather than the forwarded `session`. Production

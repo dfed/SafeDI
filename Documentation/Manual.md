@@ -927,7 +927,7 @@ The table below shows where each dependency kind lands in the three buckets abov
 | Dependency kind | Shape in the mock | Default |
 | --- | --- | --- |
 | Required `@Received` of a type some `@Instantiable` declaration fulfills (directly or via `fulfillingAdditionalTypes`), or of a type exactly one concrete type is [erased to](#receiving-a-type-erased-dependency) | Entry on `SafeDIOverrides` | Built from the real subtree, exactly like `@Instantiated` |
-| Required `@Received` of a type no `@Instantiable` declaration fulfills, including a type [different concrete types are erased to](#receiving-a-type-erased-dependency) | Flat `mock()` parameter | Required |
+| Required `@Received` of a type no `@Instantiable` declaration fulfills, including a type [different concrete types are erased to](#receiving-a-type-erased-dependency) | Flat `mock()` parameter, unless a type above the receiver instantiates it: the receiver is then passed that type's parameter | Required |
 | Required `@Received` of a type whose `@Instantiable` declaration has `@Forwarded` properties, unless received as an `Instantiator` | Flat `mock()` parameter | Required |
 | `@Forwarded` | Flat `mock()` parameter | Required, unless the root provides a default or the forwarded type has a [`mockOnly`](#the-mockonly-parameter) provider (which defaults the parameter to `Type.mock()`) |
 | `@Instantiated` | Entry on `SafeDIOverrides` | Built from the real subtree — see [Overriding dependencies](#overriding-dependencies) |

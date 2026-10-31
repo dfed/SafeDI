@@ -131,6 +131,7 @@ public actor DependencyTreeGenerator {
 		// Create mock-root ScopeGenerators using the production Scope tree.
 		var seen = Set<TypeDescription>()
 		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation(scopes: typeDescriptionToScopeMap.values)
+		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		var mockRoots = [(instantiable: Instantiable, scopeGenerator: ScopeGenerator)]()
 		var mockRootErrors = [DependencyTreeGeneratorError]()
 		for instantiable in typeDescriptionToFulfillingInstantiableMap.values
@@ -166,6 +167,7 @@ public actor DependencyTreeGenerator {
 					mockScopes: mockScopes,
 					receivedPropertiesCache: &receivedPropertiesCache,
 					childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
+					promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 				)
 				mockRoots.append((instantiable: instantiable, scopeGenerator: mockRoot))
 			} catch let error as DependencyTreeGeneratorError {
@@ -356,6 +358,7 @@ public actor DependencyTreeGenerator {
 		else { return nil }
 		let instantiable = mockRootInstantiable(for: scope.instantiable, scope: scope)
 		var childrenRequiringEachOtherValidation = ChildrenRequiringEachOtherValidation(scopes: mockScopes.typeDescriptionToScopeMap.values)
+		var promotedScopesValidatedForHiddenReceives = Set<ObjectIdentifier>()
 		let mockRoot = try createMockRoot(
 			for: instantiable,
 			scope: scope,
@@ -365,6 +368,7 @@ public actor DependencyTreeGenerator {
 			mockScopes: mockScopes,
 			receivedPropertiesCache: &receivedPropertiesCache,
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
+			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 		)
 		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable)
 
@@ -672,6 +676,7 @@ public actor DependencyTreeGenerator {
 	/// run the same ones; a pass that needs every mock root at once goes after `generateMockCode`'s loop instead.
 	/// - Parameter generatedMockReason: Why the project generates `mock()` for the type, or `nil` when it does
 	///   not, so that a hand-written method named `mock` is the type's mock rather than a collision.
+	/// - Parameter promotedScopesValidatedForHiddenReceives: See `createMockRootScopeGenerator`.
 	private func createMockRoot(
 		for instantiable: Instantiable,
 		scope: Scope,
@@ -679,6 +684,7 @@ public actor DependencyTreeGenerator {
 		mockScopes: MockScopes,
 		receivedPropertiesCache: inout ReceivedPropertiesCache,
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
+		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
 	) throws -> ScopeGenerator {
 		// A hand-written method also named `mock` can be confused with the
 		// generated `mock()`: identical signatures redeclare, overlapping ones
@@ -730,6 +736,7 @@ public actor DependencyTreeGenerator {
 			erasedToConcreteTypeMap: mockScopes.erasedToConcreteTypeMap,
 			receivedPropertiesCache: &receivedPropertiesCache,
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
+			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 		)
 	}
 
@@ -1642,6 +1649,9 @@ public actor DependencyTreeGenerator {
 	///   root, so only its children's results are collected.
 	/// - Parameter childrenRequiringEachOtherValidation: The scopes whose children are already known not to
 	///   require one another; see `validateChildrenDoNotRequireEachOther`.
+	/// - Parameter promotedScopesValidatedForHiddenReceives: The scopes of `typeDescriptionToScopeMap` whose trees are
+	///   already known to hide no received dependency, shared across mock roots: a scope's tree is validated the same
+	///   way whichever mock root promotes it.
 	private func createMockRootScopeGenerator(
 		for instantiable: Instantiable,
 		scope: Scope,
@@ -1649,6 +1659,7 @@ public actor DependencyTreeGenerator {
 		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
 		receivedPropertiesCache cache: inout ReceivedPropertiesCache,
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
+		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
 	) throws -> ScopeGenerator {
 		// Recursively collect all transitive received properties from the scope tree
 		// and any promoted scopes' subtrees. Results are cached per Scope identity
@@ -1845,11 +1856,11 @@ public actor DependencyTreeGenerator {
 			cyclesOnly: true,
 		)
 		// That walk does not follow a received `Instantiator` to the scope it builds, and
-		// promoted scopes' trees are walked by no validation, so report what it leaves:
-		// aliases that fulfill one another and children, here or anywhere in the mock tree,
-		// that require one another, in the order `validateChildrenDoNotRequireEachOther`
-		// checks them. The mock root's own children were checked above, so only their
-		// trees are left.
+		// promoted scopes' trees are walked by no cycle validation (below, each is walked for
+		// hidden received dependencies alone), so report what it leaves: aliases that fulfill
+		// one another and children, here or anywhere in the mock tree, that require one
+		// another, in the order `validateChildrenDoNotRequireEachOther` checks them. The mock
+		// root's own children were checked above, so only their trees are left.
 		if let aliasesFulfillingOneAnother = Self.aliasesFulfillingOneAnother(in: mockRootScope) {
 			throw aliasesFulfillingOneAnother.error
 		} else if let mockRootChildrenRequiringEachOther {
@@ -1900,6 +1911,36 @@ public actor DependencyTreeGenerator {
 			isReceivedUnderItsLabel: isReceivedUnderItsLabel,
 		) {
 			throw DependencyTreeGeneratorError.forwardedPropertyHiddenInPromotedTree(forwardedPropertyHiddenInPromotedTree)
+		}
+
+		// A promoted dependency stands for one the mocked type receives from above it, so in production its tree is built
+		// above the mocked type, wherever the dependency is built. A receive in that tree that a closer declaration in it
+		// hides is rejected there, so the mock rejects it too, as it rejects one in the mocked type's own tree: the
+		// validation of an additional mock's tree, run from the promoted dependency as from that mock's type, which
+		// declares nothing above it, so that the mocked type's own declarations hide nothing in it, and whose tree's
+		// received properties the mock binds. Each promoted scope's tree that passes is validated once; one that fails
+		// is walked again by every mock root that promotes it, so that each reports the error whatever order the mock
+		// roots are created in.
+		var promotedScopesToValidate = [ValidatedRootScope]()
+		var promotedScopeIdentifiersToValidate = Set<ObjectIdentifier>()
+		for case let .instantiated(_, promotedScope, _) in mockRootScope.propertiesToGenerate[scope.propertiesToGenerate.count...]
+			where !promotedScopesValidatedForHiddenReceives.contains(ObjectIdentifier(promotedScope))
+			&& promotedScopeIdentifiersToValidate.insert(ObjectIdentifier(promotedScope)).inserted
+		{
+			promotedScopesToValidate.append(ValidatedRootScope(
+				scope: promotedScope,
+				boundProperties: Self.collectReceivedProperties(from: promotedScope, cache: &cache).received,
+				isMock: true,
+			))
+		}
+		if !promotedScopesToValidate.isEmpty {
+			try validatePropertiesAreFulfillable(
+				onRootScopes: [],
+				additionalMockRootScopes: promotedScopesToValidate,
+				typeDescriptionToScopeMap: typeDescriptionToScopeMap,
+				cyclesOnly: true,
+			)
+			promotedScopesValidatedForHiddenReceives.formUnion(promotedScopeIdentifiersToValidate)
 		}
 
 		// Build the final ScopeGenerator once. The mock root binds every received
@@ -2944,7 +2985,7 @@ public actor DependencyTreeGenerator {
 	/// `onlyIfAvailableAliasPropertyProvidedByEnclosingScope` to decide what each tree is built after.
 	private struct ScopeDeclarations {
 		init(scope: Scope) {
-			propertiesToDeclare = DependencyTreeGenerator.propertiesToDeclare(in: scope)
+			propertiesToDeclare = scope.propertiesToDeclare
 			forwardedProperties = scope.instantiable.forwardedReceivableProperties
 			lazilyInstantiatedInstanceProperties = scope.instantiable.dependencies.compactMap(\.lazilyInstantiatedInstanceProperty)
 			var onlyIfAvailableAliases = [DependencyTreeGeneratorError.RequiredOnlyIfAvailableAlias]()
@@ -2960,8 +3001,9 @@ public actor DependencyTreeGenerator {
 			self.requiredAliasFulfillingProperties = requiredAliasFulfillingProperties
 		}
 
-		/// The properties the scope declares for its children: those it instantiates and the aliases it assigns. A
-		/// lazily instantiated property also declares the property that receives its instance by value.
+		/// The properties the scope declares for its children: those it instantiates, whether or not a scope builds
+		/// them, and the aliases it assigns (see `Scope.propertiesToDeclare`). A lazily instantiated property also
+		/// declares the property that receives its instance by value.
 		let propertiesToDeclare: Set<Property>
 		/// The properties the scope forwards. A lazily instantiated one is also received by value.
 		let forwardedProperties: Set<Property>
@@ -3083,12 +3125,6 @@ public actor DependencyTreeGenerator {
 			}
 			return resolvedRequirements
 		}
-	}
-
-	/// The properties `scope` declares for its children: those it instantiates and the aliases it assigns.
-	/// A lazily instantiated property also declares the property that receives its instance by value.
-	private static func propertiesToDeclare(in scope: Scope) -> Set<Property> {
-		Set(scope.propertiesToGenerate.flatMap(\.receivableProperties))
 	}
 
 	/// Classifies a detected cycle and throws the appropriate error, or

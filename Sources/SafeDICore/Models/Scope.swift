@@ -135,11 +135,39 @@ final class Scope: Hashable {
 		.filter { $0.source == .forwarded }
 		.compactMap(\.lazilyInstantiatedInstanceProperty)
 
+	/// The `@Instantiated` dependencies of this scope's type that it does not generate, because no scope builds
+	/// their type: a mock is passed each as a `mock()` parameter, which the scopes this scope builds receive, as
+	/// they would receive the property this scope generated. Always empty in a scope of the dependency tree,
+	/// whose validation rejects a dependency no scope builds. Read only once `propertiesToGenerate` is complete.
+	private(set) lazy var instantiatedDependenciesNotGenerated: [Dependency] = instantiable
+		.dependencies
+		.filter { dependency in
+			switch dependency.source {
+			case .instantiated:
+				// A mock root can generate the dependency as the `LazilyInstantiated` its tree receives.
+				!propertiesToGenerate.contains {
+					$0.property == dependency.property || $0.lazilyInstantiatedInstanceProperty == dependency.property
+				}
+			case .received, .aliased, .forwarded:
+				false
+			}
+		}
+
+	/// The properties this scope declares for the scopes it builds, which those scopes therefore do not receive
+	/// from the scopes above it: those it generates and its type's `instantiatedDependenciesNotGenerated`. A
+	/// lazily instantiated property also declares the property that receives its instance by value. Read only
+	/// once `propertiesToGenerate` is complete.
+	private(set) lazy var propertiesToDeclare = Set(
+		propertiesToGenerate.flatMap(\.receivableProperties)
+			+ instantiatedDependenciesNotGenerated.flatMap(\.receivableProperties),
+	)
+
 	/// The properties this scope declares for the scopes it builds: those it generates, which for a mock root
-	/// include the received dependencies promoted to its children, and those its type forwards. A property
-	/// declared here shadows one with the same label that was lazily instantiated further up the tree.
-	/// Read only once `propertiesToGenerate` is complete.
+	/// include the received dependencies promoted to its children, those its type instantiates that it does not
+	/// generate, and those its type forwards. A property declared here shadows one with the same label that was
+	/// lazily instantiated further up the tree. Read only once `propertiesToGenerate` is complete.
 	private lazy var declaredProperties: [Property] = propertiesToGenerate.map(\.property)
+		+ instantiatedDependenciesNotGenerated.map(\.property)
 		+ instantiable.dependencies.filter { $0.source == .forwarded }.map(\.property)
 
 	/// The labels of `declaredProperties`.
@@ -152,6 +180,7 @@ final class Scope: Hashable {
 	fileprivate lazy var declaredLazilyInstantiatedInstanceProperties = Set(
 		(
 			propertiesToGenerate.compactMap(\.lazilyInstantiatedInstanceProperty)
+				+ instantiatedDependenciesNotGenerated.compactMap(\.lazilyInstantiatedInstanceProperty)
 				+ forwardedLazilyInstantiatedInstanceProperties,
 		).filter { !declaredProperties.contains($0) },
 	)
@@ -488,6 +517,8 @@ private struct ScopeGeneratorUnderConstruction {
 			instantiable: scope.instantiable,
 			property: property,
 			propertiesToGenerate: childGenerators,
+			// A scope that closes a cycle creates no children.
+			propertiesToDeclare: isPropertyCycle ? [] : scope.propertiesToDeclare,
 			unavailableOptionalProperties: unavailableOptionalProperties,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			forwardedLazilyInstantiatedInstanceProperties: scope.forwardedLazilyInstantiatedInstanceProperties,
