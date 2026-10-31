@@ -397,8 +397,8 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_constructsInternalTypes_whenHandWrittenManifestNamesNoOwnFiles() async throws {
-		// A hand-written manifest that names no `mockScopedFilePaths` describes one module, so each of its files is
-		// one of the module's own.
+		// A hand-written manifest that names no `mockScopedFilePaths` makes the input files the module's own, so the
+		// generated code constructs the internal types they declare.
 		let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		filesToDelete.append(directory)
