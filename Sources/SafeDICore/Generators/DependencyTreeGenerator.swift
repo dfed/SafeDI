@@ -24,19 +24,53 @@ public actor DependencyTreeGenerator {
 	/// - Parameters:
 	///   - importStatements: The imports generated dependency-tree code needs.
 	///   - mockImportStatements: The imports generated mock code needs.
+	///   - emittingModule: The module the generated code compiles in, which decides what access each declaration the
+	///     generated code constructs needs, or `nil` to check no access, as `SafeDITool query` does.
 	public init(
 		importStatements: [ImportStatement],
 		mockImportStatements: [ImportStatement],
 		typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
 		aliasDeclarationReferences: AliasDeclarationReferences,
+		emittingModule: EmittingModule? = nil,
 	) {
 		self.importStatements = importStatements
 		self.mockImportStatements = mockImportStatements
 		self.typeDescriptionToFulfillingInstantiableMap = typeDescriptionToFulfillingInstantiableMap
 		self.aliasDeclarationReferences = aliasDeclarationReferences
+		self.emittingModule = emittingModule
 	}
 
 	// MARK: Public
+
+	/// The module the generated code compiles in, which decides what access each declaration the generated code
+	/// constructs needs.
+	public struct EmittingModule: Sendable {
+		/// - Parameters:
+		///   - identity: The module, as far as SafeDITool knows it.
+		///   - isOwnFile: Whether a file a declaration records is one of the module's own files, which the module
+		///     compiles: a construction of a declaration in such a file needs `internal` access only.
+		///   - isReadableFile: Whether a file a declaration records can be read at the path it records, so that an
+		///     error can be reported at the declaration with a fix-it that edits it.
+		///   - additionalMocksToGenerateLocation: Where the `#SafeDIConfiguration` that lists the module's
+		///     `additionalMocksToGenerate` is declared, at which an error about a construction in a listed type's
+		///     generated mock is reported when the declaration that must change cannot be read.
+		public init(
+			identity: ModuleIdentity,
+			isOwnFile: @escaping @Sendable (String) -> Bool,
+			isReadableFile: @escaping @Sendable (String) -> Bool,
+			additionalMocksToGenerateLocation: Dependency.DeclarationLocation?,
+		) {
+			self.identity = identity
+			self.isOwnFile = isOwnFile
+			self.isReadableFile = isReadableFile
+			self.additionalMocksToGenerateLocation = additionalMocksToGenerateLocation
+		}
+
+		let identity: ModuleIdentity
+		let isOwnFile: @Sendable (String) -> Bool
+		let isReadableFile: @Sendable (String) -> Bool
+		let additionalMocksToGenerateLocation: Dependency.DeclarationLocation?
+	}
 
 	public struct GeneratedRoot: Sendable {
 		public let typeDescription: TypeDescription
@@ -69,7 +103,7 @@ public actor DependencyTreeGenerator {
 		let rootScopeGenerators = try rootScopeGenerators
 		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: rootScopeGenerators.map { ($0.instantiable, $0.scopeGenerator) })
 
-		return try await withThrowingTaskGroup(
+		let generatedRoots = try await withThrowingTaskGroup(
 			of: GeneratedRoot?.self,
 			returning: [GeneratedRoot].self,
 		) { taskGroup in
@@ -90,6 +124,14 @@ public actor DependencyTreeGenerator {
 				}
 			}
 			return generatedRoots
+		}
+		// The file of a root this module leaves to the module that declares it holds no code, so it says why.
+		return generatedRoots + rootsGeneratedOnlyByTheirModule.map { typeDescription in
+			GeneratedRoot(
+				typeDescription: typeDescription,
+				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
+				code: "// SafeDI generates the dependency tree of \(typeDescription.asSource) only in the module that declares it, because the tree constructs a declaration that is neither `public` nor `open`.",
+			)
 		}
 	}
 
@@ -127,6 +169,11 @@ public actor DependencyTreeGenerator {
 		let mockScopes = try mockScopes(additionalMocksToGenerate: additionalMocksToGenerate, receivedPropertiesCache: &receivedPropertiesCache)
 		let typeDescriptionToScopeMap = mockScopes.typeDescriptionToScopeMap
 		let forwardedParameterMockDefaults = mockScopes.forwardedParameterMockDefaults
+		// A forwarded parameter's default constructs its type with the type's hand-written mock, as the access check
+		// of each mock root reads that type.
+		let forwardedParameterMockDefaultComments = forwardedParameterMockDefaults.keys.reduce(into: [TypeDescription: String]()) { result, typeDescription in
+			result[typeDescription] = typeDescriptionToFulfillingInstantiableMap[typeDescription].flatMap { constructionComments(for: $0).mockMethod }
+		}
 
 		// Create mock-root ScopeGenerators using the production Scope tree.
 		var seen = Set<TypeDescription>()
@@ -164,6 +211,7 @@ public actor DependencyTreeGenerator {
 					// because it is listed, so removing it from the list is also a fix.
 					generatedMockReason: instantiable.generateMock && isDeclaredInCurrentModule ? .generateMock : .additionalMocksToGenerate,
 					mockScopes: mockScopes,
+					emittingModule: emittingModuleToCheck,
 					receivedPropertiesCache: &receivedPropertiesCache,
 					childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 				)
@@ -236,6 +284,7 @@ public actor DependencyTreeGenerator {
 						codeGeneration: .mock(ScopeGenerator.MockContext(
 							mockConditionalCompilation: mockConditionalCompilation,
 							forwardedParameterMockDefaults: forwardedParameterMockDefaults,
+							forwardedParameterMockDefaultComments: forwardedParameterMockDefaultComments,
 							cycleEdges: cycleEdges,
 							handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 						)),
@@ -363,6 +412,8 @@ public actor DependencyTreeGenerator {
 			// exists only because the type is listed, so removing it from the list is also a fix.
 			generatedMockReason: generatesMock ? (instantiable.generateMock ? .generateMock : .additionalMocksToGenerate) : nil,
 			mockScopes: mockScopes,
+			// The query reports what a type needs whichever module assembles it, so it checks no module's access.
+			emittingModule: nil,
 			receivedPropertiesCache: &receivedPropertiesCache,
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 		)
@@ -670,13 +721,19 @@ public actor DependencyTreeGenerator {
 	/// once the type is known to be one a mock can be generated for. Every check that decides whether one mock
 	/// root can be generated belongs here, so that `generateMockCode` and `requirements(forTypeNamed:generatesMock:)`
 	/// run the same ones; a pass that needs every mock root at once goes after `generateMockCode`'s loop instead.
-	/// - Parameter generatedMockReason: Why the project generates `mock()` for the type, or `nil` when it does
-	///   not, so that a hand-written method named `mock` is the type's mock rather than a collision.
+	/// - Parameters:
+	///   - generatedMockReason: Why the project generates `mock()` for the type, or `nil` when it does not, so that a
+	///     hand-written method named `mock` is the type's mock rather than a collision.
+	///   - emittingModule: The module the mock's code compiles in, whose access to each type the mock constructs is
+	///     checked, or `nil` when no module emits the mock: `requirements(forTypeNamed:generatesMock:)` reports what
+	///     a type needs whichever module assembles it, so it checks no access. This is the one check of a single
+	///     mock root that the two callers do not share.
 	private func createMockRoot(
 		for instantiable: Instantiable,
 		scope: Scope,
 		generatedMockReason: GeneratedMockReason?,
 		mockScopes: MockScopes,
+		emittingModule: EmittingModule?,
 		receivedPropertiesCache: inout ReceivedPropertiesCache,
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
 	) throws -> ScopeGenerator {
@@ -728,9 +785,18 @@ public actor DependencyTreeGenerator {
 			scope: scope,
 			typeDescriptionToScopeMap: mockScopes.typeDescriptionToScopeMap,
 			erasedToConcreteTypeMap: mockScopes.erasedToConcreteTypeMap,
+			accessCheck: emittingModule.map { MockRootAccessCheck(emittingModule: $0, forwardedParameterMockDefaults: mockScopes.forwardedParameterMockDefaults) },
 			receivedPropertiesCache: &receivedPropertiesCache,
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 		)
+	}
+
+	/// What a mock root's constructions are checked against: the module its code compiles in, and the hand-written
+	/// mocks `mock()` calls for the default values of its forwarded parameters.
+	private struct MockRootAccessCheck {
+		let emittingModule: EmittingModule
+		/// The name of the hand-written mock that can be called with no arguments, by concrete type.
+		let forwardedParameterMockDefaults: [TypeDescription: String]
 	}
 
 	/// Rejects a type that generated mocks build both with its hand-written mock and without it, when the two
@@ -942,6 +1008,9 @@ public actor DependencyTreeGenerator {
 		/// Reported at the hand-written mock of each type that generated mocks build both with that mock and
 		/// without it, in ways one `SafeDIMockConfiguration` struct cannot describe. See `ConfigurationBuiltTwoWays`.
 		case configurationBuiltTwoWays([ConfigurationBuiltTwoWays])
+		/// Reported at each declaration whose access keeps the generated code from constructing a type, or, when the
+		/// declaration's file cannot be read, where this module refers to the construction. See `InaccessibleConstruction`.
+		case inaccessibleConstructions([InaccessibleConstruction])
 		/// Errors that validations independent of one another found – those of different roots, for example – each
 		/// reported as it would be alone, in source order. See `reportingAll(of:)`.
 		case independentErrors([DependencyTreeGeneratorError])
@@ -959,10 +1028,38 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
+		/// The diagnostics of this error in the groups `independentErrors` joins, leaving out those of the constructions
+		/// an `inaccessibleConstructions` error reports, which `independentErrors` merges across the errors it joins.
+		/// Every validation that finds inaccessible constructions throws them as an `inaccessibleConstructions` error
+		/// of its own, which `reportingAll(of:)` joins directly.
+		private var sourceDiagnosticGroupsOtherThanInaccessibleConstructions: [[SourceDiagnostic]] {
+			if case .inaccessibleConstructions = self {
+				[]
+			} else {
+				[sourceDiagnostics]
+			}
+		}
+
+		/// The constructions this error reports as inaccessible, if it is an `inaccessibleConstructions` error.
+		private var reportedInaccessibleConstructions: [InaccessibleConstruction] {
+			if case let .inaccessibleConstructions(inaccessibleConstructions) = self {
+				inaccessibleConstructions
+			} else {
+				[]
+			}
+		}
+
 		var sourceDiagnostics: [SourceDiagnostic] {
 			switch self {
 			case let .independentErrors(errors):
-				SourceDiagnostic.joiningInSourceOrder(errors.map(\.sourceDiagnostics))
+				// The trees of several mock roots can each need one declaration to widen, which is reported once.
+				SourceDiagnostic.joiningInSourceOrder(
+					errors.flatMap(\.sourceDiagnosticGroupsOtherThanInaccessibleConstructions)
+						+ InaccessibleConstruction.merging(errors.flatMap(\.reportedInaccessibleConstructions)).map { [$0.sourceDiagnostic] },
+				)
+			case let .inaccessibleConstructions(inaccessibleConstructions):
+				// A declaration that several constructions need to widen the same way is reported once.
+				SourceDiagnostic.joiningInSourceOrder(InaccessibleConstruction.merging(inaccessibleConstructions).map { [$0.sourceDiagnostic] })
 			case let .nonSendableWrapperCapturedBySendableBuilder(captures):
 				// The captures arrive in set order. Two whose errors read the same name the same wrapper on the same
 				// type, so their notes, at that declaration, read the same too, and the diagnostics come out the same.
@@ -1185,6 +1282,154 @@ public actor DependencyTreeGenerator {
 			/// The property a node builds, the type that declares it, and the generated mock that builds it.
 			private static func describe(_ builtNode: ScopeGenerator.BuiltMockParameterNode) -> String {
 				"`\(builtNode.node.property.asSource)` on `\(builtNode.parent.asSource)` in `\(builtNode.mockRoot.asSource).\(InstantiableVisitor.mockMethodName)()`"
+			}
+		}
+
+		/// A declaration whose access keeps the code SafeDI generates in one module from constructing a type: the type,
+		/// a type that encloses it, the method that constructs it, or an extension one of those takes its level from.
+		struct InaccessibleConstruction: Hashable {
+			/// The type the generated code constructs.
+			let constructedType: TypeDescription
+			/// The declaration that must widen, with the level it has.
+			let accessNeed: AccessNeed
+			/// What the generated code needs of the declaration.
+			let requirement: AccessRequirement
+			/// The module the generated code compiles in.
+			let emittingModule: ModuleIdentity
+			/// The module that declares the declaration.
+			let declaringModule: ModuleIdentity
+			/// Where the declaration begins, when its file can be read where it is recorded, so an editor can open it.
+			let readableDeclarationLocation: Dependency.DeclarationLocation?
+			/// Where this module refers to what leads to the construction.
+			let referenceLocation: Dependency.DeclarationLocation?
+			/// Where the constructed type is declared.
+			let constructedTypeDeclarationLocation: Dependency.DeclarationLocation?
+
+			/// `inaccessibleConstructions`, in no particular order, with those that need one declaration to widen the
+			/// same way – the constructions of several roots' trees, or of several types the declaration encloses –
+			/// merged into the one with the earliest reference in source order, or, of those with one reference, the one
+			/// whose constructed type is declared first. An error at a reference therefore names the type that reference
+			/// constructs, and neither which roots reach the declaration nor the order in which they are checked changes
+			/// what is reported.
+			static func merging(_ inaccessibleConstructions: [InaccessibleConstruction]) -> [InaccessibleConstruction] {
+				var mergedByDeclaration = [MergeKey: InaccessibleConstruction]()
+				for inaccessibleConstruction in inaccessibleConstructions {
+					let key = MergeKey(
+						access: inaccessibleConstruction.accessNeed.access,
+						requirement: inaccessibleConstruction.requirement,
+						declaringModule: inaccessibleConstruction.declaringModule,
+					)
+					mergedByDeclaration[key] = mergedByDeclaration[key].map { $0.merged(with: inaccessibleConstruction) } ?? inaccessibleConstruction
+				}
+				return Array(mergedByDeclaration.values)
+			}
+
+			/// What identifies the declaration an inaccessible construction needs to widen, and how. The access
+			/// declaration records where the declaration begins, which no other declaration shares.
+			private struct MergeKey: Hashable {
+				let access: AccessDeclaration
+				let requirement: AccessRequirement
+				let declaringModule: ModuleIdentity
+			}
+
+			/// Of this construction and `other`, which needs the same declaration to widen the same way, the one an error
+			/// about the declaration reports. Two constructions whose types are declared at one location construct one
+			/// type and report the same error.
+			private func merged(with other: InaccessibleConstruction) -> InaccessibleConstruction {
+				let otherIsReportedFirst = if other.referenceLocation == referenceLocation {
+					Dependency.DeclarationLocation.precedesInSourceOrder(other.constructedTypeDeclarationLocation, constructedTypeDeclarationLocation)
+				} else {
+					Dependency.DeclarationLocation.precedesInSourceOrder(other.referenceLocation, referenceLocation)
+				}
+				return otherIsReportedFirst ? other : self
+			}
+
+			/// A single `error:` line, since Xcode drops notes from build-tool output. When the declaration's file can
+			/// be read, it is reported there, with a fix-it that gives the declaration the level the generated code
+			/// needs. Otherwise – in a build that hands SafeDITool another module's declarations but not its files,
+			/// such as a sandboxed Bazel action, or a `.safedi` file from another machine – it is reported where this
+			/// module refers to the construction, and names the module that must change.
+			var sourceDiagnostic: SourceDiagnostic {
+				let constructedTypeName = "`\(constructedType.asSource)`"
+				func name(of member: AccessNeed.Member) -> String {
+					switch member {
+					case .initializer:
+						"\(constructedTypeName)’s initializer"
+					case .instantiateMethod:
+						"`\(constructedType.asSource).\(InstantiableVisitor.instantiateMethodName)()`"
+					case let .mockMethod(name):
+						"`\(constructedType.asSource).\(name)()`"
+					}
+				}
+				// What must widen, what the generated code cannot do without it, and how the fix names it.
+				let subject: String
+				let inability: String
+				let fixedDeclaration: String
+				switch accessNeed.declaration {
+				case let .type(type):
+					if type == constructedType {
+						subject = constructedTypeName
+						inability = "construct it"
+						fixedDeclaration = constructedTypeName
+					} else {
+						subject = "`\(type.asSource)`, which encloses \(constructedTypeName),"
+						inability = "construct \(constructedTypeName)"
+						fixedDeclaration = "`\(type.asSource)`"
+					}
+				case let .extensionDeclaringType(type):
+					subject = type == constructedType
+						? "The extension that declares \(constructedTypeName)"
+						: "The extension that declares `\(type.asSource)`, which encloses \(constructedTypeName),"
+					inability = "construct \(constructedTypeName)"
+					fixedDeclaration = "the extension"
+				case let .extensionDeclaringMember(member):
+					subject = "The extension that declares \(name(of: member))"
+					inability = "call \(name(of: member))"
+					fixedDeclaration = "the extension"
+				case let .member(member):
+					subject = name(of: member)
+					inability = "call it"
+					fixedDeclaration = member == .initializer ? "the initializer" : name(of: member)
+				}
+
+				let emitter = emittingModule.moduleName.map { "module `\($0)`" } ?? "this module"
+				let reason = switch requirement {
+				case .internal:
+					"the code SafeDI generates in another file of \(emitter) cannot \(inability)"
+				case .package:
+					"\(emitter), another module of the same package, cannot \(inability) in the code SafeDI generates"
+				case .public:
+					"\(emitter), in another package, cannot \(inability) in the code SafeDI generates"
+				case .packageUnverified:
+					"\(emitter), which SafeDI cannot tell is in the same package, cannot \(inability) in the code SafeDI generates"
+				}
+				let level = AccessLevel.spelling(satisfying: requirement)
+				// Reported in this module, the error names the module whose declaration must change.
+				let declaringModuleName = readableDeclarationLocation == nil ? declaringModule.moduleName.map { " in module `\($0)`" } ?? "" : ""
+				let fix = switch requirement {
+				case .internal, .package, .public:
+					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix."
+				case .packageUnverified:
+					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix, or `\(AccessLevel.public.spelling)` if the two modules are in different packages."
+				}
+				let message = "\(subject) is `\(accessNeed.level.spelling)`\(declaringModuleName), so \(reason). \(fix)"
+
+				if let readableDeclarationLocation {
+					// A modifier is replaced, and one is inserted where the declaration begins when it spells none.
+					let fixIt = accessNeed.access.modifierRange.map { SourceDiagnostic.FixIt(range: $0, replacement: level) }
+						?? SourceDiagnostic.FixIt(
+							range: Dependency.SourceRange(
+								startLine: readableDeclarationLocation.line,
+								startColumn: readableDeclarationLocation.column,
+								endLine: readableDeclarationLocation.line,
+								endColumn: readableDeclarationLocation.column,
+							),
+							replacement: "\(level) ",
+						)
+					return SourceDiagnostic(severity: .error, location: readableDeclarationLocation, message: message, fixIts: [fixIt])
+				} else {
+					return SourceDiagnostic(severity: .error, location: referenceLocation, message: message)
+				}
 			}
 		}
 
@@ -1498,6 +1743,7 @@ public actor DependencyTreeGenerator {
 	private let mockImportStatements: [ImportStatement]
 	private let typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]
 	private let aliasDeclarationReferences: AliasDeclarationReferences
+	private let emittingModule: EmittingModule?
 	private struct RootScopeInfo {
 		let typeDescription: TypeDescription
 		let instantiable: Instantiable
@@ -1530,28 +1776,219 @@ public actor DependencyTreeGenerator {
 					cache: &receivedPropertiesCache,
 					validation: &childrenRequiringEachOtherValidation,
 				)
+				// Creating a generator starts generating its code, so every construction must be known to compile first.
+				let rootScopesToGenerate = try rootScopesThisModuleGenerates(
+					from: rootInstantiables.sorted().compactMap { typeDescription in
+						typeDescriptionToScopeMap[typeDescription].map { (typeDescription: typeDescription, scope: $0) }
+					},
+				)
 				self.validatedScopes = Set(typeDescriptionToScopeMap.values)
-				return try rootInstantiables
-					.sorted()
-					.compactMap { typeDescription in
-						try typeDescriptionToScopeMap[typeDescription].map { scope in
-							try RootScopeInfo(
-								typeDescription: typeDescription,
-								instantiable: scope.instantiable,
-								sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
-								scopeGenerator: scope.createScopeGenerator(
-									for: nil,
-									propertyStack: [],
-									receivableProperties: [],
-									lazilyInstantiatedInstanceProperties: [],
-									erasedToConcreteExistential: false,
-								),
-							)
-						}
-					}
+				return try rootScopesToGenerate.map { typeDescription, scope in
+					try RootScopeInfo(
+						typeDescription: typeDescription,
+						instantiable: scope.instantiable,
+						sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
+						scopeGenerator: scope.createScopeGenerator(
+							for: nil,
+							propertyStack: [],
+							receivableProperties: [],
+							lazilyInstantiatedInstanceProperties: [],
+							erasedToConcreteExistential: false,
+						),
+					)
+				}
 			}()
 			return rootScopeGenerators
 		}
+	}
+
+	/// Whether every declaration any generated code could construct, with any of the methods that construct it, is
+	/// `public` or `open` where it is declared, which code in every module can use. No construction then needs to be
+	/// checked, which is the case for a project whose types are all `public`.
+	private lazy var constructsOnlyPublicDeclarations: Bool = typeDescriptionToFulfillingInstantiableMap.values.allSatisfy { instantiable in
+		Self.isPubliclyConstructible(instantiable, withMockMethod: false)
+			&& (instantiable.mockInitializer == nil || Self.isPubliclyConstructible(instantiable, withMockMethod: true))
+	}
+
+	/// The emitting module whose constructions need checking, or `nil` when none do: no module was given, or every
+	/// declaration any generated code could construct is `public` or `open`.
+	private var emittingModuleToCheck: EmittingModule? {
+		constructsOnlyPublicDeclarations ? nil : emittingModule
+	}
+
+	/// The roots whose trees this module generates code for, from `rootScopes`, the module's roots in type order. A
+	/// root declared in one of the module's own files is generated once every construction in its tree is known to
+	/// compile in the module; otherwise one error reports each declaration that keeps a construction from compiling,
+	/// however many of the roots' trees construct it. A root declared elsewhere – a file of another module that the
+	/// build tool plugin's input or `additionalDirectoriesToInclude` reaches – is generated, as its own module generates
+	/// it, only when its tree constructs `public` and `open` declarations alone, which every module can construct.
+	/// Otherwise it is withheld, which `rootsGeneratedOnlyByTheirModule` records: its file holds no code but a comment
+	/// saying why, and nothing is reported, since the module that declares the root, when it runs SafeDI, generates
+	/// it and reports what keeps it from compiling.
+	private func rootScopesThisModuleGenerates(
+		from rootScopes: [(typeDescription: TypeDescription, scope: Scope)],
+	) throws -> [(typeDescription: TypeDescription, scope: Scope)] {
+		guard let emittingModule = emittingModuleToCheck else { return rootScopes }
+		var rootScopesToGenerate = [(typeDescription: TypeDescription, scope: Scope)]()
+		var withheldRoots = [TypeDescription]()
+		var inaccessibleConstructions = [DependencyTreeGeneratorError.InaccessibleConstruction]()
+		for rootScope in rootScopes {
+			let rootInstantiable = rootScope.scope.instantiable
+			if rootInstantiable.sourceFilePath.map(emittingModule.isOwnFile) ?? false {
+				inaccessibleConstructions += Self.inaccessibleConstructions(
+					Self.constructions(
+						inTreeRootedAt: rootScope.scope,
+						rootIsConstructedWithMockMethod: false,
+						rootReferenceLocation: rootInstantiable.declarationLocation,
+						isMock: false,
+						emittingModule: emittingModule,
+					),
+					from: emittingModule,
+				)
+				rootScopesToGenerate.append(rootScope)
+			} else if Self.constructions(
+				inTreeRootedAt: rootScope.scope,
+				rootIsConstructedWithMockMethod: false,
+				rootReferenceLocation: nil,
+				isMock: false,
+				emittingModule: emittingModule,
+			).allSatisfy({ Self.isPubliclyConstructible($0.instantiable, withMockMethod: $0.usesMockMethod) }) {
+				rootScopesToGenerate.append(rootScope)
+			} else {
+				withheldRoots.append(rootScope.typeDescription)
+			}
+		}
+		guard inaccessibleConstructions.isEmpty else {
+			throw DependencyTreeGeneratorError.inaccessibleConstructions(inaccessibleConstructions)
+		}
+		rootsGeneratedOnlyByTheirModule = withheldRoots
+		return rootScopesToGenerate
+	}
+
+	/// The roots another module declares whose trees construct a declaration that is neither `public` nor `open`,
+	/// which this module therefore leaves to the module that declares them, in type order. Empty until the tree has
+	/// been generated.
+	private var rootsGeneratedOnlyByTheirModule = [TypeDescription]()
+
+	/// Whether code in every module can construct `instantiable` with its hand-written mock method when
+	/// `withMockMethod` is set, and otherwise with its initializer or `instantiate()` method.
+	private static func isPubliclyConstructible(_ instantiable: Instantiable, withMockMethod: Bool) -> Bool {
+		instantiable.accessNeeds(constructingWithMockMethod: withMockMethod).allSatisfy { $0.level.satisfies(.public) }
+	}
+
+	/// A type the generated code constructs, with how it constructs it.
+	private struct Construction {
+		let instantiable: Instantiable
+		/// Whether the type is constructed with its hand-written mock method rather than with its initializer or
+		/// `instantiate()` method.
+		let usesMockMethod: Bool
+		/// Where this module refers to what leads to the construction: the first, in source order, of the dependencies
+		/// declared in the module's own files on a path to it, or the declaration of the tree's root. An error about
+		/// the construction is reported there when the declaration that must change cannot be read.
+		let referenceLocation: Dependency.DeclarationLocation?
+	}
+
+	/// What identifies a construction while walking a tree: the scope that builds it, and how it builds it.
+	private struct ConstructionKey: Hashable {
+		let scope: ObjectIdentifier
+		let usesMockMethod: Bool
+	}
+
+	/// The constructions the code generated for the tree rooted at `rootScope` emits: the root's own, and each scope
+	/// the tree instantiates, transitively, once each, in no particular order.
+	/// - Parameters:
+	///   - rootIsConstructedWithMockMethod: Whether the root is constructed with its hand-written mock method.
+	///   - rootReferenceLocation: Where this module refers to the root.
+	///   - isMock: Whether the tree is a mock's, which constructs each type it builds with its hand-written mock method
+	///     where that method returns a type the property accepts, as `ScopeGenerator` builds it.
+	///   - emittingModule: The module the generated code compiles in, whose own files hold the dependencies that refer
+	///     to a construction.
+	private static func constructions(
+		inTreeRootedAt rootScope: Scope,
+		rootIsConstructedWithMockMethod: Bool,
+		rootReferenceLocation: Dependency.DeclarationLocation?,
+		isMock: Bool,
+		emittingModule: EmittingModule,
+	) -> [Construction] {
+		var constructionsByKey = [ConstructionKey: Construction]()
+		// A scope can be reached along several paths, and the first reference location in source order is kept,
+		// whichever path is walked first. A scope is walked again only when it is reached with an earlier reference
+		// location, so the walk ends, and a worklist rather than recursion walks it, since a tree can be as deep as the
+		// module has types.
+		var scopesToWalk = [(scope: rootScope, usesMockMethod: rootIsConstructedWithMockMethod, referenceLocation: rootReferenceLocation)]
+		while let (scope, usesMockMethod, referenceLocation) = scopesToWalk.popLast() {
+			let key = ConstructionKey(scope: ObjectIdentifier(scope), usesMockMethod: usesMockMethod)
+			guard constructionsByKey[key].map({ Dependency.DeclarationLocation.precedesInSourceOrder(referenceLocation, $0.referenceLocation) }) ?? true else {
+				continue
+			}
+			constructionsByKey[key] = Construction(instantiable: scope.instantiable, usesMockMethod: usesMockMethod, referenceLocation: referenceLocation)
+			let isDeclaredInOwnFile = scope.instantiable.sourceFilePath.map(emittingModule.isOwnFile) ?? false
+			for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
+				scopesToWalk.append((
+					scope: childScope,
+					usesMockMethod: isMock && childScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType),
+					// A dependency the mock promotes to its root, or retypes there, is declared by no type of the tree.
+					referenceLocation: isDeclaredInOwnFile
+						? scope.instantiable.dependencies.first(where: { $0.property == property })?.declarationLocation ?? referenceLocation
+						: referenceLocation,
+				))
+			}
+		}
+		return Array(constructionsByKey.values)
+	}
+
+	/// An error for each declaration that keeps one of `constructions` from compiling in `emittingModule`.
+	private static func inaccessibleConstructions(
+		_ constructions: [Construction],
+		from emittingModule: EmittingModule,
+	) -> [DependencyTreeGeneratorError.InaccessibleConstruction] {
+		var inaccessibleConstructions = [DependencyTreeGeneratorError.InaccessibleConstruction]()
+		for construction in constructions {
+			let instantiable = construction.instantiable
+			let accessNeeds = instantiable.accessNeeds(constructingWithMockMethod: construction.usesMockMethod)
+			// Nearly every construction is of `public` declarations, which need nothing more.
+			guard !accessNeeds.allSatisfy({ $0.level.satisfies(.public) }) else { continue }
+			for accessNeed in accessNeeds {
+				let declaringModule = emittingModule.declaringModule(of: accessNeed, constructing: instantiable)
+				let requirement = emittingModule.requirement(of: accessNeed, constructing: instantiable)
+				guard !accessNeed.level.satisfies(requirement) else { continue }
+				inaccessibleConstructions.append(DependencyTreeGeneratorError.InaccessibleConstruction(
+					constructedType: instantiable.concreteInstantiable,
+					accessNeed: accessNeed,
+					requirement: requirement,
+					emittingModule: emittingModule.identity,
+					declaringModule: declaringModule,
+					readableDeclarationLocation: accessNeed.access.declarationStartLocation.flatMap { declarationStartLocation in
+						emittingModule.isReadableFile(declarationStartLocation.filePath) ? declarationStartLocation : nil
+					},
+					referenceLocation: construction.referenceLocation,
+					constructedTypeDeclarationLocation: instantiable.declarationLocation,
+				))
+			}
+		}
+		return inaccessibleConstructions
+	}
+
+	/// The comments the code generated in this module ends the lines that construct `instantiable` with, one for
+	/// each way it can be constructed: a note that the generated code assumes `package` access suffices, where
+	/// SafeDITool cannot tell whether the module that declares the type is in this module's package and the
+	/// construction relies on a `package` declaration.
+	private func constructionComments(for instantiable: Instantiable) -> Scope.ConstructionComments {
+		guard let emittingModule = emittingModuleToCheck else { return Scope.ConstructionComments() }
+		func assumedPackageAccessComment(withMockMethod: Bool) -> String? {
+			let accessNeeds = instantiable.accessNeeds(constructingWithMockMethod: withMockMethod)
+			// Only a `package` declaration relies on the assumption.
+			guard accessNeeds.contains(where: { $0.level == .package }) else { return nil }
+			let requirements = accessNeeds.map { emittingModule.requirement(of: $0, constructing: instantiable) }
+			guard zip(accessNeeds, requirements).allSatisfy({ $0.level.satisfies($1) }),
+			      zip(accessNeeds, requirements).contains(where: { $0.level == .package && $1 == .packageUnverified })
+			else { return nil }
+			return "// SafeDI could not verify that \(instantiable.concreteInstantiable.asSource) is in this package; `package` access is assumed."
+		}
+		return Scope.ConstructionComments(
+			initializer: assumedPackageAccessComment(withMockMethod: false),
+			mockMethod: instantiable.mockInitializer == nil ? nil : assumedPackageAccessComment(withMockMethod: true),
+		)
 	}
 
 	private static func fileHeader(importing importStatements: [ImportStatement]) -> String {
@@ -1599,11 +2036,13 @@ public actor DependencyTreeGenerator {
 	///   root, so only its children's results are collected.
 	/// - Parameter childrenRequiringEachOtherValidation: The scopes whose children are already known not to
 	///   require one another; see `validateChildrenDoNotRequireEachOther`.
+	/// - Parameter accessCheck: What the mock's constructions are checked against, or `nil` to check none.
 	private func createMockRootScopeGenerator(
 		for instantiable: Instantiable,
 		scope: Scope,
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
 		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
+		accessCheck: MockRootAccessCheck?,
 		receivedPropertiesCache cache: inout ReceivedPropertiesCache,
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
 	) throws -> ScopeGenerator {
@@ -1687,7 +2126,7 @@ public actor DependencyTreeGenerator {
 		// Promote all received properties that have scopes.
 		// onlyIfAvailable dependencies are NOT promoted — they become optional
 		// mock parameters with no default. Nor are forwarded properties.
-		let mockRootScope = Scope(instantiable: instantiable)
+		let mockRootScope = Scope(instantiable: instantiable, constructionComments: constructionComments(for: instantiable))
 		// A property the tree creates is the instance of a `LazilyInstantiated` of its label that the tree receives, as in
 		// production: the mocked type's own `x: X` and an `x: LazilyInstantiated<X>` its tree receives are one instance. The
 		// mock builds that child as the `LazilyInstantiated`, whose instance it passes the mocked type. A forwarded `x: X`
@@ -1857,6 +2296,41 @@ public actor DependencyTreeGenerator {
 			isReceivedUnderItsLabel: isReceivedUnderItsLabel,
 		) {
 			throw DependencyTreeGeneratorError.forwardedPropertyHiddenInPromotedTree(forwardedPropertyHiddenInPromotedTree)
+		}
+
+		if let accessCheck {
+			let emittingModule = accessCheck.emittingModule
+			// The mock of a type declared in this module refers to its tree from the type's declaration; the mock of a
+			// type this module lists in `additionalMocksToGenerate`, from the `#SafeDIConfiguration` that lists it.
+			let rootReferenceLocation = instantiable.sourceFilePath.map(emittingModule.isOwnFile) ?? false
+				? instantiable.declarationLocation
+				: emittingModule.additionalMocksToGenerateLocation
+			// A mock constructs its root with the root's hand-written mock whenever it has one.
+			var constructions = Self.constructions(
+				inTreeRootedAt: mockRootScope,
+				rootIsConstructedWithMockMethod: instantiable.mockInitializer != nil,
+				rootReferenceLocation: rootReferenceLocation,
+				isMock: true,
+				emittingModule: emittingModule,
+			)
+			// `mock()` defaults a forwarded parameter that the root's construction gives no default to the type's
+			// hand-written mock that takes no arguments, when it has one, as `ScopeGenerator.generateMockRootCode` does.
+			let constructionDefaultLabels = Set(((instantiable.mockInitializer ?? instantiable.initializer)?.arguments ?? []).filter(\.hasDefaultValue).map(\.innerLabel))
+			constructions += instantiable.dependencies
+				.filter { dependency in
+					dependency.isForwarded
+						&& !constructionDefaultLabels.contains(dependency.property.label)
+						&& accessCheck.forwardedParameterMockDefaults[dependency.property.typeDescription] != nil
+				}
+				.compactMap { dependency in
+					typeDescriptionToFulfillingInstantiableMap[dependency.property.typeDescription].map { forwardedInstantiable in
+						Construction(instantiable: forwardedInstantiable, usesMockMethod: true, referenceLocation: dependency.declarationLocation)
+					}
+				}
+			let inaccessibleConstructions = Self.inaccessibleConstructions(constructions, from: emittingModule)
+			guard inaccessibleConstructions.isEmpty else {
+				throw DependencyTreeGeneratorError.inaccessibleConstructions(inaccessibleConstructions)
+			}
 		}
 
 		// Build the final ScopeGenerator once. The mock root binds every received
@@ -3468,7 +3942,7 @@ public actor DependencyTreeGenerator {
 				}
 			}
 			.reduce(into: [TypeDescription: Scope]()) { partialResult, instantiable in
-				let scope = visitedConcreteTypeToScope[instantiable.concreteInstantiable] ?? Scope(instantiable: instantiable)
+				let scope = visitedConcreteTypeToScope[instantiable.concreteInstantiable] ?? Scope(instantiable: instantiable, constructionComments: constructionComments(for: instantiable))
 				visitedConcreteTypeToScope[instantiable.concreteInstantiable] = scope
 				for instantiableType in instantiable.instantiableTypes {
 					guard let existingScope = partialResult[instantiableType] else {
@@ -3481,7 +3955,7 @@ public actor DependencyTreeGenerator {
 						   instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiableType),
 						   scope.instantiable.mockInitializer == nil
 						{
-							partialResult[instantiableType] = Scope(instantiable: instantiable)
+							partialResult[instantiableType] = Scope(instantiable: instantiable, constructionComments: constructionComments(for: instantiable))
 						} else {
 							partialResult[instantiableType] = scope
 						}
@@ -3530,6 +4004,7 @@ public actor DependencyTreeGenerator {
 					Scope(
 						instantiable: instantiable.keepingDependencies { !dependenciesLeftOut.contains($0) },
 						dependenciesLeftOut: dependenciesLeftOut,
+						constructionComments: scope.constructionComments,
 					)
 				}
 				scopesBuiltByHandWrittenMock[ObjectIdentifier(scope)] = scopeBuiltByHandWrittenMock
@@ -3621,7 +4096,7 @@ public actor DependencyTreeGenerator {
 				if let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription],
 				   partialResult[instantiable.concreteInstantiable] == nil
 				{
-					let scope = Scope(instantiable: instantiable)
+					let scope = Scope(instantiable: instantiable, constructionComments: constructionComments(for: instantiable))
 					for instantiableType in instantiable.instantiableTypes {
 						partialResult[instantiableType] = scope
 					}
@@ -4874,6 +5349,32 @@ public actor DependencyTreeGenerator {
 				fulfilledByMockOnlyDeclaration: typeDescriptionToFulfillingInstantiableMap[unbuildableTypeDescription] != nil,
 			)
 		})
+	}
+}
+
+// MARK: - DependencyTreeGenerator.EmittingModule
+
+extension DependencyTreeGenerator.EmittingModule {
+	/// The module that declares `accessNeed`, a declaration that constructing `instantiable` relies on: the module
+	/// that declares the type's hand-written mock method for that method, or the extension it takes its level from,
+	/// and the module that declares the type otherwise.
+	fileprivate func declaringModule(of accessNeed: AccessNeed, constructing instantiable: Instantiable) -> ModuleIdentity {
+		if accessNeed.isDeclaredWithMockMethod {
+			ModuleIdentity(moduleName: instantiable.mockDeclarationModuleName, packageName: instantiable.mockDeclarationPackageName)
+		} else {
+			ModuleIdentity(moduleName: instantiable.moduleName, packageName: instantiable.packageName)
+		}
+	}
+
+	/// The access `accessNeed`, a declaration that constructing `instantiable` relies on, needs for this module's
+	/// generated code to construct `instantiable`.
+	fileprivate func requirement(of accessNeed: AccessNeed, constructing instantiable: Instantiable) -> AccessRequirement {
+		let declarationFilePath = accessNeed.isDeclaredWithMockMethod ? instantiable.mockDeclarationLocation?.filePath : instantiable.sourceFilePath
+		return AccessLevel.required(
+			toConstructFrom: identity,
+			declaredIn: declaringModule(of: accessNeed, constructing: instantiable),
+			isOwnFile: declarationFilePath.map(isOwnFile) ?? false,
+		)
 	}
 }
 

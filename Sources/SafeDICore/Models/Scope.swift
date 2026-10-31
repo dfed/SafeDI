@@ -22,11 +22,18 @@
 final class Scope: Hashable {
 	// MARK: Initialization
 
-	/// - Parameter dependenciesLeftOut: The dependencies `instantiable` declared before a mock scope
-	///   left them out because the type's hand-written mock is not passed them.
-	init(instantiable: Instantiable, dependenciesLeftOut: [Dependency] = []) {
+	/// - Parameters:
+	///   - dependenciesLeftOut: The dependencies `instantiable` declared before a mock scope left them out because the
+	///     type's hand-written mock is not passed them.
+	///   - constructionComments: The comments the generated code ends the lines that construct the type with.
+	init(
+		instantiable: Instantiable,
+		dependenciesLeftOut: [Dependency] = [],
+		constructionComments: ConstructionComments = ConstructionComments(),
+	) {
 		self.instantiable = instantiable
 		self.dependenciesLeftOut = dependenciesLeftOut
+		self.constructionComments = constructionComments
 	}
 
 	deinit {
@@ -57,6 +64,22 @@ final class Scope: Hashable {
 	/// The dependencies of the type that this scope does not build or receive, because a mock builds the type
 	/// with a hand-written mock that is not passed them. Always empty in a scope of the dependency tree.
 	let dependenciesLeftOut: [Dependency]
+
+	/// The comments the generated code ends the lines that construct the type with.
+	let constructionComments: ConstructionComments
+
+	/// The comment the generated code ends a line that constructs a type with, for each way it can construct the type.
+	struct ConstructionComments: Sendable {
+		init(initializer: String? = nil, mockMethod: String? = nil) {
+			self.initializer = initializer
+			self.mockMethod = mockMethod
+		}
+
+		/// The comment for a construction with the type's initializer or `instantiate()` method, or `nil` for none.
+		let initializer: String?
+		/// The comment for a construction with the type's hand-written mock method, or `nil` for none.
+		let mockMethod: String?
+	}
 
 	/// The properties that this scope is responsible for instantiating.
 	var propertiesToGenerate = [PropertyToGenerate]()
@@ -493,6 +516,7 @@ private struct ScopeGeneratorUnderConstruction {
 			forwardedLazilyInstantiatedInstanceProperties: scope.forwardedLazilyInstantiatedInstanceProperties,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			isPropertyCycle: isPropertyCycle,
+			constructionComments: scope.constructionComments,
 		)
 		if !forMockGeneration {
 			_ = Task.detached {

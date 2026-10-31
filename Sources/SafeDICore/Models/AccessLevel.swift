@@ -36,4 +36,20 @@ public enum AccessLevel: Codable, Hashable, Sendable {
 			false
 		}
 	}
+
+	/// Whether only code in the declaration's own file can use it. SafeDI generates code in files of its own, so
+	/// that code can never use such a declaration.
+	public var isPrivateOrFilePrivate: Bool {
+		switch self {
+		case .fileprivate, .private:
+			true
+		case .open, .public, .package, .internal:
+			false
+		}
+	}
+
+	/// The modifier that sets this level, as source spells it, which is the name of its case.
+	public var spelling: String {
+		"\(self)"
+	}
 }

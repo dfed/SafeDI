@@ -39,15 +39,15 @@ struct FixableInstantiableErrorTests {
 	}
 
 	@Test
-	func mockMethodNotPublic_description_mentionsMockMethodVisibility() {
-		let error = FixableInstantiableError.mockMethodNotPublic
-		#expect(error.description == "@Instantiable-decorated type’s `mock()` method must be `public` or `open`.")
+	func privateOrFilePrivateMockMethod_description_namesTheAccessLevelAndTheFix() {
+		let error = FixableInstantiableError.privateOrFilePrivateMockMethod(.fileprivate)
+		#expect(error.description == "@Instantiable-decorated type’s `mock()` method must not be `fileprivate`: a generated mock calls it in a generated file, where a `fileprivate` method is not visible. Remove `fileprivate`.")
 	}
 
 	@Test
-	func mockMethodNotPublic_fixIt_mentionsAddingPublicModifier() {
-		let error = FixableInstantiableError.mockMethodNotPublic
-		#expect(error.fixIt.message == "Add `public` modifier to `mock()` method")
+	func privateOrFilePrivateMockMethod_fixIt_mentionsRemovingTheModifier() {
+		let error = FixableInstantiableError.privateOrFilePrivateMockMethod(.private)
+		#expect(error.fixIt.message == "Remove `private` modifier from `mock()` method")
 	}
 
 	@Test
@@ -182,7 +182,7 @@ struct FixableInstantiableErrorTests {
 	@Test
 	func mockOnlyMissingMockMethod_description_mentionsRequiredMockMethod() {
 		let error = FixableInstantiableError.mockOnlyMissingMockMethod(typeName: "MyService", methodName: "mock")
-		#expect(error.description == "@Instantiable(mockOnly: true) requires a `public static func mock(…) -> MyService` method.")
+		#expect(error.description == "@Instantiable(mockOnly: true) requires a `static func mock(…) -> MyService` method.")
 	}
 
 	@Test

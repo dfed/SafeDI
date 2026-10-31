@@ -23,17 +23,23 @@ import SwiftDiagnostics
 public enum FixableInstantiableError: DiagnosticError {
 	case missingInstantiableConformance
 	case missingRequiredInstantiateMethod(typeName: String)
-	case missingAttributes
+	case instantiateMethodNotStatic
+	/// The extension's `instantiate()` method spells this `private` or `fileprivate` access, which generated code in
+	/// another file cannot use.
+	case privateOrFilePrivateInstantiateMethod(AccessLevel)
 	case disallowedGenericParameter
 	case disallowedEffectSpecifiers
 	case incorrectReturnType(typeName: String)
 	case disallowedGenericWhereClause
 	case dependencyHasTooManyAttributes
 	case dependencyHasInitializer(propertyName: String, initializer: String)
-	case missingPublicOrOpenAttribute
+	/// The decorated type spells this `private` or `fileprivate` access, which generated code in another file cannot use.
+	case privateOrFilePrivateType(AccessLevel)
 	case missingRequiredInitializer(MissingInitializer)
 	case mockMethodMissingArguments(methodName: String, [Property])
-	case mockMethodNotPublic
+	/// The hand-written mock method spells this `private` or `fileprivate` access, which a generated mock in another
+	/// file cannot use.
+	case privateOrFilePrivateMockMethod(AccessLevel)
 	case mockMethodIncorrectReturnType(typeName: String)
 	case extensionMockMethodIncorrectReturnType(typeName: String)
 	case duplicateMockMethod
@@ -54,7 +60,8 @@ public enum FixableInstantiableError: DiagnosticError {
 		case hasOnlyInjectableProperties
 		case hasInjectableAndNotInjectableProperties
 		case hasNoInjectableProperties
-		case isNotPublicOrOpen
+		/// The initializer spells this `private` or `fileprivate` access, which generated code in another file cannot use.
+		case isPrivateOrFilePrivate(AccessLevel)
 		case missingArguments([Property])
 	}
 
@@ -63,9 +70,11 @@ public enum FixableInstantiableError: DiagnosticError {
 		case .missingInstantiableConformance:
 			"@\(InstantiableVisitor.macroName)-decorated type or extension must declare conformance to `Instantiable`."
 		case let .missingRequiredInstantiateMethod(typeName):
-			"@\(InstantiableVisitor.macroName)-decorated extension of `\(typeName)` must have a `public static func instantiate() -> \(typeName)` method."
-		case .missingAttributes:
-			"@\(InstantiableVisitor.macroName)-decorated extension must have an `instantiate()` method that is both `public` and `static`."
+			"@\(InstantiableVisitor.macroName)-decorated extension of `\(typeName)` must have a `static func instantiate() -> \(typeName)` method."
+		case .instantiateMethodNotStatic:
+			"@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must be `static`: SafeDI calls it on the extended type. Add `static`."
+		case let .privateOrFilePrivateInstantiateMethod(accessLevel):
+			"@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must not be `\(accessLevel.spelling)`: SafeDI calls it in a generated file, where a `\(accessLevel.spelling)` method is not visible. Remove `\(accessLevel.spelling)`."
 		case .disallowedGenericParameter:
 			"@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must not have a generic parameter."
 		case .disallowedEffectSpecifiers:
@@ -78,25 +87,25 @@ public enum FixableInstantiableError: DiagnosticError {
 			"A property can be decorated with only one of @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)."
 		case let .dependencyHasInitializer(propertyName, initializer):
 			"`\(propertyName)` must not have a default value: SafeDI passes every @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), and @\(Dependency.Source.forwardedRawValue) property in through the initializer. Remove `\(initializer)`."
-		case .missingPublicOrOpenAttribute:
-			"@\(InstantiableVisitor.macroName)-decorated type must be `public` or `open`."
+		case let .privateOrFilePrivateType(accessLevel):
+			"@\(InstantiableVisitor.macroName)-decorated type must not be `\(accessLevel.spelling)`: SafeDI constructs it in a generated file, where a `\(accessLevel.spelling)` type is not visible. Remove `\(accessLevel.spelling)`."
 		case let .missingRequiredInitializer(missingInitializer):
 			switch missingInitializer {
 			case .hasOnlyInjectableProperties:
-				"@\(InstantiableVisitor.macroName)-decorated type must have a `public` or `open` initializer with a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property."
+				"@\(InstantiableVisitor.macroName)-decorated type must have an initializer with a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property."
 			case .hasInjectableAndNotInjectableProperties:
-				"@\(InstantiableVisitor.macroName)-decorated type must have a `public` or `open` initializer with a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values."
+				"@\(InstantiableVisitor.macroName)-decorated type must have an initializer with a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values."
 			case .hasNoInjectableProperties:
-				"@\(InstantiableVisitor.macroName)-decorated type with no @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated properties must have a `public` or `open` initializer that either takes no parameters or has a default value for each parameter."
-			case .isNotPublicOrOpen:
-				"@\(InstantiableVisitor.macroName)-decorated type must have a `public` or `open` initializer."
+				"@\(InstantiableVisitor.macroName)-decorated type with no @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated properties must have an initializer that either takes no parameters or has a default value for each parameter."
+			case let .isPrivateOrFilePrivate(accessLevel):
+				"@\(InstantiableVisitor.macroName)-decorated type’s initializer must not be `\(accessLevel.spelling)`: SafeDI calls it in a generated file, where a `\(accessLevel.spelling)` initializer is not visible. Remove `\(accessLevel.spelling)`."
 			case let .missingArguments(properties):
-				"@\(InstantiableVisitor.macroName)-decorated type must have a `public` or `open` initializer with a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property. This initializer has no parameter for \(properties.asBacktickedList)."
+				"@\(InstantiableVisitor.macroName)-decorated type must have an initializer with a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property. This initializer has no parameter for \(properties.asBacktickedList)."
 			}
 		case let .mockMethodMissingArguments(methodName, properties):
 			"This `\(methodName)()` method has no parameter for \(properties.asBacktickedList). A hand-written mock must take a parameter for each @\(Dependency.Source.instantiatedRawValue), @\(Dependency.Source.receivedRawValue), or @\(Dependency.Source.forwardedRawValue)-decorated property; extra parameters with default values are allowed."
-		case .mockMethodNotPublic:
-			"@\(InstantiableVisitor.macroName)-decorated type’s `mock()` method must be `public` or `open`."
+		case let .privateOrFilePrivateMockMethod(accessLevel):
+			"@\(InstantiableVisitor.macroName)-decorated type’s `mock()` method must not be `\(accessLevel.spelling)`: a generated mock calls it in a generated file, where a `\(accessLevel.spelling)` method is not visible. Remove `\(accessLevel.spelling)`."
 		case let .mockMethodIncorrectReturnType(typeName):
 			"@\(InstantiableVisitor.macroName)-decorated type’s `mock()` method must return `Self` or `\(typeName)`."
 		case let .extensionMockMethodIncorrectReturnType(typeName):
@@ -122,7 +131,7 @@ public enum FixableInstantiableError: DiagnosticError {
 		case .mockOnlyWithIsRoot:
 			"`mockOnly` types cannot be marked `isRoot`."
 		case let .mockOnlyMissingMockMethod(typeName, methodName):
-			"@\(InstantiableVisitor.macroName)(mockOnly: true) requires a `public static func \(methodName)(…) -> \(typeName)` method."
+			"@\(InstantiableVisitor.macroName)(mockOnly: true) requires a `static func \(methodName)(…) -> \(typeName)` method."
 		case let .unlabeledDefaultBeforeUnlabeledParameter(defaultedParameter, followingParameter):
 			"Unlabeled parameter `\(defaultedParameter.asSource)` has a default value but is followed by unlabeled required parameter `\(followingParameter.asSource)`, so a generated `mock()` cannot leave `\(defaultedParameter.label)` out of its call. Add an argument label to `\(defaultedParameter.label)`, move unlabeled parameters with defaults after the required ones, or remove the default."
 		case let .calleeScopeReferenceInDefaultExpression(parameterLabel, typeName):
@@ -157,17 +166,18 @@ public enum FixableInstantiableError: DiagnosticError {
 			severity = switch error {
 			case .missingInstantiableConformance,
 			     .missingRequiredInstantiateMethod,
-			     .missingAttributes,
+			     .instantiateMethodNotStatic,
+			     .privateOrFilePrivateInstantiateMethod,
 			     .disallowedGenericParameter,
 			     .disallowedEffectSpecifiers,
 			     .incorrectReturnType,
 			     .disallowedGenericWhereClause,
 			     .dependencyHasTooManyAttributes,
 			     .dependencyHasInitializer,
-			     .missingPublicOrOpenAttribute,
+			     .privateOrFilePrivateType,
 			     .missingRequiredInitializer,
 			     .mockMethodMissingArguments,
-			     .mockMethodNotPublic,
+			     .privateOrFilePrivateMockMethod,
 			     .mockMethodIncorrectReturnType,
 			     .extensionMockMethodIncorrectReturnType,
 			     .duplicateMockMethod,
@@ -201,8 +211,10 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Declare conformance to `Instantiable`"
 			case let .missingRequiredInstantiateMethod(typeName):
 				"Add `public static func instantiate() -> \(typeName)` method"
-			case .missingAttributes:
-				"Set `public static` modifiers"
+			case .instantiateMethodNotStatic:
+				"Add `static` modifier"
+			case let .privateOrFilePrivateInstantiateMethod(accessLevel):
+				"Remove `\(accessLevel.spelling)` modifier"
 			case .disallowedGenericParameter:
 				"Remove generic parameter"
 			case .disallowedEffectSpecifiers:
@@ -215,23 +227,23 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Remove excessive attached macros"
 			case let .dependencyHasInitializer(_, initializer):
 				"Remove `\(initializer)`"
-			case .missingPublicOrOpenAttribute:
-				"Add `public` modifier"
+			case let .privateOrFilePrivateType(accessLevel):
+				"Remove `\(accessLevel.spelling)` modifier"
 			case let .missingRequiredInitializer(missingInitError):
 				switch missingInitError {
 				case .hasOnlyInjectableProperties,
 				     .hasInjectableAndNotInjectableProperties,
 				     .hasNoInjectableProperties:
 					"Add required initializer"
-				case .isNotPublicOrOpen:
-					"Add `public` modifier"
+				case let .isPrivateOrFilePrivate(accessLevel):
+					"Remove `\(accessLevel.spelling)` modifier"
 				case let .missingArguments(properties):
 					"Add arguments for \(properties.map(\.asSource).joined(separator: ", "))"
 				}
 			case let .mockMethodMissingArguments(methodName, properties):
 				"Add `\(methodName)()` arguments for \(properties.map(\.asSource).joined(separator: ", "))"
-			case .mockMethodNotPublic:
-				"Add `public` modifier to `mock()` method"
+			case let .privateOrFilePrivateMockMethod(accessLevel):
+				"Remove `\(accessLevel.spelling)` modifier from `mock()` method"
 			case let .mockMethodIncorrectReturnType(typeName),
 			     let .extensionMockMethodIncorrectReturnType(typeName):
 				"Change `mock()` return type to `\(typeName)`"
