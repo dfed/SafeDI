@@ -348,16 +348,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		// line ends with the same comment, after the comma that ends the parameter.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
-				Self.feature(
-					inPackage: "Shop",
-					declaring: """
-					@Instantiable
-					public final class User: Instantiable {
-					    public init() {}
-					    package static func mock() -> User { User() }
-					}
-					""",
-				),
+				Self.feature(inPackage: "Shop", declaring: Self.publicUserWithPackageMock),
 				Self.app(inPackage: "Shop", declaring: """
 				import Feature
 
@@ -385,6 +376,48 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			        name: String = ""
 			    ) -> Profile {
 			        return Profile(user: user, name: name)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": header,
+		])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_assumesPackageAccessWithCommentAfterLastForwardedParameter_whenItsDefaultCallsHandWrittenMockOfUnknownModule() async throws {
+		// `user` is the last parameter of `mock()`, so no comma ends its line before the comment.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.feature(inPackage: "Shop", declaring: Self.publicUserWithPackageMock),
+				Self.app(inPackage: "Shop", declaring: """
+				import Feature
+
+				@Instantiable(generateMock: true)
+				final class Profile: Instantiable {
+				    init(user: User) {
+				        self.user = user
+				    }
+				    @Forwarded let user: User
+				}
+				"""),
+			],
+			integration: .swiftPackagePlugin,
+			writesTargetGraph: false,
+			filesToDelete: &filesToDelete,
+		)
+
+		let header = generatedFileHeader + Self.importBlock("Feature") + "\n\n"
+		#expect(try #require(output.modules["App"]).generatedFiles == [
+			"Profile+SafeDIMock.swift": header + """
+			#if DEBUG
+			extension Profile {
+			    static func mock(
+			        user: User = User.mock() // SafeDI could not verify that User is in this package; `package` access is assumed.
+			    ) -> Profile {
+			        return Profile(user: user)
 			    }
 			}
 			#endif
@@ -1528,6 +1561,15 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	    @Instantiated let alpha: Namespace.Alpha
 	    @Instantiated let zulu: Namespace.Zulu
+	}
+	"""
+
+	/// A `public` `User` whose hand-written mock is `package`.
+	private static let publicUserWithPackageMock = """
+	@Instantiable
+	public final class User: Instantiable {
+	    public init() {}
+	    package static func mock() -> User { User() }
 	}
 	"""
 
