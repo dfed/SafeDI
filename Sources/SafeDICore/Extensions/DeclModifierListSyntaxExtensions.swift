@@ -33,4 +33,47 @@ extension DeclModifierListSyntax {
 			modifier.name.text == "static"
 		})
 	}
+
+	/// The access these modifiers spell on the declaration that `keyword` introduces: the level the first access
+	/// modifier names, or `internal` when none does. The compiler rejects a detail, such as `(set)`, on the access
+	/// modifier of every declaration SafeDI reads, so a modifier is read by its name alone.
+	/// - Parameter sourceLocationConverter: A converter for the tree that holds the declaration. When provided, the
+	///   access records where its modifier is and where the declaration begins after its attributes.
+	func access(introducedBy keyword: TokenSyntax, sourceLocationConverter: SourceLocationConverter?) -> AccessDeclaration {
+		let accessModifier = lazy
+			.compactMap { modifier in
+				AccessLevel(modifier.name.tokenKind).map { (level: $0, name: modifier.name) }
+			}
+			.first
+		return AccessDeclaration(
+			level: accessModifier?.level ?? .internal,
+			modifierRange: accessModifier.flatMap { sourceLocationConverter?.sourceRange(of: $0.name) },
+			declarationStartLocation: sourceLocationConverter?.declarationLocation(for: (first?.name ?? keyword).positionAfterSkippingLeadingTrivia),
+		)
+	}
+}
+
+// MARK: - AccessLevel
+
+extension AccessLevel {
+	/// The access level a modifier named by `tokenKind` sets, or `nil` when the modifier sets none.
+	fileprivate init?(_ tokenKind: TokenKind) {
+		switch tokenKind {
+		case .keyword(.open):
+			self = .open
+		case .keyword(.public):
+			self = .public
+		case .keyword(.package):
+			self = .package
+		case .keyword(.internal):
+			self = .internal
+		case .keyword(.fileprivate):
+			self = .fileprivate
+		case .keyword(.private):
+			self = .private
+		default:
+			// Every other modifier, such as `static` or `final`, sets something other than an access level.
+			return nil
+		}
+	}
 }

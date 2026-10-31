@@ -3143,6 +3143,123 @@ import Testing
 		}
 
 		@Test
+		func declaration_fixit_updatesFirstInitializer_whenIfConfigClausesDeclareSameSignatureWithDifferentNonPublicAccess() {
+			// The initializers differ only in access, so each is reported where it is declared. The macro reports the
+			// first initializer it can fix.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    #if DEBUG
+				    init() {}
+				    #else
+				    private init() {}
+				    #endif
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    #if DEBUG
+				    init() {}
+				    #else
+				    private init() {}
+				    #endif
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
+						line: 4,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add `public` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    #if DEBUG
+				    public init() {}
+				    #else
+				    private init() {}
+				    #endif
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_diagnosesUnlabeledDefaultAtEachInitializer_whenIfConfigClausesDeclareSameSignatureWithDifferentNonPublicAccess() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    #if DEBUG
+				    init(_ enabled: Bool = false, _ dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    #else
+				    private init(_ enabled: Bool = false, _ dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    #endif
+
+				    @Received let dependency: Dependency
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    #if DEBUG
+				    init(_ enabled: Bool = false, _ dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    #else
+				    private init(_ enabled: Bool = false, _ dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    #endif
+
+				    let dependency: Dependency
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "Unlabeled parameter `enabled: Bool` has a default value but is followed by unlabeled required parameter `dependency: Dependency`, so a generated `mock()` cannot leave `enabled` out of its call. Add an argument label to `enabled`, move unlabeled parameters with defaults after the required ones, or remove the default.",
+						line: 4,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add argument label `enabled`"),
+						],
+					),
+					DiagnosticSpec(
+						message: "Unlabeled parameter `enabled: Bool` has a default value but is followed by unlabeled required parameter `dependency: Dependency`, so a generated `mock()` cannot leave `enabled` out of its call. Add an argument label to `enabled`, move unlabeled parameters with defaults after the required ones, or remove the default.",
+						line: 8,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add argument label `enabled`"),
+						],
+					),
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
+						line: 4,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `public` modifier"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func declaration_fixit_updatesInitializerWhenExistingInitializerHasIncorrectAccessModifier() {
 			assertMacroExpansion(
 				"""
