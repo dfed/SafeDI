@@ -609,7 +609,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
-					Self.featureDeclaringNamespaceEnclosingZuluThenAlpha(deletesSwiftFilesAfterRunning: false),
+					Self.featureDeclaringNamespace(enclosing: ["Zulu", "Alpha"], deletesSwiftFilesAfterRunning: false),
 					Self.app(inPackage: "Shop", declaring: Self.rootReferringToAlphaThenZulu),
 				],
 				integration: .moduleInfo,
@@ -629,7 +629,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
-					Self.featureDeclaringNamespaceEnclosingZuluThenAlpha(deletesSwiftFilesAfterRunning: true),
+					Self.featureDeclaringNamespace(enclosing: ["Zulu", "Alpha"], deletesSwiftFilesAfterRunning: true),
 					Self.app(inPackage: "Shop", declaring: Self.rootReferringToAlphaThenZulu),
 				],
 				integration: .moduleInfo,
@@ -642,22 +642,22 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsEnclosingTypeOnceNamingTypeDeclaredFirst_whenOneReferenceLeadsToSeveralTypesItEncloses() async {
-		// Both mocks refer to their trees from the `#SafeDIConfiguration` that lists them, so the error names the type
-		// declared first.
+		// Every mock refers to its tree from the `#SafeDIConfiguration` that lists it, so the error names the type
+		// declared first: `Mike`, whose mock is checked neither first nor last, as mocks are checked in type order.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["SafeDIConfiguration.swift"]):1:1: error: `Namespace`, which encloses `Namespace.Zulu`, is `internal` in module `Feature`, so module `App`, another module of the same package, cannot construct `Namespace.Zulu` in the code SafeDI generates. Make `Namespace` `package` in module `Feature` to fix.
+			\(fixtures["App"]!["SafeDIConfiguration.swift"]):1:1: error: `Namespace`, which encloses `Namespace.Mike`, is `internal` in module `Feature`, so module `App`, another module of the same package, cannot construct `Namespace.Mike` in the code SafeDI generates. Make `Namespace` `package` in module `Feature` to fix.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
-					Self.featureDeclaringNamespaceEnclosingZuluThenAlpha(deletesSwiftFilesAfterRunning: true),
+					Self.featureDeclaringNamespace(enclosing: ["Mike", "Zulu", "Alpha"], deletesSwiftFilesAfterRunning: true),
 					ModuleFixture(
 						name: "App",
 						packageName: "Shop",
 						swiftFileContentByFilePath: [
 							"SafeDIConfiguration.swift": """
-							#SafeDIConfiguration(additionalMocksToGenerate: ["Namespace.Alpha", "Namespace.Zulu"])
+							#SafeDIConfiguration(additionalMocksToGenerate: ["Namespace.Alpha", "Namespace.Mike", "Namespace.Zulu"])
 							""",
 						],
 						dependencies: ["Feature"],
@@ -943,8 +943,8 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsInaccessibleConstructionOnceAtEarliestReference_whenSeveralRootsConstructTypeWhoseFileCannotBeRead() async {
-		// Roots are checked in type order, so `Alpha`, in `B.swift`, is checked before `Zulu`, in `A.swift`, whose
-		// reference comes first in source order.
+		// Roots are checked in type order – `Alpha`, in `C.swift`, `Mike`, in `A.swift`, then `Zulu`, in `B.swift` – so
+		// the reference that comes first in source order is checked neither first nor last.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["A.swift"]):8:5: error: `Service` is `internal` in module `Feature`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` in module `Feature` to fix.
@@ -953,34 +953,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
 					Self.feature(inPackage: "Shop", declaring: Self.internalServiceWithPackageInitializer, deletesSwiftFilesAfterRunning: true),
-					ModuleFixture(
-						name: "App",
-						packageName: "Shop",
-						swiftFileContentByFilePath: [
-							"A.swift": """
-							import Feature
-
-							@Instantiable(isRoot: true)
-							final class Zulu: Instantiable {
-							    init(service: Service) {
-							        self.service = service
-							    }
-							    @Instantiated let service: Service
-							}
-							""",
-							"B.swift": """
-							import Feature
-
-							@Instantiable(isRoot: true)
-							final class Alpha: Instantiable {
-							    init(service: Service) {
-							        self.service = service
-							    }
-							    @Instantiated let service: Service
-							}
-							""",
-						],
-						dependencies: ["Feature"],
+					Self.appInstantiatingService(
+						in: ["A.swift": "Mike", "B.swift": "Zulu", "C.swift": "Alpha"],
+						decoratedWith: "@Instantiable(isRoot: true)",
 					),
 				],
 				integration: .moduleInfo,
@@ -1135,8 +1110,8 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsInaccessibleConstructionOnceAtEarliestReference_whenSeveralMocksConstructTypeWhoseFileCannotBeRead() async {
-		// Mock roots are checked in type order, so `Alpha`, in `B.swift`, is checked before `Zulu`, in `A.swift`, whose
-		// reference comes first in source order.
+		// Mock roots are checked in type order – `Alpha`, in `C.swift`, `Mike`, in `A.swift`, then `Zulu`, in `B.swift` –
+		// so the reference that comes first in source order is checked neither first nor last.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["App"]!["A.swift"]):8:5: error: `Service` is `internal` in module `Feature`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` in module `Feature` to fix.
@@ -1145,34 +1120,9 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
 					Self.feature(inPackage: "Shop", declaring: Self.internalServiceWithPackageInitializer, deletesSwiftFilesAfterRunning: true),
-					ModuleFixture(
-						name: "App",
-						packageName: "Shop",
-						swiftFileContentByFilePath: [
-							"A.swift": """
-							import Feature
-
-							@Instantiable(generateMock: true)
-							final class Zulu: Instantiable {
-							    init(service: Service) {
-							        self.service = service
-							    }
-							    @Instantiated let service: Service
-							}
-							""",
-							"B.swift": """
-							import Feature
-
-							@Instantiable(generateMock: true)
-							final class Alpha: Instantiable {
-							    init(service: Service) {
-							        self.service = service
-							    }
-							    @Instantiated let service: Service
-							}
-							""",
-						],
-						dependencies: ["Feature"],
+					Self.appInstantiatingService(
+						in: ["A.swift": "Mike", "B.swift": "Zulu", "C.swift": "Alpha"],
+						decoratedWith: "@Instantiable(generateMock: true)",
 					),
 				],
 				integration: .moduleInfo,
@@ -1521,26 +1471,45 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	}
 	"""
 
-	/// A `Feature` module of package `Shop` whose `internal` enum `Namespace` declares `Zulu` and then `Alpha`, in
-	/// `Namespace.swift`.
-	private static func featureDeclaringNamespaceEnclosingZuluThenAlpha(deletesSwiftFilesAfterRunning: Bool) -> ModuleFixture {
+	/// An `App` module of package `Shop` depending on `Feature`, with a file at each path of `typeNameByFilePath` that
+	/// declares the type it names, decorated with `attribute`, which instantiates `Feature`'s `Service` at line 8.
+	private static func appInstantiatingService(in typeNameByFilePath: [String: String], decoratedWith attribute: String) -> ModuleFixture {
 		ModuleFixture(
+			name: "App",
+			packageName: "Shop",
+			swiftFileContentByFilePath: typeNameByFilePath.mapValues { typeName in
+				"""
+				import Feature
+
+				\(attribute)
+				final class \(typeName): Instantiable {
+				    init(service: Service) {
+				        self.service = service
+				    }
+				    @Instantiated let service: Service
+				}
+				"""
+			},
+			dependencies: ["Feature"],
+		)
+	}
+
+	/// A `Feature` module of package `Shop` whose `internal` enum `Namespace`, at the start of `Namespace.swift`,
+	/// declares a public type for each of `typeNames`, in order.
+	private static func featureDeclaringNamespace(enclosing typeNames: [String], deletesSwiftFilesAfterRunning: Bool) -> ModuleFixture {
+		let typeDeclarations = typeNames.map { typeName in
+			"""
+			    @Instantiable
+			    public final class \(typeName): Instantiable {
+			        public init() {}
+			    }
+			"""
+		}
+		return ModuleFixture(
 			name: "Feature",
 			packageName: "Shop",
 			swiftFileContentByFilePath: [
-				"Namespace.swift": """
-				enum Namespace {
-				    @Instantiable
-				    public final class Zulu: Instantiable {
-				        public init() {}
-				    }
-
-				    @Instantiable
-				    public final class Alpha: Instantiable {
-				        public init() {}
-				    }
-				}
-				""",
+				"Namespace.swift": "enum Namespace {\n" + typeDeclarations.joined(separator: "\n\n") + "\n}",
 			],
 			deletesSwiftFilesAfterRunning: deletesSwiftFilesAfterRunning,
 		)
