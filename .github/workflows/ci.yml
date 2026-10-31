@@ -694,11 +694,24 @@ jobs:
       # only on the first pass: it compiles each generated output with
       # swiftc, and recompiling a string the later passes have already
       # proven identical adds nothing except ~70% of the pass's runtime.
+      #
+      # Coverage counters are plain loads and stores, and Swift Testing
+      # runs tests in parallel, so a counter that many tests increment
+      # loses the occasional increment. llvm-cov does not count an
+      # `else` branch directly: it subtracts the `then` branch's counter
+      # from the enclosing block's. A rarely taken `else` under an `if`
+      # that runs a thousand times therefore reads zero whenever the
+      # block's counter lost a few more increments than the branch's,
+      # and Codecov reports a line that tests do run as missed (#507 saw
+      # GenerateCommand.swift lose one such line on both platforms).
+      # `-instrprof-atomic-counter-update-all` makes every update atomic,
+      # so the counts are exact. SwiftPM's native build system passes the
+      # flag through; the swiftbuild build system drops it.
       - name: Build and Test Framework
         run: |
-          xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing --traits sourceBuild
+          xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
           for _ in {1..4}; do
-            SAFEDI_SKIP_COMPILE_CHECK=1 xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing --traits sourceBuild
+            SAFEDI_SKIP_COMPILE_CHECK=1 xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
           done
       - name: Prepare Coverage Reports
         run: ./Scripts/prepare-coverage-reports.sh
@@ -738,8 +751,9 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: swift package resolve
+      # Atomic coverage counter updates, for the reason the macOS job gives.
       - name: Build and Test Framework
-        run: swift test -c release --enable-code-coverage -Xswiftc -enable-testing --traits sourceBuild
+        run: swift test -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
       # The graph fuzzer's shards run this job's test bundle rather than
       # building their own: the bundle, SafeDITool and the macro plugin (which
       # the fuzzer's compiler runs use), and SafeDI's module.
