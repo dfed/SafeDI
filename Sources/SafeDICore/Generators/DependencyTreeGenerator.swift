@@ -1030,22 +1030,20 @@ public actor DependencyTreeGenerator {
 
 		/// The diagnostics of this error in the groups `independentErrors` joins, leaving out those of the constructions
 		/// an `inaccessibleConstructions` error reports, which `independentErrors` merges across the errors it joins.
+		/// Every validation that finds inaccessible constructions throws them as an `inaccessibleConstructions` error
+		/// of its own, which `reportingAll(of:)` joins directly.
 		private var sourceDiagnosticGroupsOtherThanInaccessibleConstructions: [[SourceDiagnostic]] {
 			if case .inaccessibleConstructions = self {
 				[]
-			} else if case let .independentErrors(errors) = self {
-				[SourceDiagnostic.joiningInSourceOrder(errors.flatMap(\.sourceDiagnosticGroupsOtherThanInaccessibleConstructions))]
 			} else {
 				[sourceDiagnostics]
 			}
 		}
 
-		/// The constructions this error reports as inaccessible, those of the errors it joins included.
+		/// The constructions this error reports as inaccessible, if it is an `inaccessibleConstructions` error.
 		private var reportedInaccessibleConstructions: [InaccessibleConstruction] {
 			if case let .inaccessibleConstructions(inaccessibleConstructions) = self {
 				inaccessibleConstructions
-			} else if case let .independentErrors(errors) = self {
-				errors.flatMap(\.reportedInaccessibleConstructions)
 			} else {
 				[]
 			}
@@ -1054,11 +1052,10 @@ public actor DependencyTreeGenerator {
 		var sourceDiagnostics: [SourceDiagnostic] {
 			switch self {
 			case let .independentErrors(errors):
-				// The trees of several roots, and of several mock roots, can each need one declaration to widen, which
-				// is reported once.
+				// The trees of several mock roots can each need one declaration to widen, which is reported once.
 				SourceDiagnostic.joiningInSourceOrder(
 					errors.flatMap(\.sourceDiagnosticGroupsOtherThanInaccessibleConstructions)
-						+ InaccessibleConstruction.merging(reportedInaccessibleConstructions).map { [$0.sourceDiagnostic] },
+						+ InaccessibleConstruction.merging(errors.flatMap(\.reportedInaccessibleConstructions)).map { [$0.sourceDiagnostic] },
 				)
 			case let .inaccessibleConstructions(inaccessibleConstructions):
 				// A declaration that several constructions need to widen the same way is reported once.
