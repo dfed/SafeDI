@@ -181,13 +181,16 @@ struct MultiModuleTestOutput {
 
 /// An error thrown by `executeSafeDIToolMultiModuleTest` when a module's `generate` fails. Carries the fixture
 /// paths of every module the tool ran for, the failing one included, so diagnostics that cite those paths can
-/// be asserted in full.
+/// be asserted in full, and the output of every module processed before the failing one.
 struct SafeDIToolMultiModuleTestError: Error, CustomStringConvertible {
 	let underlyingError: any Error
 	/// The module whose `generate` failed.
 	let moduleName: String
 	/// The fixtures of every module the tool ran for, by module name.
 	let fixtures: [String: FixturePaths]
+	/// The output of each module processed before the failing one, by module name: the harness stops at the
+	/// first module whose `generate` fails, so the modules after it have none.
+	let outputs: [String: ModuleTestOutput]
 
 	var description: String {
 		"\(underlyingError)"
@@ -196,10 +199,12 @@ struct SafeDIToolMultiModuleTestError: Error, CustomStringConvertible {
 
 /// Asserts that `block` throws because `generate` failed for the module named `expectedModuleName`, with an error
 /// whose description – the compiler-formatted diagnostics for a `SourceLocatedError` – exactly matches
-/// `expectedDiagnostics`, which is given every module's fixture files so it can cite their paths.
+/// `expectedDiagnostics`, which is given every module's fixture files so it can cite their paths, and hands the
+/// outputs of the modules processed before the failing one to `inspectingOutputs`.
 func assertThrowsMultiModuleError(
 	inModule expectedModuleName: String,
 	diagnostics expectedDiagnostics: (_ fixtures: [String: FixturePaths]) -> String,
+	inspectingOutputs: (_ outputs: [String: ModuleTestOutput]) -> Void = { _ in },
 	sourceLocation: SourceLocation = #_sourceLocation,
 	block: () async throws -> some Sendable,
 ) async {
@@ -209,6 +214,7 @@ func assertThrowsMultiModuleError(
 	} catch let error as SafeDIToolMultiModuleTestError {
 		#expect(error.moduleName == expectedModuleName, sourceLocation: sourceLocation)
 		#expect(expectedDiagnostics(error.fixtures) == "\(error.underlyingError)", sourceLocation: sourceLocation)
+		inspectingOutputs(error.outputs)
 	} catch {
 		Issue.record("Threw an error that does not carry fixture paths: \(error)", sourceLocation: sourceLocation)
 	}
@@ -383,7 +389,7 @@ func executeSafeDIToolMultiModuleTest(
 			} catch {
 				var fixturesByModuleName = outputs.mapValues(\.fixtures)
 				fixturesByModuleName[moduleName] = fixtures
-				throw SafeDIToolMultiModuleTestError(underlyingError: error, moduleName: moduleName, fixtures: fixturesByModuleName)
+				throw SafeDIToolMultiModuleTestError(underlyingError: error, moduleName: moduleName, fixtures: fixturesByModuleName, outputs: outputs)
 			}
 		}
 
