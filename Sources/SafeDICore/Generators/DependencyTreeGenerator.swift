@@ -1307,9 +1307,10 @@ public actor DependencyTreeGenerator {
 
 			/// `inaccessibleConstructions`, in no particular order, with those that need one declaration to widen the
 			/// same way – the constructions of several roots' trees, or of several types the declaration encloses –
-			/// merged into one. It names the constructed type declared first, and refers to the construction from the
-			/// earliest reference, each in source order, so neither which roots reach the declaration nor the order in
-			/// which they are checked changes what is reported.
+			/// merged into the one with the earliest reference in source order, or, of those with one reference, the one
+			/// whose constructed type is declared first. An error at a reference therefore names the type that reference
+			/// constructs, and neither which roots reach the declaration nor the order in which they are checked changes
+			/// what is reported.
 			static func merging(_ inaccessibleConstructions: [InaccessibleConstruction]) -> [InaccessibleConstruction] {
 				var mergedByDeclaration = [MergeKey: InaccessibleConstruction]()
 				for inaccessibleConstruction in inaccessibleConstructions {
@@ -1331,26 +1332,16 @@ public actor DependencyTreeGenerator {
 				let declaringModule: ModuleIdentity
 			}
 
-			/// This construction merged with `other`, which needs the same declaration to widen the same way.
+			/// Of this construction and `other`, which needs the same declaration to widen the same way, the one an error
+			/// about the declaration reports. Two constructions whose types are declared at one location construct one
+			/// type and report the same error.
 			private func merged(with other: InaccessibleConstruction) -> InaccessibleConstruction {
-				let otherIsDeclaredFirst = if other.constructedTypeDeclarationLocation == constructedTypeDeclarationLocation {
-					other.constructedType < constructedType
-				} else {
+				let otherIsReportedFirst = if other.referenceLocation == referenceLocation {
 					Dependency.DeclarationLocation.precedesInSourceOrder(other.constructedTypeDeclarationLocation, constructedTypeDeclarationLocation)
+				} else {
+					Dependency.DeclarationLocation.precedesInSourceOrder(other.referenceLocation, referenceLocation)
 				}
-				let namedConstruction = otherIsDeclaredFirst ? other : self
-				return InaccessibleConstruction(
-					constructedType: namedConstruction.constructedType,
-					accessNeed: namedConstruction.accessNeed,
-					requirement: requirement,
-					emittingModule: emittingModule,
-					declaringModule: declaringModule,
-					readableDeclarationLocation: readableDeclarationLocation,
-					referenceLocation: Dependency.DeclarationLocation.precedesInSourceOrder(other.referenceLocation, referenceLocation)
-						? other.referenceLocation
-						: referenceLocation,
-					constructedTypeDeclarationLocation: namedConstruction.constructedTypeDeclarationLocation,
-				)
+				return otherIsReportedFirst ? other : self
 			}
 
 			/// A single `error:` line, since Xcode drops notes from build-tool output. When the declaration's file can

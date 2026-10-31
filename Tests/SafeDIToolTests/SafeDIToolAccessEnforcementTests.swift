@@ -599,51 +599,72 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_reportsEnclosingTypeOnce_whenSeveralTypesItEnclosesAreConstructed() async {
-		// `Zulu` is declared before `Alpha`, so the error names it.
+	mutating func generate_reportsEnclosingTypeOnceNamingTypeOfEarliestReference_whenSeveralTypesItEnclosesAreConstructed() async {
+		// `Zulu` is declared first, but `Root` refers to `Alpha` first, so the error names `Alpha`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Namespace.swift"]):1:1: error: `Namespace`, which encloses `Namespace.Zulu`, is `internal`, so module `App`, another module of the same package, cannot construct `Namespace.Zulu` in the code SafeDI generates. Make `Namespace` `package` to fix.
+			\(fixtures["Feature"]!["Namespace.swift"]):1:1: error: `Namespace`, which encloses `Namespace.Alpha`, is `internal`, so module `App`, another module of the same package, cannot construct `Namespace.Alpha` in the code SafeDI generates. Make `Namespace` `package` to fix.
 			\(fixtures["Feature"]!["Namespace.swift"]):1:1-1:1: fixit: package\(" ")
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
-					ModuleFixture(
-						name: "Feature",
-						packageName: "Shop",
-						swiftFileContentByFilePath: [
-							"Namespace.swift": """
-							enum Namespace {
-							    @Instantiable
-							    public final class Zulu: Instantiable {
-							        public init() {}
-							    }
-
-							    @Instantiable
-							    public final class Alpha: Instantiable {
-							        public init() {}
-							    }
-							}
-							""",
-						],
-					),
-					Self.app(inPackage: "Shop", declaring: """
-					import Feature
-
-					@Instantiable(isRoot: true)
-					final class Root: Instantiable {
-					    init(alpha: Namespace.Alpha, zulu: Namespace.Zulu) {
-					        self.alpha = alpha
-					        self.zulu = zulu
-					    }
-
-					    @Instantiated let alpha: Namespace.Alpha
-					    @Instantiated let zulu: Namespace.Zulu
-					}
-					"""),
+					Self.featureDeclaringNamespaceEnclosingZuluThenAlpha(deletesSwiftFilesAfterRunning: false),
+					Self.app(inPackage: "Shop", declaring: Self.rootReferringToAlphaThenZulu),
 				],
 				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsEnclosingTypeOnceAtEarliestReferenceNamingTypeItConstructs_whenDeclaringFileCannotBeRead() async {
+		// `Zulu` is declared first, but `Root` refers to `Alpha` first, so the error is reported there and names `Alpha`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):10:5: error: `Namespace`, which encloses `Namespace.Alpha`, is `internal` in module `Feature`, so module `App`, another module of the same package, cannot construct `Namespace.Alpha` in the code SafeDI generates. Make `Namespace` `package` in module `Feature` to fix.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.featureDeclaringNamespaceEnclosingZuluThenAlpha(deletesSwiftFilesAfterRunning: true),
+					Self.app(inPackage: "Shop", declaring: Self.rootReferringToAlphaThenZulu),
+				],
+				integration: .moduleInfo,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsEnclosingTypeOnceNamingTypeDeclaredFirst_whenOneReferenceLeadsToSeveralTypesItEncloses() async {
+		// Both mocks refer to their trees from the `#SafeDIConfiguration` that lists them, so the error names the type
+		// declared first.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["SafeDIConfiguration.swift"]):1:1: error: `Namespace`, which encloses `Namespace.Zulu`, is `internal` in module `Feature`, so module `App`, another module of the same package, cannot construct `Namespace.Zulu` in the code SafeDI generates. Make `Namespace` `package` in module `Feature` to fix.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.featureDeclaringNamespaceEnclosingZuluThenAlpha(deletesSwiftFilesAfterRunning: true),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContentByFilePath: [
+							"SafeDIConfiguration.swift": """
+							#SafeDIConfiguration(additionalMocksToGenerate: ["Namespace.Alpha", "Namespace.Zulu"])
+							""",
+						],
+						dependencies: ["Feature"],
+					),
+				],
+				integration: .moduleInfo,
+				compileVerification: .skipped,
 				filesToDelete: &filesToDelete,
 			)
 		}
@@ -1497,6 +1518,47 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	@Instantiable
 	final class Service: Instantiable {
 	    package init() {}
+	}
+	"""
+
+	/// A `Feature` module of package `Shop` whose `internal` enum `Namespace` declares `Zulu` and then `Alpha`, in
+	/// `Namespace.swift`.
+	private static func featureDeclaringNamespaceEnclosingZuluThenAlpha(deletesSwiftFilesAfterRunning: Bool) -> ModuleFixture {
+		ModuleFixture(
+			name: "Feature",
+			packageName: "Shop",
+			swiftFileContentByFilePath: [
+				"Namespace.swift": """
+				enum Namespace {
+				    @Instantiable
+				    public final class Zulu: Instantiable {
+				        public init() {}
+				    }
+
+				    @Instantiable
+				    public final class Alpha: Instantiable {
+				        public init() {}
+				    }
+				}
+				""",
+			],
+			deletesSwiftFilesAfterRunning: deletesSwiftFilesAfterRunning,
+		)
+	}
+
+	/// A root in `App` that refers to `Namespace.Alpha` and then to `Namespace.Zulu`, at lines 10 and 11.
+	private static let rootReferringToAlphaThenZulu = """
+	import Feature
+
+	@Instantiable(isRoot: true)
+	final class Root: Instantiable {
+	    init(alpha: Namespace.Alpha, zulu: Namespace.Zulu) {
+	        self.alpha = alpha
+	        self.zulu = zulu
+	    }
+
+	    @Instantiated let alpha: Namespace.Alpha
+	    @Instantiated let zulu: Namespace.Zulu
 	}
 	"""
 
