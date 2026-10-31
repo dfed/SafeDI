@@ -675,12 +675,13 @@ jobs:
       # build products aren't portable across toolchains. The
       # restore-keys prefix reuses the most recent cache when
       # Package.resolved changes, and the incremental build takes it
-      # from there.
+      # from there. This workflow is in the key too: the test commands
+      # below set compiler flags, and a cache hit is never re-saved.
       - name: Cache Build Directory
         uses: actions/cache@v6
         with:
           path: .build
-          key: spm-release-${{ runner.os }}-xcode-26.0-${{ hashFiles('Package.resolved') }}
+          key: spm-release-${{ runner.os }}-xcode-26.0-${{ hashFiles('Package.resolved', '.github/workflows/ci.yml') }}
           restore-keys: |
             spm-release-${{ runner.os }}-xcode-26.0-
       - name: Resolve Package Dependencies
@@ -739,12 +740,13 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v7
       # Same idea as the macOS test job: reuse dependency build products
-      # between runs. Keyed on the container's Swift version.
+      # between runs. Keyed on the container's Swift version, and on this
+      # workflow for the macOS job's reason.
       - name: Cache Build Directory
         uses: actions/cache@v6
         with:
           path: .build
-          key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved') }}
+          key: spm-release-${{ runner.os }}-swift-6.2-${{ hashFiles('Package.resolved', '.github/workflows/ci.yml') }}
           restore-keys: |
             spm-release-${{ runner.os }}-swift-6.2-
       - name: Resolve Package Dependencies
