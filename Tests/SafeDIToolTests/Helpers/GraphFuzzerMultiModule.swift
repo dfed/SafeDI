@@ -126,7 +126,7 @@ struct GraphFuzzerPartition: Equatable, Sendable {
 	/// orders agree; `Delta` sorts before `Gamma`, so in a four-module graph whose `Delta` depends on `Gamma` – otherwise
 	/// `Gamma`'s files are not in `Delta`'s CSV and its `.safedi` is not read – the plugin combines `Delta`'s own
 	/// declarations before `Gamma`'s where the module-info integration combines them after. That is deliberate: a real
-	/// package's module directories sort arbitrarily against a Bazel build's `.safedi` paths, so those graphs (503 of
+	/// package's module directories sort arbitrarily against a Bazel build's `.safedi` paths, so those graphs (521 of
 	/// the corpus's 5000, counted on the long run's `partitions` report line) check that nothing SafeDI generates or
 	/// reports depends on that order.
 	static let moduleNames = ["Alpha", "Beta", "Gamma", "Delta"]
