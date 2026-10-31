@@ -343,6 +343,59 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_assumesPackageAccessWithCommentAfterForwardedParameter_whenItsDefaultCallsHandWrittenMockOfUnknownModule() async throws {
+		// `mock()` defaults `user` to `User.mock()`, which constructs `User` as any line of a mock's tree does, so its
+		// line ends with the same comment, after the comma that ends the parameter.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.feature(
+					inPackage: "Shop",
+					declaring: """
+					@Instantiable
+					public final class User: Instantiable {
+					    public init() {}
+					    package static func mock() -> User { User() }
+					}
+					""",
+				),
+				Self.app(inPackage: "Shop", declaring: """
+				import Feature
+
+				@Instantiable(generateMock: true)
+				final class Profile: Instantiable {
+				    init(user: User, name: String = "") {
+				        self.user = user
+				    }
+				    @Forwarded let user: User
+				}
+				"""),
+			],
+			integration: .swiftPackagePlugin,
+			writesTargetGraph: false,
+			filesToDelete: &filesToDelete,
+		)
+
+		let header = generatedFileHeader + Self.importBlock("Feature") + "\n\n"
+		#expect(try #require(output.modules["App"]).generatedFiles == [
+			"Profile+SafeDIMock.swift": header + """
+			#if DEBUG
+			extension Profile {
+			    static func mock(
+			        user: User = User.mock(), // SafeDI could not verify that User is in this package; `package` access is assumed.
+			        name: String = ""
+			    ) -> Profile {
+			        return Profile(user: user, name: name)
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": header,
+		])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_constructsInternalTypes_whenHandWrittenManifestNamesNoOwnFiles() async throws {
 		// A hand-written manifest that names no `mockScopedFilePaths` describes one module, so each of its files is
 		// one of the module's own.

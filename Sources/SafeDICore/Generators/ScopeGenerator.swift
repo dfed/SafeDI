@@ -762,6 +762,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// Maps types with hand-written mock methods to their mock method name (e.g. "mock" or a custom name).
 		/// Used to provide default values for forwarded dependencies whose type has a hand-written mock.
 		let forwardedParameterMockDefaults: [TypeDescription: String]
+		/// The comment that ends the line of a forwarded parameter whose default calls the hand-written mock in
+		/// `forwardedParameterMockDefaults`, by type, as `Scope.ConstructionComments.mockMethod` ends each line that
+		/// constructs a type with its hand-written mock. A type with no comment is not listed.
+		let forwardedParameterMockDefaultComments: [TypeDescription: String]
 		/// Globally-computed feedback arc set (see
 		/// `DependencyTreeGenerator.computeCycleEdges`). Alphabetical-DFS
 		/// selection makes every root walking the same graph agree on which
@@ -2180,12 +2184,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return defaults
 		}()
 		var mockParameters = [String]()
+		// The comment that ends the line of the parameter at each index, after its comma: a default that calls a
+		// hand-written mock ends with the comment that ends every line constructing a type with that mock.
+		var mockParameterComments = [Int: String]()
 		for dependency in forwardedDependencies {
 			let typeSource = dependency.property.typeDescription.asFunctionParameter.asSource
 			if let defaultExpression = constructionDefaults[dependency.property.label] {
 				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource) = \(defaultExpression)")
 			} else if let mockMethodName = context.forwardedParameterMockDefaults[dependency.property.typeDescription] {
 				let mockTypeName = dependency.property.typeDescription.asSource
+				mockParameterComments[mockParameters.count] = context.forwardedParameterMockDefaultComments[dependency.property.typeDescription]
 				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource) = \(mockTypeName).\(mockMethodName)()")
 			} else {
 				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource)")
@@ -2205,7 +2213,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
-		lines.append(mockParameters.joined(separator: ",\n"))
+		lines.append(mockParameters.enumerated().map { index, mockParameter in
+			let separator = index < mockParameters.count - 1 ? "," : ""
+			return mockParameter + separator + (mockParameterComments[index].map { " \($0)" } ?? "")
+		}.joined(separator: "\n"))
 		lines.append("\(indent)) -> \(mockMethodReturnType) {")
 
 		// Generate mock body.

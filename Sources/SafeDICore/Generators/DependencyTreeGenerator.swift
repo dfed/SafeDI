@@ -161,6 +161,11 @@ public actor DependencyTreeGenerator {
 		let mockScopes = try mockScopes(additionalMocksToGenerate: additionalMocksToGenerate, receivedPropertiesCache: &receivedPropertiesCache)
 		let typeDescriptionToScopeMap = mockScopes.typeDescriptionToScopeMap
 		let forwardedParameterMockDefaults = mockScopes.forwardedParameterMockDefaults
+		// A forwarded parameter's default constructs its type with the type's hand-written mock, as the access check
+		// of each mock root reads that type.
+		let forwardedParameterMockDefaultComments = forwardedParameterMockDefaults.keys.reduce(into: [TypeDescription: String]()) { result, typeDescription in
+			result[typeDescription] = typeDescriptionToFulfillingInstantiableMap[typeDescription].flatMap { constructionComments(for: $0).mockMethod }
+		}
 
 		// Create mock-root ScopeGenerators using the production Scope tree.
 		var seen = Set<TypeDescription>()
@@ -271,6 +276,7 @@ public actor DependencyTreeGenerator {
 						codeGeneration: .mock(ScopeGenerator.MockContext(
 							mockConditionalCompilation: mockConditionalCompilation,
 							forwardedParameterMockDefaults: forwardedParameterMockDefaults,
+							forwardedParameterMockDefaultComments: forwardedParameterMockDefaultComments,
 							cycleEdges: cycleEdges,
 							handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 						)),
