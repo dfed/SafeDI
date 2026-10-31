@@ -212,6 +212,16 @@ struct AccessNeed: Hashable, Sendable {
 		case initializer
 		case instantiateMethod
 		case mockMethod(name: String)
+
+		/// Whether the method is a hand-written mock method.
+		var isMockMethod: Bool {
+			switch self {
+			case .initializer, .instantiateMethod:
+				false
+			case .mockMethod:
+				true
+			}
+		}
 	}
 
 	let declaration: Declaration
@@ -269,10 +279,12 @@ extension Instantiable {
 		let member: AccessNeed.Member
 		let memberAccess: AccessDeclaration
 		let declaringDeclaration: AccessDeclaration
-		if constructingWithMockMethod, let mockInitializer {
+		// The pipeline sets, copies, and clears a hand-written mock and the access of the declaration that declares it
+		// together.
+		if constructingWithMockMethod, let mockInitializer, let mockDeclarationAccess {
 			member = .mockMethod(name: customMockName ?? InstantiableVisitor.mockMethodName)
 			memberAccess = mockInitializer.access
-			declaringDeclaration = mockDeclarationAccess ?? access
+			declaringDeclaration = mockDeclarationAccess
 		} else if let initializer {
 			member = declarationType.isExtension ? .instantiateMethod : .initializer
 			memberAccess = initializer.access
@@ -288,14 +300,14 @@ extension Instantiable {
 				declaration: .extensionDeclaringMember(member),
 				access: declaringDeclaration,
 				level: declaringDeclaration.level.asDefaultOfExtensionMembers,
-				isDeclaredWithMockMethod: constructingWithMockMethod,
+				isDeclaredWithMockMethod: member.isMockMethod,
 			))
 		} else {
 			accessNeeds.append(AccessNeed(
 				declaration: .member(member),
 				access: memberAccess,
 				level: AccessLevel.ownLevel(of: memberAccess, declaredIn: declaringDeclaration),
-				isDeclaredWithMockMethod: constructingWithMockMethod,
+				isDeclaredWithMockMethod: member.isMockMethod,
 			))
 		}
 		return accessNeeds

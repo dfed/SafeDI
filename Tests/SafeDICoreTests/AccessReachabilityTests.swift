@@ -230,6 +230,19 @@ struct AccessReachabilityTests {
 		#expect(try effectiveMockAccess(of: instantiable) == .public)
 	}
 
+	@Test
+	func accessNeeds_declaresEveryNeedWithTheType_whenConstructingWithMockMethodOfTypeWithoutOne() throws {
+		// A type without a hand-written mock is constructed with its initializer, which its own declaration declares.
+		let instantiable = try instantiable(in: """
+		@Instantiable
+		public final class Service: Instantiable {
+		    init() {}
+		}
+		""")
+
+		#expect(instantiable.accessNeeds(constructingWithMockMethod: true).map(\.isDeclaredWithMockMethod) == [false, false])
+	}
+
 	@Test(arguments: [
 		// An own file is in the emitting module, whatever names are recorded.
 		(ModuleIdentity(moduleName: "App", packageName: "P"), ModuleIdentity(moduleName: "Feature", packageName: "Q"), true, AccessRequirement.internal),
