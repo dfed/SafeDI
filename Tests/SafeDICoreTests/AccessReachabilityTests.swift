@@ -270,6 +270,8 @@ struct AccessReachabilityTests {
 		(ModuleIdentity(moduleName: "App", packageName: "P"), ModuleIdentity(moduleName: "Feature", packageName: "Q"), false, AccessRequirement.public),
 		(ModuleIdentity(moduleName: "App", packageName: "P"), ModuleIdentity(moduleName: "Feature", packageName: nil), false, AccessRequirement.packageUnverified),
 		(ModuleIdentity(moduleName: "App", packageName: nil), ModuleIdentity(moduleName: "Feature", packageName: "P"), false, AccessRequirement.packageUnverified),
+		// Bazel's default: every module is named, and none is given a package name.
+		(ModuleIdentity(moduleName: "App", packageName: nil), ModuleIdentity(moduleName: "Feature", packageName: nil), false, AccessRequirement.packageUnverified),
 		(ModuleIdentity(moduleName: nil, packageName: nil), ModuleIdentity(moduleName: nil, packageName: nil), false, AccessRequirement.packageUnverified),
 	])
 	func required_followsOwnFileThenModuleThenPackage(emitter: ModuleIdentity, declarer: ModuleIdentity, isOwnFile: Bool, requirement: AccessRequirement) {
