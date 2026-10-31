@@ -1014,24 +1014,41 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
-		/// The diagnostics of this error in the groups `independentErrors` joins: one group for each construction an
-		/// `inaccessibleConstructions` error reports, which the trees of several mock roots can each reach, so that
-		/// each is reported once, and one group for any other error.
-		private var sourceDiagnosticGroups: [[SourceDiagnostic]] {
-			if case let .inaccessibleConstructions(inaccessibleConstructions) = self {
-				inaccessibleConstructions.map { [$0.sourceDiagnostic] }
+		/// The diagnostics of this error in the groups `independentErrors` joins, leaving out those of the constructions
+		/// an `inaccessibleConstructions` error reports, which `independentErrors` merges across the errors it joins.
+		private var sourceDiagnosticGroupsOtherThanInaccessibleConstructions: [[SourceDiagnostic]] {
+			if case .inaccessibleConstructions = self {
+				[]
+			} else if case let .independentErrors(errors) = self {
+				[SourceDiagnostic.joiningInSourceOrder(errors.flatMap(\.sourceDiagnosticGroupsOtherThanInaccessibleConstructions))]
 			} else {
 				[sourceDiagnostics]
+			}
+		}
+
+		/// The constructions this error reports as inaccessible, those of the errors it joins included.
+		private var reportedInaccessibleConstructions: [InaccessibleConstruction] {
+			if case let .inaccessibleConstructions(inaccessibleConstructions) = self {
+				inaccessibleConstructions
+			} else if case let .independentErrors(errors) = self {
+				errors.flatMap(\.reportedInaccessibleConstructions)
+			} else {
+				[]
 			}
 		}
 
 		var sourceDiagnostics: [SourceDiagnostic] {
 			switch self {
 			case let .independentErrors(errors):
-				SourceDiagnostic.joiningInSourceOrder(errors.flatMap(\.sourceDiagnosticGroups))
+				// The trees of several roots, and of several mock roots, can each need one declaration to widen, which
+				// is reported once.
+				SourceDiagnostic.joiningInSourceOrder(
+					errors.flatMap(\.sourceDiagnosticGroupsOtherThanInaccessibleConstructions)
+						+ InaccessibleConstruction.merging(reportedInaccessibleConstructions).map { [$0.sourceDiagnostic] },
+				)
 			case let .inaccessibleConstructions(inaccessibleConstructions):
 				// A declaration that several constructions need to widen the same way is reported once.
-				SourceDiagnostic.joiningInSourceOrder(inaccessibleConstructions.map { [$0.sourceDiagnostic] })
+				SourceDiagnostic.joiningInSourceOrder(InaccessibleConstruction.merging(inaccessibleConstructions).map { [$0.sourceDiagnostic] })
 			case let .nonSendableWrapperCapturedBySendableBuilder(captures):
 				// The captures arrive in set order. Two whose errors read the same name the same wrapper on the same
 				// type, so their notes, at that declaration, read the same too, and the diagnostics come out the same.
@@ -1274,6 +1291,56 @@ public actor DependencyTreeGenerator {
 			let readableDeclarationLocation: Dependency.DeclarationLocation?
 			/// Where this module refers to what leads to the construction.
 			let referenceLocation: Dependency.DeclarationLocation?
+			/// Where the constructed type is declared.
+			let constructedTypeDeclarationLocation: Dependency.DeclarationLocation?
+
+			/// `inaccessibleConstructions`, in no particular order, with those that need one declaration to widen the
+			/// same way – the constructions of several roots' trees, or of several types the declaration encloses –
+			/// merged into one. It names the constructed type declared first, and refers to the construction from the
+			/// earliest reference, each in source order, so neither which roots reach the declaration nor the order in
+			/// which they are checked changes what is reported.
+			static func merging(_ inaccessibleConstructions: [InaccessibleConstruction]) -> [InaccessibleConstruction] {
+				var mergedByDeclaration = [MergeKey: InaccessibleConstruction]()
+				for inaccessibleConstruction in inaccessibleConstructions {
+					let key = MergeKey(
+						access: inaccessibleConstruction.accessNeed.access,
+						requirement: inaccessibleConstruction.requirement,
+						declaringModule: inaccessibleConstruction.declaringModule,
+					)
+					mergedByDeclaration[key] = mergedByDeclaration[key].map { $0.merged(with: inaccessibleConstruction) } ?? inaccessibleConstruction
+				}
+				return Array(mergedByDeclaration.values)
+			}
+
+			/// What identifies the declaration an inaccessible construction needs to widen, and how. The access
+			/// declaration records where the declaration begins, which no other declaration shares.
+			private struct MergeKey: Hashable {
+				let access: AccessDeclaration
+				let requirement: AccessRequirement
+				let declaringModule: ModuleIdentity
+			}
+
+			/// This construction merged with `other`, which needs the same declaration to widen the same way.
+			private func merged(with other: InaccessibleConstruction) -> InaccessibleConstruction {
+				let otherIsDeclaredFirst = if other.constructedTypeDeclarationLocation == constructedTypeDeclarationLocation {
+					other.constructedType < constructedType
+				} else {
+					Dependency.DeclarationLocation.precedesInSourceOrder(other.constructedTypeDeclarationLocation, constructedTypeDeclarationLocation)
+				}
+				let namedConstruction = otherIsDeclaredFirst ? other : self
+				return InaccessibleConstruction(
+					constructedType: namedConstruction.constructedType,
+					accessNeed: namedConstruction.accessNeed,
+					requirement: requirement,
+					emittingModule: emittingModule,
+					declaringModule: declaringModule,
+					readableDeclarationLocation: readableDeclarationLocation,
+					referenceLocation: Dependency.DeclarationLocation.precedesInSourceOrder(other.referenceLocation, referenceLocation)
+						? other.referenceLocation
+						: referenceLocation,
+					constructedTypeDeclarationLocation: namedConstruction.constructedTypeDeclarationLocation,
+				)
+			}
 
 			/// A single `error:` line, since Xcode drops notes from build-tool output. When the declaration's file can
 			/// be read, it is reported there, with a fix-it that gives the declaration the level the generated code
@@ -1749,11 +1816,11 @@ public actor DependencyTreeGenerator {
 
 	/// The roots whose trees this module generates code for, from `rootScopes`, the module's roots in type order. A
 	/// root declared in one of the module's own files is generated once every construction in its tree is known to
-	/// compile in the module, which throws an error for each construction that does not. A root declared elsewhere –
-	/// a build tool plugin's input includes the files of the modules a module depends on – is generated, as its own
-	/// module generates it, only when its tree constructs `public` and `open` declarations alone, which every module
-	/// can construct. Otherwise its file is left without code, and nothing is reported: the module that declares the
-	/// root reports what keeps it from compiling.
+	/// compile in the module; otherwise one error reports each declaration that keeps a construction from compiling,
+	/// however many of the roots' trees construct it. A root declared elsewhere – a build tool plugin's input includes
+	/// the files of the modules a module depends on – is generated, as its own module generates it, only when its tree
+	/// constructs `public` and `open` declarations alone, which every module can construct. Otherwise its file is left
+	/// without code, and nothing is reported: the module that declares the root reports what keeps it from compiling.
 	private func rootScopesThisModuleGenerates(
 		from rootScopes: [(typeDescription: TypeDescription, scope: Scope)],
 	) throws -> [(typeDescription: TypeDescription, scope: Scope)] {
@@ -1882,6 +1949,7 @@ public actor DependencyTreeGenerator {
 						emittingModule.isReadableFile(declarationStartLocation.filePath) ? declarationStartLocation : nil
 					},
 					referenceLocation: construction.referenceLocation,
+					constructedTypeDeclarationLocation: instantiable.declarationLocation,
 				))
 			}
 		}

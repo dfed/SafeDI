@@ -546,6 +546,58 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsEnclosingTypeOnce_whenSeveralTypesItEnclosesAreConstructed() async {
+		// `Zulu` is declared before `Alpha`, so the error names it.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Namespace.swift"]):1:1: error: `Namespace`, which encloses `Namespace.Zulu`, is `internal`, so module `App`, another module of the same package, cannot construct `Namespace.Zulu` in the code SafeDI generates. Make `Namespace` `package` to fix.
+			\(fixtures["Feature"]!["Namespace.swift"]):1:1-1:1: fixit: package\(" ")
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Feature",
+						packageName: "Shop",
+						swiftFileContentByFilePath: [
+							"Namespace.swift": """
+							enum Namespace {
+							    @Instantiable
+							    public final class Zulu: Instantiable {
+							        public init() {}
+							    }
+
+							    @Instantiable
+							    public final class Alpha: Instantiable {
+							        public init() {}
+							    }
+							}
+							""",
+						],
+					),
+					Self.app(inPackage: "Shop", declaring: """
+					import Feature
+
+					@Instantiable(isRoot: true)
+					final class Root: Instantiable {
+					    init(alpha: Namespace.Alpha, zulu: Namespace.Zulu) {
+					        self.alpha = alpha
+					        self.zulu = zulu
+					    }
+
+					    @Instantiated let alpha: Namespace.Alpha
+					    @Instantiated let zulu: Namespace.Zulu
+					}
+					"""),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorAtExtension_whenConstructedTypeTakesInternalFromExtensionItIsDirectlyInside() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
@@ -816,6 +868,56 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsInaccessibleConstructionOnceAtEarliestReference_whenSeveralRootsConstructTypeWhoseFileCannotBeRead() async {
+		// Roots are checked in type order, so `Alpha`, in `B.swift`, is checked before `Zulu`, in `A.swift`, whose
+		// reference comes first in source order.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["A.swift"]):8:5: error: `Service` is `internal` in module `Feature`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` in module `Feature` to fix.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.feature(inPackage: "Shop", declaring: Self.internalServiceWithPackageInitializer, deletesSwiftFilesAfterRunning: true),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContentByFilePath: [
+							"A.swift": """
+							import Feature
+
+							@Instantiable(isRoot: true)
+							final class Zulu: Instantiable {
+							    init(service: Service) {
+							        self.service = service
+							    }
+							    @Instantiated let service: Service
+							}
+							""",
+							"B.swift": """
+							import Feature
+
+							@Instantiable(isRoot: true)
+							final class Alpha: Instantiable {
+							    init(service: Service) {
+							        self.service = service
+							    }
+							    @Instantiated let service: Service
+							}
+							""",
+						],
+						dependencies: ["Feature"],
+					),
+				],
+				integration: .moduleInfo,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorOfferingPackageOrPublic_whenModuleMembershipIsUnknownAndTypeIsInternal() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let servicePath = NormalizedFilePath(fixtures["Feature"]!.compilerPath(of: "Service.swift")).path
@@ -900,6 +1002,56 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 					),
 				],
 				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsInaccessibleConstructionOnceAtEarliestReference_whenSeveralMocksConstructTypeWhoseFileCannotBeRead() async {
+		// Mock roots are checked in type order, so `Alpha`, in `B.swift`, is checked before `Zulu`, in `A.swift`, whose
+		// reference comes first in source order.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["A.swift"]):8:5: error: `Service` is `internal` in module `Feature`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` in module `Feature` to fix.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.feature(inPackage: "Shop", declaring: Self.internalServiceWithPackageInitializer, deletesSwiftFilesAfterRunning: true),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContentByFilePath: [
+							"A.swift": """
+							import Feature
+
+							@Instantiable(generateMock: true)
+							final class Zulu: Instantiable {
+							    init(service: Service) {
+							        self.service = service
+							    }
+							    @Instantiated let service: Service
+							}
+							""",
+							"B.swift": """
+							import Feature
+
+							@Instantiable(generateMock: true)
+							final class Alpha: Instantiable {
+							    init(service: Service) {
+							        self.service = service
+							    }
+							    @Instantiated let service: Service
+							}
+							""",
+						],
+						dependencies: ["Feature"],
+					),
+				],
+				integration: .moduleInfo,
+				compileVerification: .skipped,
 				filesToDelete: &filesToDelete,
 			)
 		}
