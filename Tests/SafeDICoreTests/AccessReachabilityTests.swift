@@ -25,7 +25,9 @@ import Testing
 
 /// The effective access SafeDITool computes for the declarations it parses. Each rule was checked with the compiler:
 /// a member of a type defaults to `internal` whatever the type's level, a member of a `private` extension to
-/// `fileprivate`, a type directly inside an extension to the extension's level, and an extension caps nothing.
+/// `fileprivate`, a type directly inside an extension to the extension's level, and an extension caps nothing. Each
+/// fixture also checks that the declarations `accessNeeds(constructingWithMockMethod:)` lists, which the generator
+/// checks, agree with the effective access of the method that constructs the type.
 struct AccessReachabilityTests {
 	@Test
 	func effective_isTheSpelledLevel_whenTypeAndInitializerSpellModifiers() throws {
@@ -38,6 +40,7 @@ struct AccessReachabilityTests {
 
 		#expect(AccessLevel.effective(ofTypeDeclaredBy: instantiable) == .package)
 		#expect(effectiveConstructionAccess(of: instantiable) == .package)
+		#expect(leastLevelNeeded(toConstruct: instantiable) == effectiveConstructionAccess(of: instantiable))
 	}
 
 	@Test
@@ -51,6 +54,7 @@ struct AccessReachabilityTests {
 
 		#expect(AccessLevel.effective(ofTypeDeclaredBy: instantiable) == .public)
 		#expect(effectiveConstructionAccess(of: instantiable) == .internal)
+		#expect(leastLevelNeeded(toConstruct: instantiable) == effectiveConstructionAccess(of: instantiable))
 	}
 
 	@Test
@@ -68,6 +72,7 @@ struct AccessReachabilityTests {
 
 		#expect(AccessLevel.effective(ofTypeDeclaredBy: instantiable) == .internal)
 		#expect(effectiveConstructionAccess(of: instantiable) == .internal)
+		#expect(leastLevelNeeded(toConstruct: instantiable) == effectiveConstructionAccess(of: instantiable))
 	}
 
 	@Test
@@ -83,6 +88,7 @@ struct AccessReachabilityTests {
 
 		#expect(AccessLevel.effective(ofTypeDeclaredBy: instantiable) == .public)
 		#expect(effectiveConstructionAccess(of: instantiable) == .public)
+		#expect(leastLevelNeeded(toConstruct: instantiable) == effectiveConstructionAccess(of: instantiable))
 	}
 
 	@Test
@@ -97,6 +103,7 @@ struct AccessReachabilityTests {
 		""")
 
 		#expect(AccessLevel.effective(ofTypeDeclaredBy: instantiable) == .fileprivate)
+		#expect(leastLevelNeeded(toConstruct: instantiable) == effectiveConstructionAccess(of: instantiable))
 	}
 
 	@Test
@@ -111,6 +118,7 @@ struct AccessReachabilityTests {
 		""")
 
 		#expect(AccessLevel.effective(ofTypeDeclaredBy: instantiable) == .public)
+		#expect(leastLevelNeeded(toConstruct: instantiable) == effectiveConstructionAccess(of: instantiable))
 	}
 
 	@Test
@@ -127,6 +135,7 @@ struct AccessReachabilityTests {
 		""")
 
 		#expect(AccessLevel.effective(ofTypeDeclaredBy: instantiable) == .package)
+		#expect(leastLevelNeeded(toConstruct: instantiable) == effectiveConstructionAccess(of: instantiable))
 	}
 
 	@Test
@@ -140,6 +149,7 @@ struct AccessReachabilityTests {
 
 		#expect(AccessLevel.effective(ofTypeDeclaredBy: instantiable) == .open)
 		#expect(effectiveConstructionAccess(of: instantiable) == .public)
+		#expect(leastLevelNeeded(toConstruct: instantiable) == effectiveConstructionAccess(of: instantiable))
 	}
 
 	@Test
@@ -152,6 +162,7 @@ struct AccessReachabilityTests {
 		""")
 
 		#expect(effectiveConstructionAccess(of: instantiable) == .internal)
+		#expect(leastLevelNeeded(toConstruct: instantiable) == effectiveConstructionAccess(of: instantiable))
 	}
 
 	@Test
@@ -165,6 +176,7 @@ struct AccessReachabilityTests {
 
 		#expect(AccessLevel.effective(ofTypeDeclaredBy: instantiable) == .open)
 		#expect(effectiveConstructionAccess(of: instantiable) == .package)
+		#expect(leastLevelNeeded(toConstruct: instantiable) == effectiveConstructionAccess(of: instantiable))
 	}
 
 	@Test
@@ -178,6 +190,7 @@ struct AccessReachabilityTests {
 
 		#expect(AccessLevel.effective(ofTypeDeclaredBy: instantiable) == .open)
 		#expect(effectiveConstructionAccess(of: instantiable) == .public)
+		#expect(leastLevelNeeded(toConstruct: instantiable) == effectiveConstructionAccess(of: instantiable))
 	}
 
 	@Test
@@ -191,6 +204,7 @@ struct AccessReachabilityTests {
 		""")
 
 		#expect(try effectiveMockAccess(of: instantiable) == .internal)
+		#expect(try effectiveMockAccess(of: instantiable) == leastLevelNeeded(toConstruct: instantiable, withMockMethod: true))
 	}
 
 	@Test
@@ -203,6 +217,7 @@ struct AccessReachabilityTests {
 		""")
 
 		#expect(try effectiveMockAccess(of: instantiable) == .public)
+		#expect(try effectiveMockAccess(of: instantiable) == leastLevelNeeded(toConstruct: instantiable, withMockMethod: true))
 	}
 
 	@Test
@@ -215,6 +230,7 @@ struct AccessReachabilityTests {
 		""")
 
 		#expect(try effectiveMockAccess(of: instantiable) == .fileprivate)
+		#expect(try effectiveMockAccess(of: instantiable) == leastLevelNeeded(toConstruct: instantiable, withMockMethod: true))
 	}
 
 	@Test
@@ -228,6 +244,7 @@ struct AccessReachabilityTests {
 
 		#expect(AccessLevel.effective(ofTypeDeclaredBy: instantiable) == .open)
 		#expect(try effectiveMockAccess(of: instantiable) == .public)
+		#expect(try effectiveMockAccess(of: instantiable) == leastLevelNeeded(toConstruct: instantiable, withMockMethod: true))
 	}
 
 	@Test
@@ -298,5 +315,11 @@ struct AccessReachabilityTests {
 			declaredIn: #require(instantiable.mockDeclarationAccess),
 			ofTypeWithEffectiveAccess: AccessLevel.effective(ofTypeDeclaredBy: instantiable),
 		)
+	}
+
+	/// The least permissive of the levels the declarations `accessNeeds(constructingWithMockMethod:)` lists have by
+	/// themselves, which is the access with which code can construct the type.
+	private func leastLevelNeeded(toConstruct instantiable: Instantiable, withMockMethod: Bool = false) -> AccessLevel {
+		instantiable.accessNeeds(constructingWithMockMethod: withMockMethod).reduce(AccessLevel.open) { $0.capped(by: $1.level) }
 	}
 }
