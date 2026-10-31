@@ -946,6 +946,57 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenHandWrittenManifestNamesNoOwnFilesAndAdditionalDirectoryDeclaresInternalType() async throws {
+		// A hand-written manifest that names no `mockScopedFilePaths` makes the input files the module's own, and a
+		// file reached through `additionalDirectoriesToInclude` is not one of them.
+		let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+		let additionalDirectory = directory.appendingPathComponent("Additional")
+		try FileManager.default.createDirectory(at: additionalDirectory, withIntermediateDirectories: true)
+		filesToDelete.append(directory)
+		let serviceFile = additionalDirectory.appendingPathComponent("Service.swift")
+		try """
+		@Instantiable
+		final class Service: Instantiable {
+		    package init() {}
+		}
+		""".write(to: serviceFile, atomically: true, encoding: .utf8)
+		let configurationFile = directory.appendingPathComponent("SafeDIConfiguration.swift")
+		try """
+		#SafeDIConfiguration(additionalDirectoriesToInclude: ["\(additionalDirectory.path)"])
+		""".write(to: configurationFile, atomically: true, encoding: .utf8)
+		let rootFile = directory.appendingPathComponent("Root.swift")
+		try """
+		@Instantiable(isRoot: true)
+		final class Root: Instantiable {
+		    init(service: Service) {
+		        self.service = service
+		    }
+		    @Instantiated let service: Service
+		}
+		""".write(to: rootFile, atomically: true, encoding: .utf8)
+		let swiftFileCSV = directory.appendingPathComponent("Inputs.csv")
+		try [rootFile.path, configurationFile.path].joined(separator: ",").write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+		let manifestFile = directory.appendingPathComponent("Manifest.json")
+		try JSONEncoder().encode(SafeDIToolManifest(
+			dependencyTreeGeneration: [
+				.init(inputFilePath: rootFile.path, outputFilePath: directory.appendingPathComponent("Root+SafeDI.swift").path),
+			],
+			configurationFilePaths: [configurationFile.path],
+		)).write(to: manifestFile)
+
+		do {
+			try await Generate.parse([swiftFileCSV.path, "--swift-manifest", manifestFile.path]).generate()
+			Issue.record("Did not throw error!")
+		} catch {
+			#expect("\(error)" == """
+			\(serviceFile.path):2:1: error: `Service` is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` to fix, or `public` if the two modules are in different packages.
+			\(serviceFile.path):2:1-2:1: fixit: package\(" ")
+			""")
+		}
+	}
+
 	// MARK: Tests – Mocks
 
 	@Test(arguments: MultiModuleIntegration.allCases)

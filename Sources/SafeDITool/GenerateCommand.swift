@@ -276,7 +276,6 @@ struct Generate: AsyncParsableCommand {
 				isOwnFile: Self.isOwnFile(
 					manifest: manifest,
 					inputFilePaths: inputFilePaths,
-					moduleFilePaths: Set(module.instantiables.flatMap { [$0.sourceFilePath, $0.mockDeclarationLocation?.filePath].compactMap(\.self) }),
 					comparisonFilePaths: comparisonFilePaths,
 				),
 				// A declaration records its file as this run named it: relative to the project root, or else to the
@@ -694,29 +693,18 @@ struct Generate: AsyncParsableCommand {
 
 	/// Whether a file a declaration records is one of the module's own files, which the module this run generates code
 	/// for compiles, so that the generated code needs only `internal` access to a declaration in it: a file the
-	/// manifest's `mockScopedFilePaths` lists (a build tool plugin's target files, or `--mock-scoped-files`); any file
-	/// of the module, when a hand-written manifest lists none; and, without a manifest, a file the input CSV or
-	/// `--include` names. A file reached through `additionalDirectoriesToInclude` is another module's.
-	/// - Parameters:
-	///   - moduleFilePaths: The files the module's declarations and hand-written mocks record, as they record them.
-	///   - comparisonFilePaths: How this run compares paths, which spells a file the same way whichever spelling names it.
+	/// manifest's `mockScopedFilePaths` lists (a build tool plugin's target files, or `--mock-scoped-files`); and,
+	/// without a manifest or with a hand-written one that lists none, a file the input CSV or `--include` names. A file
+	/// reached through `additionalDirectoriesToInclude` is another module's.
+	/// - Parameter comparisonFilePaths: How this run compares paths, which spells a file the same way whichever
+	///   spelling names it.
 	private static func isOwnFile(
 		manifest: SafeDIToolManifest?,
 		inputFilePaths: Set<String>,
-		moduleFilePaths: Set<String>,
 		comparisonFilePaths: ProjectFilePaths,
 	) -> @Sendable (String) -> Bool {
-		if let manifest {
-			if let mockScopedFilePaths = manifest.mockScopedFilePaths {
-				let ownFilePaths = Set(mockScopedFilePaths.map(comparisonFilePaths.projectFilePath(of:)))
-				return { filePath in ownFilePaths.contains(comparisonFilePaths.projectFilePath(of: filePath)) }
-			} else {
-				return { filePath in moduleFilePaths.contains(filePath) }
-			}
-		} else {
-			let ownFilePaths = Set(inputFilePaths.map(comparisonFilePaths.projectFilePath(of:)))
-			return { filePath in ownFilePaths.contains(comparisonFilePaths.projectFilePath(of: filePath)) }
-		}
+		let ownFilePaths = Set((manifest?.mockScopedFilePaths ?? Array(inputFilePaths)).map(comparisonFilePaths.projectFilePath(of:)))
+		return { filePath in ownFilePaths.contains(comparisonFilePaths.projectFilePath(of: filePath)) }
 	}
 
 	/// Which module this run's own files belong to, as the build system tells it, or `nil` when it tells nothing. The
