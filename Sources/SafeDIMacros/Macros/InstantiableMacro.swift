@@ -281,8 +281,15 @@ public struct InstantiableMacro: MemberMacro {
 				// Of the initializers that need the smallest change, the first declared is fixed.
 				let initializerToFix: (initializer: Initializer, syntax: InitializerDeclSyntax, error: Initializer.FixableError)? = zip(visitor.initializers, visitor.initializerSyntaxes).compactMap {
 					associatedError(for: $0, declaredBy: $1)
-				}.enumerated().min {
-					($0.element.error, $0.offset) < ($1.element.error, $1.offset)
+				}.enumerated().min { lhs, rhs in
+					// Two different errors can need equally small changes, so neither precedes the other.
+					if lhs.element.error < rhs.element.error {
+						true
+					} else if rhs.element.error < lhs.element.error {
+						false
+					} else {
+						lhs.offset < rhs.offset
+					}
 				}?.element
 
 				if let initializerToFix {
@@ -1740,19 +1747,34 @@ extension Initializer {
 		case missingArguments([Property])
 		indirect case multiple([FixableError])
 
-		// Compare in terms of delta from what SafeDI needs – smallest requires the smallest change to make satisfactory.
+		// Compare in terms of delta from what SafeDI needs – smallest requires the smallest change to make satisfactory:
+		// removing a modifier, then adding the fewest missing arguments, then fixing the fewest errors at once. Errors
+		// of one kind and size are equivalent, which a strict weak ordering allows.
 		fileprivate static func < (lhs: FixableError, rhs: FixableError) -> Bool {
-			switch (lhs, rhs) {
-			case (.inaccessibleInitializer, _):
-				lhs != rhs
-			case let (.missingArguments(lhs), .missingArguments(rhs)):
-				lhs.count < rhs.count
-			case (.missingArguments, _):
-				lhs != rhs
-			case let (.multiple(lhs), .multiple(rhs)):
-				lhs.count < rhs.count
-			case (.multiple, _):
-				false
+			(lhs.kindRank, lhs.size) < (rhs.kindRank, rhs.size)
+		}
+
+		/// The order of the kinds of error, from the one that takes the smallest change to fix.
+		private var kindRank: Int {
+			switch self {
+			case .inaccessibleInitializer:
+				0
+			case .missingArguments:
+				1
+			case .multiple:
+				2
+			}
+		}
+
+		/// How much an error of its kind takes to fix.
+		private var size: Int {
+			switch self {
+			case .inaccessibleInitializer:
+				0
+			case let .missingArguments(arguments):
+				arguments.count
+			case let .multiple(errors):
+				errors.count
 			}
 		}
 

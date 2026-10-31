@@ -3612,6 +3612,87 @@ import Testing
 		}
 
 		@Test
+		func declaration_fixit_removesFilePrivateModifierFromInitializer_whenLaterInitializerIsOnlyMissingArgument() {
+			// Removing a modifier is a smaller change than adding an argument, whichever initializer is declared first.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					fileprivate init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					init(a: A, b: B) {
+						self.a = a
+						self.b = b
+						c = C()
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				""",
+				expandedSource: """
+				public final class UserService: Instantiable {
+					fileprivate init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					init(a: A, b: B) {
+						self.a = a
+						self.b = b
+						c = C()
+					}
+
+					let a: A
+					let b: B
+					let c: C
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type’s initializer must not be `fileprivate`: SafeDI calls it in a generated file, where a `fileprivate` initializer is not visible. Remove `fileprivate`.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove `fileprivate` modifier"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove `fileprivate` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class UserService: Instantiable {
+					init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					init(a: A, b: B) {
+						self.a = a
+						self.b = b
+						c = C()
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				""",
+			)
+		}
+
+		@Test
 		func declaration_fixit_removesFilePrivateModifierFromInitializer_whenAnotherInitializerHasExtraArgument() {
 			assertMacroExpansion(
 				"""
