@@ -3693,6 +3693,82 @@ import Testing
 		}
 
 		@Test
+		func declaration_fixit_addsRequiredInitializer_whenOnlyInitializerIsAsyncAndThrows() {
+			// Neither effect has a fix, so the macro offers the initializer SafeDI needs, as for no initializer at all.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class ExampleService: Instantiable {
+					public init() async throws {}
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+					public init() async throws {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 49,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class ExampleService: Instantiable {
+				public init() {}
+
+					public init() async throws {}
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutDiagnostic_whenMockMethodIsAsyncAndThrows() {
+			// Neither effect has a fix, so the macro offers none for the mock method.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class ExampleService: Instantiable {
+					public init(dependency: Dependency) {
+						self.dependency = dependency
+					}
+
+					public static func mock(dependency: Dependency) async throws -> ExampleService {
+						ExampleService(dependency: dependency)
+					}
+
+					@Received let dependency: Dependency
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+					public init(dependency: Dependency) {
+						self.dependency = dependency
+					}
+
+					public static func mock(dependency: Dependency) async throws -> ExampleService {
+						ExampleService(dependency: dependency)
+					}
+
+					let dependency: Dependency
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func declaration_fixit_removesFilePrivateModifierFromInitializer_whenAnotherInitializerHasExtraArgument() {
 			assertMacroExpansion(
 				"""

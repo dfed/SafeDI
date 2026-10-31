@@ -1789,6 +1789,7 @@ extension Initializer {
 			case let .missingArguments(arguments):
 				.missingArguments(arguments)
 			case let .multiple(errors):
+				// `asFixableError` makes `multiple` only of two or more errors.
 				errors.sorted().first!.asErrorToFix
 			}
 		}
@@ -1805,7 +1806,7 @@ extension Initializer.GenerationError {
 		case let .inaccessibleInitializer(accessLevel):
 			.inaccessibleInitializer(accessLevel)
 		case let .multiple(errors):
-			.multiple(errors.compactMap(\.asFixableError))
+			Self.fixableError(combining: errors.compactMap(\.asFixableError))
 		case .asyncInitializer,
 		     .genericParameterInInitializer,
 		     .optionalInitializer,
@@ -1813,6 +1814,16 @@ extension Initializer.GenerationError {
 		     .unexpectedArgument,
 		     .whereClauseOnInitializer:
 			nil
+		}
+	}
+
+	/// The error that `fixableErrors`, the fixable errors of one initializer, make together: none, the one, or – only
+	/// when there are two or more – `multiple`, which therefore always has an error to fix first.
+	private static func fixableError(combining fixableErrors: [Initializer.FixableError]) -> Initializer.FixableError? {
+		if fixableErrors.count > 1 {
+			.multiple(fixableErrors)
+		} else {
+			fixableErrors.first
 		}
 	}
 }
