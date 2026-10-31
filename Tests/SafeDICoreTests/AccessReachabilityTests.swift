@@ -258,6 +258,7 @@ struct AccessReachabilityTests {
 		""")
 
 		#expect(instantiable.accessNeeds(constructingWithMockMethod: true).map(\.isDeclaredWithMockMethod) == [false, false])
+		#expect(leastLevelNeeded(toConstruct: instantiable, withMockMethod: true) == effectiveConstructionAccess(of: instantiable))
 	}
 
 	@Test(arguments: [
