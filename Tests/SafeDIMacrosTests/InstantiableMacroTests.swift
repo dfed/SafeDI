@@ -3734,6 +3734,63 @@ import Testing
 		}
 
 		@Test
+		func declaration_fixit_removesPrivateModifierFirst_whenOnlyInitializerIsAlsoMissingArgument() {
+			// Both errors of the one initializer have a fix, and removing the modifier is the smaller change.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class ExampleService: Instantiable {
+					private init(a: A) {
+						self.a = a
+						b = B()
+					}
+
+					@Received let a: A
+					@Received let b: B
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+					private init(a: A) {
+						self.a = a
+						b = B()
+					}
+
+					let a: A
+					let b: B
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type’s initializer must not be `private`: SafeDI calls it in a generated file, where a `private` initializer is not visible. Remove `private`.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove `private` modifier"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove `private` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class ExampleService: Instantiable {
+					init(a: A) {
+						self.a = a
+						b = B()
+					}
+
+					@Received let a: A
+					@Received let b: B
+				}
+				""",
+			)
+		}
+
+		@Test
 		func declaration_expandsWithoutDiagnostic_whenMockMethodIsAsyncAndThrows() {
 			// Neither effect has a fix, so the macro offers none for the mock method.
 			assertMacroExpansion(
