@@ -52,24 +52,31 @@ extension DeclModifierListSyntax {
 extension WithModifiersSyntax {
 	/// This declaration without the modifier that makes it `private` or `fileprivate`, which generated code, always in
 	/// a file of its own, can never use, together with the level that modifier set, or `nil` when no modifier does.
-	/// The token that followed the modifier – the next modifier, or `keyword`, which introduces the declaration, when
-	/// none follows – takes the modifier's leading trivia, so the declaration keeps its line and indentation.
+	/// See `removingModifiers(setting:keyword:)`.
 	public func removingPrivateOrFilePrivateModifier(keyword: WritableKeyPath<Self, TokenSyntax>) -> (declaration: Self, accessLevel: AccessLevel)? {
-		var remainingModifiers = Array(modifiers)
-		guard let (index, accessLevel) = remainingModifiers.enumerated().lazy.compactMap({ index, modifier in
-			AccessLevel(modifier.name.tokenKind).flatMap { $0.isPrivateOrFilePrivate ? (index, $0) : nil }
-		}).first else {
-			return nil
+		modifiers.lazy.compactMap { AccessLevel($0.name.tokenKind) }.first(where: \.isPrivateOrFilePrivate).map { accessLevel in
+			(removingModifiers(setting: accessLevel, keyword: keyword), accessLevel)
 		}
-		let removedModifier = remainingModifiers.remove(at: index)
+	}
+
+	/// This declaration without the modifiers that set `accessLevel`. The token that followed a removed modifier – the
+	/// next modifier, or `keyword`, which introduces the declaration, when none follows – takes the modifier's leading
+	/// trivia, so the declaration keeps its line and indentation.
+	public func removingModifiers(setting accessLevel: AccessLevel, keyword: WritableKeyPath<Self, TokenSyntax>) -> Self {
 		var declaration = self
-		if index < remainingModifiers.count {
-			remainingModifiers[index].leadingTrivia = removedModifier.leadingTrivia + remainingModifiers[index].leadingTrivia
-		} else {
-			declaration[keyPath: keyword].leadingTrivia = removedModifier.leadingTrivia + declaration[keyPath: keyword].leadingTrivia
+		var remainingModifiers = [DeclModifierSyntax]()
+		var removedLeadingTrivia = Trivia()
+		for modifier in modifiers {
+			if AccessLevel(modifier.name.tokenKind) == accessLevel {
+				removedLeadingTrivia = removedLeadingTrivia + modifier.leadingTrivia
+			} else {
+				remainingModifiers.append(modifier.with(\.leadingTrivia, removedLeadingTrivia + modifier.leadingTrivia))
+				removedLeadingTrivia = []
+			}
 		}
+		declaration[keyPath: keyword].leadingTrivia = removedLeadingTrivia + declaration[keyPath: keyword].leadingTrivia
 		declaration.modifiers = DeclModifierListSyntax(remainingModifiers)
-		return (declaration, accessLevel)
+		return declaration
 	}
 }
 

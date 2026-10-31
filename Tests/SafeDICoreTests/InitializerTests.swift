@@ -30,7 +30,7 @@ struct InitializerTests {
 				arguments: [],
 			)
 
-			#expect(throws: Initializer.GenerationError.inaccessibleInitializer, performing: {
+			#expect(throws: Initializer.GenerationError.inaccessibleInitializer(accessLevel), performing: {
 				try initializer.validate(fulfilling: [])
 			})
 		}

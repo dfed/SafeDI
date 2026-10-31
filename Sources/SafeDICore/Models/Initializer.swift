@@ -277,7 +277,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 	/// suit the code that constructs the type, which SafeDITool checks when it generates that code.
 	private var dependencyIndependentErrors: [GenerationError] {
 		[
-			access.level.isPrivateOrFilePrivate ? .inaccessibleInitializer : nil,
+			access.level.isPrivateOrFilePrivate ? .inaccessibleInitializer(access.level) : nil,
 			isOptional ? .optionalInitializer : nil,
 			isAsync ? .asyncInitializer : nil,
 			doesThrow ? .throwingInitializer : nil,
@@ -289,7 +289,8 @@ public struct Initializer: Codable, Hashable, Sendable {
 	// MARK: - GenerationError
 
 	public enum GenerationError: Error, Equatable {
-		case inaccessibleInitializer
+		/// The initializer is `private` or `fileprivate`, the level it carries.
+		case inaccessibleInitializer(AccessLevel)
 		case asyncInitializer
 		case throwingInitializer
 		case optionalInitializer

@@ -440,20 +440,18 @@ public struct InstantiableMacro: MemberMacro {
 							],
 						))
 
-					case .inaccessibleInitializer:
+					case let .inaccessibleInitializer(accessLevel):
 						// Only a `private` or `fileprivate` initializer is inaccessible to generated code.
-						if let (fixedSyntax, accessLevel) = syntaxToFix.removingPrivateOrFilePrivateModifier(keyword: \.initKeyword) {
-							context.diagnose(Diagnostic(
-								node: Syntax(syntaxToFix),
-								error: FixableInstantiableError.missingRequiredInitializer(.isPrivateOrFilePrivate(accessLevel)),
-								changes: [
-									.replace(
-										oldNode: Syntax(syntaxToFix),
-										newNode: Syntax(fixedSyntax),
-									),
-								],
-							))
-						}
+						context.diagnose(Diagnostic(
+							node: Syntax(syntaxToFix),
+							error: FixableInstantiableError.missingRequiredInitializer(.isPrivateOrFilePrivate(accessLevel)),
+							changes: [
+								.replace(
+									oldNode: Syntax(syntaxToFix),
+									newNode: Syntax(syntaxToFix.removingModifiers(setting: accessLevel, keyword: \.initKeyword)),
+								),
+							],
+						))
 					}
 				} else {
 					var declarationWithInitializer = declaration
@@ -1743,7 +1741,8 @@ extension TypeDescription {
 
 extension Initializer {
 	fileprivate enum FixableError: Comparable, Hashable {
-		case inaccessibleInitializer
+		/// The initializer is `private` or `fileprivate`, the level it carries.
+		case inaccessibleInitializer(AccessLevel)
 		case missingArguments([Property])
 		indirect case multiple([FixableError])
 
@@ -1779,14 +1778,14 @@ extension Initializer {
 		}
 
 		fileprivate enum ErrorToFix {
-			case inaccessibleInitializer
+			case inaccessibleInitializer(AccessLevel)
 			case missingArguments([Property])
 		}
 
 		fileprivate var asErrorToFix: ErrorToFix {
 			switch self {
-			case .inaccessibleInitializer:
-				.inaccessibleInitializer
+			case let .inaccessibleInitializer(accessLevel):
+				.inaccessibleInitializer(accessLevel)
 			case let .missingArguments(arguments):
 				.missingArguments(arguments)
 			case let .multiple(errors):
@@ -1803,8 +1802,8 @@ extension Initializer.GenerationError {
 		switch self {
 		case let .missingArguments(arguments):
 			.missingArguments(arguments)
-		case .inaccessibleInitializer:
-			.inaccessibleInitializer
+		case let .inaccessibleInitializer(accessLevel):
+			.inaccessibleInitializer(accessLevel)
 		case let .multiple(errors):
 			.multiple(errors.compactMap(\.asFixableError))
 		case .asyncInitializer,
