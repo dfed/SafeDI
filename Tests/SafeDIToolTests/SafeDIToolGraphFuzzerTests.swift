@@ -1691,7 +1691,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0xB135ED5AA7AC45A5
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x4F80BE1C4C73C709
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -1699,7 +1699,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	static let corpusFixtureHash: UInt64 = 0xDD638CCC778015F8
 
-	static let corpusPartitionHash: UInt64 = 0x8D735CCBE377A592
+	static let corpusPartitionHash: UInt64 = 0xFFB86C819DD7B7E1
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
