@@ -30,6 +30,10 @@ jobs:
       # publish-to-bcr wants to verify don't exist. Leave off until a
       # release-workflow migration makes them available.
       attest: false
+      # Open the registry PR ready for review. A draft just waits
+      # for a human to mark it ready before a BCR maintainer can
+      # merge it.
+      draft: false
     permissions:
       contents: write
     secrets:
