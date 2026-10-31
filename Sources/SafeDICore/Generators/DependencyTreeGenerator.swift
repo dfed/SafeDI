@@ -240,6 +240,7 @@ public actor DependencyTreeGenerator {
 							forwardedParameterMockDefaults: forwardedParameterMockDefaults,
 							cycleEdges: cycleEdges,
 							handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+							sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 						)),
 					)
 					async let configurationTypes = mockRoot.collectConfigurationTypes()

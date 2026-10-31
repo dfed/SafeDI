@@ -769,6 +769,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// built with `init` beneath a pruned edge passes the struct's default for each of them
 		/// (`MockParameterNode.callSiteArgumentsForPrunedOverride(handWrittenMockDefaultParameters:)`).
 		let handWrittenMockDefaultParameters: [TypeDescription: [MockParameterNode.DefaultParameter]]
+		/// The concrete types whose `SafeDIMockConfiguration` is `@Sendable`-typed, from
+		/// `collectSendableConfigurationTypeNames` across every root. Such a struct stores each labeled
+		/// default-valued parameter as a `@Sendable` closure, which the mock body calls where it builds the type,
+		/// so the body must know which structs do (`resolveBuilderArguments`).
+		let sendableConfigurationTypeNames: Set<String>
 	}
 
 	private let scopeData: ScopeData
@@ -1701,11 +1706,31 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let property: Property
 			/// The parameter's name, the dependency's label unless it is named apart from another name in scope.
 			let label: String
-			/// The parameter's type as `mock()` spells it.
+			/// The type of the value the caller passes, which `mock()` spells as the parameter's type unless
+			/// `isSendableAutoclosure`.
 			let typeSource: String
 			/// The type the dependency instantiates, which no `@Instantiable` declaration fulfills.
 			let instantiatedType: TypeDescription
+			/// Whether `mock()` takes the parameter as `@autoclosure @escaping @Sendable () -> T`, because a type
+			/// built inside a `@Sendable` builder function instantiates the dependency: that function cannot
+			/// capture the value when its type is not `Sendable`, and SafeDI cannot tell whether it is, so each
+			/// type that instantiates the dependency calls the closure where it is built
+			/// (`sendableAutoclosureBindings(for:parameters:indent:)`), which creates the value once per
+			/// construction, as production does. The caller still passes a value.
+			let isSendableAutoclosure: Bool
 		}
+	}
+
+	/// A `mock()` parameter taken as a `@Sendable` autoclosure (`MockRootParameters.UncoveredParameter.isSendableAutoclosure`),
+	/// keyed by its dependency's property where it is passed to the body generators.
+	struct SendableAutoclosureParameter {
+		/// The parameter's name, `UncoveredParameter.label`.
+		let name: String
+		/// The name of the local the body reads the closure into before any builder function, so that the binding
+		/// of the value under `name` in a scope that instantiates the dependency can call the closure however the
+		/// scopes around it bind `name`: `__safeDI_<name>`. The prefix keeps it out of the labels SafeDI is given, and
+		/// no builder function in scope has the name, since `name` is apart from every binding in the mock.
+		let localName: String
 	}
 
 	/// The parameters this scope's `mock()` takes as a mock root. See `MockRootParameters`.
@@ -1874,7 +1899,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var uncoveredDependencies = UncoveredDependencies()
 		// Collect uncovered @Instantiated deps from the root type.
 		for dependency in mockedTypeUncoveredDependencies {
-			uncoveredDependencies.add(dependency, isHiddenWhereReferenced: false)
+			// The mocked type is built in the body of `mock()`, outside every builder function.
+			uncoveredDependencies.add(dependency, isHiddenWhereReferenced: false, isInstantiatedInSendableFunction: false)
 		}
 		// Also collect uncovered @Instantiated deps from child types in the tree.
 		// When a child has a custom mock method, its @Instantiated deps that aren't
@@ -1933,6 +1959,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				label: uncoveredDependencyNames[index],
 				typeSource: uncoveredDependencies.typeSources[index],
 				instantiatedType: uncoveredDependencies.instantiatedTypes[index],
+				isSendableAutoclosure: uncoveredDependencies.indicesInstantiatedInSendableFunction.contains(index),
 			)
 		}
 
@@ -2196,10 +2223,34 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			mockParameters.append("\(bodyIndent)\(flatReceived.label): \(flatReceived.typeSource)")
 		}
 		for flatUncovered in flatUncoveredParameters {
-			mockParameters.append("\(bodyIndent)\(flatUncovered.label): \(flatUncovered.typeSource)")
+			if flatUncovered.isSendableAutoclosure {
+				mockParameters.append("\(bodyIndent)\(flatUncovered.label): @autoclosure @escaping @Sendable () -> \(flatUncovered.typeSource)")
+			} else {
+				mockParameters.append("\(bodyIndent)\(flatUncovered.label): \(flatUncovered.typeSource)")
+			}
 		}
 		if hasOverridableTree {
 			mockParameters.append("\(bodyIndent)\(ReservedName.mockOverridesParameterName): SafeDIOverrides = .init()")
+		}
+
+		// Each `@Sendable` autoclosure parameter is read into a local before every builder function, under a name
+		// no scope rebinds, and the value of one the mocked type itself instantiates is bound under the parameter's
+		// name in the body, as a type in the tree binds it in its builder function. The body's binding hides the
+		// parameter from the receivers in the tree, which read the value as they did when the parameter was one.
+		var sendableAutoclosureParameters = [Property: SendableAutoclosureParameter]()
+		var sendableAutoclosureBindings = [String]()
+		for flatUncovered in flatUncoveredParameters where flatUncovered.isSendableAutoclosure {
+			let parameter = SendableAutoclosureParameter(
+				name: flatUncovered.label,
+				localName: "\(ReservedName.builderFunctionNamePrefix)\(flatUncovered.label)".spelledAsJoinedIdentifier,
+			)
+			sendableAutoclosureParameters[flatUncovered.property] = parameter
+			sendableAutoclosureBindings.append("\(bodyIndent)let \(parameter.localName) = \(parameter.name)")
+		}
+		for dependency in mockedTypeUncoveredDependencies {
+			if let parameter = sendableAutoclosureParameters[dependency.property] {
+				sendableAutoclosureBindings.append("\(bodyIndent)let \(parameter.name) = \(parameter.localName)()")
+			}
 		}
 
 		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
@@ -2323,6 +2374,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			indent: bodyIndent,
 		)
 
+		// The autoclosure parameters are read first: the tree's builder functions call the locals.
+		lines.append(contentsOf: sendableAutoclosureBindings)
 		if hasTree {
 			// Bind onlyIfAvailable overrides first — tree bindings may reference them.
 			for onlyIfAvailableOverride in onlyIfAvailableOverrides {
@@ -2338,10 +2391,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				flatParameterDisambiguationMap: treeDisambiguationMap,
 				lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNameMap,
 				uncoveredDependencyNames: uncoveredDependencyNameMap,
+				sendableAutoclosureParameters: sendableAutoclosureParameters,
 				parentConcreteType: nil,
 				cycleEdges: context.cycleEdges,
 				overridePathReachable: true,
 				handWrittenMockDefaultParameters: context.handWrittenMockDefaultParameters,
+				sendableConfigurationTypeNames: context.sendableConfigurationTypeNames,
 			)
 			lines.append(contentsOf: bodyBindings)
 		} else {
@@ -2466,6 +2521,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			).map {
 				"\(indent)let \(dependency.property.label): \($0.typeDescription.asSource) = \($0.name)"
 			}
+		}
+	}
+
+	/// Emits the `let <name> = <localName>()` bindings a scope needs for the `@Sendable` autoclosure
+	/// parameters (`parameters`, see `SendableAutoclosureParameter`) of the dependencies of `node` that the
+	/// mock cannot build (`uncoveredInstantiatedDependencies(of:)`). Each binding creates the value where the
+	/// node is built, once per construction, as production creates the dependency there, and the children
+	/// of the node that receive the dependency read the binding (`routingReceives`). A scope that binds one
+	/// is a builder function of its own, so that the binding redeclares nothing.
+	private static func sendableAutoclosureBindings(
+		for node: MockParameterNode,
+		parameters: [Property: SendableAutoclosureParameter],
+		indent: String,
+	) -> [String] {
+		guard !parameters.isEmpty else { return [] }
+		return uncoveredInstantiatedDependencies(of: node).compactMap { dependency in
+			guard let parameter = parameters[dependency.property] else { return nil }
+			return "\(indent)let \(parameter.name) = \(parameter.localName)()"
 		}
 	}
 
@@ -3273,8 +3346,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		private(set) var instantiatedTypes = [TypeDescription]()
 		/// The indices of the dependencies whose label a builder function around a type passed them declares.
 		private(set) var indicesHiddenWhereReferenced = Set<Int>()
+		/// The indices of the dependencies that a type built inside a `@Sendable` builder function instantiates
+		/// (`MockRootParameters.UncoveredParameter.isSendableAutoclosure`).
+		private(set) var indicesInstantiatedInSendableFunction = Set<Int>()
 
-		mutating func add(_ dependency: Dependency, isHiddenWhereReferenced: Bool) {
+		mutating func add(_ dependency: Dependency, isHiddenWhereReferenced: Bool, isInstantiatedInSendableFunction: Bool) {
 			let property = dependency.property
 			let index: Int
 			if let existingIndex = properties.firstIndex(of: property) {
@@ -3292,6 +3368,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			if isHiddenWhereReferenced {
 				indicesHiddenWhereReferenced.insert(index)
+			}
+			if isInstantiatedInSendableFunction {
+				indicesInstantiatedInSendableFunction.insert(index)
 			}
 		}
 	}
@@ -3318,6 +3397,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				uncoveredDependencies.add(
 					dependency,
 					isHiddenWhereReferenced: namesDeclaredByEnclosingBuilderFunctions.contains(dependency.property.label),
+					// The node is built inside a `@Sendable` builder function: its own, or one around it.
+					isInstantiatedInSendableFunction: node.requiresSendable,
 				)
 			}
 			// Skip recursion into property cycle children — they're self-references
@@ -3746,7 +3827,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Closure fields are marked `@Sendable` only when `requiresSendable` is `true` —
 	/// i.e., the struct's concrete type is referenced from a `SendableInstantiator`
 	/// scope in at least one root. The flag is computed once across all roots so
-	/// cross-root struct-per-type dedup produces a consistent annotation.
+	/// cross-root struct-per-type dedup produces a consistent annotation. Such a struct
+	/// also stores each labeled default-valued parameter that is not a closure as a
+	/// `@Sendable` closure returning the value, which `resolveBuilderArguments` calls.
 	private static func generateConfigurationStruct(
 		for node: MockParameterNode,
 		indent: String,
@@ -3809,6 +3892,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if defaultParameter.isClosureType {
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(closureSendable)@escaping \(typeSource) = \(defaultExpression(defaultParameter))")
 				storedProperties.append("\(innerIndent)let \(defaultParameter.label): \(closureSendable)\(typeSource)")
+			} else if requiresSendable {
+				// A `@Sendable` builder function cannot capture the value when its type is not `Sendable`, and
+				// SafeDI cannot tell whether it is, so the struct stores a `@Sendable` closure that returns the
+				// value and the mock calls it where it builds the type, which evaluates the default once per
+				// construction, as production does. The initializer takes the value as an autoclosure, so a
+				// caller still passes a value.
+				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping @Sendable () -> \(typeSource) = \(defaultExpression(defaultParameter))")
+				storedProperties.append("\(innerIndent)let \(defaultParameter.label): @Sendable () -> \(typeSource)")
 			} else {
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(typeSource) = \(defaultExpression(defaultParameter))")
 				storedProperties.append("\(innerIndent)let \(defaultParameter.label): \(typeSource)")
@@ -3849,9 +3940,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// is not, so code lexically inside a `@Sendable` function — at any depth,
 	/// including inside builder functions of nested instantiators — must not
 	/// reference it. Every value in a sendable subtree's configuration is
-	/// `Sendable` (its closures are generated `@Sendable`), so each value is
-	/// read into a local outside the function and the function captures the
-	/// local instead.
+	/// `Sendable`: its closures are generated `@Sendable`, and each of its
+	/// defaults is stored as a `@Sendable` closure that the function calls
+	/// (`generateConfigurationStruct`). So each value is read into a local
+	/// outside the function and the function captures the local instead.
 	///
 	/// The mock body walk asks the extractor for a local each time it would
 	/// otherwise read `safeDIOverrides`, so every extracted local has exactly
@@ -3891,7 +3983,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `enclosingFunctionNames` is the `BuilderFunctionNames.enclosingFunctionNames` of the
 	/// scope whose body holds `items`. `propertyNodeLabelMap` names the property nodes among
 	/// `items`, as `disambiguatePropertyLabels` does; the mock root passes the names its scope
-	/// chose apart from the names declared beneath it.
+	/// chose apart from the names declared beneath it. `sendableAutoclosureParameters` are the
+	/// `mock()` parameters taken as `@Sendable` autoclosures (`SendableAutoclosureParameter`),
+	/// which a node that instantiates one binds where it is built (`sendableAutoclosureBindings`).
 	/// This method and `generateInstantiatorBinding` call one another for each level of the
 	/// tree, which can be as deep as the module has types. They are `async` so that their frames
 	/// are allocated with the task rather than on the thread's stack, which could not hold them.
@@ -3906,10 +4000,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		enclosingFunctionNames: [Property: String] = [:],
 		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]] = [:],
 		uncoveredDependencyNames: [String: [TypeDescription: String]] = [:],
+		sendableAutoclosureParameters: [Property: SendableAutoclosureParameter],
 		parentConcreteType: String?,
 		cycleEdges: Set<CycleEdge>,
 		overridePathReachable: Bool,
 		handWrittenMockDefaultParameters: [TypeDescription: [MockParameterNode.DefaultParameter]],
+		sendableConfigurationTypeNames: Set<String>,
 	) async -> [String] {
 		var lines = [String]()
 
@@ -4015,12 +4111,20 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					sendableOverrideExtractor: sendableOverrideExtractor,
 					overrideReachable: thisOverrideReachable,
 					handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
+					sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 				)
 				let constructionExpression = node.constructionExpression(
 					overrideExpression: overrideExpression,
 					arguments: arguments,
 					overrideReachable: thisOverrideReachable,
 					handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
+				)
+				// The values of the `@Sendable` autoclosure parameters this node instantiates, bound in its own
+				// scope, before the children that receive them.
+				let sendableAutoclosureBindings = sendableAutoclosureBindings(
+					for: node,
+					parameters: sendableAutoclosureParameters,
+					indent: "\(indent)\(standardIndent)",
 				)
 
 				if node.isInstantiator {
@@ -4038,21 +4142,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						nodePath: nodePath,
 						overrideExpression: overrideExpression,
 						arguments: arguments,
+						sendableAutoclosureBindings: sendableAutoclosureBindings,
 						indent: indent,
 						ancestorTypes: childAncestors,
 						sendableOverrideExtractor: sendableOverrideExtractor,
 						flatParameterDisambiguationMap: combinedDisambiguationMap,
 						lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
 						uncoveredDependencyNames: uncoveredDependencyNames,
+						sendableAutoclosureParameters: sendableAutoclosureParameters,
 						cycleEdges: cycleEdges,
 						overridePathReachable: thisOverrideReachable,
 						handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+						sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 					))
-				} else if node.requiresFunctionWrapper || hasDisambiguatedReceiver(node, flatParameterDisambiguationMap: combinedDisambiguationMap) {
+				} else if node.requiresFunctionWrapper
+					|| hasDisambiguatedReceiver(node, flatParameterDisambiguationMap: combinedDisambiguationMap)
+					|| !sendableAutoclosureBindings.isEmpty
+				{
 					// Constant node that needs a dedicated Swift scope — either for its
-					// own children/defaults/cycle, for aliased deps, or to host the
+					// own children/defaults/cycle, for aliased deps, to host the
 					// `let <label>: <Type> = <disambiguatedName>` binding that aliases a
-					// disambiguated flat mock parameter back to its natural label. A
+					// disambiguated flat mock parameter back to its natural label, or to
+					// bind the value of a `@Sendable` autoclosure parameter it instantiates. A
 					// function scope keeps child bindings from colliding with siblings'
 					// child bindings that share the same property label and gives these
 					// receiver bindings a place to live.
@@ -4095,16 +4206,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 						lazilyInstantiatedBindingNames: functionLazilyInstantiatedBindingNames,
 						uncoveredDependencyNames: uncoveredDependencyNames,
+						sendableAutoclosureParameters: sendableAutoclosureParameters,
 						parentConcreteType: node.concreteType.asSource,
 						cycleEdges: cycleEdges,
 						overridePathReachable: thisOverrideReachable,
 						handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+						sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 					)
 
 					// The function's return type gives both branches of the `if`
 					// expression a contextual type, so no annotation is needed.
 					lines.append("\(indent)func \(functionName)() -> \(propertyTypeName) {")
 					lines.append(contentsOf: receiverBindings)
+					lines.append(contentsOf: sendableAutoclosureBindings)
 					lines.append(contentsOf: childBindings)
 					lines.append("\(innerIndent)return \(constructionExpression)")
 					lines.append("\(indent)}")
@@ -4242,6 +4356,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Beneath a pruned edge, where the node has no `SafeDIOverrides` storage,
 	/// a non-dependency argument is the default its `SafeDIMockConfiguration`
 	/// declares (see `callSiteArgumentsForPrunedOverride(handWrittenMockDefaultParameters:)`).
+	/// When the node's type is in `sendableConfigurationTypeNames`, its struct stores
+	/// each non-closure default as a `@Sendable` closure (`generateConfigurationStruct`),
+	/// so the argument calls it, wherever it is read from.
 	private static func resolveBuilderArguments(
 		for node: MockParameterNode,
 		nodePath: String,
@@ -4250,6 +4367,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		sendableOverrideExtractor: SendableOverrideExtractor?,
 		overrideReachable: Bool,
 		handWrittenMockDefaultParameters: [MockParameterNode.DefaultParameter],
+		sendableConfigurationTypeNames: Set<String>,
 	) -> [String] {
 		let dependenciesByLabel = Dictionary(
 			uniqueKeysWithValues: node.dependencies.map { ($0.property.label, $0) },
@@ -4261,6 +4379,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			overrideReachable: overrideReachable,
 			handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 		)
+		let storesDefaultsAsClosures = sendableConfigurationTypeNames.contains(node.concreteType.asSource)
+		/// `expression`, called when the struct stores the default of `argument` as a closure.
+		func readingDefault(_ expression: String, of argument: Initializer.Argument) -> String {
+			if storesDefaultsAsClosures, !argument.typeDescription.strippingEscaping.isClosure {
+				"\(expression)()"
+			} else {
+				expression
+			}
+		}
 		return argumentsToSurface.map { argument in
 			if let dependency = dependenciesByLabel[argument.innerLabel] {
 				if node.unavailableProperties.contains(dependency.property) {
@@ -4284,14 +4411,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			} else if !overrideReachable {
 				// The struct is built afresh, so nothing is read from `SafeDIOverrides`, even inside a `@Sendable` function.
-				"\(node.configurationTypeName)().\(argument.label)"
+				readingDefault("\(node.configurationTypeName)().\(argument.label)", of: argument)
 			} else if let sendableOverrideExtractor {
-				sendableOverrideExtractor.extract(
-					"\(nodePath).\(argument.label)",
-					localNameSuffix: "\(relativePath)_\(argument.label)",
+				readingDefault(
+					sendableOverrideExtractor.extract(
+						"\(nodePath).\(argument.label)",
+						localNameSuffix: "\(relativePath)_\(argument.label)",
+					),
+					of: argument,
 				)
 			} else {
-				"\(nodePath).\(argument.label)"
+				readingDefault("\(nodePath).\(argument.label)", of: argument)
 			}
 		}
 	}
@@ -4306,7 +4436,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// `MockParameterNode.constructionExpression`). `sendableOverrideExtractor`
 	/// is set when the binding is already inside a `@Sendable` function; a
 	/// sendable binding outside one starts its own extractor and re-reads its
-	/// override and `arguments` through it. `async` for the reason
+	/// override and `arguments` through it. `sendableAutoclosureBindings` are the
+	/// node's `sendableAutoclosureBindings(for:parameters:indent:)`, emitted at the
+	/// top of the inner builder function. `async` for the reason
 	/// `generateMockBodyBindings` is.
 	private static func generateInstantiatorBinding(
 		for node: MockParameterNode,
@@ -4316,15 +4448,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		nodePath: String,
 		overrideExpression: String?,
 		arguments: [String],
+		sendableAutoclosureBindings: [String],
 		indent: String,
 		ancestorTypes: Set<String>,
 		sendableOverrideExtractor: SendableOverrideExtractor?,
 		flatParameterDisambiguationMap: [String: [TypeDescription: String]],
 		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
 		uncoveredDependencyNames: [String: [TypeDescription: String]],
+		sendableAutoclosureParameters: [Property: SendableAutoclosureParameter],
 		cycleEdges: Set<CycleEdge>,
 		overridePathReachable: Bool,
 		handWrittenMockDefaultParameters: [TypeDescription: [MockParameterNode.DefaultParameter]],
+		sendableConfigurationTypeNames: Set<String>,
 	) async -> [String] {
 		let forwardedProperties = node.forwardedProperties.sorted()
 		let innerIndent = "\(indent)\(standardIndent)"
@@ -4417,10 +4552,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				enclosingFunctionNames: enclosingFunctionNames,
 				lazilyInstantiatedBindingNames: builderLazilyInstantiatedBindingNames,
 				uncoveredDependencyNames: uncoveredDependencyNames,
+				sendableAutoclosureParameters: sendableAutoclosureParameters,
 				parentConcreteType: node.concreteType.asSource,
 				cycleEdges: cycleEdges,
 				overridePathReachable: overridePathReachable,
 				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+				sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 			)
 
 			let nodeHandWrittenMockDefaultParameters = handWrittenMockDefaultParameters[node.concreteType, default: []]
@@ -4441,6 +4578,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					sendableOverrideExtractor: startedSendableOverrideExtractor,
 					overrideReachable: overridePathReachable,
 					handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
+					sendableConfigurationTypeNames: sendableConfigurationTypeNames,
 				)
 				functionOverrideExpression = overrideExpression.map {
 					startedSendableOverrideExtractor.extract($0, localNameSuffix: ReservedName.configurationBuilderPropertyName)
@@ -4456,14 +4594,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let functionReturnType = node.instantiatedTypeDescription.asSource
 			lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(functionReturnType) {")
 			lines.append(contentsOf: receiverBindings)
+			lines.append(contentsOf: sendableAutoclosureBindings)
 			lines.append(contentsOf: childBindings)
 
 			// Swift's implicit-return rule only applies when the function
-			// body is a single expression. Receiver bindings and child
-			// bindings both add extra statements, so either one forces an
-			// explicit `return`. The function's return type gives both
-			// branches of an `if` expression a contextual type.
-			let returnKeyword = childBindings.isEmpty && receiverBindings.isEmpty ? "" : "return "
+			// body is a single expression. Receiver bindings, autoclosure
+			// bindings, and child bindings all add extra statements, so any
+			// one forces an explicit `return`. The function's return type
+			// gives both branches of an `if` expression a contextual type.
+			let returnKeyword = childBindings.isEmpty && receiverBindings.isEmpty && sendableAutoclosureBindings.isEmpty ? "" : "return "
 			let constructionExpression = node.constructionExpression(
 				overrideExpression: functionOverrideExpression,
 				arguments: functionConstructionArguments,

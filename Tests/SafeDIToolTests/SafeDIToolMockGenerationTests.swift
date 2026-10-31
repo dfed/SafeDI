@@ -6594,7 +6594,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        let __safeDI_parentBuilder__parentBuilder_flag = safeDIOverrides.parentBuilder.flag
 		        let __safeDI_parentBuilder__safeDIBuilder = safeDIOverrides.parentBuilder.safeDIBuilder
 		        @Sendable func __safeDI_parentBuilder() -> Parent {
-		            if let safeDIBuilder = __safeDI_parentBuilder__safeDIBuilder { safeDIBuilder(__safeDI_parentBuilder__parentBuilder_flag) } else { Parent(flag: __safeDI_parentBuilder__parentBuilder_flag) }
+		            if let safeDIBuilder = __safeDI_parentBuilder__safeDIBuilder { safeDIBuilder(__safeDI_parentBuilder__parentBuilder_flag()) } else { Parent(flag: __safeDI_parentBuilder__parentBuilder_flag()) }
 		        }
 		        let parentBuilder = SendableInstantiator<Parent>(__safeDI_parentBuilder)
 		        let other = if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder() } else { Other() }
@@ -6690,7 +6690,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        @Sendable func __safeDI_parentBuilder() -> Parent {
 		            func __safeDI_childBuilder() -> Child {
 		                func __safeDI_grandchild() -> Grandchild {
-		                    return if let safeDIBuilder = __safeDI_parentBuilder__parentBuilder_childBuilder_grandchild_safeDIBuilder { safeDIBuilder(__safeDI_parentBuilder__parentBuilder_childBuilder_grandchild_flag) } else { Grandchild(flag: __safeDI_parentBuilder__parentBuilder_childBuilder_grandchild_flag) }
+		                    return if let safeDIBuilder = __safeDI_parentBuilder__parentBuilder_childBuilder_grandchild_safeDIBuilder { safeDIBuilder(__safeDI_parentBuilder__parentBuilder_childBuilder_grandchild_flag()) } else { Grandchild(flag: __safeDI_parentBuilder__parentBuilder_childBuilder_grandchild_flag()) }
 		                }
 		                let grandchild: Grandchild = __safeDI_grandchild()
 		                return if let safeDIBuilder = __safeDI_parentBuilder__parentBuilder_childBuilder_safeDIBuilder { safeDIBuilder(grandchild) } else { Child(grandchild: grandchild) }
@@ -8387,7 +8387,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        @Sendable func __safeDI_interceptorBuilder() -> Interceptor {
 		            func __safeDI_handler() -> Handler {
 		                let logger = if let safeDIBuilder = __safeDI_interceptorBuilder__interceptorBuilder_handler_logger_safeDIBuilder { safeDIBuilder() } else { Logger() }
-		                return if let safeDIBuilder = __safeDI_interceptorBuilder__interceptorBuilder_handler_safeDIBuilder { safeDIBuilder(logger, __safeDI_interceptorBuilder__interceptorBuilder_handler_logLevel) } else { Handler(logger: logger, logLevel: __safeDI_interceptorBuilder__interceptorBuilder_handler_logLevel) }
+		                return if let safeDIBuilder = __safeDI_interceptorBuilder__interceptorBuilder_handler_safeDIBuilder { safeDIBuilder(logger, __safeDI_interceptorBuilder__interceptorBuilder_handler_logLevel()) } else { Handler(logger: logger, logLevel: __safeDI_interceptorBuilder__interceptorBuilder_handler_logLevel()) }
 		            }
 		            let handler: Handler = __safeDI_handler()
 		            return if let safeDIBuilder = __safeDI_interceptorBuilder__safeDIBuilder { safeDIBuilder(handler) } else { Interceptor(handler: handler) }
@@ -19167,7 +19167,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		    struct SafeDIMockConfiguration {
 		        init(
 		            bBuilder: B.SafeDIMockConfiguration = .init(),
-		            label: String = "default",
+		            label: @autoclosure @escaping @Sendable () -> String = "default",
 		            _ safeDIBuilder: (@Sendable (SendableInstantiator<B>, String) -> A)? = nil
 		        ) {
 		            self.bBuilder = bBuilder
@@ -19176,7 +19176,7 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		        }
 
 		        let bBuilder: B.SafeDIMockConfiguration
-		        let label: String
+		        let label: @Sendable () -> String
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
 		        let safeDIBuilder: (@Sendable (SendableInstantiator<B>, String) -> A)?
 		    }

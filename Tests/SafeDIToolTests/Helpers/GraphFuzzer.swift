@@ -297,6 +297,9 @@ enum GraphFuzzerGenerator {
 		var additionalConformances = [String]()
 		/// Declarations written after the type's own.
 		var additionalDeclarations = [String]()
+		/// Parameters of the initializer after those of `properties`, each with a default value, which the initializer
+		/// does not store. A default-valued parameter is not a dependency.
+		var defaultValuedParameters = [String]()
 	}
 
 	/// How an `@Instantiated` property builds its target.
@@ -493,7 +496,33 @@ enum GraphFuzzerGenerator {
 				var duplicate = motifType(8, arguments: ["fulfillingAdditionalTypes: [\(sharedProtocol).self]"], properties: [])
 				duplicate.additionalConformances.append(sharedProtocol)
 				declarations.append(duplicate)
+			} else if roll >= 25, roll < 30 {
+				// A mocked type that builds a type through a `Sendable` wrapper, whose subtree has values production
+				// creates inside the `@Sendable` builder function and a mock is handed: a labeled default-valued
+				// initializer parameter of a type that is not `Sendable`, and a dependency the mock cannot build, of a
+				// type that is not `Sendable`. The wrapper is `Sendable` whatever the graph's wrappers are, so the types
+				// it builds are `@unchecked Sendable` in a `Sendable` graph, where their protocols are `Sendable`.
+				var owner = motifType(8, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "t9", type: typeName(9))])
+				owner.defaultValuedParameters = ["formatter: \(nonSendableHelperTypeName("Formatter")) = \(nonSendableHelperTypeName("Formatter"))()"]
+				owner.additionalDeclarations.append("public final class \(nonSendableHelperTypeName("Formatter")) {\n\tpublic init() {}\n}")
+				var leaf = motifType(9, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "engine", type: nonSendableHelperTypeName("Engine"))])
+				leaf.additionalDeclarations.append("public final class \(nonSendableHelperTypeName("Engine")) {\n\tpublic init() {}\n}")
+				if sendability == .sendable {
+					owner.additionalConformances.append("@unchecked Sendable")
+					leaf.additionalConformances.append("@unchecked Sendable")
+				}
+				declarations.append(motifType(7, arguments: ["generateMock: true"], properties: [
+					PropertyDeclaration(attribute: "@Instantiated", label: "t8Builder", type: "SendableInstantiator<\(typeName(8))>"),
+				]))
+				declarations.append(owner)
+				declarations.append(leaf)
+				sendableBuilderMotifMockedTypeName = typeName(7)
 			}
+		}
+
+		/// The name of a helper type the `Sendable` builder motif declares, which is never `Sendable`.
+		private func nonSendableHelperTypeName(_ name: String) -> String {
+			"\(prefix)\(name)"
 		}
 
 		private var random: GraphFuzzerRandomNumberGenerator
@@ -512,6 +541,11 @@ enum GraphFuzzerGenerator {
 		private var siblingAliasChainRandom: GraphFuzzerRandomNumberGenerator
 		/// How many types that are not `@Instantiable` `addingDependenciesMocksCannotBuild` instantiates.
 		private var unbuildableTypeCount = 0
+		/// The mocked type of the `Sendable` builder motif, when `appendMotif` drew it. It gets no dependency a mock
+		/// cannot build: it is outside the `@Sendable` builder function, so a receiver of the dependency that
+		/// `addingReceiversOfDependenciesMocksCannotBuild` adds beneath it, inside the function, would be handed a
+		/// value from outside the `Sendable` wrapper's subtree, which SafeDI leaves to the compiler to reject.
+		private var sendableBuilderMotifMockedTypeName: String?
 		private let prefix: String
 		private let sendability: Sendability
 		private let typeCount: Int
@@ -979,7 +1013,11 @@ enum GraphFuzzerGenerator {
 		private mutating func addingDependenciesMocksCannotBuild(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			let reachedNames = Self.namesReachedFromRoots(in: declarations)
 			return declarations.map { declaration in
-				guard !reachedNames.contains(declaration.name), declaration.declaresHelperTypes, unbuildableDependencyRandom.percentChance(40) else {
+				guard !reachedNames.contains(declaration.name),
+				      declaration.declaresHelperTypes,
+				      declaration.name != sendableBuilderMotifMockedTypeName,
+				      unbuildableDependencyRandom.percentChance(40)
+				else {
 					return declaration
 				}
 				let label = "t\(unbuildableDependencyRandom.integer(in: 0...(typeCount - 1)))"
@@ -1591,10 +1629,10 @@ enum GraphFuzzerGenerator {
 			}
 			let conformances = ([baseConformances] + declaration.additionalConformances).joined(separator: ", ")
 			var lines = [instantiableAttribute, "public final class \(declaration.name): \(conformances) {"]
+			let parameters = (declaration.properties.map { "\($0.label): \($0.type)" } + declaration.defaultValuedParameters).joined(separator: ", ")
 			if declaration.properties.isEmpty {
-				lines.append("\tpublic init() {}")
+				lines.append("\tpublic init(\(parameters)) {}")
 			} else {
-				let parameters = declaration.properties.map { "\($0.label): \($0.type)" }.joined(separator: ", ")
 				lines.append("\tpublic init(\(parameters)) {")
 				lines += declaration.properties.map { "\t\tself.\($0.label) = \($0.label)" }
 				lines.append("\t}")
@@ -1693,6 +1731,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case forwardedErasedInstantiator
 	/// A default-valued parameter of an extension's `instantiate(…)` method.
 	case defaultValuedInstantiateParameter
+	/// A type built through a `Sendable` wrapper whose subtree has a labeled default-valued initializer parameter and
+	/// a dependency the mock cannot build, both of types that are not `Sendable`.
+	case nonSendableValuesInsideSendableBuilder
 
 	static func < (lhs: GraphFuzzerFeature, rhs: GraphFuzzerFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -1808,6 +1849,10 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					}
 					if attribute == "@Received", let currentTypeName {
 						receivedTypeNamesByTypeName[currentTypeName, default: []].insert(type)
+					}
+					// Only the `Sendable` builder motif declares an `Engine`, beneath a type a `SendableInstantiator` builds.
+					if attribute.hasPrefix("@Instantiated"), type == "\(fixture.typeNamePrefix)Engine" {
+						features.insert(.nonSendableValuesInsideSendableBuilder)
 					}
 					if attribute.hasPrefix("@Instantiated"), let currentTypeName {
 						instantiationEdges.append(GraphFuzzerInstantiationEdge(

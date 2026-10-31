@@ -38,8 +38,10 @@ import Synchronization
 /// `instantiate(…)` and a hand-written mock method that a generated mock calls: a `@MainActor` class with a
 /// `nonisolated init` is fine when its stored properties are `Sendable`, but a `@MainActor init` is not, whatever
 /// the type’s own isolation. What the instance’s type, and every type in its subtree, receives from outside it must
-/// be `Sendable` too, even when that type is itself `Sendable`, such as an actor; in a generated mock, so must the
-/// subtree’s labeled default-valued initializer arguments and the dependencies in it that `mock()` takes as parameters.
+/// be `Sendable` too, even when that type is itself `Sendable`, such as an actor. A generated mock takes the subtree’s
+/// labeled default-valued initializer arguments, and the dependencies in it that `mock()` takes as parameters, as
+/// `@Sendable` autoclosures that it calls inside the function, so a caller passes each a value that captures nothing
+/// that is not `Sendable`.
 ///
 /// SafeDI rejects a dependency tree in which creating the instance would require the instance. It does not
 /// inspect what initializers do. Do not read `instance` from the initializer of the type that declares the
