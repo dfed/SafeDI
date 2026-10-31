@@ -91,7 +91,9 @@ extension AccessLevel {
 	///   - emitter: The module the generated code compiles in.
 	///   - declarer: The module that declares the declaration.
 	///   - isOwnFile: Whether the declaration is in one of `emitter`'s own files, which decides that the two modules
-	///     are one whatever their recorded names say.
+	///     are one whatever their recorded names say, even two different names: the module compiles each of its own
+	///     files, so it reaches a declaration in one with `internal` access whatever name is recorded for it, and a
+	///     recorded name can be missing.
 	public static func required(toConstructFrom emitter: ModuleIdentity, declaredIn declarer: ModuleIdentity, isOwnFile: Bool) -> AccessRequirement {
 		if isOwnFile {
 			.internal
