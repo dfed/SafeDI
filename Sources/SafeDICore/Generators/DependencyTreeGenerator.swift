@@ -103,7 +103,7 @@ public actor DependencyTreeGenerator {
 		let rootScopeGenerators = try rootScopeGenerators
 		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: rootScopeGenerators.map { ($0.instantiable, $0.scopeGenerator) })
 
-		return try await withThrowingTaskGroup(
+		let generatedRoots = try await withThrowingTaskGroup(
 			of: GeneratedRoot?.self,
 			returning: [GeneratedRoot].self,
 		) { taskGroup in
@@ -124,6 +124,14 @@ public actor DependencyTreeGenerator {
 				}
 			}
 			return generatedRoots
+		}
+		// The file of a root this module leaves to the module that declares it holds no code, so it says why.
+		return generatedRoots + rootsGeneratedOnlyByTheirModule.map { typeDescription in
+			GeneratedRoot(
+				typeDescription: typeDescription,
+				sourceFilePath: typeDescriptionToFulfillingInstantiableMap[typeDescription]?.sourceFilePath,
+				code: "// SafeDI generates the dependency tree of \(typeDescription.asSource) only in the module that declares it, because the tree constructs a declaration that is neither `public` nor `open`.",
+			)
 		}
 	}
 
@@ -1823,15 +1831,18 @@ public actor DependencyTreeGenerator {
 	/// The roots whose trees this module generates code for, from `rootScopes`, the module's roots in type order. A
 	/// root declared in one of the module's own files is generated once every construction in its tree is known to
 	/// compile in the module; otherwise one error reports each declaration that keeps a construction from compiling,
-	/// however many of the roots' trees construct it. A root declared elsewhere – a build tool plugin's input includes
-	/// the files of the modules a module depends on – is generated, as its own module generates it, only when its tree
-	/// constructs `public` and `open` declarations alone, which every module can construct. Otherwise its file is left
-	/// without code, and nothing is reported: the module that declares the root reports what keeps it from compiling.
+	/// however many of the roots' trees construct it. A root declared elsewhere – a file of another module that the
+	/// build tool plugin's input or `additionalDirectoriesToInclude` reaches – is generated, as its own module generates
+	/// it, only when its tree constructs `public` and `open` declarations alone, which every module can construct.
+	/// Otherwise it is withheld, which `rootsGeneratedOnlyByTheirModule` records: its file holds no code but a comment
+	/// saying why, and nothing is reported, since the module that declares the root, when it runs SafeDI, generates
+	/// it and reports what keeps it from compiling.
 	private func rootScopesThisModuleGenerates(
 		from rootScopes: [(typeDescription: TypeDescription, scope: Scope)],
 	) throws -> [(typeDescription: TypeDescription, scope: Scope)] {
 		guard let emittingModule = emittingModuleToCheck else { return rootScopes }
 		var rootScopesToGenerate = [(typeDescription: TypeDescription, scope: Scope)]()
+		var withheldRoots = [TypeDescription]()
 		var inaccessibleConstructions = [DependencyTreeGeneratorError.InaccessibleConstruction]()
 		for rootScope in rootScopes {
 			let rootInstantiable = rootScope.scope.instantiable
@@ -1855,13 +1866,21 @@ public actor DependencyTreeGenerator {
 				emittingModule: emittingModule,
 			).allSatisfy({ Self.isPubliclyConstructible($0.instantiable, withMockMethod: $0.usesMockMethod) }) {
 				rootScopesToGenerate.append(rootScope)
+			} else {
+				withheldRoots.append(rootScope.typeDescription)
 			}
 		}
 		guard inaccessibleConstructions.isEmpty else {
 			throw DependencyTreeGeneratorError.inaccessibleConstructions(inaccessibleConstructions)
 		}
+		rootsGeneratedOnlyByTheirModule = withheldRoots
 		return rootScopesToGenerate
 	}
+
+	/// The roots another module declares whose trees construct a declaration that is neither `public` nor `open`,
+	/// which this module therefore leaves to the module that declares them, in type order. Empty until the tree has
+	/// been generated.
+	private var rootsGeneratedOnlyByTheirModule = [TypeDescription]()
 
 	/// Whether code in every module can construct `instantiable` with its hand-written mock method when
 	/// `withMockMethod` is set, and otherwise with its initializer or `instantiate()` method.
