@@ -1163,6 +1163,37 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtConfigurationNamingDeclaringModule_whenAdditionalMockConstructsTypeWhoseFileCannotBeRead() async {
+		// No type of `App` builds `Service`, so the mock `App` generates for it refers to it from the
+		// `#SafeDIConfiguration` that lists it.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["SafeDIConfiguration.swift"]):1:1: error: `Service` is `internal` in module `Feature`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` in module `Feature` to fix.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.feature(inPackage: "Shop", declaring: Self.internalServiceWithPackageInitializer, deletesSwiftFilesAfterRunning: true),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContentByFilePath: [
+							"SafeDIConfiguration.swift": """
+							#SafeDIConfiguration(additionalMocksToGenerate: ["Service"])
+							""",
+						],
+						dependencies: ["Feature"],
+					),
+				],
+				integration: .moduleInfo,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsInaccessibleConstructionOnce_whenTypeOfAnotherModuleConstructsItTwice() async {
 		// `Hub` instantiates `Service` twice, and `App` generates both constructions, which refer to `Service` from
 		// one place in `App`: its `hub` property.
