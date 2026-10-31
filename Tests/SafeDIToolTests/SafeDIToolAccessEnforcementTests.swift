@@ -1429,9 +1429,14 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}
 		"""
 		#expect(try #require(output.modules["Feature"]).generatedFiles == ["FeatureRoot+SafeDI.swift": generatedFileHeader + featureRootCode])
-		#expect(try #require(output.modules["App"]).generatedFiles["FeatureRoot+SafeDI.swift"] == generatedFileHeader + Self.importBlock("Feature") + "\n\n" + """
-		// SafeDI generates the dependency tree of FeatureRoot only in the module that declares it, because the tree constructs a declaration that is neither `public` nor `open`.
-		""")
+		// `App`'s own root already has an initializer that takes nothing, so its file holds no code.
+		let appFileHeader = generatedFileHeader + Self.importBlock("Feature") + "\n\n"
+		#expect(try #require(output.modules["App"]).generatedFiles == [
+			"FeatureRoot+SafeDI.swift": appFileHeader + """
+			// SafeDI generates the dependency tree of FeatureRoot only in the module that declares it, because the tree constructs a declaration that is neither `public` nor `open`.
+			""",
+			"Root+SafeDI.swift": appFileHeader,
+		])
 		try expectEveryModuleCompiled(output)
 	}
 
@@ -1473,7 +1478,13 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}
 		"""
 		#expect(try #require(output.modules["Feature"]).generatedFiles == ["FeatureRoot+SafeDI.swift": generatedFileHeader + featureRootCode])
-		#expect(try #require(output.modules["App"]).generatedFiles["FeatureRoot+SafeDI.swift"] == generatedFileHeader + Self.importBlock("Feature") + "\n\n" + featureRootCode)
+		// `App`'s own root already has an initializer that takes nothing, so its file holds no code.
+		let appFileHeader = generatedFileHeader + Self.importBlock("Feature") + "\n\n"
+		#expect(try #require(output.modules["App"]).generatedFiles == [
+			"FeatureRoot+SafeDI.swift": appFileHeader + featureRootCode,
+			"Root+SafeDI.swift": appFileHeader,
+		])
+		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Private
