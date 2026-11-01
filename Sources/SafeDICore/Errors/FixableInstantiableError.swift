@@ -49,6 +49,12 @@ public enum FixableInstantiableError: DiagnosticError {
 	case calleeScopeReferenceInDefaultExpression(parameterLabel: String, typeName: String)
 	/// A name SafeDI binds, or refers to, in generated code collides with a name generated code introduces.
 	case reservedName(name: String, reservation: ReservedName)
+	/// An `instantiate(…)` parameter without a default value, which is a dependency, is named `_`, which names no
+	/// dependency. `argumentLabel` is the name a fix-it gives the parameter, when one is offered.
+	case unnamedInstantiateDependency(argumentLabel: String)
+	/// Two names of one declaration that SafeDI matches by name, `earlierName` and `laterName`, are equal as `String`s
+	/// but differ in their UTF-8 bytes: Swift reads them as two names, and SafeDI as one.
+	case namesEncodedDifferently(earlierName: String, laterName: String)
 	/// A dependency's type names types declared inside the decorated declaration, each spelled as `spelling`, which code
 	/// SafeDI generates in another type's extension cannot resolve.
 	case unqualifiedNestedType(typeNames: [(spelling: String, qualifiedSpelling: String)], enclosingTypeName: String, dependencyLabel: String)
@@ -141,6 +147,10 @@ public enum FixableInstantiableError: DiagnosticError {
 			case let .constructedType(typeName):
 				"`\(name)` is reserved: generated code constructs the `\(typeName)` type by that name, and a name spelled the same would hide the type from it. Rename it."
 			}
+		case let .namesEncodedDifferently(earlierName, laterName):
+			"The names `\(earlierName)` (\(earlierName.codePoints)) and `\(laterName)` (\(laterName.codePoints)) look the same but are encoded differently, so SafeDI cannot tell them apart. Rename one of them."
+		case .unnamedInstantiateDependency:
+			"This parameter of `instantiate(…)` has no default value, so it is a dependency, which SafeDI names by the parameter’s inner name. `_` names no dependency, so nothing can fulfill it. Name the parameter, or give it a default value."
 		case let .unqualifiedNestedType(typeNames, enclosingTypeName, dependencyLabel):
 			if typeNames.count == 1 {
 				"The generated code that builds or receives `\(dependencyLabel)` lives in another type’s extension, where \(typeNames.map { "`\($0.spelling)`" }.joinedAsList), declared in `\(enclosingTypeName)`, does not resolve. Write it as \(typeNames.map { "`\($0.qualifiedSpelling)`" }.joinedAsList)."
@@ -190,7 +200,9 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .mockOnlyMissingMockMethod,
 			     .unlabeledDefaultBeforeUnlabeledParameter,
 			     .calleeScopeReferenceInDefaultExpression,
-			     .reservedName:
+			     .reservedName,
+			     .unnamedInstantiateDependency,
+			     .namesEncodedDifferently:
 				.error
 			case .unqualifiedNestedType:
 				.warning
@@ -275,6 +287,10 @@ public enum FixableInstantiableError: DiagnosticError {
 				case .mockOverridesParameter, .configurationBuilderProperty, .constructedType:
 					"Rename `\(name)`"
 				}
+			case let .unnamedInstantiateDependency(argumentLabel):
+				"Name the parameter `\(argumentLabel)`"
+			case let .namesEncodedDifferently(_, laterName):
+				"Rename `\(laterName)`"
 			case let .unqualifiedNestedType(typeNames, _, _):
 				"Replace \(typeNames.map { "`\($0.spelling)` with `\($0.qualifiedSpelling)`" }.joinedAsList)"
 			}
@@ -283,6 +299,18 @@ public enum FixableInstantiableError: DiagnosticError {
 
 		let message: String
 		let fixItID: MessageID
+	}
+}
+
+// MARK: - String
+
+extension String {
+	/// This text's Unicode scalars in the notation people read code points in, such as `U+0063 U+0301`.
+	var codePoints: String {
+		unicodeScalars.map { scalar in
+			let hexadecimal = String(scalar.value, radix: 16, uppercase: true)
+			return "U+\(String(repeating: "0", count: max(0, 4 - hexadecimal.count)))\(hexadecimal)"
+		}.joined(separator: " ")
 	}
 }
 

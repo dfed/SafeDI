@@ -850,7 +850,7 @@ public actor DependencyTreeGenerator {
 			}
 		}
 		for key in adjacency.keys {
-			adjacency[key] = adjacency[key]!.sorted { $0.asSource < $1.asSource }
+			adjacency[key]?.sort { $0.asSource < $1.asSource }
 		}
 
 		let allNodes = Set(adjacency.keys)
@@ -953,6 +953,9 @@ public actor DependencyTreeGenerator {
 		/// Reported at the hand-written mock of each type that generated mocks build both with that mock and
 		/// without it, in ways one `SafeDIMockConfiguration` struct cannot describe. See `ConfigurationBuiltTwoWays`.
 		case configurationBuiltTwoWays([ConfigurationBuiltTwoWays])
+		/// Reported at each dependency of one declaration whose label `String` equates with an earlier dependency's.
+		/// See `RepeatedDependencyLabel`.
+		case repeatedDependencyLabels([RepeatedDependencyLabel])
 		/// Errors that validations independent of one another found – those of different roots, for example – each
 		/// reported as it would be alone, in source order. See `reportingAll(of:)`.
 		case independentErrors([DependencyTreeGeneratorError])
@@ -981,6 +984,10 @@ public actor DependencyTreeGenerator {
 					.map(Self.sourceDiagnostics(of:))
 					.sorted { SourceDiagnostic.precedesInSourceOrder($0[0], $1[0]) }
 					.flatMap(\.self)
+			case let .repeatedDependencyLabels(repeatedDependencyLabels):
+				repeatedDependencyLabels
+					.map(\.sourceDiagnostic)
+					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 			case let .configurationBuiltTwoWays(configurationsBuiltTwoWays):
 				// Sorted by location so the order never depends on map iteration.
 				configurationsBuiltTwoWays
@@ -1230,6 +1237,39 @@ public actor DependencyTreeGenerator {
 						location: $0.declarationLocation,
 						message: "@\(Dependency.Source.forwardedRawValue) property `\($0.property.asSource)` is declared here",
 					)
+				}
+			}
+		}
+
+		/// A dependency of a declaration whose label `String` equates with an earlier dependency's label, which generation,
+		/// keying a declaration's dependencies by label, cannot tell apart. The `@Instantiable` macro rejects the ways one
+		/// clause can do this that the compiler accepts, but every build runs SafeDITool before the compiler expands the
+		/// macro, so SafeDITool reports them too, plainly. A dependency declared once in each clause of an `#if` that only
+		/// the compiler decides is another way, which the macro and the compiler accept.
+		struct RepeatedDependencyLabel {
+			/// The type that declares both dependencies.
+			let declaringType: TypeDescription
+			let earlierDependency: Dependency
+			let laterDependency: Dependency
+
+			/// An `error:` line at the later dependency.
+			var sourceDiagnostic: SourceDiagnostic {
+				SourceDiagnostic(
+					severity: .error,
+					location: laterDependency.declarationLocation,
+					message: message,
+				)
+			}
+
+			private var message: String {
+				let earlierName = earlierDependency.property.label.spelledWithoutBackticks
+				let laterName = laterDependency.property.label.spelledWithoutBackticks
+				return if laterName == "_" {
+					"`\(declaringType.asSource)` has more than one dependency named `_`. SafeDI names an `instantiate(…)` dependency by its parameter’s name, and the @\(InstantiableVisitor.macroName) macro rejects a dependency parameter named `_`. Name the parameter."
+				} else if !earlierName.utf8.elementsEqual(laterName.utf8) {
+					"`\(declaringType.asSource)` has dependencies `\(earlierName)` (\(earlierName.codePoints)) and `\(laterName)` (\(laterName.codePoints)), which look the same but are encoded differently, so SafeDI cannot tell them apart. The @\(InstantiableVisitor.macroName) macro rejects such names. Rename one of them."
+				} else {
+					"`\(declaringType.asSource)` declares the dependency `\(laterName)` more than once. SafeDI reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`, so a dependency declared in each clause counts twice. Declare it once, outside the `#if`."
 				}
 			}
 		}
@@ -1563,6 +1603,8 @@ public actor DependencyTreeGenerator {
 	private var rootScopeGenerators: [RootScopeInfo] {
 		get throws {
 			let rootScopeGenerators: [RootScopeInfo] = try {
+				// The roots' trees build exactly the reachable types.
+				try Self.validateDependencyLabelsAreDistinct(in: reachableTypeDescriptions.compactMap { typeDescriptionToFulfillingInstantiableMap[$0] })
 				try validateReachableTypeDescriptions()
 
 				let typeDescriptionToScopeMap = try createTypeDescriptionToScopeMapping()
@@ -1813,6 +1855,19 @@ public actor DependencyTreeGenerator {
 			walkingFrom: scope,
 			scopesBuiltForRequiredProperties: scopesBuiltForRequiredProperties,
 		)
+
+		// The mock's tree builds the type of each scope the mock root's scope reaches.
+		var instantiablesInMockTree = [Instantiable]()
+		var visitedScopesInMockTree = Set<ObjectIdentifier>()
+		var scopesInMockTreeToVisit = [mockRootScope]
+		while let scopeToVisit = scopesInMockTreeToVisit.popLast() {
+			guard visitedScopesInMockTree.insert(ObjectIdentifier(scopeToVisit)).inserted else { continue }
+			instantiablesInMockTree.append(scopeToVisit.instantiable)
+			for case let .instantiated(_, childScope, _) in scopeToVisit.propertiesToGenerate {
+				scopesInMockTreeToVisit.append(childScope)
+			}
+		}
+		try Self.validateDependencyLabelsAreDistinct(in: instantiablesInMockTree)
 
 		// Validate the promoted mock scope for cycles before generating code.
 		// This catches cycles that only become visible after @Received dependencies
@@ -4985,6 +5040,32 @@ public actor DependencyTreeGenerator {
 	/// code can build, reporting every missing type, in source order. A `mockOnly` declaration exists solely
 	/// for mock generation, so it does not count. Were it counted, a type it fulfills that shares a concrete
 	/// type with a production declaration would be built from whichever declaration a set iteration reached first.
+	/// Rejects each of `instantiables` that has two dependencies whose labels `String` equates, which generation, keying
+	/// a declaration's dependencies by label, cannot tell apart. See `RepeatedDependencyLabel`. Each is reported, in
+	/// source order. Callers pass the declarations a production root's or a mock root's tree builds, whose code is
+	/// generated: one no tree reaches traps nowhere, and a shape that works must not become an error.
+	private static func validateDependencyLabelsAreDistinct(in instantiables: some Sequence<Instantiable>) throws {
+		let errors = instantiables.compactMap { instantiable -> DependencyTreeGeneratorError? in
+			var firstDependencyByLabel = [String: Dependency]()
+			var repeatedDependencyLabels = [DependencyTreeGeneratorError.RepeatedDependencyLabel]()
+			for dependency in instantiable.dependencies {
+				if let earlierDependency = firstDependencyByLabel[dependency.property.label] {
+					repeatedDependencyLabels.append(DependencyTreeGeneratorError.RepeatedDependencyLabel(
+						declaringType: instantiable.concreteInstantiable,
+						earlierDependency: earlierDependency,
+						laterDependency: dependency,
+					))
+				} else {
+					firstDependencyByLabel[dependency.property.label] = dependency
+				}
+			}
+			return repeatedDependencyLabels.isEmpty ? nil : .repeatedDependencyLabels(repeatedDependencyLabels)
+		}
+		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
+			throw error
+		}
+	}
+
 	private func validateReachableTypeDescriptions() throws {
 		let unbuildableTypeDescriptions = reachableTypeDescriptions
 			.filter { typeDescriptionToFulfillingInstantiableMap[$0]?.mockOnly != false }

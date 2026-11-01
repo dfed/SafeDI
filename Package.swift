@@ -166,9 +166,15 @@ let package = Package(
 		// this target compiles the plugin helpers via symlink:
 		// `Tests/SafeDIGeneratorPluginTests/PluginScannerStringUtilities.swift`
 		// → `Plugins/PluginScannerStringUtilities.swift`. The plugin target
-		// has the same symlink, so both targets share the source.
+		// has the same symlink, so both targets share the source. The
+		// target also checks rules SafeDI's own sources follow, which it
+		// parses with SwiftSyntax.
 		.testTarget(
 			name: "SafeDIGeneratorPluginTests",
+			dependencies: [
+				.product(name: "SwiftParser", package: "swift-syntax"),
+				.product(name: "SwiftSyntax", package: "swift-syntax"),
+			],
 			path: "Tests/SafeDIGeneratorPluginTests",
 			swiftSettings: [
 				.swiftLanguageMode(.v6),

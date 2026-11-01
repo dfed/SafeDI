@@ -47,6 +47,7 @@ import PackagePlugin
 		/// Hardcoded source repo (forks must update this to point at their
 		/// own releases for the downloader to work for their users).
 		var safeDIOrigin: URL {
+			// safedi-source-rule: allow forceUnwrap — the literal is a valid URL.
 			URL(string: "https://github.com/dfed/SafeDI")!
 		}
 

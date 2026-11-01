@@ -73,6 +73,7 @@ public struct AliasDeclarationReferences: Sendable {
 			return
 		}
 		let candidateFilePathByDeclarationFilePath = Dictionary(
+			// safedi-source-rule: allow uniqueKeysWithValues — the keys are the elements of a set, `declarationFilePaths`.
 			uniqueKeysWithValues: declarationFilePaths.map { ($0, compilerFilePaths.filePath($0)) },
 		)
 		let declarationFileNames = Set(candidateFilePathByDeclarationFilePath.values.map(\.fileName))

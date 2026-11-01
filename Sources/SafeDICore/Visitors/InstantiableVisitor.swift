@@ -92,10 +92,12 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 		// An alias's fulfilling property is named in generated code, where it is assigned to the alias.
 		if let fulfilledByDependencyNamed = dependencyAttribute.fulfilledByDependencyNamed,
-		   let fulfillingPropertyName = dependencyAttribute.fulfillingPropertyName,
-		   let reservation = ReservedName(reserving: fulfillingPropertyName)
+		   let fulfillingPropertyName = dependencyAttribute.fulfillingPropertyName
 		{
-			diagnose(fulfillingPropertyName, reservedAs: reservation, at: fulfilledByDependencyNamed)
+			if let reservation = ReservedName(reserving: fulfillingPropertyName) {
+				diagnose(fulfillingPropertyName, reservedAs: reservation, at: fulfilledByDependencyNamed)
+			}
+			diagnoseNameEncodedDifferently(fulfillingPropertyName, at: fulfilledByDependencyNamed)
 		}
 
 		// A fix-it rewrites the whole attribute, so its range is recorded only when there are no arguments to discard.
@@ -132,6 +134,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				if let reservation = ReservedName(reserving: identifier.text) {
 					diagnose(identifier.text, reservedAs: reservation, at: identifier)
 				}
+				diagnoseNameEncodedDifferently(identifier.text.spelledAsIdentifier, at: identifier)
 				dependencies.append(
 					Dependency(
 						property: Property(
@@ -158,6 +161,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		let initializer = Initializer(node, sourceLocationConverter: sourceLocationConverter)
 		initializerToInitSyntaxMap[initializer] = node
 		initializers.append(initializer)
+		diagnoseNamesEncodedDifferently(amongParametersOf: node.signature.parameterClause.parameters)
 		return .skipChildren
 	}
 
@@ -232,6 +236,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		let mockMethodName = customMockName ?? Self.mockMethodName
 		let isStaticOrClass = node.modifiers.contains(where: { $0.name.tokenKind == .keyword(.static) || $0.name.tokenKind == .keyword(.class) })
 		if node.name.text == mockMethodName, isStaticOrClass {
+			diagnoseNamesEncodedDifferently(amongParametersOf: node.signature.parameterClause.parameters)
 			if mockFunctionSyntax != nil {
 				// Already found one mock() method — this is a duplicate.
 				duplicateMockFunctionSyntaxes.append(node)
@@ -293,11 +298,15 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			let dependencyParameters = zip(initializer.arguments, node.signature.parameterClause.parameters).filter { argument, _ in
 				!argument.hasDefaultValue
 			}
-			for name in dependencyParameters.lazy.map({ $0.1.secondName ?? $0.1.firstName }) {
-				if let reservation = ReservedName(reserving: name.text) {
+			for (_, parameter) in dependencyParameters {
+				let name = parameter.secondName ?? parameter.firstName
+				if name.tokenKind == .wildcard {
+					diagnoseUnnamedDependency(parameter, among: node.signature.parameterClause.parameters)
+				} else if let reservation = ReservedName(reserving: name.text) {
 					diagnose(name.text, reservedAs: reservation, at: name)
 				}
 			}
+			diagnoseNamesEncodedDifferently(amongParametersOf: node.signature.parameterClause.parameters)
 			let dependencies = dependencyParameters.map { argument, parameter in
 				Dependency(
 					property: argument.asProperty,
@@ -413,6 +422,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	public private(set) var isRoot = false
 	public private(set) var dependencies = [Dependency]()
+	/// Whether two names SafeDI matches by name look the same but are encoded differently, which `diagnostics` reports.
+	public private(set) var hasNamesEncodedDifferently = false
 	public private(set) var initializers = [Initializer]()
 	public private(set) var initializerToInitSyntaxMap: [Initializer: InitializerDeclSyntax] = [:]
 	public private(set) var instantiableType: TypeDescription?
@@ -462,6 +473,11 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public static let macroName = "Instantiable"
 	public static let instantiateMethodName = "instantiate"
 	public static let mockMethodName = "mock"
+	/// The spellings of the names SafeDI matches by name that the declaration has spelled so far, each once.
+	private var spellingsOfMatchedNames = [String]()
+	/// Names the overrides of a generated mock cannot declare as they spell them: `Type` and `Protocol` are no member
+	/// names unescaped, and an initializer parameter named `self` hides the instance it assigns to.
+	private static let namesGeneratedMocksCannotDeclare: Set = ["self", "Type", "Protocol"]
 
 	public func walk(_ node: some ConcreteDeclSyntaxProtocol) {
 		super.walk(node)
@@ -596,6 +612,79 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// The access the decorated type declaration or extension spells, recorded when it is visited, before any
 	/// instantiable or mock method is found in it.
 	private var instantiableAccess = AccessDeclaration(level: .internal)
+
+	/// Diagnoses each of `parameters` whose name is encoded differently from a name SafeDI matches it by, as
+	/// `diagnoseNameEncodedDifferently(_:at:)` does. A parameter named `_` names nothing.
+	private func diagnoseNamesEncodedDifferently(amongParametersOf parameters: FunctionParameterListSyntax) {
+		for parameter in parameters {
+			let name = parameter.secondName ?? parameter.firstName
+			if name.tokenKind != .wildcard {
+				diagnoseNameEncodedDifferently(name.spelledAsParameterName, at: name)
+			}
+		}
+	}
+
+	/// Diagnoses `spelledName`, a name SafeDI matches by name – a dependency's, an alias's fulfilling property's, or
+	/// a parameter's of an initializer, `instantiate(…)`, or a hand-written mock – at `node`, when it is equal as a
+	/// `String` to a name the declaration spells before it but differs from it in UTF-8 bytes. Swift compares names
+	/// byte for byte, so the declaration compiles, while SafeDI, which matches names as `String`s, would take the two
+	/// for one. Each spelling is reported once, where it first appears. No fix-it is offered: neither spelling is
+	/// evidently the one to keep.
+	private func diagnoseNameEncodedDifferently(_ spelledName: String, at node: some SyntaxProtocol) {
+		guard !spellingsOfMatchedNames.contains(where: { $0.utf8.elementsEqual(spelledName.utf8) }) else {
+			return
+		}
+		if let earlierName = spellingsOfMatchedNames.first(where: { $0 == spelledName }) {
+			hasNamesEncodedDifferently = true
+			diagnostics.append(Diagnostic(
+				node: node,
+				message: FixableInstantiableError.namesEncodedDifferently(earlierName: earlierName, laterName: spelledName).diagnostic,
+			))
+		}
+		spellingsOfMatchedNames.append(spelledName)
+	}
+
+	/// Diagnoses `parameter`, a dependency parameter of `instantiate(…)` named `_`, among `parameters`, the method's
+	/// parameters. The fix-it names the parameter after its argument label, the name a call already spells, unless
+	/// that name is `_`, is reserved, is one a generated mock's overrides cannot declare (`self`, `Type`, or `Protocol`),
+	/// or is another parameter's name or the name the fix-it gives another dependency parameter named `_`,
+	/// which two parameters cannot share.
+	private func diagnoseUnnamedDependency(_ parameter: FunctionParameterSyntax, among parameters: FunctionParameterListSyntax) {
+		let name = parameter.secondName ?? parameter.firstName
+		let otherNames = Set(parameters.lazy.filter { $0.id != parameter.id }.map { otherParameter in
+			let otherName = otherParameter.secondName ?? otherParameter.firstName
+			return otherName.tokenKind == .wildcard && otherParameter.defaultValue == nil
+				? otherParameter.firstName.spelledAsParameterName
+				: otherName.spelledAsParameterName
+		})
+		if let secondName = parameter.secondName,
+		   parameter.firstName.tokenKind != .wildcard,
+		   case let newName = parameter.firstName.spelledAsParameterName,
+		   ReservedName(reserving: newName) == nil,
+		   !Self.namesGeneratedMocksCannotDeclare.contains(parameter.firstName.text.spelledWithoutBackticks),
+		   !otherNames.contains(newName)
+		{
+			// `first _: First` becomes `first: First`.
+			var fixedParameter = parameter
+			fixedParameter.firstName = parameter.firstName.with(\.trailingTrivia, secondName.trailingTrivia)
+			fixedParameter.secondName = nil
+			diagnostics.append(Diagnostic(
+				node: name,
+				error: FixableInstantiableError.unnamedInstantiateDependency(argumentLabel: parameter.firstName.text.spelledWithoutBackticks),
+				changes: [
+					.replace(
+						oldNode: Syntax(parameter),
+						newNode: Syntax(fixedParameter),
+					),
+				],
+			))
+		} else {
+			diagnostics.append(Diagnostic(
+				node: name,
+				message: FixableInstantiableError.unnamedInstantiateDependency(argumentLabel: name.text).diagnostic,
+			))
+		}
+	}
 
 	/// Reports that `name`, which generated code binds or refers to, collides with `reservation`.
 	/// No fix-it is offered: SafeDI matches dependencies by label, so a new name could fulfill, or be fulfilled

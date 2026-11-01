@@ -27,12 +27,17 @@ extension String {
 	/// or `self`, or a raw identifier such as `my leaf`. SafeDI reads every name a declaration gives into this
 	/// spelling, so `` `thing` `` and `thing` name one property, and `default` and `` `default` `` another.
 	var spelledAsIdentifier: String {
-		let name = String(filter { $0 != "`" })
+		let name = spelledWithoutBackticks
 		return if name.isValidSwiftIdentifier(for: .variableName) {
 			name
 		} else {
 			"`\(name)`"
 		}
+	}
+
+	/// This name without the backticks it was written with, as prose names it: `` `inout` `` is `inout`.
+	var spelledWithoutBackticks: String {
+		String(filter { $0 != "`" })
 	}
 
 	/// The identifier that this text, which joins names in `spelledAsIdentifier` spelling with text such as
