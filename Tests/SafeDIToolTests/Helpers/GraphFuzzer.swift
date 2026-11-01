@@ -2213,7 +2213,8 @@ enum GraphFuzzerToolOutcome: Equatable {
 }
 
 /// A graph the oracle does not accept: the tool succeeded and the output does not compile, the fixture itself
-/// does not compile (a defect in the fuzzer), or two runs of the tool differ.
+/// does not compile (a defect in the fuzzer), two runs of the tool differ, a renamed graph gives other results, or
+/// the graph split across modules gives other results under one multi-module integration than under the other.
 struct GraphFuzzerFailure: Equatable {
 	enum Kind: String, Equatable {
 		case generatedCodeDoesNotCompile = "generated code does not compile"
@@ -2223,6 +2224,7 @@ struct GraphFuzzerFailure: Equatable {
 		case compilerCrashedOnGeneratedCode = "the Swift compiler crashed on generated code"
 		case renamedGraphDiffers = "the graph renamed to change an order gives other results"
 		case mockTakesWrapperParameterForReceive = "a generated mock takes a LazilyInstantiated parameter for a receive"
+		case integrationsDiffer = "the graph split across modules gives other results under the two multi-module integrations"
 	}
 
 	let seed: UInt64
@@ -2246,21 +2248,38 @@ struct GraphFuzzerFailure: Equatable {
 
 /// The oracle's verdict on one graph.
 struct GraphFuzzerResult {
-	init(fixture: GraphFuzzerFixture, outcome: GraphFuzzerToolOutcome, failure: GraphFuzzerFailure?, renamedGraphFailures: [GraphFuzzerFailure] = []) {
+	init(
+		fixture: GraphFuzzerFixture,
+		outcome: GraphFuzzerToolOutcome,
+		failure: GraphFuzzerFailure?,
+		renamedGraphFailures: [GraphFuzzerFailure] = [],
+		multiModuleRuns: [GraphFuzzerMultiModuleRuns] = [],
+	) {
 		self.fixture = fixture
 		self.outcome = outcome
 		self.failure = failure
 		self.renamedGraphFailures = renamedGraphFailures
+		self.multiModuleRuns = multiModuleRuns
 	}
 
 	let fixture: GraphFuzzerFixture
 	let outcome: GraphFuzzerToolOutcome
 	/// The first way the graph fails the oracle: its runs differ, it does not compile, a generated mock takes a
-	/// `LazilyInstantiated` parameter for a receive, or, failing none of those ways, a renamed graph gives other results.
+	/// `LazilyInstantiated` parameter for a receive, the graph split across modules gives other results under one
+	/// multi-module integration than under the other, or, failing none of those ways, a renamed graph gives other results.
 	let failure: GraphFuzzerFailure?
 	/// How each renamed graph that gives other results differs, in the order of `GraphFuzzerRenaming.all`, whether
 	/// or not the graph also fails another way.
 	let renamedGraphFailures: [GraphFuzzerFailure]
+	/// What the two multi-module integrations produced for the graph split across modules, in the order of
+	/// `GraphFuzzerOracle.multiModuleRenamings`.
+	let multiModuleRuns: [GraphFuzzerMultiModuleRuns]
+
+	/// How each partitioned run that gives other results under the two multi-module integrations differs, whether or
+	/// not the graph also fails another way.
+	var multiModuleFailures: [GraphFuzzerFailure] {
+		multiModuleRuns.compactMap(\.failure)
+	}
 
 	var isAccepted: Bool {
 		switch outcome {
@@ -2286,6 +2305,9 @@ struct GraphFuzzerKnownIssue: Equatable {
 		/// The fixture itself fails to compile, with an error whose message contains this text: the macro rejects
 		/// a shape the generator emits before the macro accepts it.
 		case macroRejectsFixture(containing: String)
+		/// The graph split across modules gives other results under the two multi-module integrations, in the
+		/// aspect whose description contains this text.
+		case integrationsDiffer(containing: String)
 	}
 
 	let reason: String
@@ -2305,6 +2327,8 @@ struct GraphFuzzerKnownIssue: Equatable {
 				failure.kind == .renamedGraphDiffers && failure.details.prefix { $0 != "\n" }.contains(text)
 			case let .macroRejectsFixture(text):
 				failure.kind == .fixtureDoesNotCompile && failure.details.contains(text)
+			case let .integrationsDiffer(text):
+				failure.kind == .integrationsDiffer && failure.details.prefix { $0 != "\n" }.contains(text)
 			}
 		}
 	}
@@ -2410,23 +2434,33 @@ struct GraphFuzzerHash {
 
 /// A graph with what two runs of the tool produced for it.
 struct GraphFuzzerToolRuns {
-	/// - Parameter renamedOutcomes: The outcome of the graph renamed by each renaming, with the renaming undone.
+	/// - Parameters:
+	///   - renamedOutcomes: The outcome of the graph renamed by each renaming, with the renaming undone.
+	///   - multiModuleRuns: What the two multi-module integrations produced for the graph split across modules.
 	init(
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,
 		secondOutcome: GraphFuzzerToolOutcome,
 		renamedOutcomes: [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)] = [],
+		multiModuleRuns: [GraphFuzzerMultiModuleRuns] = [],
 	) {
 		self.fixture = fixture
 		self.firstOutcome = firstOutcome
 		self.secondOutcome = secondOutcome
 		self.renamedOutcomes = renamedOutcomes
+		self.multiModuleRuns = multiModuleRuns
 	}
 
 	let fixture: GraphFuzzerFixture
 	let firstOutcome: GraphFuzzerToolOutcome
 	let secondOutcome: GraphFuzzerToolOutcome
 	let renamedOutcomes: [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)]
+	let multiModuleRuns: [GraphFuzzerMultiModuleRuns]
+
+	/// The failure of each partitioned run whose two integrations give other results, in the order the runs were made.
+	var multiModuleFailures: [GraphFuzzerFailure] {
+		multiModuleRuns.compactMap(\.failure)
+	}
 
 	/// The failure of each renamed graph that, with its renaming undone, gives another verdict, other
 	/// diagnostics or warnings in any order (the tool sorts them by file, and the files are renamed), each
@@ -2510,9 +2544,10 @@ struct GraphFuzzerToolRuns {
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 enum GraphFuzzerOracle {
-	/// Runs each seed's graph through SafeDITool twice, then compiles every graph's fixture, with the generated
-	/// code of each graph the tool accepted, in as few `swiftc` invocations as attribution allows. Compilation is
-	/// skipped when `compileVerificationIsEnabled` is `false`.
+	/// Runs each seed's graph through SafeDITool twice, renamed by each renaming, and split across modules through
+	/// both multi-module integrations (`GraphFuzzerMultiModuleProperty`), then compiles every graph's fixture, with
+	/// the generated code of each graph the tool accepted, in as few `swiftc` invocations as attribution allows.
+	/// Compilation is skipped when `compileVerificationIsEnabled` is `false`.
 	///
 	/// - Parameter willRunSeed: Called before the tool first runs a seed's graph, so that a long run can record
 	///   which seed was running if the tool crashes the process.
@@ -2538,25 +2573,41 @@ enum GraphFuzzerOracle {
 			return GraphFuzzerResult(
 				fixture: runs.fixture,
 				outcome: runs.firstOutcome,
-				failure: runs.runsDifferFailure ?? compilationFailures[runs.fixture.seed] ?? runs.wrapperParameterFailure ?? renamedGraphFailures.first,
+				failure: runs.runsDifferFailure ?? compilationFailures[runs.fixture.seed] ?? runs.wrapperParameterFailure ?? runs.multiModuleFailures.first ?? renamedGraphFailures.first,
 				renamedGraphFailures: renamedGraphFailures,
+				multiModuleRuns: runs.multiModuleRuns,
 			)
 		}
 	}
 
-	/// Runs the tool twice over `fixture`, and once over it renamed by each of `renamings`.
-	static func toolRuns(of fixture: GraphFuzzerFixture, renamings: [GraphFuzzerRenaming] = GraphFuzzerRenaming.all) async throws -> GraphFuzzerToolRuns {
+	/// The renamings the graph is split across modules under, besides the graph as generated (`nil`). See
+	/// `GraphFuzzerPartition`.
+	static let multiModuleRenamings: [GraphFuzzerRenaming?] = [nil]
+
+	/// Runs the tool twice over `fixture`, once over it renamed by each of `renamings`, and, split across modules by
+	/// `GraphFuzzerPartition` and renamed by each of `multiModuleRenamings`, once through each multi-module integration.
+	static func toolRuns(
+		of fixture: GraphFuzzerFixture,
+		renamings: [GraphFuzzerRenaming] = GraphFuzzerRenaming.all,
+		multiModuleRenamings: [GraphFuzzerRenaming?] = multiModuleRenamings,
+	) async throws -> GraphFuzzerToolRuns {
 		var renamedOutcomes = [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)]()
 		for renaming in renamings {
 			let renamedFixture = fixture.renamed(by: renaming)
 			let outcome = try await toolOutcome(of: renamedFixture, fileNames: renaming.fileNames(of: renamedFixture))
 			renamedOutcomes.append((renaming, renaming.restore(outcome, typeNamePrefix: fixture.typeNamePrefix)))
 		}
+		let partition = GraphFuzzerPartition.partition(of: fixture)
+		var multiModuleRuns = [GraphFuzzerMultiModuleRuns]()
+		for renaming in multiModuleRenamings {
+			await multiModuleRuns.append(try GraphFuzzerMultiModuleProperty.runs(of: fixture, partition: partition, renaming: renaming))
+		}
 		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
 			firstOutcome: toolOutcome(of: fixture),
 			secondOutcome: toolOutcome(of: fixture),
 			renamedOutcomes: renamedOutcomes,
+			multiModuleRuns: multiModuleRuns,
 		)
 	}
 
