@@ -2,7 +2,7 @@
 
 ## Documentation
 
-The core documentation is `Documentation/Manual.md`. Read it before making changes to understand SafeDI's API, macros, configuration options, and mock generation. The manual is the source of truth for user-facing behavior — if you change behavior, update the manual.
+The core documentation is `Documentation/Manual.md`. Read it before making changes to understand SafeDI's API, macros, configuration options, and mock generation; `Documentation/Mocks.md` continues its Mock generation section with the detail behind each mock rule. The manual and `Documentation/Mocks.md` are the source of truth for user-facing behavior — if you change behavior, update the manual, and Mocks.md for the detail of a mock rule.
 
 ## Build & Test
 
