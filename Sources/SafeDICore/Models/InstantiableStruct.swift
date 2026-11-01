@@ -28,6 +28,9 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		additionalInstantiables: [TypeDescription]?,
 		dependencies: [Dependency],
 		declarationType: DeclarationType,
+		access: AccessDeclaration,
+		enclosingTypeAccess: [AccessDeclaration] = [],
+		enclosingExtensionAccess: AccessDeclaration? = nil,
 		mockAttributes: String = "",
 		generateMock: Bool = false,
 		mockOnly: Bool = false,
@@ -35,6 +38,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		mockReturnType: TypeDescription? = nil,
 		customMockName: String? = nil,
 		mockDeclarationLocation: Dependency.DeclarationLocation? = nil,
+		mockDeclarationAccess: AccessDeclaration? = nil,
 		declarationLocation: Dependency.DeclarationLocation? = nil,
 	) {
 		instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
@@ -43,6 +47,9 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		self.initializer = initializer
 		self.dependencies = dependencies
 		self.declarationType = declarationType
+		self.access = access
+		self.enclosingTypeAccess = enclosingTypeAccess
+		self.enclosingExtensionAccess = enclosingExtensionAccess
 		self.mockAttributes = mockAttributes
 		self.generateMock = generateMock
 		self.mockOnly = mockOnly
@@ -50,6 +57,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		self.mockReturnType = mockReturnType
 		self.customMockName = customMockName
 		self.mockDeclarationLocation = mockDeclarationLocation
+		self.mockDeclarationAccess = mockDeclarationAccess
 	}
 
 	// MARK: Public
@@ -70,6 +78,27 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public private(set) var dependencies: [Dependency]
 	/// The declaration type of the Instantiable’s concrete type.
 	public let declarationType: DeclarationType
+	/// The access spelled on the declaration this Instantiable was found on: the type declaration, or, for an
+	/// extension-based Instantiable, the extension, whose members default to it (`fileprivate` for a `private`
+	/// extension). Its level is `internal` when the declaration spells none. An extension's `instantiate()` records the
+	/// access spelled on the method itself in `initializer`, so the method's effective access is derived later from
+	/// both. A hand-written mock method may be declared in another declaration that is merged into this one, so the
+	/// access of the declaration that declares it is `mockDeclarationAccess`, and the access spelled on the method
+	/// itself is on `mockInitializer`.
+	public let access: AccessDeclaration
+	/// The access spelled on each class, actor, struct, and enum declaration in the file that encloses the declaration
+	/// this Instantiable was found on, outermost first. Each caps the declaration's effective access. Empty when no
+	/// type declaration encloses it, which is always the case for an extension-based Instantiable, whose own `access`
+	/// is the extension's.
+	public let enclosingTypeAccess: [AccessDeclaration]
+	/// The access spelled on the extension that encloses the declaration this Instantiable was found on, if one does.
+	/// An extension is declared at file scope, so it can only be outermost. Unlike an enclosing type, it caps nothing:
+	/// it is only the default access of the one declaration directly inside it – the first entry of
+	/// `enclosingTypeAccess`, or this declaration when that list is empty – when that declaration spells no access
+	/// modifier (its `modifierRange` is `nil`), with `fileprivate` as a `private` extension's default. The extended
+	/// type's own access is declared elsewhere and unknown to the tool. `nil` for an extension-based Instantiable, whose
+	/// own `access` is the extension's.
+	public let enclosingExtensionAccess: AccessDeclaration?
 	/// Attributes to add to the generated `mock()` method (e.g. `"@MainActor"`).
 	public let mockAttributes: String
 	/// Whether to generate a `mock()` method for this type.
@@ -90,6 +119,11 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// `mockInitializer` when a `mockOnly` declaration's mock is merged into a production entry, so diagnostics
 	/// about the hand-written mock point at the method rather than at the production declaration.
 	public var mockDeclarationLocation: Dependency.DeclarationLocation?
+	/// The access spelled on the declaration that declares the user-defined mock method: the declaration this
+	/// Instantiable was found on (the type, or the `@Instantiable` extension), or a `mockOnly` extension merged into it,
+	/// whose members default to it (`fileprivate` for a `private` extension). Travels with `mockInitializer` when a
+	/// `mockOnly` declaration's mock is merged into a production entry. `nil` when there is no user-defined mock.
+	public var mockDeclarationAccess: AccessDeclaration?
 
 	/// Returns a copy of this Instantiable with mock-related fields replaced by those from `mockProvider`.
 	/// Used when merging a production `@Instantiable` with a `mockOnly` declaration for the same type.
@@ -99,6 +133,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		merged.mockReturnType = mockProvider.mockReturnType
 		merged.customMockName = mockProvider.customMockName
 		merged.mockDeclarationLocation = mockProvider.mockDeclarationLocation
+		merged.mockDeclarationAccess = mockProvider.mockDeclarationAccess
 		return merged
 	}
 
@@ -109,6 +144,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		instantiable.mockReturnType = nil
 		instantiable.customMockName = nil
 		instantiable.mockDeclarationLocation = nil
+		instantiable.mockDeclarationAccess = nil
 		return instantiable
 	}
 

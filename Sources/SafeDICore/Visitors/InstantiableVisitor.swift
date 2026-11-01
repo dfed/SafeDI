@@ -27,16 +27,23 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// - Parameters:
 	///   - declarationType: The kind of declaration this visitor walks.
 	///   - parentType: The type enclosing the walked declaration, if any.
+	///   - enclosingTypeAccess: The access of each type declaration enclosing the walked declaration in its file,
+	///     outermost first.
+	///   - enclosingExtensionAccess: The access of the extension enclosing the walked declaration, if one does.
 	///   - conditionalCompilation: How `#if` blocks among the declaration's members are scanned. The macro scans every clause because the compiler has already selected the active one; SafeDITool evaluates them.
 	///   - sourceLocationConverter: A converter for the tree being walked. When provided, the declaration and each dependency record where they begin.
 	public init(
 		declarationType: DeclarationType,
 		parentType: TypeDescription? = nil,
+		enclosingTypeAccess: [AccessDeclaration] = [],
+		enclosingExtensionAccess: AccessDeclaration? = nil,
 		conditionalCompilation: ConditionalCompilationHandling = .scanAllClauses,
 		sourceLocationConverter: SourceLocationConverter? = nil,
 	) {
 		self.declarationType = declarationType
 		self.parentType = parentType
+		self.enclosingTypeAccess = enclosingTypeAccess
+		self.enclosingExtensionAccess = enclosingExtensionAccess
 		self.conditionalCompilation = conditionalCompilation
 		self.sourceLocationConverter = sourceLocationConverter
 		super.init(viewMode: .sourceAccurate)
@@ -148,7 +155,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		guard declarationType.isTypeDefinition else {
 			return .skipChildren
 		}
-		let initializer = Initializer(node)
+		let initializer = Initializer(node, sourceLocationConverter: sourceLocationConverter)
 		initializerToInitSyntaxMap[initializer] = node
 		initializers.append(initializer)
 		return .skipChildren
@@ -210,6 +217,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
 		instantiableType = node.extendedType.typeDescription
 		instantiableDeclarationLocation = declarationLocation(of: node)
+		instantiableAccess = node.modifiers.access(introducedBy: node.extensionKeyword, sourceLocationConverter: sourceLocationConverter)
 		if let instantiableMacro = node.attributes.instantiableMacro {
 			instantiableConstruction = .instantiateMethod
 			processAttributes(node.attributes, on: instantiableMacro)
@@ -228,9 +236,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				// Already found one mock() method — this is a duplicate.
 				duplicateMockFunctionSyntaxes.append(node)
 			} else {
-				mockInitializer = Initializer(node)
+				mockInitializer = Initializer(node, sourceLocationConverter: sourceLocationConverter)
 				mockReturnType = node.signature.returnClause?.type.typeDescription
 				mockDeclarationLocation = declarationLocation(of: node)
+				mockDeclarationAccess = instantiableAccess
 				mockFunctionSyntax = node
 			}
 		}
@@ -276,7 +285,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			))
 		}
 
-		let initializer = Initializer(node)
+		let initializer = Initializer(node, sourceLocationConverter: sourceLocationConverter)
 		if let instantiableType = node.signature.returnClause?.type.typeDescription {
 			// Each parameter without a default value is a dependency named by its inner name. Its argument label
 			// binds nothing. A parameter with a default value is not a dependency, as for an initializer: the
@@ -306,6 +315,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				additionalInstantiables: additionalInstantiables,
 				dependencies: dependencies,
 				declarationType: .extensionType,
+				access: instantiableAccess,
+				enclosingTypeAccess: enclosingTypeAccess,
+				enclosingExtensionAccess: enclosingExtensionAccess,
 				mockAttributes: mockAttributes,
 				generateMock: generateMock,
 				mockOnly: mockOnly,
@@ -313,12 +325,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				mockReturnType: mockReturnType,
 				customMockName: customMockName,
 				mockDeclarationLocation: mockDeclarationLocation,
+				mockDeclarationAccess: mockDeclarationAccess,
 				declarationLocation: instantiableDeclarationLocation,
 			))
 			instantiateFunctions.append(InstantiateFunction(syntax: node, initializer: initializer, dependencies: dependencies))
 		}
 
-		if !initializer.isPublicOrOpen || node.modifiers.staticModifier == nil {
+		if !initializer.access.level.isPublicOrOpen || node.modifiers.staticModifier == nil {
 			var modifiedNode = node
 			modifiedNode.modifiers = DeclModifierListSyntax(
 				arrayLiteral:
@@ -413,6 +426,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var mockFunctionSyntax: FunctionDeclSyntax?
 	/// Where `mockFunctionSyntax` begins, recorded when the declaration is visited with a converter.
 	public private(set) var mockDeclarationLocation: Dependency.DeclarationLocation?
+	/// The access of the declaration that declares `mockFunctionSyntax`, recorded when the mock method is visited.
+	public private(set) var mockDeclarationAccess: AccessDeclaration?
 	public private(set) var duplicateMockFunctionSyntaxes = [FunctionDeclSyntax]()
 	/// The `instantiate(…)` methods of an extension that declare a return type, in source order.
 	public private(set) var instantiateFunctions = [InstantiateFunction]()
@@ -495,6 +510,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						additionalInstantiables: additionalInstantiables,
 						dependencies: dependencies,
 						declarationType: instantiableDeclarationType.asDeclarationType,
+						access: instantiableAccess,
+						enclosingTypeAccess: enclosingTypeAccess,
+						enclosingExtensionAccess: enclosingExtensionAccess,
 						mockAttributes: mockAttributes,
 						generateMock: generateMock,
 						mockOnly: mockOnly,
@@ -502,6 +520,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						mockReturnType: mockReturnType,
 						customMockName: customMockName,
 						mockDeclarationLocation: mockDeclarationLocation,
+						mockDeclarationAccess: mockDeclarationAccess,
 						declarationLocation: instantiableDeclarationLocation,
 					),
 				]
@@ -522,6 +541,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						additionalInstantiables: additionalInstantiables,
 						dependencies: [],
 						declarationType: .extensionType,
+						access: instantiableAccess,
+						enclosingTypeAccess: enclosingTypeAccess,
+						enclosingExtensionAccess: enclosingExtensionAccess,
 						mockAttributes: mockAttributes,
 						generateMock: generateMock,
 						mockOnly: mockOnly,
@@ -529,6 +551,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						mockReturnType: mockReturnType,
 						customMockName: customMockName,
 						mockDeclarationLocation: mockDeclarationLocation,
+						mockDeclarationAccess: mockDeclarationAccess,
 						declarationLocation: instantiableDeclarationLocation,
 					),
 				]
@@ -543,6 +566,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 					patched.mockInitializer = mockInitializer
 					patched.mockReturnType = mockReturnType
 					patched.mockDeclarationLocation = mockDeclarationLocation
+					patched.mockDeclarationAccess = mockDeclarationAccess
 					return patched
 				}
 			}
@@ -560,6 +584,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	private let declarationType: DeclarationType
 	private let parentType: TypeDescription?
+	private let enclosingTypeAccess: [AccessDeclaration]
+	private let enclosingExtensionAccess: AccessDeclaration?
 	private let conditionalCompilation: ConditionalCompilationHandling
 	private let sourceLocationConverter: SourceLocationConverter?
 	/// The `#if` clauses the evaluator selected for scanning.
@@ -567,6 +593,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 	/// The location of the decorated declaration, recorded when the declaration is visited with a converter.
 	private var instantiableDeclarationLocation: Dependency.DeclarationLocation?
+	/// The access the decorated type declaration or extension spells, recorded when it is visited, before any
+	/// instantiable or mock method is found in it.
+	private var instantiableAccess = AccessDeclaration(level: .internal)
 
 	/// Reports that `name`, which generated code binds or refers to, collides with `reservation`.
 	/// No fix-it is offered: SafeDI matches dependencies by label, so a new name could fulfill, or be fulfilled
@@ -588,14 +617,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// The range of `node`’s text, excluding its leading and trailing trivia, or `nil` without a converter.
 	private func sourceRange(of node: some SyntaxProtocol) -> Dependency.SourceRange? {
 		sourceLocationConverter.map { sourceLocationConverter in
-			let start = sourceLocationConverter.location(for: node.positionAfterSkippingLeadingTrivia)
-			let end = sourceLocationConverter.location(for: node.endPositionBeforeTrailingTrivia)
-			return Dependency.SourceRange(
-				startLine: start.line,
-				startColumn: start.column,
-				endLine: end.line,
-				endColumn: end.column,
-			)
+			sourceLocationConverter.sourceRange(of: node)
 		}
 	}
 
@@ -625,6 +647,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		instantiableType = nodeDeclarationType
 		processAttributes(node.attributes, on: macro)
 		processModifiers(node.modifiers, on: node)
+		instantiableAccess = node.modifiers.access(introducedBy: node.keyword, sourceLocationConverter: sourceLocationConverter)
 
 		return .visitChildren
 	}
@@ -710,5 +733,17 @@ extension SourceLocationConverter {
 	func declarationLocation(for position: AbsolutePosition) -> Dependency.DeclarationLocation {
 		let location = location(for: position)
 		return Dependency.DeclarationLocation(filePath: location.file, line: location.line, column: location.column)
+	}
+
+	/// The range of `node`’s text, excluding its leading and trailing trivia.
+	func sourceRange(of node: some SyntaxProtocol) -> Dependency.SourceRange {
+		let start = location(for: node.positionAfterSkippingLeadingTrivia)
+		let end = location(for: node.endPositionBeforeTrailingTrivia)
+		return Dependency.SourceRange(
+			startLine: start.line,
+			startColumn: start.column,
+			endLine: end.line,
+			endColumn: end.column,
+		)
 	}
 }

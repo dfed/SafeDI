@@ -24,8 +24,10 @@ import SwiftSyntaxBuilder
 public struct Initializer: Codable, Hashable, Sendable {
 	// MARK: Initialization
 
-	init(_ node: InitializerDeclSyntax) {
-		isPublicOrOpen = node.modifiers.containsPublicOrOpen
+	/// - Parameter sourceLocationConverter: A converter for the tree that holds `node`. When provided, the initializer
+	///   records where its access modifier is and where its declaration begins.
+	init(_ node: InitializerDeclSyntax, sourceLocationConverter: SourceLocationConverter? = nil) {
+		access = node.modifiers.access(introducedBy: node.initKeyword, sourceLocationConverter: sourceLocationConverter)
 		isOptional = node.optionalMark != nil
 		isAsync = node.signature.effectSpecifiers?.asyncSpecifier != nil
 		doesThrow = node.signature.effectSpecifiers?.throwsClause?.throwsSpecifier != nil
@@ -38,8 +40,10 @@ public struct Initializer: Codable, Hashable, Sendable {
 			.map(Argument.init)
 	}
 
-	public init(_ node: FunctionDeclSyntax) {
-		isPublicOrOpen = node.modifiers.containsPublicOrOpen
+	/// - Parameter sourceLocationConverter: A converter for the tree that holds `node`. When provided, the initializer
+	///   records where its access modifier is and where its declaration begins.
+	public init(_ node: FunctionDeclSyntax, sourceLocationConverter: SourceLocationConverter? = nil) {
+		access = node.modifiers.access(introducedBy: node.funcKeyword, sourceLocationConverter: sourceLocationConverter)
 		isOptional = false
 		isAsync = node.signature.effectSpecifiers?.asyncSpecifier != nil
 		doesThrow = node.signature.effectSpecifiers?.throwsClause?.throwsSpecifier != nil
@@ -53,7 +57,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 	}
 
 	public init(
-		isPublicOrOpen: Bool = true,
+		access: AccessDeclaration = AccessDeclaration(level: .public),
 		isOptional: Bool = false,
 		isAsync: Bool = false,
 		doesThrow: Bool = false,
@@ -61,7 +65,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 		hasGenericWhereClause: Bool = false,
 		arguments: [Initializer.Argument],
 	) {
-		self.isPublicOrOpen = isPublicOrOpen
+		self.access = access
 		self.isOptional = isOptional
 		self.isAsync = isAsync
 		self.doesThrow = doesThrow
@@ -72,7 +76,10 @@ public struct Initializer: Codable, Hashable, Sendable {
 
 	// MARK: Public
 
-	public let isPublicOrOpen: Bool
+	/// The access the initializer's own modifiers spell, which begins at its first modifier or its `init` or `func`
+	/// keyword. A method declared in an extension defaults to the extension's access (`fileprivate` for a `private`
+	/// extension), which the `Instantiable` records.
+	public let access: AccessDeclaration
 	public let isOptional: Bool
 	public let isAsync: Bool
 	public let doesThrow: Bool
@@ -122,7 +129,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 
 	public func mapArguments(_ transform: (Argument) -> Argument) -> Self? {
 		.init(
-			isPublicOrOpen: isPublicOrOpen,
+			access: access,
 			isOptional: isOptional,
 			isAsync: isAsync,
 			doesThrow: doesThrow,
@@ -268,7 +275,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 	/// The reasons this initializer cannot construct its type, whatever dependencies the type has.
 	private var dependencyIndependentErrors: [GenerationError] {
 		[
-			isPublicOrOpen ? nil : .inaccessibleInitializer,
+			access.level.isPublicOrOpen ? nil : .inaccessibleInitializer,
 			isOptional ? .optionalInitializer : nil,
 			isAsync ? .asyncInitializer : nil,
 			doesThrow ? .throwingInitializer : nil,

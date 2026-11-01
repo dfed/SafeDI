@@ -388,6 +388,9 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("additionalInstantiables", \.additionalInstantiables),
 				BinaryLayoutField("dependencies", \.dependencies),
 				BinaryLayoutField("declarationType", \.declarationType),
+				BinaryLayoutField("access", \.access),
+				BinaryLayoutField("enclosingTypeAccess", \.enclosingTypeAccess),
+				BinaryLayoutField("enclosingExtensionAccess", \.enclosingExtensionAccess),
 				BinaryLayoutField("mockAttributes", \.mockAttributes),
 				BinaryLayoutField("generateMock", \.generateMock),
 				BinaryLayoutField("mockOnly", \.mockOnly),
@@ -395,6 +398,7 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("mockReturnType", \.mockReturnType),
 				BinaryLayoutField("customMockName", \.customMockName),
 				BinaryLayoutField("mockDeclarationLocation", \.mockDeclarationLocation),
+				BinaryLayoutField("mockDeclarationAccess", \.mockDeclarationAccess),
 				BinaryLayoutField("declarationLocation", \.declarationLocation),
 				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
 			],
@@ -411,6 +415,9 @@ extension Instantiable: BinarySchemaMember {
 			additionalInstantiables: reader.read() as [TypeDescription],
 			dependencies: reader.read(),
 			declarationType: reader.read(),
+			access: reader.read(),
+			enclosingTypeAccess: reader.read(),
+			enclosingExtensionAccess: reader.read() as AccessDeclaration?,
 			mockAttributes: reader.read(),
 			generateMock: reader.read(),
 			mockOnly: reader.read(),
@@ -418,6 +425,7 @@ extension Instantiable: BinarySchemaMember {
 			mockReturnType: reader.read() as TypeDescription?,
 			customMockName: reader.read() as String?,
 			mockDeclarationLocation: reader.read() as Dependency.DeclarationLocation?,
+			mockDeclarationAccess: reader.read() as AccessDeclaration?,
 			declarationLocation: reader.read() as Dependency.DeclarationLocation?,
 		)
 		sourceFilePath = try reader.read() as String?
@@ -432,6 +440,9 @@ extension Instantiable: BinarySchemaMember {
 			writer.write(additionalInstantiables)
 			writer.write(dependencies)
 			writer.write(declarationType)
+			writer.write(access)
+			writer.write(enclosingTypeAccess)
+			writer.write(enclosingExtensionAccess)
 			writer.write(mockAttributes)
 			writer.write(generateMock)
 			writer.write(mockOnly)
@@ -439,6 +450,7 @@ extension Instantiable: BinarySchemaMember {
 			writer.write(mockReturnType)
 			writer.write(customMockName)
 			writer.write(mockDeclarationLocation)
+			writer.write(mockDeclarationAccess)
 			writer.write(declarationLocation)
 			writer.write(sourceFilePath)
 		}
@@ -481,11 +493,75 @@ extension Instantiable.DeclarationType: BinarySchemaMember {
 	}
 }
 
+extension AccessDeclaration: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("level", \.level),
+				BinaryLayoutField("modifierRange", \.modifierRange),
+				BinaryLayoutField("declarationStartLocation", \.declarationStartLocation),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(
+			level: reader.read(),
+			modifierRange: reader.read() as Dependency.SourceRange?,
+			declarationStartLocation: reader.read() as Dependency.DeclarationLocation?,
+		)
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(level)
+		writer.write(modifierRange)
+		writer.write(declarationStartLocation)
+	}
+}
+
+extension AccessLevel: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.enumeration(writtenAs: Tag.self) { _ in [] }
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		self = switch try reader.readTag() as Tag {
+		case .open: .open
+		case .public: .public
+		case .package: .package
+		case .internal: .internal
+		case .fileprivate: .fileprivate
+		case .private: .private
+		}
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		switch self {
+		case .open: writer.writeTag(Tag.open)
+		case .public: writer.writeTag(Tag.public)
+		case .package: writer.writeTag(Tag.package)
+		case .internal: writer.writeTag(Tag.internal)
+		case .fileprivate: writer.writeTag(Tag.fileprivate)
+		case .private: writer.writeTag(Tag.private)
+		}
+	}
+
+	enum Tag: UInt8, BinaryTag {
+		case open
+		case `public`
+		case package
+		case `internal`
+		case `fileprivate`
+		case `private`
+	}
+}
+
 extension Initializer: BinarySchemaMember {
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
 			fields: [
-				BinaryLayoutField("isPublicOrOpen", \.isPublicOrOpen),
+				BinaryLayoutField("access", \.access),
 				BinaryLayoutField("isOptional", \.isOptional),
 				BinaryLayoutField("isAsync", \.isAsync),
 				BinaryLayoutField("doesThrow", \.doesThrow),
@@ -499,7 +575,7 @@ extension Initializer: BinarySchemaMember {
 
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
-			isPublicOrOpen: reader.read(),
+			access: reader.read(),
 			isOptional: reader.read(),
 			isAsync: reader.read(),
 			doesThrow: reader.read(),
@@ -510,7 +586,7 @@ extension Initializer: BinarySchemaMember {
 	}
 
 	func write(to writer: inout BinaryWriter) {
-		writer.write(isPublicOrOpen)
+		writer.write(access)
 		writer.write(isOptional)
 		writer.write(isAsync)
 		writer.write(doesThrow)
