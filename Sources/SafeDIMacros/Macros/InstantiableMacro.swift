@@ -48,12 +48,28 @@ public struct InstantiableMacro: MemberMacro {
 			}
 		}
 
+		if let generatedInitializerAttributesArgument = declaration
+			.attributes
+			.instantiableMacro?
+			.generatedInitializerAttributes, StringLiteralExprSyntax(generatedInitializerAttributesArgument) == nil
+		{
+			throw InstantiableError.generatedInitializerAttributesArgumentInvalid
+		}
+
 		if let mockAttributesArgument = declaration
 			.attributes
 			.instantiableMacro?
 			.mockAttributes, StringLiteralExprSyntax(mockAttributesArgument) == nil
 		{
 			throw InstantiableError.mockAttributesArgumentInvalid
+		}
+
+		if let generatedAttributesArgument = declaration
+			.attributes
+			.instantiableMacro?
+			.generatedAttributes, StringLiteralExprSyntax(generatedAttributesArgument) == nil
+		{
+			throw InstantiableError.generatedAttributesArgumentInvalid
 		}
 
 		if let generateMockArgument = declaration
@@ -1863,7 +1879,9 @@ public struct InstantiableMacro: MemberMacro {
 		case decoratingProtocol
 		case fulfillingAdditionalTypesContainsOptional(String)
 		case fulfillingAdditionalTypesArgumentInvalid
+		case generatedInitializerAttributesArgumentInvalid
 		case mockAttributesArgumentInvalid
+		case generatedAttributesArgumentInvalid
 		case generateMockArgumentInvalid
 		case mockOnlyArgumentInvalid
 		case customMockNameArgumentInvalid
@@ -1881,8 +1899,12 @@ public struct InstantiableMacro: MemberMacro {
 				"The argument `fulfillingAdditionalTypes` must not include optional types, but it includes `\(element)`. List the non-optional type instead."
 			case .fulfillingAdditionalTypesArgumentInvalid:
 				"The argument `fulfillingAdditionalTypes` must be an array literal of types, such as `[MyProtocol.self]`."
+			case .generatedInitializerAttributesArgumentInvalid:
+				"The argument `generatedInitializerAttributes` must be a string literal."
 			case .mockAttributesArgumentInvalid:
 				"The argument `mockAttributes` must be a string literal."
+			case .generatedAttributesArgumentInvalid:
+				"The argument `generatedAttributes` must be a string literal."
 			case .generateMockArgumentInvalid:
 				"The argument `generateMock` must be a Bool literal (`true` or `false`)."
 			case .mockOnlyArgumentInvalid:

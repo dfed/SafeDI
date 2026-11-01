@@ -1389,9 +1389,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				if instantiable.dependencies.isEmpty {
 					return ""
 				} else {
+					// Attributes precede the initializer's modifiers on its line, as `mockAttributes` precede a mock's.
+					let attributesPrefix = instantiable.generatedInitializerAttributes.isEmpty ? "" : "\(instantiable.generatedInitializerAttributes) "
 					return try await """
 					extension \(instantiable.concreteInstantiable.asSource) {
-					    public \(instantiable.declarationType == .classType ? "convenience " : "")init() {
+					    \(attributesPrefix)public \(instantiable.declarationType == .classType ? "convenience " : "")init() {
 					\(generateProperties(propertiesGeneratedLater: propertiesGeneratedLater, enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames, leadingMemberWhitespace: "        ").joined(separator: "\n"))
 					        self.init(\(argumentList))
 					    }

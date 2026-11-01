@@ -237,7 +237,7 @@ A module's build can read the files of other modules, and plans a file for each 
 
 #### Creating the root of your dependency tree
 
-Any type decorated with `@Instantiable(isRoot: true)` is a root of a SafeDI dependency tree. SafeDI creates a no-parameter `public init()` initializer that instantiates the dependency tree in an extension on each root type.
+Any type decorated with `@Instantiable(isRoot: true)` is a root of a SafeDI dependency tree. SafeDI creates a no-parameter `public init()` initializer that instantiates the dependency tree in an extension on each root type that has dependencies. To bind that initializer to a global actor, or give it other attributes, see [Attributes for generated declarations](#attributes-for-generated-declarations).
 
 #### Making protocols `@Instantiable`
 
@@ -409,6 +409,61 @@ extension Container {
     }
 }
 ```
+
+#### Attributes for generated declarations
+
+SafeDI generates an `init()` for each root that has dependencies, and a `mock()` for each type with `generateMock: true` or listed in a module's `additionalMocksToGenerate` (see [Mock generation](#mock-generation)). The plugin cannot detect every attribute these need from source – a global actor that the initializers they call are bound to, for example – so three `@Instantiable` arguments add attributes to them:
+
+| Argument | Adds its text to |
+| -------- | ---------------- |
+| `generatedInitializerAttributes` | The root's generated `init()`. |
+| `mockAttributes` | The generated `mock()`. |
+| `generatedAttributes` | Both. |
+
+A root that is not bound to the main actor needs `generatedInitializerAttributes: "@MainActor"` when its tree builds a type whose initializer is:
+
+```swift
+@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor")
+public final class Root: Instantiable {
+    public init(presenter: Presenter) {
+        self.presenter = presenter
+    }
+
+    /// `Presenter`'s initializer is `@MainActor`.
+    @Instantiated private let presenter: Presenter
+}
+```
+
+SafeDI writes the text before the generated declaration's modifiers, on the same line:
+
+```swift
+extension Root {
+    @MainActor public convenience init() {
+        let presenter = Presenter()
+        self.init(presenter: presenter)
+    }
+}
+```
+
+A type that is not bound to the main actor needs `mockAttributes: "@MainActor"` on its generated mock when its own initializer is, or when its tree builds a type whose initializer is:
+
+```swift
+@Instantiable(mockAttributes: "@MainActor", generateMock: true)
+public final class MyPresenter: Instantiable {
+    @MainActor public init() { … }
+}
+```
+
+`generatedAttributes` is the shorthand for giving both the same text. It cannot be combined with `generatedInitializerAttributes` or `mockAttributes`: the compiler reports an extra argument when a declaration spells either beside it.
+
+```swift
+@Instantiable(isRoot: true, generatedAttributes: "@MainActor", generateMock: true)
+public final class Root: Instantiable { … }
+```
+
+Each argument must be a string literal. A root without dependencies has no generated `init()`, so `generatedInitializerAttributes` adds nothing to it. When a [`mockOnly` declaration](#the-mockonly-parameter) gives a type with a production declaration its hand-written mock, the generated `mock()` takes the production declaration's attributes, not the `mockOnly` declaration's.
+
+None of these arguments changes the `@Sendable` function in which SafeDI builds a `SendableInstantiator`, `SendableErasedInstantiator`, or `SendableLazilyInstantiated` dependency; see [`Sendable` wrappers](#sendable-wrappers) for what that function requires, and for when a non-`Sendable` twin with these attributes helps.
 
 ### @Instantiated
 
@@ -731,7 +786,9 @@ In a [generated mock](#mock-generation), a lazily instantiated dependency is ove
 A `Sendable` wrapper builds its dependency in a `@Sendable` function, which places two requirements on the dependency’s subtree:
 
 - **What the subtree receives from outside it must be `Sendable`**, even when the receiving type is itself `Sendable`. Declare a wrapper the subtree receives from outside, or whose instance it receives, as its `Sendable` twin; SafeDI reports an error at the property that receives one that is not. Wrappers instantiated inside the same `Sendable` wrapper are fine. Anything else the subtree receives that is not `Sendable` is rejected by the compiler in the generated code.
-- **Every initializer the function calls must be callable synchronously outside any actor**, and so must an extension’s `instantiate(…)` and a hand-written mock method that a generated mock calls there. The initializer’s isolation counts, not the type’s: a `@MainActor` class with a `nonisolated init` is fine when its stored properties are `Sendable`. SafeDI does not check this, and the generated code fails to compile otherwise; declare such an initializer `nonisolated`. `mockAttributes: "@MainActor"` does not help.
+- **Every initializer the function calls must be callable synchronously outside any actor**, and so must an extension’s `instantiate(…)` and a hand-written mock method that a generated mock calls there. The initializer’s isolation counts, not the type’s: a `@MainActor` class with a `nonisolated init` is fine when its stored properties are `Sendable`. SafeDI does not check this, and the generated code fails to compile otherwise; declare such an initializer `nonisolated`. The function is not isolated to any actor, whatever the isolation of the generated `init()` or `mock()` around it, so [attributes for generated declarations](#attributes-for-generated-declarations) do not help.
+
+To call a `@MainActor` initializer in the dependency’s subtree, declare the wrapper as its non-`Sendable` twin – `Instantiator`, `ErasedInstantiator`, or `LazilyInstantiated` – instead. SafeDI builds a non-`Sendable` wrapper’s dependency in a plain nested function, which takes the isolation of the generated `init()` or `mock()` around it. That `init()` or `mock()` must be isolated to `@MainActor`, which it is when the root or mocked type is, or when [attributes for generated declarations](#attributes-for-generated-declarations) say so. No `Sendable` wrapper’s subtree may contain the twin either, since the twin would then be built inside that wrapper’s `@Sendable` function.
 
 Generated mocks follow the same rules, and the `SafeDIMockConfiguration` of a type reached through a `Sendable` wrapper has `@Sendable` closure fields. Two values that production creates inside the function, a labeled default-valued initializer parameter of a type in the subtree and a dependency the mock cannot build that a type in the subtree instantiates, the mock takes as `@Sendable` autoclosures – the `SafeDIMockConfiguration` field is declared `formatter: @autoclosure @escaping @Sendable () -> Formatter = Formatter()` and stored as `@Sendable () -> Formatter` (a closure-typed default is stored `@Sendable` as before), and the `mock()` parameter is declared `service: @autoclosure @escaping @Sendable () -> Service` – and calls them where it builds the type, so each value is created there, once per construction, as in production. A caller still passes a value, as in `Root.mock(service: MockService())`; an argument that captures a non-`Sendable` value, such as a `MockService` held in a `let` outside the call, does not compile.
 
@@ -744,7 +801,7 @@ SafeDI can automatically generate `mock()` methods for `@Instantiable` types, dr
 To generate a `mock()` method for a type, set `generateMock: true` on the `@Instantiable` decorator:
 
 ```swift
-@Instantiable(generateMock: true, fulfillingAdditionalTypes: [UserService.self])
+@Instantiable(fulfillingAdditionalTypes: [UserService.self], generateMock: true)
 public final class DefaultUserService: UserService, Instantiable {
     // …
 
@@ -752,7 +809,7 @@ public final class DefaultUserService: UserService, Instantiable {
 }
 ```
 
-By default, `generateMock` is `false` and no mock is generated. Generated mocks are wrapped in `#if DEBUG` by default. To customize the conditional compilation flag, set the `mockConditionalCompilation` parameter in your module’s [`#SafeDIConfiguration`](#safediconfiguration).
+By default, `generateMock` is `false` and no mock is generated. Generated mocks are wrapped in `#if DEBUG` by default. To customize the conditional compilation flag, set the `mockConditionalCompilation` parameter in your module’s [`#SafeDIConfiguration`](#safediconfiguration). To bind a generated mock to a global actor, or give it other attributes, see [Attributes for generated declarations](#attributes-for-generated-declarations).
 
 ### Using generated mocks
 
@@ -986,17 +1043,6 @@ The same matching applies to a received erased instantiator: a mock builds a rec
 Generated mocks have `internal` visibility. They are accessible within the module where they are generated but not from other modules. This avoids cross-module extension conflicts when multiple modules generate mocks for the same types.
 
 To use a mock from another module in your tests, see [Cross-module mock generation](#cross-module-mock-generation).
-
-### The `mockAttributes` parameter
-
-When a type’s initializer is bound to a global actor that the plugin cannot detect (e.g. inherited `@MainActor`), use `mockAttributes` to annotate the generated mock:
-
-```swift
-@Instantiable(mockAttributes: "@MainActor")
-public final class MyPresenter: Instantiable { … }
-```
-
-`mockAttributes` does not relax the [`Sendable` wrappers](#sendable-wrappers) rule: an initializer reached through one must still be callable outside any actor.
 
 ### Multi-module mock generation
 

@@ -54,7 +54,8 @@
 ///   - additionalTypes: The types (in addition to the type decorated with this macro) of properties that can be decorated with `@Instantiated` and yield a result of this type. The types provided *must* be either superclasses of this type or protocols to which this type conforms.
 ///   - conformsElsewhere: Whether the decorated type already conforms to the `Instantiable` protocol elsewhere. If set to `true`, the macro does not enforce that this declaration conforms to `Instantiable`.
 ///   - mockOnly: Whether this declaration exists solely for mock generation. When `true`, you must provide a hand-written `mock()` method (or a method named by `customMockName`). No `init`/`instantiate()` or `Instantiable` conformance is required. Hand-written mocks take priority over generated ones — a `mockOnly` mock is used even when the production type has `generateMock: true`. A type can have at most one hand-written mock; if the production type also has a hand-written mock, SafeDI emits an error. Mutually exclusive with `generateMock` and `isRoot`. Defaults to `false`.
-///   - mockAttributes: Attributes to add to the generated `mock()` method. Use this when the type’s initializer is bound to a global actor that the plugin cannot detect from source (e.g. inherited `@MainActor`). Example: `@Instantiable(mockAttributes: "@MainActor")`.
+///   - generatedInitializerAttributes: Attributes to add to the initializer SafeDI generates for this type: the `init()` it generates for a root that has dependencies. Use this when that initializer must be bound to a global actor or carry an availability the plugin cannot detect from source (e.g. a root whose dependencies have `@MainActor` initializers). Example: `@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor")`. To add the same attributes to the generated `mock()` too, pass them once as `generatedAttributes` instead.
+///   - mockAttributes: Attributes to add to the generated `mock()` method. Use this when the type is not bound to a global actor that the mock must be bound to: when the type’s own initializer is bound to it, or when its tree builds a type whose initializer is. Example: `@Instantiable(mockAttributes: "@MainActor", generateMock: true)`.
 ///   - generateMock: Whether to generate a `mock()` method for this type. Defaults to `false`.
 ///   - customMockName: The name of the canonical hand-written mock method. With `generateMock: true`, the generated `mock()` calls through to this method (it must have a different name to avoid ambiguity). With `mockOnly: true`, SafeDI uses this method as the mock provider for the type. Requires `generateMock: true` or `mockOnly: true`.
 @attached(member, names: named(ForwardedProperties))
@@ -63,7 +64,43 @@ public macro Instantiable(
 	fulfillingAdditionalTypes additionalTypes: [Any.Type] = [],
 	conformsElsewhere: Bool = false,
 	mockOnly: Bool = false,
+	generatedInitializerAttributes: StaticString = "",
 	mockAttributes: StaticString = "",
+	generateMock: Bool = false,
+	customMockName: StaticString? = nil,
+) = #externalMacro(module: "SafeDIMacros", type: "InstantiableMacro")
+
+/// Marks a type as capable of being instantiated by the SafeDI system, adding the same attributes to the `init()` and `mock()` SafeDI generates for it.
+///
+/// `generatedAttributes` is the shorthand for passing the same text as both `generatedInitializerAttributes` and `mockAttributes` to ``Instantiable(isRoot:fulfillingAdditionalTypes:conformsElsewhere:mockOnly:generatedInitializerAttributes:mockAttributes:generateMock:customMockName:)``, which documents the macro in full. It cannot be combined with either.
+///
+/// Example:
+///
+///     @Instantiable(isRoot: true, generatedAttributes: "@MainActor", generateMock: true)
+///     public final class Root: Instantiable {
+///         public init(presenter: Presenter) {
+///             self.presenter = presenter
+///         }
+///
+///         /// A dependency whose initializer is bound to the main actor, so the generated `init()` and `mock()` that build it must be too.
+///         @Instantiated private let presenter: Presenter
+///     }
+///
+/// - Parameters:
+///   - isRoot: Whether the decorated type represents a root of a dependency tree.
+///   - additionalTypes: The types (in addition to the type decorated with this macro) of properties that can be decorated with `@Instantiated` and yield a result of this type. The types provided *must* be either superclasses of this type or protocols to which this type conforms.
+///   - conformsElsewhere: Whether the decorated type already conforms to the `Instantiable` protocol elsewhere. If set to `true`, the macro does not enforce that this declaration conforms to `Instantiable`.
+///   - mockOnly: Whether this declaration exists solely for mock generation. Mutually exclusive with `generateMock` and `isRoot`. Defaults to `false`.
+///   - generatedAttributes: Attributes to add to the `init()` SafeDI generates for a root that has dependencies and to the generated `mock()` method. Example: `@Instantiable(isRoot: true, generatedAttributes: "@MainActor", generateMock: true)`.
+///   - generateMock: Whether to generate a `mock()` method for this type. Defaults to `false`.
+///   - customMockName: The name of the canonical hand-written mock method. Requires `generateMock: true` or `mockOnly: true`.
+@attached(member, names: named(ForwardedProperties))
+public macro Instantiable(
+	isRoot: Bool = false,
+	fulfillingAdditionalTypes additionalTypes: [Any.Type] = [],
+	conformsElsewhere: Bool = false,
+	mockOnly: Bool = false,
+	generatedAttributes: StaticString,
 	generateMock: Bool = false,
 	customMockName: StaticString? = nil,
 ) = #externalMacro(module: "SafeDIMacros", type: "InstantiableMacro")

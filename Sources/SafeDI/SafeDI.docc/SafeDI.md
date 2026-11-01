@@ -65,7 +65,8 @@ Working sample projects live in the [Examples folder](https://github.com/dfed/Sa
 
 ### Decorator macros
 
-- ``Instantiable(isRoot:fulfillingAdditionalTypes:conformsElsewhere:mockOnly:mockAttributes:generateMock:customMockName:)``
+- ``Instantiable(isRoot:fulfillingAdditionalTypes:conformsElsewhere:mockOnly:generatedInitializerAttributes:mockAttributes:generateMock:customMockName:)``
+- ``Instantiable(isRoot:fulfillingAdditionalTypes:conformsElsewhere:mockOnly:generatedAttributes:generateMock:customMockName:)``
 - ``Instantiated()``
 - ``Instantiated(fulfilledByType:erasedToConcreteExistential:)``
 - ``Received(onlyIfAvailable:)``
