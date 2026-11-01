@@ -31,6 +31,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		access: AccessDeclaration,
 		enclosingTypeAccess: [AccessDeclaration] = [],
 		enclosingExtensionAccess: AccessDeclaration? = nil,
+		generatedInitializerAttributes: String = "",
 		mockAttributes: String = "",
 		generateMock: Bool = false,
 		mockOnly: Bool = false,
@@ -54,6 +55,7 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		self.access = access
 		self.enclosingTypeAccess = enclosingTypeAccess
 		self.enclosingExtensionAccess = enclosingExtensionAccess
+		self.generatedInitializerAttributes = generatedInitializerAttributes
 		self.mockAttributes = mockAttributes
 		self.generateMock = generateMock
 		self.mockOnly = mockOnly
@@ -107,7 +109,13 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// type's own access is declared elsewhere and unknown to the tool. `nil` for an extension-based Instantiable, whose
 	/// own `access` is the extension's.
 	public let enclosingExtensionAccess: AccessDeclaration?
-	/// Attributes to add to the generated `mock()` method (e.g. `"@MainActor"`).
+	/// Attributes to add to the initializer SafeDI generates for this type (e.g. `"@MainActor"`): the macro's
+	/// `generatedAttributes` when it is given, else its `generatedInitializerAttributes`. The declaration's own: a
+	/// `mockOnly` declaration merged into this one contributes none, as for `mockAttributes`.
+	public let generatedInitializerAttributes: String
+	/// Attributes to add to the generated `mock()` method (e.g. `"@MainActor"`): the macro's `generatedAttributes` when
+	/// it is given, else its `mockAttributes`. The declaration's own: a `mockOnly` declaration merged into this one,
+	/// whose hand-written mock the generated `mock()` calls, contributes none.
 	public let mockAttributes: String
 	/// Whether to generate a `mock()` method for this type.
 	public let generateMock: Bool

@@ -107,6 +107,30 @@ struct SafeDIToolInstantiableResolutionTests: ~Copyable {
 		#expect([service.moduleName, service.packageName, service.mockDeclarationModuleName, service.mockDeclarationPackageName] == ["Services", "production", "ServicesTestSupport", "support"])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func resolveSafeDIFulfilledTypes_keepsProductionGeneratedAttributes_whenProductionDeclarationIsMetFirst() async throws {
+		let resolved = try await resolvedInstantiables(fromFilesNamed: [
+			"AService.swift": Self.productionDeclarationWithGeneratedAttributes,
+			"BServiceMock.swift": Self.mockOnlyExtensionWithGeneratedAttributes,
+		])
+
+		let service = try #require(resolved.instantiables[.simple(name: "Service")])
+		#expect([service.generatedInitializerAttributes, service.mockAttributes] == ["@MainActor", "@MainActor"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func resolveSafeDIFulfilledTypes_keepsProductionGeneratedAttributes_whenMockOnlyExtensionIsMetFirst() async throws {
+		let resolved = try await resolvedInstantiables(fromFilesNamed: [
+			"AServiceMock.swift": Self.mockOnlyExtensionWithGeneratedAttributes,
+			"BService.swift": Self.productionDeclarationWithGeneratedAttributes,
+		])
+
+		let service = try #require(resolved.instantiables[.simple(name: "Service")])
+		#expect([service.generatedInitializerAttributes, service.mockAttributes] == ["@MainActor", "@MainActor"])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -120,6 +144,24 @@ struct SafeDIToolInstantiableResolutionTests: ~Copyable {
 
 	private static let mockOnlyExtension = """
 	@Instantiable(mockOnly: true)
+	package extension Service {
+	    static func mock() -> Service {
+	        Service()
+	    }
+	}
+	"""
+
+	private static let productionDeclarationWithGeneratedAttributes = """
+	@Instantiable(generatedAttributes: "@MainActor")
+	public struct Service: Instantiable {
+	    public init() {}
+	}
+	"""
+
+	/// A `mockOnly` declaration's attributes are its own, as its `mockAttributes` are: the generated `mock()` of the
+	/// declaration it merges into takes that declaration's.
+	private static let mockOnlyExtensionWithGeneratedAttributes = """
+	@Instantiable(mockOnly: true, generatedAttributes: "@available(iOS 17, *)")
 	package extension Service {
 	    static func mock() -> Service {
 	        Service()

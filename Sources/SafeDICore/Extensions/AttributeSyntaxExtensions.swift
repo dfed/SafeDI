@@ -81,6 +81,32 @@ extension AttributeSyntax {
 		return firstLabeledExpression.expression
 	}
 
+	public var generatedInitializerAttributes: ExprSyntax? {
+		guard let arguments,
+		      let labeledExpressionList = LabeledExprListSyntax(arguments),
+		      let firstLabeledExpression = labeledExpressionList.first(where: {
+		      	$0.label?.text == "generatedInitializerAttributes"
+		      })
+		else {
+			return nil
+		}
+
+		return firstLabeledExpression.expression
+	}
+
+	public var generatedAttributes: ExprSyntax? {
+		guard let arguments,
+		      let labeledExpressionList = LabeledExprListSyntax(arguments),
+		      let firstLabeledExpression = labeledExpressionList.first(where: {
+		      	$0.label?.text == "generatedAttributes"
+		      })
+		else {
+			return nil
+		}
+
+		return firstLabeledExpression.expression
+	}
+
 	public var mockOnly: ExprSyntax? {
 		guard let arguments,
 		      let labeledExpressionList = LabeledExprListSyntax(arguments),
@@ -139,23 +165,32 @@ extension AttributeSyntax {
 	}
 
 	public var customMockNameValue: String? {
-		guard let customMockName,
-		      let stringLiteral = StringLiteralExprSyntax(customMockName),
+		Self.text(ofStringLiteral: customMockName)
+	}
+
+	public var mockAttributesValue: String {
+		Self.text(ofStringLiteral: mockAttributes) ?? ""
+	}
+
+	public var generatedInitializerAttributesValue: String {
+		Self.text(ofStringLiteral: generatedInitializerAttributes) ?? ""
+	}
+
+	/// The text of `generatedAttributes`, or `nil` when the argument is not given as a string literal without
+	/// interpolation. The macro's overloads never take it together with `generatedInitializerAttributes` or
+	/// `mockAttributes`, for both of which it stands.
+	public var generatedAttributesValue: String? {
+		Self.text(ofStringLiteral: generatedAttributes)
+	}
+
+	/// The text of `expression` when it is a string literal without interpolation, or `nil`.
+	private static func text(ofStringLiteral expression: ExprSyntax?) -> String? {
+		guard let expression,
+		      let stringLiteral = StringLiteralExprSyntax(expression),
 		      stringLiteral.segments.count == 1,
 		      case let .stringSegment(segment) = stringLiteral.segments.first
 		else {
 			return nil
-		}
-		return segment.content.text
-	}
-
-	public var mockAttributesValue: String {
-		guard let mockAttributes,
-		      let stringLiteral = StringLiteralExprSyntax(mockAttributes),
-		      stringLiteral.segments.count == 1,
-		      case let .stringSegment(segment) = stringLiteral.segments.first
-		else {
-			return ""
 		}
 		return segment.content.text
 	}
