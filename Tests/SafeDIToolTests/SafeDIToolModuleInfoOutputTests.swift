@@ -65,7 +65,54 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 		encoder.outputFormatting = [.sortedKeys]
 		let moduleInfo = try ModuleInfo(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.moduleInfoOutputPath)))
 		#expect(try String(decoding: encoder.encode(moduleInfo), as: UTF8.self) == """
-		{"conditionalCompilationDecisions":[],"configurations":[],"imports":[{"attribute":"","kind":"","moduleName":"Alpha","type":""}],"instantiableTypeNamesInAnyClause":["Leaf"],"instantiables":[{"access":{"declarationStartLocation":{"column":1,"filePath":"\(leafPath)","line":4},"level":{"public":{}},"modifierRange":{"endColumn":7,"endLine":4,"startColumn":1,"startLine":4}},"declarationLocation":{"column":1,"filePath":"\(leafPath)","line":3},"declarationType":{"structType":{}},"dependencies":[],"enclosingTypeAccess":[],"generateMock":false,"initializer":{"access":{"declarationStartLocation":{"column":5,"filePath":"\(leafPath)","line":5},"level":{"public":{}},"modifierRange":{"endColumn":11,"endLine":5,"startColumn":5,"startLine":5}},"arguments":[],"doesThrow":false,"hasGenericParameter":false,"hasGenericWhereClause":false,"isAsync":false,"isOptional":false},"instantiableTypes":[{"simple":{"generics":[],"name":"Leaf"}}],"isRoot":false,"mockAttributes":"","mockOnly":false,"sourceFilePath":"\(leafPath)"}],"mockImports":[{"attribute":"","kind":"","moduleName":"Alpha","type":""}]}
+		{"conditionalCompilationDecisions":[],"configurations":[],"dependencyModuleNames":[],"imports":[{"attribute":"","kind":"","moduleName":"Alpha","type":""}],"instantiableTypeNamesInAnyClause":["Leaf"],"instantiables":[{"access":{"declarationStartLocation":{"column":1,"filePath":"\(leafPath)","line":4},"level":{"public":{}},"modifierRange":{"endColumn":7,"endLine":4,"startColumn":1,"startLine":4}},"declarationLocation":{"column":1,"filePath":"\(leafPath)","line":3},"declarationType":{"structType":{}},"dependencies":[],"enclosingTypeAccess":[],"generateMock":false,"initializer":{"access":{"declarationStartLocation":{"column":5,"filePath":"\(leafPath)","line":5},"level":{"public":{}},"modifierRange":{"endColumn":11,"endLine":5,"startColumn":5,"startLine":5}},"arguments":[],"doesThrow":false,"hasGenericParameter":false,"hasGenericWhereClause":false,"isAsync":false,"isOptional":false},"instantiableTypes":[{"simple":{"generics":[],"name":"Leaf"}}],"isRoot":false,"mockAttributes":"","mockOnly":false,"sourceFilePath":"\(leafPath)"}],"mockImports":[{"attribute":"","kind":"","moduleName":"Alpha","type":""}]}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesModuleAndPackageToModuleInfo_whenModuleAndItsDependenciesAreNamed() async throws {
+		// The file is binary, so its contents are compared as `dump` prints them, with sorted keys.
+		var dependentModuleInfoPaths = [String]()
+		for (moduleName, typeName) in [("Roots", "Root"), ("Bark", "Bark")] {
+			let dependency = try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable
+					public struct \(typeName): Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				filesToDelete: &filesToDelete,
+				moduleMembershipArguments: ["--module-name", moduleName],
+			)
+			dependentModuleInfoPaths.append(dependency.moduleInfoOutputPath)
+		}
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Leaf: Instantiable {
+				    public init() {}
+				    public static func mock() -> Leaf {
+				        Leaf()
+				    }
+				}
+				""",
+			],
+			dependentModuleInfoPaths: dependentModuleInfoPaths,
+			filesToDelete: &filesToDelete,
+			inputPathsRelativeToCurrentDirectory: true,
+			moduleMembershipArguments: ["--module-name", "Tree", "--package-name", "Forest"],
+		)
+
+		let leafPath = output.fixtures["Leaf.swift"].replacingOccurrences(of: "/", with: "\\/")
+		let encoder = JSONEncoder()
+		encoder.outputFormatting = [.sortedKeys]
+		let moduleInfo = try ModuleInfo(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.moduleInfoOutputPath)))
+		#expect(try String(decoding: encoder.encode(moduleInfo), as: UTF8.self) == """
+		{"conditionalCompilationDecisions":[],"configurations":[],"dependencyModuleNames":["Bark","Roots"],"imports":[],"instantiableTypeNamesInAnyClause":["Leaf"],"instantiables":[{"access":{"declarationStartLocation":{"column":1,"filePath":"\(leafPath)","line":2},"level":{"public":{}},"modifierRange":{"endColumn":7,"endLine":2,"startColumn":1,"startLine":2}},"declarationLocation":{"column":1,"filePath":"\(leafPath)","line":1},"declarationType":{"structType":{}},"dependencies":[],"enclosingTypeAccess":[],"generateMock":false,"initializer":{"access":{"declarationStartLocation":{"column":5,"filePath":"\(leafPath)","line":3},"level":{"public":{}},"modifierRange":{"endColumn":11,"endLine":3,"startColumn":5,"startLine":3}},"arguments":[],"doesThrow":false,"hasGenericParameter":false,"hasGenericWhereClause":false,"isAsync":false,"isOptional":false},"instantiableTypes":[{"simple":{"generics":[],"name":"Leaf"}}],"isRoot":false,"mockAttributes":"","mockDeclarationAccess":{"declarationStartLocation":{"column":1,"filePath":"\(leafPath)","line":2},"level":{"public":{}},"modifierRange":{"endColumn":7,"endLine":2,"startColumn":1,"startLine":2}},"mockDeclarationLocation":{"column":5,"filePath":"\(leafPath)","line":4},"mockDeclarationModuleName":"Tree","mockDeclarationPackageName":"Forest","mockInitializer":{"access":{"declarationStartLocation":{"column":5,"filePath":"\(leafPath)","line":4},"level":{"public":{}},"modifierRange":{"endColumn":11,"endLine":4,"startColumn":5,"startLine":4}},"arguments":[],"doesThrow":false,"hasGenericParameter":false,"hasGenericWhereClause":false,"isAsync":false,"isOptional":false},"mockOnly":false,"mockReturnType":{"simple":{"generics":[],"name":"Leaf"}},"moduleName":"Tree","packageName":"Forest","sourceFilePath":"\(leafPath)"}],"mockImports":[],"moduleName":"Tree","packageName":"Forest"}
 		""")
 	}
 

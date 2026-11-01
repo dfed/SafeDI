@@ -47,6 +47,10 @@ public enum SafeDI {
 	/// concatenated into one file). Downstream targets pass the
 	/// producer's name in `dependencies:` so the helper feeds that
 	/// `.safedi` artifact through `--dependent-module-info-file-path`.
+	/// The script names the module with `--module-name
+	/// $PRODUCT_MODULE_NAME`, and its package with `--package-name
+	/// $SWIFT_PACKAGE_NAME` when the target sets that build setting, for
+	/// a SafeDITool that accepts them.
 	///
 	/// The helper assumes the target's Swift sources live under
 	/// `$SRCROOT/<module>/**/*.swift`. That single glob feeds both the
@@ -224,6 +228,22 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 		&& "$safedi_tool" generate --help | grep -q -- '--active-compilation-conditions'; then
 		# shellcheck disable=SC2086
 		set -- "$@" --active-compilation-conditions $SWIFT_ACTIVE_COMPILATION_CONDITIONS
+	fi
+
+	# Name the module this target compiles and its package, which
+	# SafeDITool records in this target's `.safedi` artifact, beside the
+	# modules the dependencies' `.safedi` artifacts record. SafeDITool
+	# releases before the options existed reject them, so they are
+	# forwarded only when the binary advertises them. The package is
+	# named only when the target sets `SWIFT_PACKAGE_NAME`, which Xcode
+	# passes the compiler as `-package-name`.
+	if "$safedi_tool" generate --help | grep -q -- '--module-name'; then
+		if [ -n "${PRODUCT_MODULE_NAME:-}" ]; then
+			set -- "$@" --module-name "$PRODUCT_MODULE_NAME"
+		fi
+		if [ -n "${SWIFT_PACKAGE_NAME:-}" ]; then
+			set -- "$@" --package-name "$SWIFT_PACKAGE_NAME"
+		fi
 	fi
 
 	"$safedi_tool" generate "$@"

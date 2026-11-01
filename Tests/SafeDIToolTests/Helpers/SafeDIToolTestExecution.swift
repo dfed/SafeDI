@@ -52,6 +52,8 @@ func executeSafeDIToolTest(
 	compilerReceivesInputPathsUnchanged: Bool = false,
 	activeCompilationConditions: [String] = [],
 	buildSettingArguments: [String] = [],
+	moduleMembershipArguments: [String] = [],
+	pluginTargetGraph: ((_ inputSwiftFilePaths: [String]) -> PluginTargetGraph)? = nil,
 	verificationCompilationConditions: [String]? = nil,
 	swiftFileContentAfterScan: [String]? = nil,
 ) async throws -> TestOutput {
@@ -146,6 +148,12 @@ func executeSafeDIToolTest(
 	try inputSwiftFilePaths
 		.joined(separator: ",")
 		.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+	if let pluginTargetGraph {
+		// As the SafeDIGenerator plugin writes it beside its CSV, spelling each file as the CSV does.
+		let targetGraphFile = URL(fileURLWithPath: swiftFileCSV.path + PluginTargetGraph.fileNameSuffix)
+		try JSONEncoder().encode(pluginTargetGraph(inputSwiftFilePaths)).write(to: targetGraphFile)
+		filesToDelete.append(targetGraphFile)
+	}
 
 	let dependentModuleInfoFileCSV = URL.temporaryFile
 	try dependentModuleInfoPaths
@@ -253,6 +261,7 @@ func executeSafeDIToolTest(
 			}
 		}
 		generateArguments += buildSettingArguments
+		generateArguments += moduleMembershipArguments
 		if buildDOTFileOutput {
 			generateArguments += ["--dot-file-output", dotTreeOutput.relativePath]
 		}
@@ -270,9 +279,9 @@ func executeSafeDIToolTest(
 			paths: inputSwiftFilePaths,
 			compilerPaths: compilerSwiftFilePaths,
 		)
-		let warnings: [SourceDiagnostic]
+		let generateOutput: Generate.Output
 		do {
-			warnings = try await tool.generate()
+			generateOutput = try await tool.generate()
 		} catch {
 			throw SafeDIToolTestError(underlyingError: error, fixtures: fixtures)
 		}
@@ -340,7 +349,8 @@ func executeSafeDIToolTest(
 			moduleInfo: moduleInfo,
 			moduleInfoOutputPath: moduleInfoOutput.relativePath,
 			fixtures: fixtures,
-			warnings: warnings,
+			warnings: generateOutput.warnings,
+			generateOutput: generateOutput,
 			generatedFiles: generatedFiles,
 			dotTree: buildDOTFileOutput ? String(data: Data(contentsOf: dotTreeOutput), encoding: .utf8) : nil,
 			combinedOutput: buildCombinedOutput
@@ -358,6 +368,8 @@ struct TestOutput {
 	let fixtures: FixturePaths
 	/// The non-fatal diagnostics `generate` reported, which `run()` prints to standard error.
 	let warnings: [SourceDiagnostic]
+	/// What `generate` read and reported.
+	let generateOutput: Generate.Output
 	let generatedFiles: [String: String]?
 	let dotTree: String?
 	let combinedOutput: String?

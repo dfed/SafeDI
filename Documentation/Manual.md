@@ -103,7 +103,7 @@ safedi_swift_library(
 
 The macro accepts every `swift_library` attribute and declares two targets: the `swift_library` named `App`, and `App_safedi`, which runs `SafeDITool` over the same `srcs` with the same `defines` and `copts`. List another module’s `<name>_safedi` target in `safedi_deps` to use the `@Instantiable` types it declares, and the module itself in `deps`. You can see this integration in practice in the [ExampleBazelIntegration](../Examples/ExampleBazelIntegration) module.
 
-A module that needs a shape the macro does not offer can declare the `safedi_compile` rule and its `swift_library` separately, adding `[":<rule name>"]` to the library’s `srcs` and giving the rule the library’s `defines` and `copts`; see [`bazel/safedi.bzl`](../bazel/safedi.bzl).
+A module that needs a shape the macro does not offer can declare the `safedi_compile` rule and its `swift_library` separately, adding `[":<rule name>"]` to the library’s `srcs` and giving the rule the library’s `defines` and `copts`, its `module_name` (the library’s `module_name` attribute, or the name `derive_swift_module_name` from `@build_bazel_rules_swift//swift:module_name.bzl` gives the library’s label), and its `package_name`; see [`bazel/safedi.bzl`](../bazel/safedi.bzl). Without `module_name`, SafeDITool records no module for the rule’s declarations, and the modules that list the rule in their `deps` record no dependency on it.
 
 `SafeDITool` runs as the prebuilt binary the SafeDI release publishes for the machine that runs the build – macOS arm64 or x86_64, or Linux x86_64 or arm64 – the same binary the `SafeDIGenerator` plugin and the Tuist plugin run. Bazel downloads it from the release’s GitHub assets the first time a build needs it – so that build needs network access to GitHub, or a [repository cache](https://bazel.build/run/build#repository-cache) that holds the binary – and checks it against the sha256 recorded in the release’s source archive. On any other machine, Bazel builds `SafeDITool` from source. To always build it from source, add this line to your `.bazelrc`:
 
@@ -126,7 +126,7 @@ On an Intel Mac, the bundle’s directory is `SafeDITool-macos-x86_64`.
 
 ### Additional configurations
 
-`SafeDITool` is designed to integrate into projects of any size or shape. Our [Releases](https://github.com/dfed/SafeDI/releases) page ships a prebuilt, codesigned `SafeDITool.artifactbundle.zip` that can be downloaded and driven directly from a pre-build script — see the embedded shell in [`TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift`](../TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift) for a working reference (it locates the binary via SPM, runs `generate --combined-output` for fixed-path Swift output, and supports the cross-module `.safedi` module-info handoff). For a non-SPM build system, swap the binary-location lookup for a `curl` of the artifact bundle. Set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script. Pass the target's active compilation conditions to `generate --active-compilation-conditions`, or its `SWIFT_ACTIVE_COMPILATION_CONDITIONS` and `OTHER_SWIFT_FLAGS` build settings to `generate --build-setting-active-compilation-conditions` and `--build-setting-other-swift-flags`, so SafeDITool scans the same `#if` clauses the compiler compiles; see [Conditional compilation](#conditional-compilation).
+`SafeDITool` is designed to integrate into projects of any size or shape. Our [Releases](https://github.com/dfed/SafeDI/releases) page ships a prebuilt, codesigned `SafeDITool.artifactbundle.zip` that can be downloaded and driven directly from a pre-build script — see the embedded shell in [`TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift`](../TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift) for a working reference (it locates the binary via SPM, runs `generate --combined-output` for fixed-path Swift output, and supports the cross-module `.safedi` module-info handoff). For a non-SPM build system, swap the binary-location lookup for a `curl` of the artifact bundle. Set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script. Pass the target's active compilation conditions to `generate --active-compilation-conditions`, or its `SWIFT_ACTIVE_COMPILATION_CONDITIONS` and `OTHER_SWIFT_FLAGS` build settings to `generate --build-setting-active-compilation-conditions` and `--build-setting-other-swift-flags`, so SafeDITool scans the same `#if` clauses the compiler compiles; see [Conditional compilation](#conditional-compilation). Pass the target's `PRODUCT_MODULE_NAME` to `generate --module-name`, and its `SWIFT_PACKAGE_NAME` to `--package-name` when it sets one, so the `.safedi` records which module and package declare each type; see [Custom build system integration](#custom-build-system-integration).
 
 `SafeDITool` can parse all of your Swift files at once, or for even better performance, the tool can be run on each dependent module as part of the build. Run `SafeDITool` with `--help`, as [Running SafeDITool yourself](#running-safeditool-yourself) describes for your integration, to see documentation of the tool’s supported arguments.
 
@@ -1094,7 +1094,7 @@ SafeDITool can read the conditions in two ways:
 | Swift package plugin, built by Xcode | The build settings, in every configuration. Xcode hands the plugin a package’s `.when(configuration:)` defines as for a debug build whatever configuration it compiles, so the build settings correct what the plugin sees in Release. |
 | Xcode project plugin | The build settings. |
 | Tuist plugin and other prebuild scripts | The target’s `SWIFT_ACTIVE_COMPILATION_CONDITIONS` build setting, passed as `generate --active-compilation-conditions`. The Tuist plugin does not forward `-D` flags in `OTHER_SWIFT_FLAGS`; a script can pass both settings with the `--build-setting-…` options instead. |
-| Bazel `safedi_swift_library` and `safedi_compile` | `DEBUG` in the `dbg` and `fastbuild` compilation modes, `NDEBUG` in the `opt` compilation mode, the target’s `defines`, each `-D` flag in the target’s `copts` (after Make variable expansion, so `-D$(NAME)` reports the value of `--define=NAME=…`), and each `-D` flag passed with `--@rules_swift//swift:copt` (`--@rules_swift//swift:exec_copt` for a target built in the exec configuration). `safedi_swift_library` gives its `swift_library` and its `<name>_safedi` target the same `defines` and `copts`; a hand-written `safedi_compile` must repeat the `defines` and `copts` of the `swift_library` that compiles its output. Not reported: `defines` propagated from a dependency, `--@rules_swift//swift:per_module_swiftcopt`, and copts configured on a custom Swift toolchain. `--copt` and `--define` alone do not reach the Swift compiler, so they never need reporting. |
+| Bazel `safedi_swift_library` and `safedi_compile` | `DEBUG` in the `dbg` and `fastbuild` compilation modes, `NDEBUG` in the `opt` compilation mode, the target’s `defines`, each `-D` flag in the target’s `copts` (after Make variable expansion, so `-D$(NAME)` reports the value of `--define=NAME=…`), and each `-D` flag passed with `--@rules_swift//swift:copt` (`--@rules_swift//swift:exec_copt` for a target built in the exec configuration). `safedi_swift_library` gives its `swift_library` and its `<name>_safedi` target the same `defines` and `copts`; a hand-written `safedi_compile` must repeat the `defines` and `copts` of the `swift_library` that compiles its output (and, so that SafeDITool records its module and package, its `module_name` and `package_name`; see [Bazel](#bazel)). Not reported: `defines` propagated from a dependency, `--@rules_swift//swift:per_module_swiftcopt`, and copts configured on a custom Swift toolchain. `--copt` and `--define` alone do not reach the Swift compiler, so they never need reporting. |
 
 The Swift package plugin scans the sources of a target’s dependencies with the target’s own conditions, so a condition that guards a production declaration in a dependency must be active on every target whose dependency tree reaches it.
 
@@ -1194,20 +1194,22 @@ After (2.x), single module:
 safeditool generate input.csv --combined-output ./generated/SafeDI.swift
 ```
 
-For multi-module projects, you can add the `--module-info-output` flag so downstream modules can resolve `@Instantiable` types declared upstream without re-parsing the producer's sources. Each producer emits a `.safedi` sidecar; each consumer feeds the producer's `.safedi` back in through `--dependent-module-info-file-path`:
+For multi-module projects, you can add the `--module-info-output` flag so downstream modules can resolve `@Instantiable` types declared upstream without re-parsing the producer's sources. Each producer emits a `.safedi` sidecar; each consumer feeds the producer's `.safedi` back in through `--dependent-module-info-file-path`. Name each module with `--module-name`, and its package with `--package-name` when the compiler receives one, so the `.safedi` records which module declares each type (see [Custom build system integration](#custom-build-system-integration)):
 
 ```bash
 # Producing module (Subproject):
 safeditool generate Subproject.csv \
   --combined-output Subproject/SafeDIGenerated.swift \
-  --module-info-output Subproject.safedi
+  --module-info-output Subproject.safedi \
+  --module-name Subproject
 
 # Consuming module (App), with Subproject already built:
 echo "Subproject.safedi" > deps.csv
 safeditool generate App.csv \
   --combined-output App/SafeDIGenerated.swift \
   --module-info-output App.safedi \
-  --dependent-module-info-file-path deps.csv
+  --dependent-module-info-file-path deps.csv \
+  --module-name App
 ```
 
 Given the same input files, `generate` writes the same `.safedi` bytes every time, so a build cache keyed on them stays warm. `query needs --module-info` reads the same files, so a project that writes them can [query what a type needs](#querying-what-a-type-needs) with [the `SafeDITool` its build runs](#running-safeditool-yourself), without parsing its sources again. A `.safedi` file names each file by the path the input CSV gives it, so a CSV of relative paths, like those the Bazel rule and the Tuist plugin write, keeps absolute paths out of it.
@@ -1240,6 +1242,13 @@ Both subcommands utilize Apple’s [SwiftSyntax](https://github.com/apple/swift-
 Generated code points a renamed dependency’s assignment at its `@Received` declaration with a `#sourceLocation` directive only when SafeDITool knows the exact path the compiler is handed for each file: under the `SafeDIGenerator` plugin, or with `generate --compiler-receives-input-paths-unchanged`, which a build system that hands the compiler every Swift file at exactly the path it hands SafeDITool may pass (the vended Bazel rule does). Otherwise each such assignment ends in a comment naming the declaration’s file and line.
 
 SafeDITool prints diagnostics at paths resolved against its working directory, which under Bazel is the action’s sandbox.
+
+A build system that runs `generate` once per module should also tell `SafeDITool` which module it runs for, so that `SafeDITool` knows which module and package declare each `@Instantiable` type it reads:
+
+- `--module-name` names the Swift module that compiles the files the input CSV and `--include` name. Files reached through a `#SafeDIConfiguration`’s `additionalDirectoriesToInclude` belong to another module, which `SafeDITool` does not know.
+- `--package-name` names that module’s package exactly as the compiler’s `-package-name` names it. Omit it when the compiler receives no `-package-name`.
+
+`generate --module-info-output` records both in the module’s `.safedi` file, so a module that reads the file knows which module and package declare each type in it, and records as the module’s dependencies the module each `--dependent-module-info-file-path` file records. A `package` declaration is visible only to modules compiled with the same `-package-name`. SwiftPM passes every target of a package the same one, derived from the package’s identity. Bazel passes one only when a `swift_library` sets `package_name`, which `safedi_swift_library` takes too and passes to both the library and SafeDITool. Xcode, and therefore Tuist, passes one only when a target sets the `SWIFT_PACKAGE_NAME` build setting, which the Tuist plugin forwards. The Bazel rule passes both options, and the Tuist plugin passes them to a SafeDITool that accepts them. The `SafeDIGenerator` plugin needs none of them: for a Swift package target it writes the module, package, and Swift files of every target whose files it lists beside its input CSV, and `generate` reads that instead. An Xcode project target’s plugin knows no modules, so `SafeDITool` does not know which module declares each file there.
 
 Run `SafeDITool`, as [Running SafeDITool yourself](#running-safeditool-yourself) describes for your integration, with `--help`, `scan --help`, or `generate --help` to see documentation of all supported arguments, `query needs --help` for the command that [reports what types need](#querying-what-a-type-needs) (in beta), and `dump --help` for the command that prints a `.safedi` file, or the cache `scan` writes beside its manifest, as JSON.
 

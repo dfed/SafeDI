@@ -58,6 +58,15 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 			relativeTo: packageRoot,
 			to: inputSourcesFile,
 		)
+		// Every form of the `generate` command below reads it, to record the module and package that declare each file,
+		// and declares it, with the CSV, as an input, so a change to the targets that changes no Swift file reruns it.
+		try writeTargetGraph(
+			of: sourceTarget,
+			dependencyTargets: sourceTarget.sourceModuleRecursiveDependencies,
+			in: context.package,
+			relativeTo: packageRoot,
+			besideInputSourcesFile: inputSourcesFile,
+		)
 
 		let manifestFile = context.pluginWorkDirectoryURL.appending(path: "SafeDIManifest.json")
 
@@ -125,7 +134,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 					+ activeCompilationConditionArguments
 					+ buildSettingCompilationConditionArguments,
 				environment: [:],
-				inputFiles: allSwiftFiles + additionalInputFiles,
+				inputFiles: allSwiftFiles + additionalInputFiles + [inputSourcesFile, targetGraphFile(besideInputSourcesFile: inputSourcesFile)],
 				outputFiles: outputFiles,
 			),
 		]
@@ -167,7 +176,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 					+ activeCompilationConditionArguments
 					+ buildSettingCompilationConditionArguments,
 				environment: [:],
-				inputFiles: allSwiftFiles + scanResult.additionalInputFiles,
+				inputFiles: allSwiftFiles + scanResult.additionalInputFiles + [inputSourcesFile, targetGraphFile(besideInputSourcesFile: inputSourcesFile)],
 				outputFiles: scanResult.outputFiles,
 			),
 		]
@@ -199,23 +208,95 @@ let buildSettingCompilationConditionArguments = [
 	"--build-setting-other-swift-flags=[${OTHER_SWIFT_FLAGS}]",
 ]
 
-/// Writes `swiftFiles` to `inputSourcesFile` as SafeDITool reads its input CSV, each relative to `base` when it lies
-/// inside it. `NormalizedFilePath` comes from SafeDICore's `FilePathSpelling.swift`, which this plugin compiles
-/// through a symbolic link.
+/// Writes `swiftFiles` to `inputSourcesFile` as SafeDITool reads its input CSV, each spelled as
+/// `inputSwiftFilePaths(of:relativeTo:)` spells it.
 func writeInputSwiftFilesCSV(
 	_ swiftFiles: [URL],
 	relativeTo base: URL,
 	to inputSourcesFile: URL,
 ) throws {
+	try writeIfChanged(
+		Data(inputSwiftFilePaths(of: swiftFiles, relativeTo: base).joined(separator: ",").utf8),
+		to: inputSourcesFile,
+	)
+}
+
+/// Writes `data` to `file` unless the file already holds it. A command that declares the file as an input then
+/// reruns only when what the file holds changes: the plugin writes the file each time it plans the build.
+func writeIfChanged(_ data: Data, to file: URL) throws {
+	if (try? Data(contentsOf: file)) != data {
+		try data.write(to: file, options: .atomic)
+	}
+}
+
+/// The file the plugin writes the target graph to, beside the input CSV at `inputSourcesFile`.
+func targetGraphFile(besideInputSourcesFile inputSourcesFile: URL) -> URL {
+	URL(fileURLWithPath: inputSourcesFile.path(percentEncoded: false) + PluginTargetGraph.fileNameSuffix)
+}
+
+/// `swiftFiles` as the input CSV spells them: each relative to `base` when it lies inside it, and normalized
+/// otherwise. `NormalizedFilePath` comes from SafeDICore's `FilePathSpelling.swift`, which this plugin compiles
+/// through a symbolic link.
+func inputSwiftFilePaths(of swiftFiles: [URL], relativeTo base: URL) -> [String] {
 	let normalizedBase = NormalizedFilePath(base.path(percentEncoded: false))
-	try swiftFiles
-		.map { NormalizedFilePath($0.path(percentEncoded: false)).path(relativeTo: normalizedBase) }
-		.joined(separator: ",")
-		.write(
-			to: inputSourcesFile,
-			atomically: true,
-			encoding: .utf8,
+	return swiftFiles.map { NormalizedFilePath($0.path(percentEncoded: false)).path(relativeTo: normalizedBase) }
+}
+
+/// Writes the target graph of `target`, whose input CSV lists its own files and those of `dependencyTargets`, each
+/// spelled relative to `base` as `inputSwiftFilePaths(of:relativeTo:)` spells it, beside `inputSourcesFile`, for
+/// `generate` to read the module and package that declare each file.
+///
+/// The plugin API reports which package declares a target only by listing the package's targets, so each target's
+/// package is found among `package` and the packages it depends on, directly or through another. The API does not
+/// report which plugins a target applies, so the graph does not say whether a dependency target applies this one.
+func writeTargetGraph(
+	of target: SwiftSourceModuleTarget,
+	dependencyTargets: [SwiftSourceModuleTarget],
+	in package: Package,
+	relativeTo base: URL,
+	besideInputSourcesFile inputSourcesFile: URL,
+) throws {
+	var packageIDsByTargetID = [String: Package.ID]()
+	var visitedPackageIDs = Set<Package.ID>()
+	var packagesToVisit = [package]
+	while let packageToVisit = packagesToVisit.popLast() {
+		if visitedPackageIDs.insert(packageToVisit.id).inserted {
+			for packageTarget in packageToVisit.targets {
+				packageIDsByTargetID[packageTarget.id] = packageToVisit.id
+			}
+			packagesToVisit += packageToVisit.dependencies.map(\.package)
+		}
+	}
+	func moduleName(of target: any Target) -> String {
+		(target as? any SourceModuleTarget)?.moduleName ?? target.name
+	}
+	func graphTarget(_ target: SwiftSourceModuleTarget) -> PluginTargetGraph.Target {
+		PluginTargetGraph.Target(
+			moduleName: target.moduleName,
+			packageID: packageIDsByTargetID[target.id],
+			// The files the CSV lists for the target, spelled by the same code.
+			sourceFilePaths: inputSwiftFilePaths(of: target.sourceFiles(withSuffix: ".swift").map(\.url), relativeTo: base).sorted(),
+			dependencyModuleNames: Set(target.dependencies.flatMap { dependency in
+				switch dependency {
+				case let .target(dependencyTarget):
+					[moduleName(of: dependencyTarget)]
+				case let .product(product):
+					product.targets.map(moduleName(of:))
+				@unknown default:
+					[String]()
+				}
+			}).sorted(),
 		)
+	}
+	let targetGraph = PluginTargetGraph(
+		target: graphTarget(target),
+		dependencyTargets: dependencyTargets.map(graphTarget).sorted {
+			($0.moduleName, $0.packageID ?? "") < ($1.moduleName, $1.packageID ?? "")
+		},
+	)
+	let encoder = JSONEncoder()
+	encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+	try writeIfChanged(encoder.encode(targetGraph), to: targetGraphFile(besideInputSourcesFile: inputSourcesFile))
 }
 
 extension Target {
