@@ -843,7 +843,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
 						line: 2,
 						column: 44,
 						severity: .error,
@@ -880,7 +880,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
 						line: 2,
 						column: 43,
 						severity: .error,
@@ -917,7 +917,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
 						line: 2,
 						column: 43,
 						severity: .error,
@@ -974,7 +974,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
 						line: 2,
 						column: 44,
 						severity: .error,
@@ -1014,7 +1014,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
 						line: 2,
 						column: 44,
 						severity: .error,
@@ -1054,7 +1054,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
 						line: 2,
 						column: 44,
 						severity: .error,
@@ -1134,7 +1134,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
 						line: 2,
 						column: 44,
 						severity: .error,
@@ -1372,7 +1372,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
 						line: 2,
 						column: 44,
 						severity: .error,
@@ -1442,7 +1442,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
 						line: 2,
 						column: 49,
 						severity: .error,
@@ -1502,7 +1502,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
 						line: 2,
 						column: 44,
 						severity: .error,
@@ -1550,7 +1550,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
 						line: 2,
 						column: 44,
 						severity: .error,
@@ -1598,7 +1598,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
 						line: 2,
 						column: 44,
 						severity: .error,
@@ -1648,7 +1648,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
 						line: 2,
 						column: 44,
 						severity: .error,
@@ -1701,7 +1701,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedA: ReceivedA`.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedA: ReceivedA`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -1756,7 +1756,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -1820,7 +1820,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -1882,7 +1882,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `forwardedA: ForwardedA`.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `forwardedA: ForwardedA`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -1942,7 +1942,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedA: ReceivedA`.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedA: ReceivedA`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -2004,7 +2004,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedA: ReceivedA`.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedA: ReceivedA`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -2070,7 +2070,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
 						line: 3,
 						column: 5,
 						severity: .error,
@@ -2140,7 +2140,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
 						line: 3,
 						column: 5,
 						severity: .error,
@@ -2204,7 +2204,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `forwardedA: ForwardedA`.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `forwardedA: ForwardedA`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -2272,7 +2272,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedA: ReceivedA`.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedA: ReceivedA`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -2337,7 +2337,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -2400,7 +2400,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -2464,7 +2464,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -2522,7 +2522,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `received: Received`, `instantiated: Instantiated`, `forwarded: Forwarded`.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `received: Received`, `instantiated: Instantiated`, `forwarded: Forwarded`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -2626,18 +2626,18 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
+						message: "@Instantiable-decorated type’s initializer must not be `private`: SafeDI calls it in a generated file, where a `private` initializer is not visible. Remove `private`.",
 						line: 22,
 						column: 2,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Add `public` modifier"),
+							FixItSpec(message: "Remove `private` modifier"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add `public` modifier",
+					"Remove `private` modifier",
 				],
 				fixedSource: """
 				@Instantiable
@@ -2661,7 +2661,7 @@ import Testing
 						self.receivedA = receivedA
 					}
 
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
+					init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
 						self.forwardedA = forwardedA
 						self.receivedA = receivedA
 						self.receivedB = receivedB
@@ -2735,18 +2735,18 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `forwardedA: ForwardedA`.",
-						line: 18,
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `receivedB: ReceivedB`.",
+						line: 13,
 						column: 2,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Add arguments for forwardedA: ForwardedA"),
+							FixItSpec(message: "Add arguments for receivedB: ReceivedB"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add arguments for forwardedA: ForwardedA",
+					"Add arguments for receivedB: ReceivedB",
 				],
 				fixedSource: """
 				@Instantiable
@@ -2761,13 +2761,13 @@ import Testing
 						self.receivedA = receivedA
 					}
 
-					init(forwardedA: ForwardedA, receivedA: ReceivedA) {
+					init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB) {
 						self.forwardedA = forwardedA
 						self.receivedA = receivedA
+						self.receivedB = receivedB
 					}
 
-					public init(forwardedA: ForwardedA, receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
-						self.forwardedA = forwardedA
+					public init(receivedA: ReceivedA, receivedB: ReceivedB, customizable: String = "") {
 						self.receivedA = receivedA
 						self.receivedB = receivedB
 					}
@@ -2810,7 +2810,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `forwardedA: ForwardedA`.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `forwardedA: ForwardedA`.",
 						line: 3,
 						column: 2,
 						severity: .error,
@@ -2860,7 +2860,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
 						line: 2,
 						column: 46,
 						severity: .error,
@@ -2908,7 +2908,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
 						line: 2,
 						column: 44,
 						severity: .error,
@@ -2950,7 +2950,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
 						line: 2,
 						column: 44,
 						severity: .error,
@@ -2992,7 +2992,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
 						line: 2,
 						column: 44,
 						severity: .error,
@@ -3019,7 +3019,8 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesInitializerWhenExistingInitializerIsMissingAccessModifier() {
+		func declaration_expandsWithoutDiagnostic_whenInitializerSpellsNoAccessModifier() {
+			// The initializer is `internal`. SafeDITool checks that the code it generates can call it.
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -3046,47 +3047,21 @@ import Testing
 					let a: A
 					let b: B
 					let c: C
-				}
-				""",
-				diagnostics: [
-					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
-						line: 3,
-						column: 2,
-						severity: .error,
-						fixIts: [
-							FixItSpec(message: "Add `public` modifier"),
-						],
-					),
-				],
-				macros: instantiableTestMacros,
-				applyFixIts: [
-					"Add `public` modifier",
-				],
-				fixedSource: """
-				@Instantiable
-				public final class UserService: Instantiable {
-					public init(a: A, b: B, c: C) {
-						self.a = a
-						self.b = b
-						self.c = c
-					}
 
-					@Received let a: A
-					@Instantiated let b: B
-					@Forwarded let c: C
+				    public typealias ForwardedProperties = C
 				}
 				""",
+				macros: instantiableTestMacros,
 			)
 		}
 
 		@Test
-		func declaration_fixit_updatesInitializerWhenExistingInitializerIsMissingAccessModifierWithOtherModifier() {
+		func declaration_expandsWithoutDiagnostic_whenInitializerIsPackage() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
-				public final class UserService: Instantiable {
-					final init(a: A, b: B, c: C) {
+				package final class UserService: Instantiable {
+					package init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -3098,8 +3073,8 @@ import Testing
 				}
 				""",
 				expandedSource: """
-				public final class UserService: Instantiable {
-					final init(a: A, b: B, c: C) {
+				package final class UserService: Instantiable {
+					package init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -3108,42 +3083,16 @@ import Testing
 					let a: A
 					let b: B
 					let c: C
-				}
-				""",
-				diagnostics: [
-					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
-						line: 3,
-						column: 2,
-						severity: .error,
-						fixIts: [
-							FixItSpec(message: "Add `public` modifier"),
-						],
-					),
-				],
-				macros: instantiableTestMacros,
-				applyFixIts: [
-					"Add `public` modifier",
-				],
-				fixedSource: """
-				@Instantiable
-				public final class UserService: Instantiable {
-					public final init(a: A, b: B, c: C) {
-						self.a = a
-						self.b = b
-						self.c = c
-					}
 
-					@Received let a: A
-					@Instantiated let b: B
-					@Forwarded let c: C
+				    public typealias ForwardedProperties = C
 				}
 				""",
+				macros: instantiableTestMacros,
 			)
 		}
 
 		@Test
-		func declaration_fixit_updatesFirstInitializer_whenIfConfigClausesDeclareSameSignatureWithDifferentNonPublicAccess() {
+		func declaration_fixit_updatesFirstInitializer_whenIfConfigClausesDeclareSameSignatureWithDifferentPrivateOrFilePrivateAccess() {
 			// The initializers differ only in access, so each is reported where it is declared. The macro reports the
 			// first initializer it can fix.
 			assertMacroExpansion(
@@ -3151,7 +3100,7 @@ import Testing
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				    #if DEBUG
-				    init() {}
+				    fileprivate init() {}
 				    #else
 				    private init() {}
 				    #endif
@@ -3160,7 +3109,7 @@ import Testing
 				expandedSource: """
 				public struct ExampleService: Instantiable {
 				    #if DEBUG
-				    init() {}
+				    fileprivate init() {}
 				    #else
 				    private init() {}
 				    #endif
@@ -3168,24 +3117,24 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
+						message: "@Instantiable-decorated type’s initializer must not be `fileprivate`: SafeDI calls it in a generated file, where a `fileprivate` initializer is not visible. Remove `fileprivate`.",
 						line: 4,
 						column: 5,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Add `public` modifier"),
+							FixItSpec(message: "Remove `fileprivate` modifier"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add `public` modifier",
+					"Remove `fileprivate` modifier",
 				],
 				fixedSource: """
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				    #if DEBUG
-				    public init() {}
+				    init() {}
 				    #else
 				    private init() {}
 				    #endif
@@ -3195,13 +3144,169 @@ import Testing
 		}
 
 		@Test
-		func declaration_diagnosesUnlabeledDefaultAtEachInitializer_whenIfConfigClausesDeclareSameSignatureWithDifferentNonPublicAccess() {
+		func declaration_diagnosesUnlabeledDefaultAtEachInitializer_whenIfConfigClausesDeclareIdenticalInitializers() {
+			// The two initializers are equal, so each is reported where it is declared only because the macro finds a
+			// declaration by its position among the initializers rather than by its value.
 			assertMacroExpansion(
 				"""
 				@Instantiable
 				public struct ExampleService: Instantiable {
 				    #if DEBUG
 				    init(_ enabled: Bool = false, _ dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    #else
+				    init(_ enabled: Bool = false, _ dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    #endif
+
+				    @Received let dependency: Dependency
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    #if DEBUG
+				    init(_ enabled: Bool = false, _ dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    #else
+				    init(_ enabled: Bool = false, _ dependency: Dependency) {
+				        self.dependency = dependency
+				    }
+				    #endif
+
+				    let dependency: Dependency
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "Unlabeled parameter `enabled: Bool` has a default value but is followed by unlabeled required parameter `dependency: Dependency`, so a generated `mock()` cannot leave `enabled` out of its call. Add an argument label to `enabled`, move unlabeled parameters with defaults after the required ones, or remove the default.",
+						line: 4,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add argument label `enabled`"),
+						],
+					),
+					DiagnosticSpec(
+						message: "Unlabeled parameter `enabled: Bool` has a default value but is followed by unlabeled required parameter `dependency: Dependency`, so a generated `mock()` cannot leave `enabled` out of its call. Add an argument label to `enabled`, move unlabeled parameters with defaults after the required ones, or remove the default.",
+						line: 8,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Add argument label `enabled`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_diagnosesSelfInDefaultAtFirstInitializer_whenIfConfigClausesDeclareIdenticalInitializers() {
+			// SafeDI constructs the type with the first initializer that fulfills its dependencies, so only that
+			// initializer's defaults are checked, where it is declared.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyType: Instantiable {
+				    #if DEBUG
+				    init(name: String = Self.defaultName) {
+				        self.name = name
+				    }
+				    #else
+				    init(name: String = Self.defaultName) {
+				        self.name = name
+				    }
+				    #endif
+				    static let defaultName = "fallback"
+				    let name: String
+				}
+				""",
+				expandedSource: """
+				public struct MyType: Instantiable {
+				    #if DEBUG
+				    init(name: String = Self.defaultName) {
+				        self.name = name
+				    }
+				    #else
+				    init(name: String = Self.defaultName) {
+				        self.name = name
+				    }
+				    #endif
+				    static let defaultName = "fallback"
+				    let name: String
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The default value of `name` refers to `Self`. A generated `mock()` repeats this default outside `MyType`, where `Self` names a different type. Write `MyType` instead of `Self`, or remove the default.",
+						line: 4,
+						column: 10,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_fixit_updatesFirstInitializer_whenIfConfigClausesDeclareIdenticalInaccessibleInitializers() {
+			// The two initializers are equal and need the same change, so the first declared is fixed.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    #if DEBUG
+				    private init() {}
+				    #else
+				    private init() {}
+				    #endif
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    #if DEBUG
+				    private init() {}
+				    #else
+				    private init() {}
+				    #endif
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type’s initializer must not be `private`: SafeDI calls it in a generated file, where a `private` initializer is not visible. Remove `private`.",
+						line: 4,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove `private` modifier"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove `private` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    #if DEBUG
+				    init() {}
+				    #else
+				    private init() {}
+				    #endif
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_diagnosesUnlabeledDefaultAtEachInitializer_whenIfConfigClausesDeclareSameSignatureWithDifferentPrivateOrFilePrivateAccess() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    #if DEBUG
+				    fileprivate init(_ enabled: Bool = false, _ dependency: Dependency) {
 				        self.dependency = dependency
 				    }
 				    #else
@@ -3216,7 +3321,7 @@ import Testing
 				expandedSource: """
 				public struct ExampleService: Instantiable {
 				    #if DEBUG
-				    init(_ enabled: Bool = false, _ dependency: Dependency) {
+				    fileprivate init(_ enabled: Bool = false, _ dependency: Dependency) {
 				        self.dependency = dependency
 				    }
 				    #else
@@ -3246,12 +3351,12 @@ import Testing
 						],
 					),
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
+						message: "@Instantiable-decorated type’s initializer must not be `fileprivate`: SafeDI calls it in a generated file, where a `fileprivate` initializer is not visible. Remove `fileprivate`.",
 						line: 4,
 						column: 5,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Add `public` modifier"),
+							FixItSpec(message: "Remove `fileprivate` modifier"),
 						],
 					),
 				],
@@ -3291,23 +3396,23 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
+						message: "@Instantiable-decorated type’s initializer must not be `private`: SafeDI calls it in a generated file, where a `private` initializer is not visible. Remove `private`.",
 						line: 3,
 						column: 2,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Add `public` modifier"),
+							FixItSpec(message: "Remove `private` modifier"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add `public` modifier",
+					"Remove `private` modifier",
 				],
 				fixedSource: """
 				@Instantiable
 				public final class UserService: Instantiable {
-					public init(a: A, b: B, c: C) {
+					init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -3353,23 +3458,23 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
+						message: "@Instantiable-decorated type’s initializer must not be `private`: SafeDI calls it in a generated file, where a `private` initializer is not visible. Remove `private`.",
 						line: 3,
 						column: 2,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Add `public` modifier"),
+							FixItSpec(message: "Remove `private` modifier"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add `public` modifier",
+					"Remove `private` modifier",
 				],
 				fixedSource: """
 				@Instantiable
 				public final class UserService: Instantiable {
-					final public init(a: A, b: B, c: C) {
+					final init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -3415,23 +3520,23 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
+						message: "@Instantiable-decorated type’s initializer must not be `private`: SafeDI calls it in a generated file, where a `private` initializer is not visible. Remove `private`.",
 						line: 3,
 						column: 2,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Add `public` modifier"),
+							FixItSpec(message: "Remove `private` modifier"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add `public` modifier",
+					"Remove `private` modifier",
 				],
 				fixedSource: """
 				@Instantiable
 				public final class UserService: Instantiable {
-					public final init(a: A, b: B, c: C) {
+					final init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -3446,12 +3551,12 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesInitializerWhenExistingInitializerIsMissingAccessModifierAndAnotherInitializerWithMissingArgument() {
+		func declaration_fixit_removesFilePrivateModifierFromInitializer_whenAnotherInitializerIsMissingArgument() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
 				public final class UserService: Instantiable {
-					init(a: A, b: B, c: C) {
+					fileprivate init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -3470,7 +3575,7 @@ import Testing
 				""",
 				expandedSource: """
 				public final class UserService: Instantiable {
-					init(a: A, b: B, c: C) {
+					fileprivate init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -3489,23 +3594,23 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
+						message: "@Instantiable-decorated type’s initializer must not be `fileprivate`: SafeDI calls it in a generated file, where a `fileprivate` initializer is not visible. Remove `fileprivate`.",
 						line: 3,
 						column: 2,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Add `public` modifier"),
+							FixItSpec(message: "Remove `fileprivate` modifier"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add `public` modifier",
+					"Remove `fileprivate` modifier",
 				],
 				fixedSource: """
 				@Instantiable
 				public final class UserService: Instantiable {
-					public init(a: A, b: B, c: C) {
+					init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -3526,12 +3631,356 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_updatesInitializerWhenExistingInitializerIsMissingAccessModifierAndAnotherInitializerExistsWithExtraArgument() {
+		func declaration_fixit_removesFilePrivateModifierFromInitializer_whenLaterInitializerIsOnlyMissingArgument() {
+			// Removing a modifier is a smaller change than adding an argument, whichever initializer is declared first.
 			assertMacroExpansion(
 				"""
 				@Instantiable
 				public final class UserService: Instantiable {
+					fileprivate init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					init(a: A, b: B) {
+						self.a = a
+						self.b = b
+						c = C()
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				""",
+				expandedSource: """
+				public final class UserService: Instantiable {
+					fileprivate init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					init(a: A, b: B) {
+						self.a = a
+						self.b = b
+						c = C()
+					}
+
+					let a: A
+					let b: B
+					let c: C
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type’s initializer must not be `fileprivate`: SafeDI calls it in a generated file, where a `fileprivate` initializer is not visible. Remove `fileprivate`.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove `fileprivate` modifier"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove `fileprivate` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class UserService: Instantiable {
 					init(a: A, b: B, c: C) {
+						self.a = a
+						self.b = b
+						self.c = c
+					}
+
+					init(a: A, b: B) {
+						self.a = a
+						self.b = b
+						c = C()
+					}
+
+					@Received let a: A
+					@Instantiated let b: B
+					@Forwarded let c: C
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_fixit_addsRequiredInitializer_whenOnlyInitializerIsAsyncAndThrows() {
+			// Neither effect has a fix, so the macro offers the initializer SafeDI needs, as for no initializer at all.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class ExampleService: Instantiable {
+					public init() async throws {}
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+					public init() async throws {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 49,
+						severity: .error,
+						notes: [
+							NoteSpec(
+								message: "SafeDI cannot construct the type with this initializer: generated code calls an initializer synchronously, so it must be neither `async` nor `throws`.",
+								line: 3,
+								column: 2,
+							),
+						],
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class ExampleService: Instantiable {
+				public init() {}
+
+					public init() async throws {}
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_fixit_removesPrivateModifierFirst_whenOnlyInitializerIsAlsoMissingArgument() {
+			// Both errors of the one initializer have a fix, and removing the modifier is the smaller change.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class ExampleService: Instantiable {
+					private init(a: A) {
+						self.a = a
+						b = B()
+					}
+
+					@Received let a: A
+					@Received let b: B
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+					private init(a: A) {
+						self.a = a
+						b = B()
+					}
+
+					let a: A
+					let b: B
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type’s initializer must not be `private`: SafeDI calls it in a generated file, where a `private` initializer is not visible. Remove `private`.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove `private` modifier"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove `private` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class ExampleService: Instantiable {
+					init(a: A) {
+						self.a = a
+						b = B()
+					}
+
+					@Received let a: A
+					@Received let b: B
+				}
+				""",
+			)
+		}
+
+		@Test(arguments: ["async", "throws", "async throws"])
+		func declaration_fixit_removesEffectSpecifiersFromMockMethod_whenMockMethodHasThem(effectSpecifiers: String) {
+			// A generated mock calls the hand-written mock synchronously.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class ExampleService: Instantiable {
+					public init(dependency: Dependency) {
+						self.dependency = dependency
+					}
+
+					public static func mock(dependency: Dependency) \(effectSpecifiers) -> ExampleService {
+						ExampleService(dependency: dependency)
+					}
+
+					@Received let dependency: Dependency
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+					public init(dependency: Dependency) {
+						self.dependency = dependency
+					}
+
+					public static func mock(dependency: Dependency) \(effectSpecifiers) -> ExampleService {
+						ExampleService(dependency: dependency)
+					}
+
+					let dependency: Dependency
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This `mock()` method must be neither `async` nor `throws`: generated mocks call it synchronously. Remove its effect specifiers.",
+						line: 7,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove effect specifiers from `mock()`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove effect specifiers from `mock()`",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class ExampleService: Instantiable {
+					public init(dependency: Dependency) {
+						self.dependency = dependency
+					}
+
+					public static func mock(dependency: Dependency) -> ExampleService {
+						ExampleService(dependency: dependency)
+					}
+
+					@Received let dependency: Dependency
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_fixit_removesEffectSpecifiersFromCustomNamedMockMethod_whenItIsAsync() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public final class ExampleService: Instantiable {
+					public init() {}
+
+					public static func customMock() async -> ExampleService {
+						ExampleService()
+					}
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+					public init() {}
+
+					public static func customMock() async -> ExampleService {
+						ExampleService()
+					}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This `customMock()` method must be neither `async` nor `throws`: generated mocks call it synchronously. Remove its effect specifiers.",
+						line: 5,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove effect specifiers from `customMock()`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove effect specifiers from `customMock()`",
+				],
+				fixedSource: """
+				@Instantiable(generateMock: true, customMockName: "customMock")
+				public final class ExampleService: Instantiable {
+					public init() {}
+
+					public static func customMock() -> ExampleService {
+						ExampleService()
+					}
+				}
+				""",
+			)
+		}
+
+		@Test(arguments: ["async", "throws", "async throws"])
+		func extension_fixit_removesEffectSpecifiersFromMockMethod_whenMockMethodHasThem(effectSpecifiers: String) {
+			// A generated mock calls the hand-written mock synchronously.
+			assertMacroExpansion(
+				"""
+				@Instantiable(mockOnly: true)
+				extension ExampleService {
+					public static func mock() \(effectSpecifiers) -> ExampleService {
+						ExampleService()
+					}
+				}
+				""",
+				expandedSource: """
+				extension ExampleService {
+					public static func mock() \(effectSpecifiers) -> ExampleService {
+						ExampleService()
+					}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This `mock()` method must be neither `async` nor `throws`: generated mocks call it synchronously. Remove its effect specifiers.",
+						line: 3,
+						column: 2,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove effect specifiers from `mock()`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove effect specifiers from `mock()`",
+				],
+				fixedSource: """
+				@Instantiable(mockOnly: true)
+				extension ExampleService {
+					public static func mock() -> ExampleService {
+						ExampleService()
+					}
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_fixit_removesFilePrivateModifierFromInitializer_whenAnotherInitializerHasExtraArgument() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class UserService: Instantiable {
+					fileprivate init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -3551,7 +4000,7 @@ import Testing
 				""",
 				expandedSource: """
 				public final class UserService: Instantiable {
-					init(a: A, b: B, c: C) {
+					fileprivate init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -3571,23 +4020,23 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer.",
+						message: "@Instantiable-decorated type’s initializer must not be `fileprivate`: SafeDI calls it in a generated file, where a `fileprivate` initializer is not visible. Remove `fileprivate`.",
 						line: 3,
 						column: 2,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Add `public` modifier"),
+							FixItSpec(message: "Remove `fileprivate` modifier"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add `public` modifier",
+					"Remove `fileprivate` modifier",
 				],
 				fixedSource: """
 				@Instantiable
 				public final class UserService: Instantiable {
-					public init(a: A, b: B, c: C) {
+					init(a: A, b: B, c: C) {
 						self.a = a
 						self.b = b
 						self.c = c
@@ -3899,7 +4348,8 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_addsFixitWhenInjectableActorIsNotPublicOrOpen() {
+		func declaration_expandsWithoutDiagnostic_whenInjectableActorSpellsNoAccessModifier() {
+			// The actor is `internal`. SafeDITool checks that the code it generates can construct it.
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -3920,41 +4370,17 @@ import Testing
 				    let receivedA: ReceivedA
 				}
 				""",
-				diagnostics: [
-					DiagnosticSpec(
-						message: "@Instantiable-decorated type must be `public` or `open`.",
-						line: 1,
-						column: 1,
-						severity: .error,
-						fixIts: [
-							FixItSpec(message: "Add `public` modifier"),
-						],
-					),
-				],
 				macros: instantiableTestMacros,
-				applyFixIts: [
-					"Add `public` modifier",
-				],
-				fixedSource: """
-				@Instantiable
-				public actor ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    @Instantiated let receivedA: ReceivedA
-				}
-				""",
 			)
 		}
 
 		@Test
-		func declaration_fixit_addsFixitWhenInjectableClassIsNotPublicOrOpen() {
+		func declaration_expandsWithoutDiagnostic_whenInjectableClassSpellsNoAccessModifier() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
 				class ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
+				    init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
 
@@ -3963,6 +4389,32 @@ import Testing
 				""",
 				expandedSource: """
 				class ExampleService: Instantiable {
+				    init(receivedA: ReceivedA) {
+				        self.receivedA = receivedA
+				    }
+
+				    let receivedA: ReceivedA
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_fixit_removesPrivateModifier_whenInjectableFinalClassIsPrivate() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				private final class ExampleService: Instantiable {
+				    public init(receivedA: ReceivedA) {
+				        self.receivedA = receivedA
+				    }
+
+				    @Instantiated let receivedA: ReceivedA
+				}
+				""",
+				expandedSource: """
+				private final class ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
@@ -3972,36 +4424,20 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must be `public` or `open`.",
+						message: "@Instantiable-decorated type must not be `private`: SafeDI constructs it in a generated file, where a `private` type is not visible. Remove `private`.",
 						line: 1,
 						column: 1,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Add `public` modifier"),
+							FixItSpec(message: "Remove `private` modifier"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add `public` modifier",
+					"Remove `private` modifier",
 				],
 				fixedSource: """
-				@Instantiable
-				public class ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    @Instantiated let receivedA: ReceivedA
-				}
-				""",
-			)
-		}
-
-		@Test
-		func declaration_fixit_addsFixitWhenInjectableFinalClassIsNotPublicOrOpen() {
-			assertMacroExpansion(
-				"""
 				@Instantiable
 				final class ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
@@ -4011,50 +4447,16 @@ import Testing
 				    @Instantiated let receivedA: ReceivedA
 				}
 				""",
-				expandedSource: """
-				final class ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    let receivedA: ReceivedA
-				}
-				""",
-				diagnostics: [
-					DiagnosticSpec(
-						message: "@Instantiable-decorated type must be `public` or `open`.",
-						line: 1,
-						column: 1,
-						severity: .error,
-						fixIts: [
-							FixItSpec(message: "Add `public` modifier"),
-						],
-					),
-				],
-				macros: instantiableTestMacros,
-				applyFixIts: [
-					"Add `public` modifier",
-				],
-				fixedSource: """
-				@Instantiable
-				public final class ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    @Instantiated let receivedA: ReceivedA
-				}
-				""",
 			)
 		}
 
 		@Test
-		func declaration_fixit_addsFixitWhenInjectableClassIsInternal() {
+		func declaration_expandsWithoutDiagnostic_whenInjectableClassIsInternal() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
 				internal class ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
+				    internal init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
 
@@ -4063,43 +4465,19 @@ import Testing
 				""",
 				expandedSource: """
 				internal class ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
+				    internal init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
 
 				    let receivedA: ReceivedA
 				}
 				""",
-				diagnostics: [
-					DiagnosticSpec(
-						message: "@Instantiable-decorated type must be `public` or `open`.",
-						line: 1,
-						column: 1,
-						severity: .error,
-						fixIts: [
-							FixItSpec(message: "Add `public` modifier"),
-						],
-					),
-				],
 				macros: instantiableTestMacros,
-				applyFixIts: [
-					"Add `public` modifier",
-				],
-				fixedSource: """
-				@Instantiable
-				public class ExampleService: Instantiable {
-				    public init(receivedA: ReceivedA) {
-				        self.receivedA = receivedA
-				    }
-
-				    @Instantiated let receivedA: ReceivedA
-				}
-				""",
 			)
 		}
 
 		@Test
-		func declaration_fixit_addsFixitWhenInjectableClassIsFileprivate() {
+		func declaration_fixit_removesFileprivateModifier_whenInjectableClassIsFileprivate() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -4122,22 +4500,22 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must be `public` or `open`.",
+						message: "@Instantiable-decorated type must not be `fileprivate`: SafeDI constructs it in a generated file, where a `fileprivate` type is not visible. Remove `fileprivate`.",
 						line: 1,
 						column: 1,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Add `public` modifier"),
+							FixItSpec(message: "Remove `fileprivate` modifier"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add `public` modifier",
+					"Remove `fileprivate` modifier",
 				],
 				fixedSource: """
 				@Instantiable
-				public class ExampleService: Instantiable {
+				class ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
@@ -4149,7 +4527,7 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_addsFixitWhenInjectableClassIsPrivate() {
+		func declaration_fixit_removesPrivateModifier_whenInjectableClassIsPrivate() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -4172,22 +4550,22 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must be `public` or `open`.",
+						message: "@Instantiable-decorated type must not be `private`: SafeDI constructs it in a generated file, where a `private` type is not visible. Remove `private`.",
 						line: 1,
 						column: 1,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Add `public` modifier"),
+							FixItSpec(message: "Remove `private` modifier"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add `public` modifier",
+					"Remove `private` modifier",
 				],
 				fixedSource: """
 				@Instantiable
-				public class ExampleService: Instantiable {
+				class ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
@@ -4199,11 +4577,12 @@ import Testing
 		}
 
 		@Test
-		func declaration_fixit_addsFixitWhenInjectableStructIsNotPublicOrOpen() {
+		func declaration_fixit_removesPrivateModifier_whenInjectableActorIsPrivate() {
+			// The `actor` keyword takes the removed modifier's place, and its leading trivia.
 			assertMacroExpansion(
 				"""
 				@Instantiable
-				struct ExampleService: Instantiable {
+				private actor ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
@@ -4212,7 +4591,7 @@ import Testing
 				}
 				""",
 				expandedSource: """
-				struct ExampleService: Instantiable {
+				private actor ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
@@ -4222,22 +4601,22 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must be `public` or `open`.",
+						message: "@Instantiable-decorated type must not be `private`: SafeDI constructs it in a generated file, where a `private` type is not visible. Remove `private`.",
 						line: 1,
 						column: 1,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Add `public` modifier"),
+							FixItSpec(message: "Remove `private` modifier"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add `public` modifier",
+					"Remove `private` modifier",
 				],
 				fixedSource: """
 				@Instantiable
-				public struct ExampleService: Instantiable {
+				actor ExampleService: Instantiable {
 				    public init(receivedA: ReceivedA) {
 				        self.receivedA = receivedA
 				    }
@@ -4245,6 +4624,32 @@ import Testing
 				    @Instantiated let receivedA: ReceivedA
 				}
 				""",
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutDiagnostic_whenInjectableStructIsPackage() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				package struct ExampleService: Instantiable {
+				    package init(receivedA: ReceivedA) {
+				        self.receivedA = receivedA
+				    }
+
+				    @Instantiated let receivedA: ReceivedA
+				}
+				""",
+				expandedSource: """
+				package struct ExampleService: Instantiable {
+				    package init(receivedA: ReceivedA) {
+				        self.receivedA = receivedA
+				    }
+
+				    let receivedA: ReceivedA
+				}
+				""",
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -4264,7 +4669,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type with no @Instantiated, @Received, or @Forwarded-decorated properties must have a `public` or `open` initializer that either takes no parameters or has a default value for each parameter.",
+						message: "@Instantiable-decorated type with no @Instantiated, @Received, or @Forwarded-decorated properties must have an initializer that either takes no parameters or has a default value for each parameter.",
 						line: 2,
 						column: 44,
 						severity: .error,
@@ -4311,7 +4716,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values.",
 						line: 2,
 						column: 44,
 						severity: .error,
@@ -4366,7 +4771,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values.",
+						message: "@Instantiable-decorated type must have an initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. Parameters in this initializer that do not correspond to a decorated property must have default values.",
 						line: 2,
 						column: 44,
 						severity: .error,
@@ -4542,7 +4947,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated extension of `ExampleService` must have a `public static func instantiate() -> ExampleService` method.",
+						message: "@Instantiable-decorated extension of `ExampleService` must have a `static func instantiate() -> ExampleService` method.",
 						line: 2,
 						column: 41,
 						severity: .error,
@@ -4568,7 +4973,8 @@ import Testing
 		}
 
 		@Test
-		func extension_fixit_addsFixitWhenInstantiateMethodIsNotPublic() {
+		func extension_expandsWithoutDiagnostic_whenInstantiateMethodSpellsNoAccessModifier() {
+			// The method is `internal`. SafeDITool checks that the code it generates can call it.
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -4581,32 +4987,12 @@ import Testing
 				    static func instantiate() -> ExampleService { fatalError() }
 				}
 				""",
-				diagnostics: [
-					DiagnosticSpec(
-						message: "@Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`.",
-						line: 3,
-						column: 5,
-						severity: .error,
-						fixIts: [
-							FixItSpec(message: "Set `public static` modifiers"),
-						],
-					),
-				],
 				macros: instantiableTestMacros,
-				applyFixIts: [
-					"Set `public static` modifiers",
-				],
-				fixedSource: """
-				@Instantiable
-				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
-				}
-				""",
 			)
 		}
 
 		@Test
-		func extension_fixit_addsFixitWhenInstantiateMethodIsNotStatic() {
+		func extension_fixit_addsStaticModifier_whenInstantiateMethodIsNotStatic() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -4621,18 +5007,18 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`.",
+						message: "@Instantiable-decorated extension’s `instantiate()` method must be `static`: SafeDI calls it on the extended type. Add `static`.",
 						line: 3,
 						column: 5,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Set `public static` modifiers"),
+							FixItSpec(message: "Add `static` modifier"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Set `public static` modifiers",
+					"Add `static` modifier",
 				],
 				fixedSource: """
 				@Instantiable
@@ -4644,7 +5030,7 @@ import Testing
 		}
 
 		@Test
-		func extension_fixit_addsFixitWhenInstantiateMethodIsNotStaticOrPublic() {
+		func extension_fixit_addsStaticModifier_whenInstantiateMethodSpellsNoModifier() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -4659,23 +5045,108 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated extension must have an `instantiate()` method that is both `public` and `static`.",
+						message: "@Instantiable-decorated extension’s `instantiate()` method must be `static`: SafeDI calls it on the extended type. Add `static`.",
 						line: 3,
 						column: 5,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Set `public static` modifiers"),
+							FixItSpec(message: "Add `static` modifier"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Set `public static` modifiers",
+					"Add `static` modifier",
 				],
 				fixedSource: """
 				@Instantiable
 				extension ExampleService: Instantiable {
-				    public static func instantiate() -> ExampleService { fatalError() }
+				    static func instantiate() -> ExampleService { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_fixit_removesPrivateModifier_whenInstantiateMethodIsPrivate() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    private static func instantiate() -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    private static func instantiate() -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated extension’s `instantiate()` method must not be `private`: SafeDI calls it in a generated file, where a `private` method is not visible. Remove `private`.",
+						line: 3,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove `private` modifier"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove `private` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    static func instantiate() -> ExampleService { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_diagnosesEachModifierProblem_whenInstantiateMethodIsFileprivateAndNotStatic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    fileprivate func instantiate() -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    fileprivate func instantiate() -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated extension’s `instantiate()` method must be `static`: SafeDI calls it on the extended type. Add `static`.",
+						line: 3,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add `static` modifier"),
+						],
+					),
+					DiagnosticSpec(
+						message: "@Instantiable-decorated extension’s `instantiate()` method must not be `fileprivate`: SafeDI calls it in a generated file, where a `fileprivate` method is not visible. Remove `fileprivate`.",
+						line: 3,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Remove `fileprivate` modifier"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove `fileprivate` modifier",
+				],
+				fixedSource: """
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    func instantiate() -> ExampleService { fatalError() }
 				}
 				""",
 			)
@@ -6986,7 +7457,57 @@ import Testing
 		}
 
 		@Test
-		func mockMethodNotPublicProducesDiagnostic() {
+		func mockMethodPrivateProducesDiagnostic() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    private static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				expandedSource: """
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    private static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type’s `mock()` method must not be `private`: a generated mock calls it in a generated file, where a `private` method is not visible. Remove `private`.",
+						line: 5,
+						column: 5,
+						fixIts: [
+							FixItSpec(message: "Remove `private` modifier from `mock()` method"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Remove `private` modifier from `mock()` method",
+				],
+				fixedSource: """
+				@Instantiable
+				public struct MyService: Instantiable {
+				    public init() {}
+
+				    static func mock() -> MyService {
+				        MyService()
+				    }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func mockMethodInternalProducesNoDiagnostic() {
+			// SafeDITool checks that the mocks it generates can call the method.
 			assertMacroExpansion(
 				"""
 				@Instantiable
@@ -7007,16 +7528,6 @@ import Testing
 				    }
 				}
 				""",
-				diagnostics: [
-					DiagnosticSpec(
-						message: "@Instantiable-decorated type’s `mock()` method must be `public` or `open`.",
-						line: 5,
-						column: 5,
-						fixIts: [
-							FixItSpec(message: "Add `public` modifier to `mock()` method"),
-						],
-					),
-				],
 				macros: instantiableTestMacros,
 			)
 		}
@@ -7343,14 +7854,14 @@ import Testing
 		}
 
 		@Test
-		func extension_mockMethodNotPublicProducesDiagnostic() {
+		func extension_mockMethodFileprivateProducesDiagnostic() {
 			assertMacroExpansion(
 				"""
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 
-				    static func mock() -> ExampleService {
+				    static fileprivate func mock() -> ExampleService {
 				        ExampleService()
 				    }
 				}
@@ -7359,35 +7870,62 @@ import Testing
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 
-				    static func mock() -> ExampleService {
+				    static fileprivate func mock() -> ExampleService {
 				        ExampleService()
 				    }
 				}
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable-decorated type’s `mock()` method must be `public` or `open`.",
+						message: "@Instantiable-decorated type’s `mock()` method must not be `fileprivate`: a generated mock calls it in a generated file, where a `fileprivate` method is not visible. Remove `fileprivate`.",
 						line: 5,
 						column: 5,
 						fixIts: [
-							FixItSpec(message: "Add `public` modifier to `mock()` method"),
+							FixItSpec(message: "Remove `fileprivate` modifier from `mock()` method"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add `public` modifier to `mock()` method",
+					"Remove `fileprivate` modifier from `mock()` method",
 				],
 				fixedSource: """
 				@Instantiable
 				extension ExampleService: Instantiable {
 				    public static func instantiate() -> ExampleService { fatalError() }
 
-				    public static func mock() -> ExampleService {
+				    static func mock() -> ExampleService {
 				        ExampleService()
 				    }
 				}
 				""",
+			)
+		}
+
+		@Test
+		func extension_mockMethodPackageProducesNoDiagnostic() {
+			// SafeDITool checks that the mocks it generates can call the method.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension ExampleService: Instantiable {
+				    package static func instantiate() -> ExampleService { fatalError() }
+
+				    package static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    package static func instantiate() -> ExampleService { fatalError() }
+
+				    package static func mock() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				macros: instantiableTestMacros,
 			)
 		}
 
@@ -8116,7 +8654,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable(mockOnly: true) requires a `public static func mock(…) -> ExampleService` method.",
+						message: "@Instantiable(mockOnly: true) requires a `static func mock(…) -> ExampleService` method.",
 						line: 1,
 						column: 1,
 						fixIts: [
@@ -8153,7 +8691,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable(mockOnly: true) requires a `public static func mock(…) -> ExampleService` method.",
+						message: "@Instantiable(mockOnly: true) requires a `static func mock(…) -> ExampleService` method.",
 						line: 1,
 						column: 1,
 						fixIts: [
@@ -8188,7 +8726,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable(mockOnly: true) requires a `public static func mock(…) -> ExternalService` method.",
+						message: "@Instantiable(mockOnly: true) requires a `static func mock(…) -> ExternalService` method.",
 						line: 1,
 						column: 1,
 						fixIts: [
@@ -8375,7 +8913,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable(mockOnly: true) requires a `public static func preview(…) -> ExampleService` method.",
+						message: "@Instantiable(mockOnly: true) requires a `static func preview(…) -> ExampleService` method.",
 						line: 1,
 						column: 1,
 						fixIts: [
@@ -8493,7 +9031,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "@Instantiable(mockOnly: true) requires a `public static func mock(…) -> ExampleService` method.",
+						message: "@Instantiable(mockOnly: true) requires a `static func mock(…) -> ExampleService` method.",
 						line: 1,
 						column: 1,
 						fixIts: [

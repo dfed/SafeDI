@@ -23,15 +23,29 @@ import Testing
 
 struct InitializerTests {
 	@Test
-	func generateSafeDIInitializer_throwsWhenInitializerIsNotPublicOrOpen() {
-		let initializer = Initializer(
-			access: AccessDeclaration(level: .internal),
-			arguments: [],
-		)
+	func generateSafeDIInitializer_throwsWhenInitializerIsPrivateOrFilePrivate() {
+		for accessLevel in [AccessLevel.private, .fileprivate] {
+			let initializer = Initializer(
+				access: AccessDeclaration(level: accessLevel),
+				arguments: [],
+			)
 
-		#expect(throws: Initializer.GenerationError.inaccessibleInitializer, performing: {
-			try initializer.validate(fulfilling: [])
-		})
+			#expect(throws: Initializer.GenerationError.inaccessibleInitializer(accessLevel), performing: {
+				try initializer.validate(fulfilling: [])
+			})
+		}
+	}
+
+	@Test
+	func isValid_returnsTrue_whenInitializerIsInternalOrPackage() {
+		for accessLevel in [AccessLevel.internal, .package] {
+			let initializer = Initializer(
+				access: AccessDeclaration(level: accessLevel),
+				arguments: [],
+			)
+
+			#expect(initializer.isValid(forFulfilling: []))
+		}
 	}
 
 	@Test

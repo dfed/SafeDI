@@ -232,8 +232,7 @@ public struct InstantiableMacro: MemberMacro {
 			// unlabeled required parameter) on every candidate initializer.
 			// Runs regardless of `generateMock`/`mockOnly` because the shape
 			// is awkward for any future mock use and the diagnostic is local.
-			for initializer in visitor.initializers {
-				guard let initializerSyntax = visitor.initializerToInitSyntaxMap[initializer] else { continue }
+			for (initializer, initializerSyntax) in zip(visitor.initializers, visitor.initializerSyntaxes) {
 				Self.validateUnlabeledDefaultShape(
 					functionSyntax: initializerSyntax.signature,
 					arguments: initializer.arguments,
@@ -251,8 +250,9 @@ public struct InstantiableMacro: MemberMacro {
 			// would be a false positive. Also skipped when a custom mock
 			// exists — then SafeDI prefers `mockInitializer` over any init.
 			if visitor.mockInitializer == nil,
-			   let selectedInitializer = visitor.initializers.first(where: { $0.isValid(forFulfilling: visitor.dependencies) }),
-			   let selectedInitializerSyntax = visitor.initializerToInitSyntaxMap[selectedInitializer]
+			   let (_, selectedInitializerSyntax) = zip(visitor.initializers, visitor.initializerSyntaxes).first(where: { initializer, _ in
+			   	initializer.isValid(forFulfilling: visitor.dependencies)
+			   })
 			{
 				Self.validateDefaultExpressions(
 					functionSyntax: selectedInitializerSyntax.signature,
@@ -291,21 +291,29 @@ public struct InstantiableMacro: MemberMacro {
 
 			let hasMemberwiseInitializerForInjectableProperties = isMockOnly || visitor.canonicalConstructionInitializer != nil
 			guard hasMemberwiseInitializerForInjectableProperties else {
-				func associatedError(for initializer: Initializer) -> (initializer: Initializer, syntax: InitializerDeclSyntax, error: Initializer.FixableError)? {
+				func associatedError(for initializer: Initializer, declaredBy syntax: InitializerDeclSyntax) -> (initializer: Initializer, syntax: InitializerDeclSyntax, error: Initializer.FixableError)? {
 					do {
 						try initializer.validate(fulfilling: visitor.dependencies)
 					} catch {
-						if let fixableError = error.asFixableError, let syntax = visitor.initializerToInitSyntaxMap[initializer] {
+						if let fixableError = error.asFixableError {
 							return (initializer: initializer, syntax: syntax, error: fixableError)
 						}
 					}
 					return nil
 				}
-				let initializerToFix: (initializer: Initializer, syntax: InitializerDeclSyntax, error: Initializer.FixableError)? = visitor.initializers.compactMap {
-					associatedError(for: $0)
-				}.sorted {
-					$0.error < $1.error
-				}.first
+				// Of the initializers that need the smallest change, the first declared is fixed.
+				let initializerToFix: (initializer: Initializer, syntax: InitializerDeclSyntax, error: Initializer.FixableError)? = zip(visitor.initializers, visitor.initializerSyntaxes).compactMap {
+					associatedError(for: $0, declaredBy: $1)
+				}.enumerated().min { lhs, rhs in
+					// Two different errors can need equally small changes, so neither precedes the other.
+					if lhs.element.error < rhs.element.error {
+						true
+					} else if rhs.element.error < lhs.element.error {
+						false
+					} else {
+						lhs.offset < rhs.offset
+					}
+				}?.element
 
 				if let initializerToFix {
 					let syntaxToFix = initializerToFix.syntax
@@ -455,54 +463,15 @@ public struct InstantiableMacro: MemberMacro {
 							],
 						))
 
-					case .inaccessibleInitializer:
-						let disallowedModifiers = Set([
-							"private",
-							"fileprivate",
-							"internal",
-							"package",
-						])
-						var fixedSyntax = syntaxToFix
-						fixedSyntax.modifiers = .init(fixedSyntax.modifiers.map {
-							if disallowedModifiers.contains($0.name.text) {
-								.init(
-									leadingTrivia: $0.leadingTrivia,
-									name: TokenSyntax(
-										TokenKind.keyword(.public),
-										presence: .present,
-									),
-									trailingTrivia: $0.trailingTrivia,
-								)
-							} else {
-								$0
-							}
-						})
-						if !fixedSyntax.modifiers.containsPublicOrOpen {
-							if syntaxToFix.modifiers.first != nil {
-								fixedSyntax.modifiers[fixedSyntax.modifiers.startIndex].leadingTrivia = []
-							}
-							fixedSyntax.modifiers.insert(.init(
-								leadingTrivia: fixedSyntax.modifiers.isEmpty ? .newline : [],
-								name: TokenSyntax(
-									TokenKind.keyword(.public),
-									presence: .present,
-								),
-								trailingTrivia: .space,
-							), at: fixedSyntax.modifiers.startIndex)
-						}
-						if let firstModifier = syntaxToFix.modifiers.first {
-							fixedSyntax.modifiers[fixedSyntax.modifiers.startIndex].leadingTrivia = firstModifier.leadingTrivia
-						} else {
-							fixedSyntax.modifiers[fixedSyntax.modifiers.startIndex].leadingTrivia = fixedSyntax.initKeyword.leadingTrivia
-							fixedSyntax.initKeyword.leadingTrivia = []
-						}
+					case let .inaccessibleInitializer(accessLevel):
+						// Only a `private` or `fileprivate` initializer is inaccessible to generated code.
 						context.diagnose(Diagnostic(
 							node: Syntax(syntaxToFix),
-							error: FixableInstantiableError.missingRequiredInitializer(.isNotPublicOrOpen),
+							error: FixableInstantiableError.missingRequiredInitializer(.isPrivateOrFilePrivate(accessLevel)),
 							changes: [
 								.replace(
 									oldNode: Syntax(syntaxToFix),
-									newNode: Syntax(fixedSyntax),
+									newNode: Syntax(syntaxToFix.removingModifiers(setting: accessLevel, keyword: \.initKeyword)),
 								),
 							],
 						))
@@ -528,9 +497,14 @@ public struct InstantiableMacro: MemberMacro {
 					} else {
 						.hasInjectableAndNotInjectableProperties
 					}
+					// An initializer that is `async` or `throws` would otherwise go unexplained.
+					let effectfulInitializerNotes = zip(visitor.initializers, visitor.initializerSyntaxes)
+						.filter { initializer, _ in initializer.isAsync || initializer.doesThrow }
+						.map { _, syntax in Note(node: Syntax(syntax), message: EffectfulInitializerNote()) }
 					context.diagnose(Diagnostic(
 						node: Syntax(declaration.memberBlock),
 						error: FixableInstantiableError.missingRequiredInitializer(errorType),
+						notes: effectfulInitializerNotes,
 						changes: [
 							.replace(
 								oldNode: Syntax(declaration),
@@ -616,7 +590,7 @@ public struct InstantiableMacro: MemberMacro {
 				}
 			}
 
-			// Validate mock method if one exists: must be public, return Self or the type name, and have parameters for all dependencies.
+			// Validate mock method if one exists: must not be private or fileprivate, must return Self or the type name, and must have parameters for all dependencies.
 			if let mockInitializer = visitor.mockInitializer,
 			   let mockSyntax = visitor.mockFunctionSyntax
 			{
@@ -700,26 +674,12 @@ public struct InstantiableMacro: MemberMacro {
 						],
 					))
 				}
-				if !mockInitializer.access.level.isPublicOrOpen {
-					var fixedMockSyntax = mockSyntax
-					// Mock detection requires `static` or `class`, so modifiers.first is always non-nil.
-					let firstModifier = mockSyntax.modifiers.first
-					fixedMockSyntax.modifiers.insert(
-						DeclModifierSyntax(
-							leadingTrivia: firstModifier?.leadingTrivia ?? mockSyntax.funcKeyword.leadingTrivia,
-							name: .keyword(.public),
-							trailingTrivia: .space,
-						),
-						at: fixedMockSyntax.modifiers.startIndex,
-					)
-					if let firstModifier {
-						fixedMockSyntax.modifiers[fixedMockSyntax.modifiers.startIndex].leadingTrivia = firstModifier.leadingTrivia
-						let secondModifierIndex = fixedMockSyntax.modifiers.index(after: fixedMockSyntax.modifiers.startIndex)
-						fixedMockSyntax.modifiers[secondModifierIndex].leadingTrivia = []
-					}
+				// Any other access can suit the generated mocks that call the method; SafeDITool checks those, which it
+				// generates.
+				if let (fixedMockSyntax, accessLevel) = mockSyntax.removingPrivateOrFilePrivateModifier(keyword: \.funcKeyword) {
 					context.diagnose(Diagnostic(
 						node: Syntax(mockSyntax),
-						error: FixableInstantiableError.mockMethodNotPublic,
+						error: FixableInstantiableError.privateOrFilePrivateMockMethod(accessLevel),
 						changes: [
 							.replace(
 								oldNode: Syntax(mockSyntax),
@@ -727,6 +687,9 @@ public struct InstantiableMacro: MemberMacro {
 							),
 						],
 					))
+				}
+				if mockInitializer.isAsync || mockInitializer.doesThrow {
+					context.diagnose(Self.mockMethodHasEffectSpecifiersDiagnostic(for: mockSyntax))
 				}
 				if !visitor.dependencies.isEmpty {
 					do {
@@ -880,7 +843,7 @@ public struct InstantiableMacro: MemberMacro {
 				))
 			}
 
-			// Validate mock() methods on extensions: must be public, return the extended type or one of its `fulfillingAdditionalTypes`, and be unique per return type.
+			// Validate mock() methods on extensions: must not be private or fileprivate, must return the extended type or one of its `fulfillingAdditionalTypes`, and must be unique per return type.
 			let extendedTypeDescription = extensionDeclaration.extendedType.typeDescription
 			let extendedTypeName = extendedTypeDescription.asSource
 			let extendedTypeStrippingGenerics = extendedTypeDescription.strippingGenerics
@@ -1075,25 +1038,10 @@ public struct InstantiableMacro: MemberMacro {
 						],
 					))
 				}
-				if !mockFunction.modifiers.containsPublicOrOpen {
-					var fixedMockFunction = mockFunction
-					let firstModifier = mockFunction.modifiers.first
-					fixedMockFunction.modifiers.insert(
-						DeclModifierSyntax(
-							leadingTrivia: firstModifier?.leadingTrivia ?? mockFunction.funcKeyword.leadingTrivia,
-							name: .keyword(.public),
-							trailingTrivia: .space,
-						),
-						at: fixedMockFunction.modifiers.startIndex,
-					)
-					if let firstModifier {
-						fixedMockFunction.modifiers[fixedMockFunction.modifiers.startIndex].leadingTrivia = firstModifier.leadingTrivia
-						let secondModifierIndex = fixedMockFunction.modifiers.index(after: fixedMockFunction.modifiers.startIndex)
-						fixedMockFunction.modifiers[secondModifierIndex].leadingTrivia = []
-					}
+				if let (fixedMockFunction, accessLevel) = mockFunction.removingPrivateOrFilePrivateModifier(keyword: \.funcKeyword) {
 					context.diagnose(Diagnostic(
 						node: Syntax(mockFunction),
-						error: FixableInstantiableError.mockMethodNotPublic,
+						error: FixableInstantiableError.privateOrFilePrivateMockMethod(accessLevel),
 						changes: [
 							.replace(
 								oldNode: Syntax(mockFunction),
@@ -1101,6 +1049,10 @@ public struct InstantiableMacro: MemberMacro {
 							),
 						],
 					))
+				}
+				let mockFunctionInitializer = Initializer(mockFunction)
+				if mockFunctionInitializer.isAsync || mockFunctionInitializer.doesThrow {
+					context.diagnose(Self.mockMethodHasEffectSpecifiersDiagnostic(for: mockFunction))
 				}
 				// Duplicate detection: one mock per return type.
 				if let mockReturnType {
@@ -1653,6 +1605,25 @@ public struct InstantiableMacro: MemberMacro {
 		}
 	}
 
+	// MARK: - Mock Method Effect Specifiers Fix-It
+
+	/// The error for a hand-written mock method that is `async` or `throws`, which a generated mock calls
+	/// synchronously, with a fix-it that removes its effect specifiers.
+	private static func mockMethodHasEffectSpecifiersDiagnostic(for mockFunction: FunctionDeclSyntax) -> Diagnostic {
+		var fixedMockFunction = mockFunction
+		fixedMockFunction.signature.effectSpecifiers = nil
+		return Diagnostic(
+			node: Syntax(mockFunction),
+			error: FixableInstantiableError.mockMethodHasEffectSpecifiers(methodName: mockFunction.name.text),
+			changes: [
+				.replace(
+					oldNode: Syntax(mockFunction),
+					newNode: Syntax(fixedMockFunction),
+				),
+			],
+		)
+	}
+
 	// MARK: - Parameter Clause Fix-It
 
 	/// Builds a fixed parameter clause that includes all required properties in order,
@@ -1981,42 +1952,68 @@ extension DeclSyntax {
 	}
 }
 
+// MARK: EffectfulInitializerNote
+
+/// The note at an initializer that is `async` or `throws`, which generated code, calling initializers synchronously,
+/// cannot call.
+private struct EffectfulInitializerNote: NoteMessage {
+	let message = "SafeDI cannot construct the type with this initializer: generated code calls an initializer synchronously, so it must be neither `async` nor `throws`."
+	let noteID = MessageID(domain: "SafeDIMacros", id: "effectfulInitializer")
+}
+
 // MARK: Initializer
 
 extension Initializer {
 	fileprivate enum FixableError: Comparable, Hashable {
-		case inaccessibleInitializer
+		/// The initializer is `private` or `fileprivate`, the level it carries.
+		case inaccessibleInitializer(AccessLevel)
 		case missingArguments([Property])
 		indirect case multiple([FixableError])
 
-		// Compare in terms of delta from what SafeDI needs – smallest requires the smallest change to make satisfactory.
+		// Compare in terms of delta from what SafeDI needs – smallest requires the smallest change to make satisfactory:
+		// removing a modifier, then adding the fewest missing arguments, then fixing the fewest errors at once. Errors
+		// of one kind and size are equivalent, which a strict weak ordering allows.
 		fileprivate static func < (lhs: FixableError, rhs: FixableError) -> Bool {
-			switch (lhs, rhs) {
-			case (.inaccessibleInitializer, _):
-				lhs != rhs
-			case let (.missingArguments(lhs), .missingArguments(rhs)):
-				lhs.count < rhs.count
-			case (.missingArguments, _):
-				lhs != rhs
-			case let (.multiple(lhs), .multiple(rhs)):
-				lhs.count < rhs.count
-			case (.multiple, _):
-				false
+			(lhs.kindRank, lhs.size) < (rhs.kindRank, rhs.size)
+		}
+
+		/// The order of the kinds of error, from the one that takes the smallest change to fix.
+		private var kindRank: Int {
+			switch self {
+			case .inaccessibleInitializer:
+				0
+			case .missingArguments:
+				1
+			case .multiple:
+				2
+			}
+		}
+
+		/// How much an error of its kind takes to fix.
+		private var size: Int {
+			switch self {
+			case .inaccessibleInitializer:
+				0
+			case let .missingArguments(arguments):
+				arguments.count
+			case let .multiple(errors):
+				errors.count
 			}
 		}
 
 		fileprivate enum ErrorToFix {
-			case inaccessibleInitializer
+			case inaccessibleInitializer(AccessLevel)
 			case missingArguments([Property])
 		}
 
 		fileprivate var asErrorToFix: ErrorToFix {
 			switch self {
-			case .inaccessibleInitializer:
-				.inaccessibleInitializer
+			case let .inaccessibleInitializer(accessLevel):
+				.inaccessibleInitializer(accessLevel)
 			case let .missingArguments(arguments):
 				.missingArguments(arguments)
 			case let .multiple(errors):
+				// `asFixableError` makes `multiple` only of two or more errors.
 				errors.sorted().first!.asErrorToFix
 			}
 		}
@@ -2030,10 +2027,10 @@ extension Initializer.GenerationError {
 		switch self {
 		case let .missingArguments(arguments):
 			.missingArguments(arguments)
-		case .inaccessibleInitializer:
-			.inaccessibleInitializer
+		case let .inaccessibleInitializer(accessLevel):
+			.inaccessibleInitializer(accessLevel)
 		case let .multiple(errors):
-			.multiple(errors.compactMap(\.asFixableError))
+			Self.fixableError(combining: errors.compactMap(\.asFixableError))
 		case .asyncInitializer,
 		     .genericParameterInInitializer,
 		     .optionalInitializer,
@@ -2041,6 +2038,16 @@ extension Initializer.GenerationError {
 		     .unexpectedArgument,
 		     .whereClauseOnInitializer:
 			nil
+		}
+	}
+
+	/// The error that `fixableErrors`, the fixable errors of one initializer, make together: none, the one, or – only
+	/// when there are two or more – `multiple`, which therefore always has an error to fix first.
+	private static func fixableError(combining fixableErrors: [Initializer.FixableError]) -> Initializer.FixableError? {
+		if fixableErrors.count > 1 {
+			.multiple(fixableErrors)
+		} else {
+			fixableErrors.first
 		}
 	}
 }

@@ -59,6 +59,7 @@ struct SafeDIToolInstantiableResolutionTests: ~Copyable {
 			level: .package,
 			modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 8),
 			declarationStartLocation: Dependency.DeclarationLocation(filePath: try #require(resolved.filePaths["BServiceMock.swift"]), line: 2, column: 1),
+			isExtension: true,
 		))
 	}
 
@@ -80,6 +81,7 @@ struct SafeDIToolInstantiableResolutionTests: ~Copyable {
 			level: .package,
 			modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 8),
 			declarationStartLocation: Dependency.DeclarationLocation(filePath: try #require(resolved.filePaths["AServiceMock.swift"]), line: 2, column: 1),
+			isExtension: true,
 		))
 	}
 

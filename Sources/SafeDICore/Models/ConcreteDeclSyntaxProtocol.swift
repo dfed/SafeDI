@@ -20,9 +20,8 @@
 
 import SwiftSyntax
 
-public protocol ConcreteDeclSyntaxProtocol: SyntaxProtocol {
+public protocol ConcreteDeclSyntaxProtocol: WithModifiersSyntax {
 	var attributes: AttributeListSyntax { get set }
-	var modifiers: DeclModifierListSyntax { get set }
 	var inheritanceClause: InheritanceClauseSyntax? { get set }
 	var keyword: TokenSyntax { get set }
 	var name: TokenSyntax { get set }

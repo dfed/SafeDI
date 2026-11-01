@@ -170,11 +170,11 @@ Type declarations decorated with [`@Instantiable`](../Sources/SafeDI/Decorators/
 
 SafeDI is designed to make instantiating and receiving dependencies _simple_, without requiring developers to think about abstract dependency injection (DI) concepts. That said, for those familiar with other DI systems: each `@Instantiable` type is its own [Scope](https://medium.com/@aarontharris/scope-dependency-injection-6fc25beffc9c). For those unfamiliar with DI terminology, know that each `@Instantiable` type retains its dependencies, and that every `@Instantiated` or `@Forwarded` dependency is available to all transitive child dependencies.  
 
-Every `@Instantiable`-decorated type must be:
+Every `@Instantiable`-decorated type must:
 
-1. `public` or `open`
+1. Be visible, with its initializer, to the code that constructs it. See [Access levels](#access-levels).
 
-2. Have a `public init(…)` or `open init(…)` that has a parameter for each of its injected properties.
+2. Have an initializer that has a parameter for each of its injected properties.
 
 3. Spell a nested type in a decorated property’s type with its enclosing types, such as `@Forwarded let configuration: Feature.Configuration` for a `Configuration` declared inside `Feature`: generated code is in an extension where the members of `Feature` are not in scope, and the `@Instantiable` macro warns, with a fix-it, when a type declared inside the decorated type is spelled without it. SafeDI itself qualifies a nested type that an `@Instantiable` declaration [fulfills](#making-protocols-instantiable).
 
@@ -218,6 +218,22 @@ public struct LoggedInView: Instantiable, View {
 - `@Instantiated` marks a dependency that SafeDI constructs when this type is instantiated. `noteStorage`’s own `@Received` inputs are resolved from this scope’s context.
 
 The exact semantics of each dependency kind — including `@Instantiated`’s configuration parameters for dependency inversion, and `@Received`’s `onlyIfAvailable` option — are covered in [@Instantiated](#instantiated), [@Received](#received), and [@Forwarded](#forwarded).
+
+#### Access levels
+
+SafeDI constructs each `@Instantiable` type in code it generates in a file of its own: a root's `init()` is generated in the root's module, and a `mock()` in the module that generates it. That code calls the type's initializer – or the `instantiate(…)` method of an `@Instantiable` extension, or the hand-written mock method a generated mock calls – so the type, that method, and any type the type is nested in must be visible to it:
+
+- Within the module that declares them, any access but `private` and `fileprivate` works, so a type and its initializer can stay `internal`. A type nested in a `private` type, or declared in a `private extension` without an access modifier of its own, is `fileprivate` too.
+- From another module of the same package, they must be `package`, `public`, or `open`.
+- From a module of another package, they must be `public` or `open`.
+
+A member of a type that spells no access modifier is `internal`, even in a `public` type, so a `public` type constructed from another module needs a `public` (or `package`) initializer too. A member of an extension that spells none takes the extension's access.
+
+The `@Instantiable` macro reports a `private` or `fileprivate` type, initializer, `instantiate(…)` method, or hand-written mock method, with a fix-it that removes the modifier. Only `SafeDITool generate`, which reads every module the code it generates for a module uses, knows which modules construct a type, so it checks every construction it generates. It reports one that cannot compile as an error at the declaration that must change, with a fix-it that gives it the access the construction needs. When the declaration's file is not available to `SafeDITool`, as in a sandboxed Bazel action, which is handed another module's `.safedi` file but not its source, the error is reported in the module that constructs the type, at the dependency declared there that leads to the construction (or at the `#SafeDIConfiguration` that lists an additional mock), and names the declaration to change and the module that declares it.
+
+`package` access requires the compiler's `-package-name`, which every module of a package must be compiled with. SwiftPM passes one automatically. Under Bazel, set `package_name` on `safedi_swift_library`, which passes it to both the library and `SafeDITool`. For Xcode and Tuist, set the `SWIFT_PACKAGE_NAME` build setting, which the Tuist plugin passes to `SafeDITool`. The Xcode project plugin cannot tell `SafeDITool` which module and package declare each type, so `SafeDITool` accepts a `package` declaration that another module constructs and ends the line that constructs it with a comment saying so; the compiler then reports a construction that crosses packages.
+
+A module's build can read the files of other modules, and plans a file for each root they declare: the `SafeDIGenerator` package plugin reads the files of every module a module depends on, and the Xcode project plugin, through a `#SafeDIConfiguration`'s `additionalDirectoriesToInclude`, reads the files in the directories it names. A module generates a root another module declares only when every type the root's tree constructs is `public` or `open`, as are the types it is nested in and the initializer or `instantiate(…)` method that builds it. Otherwise it leaves that root's file without code, apart from a comment saying why. The module that declares the root generates it, and reports any problem with it, when that module runs SafeDI too.
 
 #### Creating the root of your dependency tree
 
@@ -310,7 +326,7 @@ public struct NotesApp: App, Instantiable {
 
 #### Making external types `@Instantiable`
 
-Types that are declared outside of your project can be instantiated by SafeDI if there is an extension on the type decorated with the `@Instantiable` macro. Extensions decorated with this macro define how to instantiate the extended type via a `public static func instantiate(…) -> ExtendedType` function. This `instantiate(…)` function can receive dependencies instantiated or forwarded by objects further up the dependency tree by declaring these dependencies as parameters to the `instantiate(…)` function. A parameter with a default value is not a dependency, as for an initializer: SafeDI calls `instantiate(…)` without it, and a generated mock offers it as an override.
+Types that are declared outside of your project can be instantiated by SafeDI if there is an extension on the type decorated with the `@Instantiable` macro. Extensions decorated with this macro define how to instantiate the extended type via a `static func instantiate(…) -> ExtendedType` function, which must be visible to the code that constructs the type, as [Access levels](#access-levels) describes. This `instantiate(…)` function can receive dependencies instantiated or forwarded by objects further up the dependency tree by declaring these dependencies as parameters to the `instantiate(…)` function. A parameter with a default value is not a dependency, as for an initializer: SafeDI calls `instantiate(…)` without it, and a generated mock offers it as an override.
 
 Here we have a sample `@Instantiable` extension on `UserDefaults` that adopts a first-party `StringStorage` protocol so SafeDI can instantiate it in place of a hand-rolled storage type:
 
@@ -342,7 +358,7 @@ extension UserDefaults: @retroactive Instantiable, StringStorage {
 
 #### Making generic types `@Instantiable`
 
-Generic types can be instantiated by SafeDI if there is an extension on the type decorated with the `@Instantiable` macro. Extensions decorated with this macro define how to instantiate the extended type via functions of the form `public static func instantiate(…) -> GenericType<ConcreteType>`.
+Generic types can be instantiated by SafeDI if there is an extension on the type decorated with the `@Instantiable` macro. Extensions decorated with this macro define how to instantiate the extended type via functions of the form `static func instantiate(…) -> GenericType<ConcreteType>`.
 
 Here we have a sample `Container<T>` wrapper that is `@Instantiable` when `T` is a common Swift type:
 
@@ -851,7 +867,7 @@ extension MyService {
 
 The hand-written mock also decides which of the production declaration’s dependencies a generated mock builds. A parameter of the mock that has a dependency’s label is passed that dependency. A dependency the mock has no parameter for is not built, is not received from further up the tree, and has no entry in `SafeDIOverrides`, unless a dependency the mock is passed receives it. In the first example, `MyService.mock()` takes no `database`, so the mock of a type that instantiates `MyService` calls `MyService.mock()` without building a `Database`. Declare `mock(database: Database = .mock())` instead to have the generated mock build the `Database` and pass it in.
 
-Your user-defined `mock()` method must be `public` (or `open`) and must accept parameters for each of the type’s `@Instantiated`, `@Received`, and `@Forwarded` dependencies. Non-dependency parameters must have default values. On concrete type declarations the return type must be `Self` or the type name; on extension-based `@Instantiable` types the return type must match the extended type (e.g. `-> Container<Bool>`) or a `fulfillingAdditionalTypes` entry, mirroring the corresponding `instantiate()` method. The `@Instantiable` macro validates these requirements and provides fix-its for any issues.
+Your user-defined `mock()` method must be visible to the generated mocks that call it, as [Access levels](#access-levels) describes, and must accept parameters for each of the type’s `@Instantiated`, `@Received`, and `@Forwarded` dependencies. Non-dependency parameters must have default values. The method must be neither `async` nor `throws`, since generated mocks call it synchronously. On concrete type declarations the return type must be `Self` or the type name; on extension-based `@Instantiable` types the return type must match the extended type (e.g. `-> Container<Bool>`) or a `fulfillingAdditionalTypes` entry, mirroring the corresponding `instantiate()` method. The `@Instantiable` macro validates these requirements and provides fix-its for any issues.
 
 ```swift
 #if DEBUG
@@ -1008,7 +1024,7 @@ For the second case, use the `additionalMocksToGenerate` parameter on [`#SafeDIC
 )
 ```
 
-This generates a `mock()` method for each listed type in the current module, even though the type is defined elsewhere. The type must be `@Instantiable` in its home module, but `generateMock: true` is not required there unless that home module also wants to generate its own mock.
+This generates a `mock()` method for each listed type in the current module, even though the type is defined elsewhere. The type must be `@Instantiable` in its home module, but `generateMock: true` is not required there unless that home module also wants to generate its own mock. The generated mock constructs the type and its dependencies in the current module, so they must be visible to it, as [Access levels](#access-levels) describes.
 
 List each type by its declared name, with enclosing types and without the module (`Outer.Inner`, not `MyModule.Outer.Inner`).
 
@@ -1243,12 +1259,12 @@ Generated code points a renamed dependency’s assignment at its `@Received` dec
 
 SafeDITool prints diagnostics at paths resolved against its working directory, which under Bazel is the action’s sandbox.
 
-A build system that runs `generate` once per module should also tell `SafeDITool` which module it runs for, so that `SafeDITool` knows which module and package declare each `@Instantiable` type it reads:
+A build system that runs `generate` once per module should also tell `SafeDITool` which module it runs for, so that `SafeDITool` knows which module and package declare each `@Instantiable` type it reads, which decides the access the code it generates needs to construct the type (see [Access levels](#access-levels)):
 
 - `--module-name` names the Swift module that compiles the files the input CSV and `--include` name. Files reached through a `#SafeDIConfiguration`’s `additionalDirectoriesToInclude` belong to another module, which `SafeDITool` does not know.
 - `--package-name` names that module’s package exactly as the compiler’s `-package-name` names it. Omit it when the compiler receives no `-package-name`.
 
-`generate --module-info-output` records both in the module’s `.safedi` file, so a module that reads the file knows which module and package declare each type in it, and records as the module’s dependencies the module each `--dependent-module-info-file-path` file records. A `package` declaration is visible only to modules compiled with the same `-package-name`. SwiftPM passes every target of a package the same one, derived from the package’s identity. Bazel passes one only when a `swift_library` sets `package_name`, which `safedi_swift_library` takes too and passes to both the library and SafeDITool. Xcode, and therefore Tuist, passes one only when a target sets the `SWIFT_PACKAGE_NAME` build setting, which the Tuist plugin forwards. The Bazel rule passes both options, and the Tuist plugin passes them to a SafeDITool that accepts them. The `SafeDIGenerator` plugin needs none of them: for a Swift package target it writes the module, package, and Swift files of every target whose files it lists beside its input CSV, and `generate` reads that instead. An Xcode project target’s plugin knows no modules, so `SafeDITool` does not know which module declares each file there.
+`generate --module-info-output` records both in the module’s `.safedi` file, so a module that reads the file knows which module and package declare each type in it, and records as the module’s dependencies the module each `--dependent-module-info-file-path` file records. [Access levels](#access-levels) says how each integration sets `-package-name`.
 
 Run `SafeDITool`, as [Running SafeDITool yourself](#running-safeditool-yourself) describes for your integration, with `--help`, `scan --help`, or `generate --help` to see documentation of all supported arguments, `query needs --help` for the command that [reports what types need](#querying-what-a-type-needs) (in beta), and `dump --help` for the command that prints a `.safedi` file, or the cache `scan` writes beside its manifest, as JSON.
 
