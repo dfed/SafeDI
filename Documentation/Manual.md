@@ -16,7 +16,7 @@ To add the SafeDI framework as a dependency to a package utilizing [Swift Packag
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.1.0"),
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.2.0"),
 ]
 ```
 
@@ -84,7 +84,7 @@ import SafeDI
 
 #### Bazel
 
-Add `bazel_dep(name = "safedi", version = "2.1.0")` to your `MODULE.bazel`, then declare each SafeDI module with `safedi_swift_library` in place of `swift_library`:
+Add `bazel_dep(name = "safedi", version = "2.2.0")` to your `MODULE.bazel`, then declare each SafeDI module with `safedi_swift_library` in place of `swift_library`:
 
 ```python
 load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
@@ -1172,7 +1172,7 @@ This plugin will:
 ### Manual migration
 
 1. Update your `swift-tools-version` to 6.2 or later
-2. Update your SafeDI dependency to `from: "2.1.0"`
+2. Update your SafeDI dependency to `from: "2.2.0"`
 3. If you have `.safedi/configuration/include.csv` or `.safedi/configuration/additionalImportedModules.csv`, add a `#SafeDIConfiguration` in your root module with the equivalent values and delete the CSV files
 4. If you don’t have CSV configuration files and do not need other SafeDI configuration options, no `#SafeDIConfiguration()` declaration is required
 
