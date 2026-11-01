@@ -668,7 +668,7 @@ struct SafeDIToolConfigurationFileTests: ~Copyable {
 		let warnings = try await Generate.parse([
 			swiftFileCSV.path,
 			"--swift-manifest", manifestFile.path,
-		]).generate()
+		]).generate().warnings
 
 		#expect(warnings.map(\.formatted) == [
 			"\(configurationFile.path):1:1: warning: \(Self.placementWarningMessage)",
