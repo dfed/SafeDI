@@ -38,7 +38,7 @@
 ///     }
 ///
 /// An extension declaration decorated with `@Instantiable` makes the extended type capable of having properties of other `@Instantiable`-decorated types injected into it. Decorating extensions with `@Instantiable` enables third-party types to be instantiated by the SafeDI system.
-/// Usage of this macro requires the extension to implement a method `public static func instantiate() -> ExtendedType` that defines the instantiation logic for the externally defined type.
+/// Usage of this macro requires the extension to implement a method `static func instantiate() -> ExtendedType` that defines the instantiation logic for the externally defined type, visible to the code that constructs the type: not `private` or `fileprivate`; `package` when another module of its package constructs it, and `public` when a module of another package does.
 ///
 /// Example:
 ///
