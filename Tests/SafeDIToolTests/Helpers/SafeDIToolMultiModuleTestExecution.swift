@@ -62,6 +62,9 @@ struct ModuleFixture {
 	///     it names one other than `DEBUG`, which the compile always defines. The compile defines it so the mocks
 	///     compile too, and each integration checks it against the configuration the tool found: `.moduleInfo`
 	///     in the module's `.safedi`, `.swiftPackagePlugin` in what `scan` cached.
+	///   - deletesSwiftFilesAfterRunning: Whether the harness deletes the module's Swift files once the tool has run
+	///     for it, as a sandboxed Bazel action hands the modules that depend on it its `.safedi` but not its files. The
+	///     module's files then cannot be compiled, so a test that deletes them skips compile verification.
 	init(
 		name: String,
 		packageName: String,
@@ -73,6 +76,7 @@ struct ModuleFixture {
 		buildSettingArguments: [String]? = nil,
 		verificationCompilationConditions: [String]? = nil,
 		mockConditionalCompilation: String? = nil,
+		deletesSwiftFilesAfterRunning: Bool = false,
 	) {
 		self.name = name
 		self.packageName = packageName
@@ -84,6 +88,7 @@ struct ModuleFixture {
 		self.buildSettingArguments = buildSettingArguments
 		self.verificationCompilationConditions = verificationCompilationConditions
 		self.mockConditionalCompilation = mockConditionalCompilation
+		self.deletesSwiftFilesAfterRunning = deletesSwiftFilesAfterRunning
 	}
 
 	let name: String
@@ -96,6 +101,7 @@ struct ModuleFixture {
 	let buildSettingArguments: [String]?
 	let verificationCompilationConditions: [String]?
 	let mockConditionalCompilation: String?
+	let deletesSwiftFilesAfterRunning: Bool
 
 	/// The same module for `executeSafeDIToolQuery`, which names the module after its directory and reads its
 	/// files from there.
@@ -234,12 +240,17 @@ struct MultiModuleFixtureError: Error, CustomStringConvertible {
 /// The tool finds files on disk, as a build does. Under `.swiftPackagePlugin`, each module's scan cache is
 /// checked to read back exactly what `scan` wrote, as `executeSafeDIToolTest` checks it.
 ///
-/// - Parameter modules: The modules in dependency order: each names only modules before it as `dependencies`.
+/// - Parameters:
+///   - modules: The modules in dependency order: each names only modules before it as `dependencies`.
+///   - writesTargetGraph: Whether `.swiftPackagePlugin` writes the target graph beside each module's CSV, as the
+///     SafeDIGenerator plugin does for a Swift package. Without it, as for the Xcode project plugin, the tool knows
+///     no module.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func executeSafeDIToolMultiModuleTest(
 	modules: [ModuleFixture],
 	integration: MultiModuleIntegration,
 	compileVerification: MultiModuleCompileVerification = .recordingIssues,
+	writesTargetGraph: Bool = true,
 	filesToDelete: inout [URL],
 	sourceLocation: SourceLocation = #_sourceLocation,
 ) async throws -> MultiModuleTestOutput {
@@ -343,13 +354,15 @@ func executeSafeDIToolMultiModuleTest(
 				.filter { !$0.fixture.isCheckoutPackage }
 			let csvEntries = inputSwiftFilePaths + firstPartyDependencies.flatMap { $0.swiftFiles.map(csvEntry(of:)) }
 			try csvEntries.joined(separator: ",").write(to: swiftFileCSV, atomically: true, encoding: .utf8)
-			// As the plugin's `writeTargetGraph`, beside the CSV.
-			let encoder = JSONEncoder()
-			encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-			try encoder.encode(PluginTargetGraph(
-				target: module.graphTarget(spellingFilesAs: csvEntry(of:)),
-				dependencyTargets: firstPartyDependencies.map { $0.graphTarget(spellingFilesAs: csvEntry(of:)) }.sorted { $0.moduleName < $1.moduleName },
-			)).write(to: URL(fileURLWithPath: swiftFileCSV.path + PluginTargetGraph.fileNameSuffix))
+			if writesTargetGraph {
+				// As the plugin's `writeTargetGraph`, beside the CSV.
+				let encoder = JSONEncoder()
+				encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+				try encoder.encode(PluginTargetGraph(
+					target: module.graphTarget(spellingFilesAs: csvEntry(of:)),
+					dependencyTargets: firstPartyDependencies.map { $0.graphTarget(spellingFilesAs: csvEntry(of:)) }.sorted { $0.moduleName < $1.moduleName },
+				)).write(to: URL(fileURLWithPath: swiftFileCSV.path + PluginTargetGraph.fileNameSuffix))
+			}
 			let manifestFile = fixtureRoot.appendingPathComponent("Manifests").appendingPathComponent("\(moduleName).json")
 			try FileManager.default.createDirectory(at: manifestFile.deletingLastPathComponent(), withIntermediateDirectories: true)
 			// The scan cache lies under `fixtureRoot`, which is already registered for deletion.
@@ -406,6 +419,11 @@ func executeSafeDIToolMultiModuleTest(
 		let moduleInfo = try moduleInfoOutput.map { try ModuleInfo(moduleInfoData: Data(contentsOf: $0)) }
 		if let moduleInfo {
 			expectMockConditionAgrees(configured: moduleInfo.configurations.first?.mockConditionalCompilation, fixture: module.fixture, sourceLocation: sourceLocation)
+		}
+		if module.fixture.deletesSwiftFilesAfterRunning {
+			for swiftFile in module.swiftFiles {
+				try FileManager.default.removeItem(at: swiftFile)
+			}
 		}
 		outputs[moduleName] = ModuleTestOutput(
 			generateRan: generateArguments != nil,
