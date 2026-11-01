@@ -913,7 +913,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			import FeatureKit
 			#endif
 
-			@Instantiable(isRoot: true, fulfillingAdditionalTypes: [KitchenProtocol.self], generateMock: true, mockAttributes: "@MainActor")
+			@Instantiable(isRoot: true, fulfillingAdditionalTypes: [KitchenProtocol.self], generatedInitializerAttributes: "@available(macOS 10.15, *)", mockAttributes: "@MainActor", generateMock: true)
 			public final class Kitchen: Instantiable {
 			    public init(
 			        pantry kitchenPantry: Pantry,

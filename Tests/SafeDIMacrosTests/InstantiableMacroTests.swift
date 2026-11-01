@@ -5501,6 +5501,118 @@ import Testing
 			)
 		}
 
+		// MARK: generatedInitializerAttributes Tests
+
+		@Test
+		func expandsWithoutIssue_whenGeneratedInitializerAttributesIsProvided() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor")
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func throwsError_whenGeneratedInitializerAttributesIsNotStringLiteral() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, generatedInitializerAttributes: someVariable)
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `generatedInitializerAttributes` must be a string literal.",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		// MARK: generatedAttributes Tests
+
+		@Test
+		func expandsWithoutIssue_whenGeneratedAttributesIsProvided() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, generatedAttributes: "@MainActor", generateMock: true)
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func expandsWithoutIssue_whenGeneratedAttributesIsProvidedOnExtension() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generatedAttributes: "@MainActor", generateMock: true)
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				expandedSource: """
+				extension ExampleService: Instantiable {
+				    public static func instantiate() -> ExampleService {
+				        ExampleService()
+				    }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func throwsError_whenGeneratedAttributesIsNotStringLiteral() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generatedAttributes: someVariable)
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `generatedAttributes` must be a string literal.",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
 		// MARK: generateMock Tests
 
 		@Test
