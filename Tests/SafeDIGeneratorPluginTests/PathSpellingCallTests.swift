@@ -28,10 +28,6 @@ import Testing
 struct PathSpellingCallTests {
 	@Test
 	func sources_normalizeAndResolvePathsOnlyInFilePathSpelling() throws {
-		let repositoryRoot = URL(fileURLWithPath: #filePath)
-			.deletingLastPathComponent()
-			.deletingLastPathComponent()
-			.deletingLastPathComponent()
 		let pathSpellingCalls = try [
 			#"\bstandardizedFileURL\b"#,
 			#"\.standardized\b"#,
@@ -44,20 +40,12 @@ struct PathSpellingCallTests {
 		].map { try Regex($0) }
 		var checkedFileNames = Set<String>()
 		var violations = [String]()
-		for directory in ["Sources", "Plugins"] {
-			let enumerator = try #require(FileManager.default.enumerator(
-				at: repositoryRoot.appendingPathComponent(directory),
-				includingPropertiesForKeys: [.isSymbolicLinkKey],
-			))
-			for case let fileURL as URL in enumerator where fileURL.pathExtension == "swift" {
-				// A symbolic link compiles a file that is checked where it lives.
-				guard try fileURL.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink != true else { continue }
-				checkedFileNames.insert(fileURL.lastPathComponent)
-				guard fileURL.lastPathComponent != "FilePathSpelling.swift" else { continue }
-				let code = try stripSwiftCommentsAndStrings(from: String(contentsOf: fileURL, encoding: .utf8))
-				for call in pathSpellingCalls where code.contains(call) {
-					violations.append(fileURL.lastPathComponent)
-				}
+		for file in try RepositorySwiftFile.files(under: ["Sources", "Plugins"]) {
+			checkedFileNames.insert(file.name)
+			guard file.name != "FilePathSpelling.swift" else { continue }
+			let code = stripSwiftCommentsAndStrings(from: file.source)
+			for call in pathSpellingCalls where code.contains(call) {
+				violations.append(file.name)
 			}
 		}
 		#expect(checkedFileNames.isSuperset(of: ["FilePathSpelling.swift", "ScanCommand.swift", "GenerateCommand.swift", "PluginScanner.swift"]))

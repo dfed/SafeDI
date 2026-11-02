@@ -227,4 +227,11 @@ struct FixableInstantiableErrorTests {
 		let error = FixableInstantiableError.reservedName(name: "safeDIOverrides", reservation: .mockOverridesParameter)
 		#expect(error.fixIt.message == "Rename `safeDIOverrides`")
 	}
+
+	@Test
+	func namesEncodedDifferently_fixIt_namesTheLaterName() {
+		// The macro offers no fix-it for two names encoded differently, neither of which is evidently the one to keep.
+		let error = FixableInstantiableError.namesEncodedDifferently(earlierName: "caf\u{E9}", laterName: "cafe\u{301}")
+		#expect(error.fixIt.message == "Rename `cafe\u{301}`")
+	}
 }

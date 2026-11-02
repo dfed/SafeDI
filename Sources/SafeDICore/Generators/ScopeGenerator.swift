@@ -1325,6 +1325,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			},
 			reservedNames: referencedFunctionNames.union(childNames),
 		)
+		// safedi-source-rule: allow uniqueKeysWithValues — the keys are distinct indices of `children`.
 		let renamedNameByIndex = Dictionary(uniqueKeysWithValues: zip(renamedIndices, renamedNames))
 		return children.indices.map { index in
 			let child = children[index]
@@ -2061,6 +2062,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		{
 			flatParameterDisambiguationMap[property.label, default: [:]][property.typeDescription] = name
 		}
+		// safedi-source-rule: allow uniqueKeysWithValues — the keys are the elements of a set, `receivedParameterProperties`.
 		let flatReceivedNameByProperty = Dictionary(uniqueKeysWithValues: zip(flatReceivedProperties, flatReceivedNames))
 		let flatReceivedParameters = zip(flatReceivedProperties, flatReceivedNames).map { property, name in
 			(
@@ -2447,9 +2449,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		guard let constructionInitializer else {
 			return Instantiable.incorrectlyConfiguredComment
 		}
-		let dependenciesByLabel = Dictionary(
-			uniqueKeysWithValues: instantiable.dependencies.map { ($0.property.label, $0) },
-		)
+		// Each label names one dependency: `validateDependencyLabelsAreDistinct` rejects a declaration in a generated tree that repeats one.
+		let dependenciesByLabel = Dictionary(grouping: instantiable.dependencies, by: \.property.label).compactMapValues(\.first)
 		// A mock root that receives a dependency by value is passed the instance of the
 		// `LazilyInstantiated` property promoted to its children, when the tree also receives that.
 		// So is one that instantiates a dependency the mock builds as the `LazilyInstantiated` its tree receives.
@@ -3665,6 +3666,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		for node: MockParameterNode,
 		labelMap: [String: [TypeDescription: String]],
 	) -> String {
+		// safedi-source-rule: allow forceUnwrap — every caller passes the `labelMap` that `disambiguatePropertyLabels` made of nodes that include `node`, and it names each of them.
 		labelMap[node.propertyLabel]![node.typeDescription]!
 	}
 
@@ -4369,9 +4371,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		handWrittenMockDefaultParameters: [MockParameterNode.DefaultParameter],
 		sendableConfigurationTypeNames: Set<String>,
 	) -> [String] {
-		let dependenciesByLabel = Dictionary(
-			uniqueKeysWithValues: node.dependencies.map { ($0.property.label, $0) },
-		)
+		// Each label names one dependency: `validateDependencyLabelsAreDistinct` rejects a declaration in a generated tree that repeats one.
+		let dependenciesByLabel = Dictionary(grouping: node.dependencies, by: \.property.label).compactMapValues(\.first)
 		let relativePath = nodePath
 			.replacingOccurrences(of: "\(ReservedName.mockOverridesParameterName).", with: "")
 			.replacingOccurrences(of: ".", with: "_")

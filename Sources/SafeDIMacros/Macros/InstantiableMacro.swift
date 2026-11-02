@@ -291,6 +291,9 @@ public struct InstantiableMacro: MemberMacro {
 
 			let hasMemberwiseInitializerForInjectableProperties = isMockOnly || visitor.canonicalConstructionInitializer != nil
 			guard hasMemberwiseInitializerForInjectableProperties else {
+				// SafeDI matches parameters to properties by name, so names encoded differently also leave the initializer
+				// unmatched. The error at those names says why, and the initializer's error would only repeat it.
+				guard !visitor.hasNamesEncodedDifferently else { return [] }
 				func associatedError(for initializer: Initializer) -> (initializer: Initializer, syntax: InitializerDeclSyntax, error: Initializer.FixableError)? {
 					do {
 						try initializer.validate(fulfilling: visitor.dependencies)
@@ -728,7 +731,7 @@ public struct InstantiableMacro: MemberMacro {
 						],
 					))
 				}
-				if !visitor.dependencies.isEmpty {
+				if !visitor.dependencies.isEmpty, !visitor.hasNamesEncodedDifferently {
 					do {
 						try mockInitializer.validate(fulfilling: visitor.dependencies)
 					} catch {
@@ -1122,7 +1125,8 @@ public struct InstantiableMacro: MemberMacro {
 				// Argument validation: mock must have parameters matching the instantiate() method's dependencies.
 				if let mockReturnType,
 				   let matchingInstantiable = visitor.instantiables.first(where: { $0.concreteInstantiable == mockReturnType }),
-				   !matchingInstantiable.dependencies.isEmpty
+				   !matchingInstantiable.dependencies.isEmpty,
+				   !visitor.hasNamesEncodedDifferently
 				{
 					let mockInitializer = Initializer(mockFunction)
 					do {
@@ -1712,7 +1716,9 @@ public struct InstantiableMacro: MemberMacro {
 		on declaration: some SyntaxProtocol,
 	) -> [FixIt.Change] {
 		var fixedAttribute = attribute
+		// safedi-source-rule: allow forceUnwrap — callers remove `generateMock` or `isRoot` only from an attribute whose `generateMockValue` or `isRootValue` read it from labeled arguments.
 		let arguments = LabeledExprListSyntax(attribute.arguments!)!
+		// safedi-source-rule: allow forceUnwrap — the arguments hold `label`, for the reason above.
 		let targetIndex = arguments.firstIndex(where: { $0.label?.text == label })!
 		var newArguments = Array(arguments)
 		let removedIndex = arguments.distance(from: arguments.startIndex, to: targetIndex)
@@ -1767,6 +1773,7 @@ public struct InstantiableMacro: MemberMacro {
 			colon: .colonToken(trailingTrivia: .space),
 			expression: StringLiteralExprSyntax(content: "customMock"),
 		)
+		// safedi-source-rule: allow forceUnwrap — callers rename only for an attribute whose `generateMockValue` read `generateMock: true` from its labeled arguments.
 		let labeledExpressionList = LabeledExprListSyntax(instantiableMacro.arguments!)!
 		var newArguments = Array(labeledExpressionList)
 		if var lastArgument = newArguments.last {
@@ -2017,6 +2024,7 @@ extension Initializer {
 			case let .missingArguments(arguments):
 				.missingArguments(arguments)
 			case let .multiple(errors):
+				// safedi-source-rule: allow forceUnwrap — `asFixableError` makes `.multiple` only of a non-empty list.
 				errors.sorted().first!.asErrorToFix
 			}
 		}
@@ -2033,7 +2041,12 @@ extension Initializer.GenerationError {
 		case .inaccessibleInitializer:
 			.inaccessibleInitializer
 		case let .multiple(errors):
-			.multiple(errors.compactMap(\.asFixableError))
+			// An initializer none of whose reasons a fix-it addresses is not one to fix, however many reasons it has.
+			if case let fixableErrors = errors.compactMap(\.asFixableError), !fixableErrors.isEmpty {
+				.multiple(fixableErrors)
+			} else {
+				nil
+			}
 		case .asyncInitializer,
 		     .genericParameterInInitializer,
 		     .optionalInitializer,

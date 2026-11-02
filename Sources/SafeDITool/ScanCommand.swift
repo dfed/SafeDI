@@ -74,6 +74,7 @@ func performScan(
 
 	// Each input's comparable path, which names it in the parse and in every comparison.
 	let allFilePaths = Set(inputFilePaths.map(projectFilePaths.projectFilePath(of:)))
+	// safedi-source-rule: allow uniqueKeysWithValues — the keys are the paths of a set of `ProjectFilePath`s, which are equal exactly when their paths are.
 	let allFilePathsByName = Dictionary(uniqueKeysWithValues: allFilePaths.map { ($0.path, $0) })
 
 	// Each input's modification times, recorded before the input is read so that an edit made
@@ -299,6 +300,7 @@ func parseAdditionalDirectoryFiles(
 ) async throws -> [CachedFileScan] {
 	let filePathsToParse = filePaths.subtracting(inputFilePaths)
 	let fileScansByName = try await Dictionary(
+		// safedi-source-rule: allow uniqueKeysWithValues — `parseSwiftFiles` walks each path of a set once, and names each scan by the path it walked.
 		uniqueKeysWithValues: parseSwiftFiles(Set(filePathsToParse.map(\.path)), conditionalCompilation: evaluator).map { ($0.path, $0) },
 	)
 	// A file that does not mention SafeDI is not walked, so it contributes nothing.

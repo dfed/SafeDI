@@ -4985,6 +4985,189 @@ import Testing
 			)
 		}
 
+		@Test
+		func declaration_fixit_generatesRequiredInitializer_whenOnlyInitializerIsAsyncAndThrows() {
+			// No fix-it addresses either reason the initializer cannot construct the type, as when it has one of them.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class ExampleService: Instantiable {
+				    public init() async throws {}
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+				    public init() async throws {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 49,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class ExampleService: Instantiable {
+				public init() {}
+
+				    public init() async throws {}
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_fixit_generatesRequiredInitializer_whenOnlyInitializerIsFailableAndAsync() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class ExampleService: Instantiable {
+				    public init?() async {}
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+				    public init?() async {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property.",
+						line: 2,
+						column: 49,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add required initializer"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add required initializer",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class ExampleService: Instantiable {
+				public init() {}
+
+				    public init?() async {}
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutIssue_whenHandWrittenMockIsAsyncAndThrows() {
+			// No fix-it addresses either reason the mock cannot construct the type, so the mock has nothing to fix, as
+			// when it has one of them.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class ExampleService: Instantiable {
+				    public init(dependency: Dependency) {}
+
+				    public static func mock(dependency: Dependency) async throws -> ExampleService { fatalError() }
+
+				    @Received let dependency: Dependency
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+				    public init(dependency: Dependency) {}
+
+				    public static func mock(dependency: Dependency) async throws -> ExampleService { fatalError() }
+
+				    let dependency: Dependency
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_expandsWithoutIssue_whenHandWrittenMockIsAsyncAndThrows() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(dependency: Dependency) -> Service { fatalError() }
+
+				    public static func mock(dependency: Dependency) async throws -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(dependency: Dependency) -> Service { fatalError() }
+
+				    public static func mock(dependency: Dependency) async throws -> Service { fatalError() }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_fixit_addsMissingArgument_whenOnlyInitializerIsAsyncAndThrowsAndMissesAnArgument() {
+			// A fix-it addresses one of the initializer's reasons, so the initializer is the one to fix.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class ExampleService: Instantiable {
+				    public init() async throws {
+				        _ = "keep me"
+				    }
+
+				    @Received let dependency: Dependency
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+				    public init() async throws {
+				        _ = "keep me"
+				    }
+
+				    let dependency: Dependency
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "@Instantiable-decorated type must have a `public` or `open` initializer with a parameter for each @Instantiated, @Received, or @Forwarded-decorated property. This initializer has no parameter for `dependency: Dependency`.",
+						line: 3,
+						column: 5,
+						severity: .error,
+						fixIts: [
+							FixItSpec(message: "Add arguments for dependency: Dependency"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: [
+					"Add arguments for dependency: Dependency",
+				],
+				fixedSource: """
+				@Instantiable
+				public final class ExampleService: Instantiable {
+				    public init(dependency: Dependency) async throws {
+				        self.dependency = dependency
+				        _ = "keep me"
+				    }
+
+				    @Received let dependency: Dependency
+				}
+				""",
+			)
+		}
+
 		// MARK: mockAttributes Tests
 
 		@Test
@@ -8674,6 +8857,751 @@ import Testing
 						message: "`__safeDI_editor` begins with `__safeDI_`, a prefix SafeDI reserves for names in the code it generates. Rename it so that it does not begin with `__safeDI_`.",
 						line: 3,
 						column: 36,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_fixit_namesParameterAfterItsArgumentLabel_whenInstantiateDependencyParameterIsNamedUnderscore() {
+			// SafeDI names an `instantiate(…)` dependency by its parameter’s inner name, so `_` names none.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(first _: First) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(first _: First) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This parameter of `instantiate(…)` has no default value, so it is a dependency, which SafeDI names by the parameter’s inner name. `_` names no dependency, so nothing can fulfill it. Name the parameter, or give it a default value.",
+						line: 3,
+						column: 42,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Name the parameter `first`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Name the parameter `first`"],
+				fixedSource: """
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(first: First) -> Service { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_fixit_namesEachParameterAfterItsArgumentLabel_whenTwoInstantiateDependencyParametersAreNamedUnderscore() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(first _: First, second _: Second) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(first _: First, second _: Second) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This parameter of `instantiate(…)` has no default value, so it is a dependency, which SafeDI names by the parameter’s inner name. `_` names no dependency, so nothing can fulfill it. Name the parameter, or give it a default value.",
+						line: 3,
+						column: 42,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Name the parameter `first`")],
+					),
+					DiagnosticSpec(
+						message: "This parameter of `instantiate(…)` has no default value, so it is a dependency, which SafeDI names by the parameter’s inner name. `_` names no dependency, so nothing can fulfill it. Name the parameter, or give it a default value.",
+						line: 3,
+						column: 59,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Name the parameter `second`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Name the parameter `first`", "Name the parameter `second`"],
+				fixedSource: """
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(first: First, second: Second) -> Service { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_fixit_namesOnlyTheUnnamedParameter_whenInstantiateDependencyParameterNamedUnderscoreIsBesideANamedOne() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(first _: First, second: Second) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(first _: First, second: Second) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This parameter of `instantiate(…)` has no default value, so it is a dependency, which SafeDI names by the parameter’s inner name. `_` names no dependency, so nothing can fulfill it. Name the parameter, or give it a default value.",
+						line: 3,
+						column: 42,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Name the parameter `first`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Name the parameter `first`"],
+				fixedSource: """
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(first: First, second: Second) -> Service { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_expandsWithoutIssue_whenDefaultValuedInstantiateParameterIsNamedUnderscore() {
+			// A parameter with a default value is not a dependency, so it needs no name.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(first _: First = First()) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(first _: First = First()) -> Service { fatalError() }
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_producesDiagnosticWithoutFixit_whenInstantiateDependencyParameterHasNeitherArgumentLabelNorName() {
+			// No argument label offers a name.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(_: First, _ _: Second) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(_: First, _ _: Second) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This parameter of `instantiate(…)` has no default value, so it is a dependency, which SafeDI names by the parameter’s inner name. `_` names no dependency, so nothing can fulfill it. Name the parameter, or give it a default value.",
+						line: 3,
+						column: 36,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "This parameter of `instantiate(…)` has no default value, so it is a dependency, which SafeDI names by the parameter’s inner name. `_` names no dependency, so nothing can fulfill it. Name the parameter, or give it a default value.",
+						line: 3,
+						column: 48,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_producesDiagnosticWithoutFixit_whenNamingParameterAfterItsArgumentLabelWouldRedeclareAnotherParameter() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(first _: First, first: Second) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(first _: First, first: Second) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This parameter of `instantiate(…)` has no default value, so it is a dependency, which SafeDI names by the parameter’s inner name. `_` names no dependency, so nothing can fulfill it. Name the parameter, or give it a default value.",
+						line: 3,
+						column: 42,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_producesDiagnosticsWithoutFixits_whenTwoParametersNamedUnderscoreShareAnArgumentLabel() {
+			// Naming either parameter after the label would leave the other no name to take.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(first _: First, first _: Second) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(first _: First, first _: Second) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This parameter of `instantiate(…)` has no default value, so it is a dependency, which SafeDI names by the parameter’s inner name. `_` names no dependency, so nothing can fulfill it. Name the parameter, or give it a default value.",
+						line: 3,
+						column: 42,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "This parameter of `instantiate(…)` has no default value, so it is a dependency, which SafeDI names by the parameter’s inner name. `_` names no dependency, so nothing can fulfill it. Name the parameter, or give it a default value.",
+						line: 3,
+						column: 58,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_producesDiagnosticWithoutFixit_whenParameterNamedUnderscoreHasReservedArgumentLabel() {
+			// A dependency named after the label would be rejected as reserved.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(safeDIOverrides _: First) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(safeDIOverrides _: First) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This parameter of `instantiate(…)` has no default value, so it is a dependency, which SafeDI names by the parameter’s inner name. `_` names no dependency, so nothing can fulfill it. Name the parameter, or give it a default value.",
+						line: 3,
+						column: 52,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_fixit_namesParameterAfterKeywordArgumentLabel_whenInstantiateDependencyParameterIsNamedUnderscore() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(default _: First) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(default _: First) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This parameter of `instantiate(…)` has no default value, so it is a dependency, which SafeDI names by the parameter’s inner name. `_` names no dependency, so nothing can fulfill it. Name the parameter, or give it a default value.",
+						line: 3,
+						column: 44,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Name the parameter `default`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Name the parameter `default`"],
+				fixedSource: """
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(default: First) -> Service { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_fixit_keepsParameterType_whenInstantiateDependencyParameterNamedUnderscoreHasClosureType() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(first _: @escaping () -> Void) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(first _: @escaping () -> Void) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This parameter of `instantiate(…)` has no default value, so it is a dependency, which SafeDI names by the parameter’s inner name. `_` names no dependency, so nothing can fulfill it. Name the parameter, or give it a default value.",
+						line: 3,
+						column: 42,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Name the parameter `first`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Name the parameter `first`"],
+				fixedSource: """
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(first: @escaping () -> Void) -> Service { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_fixit_keepsParameterType_whenInstantiateDependencyParameterNamedUnderscoreHasSendableClosureType() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(first _: @escaping @Sendable () -> Void) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(first _: @escaping @Sendable () -> Void) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This parameter of `instantiate(…)` has no default value, so it is a dependency, which SafeDI names by the parameter’s inner name. `_` names no dependency, so nothing can fulfill it. Name the parameter, or give it a default value.",
+						line: 3,
+						column: 42,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Name the parameter `first`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Name the parameter `first`"],
+				fixedSource: """
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(first: @escaping @Sendable () -> Void) -> Service { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_fixit_keepsParameterType_whenInstantiateDependencyParameterNamedUnderscoreHasOptionalType() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(first _: First?) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(first _: First?) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This parameter of `instantiate(…)` has no default value, so it is a dependency, which SafeDI names by the parameter’s inner name. `_` names no dependency, so nothing can fulfill it. Name the parameter, or give it a default value.",
+						line: 3,
+						column: 42,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Name the parameter `first`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Name the parameter `first`"],
+				fixedSource: """
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(first: First?) -> Service { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func extension_fixit_keepsParameterType_whenInstantiateDependencyParameterNamedUnderscoreHasWrapperType() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(first _: Instantiator<First>) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(first _: Instantiator<First>) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "This parameter of `instantiate(…)` has no default value, so it is a dependency, which SafeDI names by the parameter’s inner name. `_` names no dependency, so nothing can fulfill it. Name the parameter, or give it a default value.",
+						line: 3,
+						column: 42,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Name the parameter `first`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Name the parameter `first`"],
+				fixedSource: """
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(first: Instantiator<First>) -> Service { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_producesDiagnostic_whenTwoPropertyNamesAreEncodedDifferently() {
+			// Swift compares names byte for byte, so these are two properties; `String`, which SafeDI matches names by, calls them equal.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Service: Instantiable {
+				    @Instantiated let caf\u{E9}: First
+				    @Instantiated let cafe\u{301}: Second
+				    public init(caf\u{E9}: First, cafe\u{301}: Second) {}
+				}
+				""",
+				expandedSource: """
+				public final class Service: Instantiable {
+				    let caf\u{E9}: First
+				    let cafe\u{301}: Second
+				    public init(caf\u{E9}: First, cafe\u{301}: Second) {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The names `caf\u{E9}` (U+0063 U+0061 U+0066 U+00E9) and `cafe\u{301}` (U+0063 U+0061 U+0066 U+0065 U+0301) look the same but are encoded differently, so SafeDI cannot tell them apart. Rename one of them.",
+						line: 4,
+						column: 23,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesDiagnostic_whenPropertyNameIsEncodedDifferentlyFromForwardedPropertyName() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Service: Instantiable {
+				    @Forwarded let caf\u{E9}: First
+				    @Received let cafe\u{301}: Second
+				    public init(caf\u{E9}: First, cafe\u{301}: Second) {}
+				}
+				""",
+				expandedSource: """
+				public final class Service: Instantiable {
+				    let caf\u{E9}: First
+				    let cafe\u{301}: Second
+				    public init(caf\u{E9}: First, cafe\u{301}: Second) {}
+
+				    public typealias ForwardedProperties = First
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The names `caf\u{E9}` (U+0063 U+0061 U+0066 U+00E9) and `cafe\u{301}` (U+0063 U+0061 U+0066 U+0065 U+0301) look the same but are encoded differently, so SafeDI cannot tell them apart. Rename one of them.",
+						line: 4,
+						column: 19,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesDiagnosticAtEachLaterSpelling_whenThreeNamesAreEncodedDifferently() {
+			// Each later spelling is reported once, at its first occurrence, beside the first spelling it cannot be told apart from.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Service: Instantiable {
+				    @Instantiated let \u{C5}: First
+				    @Instantiated let \u{212B}: Second
+				    @Instantiated let A\u{30A}: Third
+				    public init(\u{C5}: First, \u{212B}: Second, A\u{30A}: Third) {}
+				}
+				""",
+				expandedSource: """
+				public final class Service: Instantiable {
+				    let \u{C5}: First
+				    let \u{212B}: Second
+				    let A\u{30A}: Third
+				    public init(\u{C5}: First, \u{212B}: Second, A\u{30A}: Third) {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The names `\u{C5}` (U+00C5) and `\u{212B}` (U+212B) look the same but are encoded differently, so SafeDI cannot tell them apart. Rename one of them.",
+						line: 4,
+						column: 23,
+						severity: .error,
+					),
+					DiagnosticSpec(
+						message: "The names `\u{C5}` (U+00C5) and `A\u{30A}` (U+0041 U+030A) look the same but are encoded differently, so SafeDI cannot tell them apart. Rename one of them.",
+						line: 5,
+						column: 23,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutIssue_whenTwoPropertyNamesAreByteIdentical() {
+			// The compiler reports the redeclaration of a name spelled the same way twice in one clause.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Service: Instantiable {
+				    @Instantiated let caf\u{E9}: First
+				    @Instantiated let caf\u{E9}: Second
+				    public init(caf\u{E9}: First, caf\u{E9}: Second) {}
+				}
+				""",
+				expandedSource: """
+				public final class Service: Instantiable {
+				    let caf\u{E9}: First
+				    let caf\u{E9}: Second
+				    public init(caf\u{E9}: First, caf\u{E9}: Second) {}
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesDiagnostic_whenInitializerParameterNameIsEncodedDifferentlyFromThePropertyItFulfills() {
+			// SafeDI matches the parameter to the property by name, and generated code passes the property under the parameter’s spelling.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Service: Instantiable {
+				    @Received let caf\u{E9}: First
+				    public init(cafe\u{301}: First) {}
+				}
+				""",
+				expandedSource: """
+				public final class Service: Instantiable {
+				    let caf\u{E9}: First
+				    public init(cafe\u{301}: First) {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The names `caf\u{E9}` (U+0063 U+0061 U+0066 U+00E9) and `cafe\u{301}` (U+0063 U+0061 U+0066 U+0065 U+0301) look the same but are encoded differently, so SafeDI cannot tell them apart. Rename one of them.",
+						line: 4,
+						column: 17,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesDiagnostic_whenDefaultValuedInitializerParameterNameIsEncodedDifferentlyFromPropertyName() {
+			// A generated mock offers a default-valued parameter as an override, which SafeDI matches to the property by name.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Service: Instantiable {
+				    @Instantiated let caf\u{E9}: First
+				    public init(caf\u{E9}: First, cafe\u{301}: Second = Second()) {}
+				}
+				""",
+				expandedSource: """
+				public final class Service: Instantiable {
+				    let caf\u{E9}: First
+				    public init(caf\u{E9}: First, cafe\u{301}: Second = Second()) {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The names `caf\u{E9}` (U+0063 U+0061 U+0066 U+00E9) and `cafe\u{301}` (U+0063 U+0061 U+0066 U+0065 U+0301) look the same but are encoded differently, so SafeDI cannot tell them apart. Rename one of them.",
+						line: 4,
+						column: 31,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesDiagnostic_whenMockParameterNameIsEncodedDifferentlyFromPropertyName() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Service: Instantiable {
+				    @Received let caf\u{E9}: First
+				    public init(caf\u{E9}: First) {}
+				    public static func mock(cafe\u{301}: First) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				public final class Service: Instantiable {
+				    let caf\u{E9}: First
+				    public init(caf\u{E9}: First) {}
+				    public static func mock(cafe\u{301}: First) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The names `caf\u{E9}` (U+0063 U+0061 U+0066 U+00E9) and `cafe\u{301}` (U+0063 U+0061 U+0066 U+0065 U+0301) look the same but are encoded differently, so SafeDI cannot tell them apart. Rename one of them.",
+						line: 5,
+						column: 29,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesDiagnostic_whenAliasFulfillingNameIsEncodedDifferentlyFromPropertyName() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Service: Instantiable {
+				    @Instantiated let caf\u{E9}: Dependency
+				    @Received(fulfilledByDependencyNamed: "cafe\u{301}", ofType: Dependency.self) let renamed: Dependency
+				    public init(caf\u{E9}: Dependency, renamed: Dependency) {}
+				}
+				""",
+				expandedSource: """
+				public final class Service: Instantiable {
+				    let caf\u{E9}: Dependency
+				    let renamed: Dependency
+				    public init(caf\u{E9}: Dependency, renamed: Dependency) {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The names `caf\u{E9}` (U+0063 U+0061 U+0066 U+00E9) and `cafe\u{301}` (U+0063 U+0061 U+0066 U+0065 U+0301) look the same but are encoded differently, so SafeDI cannot tell them apart. Rename one of them.",
+						line: 4,
+						column: 43,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func declaration_producesOnlyEncodingDiagnostic_whenSameTypedPropertiesWithDifferentDecoratorsAreEncodedDifferently() {
+			// SafeDI matches both parameters to the first property, but the initializer error that would follow is not reported beside the one that explains it.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Service: Instantiable {
+				    @Instantiated let caf\u{E9}: Dependency
+				    @Received let cafe\u{301}: Dependency
+				    public init(caf\u{E9}: Dependency, cafe\u{301}: Dependency) {}
+				}
+				""",
+				expandedSource: """
+				public final class Service: Instantiable {
+				    let caf\u{E9}: Dependency
+				    let cafe\u{301}: Dependency
+				    public init(caf\u{E9}: Dependency, cafe\u{301}: Dependency) {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The names `caf\u{E9}` (U+0063 U+0061 U+0066 U+00E9) and `cafe\u{301}` (U+0063 U+0061 U+0066 U+0065 U+0301) look the same but are encoded differently, so SafeDI cannot tell them apart. Rename one of them.",
+						line: 4,
+						column: 19,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_producesDiagnostic_whenTwoInstantiateDependencyParameterNamesAreEncodedDifferently() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(caf\u{E9}: First, cafe\u{301}: Second) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(caf\u{E9}: First, cafe\u{301}: Second) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The names `caf\u{E9}` (U+0063 U+0061 U+0066 U+00E9) and `cafe\u{301}` (U+0063 U+0061 U+0066 U+0065 U+0301) look the same but are encoded differently, so SafeDI cannot tell them apart. Rename one of them.",
+						line: 3,
+						column: 50,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
+		func extension_producesDiagnostic_whenDefaultValuedParameterNameIsEncodedDifferentlyFromDependencyParameterName() {
+			// A generated mock offers a default-valued parameter as an override, which SafeDI matches to the dependency by name.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				extension Service: Instantiable {
+				    public static func instantiate(caf\u{E9}: First, cafe\u{301}: Second = Second()) -> Service { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Service: Instantiable {
+				    public static func instantiate(caf\u{E9}: First, cafe\u{301}: Second = Second()) -> Service { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The names `caf\u{E9}` (U+0063 U+0061 U+0066 U+00E9) and `cafe\u{301}` (U+0063 U+0061 U+0066 U+0065 U+0301) look the same but are encoded differently, so SafeDI cannot tell them apart. Rename one of them.",
+						line: 3,
+						column: 50,
 						severity: .error,
 					),
 				],
