@@ -13,3 +13,5 @@ Respect the minimum deployment target. If you are adding code that uses new APIs
 ### Forwards compatibility
 
 Please do not write new code using deprecated APIs.
+
+<!-- Throwaway: verifies that a Markdown-only pull request reports every required check. Do not merge. -->
