@@ -845,6 +845,7 @@ struct Generate: AsyncParsableCommand {
 		}
 		// Scan parsed every file under its absolute path, so the file is read from the name it is parsed under.
 		let rescans = try await parseSwiftFiles(Set(staleFileScans.map(\.scannedPath)), conditionalCompilation: evaluator)
+		// safedi-source-rule: allow uniqueKeysWithValues — `parseSwiftFiles` walks each path of a set once, and names each scan by the path it walked.
 		let rescanByScannedPath = Dictionary(uniqueKeysWithValues: rescans.map { ($0.path, $0) })
 		let staleScannedPaths = Set(staleFileScans.map(\.scannedPath))
 		// A file that no longer mentions SafeDI is not walked, so it contributes nothing, as in a fresh parse.

@@ -310,7 +310,7 @@ public struct NotesApp: App, Instantiable {
 
 #### Making external types `@Instantiable`
 
-Types that are declared outside of your project can be instantiated by SafeDI if there is an extension on the type decorated with the `@Instantiable` macro. Extensions decorated with this macro define how to instantiate the extended type via a `public static func instantiate(…) -> ExtendedType` function. This `instantiate(…)` function can receive dependencies instantiated or forwarded by objects further up the dependency tree by declaring these dependencies as parameters to the `instantiate(…)` function. A parameter with a default value is not a dependency, as for an initializer: SafeDI calls `instantiate(…)` without it, and a generated mock offers it as an override.
+Types that are declared outside of your project can be instantiated by SafeDI if there is an extension on the type decorated with the `@Instantiable` macro. Extensions decorated with this macro define how to instantiate the extended type via a `public static func instantiate(…) -> ExtendedType` function. This `instantiate(…)` function can receive dependencies instantiated or forwarded by objects further up the dependency tree by declaring these dependencies as parameters to the `instantiate(…)` function. SafeDI names each such dependency by its parameter’s name (`editor` in `instantiate(for editor: Editor)`), so a dependency parameter cannot be named `_`. A parameter with a default value is not a dependency, as for an initializer: SafeDI calls `instantiate(…)` without it, and a generated mock offers it as an override.
 
 Here we have a sample `@Instantiable` extension on `UserDefaults` that adopts a first-party `StringStorage` protocol so SafeDI can instantiate it in place of a hand-rolled storage type:
 
@@ -1031,7 +1031,7 @@ public final class DisabledEventLogger: EventLogger, Instantiable { … }
 #endif
 ```
 
-- Platform conditions such as `os(iOS)`, `arch(arm64)`, `canImport(UIKit)`, `targetEnvironment(simulator)`, `swift(>=6.0)`, and `compiler(>=6.0)` are left to the compiler. SafeDITool scans every clause one of them could select, so declarations under `#if os(iOS)` and under its `#else` are both visible to code generation.
+- Platform conditions such as `os(iOS)`, `arch(arm64)`, `canImport(UIKit)`, `targetEnvironment(simulator)`, `swift(>=6.0)`, and `compiler(>=6.0)` are left to the compiler. SafeDITool scans every clause one of them could select, so declarations under `#if os(iOS)` and under its `#else` are both visible to code generation. Declare a dependency once, outside such a block: SafeDITool reports a dependency declared in each clause of a type that generated code builds as declared more than once.
 
 The reported conditions are taken as complete, so a condition your build defines but your integration does not report would make SafeDITool scan the wrong clause. To keep that from going unnoticed, every generated file begins by asserting each decision SafeDITool made about a block that declares something SafeDI scans for—an `@Instantiable` type, a dependency property, an `instantiate()` method, an initializer SafeDI could select to construct its type, or a `#SafeDIConfiguration`:
 
