@@ -557,6 +557,10 @@ func stageCompileSources(
 ///   - emitsModule: Whether to emit `<moduleName>.swiftmodule` into `outputDirectory` as well, for the
 ///     modules compiled after this one to import.
 ///   - moduleSearchPaths: Directories searched for imported modules, after the one holding `SafeDI`.
+///   - enablesTesting: Whether to compile with `-enable-testing`, so that a module compiled after this one can
+///     `@testable import` it.
+///   - parsesAsLibrary: Whether to compile with `-parse-as-library`, so that a module of one file is a library
+///     rather than a script that defines `main`, which a link into an executable would duplicate.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func compileSwift(
 	sources: [URL],
@@ -567,13 +571,10 @@ func compileSwift(
 	packageName: String? = nil,
 	emitsModule: Bool = false,
 	moduleSearchPaths: [URL] = [],
+	enablesTesting: Bool = false,
+	parsesAsLibrary: Bool = false,
 ) throws -> SwiftCompileResult {
-	#if os(Linux)
-		let executableURL = URL(fileURLWithPath: "/usr/bin/env")
-	#else
-		let executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-	#endif
-	var arguments = ["swiftc"]
+	var arguments = swiftCompilerCommand.arguments
 	arguments.append(contentsOf: [
 		"-emit-object",
 		"-whole-module-optimization",
@@ -589,6 +590,12 @@ func compileSwift(
 		"-DDEBUG",
 		"-swift-version", "6",
 	])
+	if enablesTesting {
+		arguments.append("-enable-testing")
+	}
+	if parsesAsLibrary {
+		arguments.append("-parse-as-library")
+	}
 	if let packageName {
 		arguments.append(contentsOf: ["-package-name", packageName])
 	}
@@ -597,7 +604,7 @@ func compileSwift(
 	}
 	arguments.append(contentsOf: Set(activeCompilationConditions).subtracting(["DEBUG"]).sorted().map { "-D\($0)" })
 	arguments.append(contentsOf: sources.map(\.path))
-	return try runProcess(executableURL, arguments: arguments)
+	return try runProcess(swiftCompilerCommand.executable, arguments: arguments)
 }
 
 /// Runs `executableURL` with `arguments` to completion and returns its exit status and everything it wrote.
@@ -629,3 +636,12 @@ func runProcess(_ executableURL: URL, arguments: [String]) throws -> SwiftCompil
 		stderr: (try? String(contentsOf: standardError, encoding: .utf8)) ?? "",
 	)
 }
+
+/// How this platform runs `swiftc`: through `xcrun` on Apple platforms, and from `PATH` elsewhere.
+let swiftCompilerCommand: (executable: URL, arguments: [String]) = {
+	#if os(Linux)
+		(URL(fileURLWithPath: "/usr/bin/env"), ["swiftc"])
+	#else
+		(URL(fileURLWithPath: "/usr/bin/xcrun"), ["swiftc"])
+	#endif
+}()
