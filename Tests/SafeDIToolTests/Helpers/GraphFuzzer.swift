@@ -2212,11 +2212,14 @@ enum GraphFuzzerToolOutcome: Equatable {
 	}
 }
 
-/// A graph the oracle does not accept: the tool succeeded and the output does not compile, the fixture itself
-/// does not compile (a defect in the fuzzer), or two runs of the tool differ.
+/// A graph the oracle does not accept: the tool succeeded and the output does not compile or draws a compiler
+/// warning, the fixture itself does not compile (a defect in the fuzzer), or two runs of the tool differ.
 struct GraphFuzzerFailure: Equatable {
 	enum Kind: String, Equatable {
 		case generatedCodeDoesNotCompile = "generated code does not compile"
+		/// The generated code compiles, and the compiler reports a warning in it that the fixture does not draw
+		/// itself: a build that treats warnings as errors fails on it, and its author cannot edit generated code.
+		case generatedCodeDrawsWarning = "generated code draws a compiler warning"
 		case fixtureDoesNotCompile = "fixture does not compile on its own"
 		case runsDiffer = "two runs of the tool differ"
 		case runsDifferAcrossProcesses = "the tool's output differs between two processes"
@@ -2255,8 +2258,9 @@ struct GraphFuzzerResult {
 
 	let fixture: GraphFuzzerFixture
 	let outcome: GraphFuzzerToolOutcome
-	/// The first way the graph fails the oracle: its runs differ, it does not compile, a generated mock takes a
-	/// `LazilyInstantiated` parameter for a receive, or, failing none of those ways, a renamed graph gives other results.
+	/// The first way the graph fails the oracle: its runs differ, it does not compile or its generated code draws a
+	/// compiler warning, a generated mock takes a `LazilyInstantiated` parameter for a receive, or, failing none of
+	/// those ways, a renamed graph gives other results.
 	let failure: GraphFuzzerFailure?
 	/// How each renamed graph that gives other results differs, in the order of `GraphFuzzerRenaming.all`, whether
 	/// or not the graph also fails another way.
@@ -2279,6 +2283,8 @@ struct GraphFuzzerKnownIssue: Equatable {
 	enum Signature: Equatable {
 		/// The generated code fails to compile with an error whose message contains this text.
 		case compilerError(containing: String)
+		/// The generated code compiles, drawing a warning whose message contains this text.
+		case compilerWarning(containing: String)
 		/// The Swift compiler crashes while compiling a generated mock.
 		case compilerCrashInGeneratedMock
 		/// A renamed graph gives other results, in the aspect whose description contains this text.
@@ -2299,6 +2305,8 @@ struct GraphFuzzerKnownIssue: Equatable {
 			switch signature {
 			case let .compilerError(text):
 				failure.kind == .generatedCodeDoesNotCompile && failure.details.contains(text)
+			case let .compilerWarning(text):
+				failure.kind == .generatedCodeDrawsWarning && failure.details.contains(text)
 			case .compilerCrashInGeneratedMock:
 				failure.kind == .compilerCrashedOnGeneratedCode && failure.details.contains("+SafeDIMock.swift")
 			case let .renamedGraphDiffers(text):
@@ -2630,29 +2638,6 @@ enum GraphFuzzerOracle {
 		return GraphFuzzerFailure(seed: fixture.seed, kind: .runsDifferAcrossProcesses, details: "First process:\n\(outputs[0])\nSecond process:\n\(outputs[1])")
 	}
 
-	private static func runProcess(_ executable: URL, arguments: [String]) throws -> SwiftCompileResult {
-		let process = Process()
-		process.executableURL = executable
-		process.arguments = arguments
-		let standardOutput = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-graph-fuzzer-output-\(UUID().uuidString)")
-		let standardError = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-graph-fuzzer-error-\(UUID().uuidString)")
-		FileManager.default.createFile(atPath: standardOutput.path, contents: nil)
-		FileManager.default.createFile(atPath: standardError.path, contents: nil)
-		defer {
-			try? FileManager.default.removeItem(at: standardOutput)
-			try? FileManager.default.removeItem(at: standardError)
-		}
-		process.standardOutput = try FileHandle(forWritingTo: standardOutput)
-		process.standardError = try FileHandle(forWritingTo: standardError)
-		try process.run()
-		process.waitUntilExit()
-		return SwiftCompileResult(
-			exitCode: process.terminationStatus,
-			stdout: (try? String(contentsOf: standardOutput, encoding: .utf8)) ?? "",
-			stderr: (try? String(contentsOf: standardError, encoding: .utf8)) ?? "",
-		)
-	}
-
 	private static func fixtureDirectory(of fileNames: [String], in fixtures: FixturePaths) -> String {
 		(fixtures[fileNames[0]] as NSString).deletingLastPathComponent
 	}
@@ -2665,14 +2650,16 @@ enum GraphFuzzerOracle {
 	}
 
 	/// Compiles each graph's fixture, with the generated code when the tool accepted it, and returns the failure
-	/// of each graph that does not compile, keyed by seed.
+	/// of each graph that does not compile, or whose generated code draws a compiler warning, keyed by seed.
 	///
 	/// Every graph is compiled in one `swiftc` invocation, as `verifyGeneratedCodeCompiles` compiles one test's
 	/// fixture and output; distinct type-name prefixes keep the graphs apart. When that fails, each error is
 	/// attributed to a graph by the prefix in its file name. Those graphs fail, and the rest are compiled again
 	/// without them, because a type error stops the compiler before the SIL passes that report errors such as a
 	/// closure that captures a later local. A failing graph is then compiled without its generated code, to tell
-	/// a generator defect from a fixture the fuzzer got wrong.
+	/// a generator defect from a fixture the fuzzer got wrong. A graph that compiles fails when the compile it
+	/// passed reports a warning in its generated code that its fixture does not draw, as `verifyGeneratedCodeCompiles`
+	/// fails a test (`warningsOnlyGeneratedCodeDraws`).
 	static func compilationFailures(of toolRuns: [GraphFuzzerToolRuns]) throws -> [UInt64: GraphFuzzerFailure] {
 		guard !toolRuns.isEmpty else { return [:] }
 		guard let artifacts = SafeDIBuildArtifactLocator.locate() else {
@@ -2705,19 +2692,28 @@ enum GraphFuzzerOracle {
 				generatedFiles[stagedFileName] = contents
 			}
 			let combined = try stageCompileSources(inputSwiftFiles: fixtureFiles, generatedFiles: generatedFiles, filesToDelete: &filesToDelete)
-			combinedUnits.append(CompilationUnit(seed: runs.fixture.seed, sources: combined.inputFiles + combined.generatedFiles.sorted { $0.path < $1.path }))
+			combinedUnits.append(CompilationUnit(
+				seed: runs.fixture.seed,
+				inputFiles: combined.inputFiles,
+				generatedFiles: combined.generatedFiles.sorted { $0.path < $1.path },
+			))
 			if !generatedFiles.isEmpty {
-				inputOnlyUnitsBySeed[runs.fixture.seed] = CompilationUnit(seed: runs.fixture.seed, sources: combined.inputFiles)
+				inputOnlyUnitsBySeed[runs.fixture.seed] = CompilationUnit(seed: runs.fixture.seed, inputFiles: combined.inputFiles, generatedFiles: [])
 			}
 		}
 
-		let combinedFailures = try diagnosticsOfFailingUnits(combinedUnits, outputDirectory: fixtureDirectory, artifacts: artifacts)
-		let inputOnlyFailures = try diagnosticsOfFailingUnits(
-			toolRuns.compactMap { combinedFailures[$0.fixture.seed] == nil ? nil : inputOnlyUnitsBySeed[$0.fixture.seed] },
+		let combinedCompilation = try compilation(of: combinedUnits, outputDirectory: fixtureDirectory, artifacts: artifacts)
+		let combinedFailures = combinedCompilation.failures
+		// These units hold no generated code, so they record no warnings.
+		let inputOnlyFailures = try compilation(
+			of: toolRuns.compactMap { combinedFailures[$0.fixture.seed] == nil ? nil : inputOnlyUnitsBySeed[$0.fixture.seed] },
 			outputDirectory: fixtureDirectory,
 			artifacts: artifacts,
-		)
+		).failures
 		var failures = [UInt64: GraphFuzzerFailure]()
+		for (seed, warnings) in combinedCompilation.generatedCodeWarnings {
+			failures[seed] = GraphFuzzerFailure(seed: seed, kind: .generatedCodeDrawsWarning, details: warnings.joined(separator: "\n"))
+		}
 		for (seed, diagnostics) in combinedFailures {
 			// A graph the tool rejected is compiled without generated code, so its failure is the fixture's own.
 			let fixtureFails = inputOnlyUnitsBySeed[seed] == nil || inputOnlyFailures[seed] != nil
@@ -2735,7 +2731,12 @@ enum GraphFuzzerOracle {
 
 	private struct CompilationUnit {
 		let seed: UInt64
-		let sources: [URL]
+		let inputFiles: [URL]
+		let generatedFiles: [URL]
+
+		var sources: [URL] {
+			inputFiles + generatedFiles
+		}
 
 		/// Whether `fileName` belongs to this unit: a fixture staged as `input_<index>_<prefix>…`, a generated file
 		/// named `<prefix>…`, or a fixture named in a `#sourceLocation` directive.
@@ -2745,7 +2746,6 @@ enum GraphFuzzerOracle {
 		}
 	}
 
-	/// The compiler errors of each unit that fails to compile, keyed by seed.
 	/// Why a unit failed to compile: its compiler errors, or a summary of the compiler's crash.
 	private struct UnitDiagnostics {
 		let text: String
@@ -2767,20 +2767,47 @@ enum GraphFuzzerOracle {
 		}
 	}
 
-	private static func diagnosticsOfFailingUnits(
-		_ units: [CompilationUnit],
+	/// How a set of units compiled: why each unit that fails to compile fails, and the warnings each other unit's
+	/// generated code draws, each keyed by seed.
+	private struct UnitsCompilation {
+		var failures = [UInt64: UnitDiagnostics]()
+		var generatedCodeWarnings = [UInt64: [String]]()
+
+		/// Records the warnings `unit`'s generated code draws in `compilerOutput`, the output of a compile that
+		/// `unit` passed, which reports every warning in `unit`'s files.
+		mutating func recordGeneratedCodeWarnings(of unit: CompilationUnit, inCompilerOutput compilerOutput: String) throws {
+			let warnings = try warningsOnlyGeneratedCodeDraws(
+				inCompilerOutput: compilerOutput,
+				generatedFiles: unit.generatedFiles,
+				inputFiles: unit.inputFiles,
+			)
+			guard !warnings.isEmpty else { return }
+			generatedCodeWarnings[unit.seed] = warnings
+		}
+	}
+
+	/// Compiles `units` together, then again without each unit an error is attributed to, until the rest compile.
+	/// A unit's warnings are read from the last compile it is part of, the one that passes, so a warning reported
+	/// only by a SIL pass that a type error elsewhere stopped is still read.
+	private static func compilation(
+		of units: [CompilationUnit],
 		outputDirectory: URL,
 		artifacts: SafeDIBuildArtifacts,
-	) throws -> [UInt64: UnitDiagnostics] {
+	) throws -> UnitsCompilation {
 		var remainingUnits = units
-		var diagnosticsBySeed = [UInt64: UnitDiagnostics]()
+		var compilation = UnitsCompilation()
 		while !remainingUnits.isEmpty {
 			let result = try compileSwift(
 				sources: remainingUnits.flatMap(\.sources),
 				outputDirectory: outputDirectory,
 				artifacts: artifacts,
 			)
-			guard result.exitCode != 0 else { break }
+			guard result.exitCode != 0 else {
+				for unit in remainingUnits {
+					try compilation.recordGeneratedCodeWarnings(of: unit, inCompilerOutput: result.stderr)
+				}
+				break
+			}
 			let errorLines = result.stderr.split(separator: "\n").filter { $0.contains(": error: ") }
 			let crash = GraphFuzzerCompilerCrash(standardError: result.stderr)
 			var attributedSeeds = Set<UInt64>()
@@ -2792,21 +2819,23 @@ enum GraphFuzzerOracle {
 				}
 				if let crash, let fileName = crash.fileName, unit.contains(fileName: Substring(fileName)) {
 					attributedSeeds.insert(unit.seed)
-					diagnosticsBySeed[unit.seed] = UnitDiagnostics(standardError: result.stderr)
+					compilation.failures[unit.seed] = UnitDiagnostics(standardError: result.stderr)
 				} else if !unitErrorLines.isEmpty {
 					attributedSeeds.insert(unit.seed)
-					diagnosticsBySeed[unit.seed] = UnitDiagnostics(errorLines: unitErrorLines)
+					compilation.failures[unit.seed] = UnitDiagnostics(errorLines: unitErrorLines)
 				}
 			}
 			if attributedSeeds.isEmpty, remainingUnits.count == 1 {
-				diagnosticsBySeed[remainingUnits[0].seed] = UnitDiagnostics(standardError: result.stderr)
+				compilation.failures[remainingUnits[0].seed] = UnitDiagnostics(standardError: result.stderr)
 				break
 			} else if attributedSeeds.isEmpty {
 				// Nothing names a graph, so compile each graph on its own to find the failing ones.
 				for unit in remainingUnits {
 					let unitResult = try compileSwift(sources: unit.sources, outputDirectory: outputDirectory, artifacts: artifacts)
 					if unitResult.exitCode != 0 {
-						diagnosticsBySeed[unit.seed] = UnitDiagnostics(standardError: unitResult.stderr)
+						compilation.failures[unit.seed] = UnitDiagnostics(standardError: unitResult.stderr)
+					} else {
+						try compilation.recordGeneratedCodeWarnings(of: unit, inCompilerOutput: unitResult.stderr)
 					}
 				}
 				break
@@ -2814,7 +2843,7 @@ enum GraphFuzzerOracle {
 				remainingUnits.removeAll { attributedSeeds.contains($0.seed) }
 			}
 		}
-		return diagnosticsBySeed
+		return compilation
 	}
 }
 
