@@ -122,6 +122,51 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func finding_isKnownIssue_whenKnownIssueSeedDrawsDocumentedWarning() {
+		let knownIssue = Self.compilerWarningKnownIssue
+		let failure = GraphFuzzerFailure(
+			seed: knownIssue.seeds[0],
+			kind: .generatedCodeDrawsWarning,
+			details: "S84_Root0+SafeDI.swift:6:13: warning: initialization of immutable value '__safeDI_t1_fallback' was never used",
+		)
+
+		let finding = GraphFuzzerFinding(failure: failure, knownIssue: knownIssue)
+
+		#expect(finding == .knownIssue(knownIssue, failure))
+		#expect(finding.reportLine(seed: knownIssue.seeds[0]) == "known \(knownIssue.seeds[0]) \(knownIssue.reason)")
+	}
+
+	@Test
+	func finding_isFailure_whenCompilerWarningKnownIssueSeedFailsToCompileWithDocumentedText() {
+		let knownIssue = Self.compilerWarningKnownIssue
+		let failure = GraphFuzzerFailure(
+			seed: knownIssue.seeds[0],
+			kind: .generatedCodeDoesNotCompile,
+			details: "S84_Root0+SafeDI.swift:6:13: error: initialization of immutable value '__safeDI_t1_fallback' was never used",
+		)
+
+		let finding = GraphFuzzerFinding(failure: failure, knownIssue: knownIssue)
+
+		#expect(finding == .failure(failure))
+		#expect(finding.reportLine(seed: knownIssue.seeds[0]) == "failure \(knownIssue.seeds[0]) generated code does not compile")
+	}
+
+	@Test
+	func finding_isFailure_whenCompilerErrorKnownIssueSeedDrawsWarningWithDocumentedText() {
+		let knownIssue = Self.compilerErrorKnownIssue
+		let failure = GraphFuzzerFailure(
+			seed: knownIssue.seeds[0],
+			kind: .generatedCodeDrawsWarning,
+			details: "T4+SafeDIMock.swift:13:13: warning: invalid redeclaration of 't5'",
+		)
+
+		let finding = GraphFuzzerFinding(failure: failure, knownIssue: knownIssue)
+
+		#expect(finding == .failure(failure))
+		#expect(finding.reportLine(seed: knownIssue.seeds[0]) == "failure \(knownIssue.seeds[0]) generated code draws a compiler warning")
+	}
+
+	@Test
 	func finding_isStaleKnownIssue_whenKnownIssueSeedNoLongerFails() {
 		let knownIssue = Self.compilerErrorKnownIssue
 
@@ -222,25 +267,22 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles generated code only when compile verification is enabled"))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	func compilationFailures_reportEachBrokenGraph_whenGeneratedCodeFailsToTypeCheckOrToLower() throws {
-		// Each graph is one small type, so the three compiler invocations this takes stay cheap; the smoke batch
+	func compilationFailures_reportEachBrokenGraph_whenGeneratedCodeFailsToTypeCheckOrToLowerOrDrawsWarning() throws {
+		// Each graph is one small type, so the four compiler invocations this takes stay cheap; the smoke batch
 		// already compiles real graphs.
-		func graph(seed: UInt64, brokenGeneratedCode: String) -> GraphFuzzerToolRuns {
-			let prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
-			let fixture = GraphFuzzerFixture(seed: seed, swiftFileContent: [
-				"@Instantiable\npublic final class \(prefix)Probe: Instantiable {\n\tpublic init() {}\n}\n",
-			])
-			let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["\(prefix)Broken.swift": brokenGeneratedCode], warnings: [])
-			return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome)
-		}
 		let typeErrorSeed: UInt64 = 1_000_000_001
 		let loweringErrorSeed: UInt64 = 1_000_000_002
+		let warningSeed: UInt64 = 1_000_000_003
+		let redirectedWarningSeed: UInt64 = 1_000_000_004
+		let fixtureWarningSeed: UInt64 = 1_000_000_005
+		let redirectedWarningPrefix = GraphFuzzerFixture.typeNamePrefix(forSeed: redirectedWarningSeed)
+		let fixtureWarningPrefix = GraphFuzzerFixture.typeNamePrefix(forSeed: fixtureWarningSeed)
 		let toolRuns = [
 			// A type error, which the type checker reports.
-			graph(seed: typeErrorSeed, brokenGeneratedCode: "func broken() -> Int { \"not an integer\" }\n"),
+			Self.probeGraph(seed: typeErrorSeed, generatedCode: "func broken() -> Int { \"not an integer\" }\n"),
 			// A closure that captures a local declared after it, which only lowering to SIL reports, and which a
 			// type error elsewhere in the same compilation would hide.
-			graph(seed: loweringErrorSeed, brokenGeneratedCode: """
+			Self.probeGraph(seed: loweringErrorSeed, generatedCode: """
 			func brokenWhenLowered() -> Int {
 				func read() -> Int { value }
 				let value = read()
@@ -248,13 +290,74 @@ struct SafeDIToolGraphFuzzerTests {
 			}
 
 			"""),
+			// A warning in the generated file, which compiles.
+			Self.probeGraph(seed: warningSeed, generatedCode: "func drawsWarning() {\n\tlet unused = 1\n}\n"),
+			// A warning the compiler reports at the fixture's declaration, where a `#sourceLocation` directive in
+			// the generated file attributes the line, as the tool's directives name the fixtures it was given.
+			Self.probeGraph(seed: redirectedWarningSeed, generatedCode: """
+			func drawsWarningAtDeclaration() {
+				#sourceLocation(file: "/fuzzer/<fixture-directory>/\(redirectedWarningPrefix)Probe.swift", line: 3)
+				let unused = 1
+				#sourceLocation()
+			}
+
+			"""),
+			// A warning the fixture draws too, which is not the generated code's to avoid. The two graphs above draw the
+			// same message in their generated code and still fail, which pins that only a graph's own fixture excuses
+			// its warning, although every graph is in the one compile.
+			Self.probeGraph(
+				seed: fixtureWarningSeed,
+				fixtureDeclarations: "func \(fixtureWarningPrefix)drawsWarning() {\n\tlet unused = 1\n}\n",
+				generatedCode: "func \(fixtureWarningPrefix)generatedDrawsWarning() {\n\tlet unused = 1\n}\n",
+			),
 		]
 
 		let failures = try GraphFuzzerOracle.compilationFailures(of: toolRuns)
 
-		#expect(failures.keys.sorted() == [typeErrorSeed, loweringErrorSeed])
+		#expect(failures.keys.sorted() == [typeErrorSeed, loweringErrorSeed, warningSeed, redirectedWarningSeed])
 		#expect(failures[typeErrorSeed]?.kind == .generatedCodeDoesNotCompile)
 		#expect(failures[loweringErrorSeed]?.kind == .generatedCodeDoesNotCompile)
+		#expect(failures[warningSeed]?.kind == .generatedCodeDrawsWarning)
+		#expect(failures[warningSeed]?.details.contains("Broken.swift:3:6: warning: initialization of immutable value 'unused' was never used") == true)
+		#expect(failures[redirectedWarningSeed]?.kind == .generatedCodeDrawsWarning)
+		#expect(failures[redirectedWarningSeed]?.details.hasPrefix("/fuzzer/<fixture-directory>/\(redirectedWarningPrefix)Probe.swift:3:6: warning: initialization of immutable value 'unused' was never used") == true)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles generated code only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func compilationFailures_reportWarning_whenGraphCompilesOnItsOwnAfterAnErrorThatNamesNoGraph() throws {
+		// The fixture's type name lacks its seed's prefix, so no graph's file is named in the error it draws, and the
+		// oracle compiles each graph on its own.
+		let unattributedErrorSeed: UInt64 = 1_000_000_006
+		let warningSeed: UInt64 = 1_000_000_007
+		let rejected = GraphFuzzerToolOutcome.rejected(diagnostics: "")
+		let toolRuns = [
+			GraphFuzzerToolRuns(
+				fixture: GraphFuzzerFixture(seed: unattributedErrorSeed, swiftFileContent: [
+					"@Instantiable\npublic final class UnprefixedProbe: Instantiable {\n\tpublic init() {}\n}\nfunc unprefixedBroken() -> Int { \"not an integer\" }\n",
+				]),
+				firstOutcome: rejected,
+				secondOutcome: rejected,
+			),
+			Self.probeGraph(seed: warningSeed, generatedCode: "func drawsWarning() {\n\tlet unused = 1\n}\n"),
+		]
+
+		let failures = try GraphFuzzerOracle.compilationFailures(of: toolRuns)
+
+		#expect(failures.keys.sorted() == [unattributedErrorSeed, warningSeed])
+		#expect(failures[unattributedErrorSeed]?.kind == .fixtureDoesNotCompile)
+		#expect(failures[warningSeed]?.kind == .generatedCodeDrawsWarning)
+	}
+
+	/// A graph of one small type whose fixture also declares `fixtureDeclarations`, which the tool accepted with
+	/// `generatedCode` as its one generated file.
+	private static func probeGraph(seed: UInt64, fixtureDeclarations: String = "", generatedCode: String) -> GraphFuzzerToolRuns {
+		let prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
+		let fixture = GraphFuzzerFixture(seed: seed, swiftFileContent: [
+			"@Instantiable\npublic final class \(prefix)Probe: Instantiable {\n\tpublic init() {}\n}\n" + fixtureDeclarations,
+		])
+		let outcome = GraphFuzzerToolOutcome.accepted(generatedFiles: ["\(prefix)Broken.swift": generatedCode], warnings: [])
+		return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome)
 	}
 
 	@Test
@@ -872,7 +975,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// is one `swiftc` invocation when nothing fails.
 	static let smokeSeeds: [UInt64] = [12, 14, 25, 62, 582, 691, 705, 731, 930, 2_420, 2_611, 4_224, 4_516]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x14EAA9C0A0F05B57
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x36C0529696F414
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -931,12 +1034,22 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.compilerError(containing: "must be unwrapped to a value of type")],
 			seeds: [4_628],
 		),
+		GraphFuzzerKnownIssue(
+			reason: "A mock promotes the optional form of the mocked type's own alias, which a promoted dependency's tree requires, and builds a node and an override that nothing reads, since the receiver is handed the alias",
+			signatures: [.compilerWarning(containing: "was never used")],
+			seeds: [916],
+		),
 	]
 
 	/// Known issues for the tests of `GraphFuzzerFinding`, which must not depend on what `knownIssues` lists today.
 	private static let compilerErrorKnownIssue = GraphFuzzerKnownIssue(
 		reason: "A shape whose generated code redeclares a label",
 		signatures: [.compilerError(containing: "invalid redeclaration")],
+		seeds: [84],
+	)
+	private static let compilerWarningKnownIssue = GraphFuzzerKnownIssue(
+		reason: "A shape whose generated code binds a value it never reads",
+		signatures: [.compilerWarning(containing: "was never used")],
 		seeds: [84],
 	)
 	private static let compilerCrashKnownIssue = GraphFuzzerKnownIssue(
