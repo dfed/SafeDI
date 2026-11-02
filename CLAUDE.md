@@ -24,6 +24,7 @@ Always lint before pushing. Always run the full test suite after changes — don
 - Every CI job runs on a Linux runner unless it genuinely needs macOS: Xcode or `xcodebuild`, an Apple platform SDK, the Xcode project plugin, or the macOS release binaries and their notarization. Linux runners scale; macOS runners are the scarce resource that pull requests and publishes queue on.
 - A job on a `macos-*` runner states why in a comment in the workflow.
 - New Linux jobs use the same container and setup as the existing Linux test job ("Build and Test on Linux" in `ci.yml`).
+- A required check that a matrix job reports needs a Linux stand-in that reports the same names when a Markdown-only change skips the job. A skipped job satisfies a required check under its own name, but GitHub evaluates a job's `if:` before expanding its matrix, so a skipped matrix job reports only its unexpanded name. The stand-in takes the job's `name:` and matrix through YAML anchors, runs only when `changes` reports a Markdown-only pull request, and needs no container, since it only reports (as "xcodebuild-markdown-only" does for "xcodebuild").
 
 ## Architecture
 

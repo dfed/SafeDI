@@ -19,7 +19,10 @@ jobs:
     # Every build and test job below depends on this one and skips
     # itself when the push or pull request touched only Markdown. A
     # job skipped by its `if:` reports "Success", so required status
-    # checks are satisfied without allocating a runner. Anything that
+    # checks are satisfied without allocating a runner. A skipped
+    # matrix job is the exception: it reports one check under its
+    # unexpanded name, so "xcodebuild-markdown-only" reports the names
+    # branch protection requires of "xcodebuild". Anything that
     # isn't Markdown (sources, workflows, lockfiles, project files)
     # counts as a source change. DocC articles are Markdown but feed
     # the DocC build, so they're tracked separately. The link checker
@@ -224,13 +227,15 @@ jobs:
 
   xcodebuild:
     # The job name spells out the matrix value so the check names stay
-    # exactly as branch protection lists them.
-    name: Build with xcodebuild on Xcode 26 (${{ matrix.platforms }})
+    # exactly as branch protection lists them. The name and the matrix
+    # are anchored so that "xcodebuild-markdown-only" reports the same
+    # names when a Markdown-only pull request skips this job.
+    name: &xcodebuild-name Build with xcodebuild on Xcode 26 (${{ matrix.platforms }})
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
     runs-on: macos-26
     strategy:
-      matrix:
+      matrix: &xcodebuild-matrix
         # Why the non-macOS destinations build with Xcode 26.2 while
         # everything else in this workflow stays on the 26.0 floor:
         # GitHub's macos-26 image ships the simulator runtimes for
@@ -332,6 +337,29 @@ jobs:
           download || download
       - name: Build Framework
         run: xcrun xcodebuild -skipMacroValidation -skipPackagePluginValidation build -scheme SafeDI-Package -destination ${{ matrix.platforms }} -clonedSourcePackagesDirPath "$RUNNER_TEMP/xcode-packages"
+
+  xcodebuild-markdown-only:
+    name: *xcodebuild-name
+    needs: changes
+    # GitHub evaluates a job's `if:` before it expands the job's matrix,
+    # so when a Markdown-only change skips "xcodebuild", that job reports
+    # one check under its unexpanded name and none of the five names
+    # branch protection requires. This job reports those five, from the
+    # same name and matrix (the anchors above), on the pull requests
+    # "Codecov Status for Markdown-only Changes" covers. Otherwise it is
+    # skipped and reports only its unexpanded name, which nothing
+    # requires. It builds nothing, so it runs on Linux, without the test
+    # jobs' container.
+    if: ${{ needs.changes.outputs.source == 'false' && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: *xcodebuild-matrix
+    permissions: {}
+    steps:
+      - name: Report the Skipped Build
+        env:
+          PLATFORMS: ${{ matrix.platforms }}
+        run: echo "Stands in for the macOS job that builds for $PLATFORMS, which this pull request skips because it changes only Markdown."
 
   docc:
     name: Build DocC on Xcode 26
