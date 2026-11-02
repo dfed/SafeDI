@@ -277,7 +277,7 @@ private func compileModule(
 	let generatedCodeWarnings: [String]
 	if combinedResult.exitCode == 0 {
 		failure = nil
-		generatedCodeWarnings = warningsOnlyGeneratedCodeDraws(
+		generatedCodeWarnings = try warningsOnlyGeneratedCodeDraws(
 			inCompilerOutput: combinedResult.stderr,
 			generatedFiles: staged.generatedFiles,
 			inputFiles: staged.inputFiles,
@@ -299,27 +299,65 @@ private func compileModule(
 private let generatedCodeCompilationFailureMessage = "Generated code failed to compile alongside test inputs."
 private let generatedCodeWarningMessage = "Generated code compiled with a warning."
 
-/// The warning lines of `compilerOutput` located in `generatedFiles` whose message the compiler does not
-/// also report in one of `inputFiles`.
-private func warningsOnlyGeneratedCodeDraws(
+/// The warning lines of `compilerOutput` that generated code draws, whose message the compiler does not also
+/// report in one of `inputFiles`: those located in `generatedFiles`, and those located at a line that a
+/// `#sourceLocation(file:line:)` directive in one of `generatedFiles` attributes to another file. The compiler
+/// reports a diagnostic in the generated lines such a directive covers at the user's declaration, under the path
+/// the directive spells, so a warning there is generated code's although it names another file.
+///
+/// The graph fuzzer compiles several graphs together and asks about each graph's files in turn, so only the
+/// directives of `generatedFiles` count.
+func warningsOnlyGeneratedCodeDraws(
 	inCompilerOutput compilerOutput: String,
 	generatedFiles: [URL],
 	inputFiles: [URL],
-) -> [String] {
+) throws -> [String] {
 	let warningMarker = ": warning: "
-	/// The warning messages reported in `files`, each paired with the line that reports it.
-	func warnings(in files: [URL]) -> [(line: String, message: String)] {
-		compilerOutput.split(separator: "\n").compactMap { line in
-			guard files.contains(where: { line.hasPrefix("\($0.path):") }),
-			      let markerRange = line.range(of: warningMarker)
-			else { return nil }
-			return (line: String(line), message: String(line[markerRange.upperBound...]))
+	let warnings = compilerOutput.split(separator: "\n").compactMap { line -> (line: Substring, location: Substring, message: Substring)? in
+		guard let markerRange = line.range(of: warningMarker) else { return nil }
+		return (line: line, location: line[..<markerRange.lowerBound], message: line[markerRange.upperBound...])
+	}
+	guard !warnings.isEmpty else { return [] }
+	func isLocated(_ location: Substring, in files: [URL]) -> Bool {
+		files.contains { location.hasPrefix("\($0.path):") }
+	}
+	let messagesInputsDraw = Set(warnings.filter { isLocated($0.location, in: inputFiles) }.map(\.message))
+	let redirectedLocations = try locationsRedirectedBySourceLocationDirectives(in: generatedFiles)
+	return warnings.filter { warning in
+		// A location is `<file>:<line>:<column>`.
+		let fileAndLine = warning.location.split(separator: ":", omittingEmptySubsequences: false).dropLast().joined(separator: ":")
+		return (isLocated(warning.location, in: generatedFiles) || redirectedLocations.contains(fileAndLine))
+			&& !messagesInputsDraw.contains(warning.message)
+	}.map { String($0.line) }
+}
+
+/// Each `<file>:<line>` to which a `#sourceLocation(file:line:)` directive in `generatedFiles` attributes a line of
+/// generated code: the lines after the directive, up to the `#sourceLocation()` that ends it, numbered from the
+/// directive's `line`. The path is the directive's string as spelled, which the compiler reports without resolving
+/// it; a path holding a quote or a backslash, which the directive escapes, would not match, and no fixture's does.
+private func locationsRedirectedBySourceLocationDirectives(in generatedFiles: [URL]) throws -> Set<String> {
+	let directivePrefix = "#sourceLocation(file: \""
+	let lineArgumentPrefix = "\", line: "
+	var redirectedLocations = Set<String>()
+	for generatedFile in generatedFiles {
+		var redirection: (file: Substring, line: Int)?
+		for line in try String(contentsOf: generatedFile, encoding: .utf8).split(separator: "\n", omittingEmptySubsequences: false) {
+			let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+			if trimmedLine == "#sourceLocation()" {
+				redirection = nil
+			} else if trimmedLine.hasPrefix(directivePrefix),
+			          let lineArgumentRange = trimmedLine.range(of: lineArgumentPrefix),
+			          let lineNumber = Int(trimmedLine[lineArgumentRange.upperBound...].prefix { $0.isNumber })
+			{
+				let file = trimmedLine[trimmedLine.index(trimmedLine.startIndex, offsetBy: directivePrefix.count)..<lineArgumentRange.lowerBound]
+				redirection = (file: file, line: lineNumber)
+			} else if let currentRedirection = redirection {
+				redirectedLocations.insert("\(currentRedirection.file):\(currentRedirection.line)")
+				redirection = (file: currentRedirection.file, line: currentRedirection.line + 1)
+			}
 		}
 	}
-	let messagesInputsDraw = Set(warnings(in: inputFiles).map(\.message))
-	return warnings(in: generatedFiles)
-		.filter { !messagesInputsDraw.contains($0.message) }
-		.map(\.line)
+	return redirectedLocations
 }
 
 extension Issue {
@@ -530,14 +568,12 @@ func compileSwift(
 	emitsModule: Bool = false,
 	moduleSearchPaths: [URL] = [],
 ) throws -> SwiftCompileResult {
-	let process = Process()
 	#if os(Linux)
-		process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-		var arguments = ["swiftc"]
+		let executableURL = URL(fileURLWithPath: "/usr/bin/env")
 	#else
-		process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-		var arguments = ["swiftc"]
+		let executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
 	#endif
+	var arguments = ["swiftc"]
 	arguments.append(contentsOf: [
 		"-emit-object",
 		"-whole-module-optimization",
@@ -561,64 +597,35 @@ func compileSwift(
 	}
 	arguments.append(contentsOf: Set(activeCompilationConditions).subtracting(["DEBUG"]).sorted().map { "-D\($0)" })
 	arguments.append(contentsOf: sources.map(\.path))
-	process.arguments = arguments
-
-	let stdoutPipe = Pipe()
-	let stderrPipe = Pipe()
-	process.standardOutput = stdoutPipe
-	process.standardError = stderrPipe
-
-	// Drain both pipes via readability handlers into lock-protected
-	// accumulators so a chatty `swiftc` failure (many diagnostics across
-	// generated files) can't deadlock the verifier by filling the OS pipe
-	// buffer before we get a chance to read it. Mirrors the
-	// readability-handler-plus-lock pattern from swift-shell's `Process.swift`,
-	// which sidesteps Swift 6 strict-Sendable closure-capture errors that
-	// arise when accumulating into a captured `var`.
-	let stdoutData = LockedData()
-	let stderrData = LockedData()
-	stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
-		stdoutData.append(handle.availableData)
-	}
-	stderrPipe.fileHandleForReading.readabilityHandler = { handle in
-		stderrData.append(handle.availableData)
-	}
-
-	try process.run()
-	process.waitUntilExit()
-
-	stdoutPipe.fileHandleForReading.readabilityHandler = nil
-	stderrPipe.fileHandleForReading.readabilityHandler = nil
-	if let remaining = try? stdoutPipe.fileHandleForReading.readToEnd() {
-		stdoutData.append(remaining)
-	}
-	if let remaining = try? stderrPipe.fileHandleForReading.readToEnd() {
-		stderrData.append(remaining)
-	}
-
-	return SwiftCompileResult(
-		exitCode: process.terminationStatus,
-		stdout: String(data: stdoutData.read(), encoding: .utf8) ?? "",
-		stderr: String(data: stderrData.read(), encoding: .utf8) ?? "",
-	)
+	return try runProcess(executableURL, arguments: arguments)
 }
 
-/// Thread-safe `Data` accumulator used by `compileSwift` to collect pipe
-/// output from a background readability handler without tripping Swift 6
-/// strict-Sendable closure-capture diagnostics.
-private final class LockedData: @unchecked Sendable {
-	private let lock = NSLock()
-	private var value = Data()
-
-	func append(_ other: Data) {
-		lock.lock()
-		defer { lock.unlock() }
-		value.append(other)
+/// Runs `executableURL` with `arguments` to completion and returns its exit status and everything it wrote.
+///
+/// The process writes its output into files, which are read once it exits. Output read from a pipe through a
+/// `readabilityHandler` is lost now and then when processes run concurrently, as the graph fuzzer's batches do: the
+/// handler that reads the last chunk can still be running after the process exits, when the caller has already taken
+/// what was read, and a compile that passed then seems to report no warning. A file also cannot fill up and block
+/// the process, as a pipe that no one drains can.
+func runProcess(_ executableURL: URL, arguments: [String]) throws -> SwiftCompileResult {
+	let process = Process()
+	process.executableURL = executableURL
+	process.arguments = arguments
+	let standardOutput = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-process-output-\(UUID().uuidString)")
+	let standardError = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-process-error-\(UUID().uuidString)")
+	FileManager.default.createFile(atPath: standardOutput.path, contents: nil)
+	FileManager.default.createFile(atPath: standardError.path, contents: nil)
+	defer {
+		try? FileManager.default.removeItem(at: standardOutput)
+		try? FileManager.default.removeItem(at: standardError)
 	}
-
-	func read() -> Data {
-		lock.lock()
-		defer { lock.unlock() }
-		return value
-	}
+	process.standardOutput = try FileHandle(forWritingTo: standardOutput)
+	process.standardError = try FileHandle(forWritingTo: standardError)
+	try process.run()
+	process.waitUntilExit()
+	return SwiftCompileResult(
+		exitCode: process.terminationStatus,
+		stdout: (try? String(contentsOf: standardOutput, encoding: .utf8)) ?? "",
+		stderr: (try? String(contentsOf: standardError, encoding: .utf8)) ?? "",
+	)
 }
