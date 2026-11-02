@@ -277,8 +277,13 @@ struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
 /// share their properties, or by a type that dominates the receiver – and not by a property whose own subtree
 /// holds the receiver. So many graphs are accepted, while the rest exercise SafeDI's validation.
 enum GraphFuzzerGenerator {
-	static func fixture(forSeed seed: UInt64) -> GraphFuzzerFixture {
-		var builder = Builder(seed: seed)
+	/// - Parameter storingEveryParameter: Whether each type stores every parameter it takes, so that the differential
+	///   value comparator sees the values the generated code passes and the defaults it leaves in place: the
+	///   default-valued parameters of a type's initializer, and the parameters of an extension's `instantiate(…)`,
+	///   which the type it returns then takes and stores. It changes how a type is written, never what the seed
+	///   draws, so the corpus and its pins are those of `false`.
+	static func fixture(forSeed seed: UInt64, storingEveryParameter: Bool = false) -> GraphFuzzerFixture {
+		var builder = Builder(seed: seed, storesEveryParameter: storingEveryParameter)
 		return GraphFuzzerFixture(seed: seed, swiftFileContent: builder.build())
 	}
 
@@ -298,8 +303,32 @@ enum GraphFuzzerGenerator {
 		/// Declarations written after the type's own.
 		var additionalDeclarations = [String]()
 		/// Parameters of the initializer after those of `properties`, each with a default value, which the initializer
-		/// does not store. A default-valued parameter is not a dependency.
-		var defaultValuedParameters = [String]()
+		/// stores only when the builder stores every parameter. A default-valued parameter is not a dependency.
+		var defaultValuedParameters = [ParameterDeclaration]()
+	}
+
+	/// A parameter of an initializer or of an extension's `instantiate(…)` that is not a decorated property.
+	private struct ParameterDeclaration: Equatable {
+		/// The argument label when it differs from `name`: `_` for an unlabeled parameter.
+		var argumentLabel: String?
+		let name: String
+		let type: String
+		var defaultValue: String?
+
+		/// The parameter as declared: `title: String = "default"`, `_ note: String = ""`.
+		var declaration: String {
+			"\(argumentLabel.map { "\($0) " } ?? "")\(name): \(type)\(defaultValue.map { " = \($0)" } ?? "")"
+		}
+
+		/// The parameter as a type that takes and stores it declares it: `title: String`.
+		var storedDeclaration: String {
+			"\(name): \(type)"
+		}
+
+		/// The parameter passed on to that type: `title: title`.
+		var argument: String {
+			"\(name): \(name)"
+		}
 	}
 
 	/// How an `@Instantiated` property builds its target.
@@ -372,7 +401,8 @@ enum GraphFuzzerGenerator {
 	}
 
 	private struct Builder {
-		init(seed: UInt64) {
+		init(seed: UInt64, storesEveryParameter: Bool) {
+			self.storesEveryParameter = storesEveryParameter
 			random = GraphFuzzerRandomNumberGenerator(seed: seed)
 			generatedNameRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.generatedNameRandomSeedMask)
 			unbuildableDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencyRandomSeedMask)
@@ -503,7 +533,7 @@ enum GraphFuzzerGenerator {
 				// type that is not `Sendable`. The wrapper is `Sendable` whatever the graph's wrappers are, so the types
 				// it builds are `@unchecked Sendable` in a `Sendable` graph, where their protocols are `Sendable`.
 				var owner = motifType(8, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "t9", type: typeName(9))])
-				owner.defaultValuedParameters = ["formatter: \(nonSendableHelperTypeName("Formatter")) = \(nonSendableHelperTypeName("Formatter"))()"]
+				owner.defaultValuedParameters = [ParameterDeclaration(name: "formatter", type: nonSendableHelperTypeName("Formatter"), defaultValue: "\(nonSendableHelperTypeName("Formatter"))()")]
 				owner.additionalDeclarations.append("public final class \(nonSendableHelperTypeName("Formatter")) {\n\tpublic init() {}\n}")
 				var leaf = motifType(9, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "engine", type: nonSendableHelperTypeName("Engine"))])
 				leaf.additionalDeclarations.append("public final class \(nonSendableHelperTypeName("Engine")) {\n\tpublic init() {}\n}")
@@ -546,6 +576,8 @@ enum GraphFuzzerGenerator {
 		/// `addingReceiversOfDependenciesMocksCannotBuild` adds beneath it, inside the function, would be handed a
 		/// value from outside the `Sendable` wrapper's subtree, which SafeDI leaves to the compiler to reject.
 		private var sendableBuilderMotifMockedTypeName: String?
+		/// Whether each type stores every parameter it takes; see `GraphFuzzerGenerator.fixture(forSeed:storingEveryParameter:)`.
+		private let storesEveryParameter: Bool
 		private let prefix: String
 		private let sendability: Sendability
 		private let typeCount: Int
@@ -1502,12 +1534,16 @@ enum GraphFuzzerGenerator {
 			let candidates = hostIndex < rootCount
 				? provided.filter { $0.providerIndex == nil }
 				: receivableProperties(receiverIndex: hostIndex - rootCount)
-			var parameters = [String]()
+			var parameters = [ParameterDeclaration]()
 			if !candidates.isEmpty, random.percentChance(50) {
 				let receivedProperty = random.element(of: candidates)
-				parameters.append("\(receivedProperty.label): \(receivedProperty.type)")
+				parameters.append(ParameterDeclaration(name: receivedProperty.label, type: receivedProperty.type))
 			}
-			let defaultValuedParameters = ["title: String = \"default\"", "retryCount: Int = 3", "isEnabled: Bool = false"]
+			let defaultValuedParameters = [
+				ParameterDeclaration(name: "title", type: "String", defaultValue: "\"default\""),
+				ParameterDeclaration(name: "retryCount", type: "Int", defaultValue: "3"),
+				ParameterDeclaration(name: "isEnabled", type: "Bool", defaultValue: "false"),
+			]
 			for _ in 0..<random.integer(in: 1...2) {
 				let parameter = random.element(of: defaultValuedParameters)
 				if !parameters.contains(parameter) {
@@ -1516,21 +1552,42 @@ enum GraphFuzzerGenerator {
 			}
 			// An unlabeled default-valued parameter last, which a generated call leaves to its default.
 			if random.percentChance(20) {
-				parameters.append("_ note: String = \"\"")
+				parameters.append(ParameterDeclaration(argumentLabel: "_", name: "note", type: "String", defaultValue: "\"\""))
 			}
 			let instantiableAttribute = random.percentChance(30) ? "@Instantiable(generateMock: true)" : "@Instantiable"
-			return [
+			// When every parameter is stored, the extended type takes and stores what `instantiate(…)` is passed. In a
+			// mixed graph that can be a wrapper that is not `Sendable`, so the type is then `@unchecked Sendable`, as the
+			// graph's types are.
+			let storedParameters = storesEveryParameter ? parameters : []
+			let sendableConformance = switch (sendability, storedParameters.isEmpty) {
+			case (.nonSendable, _):
+				""
+			case (.sendable, _), (.mixed, true):
+				": Sendable"
+			case (.mixed, false):
+				": @unchecked Sendable"
+			}
+			var lines = [
 				instantiableAttribute,
 				"extension \(extensionTypeName): Instantiable {",
-				"\tpublic static func instantiate(\(parameters.joined(separator: ", "))) -> \(extensionTypeName) {",
-				"\t\t\(extensionTypeName)()",
+				"\tpublic static func instantiate(\(parameters.map(\.declaration).joined(separator: ", "))) -> \(extensionTypeName) {",
+				"\t\t\(extensionTypeName)(\(storedParameters.map(\.argument).joined(separator: ", ")))",
 				"\t}",
 				"}",
 				"",
-				"public final class \(extensionTypeName)\(helperTypesAreSendable ? ": Sendable" : "") {",
-				"\tpublic init() {}",
-				"}",
-			].joined(separator: "\n") + "\n"
+				"public final class \(extensionTypeName)\(sendableConformance) {",
+			]
+			if storedParameters.isEmpty {
+				lines.append("\tpublic init() {}")
+			} else {
+				lines.append("\tpublic init(\(storedParameters.map(\.storedDeclaration).joined(separator: ", "))) {")
+				lines += storedParameters.map { "\t\tself.\($0.name) = \($0.name)" }
+				lines.append("\t}")
+				lines.append("")
+				lines += storedParameters.map { "\tpublic let \($0.storedDeclaration)" }
+			}
+			lines.append("}")
+			return lines.joined(separator: "\n") + "\n"
 		}
 
 		private var extensionTypeName: String {
@@ -1629,15 +1686,18 @@ enum GraphFuzzerGenerator {
 			}
 			let conformances = ([baseConformances] + declaration.additionalConformances).joined(separator: ", ")
 			var lines = [instantiableAttribute, "public final class \(declaration.name): \(conformances) {"]
-			let parameters = (declaration.properties.map { "\($0.label): \($0.type)" } + declaration.defaultValuedParameters).joined(separator: ", ")
-			if declaration.properties.isEmpty {
+			let parameters = (declaration.properties.map { "\($0.label): \($0.type)" } + declaration.defaultValuedParameters.map(\.declaration)).joined(separator: ", ")
+			let storedParameters = storesEveryParameter ? declaration.defaultValuedParameters : []
+			if declaration.properties.isEmpty, storedParameters.isEmpty {
 				lines.append("\tpublic init(\(parameters)) {}")
 			} else {
 				lines.append("\tpublic init(\(parameters)) {")
 				lines += declaration.properties.map { "\t\tself.\($0.label) = \($0.label)" }
+				lines += storedParameters.map { "\t\tself.\($0.name) = \($0.name)" }
 				lines.append("\t}")
 				lines.append("")
 				lines += declaration.properties.map { "\t\($0.attribute) let \($0.label): \($0.type)" }
+				lines += storedParameters.map { "\tlet \($0.storedDeclaration)" }
 			}
 			lines.append("}")
 			if declaration.declaresHelperTypes {
@@ -2037,7 +2097,7 @@ private struct GraphFuzzerInstantiationEdge {
 }
 
 /// One line of a generated fixture, in the shape `GraphFuzzerGenerator` emits it.
-enum GraphFuzzerSourceLine {
+enum GraphFuzzerSourceLine: Equatable {
 	case instantiableAttribute(arguments: String)
 	/// A `public final class` or an `extension … : Instantiable` that an `@Instantiable` attribute decorates.
 	case typeDeclaration(name: String)
