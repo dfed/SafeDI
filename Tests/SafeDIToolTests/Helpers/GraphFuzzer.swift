@@ -280,8 +280,9 @@ enum GraphFuzzerGenerator {
 	/// - Parameter storingEveryParameter: Whether each type stores every parameter it takes, so that the differential
 	///   value comparator sees the values the generated code passes and the defaults it leaves in place: the
 	///   default-valued parameters of a type's initializer, and the parameters of an extension's `instantiate(…)`,
-	///   which the type it returns then takes and stores. It changes how a type is written, never what the seed
-	///   draws, so the corpus and its pins are those of `false`.
+	///   which the type it returns then takes and stores. Every class of the graph also stores a creation stamp
+	///   (`DifferentialValueCreationStamp`) from a counter the first file declares. It changes how a type is written,
+	///   never what the seed draws, so the corpus and its pins are those of `false`.
 	static func fixture(forSeed seed: UInt64, storingEveryParameter: Bool = false) -> GraphFuzzerFixture {
 		var builder = Builder(seed: seed, storesEveryParameter: storingEveryParameter)
 		return GraphFuzzerFixture(seed: seed, swiftFileContent: builder.build())
@@ -470,11 +471,32 @@ enum GraphFuzzerGenerator {
 			appendMotif(to: &declarations)
 			// Decided last, so that the rest of a seed's graph does not depend on whether it has the extension.
 			let extensionSource = random.percentChance(25) ? extensionDeclarationSource(addingPropertyToOneOf: &declarations) : nil
-			return addingReceiversOfDependenciesMocksCannotBuild(
+			let sources = addingReceiversOfDependenciesMocksCannotBuild(
 				to: addingSiblingAliasChains(to: addingAliasChains(to: addingDependenciesMocksCannotBuild(to: addingPropertiesLabeledAsGeneratedNames(to: declarations)))),
 			)
 			.map(source(of:))
 			+ [extensionSource].compactMap(\.self)
+			return storesEveryParameter ? addingCreationStamps(to: sources) : sources
+		}
+
+		/// `sources` with the creation stamps of `DifferentialValueCreationStamp`: the counter, at the end of the first
+		/// file, which is `Root0`'s, and a stamp as the first stored property of every class the graph declares, each of
+		/// which begins a line with `public final class` and ends it with ` {` or, for a class without a body, ` {}`.
+		private func addingCreationStamps(to sources: [String]) -> [String] {
+			let counterName = "\(prefix)CreationStamp"
+			let stamp = "\t" + DifferentialValueCreationStamp.property(counterNamed: counterName)
+			return sources.enumerated().map { index, source in
+				let lines = source.split(separator: "\n", omittingEmptySubsequences: false).flatMap { line -> [String] in
+					guard line.hasPrefix("public final class ") else { return [String(line)] }
+					if line.hasSuffix(" {}") {
+						return [String(line.dropLast("}".count)), stamp, "}"]
+					} else {
+						return [String(line), stamp, ""]
+					}
+				}
+				let stampedSource = lines.joined(separator: "\n")
+				return index == 0 ? stampedSource + "\n" + DifferentialValueCreationStamp.counterDeclaration(named: counterName) + "\n" : stampedSource
+			}
 		}
 
 		/// A quarter of graphs end with a motif: a few more types, in a shape whose generated code or diagnostics

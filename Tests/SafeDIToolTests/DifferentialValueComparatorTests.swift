@@ -114,6 +114,125 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_rejectsAnInstanceReadBeforeTheProbeIsDescribed_whenFeaturePathReadsItsLazilyInstantiatedWrapperDuringConstruction() throws {
+		// The instance read during construction is the one read last, and the two paths' instances agree: only the
+		// wrapper's state tells an eager read from a lazy one.
+		#expect(try Self.differences(betweenKnownRightGraphAnd: Self.graphGeneratedCode(replacing: [
+			"let a = A()": "let a = A()\n        let lazyB = LazilyInstantiated { B(a: a, c: C()) }\n        _ = lazyB.instance",
+			"lazyB: LazilyInstantiated { B(a: a, c: C()) }": "lazyB: lazyB",
+		]), filesToDelete: &filesToDelete) == [
+			DifferentialValueDifference(probe: "Root()", path: ["<1> Root", "lazyB"], feature: "lazyB: <10> LazilyInstantiated<B> (already instantiated, instance read last)", knownRight: "lazyB: <10> LazilyInstantiated<B> (instance read last)"),
+		])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_reportsOneDifferenceAnExemptionAccepts_whenFeaturePathsLazilyInstantiatedClosureCapturesAnInstanceBuiltBeforeIt() throws {
+		let comparison = try DifferentialValueOracle.compare(
+			feature: Self.stampedPath(initializerBody: "let made = B(a: a)\n        self.init(a: a, lazyB: LazilyInstantiated { made })"),
+			knownRight: Self.stampedPath(initializerBody: "self.init(a: a, lazyB: LazilyInstantiated { B(a: a) })"),
+			probes: [DifferentialValueProbe("Root()")],
+			filesToDelete: &filesToDelete,
+		)
+
+		// The wrapper was never read before the probe, and the instances agree: only the instance's stamp tells that
+		// the feature path built it up front.
+		let difference = DifferentialValueDifference(probe: "Root()", path: ["<3>.instance"], feature: "<3>.instance: <4> B (built before the probe's value)", knownRight: "<3>.instance: <4> B")
+		let comparisonMade = try #require(comparison)
+		#expect(comparisonMade.differences == [difference])
+		#expect(comparisonMade.differences(exempting: [difference]).isEmpty)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_comparesWhatAnInstanceHolds_whenItsOnlyDifferenceIsBeingBuiltBeforeTheProbesValue() throws {
+		let comparison = try DifferentialValueOracle.compare(
+			feature: Self.stampedPath(initializerBody: "let made = B(a: A())\n        self.init(a: a, lazyB: LazilyInstantiated { made })"),
+			knownRight: Self.stampedPath(initializerBody: "self.init(a: a, lazyB: LazilyInstantiated { B(a: a) })"),
+			probes: [DifferentialValueProbe("Root()")],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(comparison).differences == [
+			DifferentialValueDifference(probe: "Root()", path: ["<3>.instance"], feature: "<3>.instance: <4> B (built before the probe's value)", knownRight: "<3>.instance: <4> B"),
+			DifferentialValueDifference(probe: "Root()", path: ["<3>.instance", "a"], feature: "a: <5> A", knownRight: "a: <2> A (seen, first at <1> Root > a)"),
+		])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_comparesTheInstanceAndEveryLaterReference_whenALazilyInstantiatedWrapperDiffersOnlyByItsState() throws {
+		let fixture = """
+		public final class A {
+		    public init() {}
+		}
+		public final class B {
+		    public init(a: A) {
+		        self.a = a
+		    }
+		    public let a: A
+		}
+		public final class Root {
+		    public init(a: A, lazyB: LazilyInstantiated<B>, lazyBAgain: LazilyInstantiated<B>) {
+		        self.a = a
+		        self.lazyB = lazyB
+		        self.lazyBAgain = lazyBAgain
+		    }
+		    public let a: A
+		    public let lazyB: LazilyInstantiated<B>
+		    public let lazyBAgain: LazilyInstantiated<B>
+		}
+		"""
+		func path(initializerBody: String) -> DifferentialValuePath {
+			DifferentialValuePath(fixtureFiles: ["Root.swift": fixture], generatedFiles: ["Root+Make.swift": "extension Root {\n    convenience init() {\n        let a = A()\n        \(initializerBody)\n        self.init(a: a, lazyB: lazyB, lazyBAgain: lazyB)\n    }\n}\n"])
+		}
+
+		let comparison = try DifferentialValueOracle.compare(
+			feature: path(initializerBody: "let lazyB = LazilyInstantiated { B(a: A()) }\n        _ = lazyB.instance"),
+			knownRight: path(initializerBody: "let lazyB = LazilyInstantiated { B(a: a) }"),
+			probes: [DifferentialValueProbe("Root()")],
+			filesToDelete: &filesToDelete,
+		)
+
+		// The wrappers pair, so the second reference to the feature path's wrapper agrees, and the instance read last is
+		// compared: an exemption of the wrapper's line accepts the early read alone.
+		#expect(try #require(comparison).differences == [
+			DifferentialValueDifference(probe: "Root()", path: ["<1> Root", "lazyB"], feature: "lazyB: <3> LazilyInstantiated<B> (already instantiated, instance read last)", knownRight: "lazyB: <3> LazilyInstantiated<B> (instance read last)"),
+			DifferentialValueDifference(probe: "Root()", path: ["<3>.instance", "a"], feature: "a: <5> A", knownRight: "a: <2> A (seen, first at <1> Root > a)"),
+		])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_reportsOneDifference_whenAnInstantiatorTheProbeCallsReadsTheInstanceAClosureCapturedBeforeItsWrapper() throws {
+		// The probe's own call of `cBuilder` reads the instance, as the builder SafeDI generates for a type that
+		// receives it by value does, before the wrapper is met and before its instance is read last.
+		func path(initializerBody: String) -> DifferentialValuePath {
+			DifferentialValuePath(
+				fixtureFiles: ["Root.swift": Self.lazyInstanceReadByBuilderFixture],
+				generatedFiles: ["Root+Make.swift": "extension RootBuilderFirst {\n    convenience init() {\n        \(initializerBody)\n        self.init(cBuilder: Instantiator { C(x: lazyX.instance) }, lazyX: lazyX)\n    }\n}\n"],
+			)
+		}
+
+		let comparison = try DifferentialValueOracle.compare(
+			feature: path(initializerBody: "let made = X()\n        let lazyX = LazilyInstantiated { made }"),
+			knownRight: path(initializerBody: "let lazyX = LazilyInstantiated { X() }"),
+			probes: [DifferentialValueProbe("RootBuilderFirst()")],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(comparison).differences == [
+			DifferentialValueDifference(
+				probe: "RootBuilderFirst()",
+				path: ["<6>.instance"],
+				feature: "<6>.instance: <4> X (built before the probe's value) (seen, first at <1> RootBuilderFirst > cBuilder > instantiate() > x)",
+				knownRight: "<6>.instance: <4> X (seen, first at <1> RootBuilderFirst > cBuilder > instantiate() > x)",
+			),
+		])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func compare_rejectsMissingTraversal_whenFeaturePathStoresAWrapperTheComparatorDoesNotTraverseWhereKnownRightPathStoresOneItDoes() throws {
 		let comparison = try DifferentialValueOracle.compare(
 			feature: DifferentialValuePath(
@@ -404,7 +523,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func compare_acceptsAPathWrittenDifferently_whenItBuildsTheSameValues() throws {
 		// Builder functions declared in another order, the shared instance bound through other names, an instance
-		// built in a closure called at once, a default spelled another way, and the lazily built instance read early.
+		// built in a closure called at once, a default spelled another way, and the lazily built instance's wrapper
+		// declared first. Reading the instance early is a difference: the wrapper's line shows it.
 		let featureGenerated = """
 		extension Root {
 		    convenience init() {
@@ -415,7 +535,6 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		            return B(a: a, c: c)
 		        }
 		        let lazyB = LazilyInstantiated<B> { B(a: shared, c: C()) }
-		        _ = lazyB.instance
 		        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 		        let b: B = { B(a: a, c: C()) }()
 		        self.init(a: a, b: b, e: shared, title: "def" + "ault", bBuilder: bBuilder, lazyB: lazyB)
@@ -873,6 +992,429 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func describe_marksTheInstanceAndNotItsWrapper_whenAStampedFixturesLazilyInstantiatedInstanceWasReadBeforeTheProbesValueWasBuilt() throws {
+		let fixture = """
+		\(Self.stampCounter)
+		public final class B {
+		    public init() {}
+		    \(Self.stampProperty)
+		}
+		public final class Root {
+		    public init(untouched: LazilyInstantiated<B>, readEarly: LazilyInstantiated<B>) {
+		        self.untouched = untouched
+		        self.readEarly = readEarly
+		    }
+		    public let untouched: LazilyInstantiated<B>
+		    public let readEarly: LazilyInstantiated<B>
+		    \(Self.stampProperty)
+		}
+		extension Root {
+		    static func make() -> Root {
+		        let readEarly = LazilyInstantiated { B() }
+		        _ = readEarly.instance
+		        return Root(untouched: LazilyInstantiated { B() }, readEarly: readEarly)
+		    }
+		}
+		"""
+
+		let description = try DifferentialValueOracle.describe(
+			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
+			probes: [DifferentialValueProbe("Root.make()")],
+			filesToDelete: &filesToDelete,
+		)
+
+		// The early read's instance is built before `Root`, and its stamp says so. The wrapper's state is not written in a
+		// stamped probe, where a read by the probe's own instantiator calls would set it too, so one early read is one mark.
+		#expect(description == """
+		probe Root.make()
+		<1> Root
+		  untouched: <2> LazilyInstantiated<B> (instance read last)
+		  readEarly: <3> LazilyInstantiated<B> (instance read last)
+		<2>.instance: <4> B
+		<3>.instance: <5> B (built before the probe's value)
+
+		""")
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func describe_marksAnInstanceBuiltBeforeTheProbesValue_whenAnInstantiatorTheProbeCallsReadsItFirst_inEitherDeclarationOrder() throws {
+		let makers = """
+		extension RootBuilderFirst {
+		    static func lazy() -> RootBuilderFirst {
+		        let lazyX = LazilyInstantiated { X() }
+		        return RootBuilderFirst(cBuilder: Instantiator { C(x: lazyX.instance) }, lazyX: lazyX)
+		    }
+		    static func readDuringConstruction() -> RootBuilderFirst {
+		        let lazyX = LazilyInstantiated { X() }
+		        _ = lazyX.instance
+		        return RootBuilderFirst(cBuilder: Instantiator { C(x: lazyX.instance) }, lazyX: lazyX)
+		    }
+		    static func capturedPreBuilt() -> RootBuilderFirst {
+		        let made = X()
+		        let lazyX = LazilyInstantiated { made }
+		        return RootBuilderFirst(cBuilder: Instantiator { C(x: lazyX.instance) }, lazyX: lazyX)
+		    }
+		}
+		extension RootLazyFirst {
+		    static func lazy() -> RootLazyFirst {
+		        let lazyX = LazilyInstantiated { X() }
+		        return RootLazyFirst(lazyX: lazyX, cBuilder: Instantiator { C(x: lazyX.instance) })
+		    }
+		    static func readDuringConstruction() -> RootLazyFirst {
+		        let lazyX = LazilyInstantiated { X() }
+		        _ = lazyX.instance
+		        return RootLazyFirst(lazyX: lazyX, cBuilder: Instantiator { C(x: lazyX.instance) })
+		    }
+		    static func capturedPreBuilt() -> RootLazyFirst {
+		        let made = X()
+		        let lazyX = LazilyInstantiated { made }
+		        return RootLazyFirst(lazyX: lazyX, cBuilder: Instantiator { C(x: lazyX.instance) })
+		    }
+		}
+		"""
+
+		let description = try DifferentialValueOracle.describe(
+			DifferentialValuePath(fixtureFiles: ["Fixture.swift": Self.lazyInstanceReadByBuilderFixture, "Makers.swift": makers]),
+			probes: ["RootBuilderFirst", "RootLazyFirst"].flatMap { root in
+				["lazy", "readDuringConstruction", "capturedPreBuilt"].map { DifferentialValueProbe("\(root).\($0)()") }
+			},
+			filesToDelete: &filesToDelete,
+		)
+
+		// The probe's call of `cBuilder` builds `C`, which reads the instance: lazily, after the probe's value was built;
+		// otherwise, before. The instance is marked where it is read last, whichever line saw it first.
+		#expect(description == """
+		probe RootBuilderFirst.lazy()
+		<1> RootBuilderFirst
+		  cBuilder: <2> Instantiator<C>
+		    instantiate(): <3> C
+		      x: <4> X
+		    instantiate() again: <5> C
+		      x: <4> X (seen)
+		  lazyX: <6> LazilyInstantiated<X> (instance read last)
+		<6>.instance: <4> X (seen)
+		probe RootBuilderFirst.readDuringConstruction()
+		<1> RootBuilderFirst
+		  cBuilder: <2> Instantiator<C>
+		    instantiate(): <3> C
+		      x: <4> X
+		    instantiate() again: <5> C
+		      x: <4> X (seen)
+		  lazyX: <6> LazilyInstantiated<X> (instance read last)
+		<6>.instance: <4> X (built before the probe's value) (seen)
+		probe RootBuilderFirst.capturedPreBuilt()
+		<1> RootBuilderFirst
+		  cBuilder: <2> Instantiator<C>
+		    instantiate(): <3> C
+		      x: <4> X
+		    instantiate() again: <5> C
+		      x: <4> X (seen)
+		  lazyX: <6> LazilyInstantiated<X> (instance read last)
+		<6>.instance: <4> X (built before the probe's value) (seen)
+		probe RootLazyFirst.lazy()
+		<1> RootLazyFirst
+		  lazyX: <2> LazilyInstantiated<X> (instance read last)
+		  cBuilder: <3> Instantiator<C>
+		    instantiate(): <4> C
+		      x: <5> X
+		    instantiate() again: <6> C
+		      x: <5> X (seen)
+		<2>.instance: <5> X (seen)
+		probe RootLazyFirst.readDuringConstruction()
+		<1> RootLazyFirst
+		  lazyX: <2> LazilyInstantiated<X> (instance read last)
+		  cBuilder: <3> Instantiator<C>
+		    instantiate(): <4> C
+		      x: <5> X
+		    instantiate() again: <6> C
+		      x: <5> X (seen)
+		<2>.instance: <5> X (built before the probe's value) (seen)
+		probe RootLazyFirst.capturedPreBuilt()
+		<1> RootLazyFirst
+		  lazyX: <2> LazilyInstantiated<X> (instance read last)
+		  cBuilder: <3> Instantiator<C>
+		    instantiate(): <4> C
+		      x: <5> X
+		    instantiate() again: <6> C
+		      x: <5> X (seen)
+		<2>.instance: <5> X (built before the probe's value) (seen)
+
+		""")
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func describe_leavesALazilyBuiltInstanceUnmarked_whenTheProbesValueAlsoHoldsIt() throws {
+		// A mock builds the instance of a lazily instantiated wrapper up front when the mocked type itself takes it by
+		// value: a path that holds the instance differs from one that does not by its identity, not by a mark.
+		let fixture = """
+		\(Self.stampCounter)
+		public final class X {
+		    public init() {}
+		    \(Self.stampProperty)
+		}
+		public final class Root {
+		    public init(x: X, lazyX: LazilyInstantiated<X>) {
+		        self.x = x
+		        self.lazyX = lazyX
+		    }
+		    public let x: X
+		    public let lazyX: LazilyInstantiated<X>
+		    \(Self.stampProperty)
+		}
+		extension Root {
+		    static func make() -> Root {
+		        let lazyX = LazilyInstantiated { X() }
+		        return Root(x: lazyX.instance, lazyX: lazyX)
+		    }
+		}
+		"""
+
+		let description = try DifferentialValueOracle.describe(
+			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
+			probes: [DifferentialValueProbe("Root.make()")],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(description == """
+		probe Root.make()
+		<1> Root
+		  x: <2> X
+		  lazyX: <3> LazilyInstantiated<X> (instance read last)
+		<3>.instance: <2> X (seen)
+
+		""")
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func describe_leavesAConstantOfTheProbesValueUnmarked_whenAnInstantiatorDeclaredBeforeItShowsItFirst() throws {
+		// Generated code builds a root's constants before the root, so `a`'s stamp is below the root's, and the probe's
+		// call of `bBuilder` shows it before the root's own property does.
+		let fixture = """
+		\(Self.stampCounter)
+		public final class A {
+		    public init() {}
+		    \(Self.stampProperty)
+		}
+		public final class B: Instantiable {
+		    public init(a: A) {
+		        self.a = a
+		    }
+		    public let a: A
+		    \(Self.stampProperty)
+		}
+		public final class Root {
+		    public init(bBuilder: Instantiator<B>, a: A) {
+		        self.bBuilder = bBuilder
+		        self.a = a
+		    }
+		    public let bBuilder: Instantiator<B>
+		    public let a: A
+		    \(Self.stampProperty)
+		}
+		extension Root {
+		    static func make() -> Root {
+		        let a = A()
+		        return Root(bBuilder: Instantiator { B(a: a) }, a: a)
+		    }
+		}
+		"""
+
+		let description = try DifferentialValueOracle.describe(
+			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
+			probes: [DifferentialValueProbe("Root.make()")],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(description == """
+		probe Root.make()
+		<1> Root
+		  bBuilder: <2> Instantiator<B>
+		    instantiate(): <3> B
+		      a: <4> A
+		    instantiate() again: <5> B
+		      a: <4> A (seen)
+		  a: <4> A (seen)
+
+		""")
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func describe_marksALazilyBuiltInstanceBuiltBeforeTheProbesValue_whateverTheWrapperAndWhetherItIsOptional() throws {
+		let fixture = """
+		\(Self.stampCounter)
+		public final class B: Sendable {
+		    public init() {}
+		    \(Self.stampProperty)
+		}
+		public final class Root {
+		    public init(
+		        lazyB: LazilyInstantiated<B>,
+		        optionalLazyB: LazilyInstantiated<B>?,
+		        sendableLazyB: SendableLazilyInstantiated<B>,
+		        optionalSendableLazyB: SendableLazilyInstantiated<B>?,
+		        sendableReadEarly: SendableLazilyInstantiated<B>
+		    ) {
+		        self.lazyB = lazyB
+		        self.optionalLazyB = optionalLazyB
+		        self.sendableLazyB = sendableLazyB
+		        self.optionalSendableLazyB = optionalSendableLazyB
+		        self.sendableReadEarly = sendableReadEarly
+		    }
+		    public let lazyB: LazilyInstantiated<B>
+		    public let optionalLazyB: LazilyInstantiated<B>?
+		    public let sendableLazyB: SendableLazilyInstantiated<B>
+		    public let optionalSendableLazyB: SendableLazilyInstantiated<B>?
+		    public let sendableReadEarly: SendableLazilyInstantiated<B>
+		    \(Self.stampProperty)
+		}
+		extension Root {
+		    static func make() -> Root {
+		        let made = B()
+		        let madeForOptional = B()
+		        let madeForSendable = B()
+		        let madeForOptionalSendable = B()
+		        let sendableReadEarly = SendableLazilyInstantiated { B() }
+		        _ = sendableReadEarly.instance
+		        return Root(
+		            lazyB: LazilyInstantiated { made },
+		            optionalLazyB: LazilyInstantiated { madeForOptional },
+		            sendableLazyB: SendableLazilyInstantiated { madeForSendable },
+		            optionalSendableLazyB: SendableLazilyInstantiated { madeForOptionalSendable },
+		            sendableReadEarly: sendableReadEarly
+		        )
+		    }
+		}
+		"""
+
+		let description = try DifferentialValueOracle.describe(
+			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
+			probes: [DifferentialValueProbe("Root.make()")],
+			filesToDelete: &filesToDelete,
+		)
+
+		// Each instance is built before `Root`, the probe's value, which holds none of them. A `SendableLazilyInstantiated`
+		// hides whether it was read, and its instance read early is marked as a captured one is.
+		#expect(description == """
+		probe Root.make()
+		<1> Root
+		  lazyB: <2> LazilyInstantiated<B> (instance read last)
+		  optionalLazyB: <3> LazilyInstantiated<B> (instance read last)
+		  sendableLazyB: <4> SendableLazilyInstantiated<B> (instance read last)
+		  optionalSendableLazyB: <5> SendableLazilyInstantiated<B> (instance read last)
+		  sendableReadEarly: <6> SendableLazilyInstantiated<B> (instance read last)
+		<2>.instance: <7> B (built before the probe's value)
+		<3>.instance: <8> B (built before the probe's value)
+		<4>.instance: <9> B (built before the probe's value)
+		<5>.instance: <10> B (built before the probe's value)
+		<6>.instance: <11> B (built before the probe's value)
+
+		""")
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func describe_leavesALazilyBuiltInstanceUnmarked_whenItsOwnDependenciesAreBuiltInsideItsWrappersClosure() throws {
+		let fixture = """
+		\(Self.stampCounter)
+		public final class A {
+		    public init() {}
+		    \(Self.stampProperty)
+		}
+		public final class B {
+		    public init(a: A) {
+		        self.a = a
+		    }
+		    public let a: A
+		    \(Self.stampProperty)
+		}
+		public final class Root {
+		    public init(lazyB: LazilyInstantiated<B>) {
+		        self.lazyB = lazyB
+		    }
+		    public let lazyB: LazilyInstantiated<B>
+		    \(Self.stampProperty)
+		}
+		extension Root {
+		    static func make() -> Root {
+		        Root(lazyB: LazilyInstantiated { B(a: A()) })
+		    }
+		}
+		"""
+
+		let description = try DifferentialValueOracle.describe(
+			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
+			probes: [DifferentialValueProbe("Root.make()")],
+			filesToDelete: &filesToDelete,
+		)
+
+		// The read builds `A` and then `B`, each stamped after `Root`, the probe's value.
+		#expect(description == """
+		probe Root.make()
+		<1> Root
+		  lazyB: <2> LazilyInstantiated<B> (instance read last)
+		<2>.instance: <3> B
+		  a: <4> A
+
+		""")
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func describe_leavesALazilyBuiltInstanceUnmarked_whenItsWrapperIsBuiltByAnInstantiatorTheProbeCalls() throws {
+		let fixture = """
+		\(Self.stampCounter)
+		public final class B {
+		    public init() {}
+		    \(Self.stampProperty)
+		}
+		public final class C: Instantiable {
+		    public init(lazyB: LazilyInstantiated<B>) {
+		        self.lazyB = lazyB
+		    }
+		    public let lazyB: LazilyInstantiated<B>
+		    \(Self.stampProperty)
+		}
+		public final class Root {
+		    public init(cBuilder: Instantiator<C>) {
+		        self.cBuilder = cBuilder
+		    }
+		    public let cBuilder: Instantiator<C>
+		    \(Self.stampProperty)
+		}
+		extension Root {
+		    static func make() -> Root {
+		        Root(cBuilder: Instantiator { C(lazyB: LazilyInstantiated { B() }) })
+		    }
+		}
+		"""
+
+		let description = try DifferentialValueOracle.describe(
+			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
+			probes: [DifferentialValueProbe("Root.make()")],
+			filesToDelete: &filesToDelete,
+		)
+
+		// Each `C`, and its wrapper, is built while the probe is described, and each `B` after it, when it is read.
+		#expect(description == """
+		probe Root.make()
+		<1> Root
+		  cBuilder: <2> Instantiator<C>
+		    instantiate(): <3> C
+		      lazyB: <4> LazilyInstantiated<B> (instance read last)
+		    instantiate() again: <5> C
+		      lazyB: <6> LazilyInstantiated<B> (instance read last)
+		<4>.instance: <7> B
+		<6>.instance: <8> B
+
+		""")
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func describe_callsAnInstantiatorUntilItsTypeAndPropertyAreBeingCalledTwiceOnThePath_whenInstantiatorsFormACycle() throws {
 		let description = try DifferentialValueOracle.describe(
 			DifferentialValuePath(fixtureFiles: ["Fixture.swift": Self.cycleFixture]),
@@ -927,21 +1469,81 @@ struct DifferentialValueComparatorTests: ~Copyable {
 				fixtureFiles: ["Thing.swift": "public final class Thing {\n    public init() {}\n}\n"],
 			),
 			DifferentialValueModule(
-				name: "App",
+				name: "Extensions",
 				dependencyModuleNames: ["Core"],
-				fixtureFiles: ["Root.swift": "import Core\npublic final class Root {\n    public init() {}\n    public let thing = Thing()\n    public let things: [Thing] = []\n}\n"],
+				fixtureFiles: ["Inner.swift": "import Core\nextension Thing {\n    public struct Inner {\n        public init() {}\n        public struct Deeper {\n            public init() {}\n        }\n    }\n}\n"],
+			),
+			DifferentialValueModule(
+				name: "App",
+				dependencyModuleNames: ["Core", "Extensions"],
+				fixtureFiles: ["Root.swift": """
+				import Core
+				import Extensions
+				extension Thing.Inner {
+				    public struct Further {
+				        public init() {}
+				    }
+				}
+				public final class Root {
+				    public init() {}
+				    public let thing = Thing()
+				    public let things: [Thing] = []
+				    public let inner = Thing.Inner()
+				    public let deeper = Thing.Inner.Deeper()
+				    public let further = Thing.Inner.Further()
+				    public let inners: [Thing.Inner] = []
+				}
+				"""],
 			),
 		])
 
 		let description = try DifferentialValueOracle.describe(path, probes: [DifferentialValueProbe("Root()")], filesToDelete: &filesToDelete)
 
-		// A type is named without its module so that a graph split across modules compares against the same graph in
-		// one module. Two types of one name in two modules of a path therefore print alike.
+		// A type is named without its module, and without the extensions of the path's modules it is declared in
+		// (`(extension in App):(extension in Extensions):Core.Thing.Inner.Further`), so that a graph split across
+		// modules compares against the same graph in one module. Two types of one name in two modules of a path
+		// therefore print alike.
 		#expect(description == """
 		probe Root()
 		<1> Root
 		  thing: <2> Thing
 		  things: Array<Thing>
+		  inner: Thing.Inner
+		  deeper: Thing.Inner.Deeper
+		  further: Thing.Inner.Further
+		  inners: Array<Thing.Inner>
+
+		""")
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func describe_keepsTheExtensionATypeIsDeclaredIn_whenItsModuleIsNotOneOfThePaths() throws {
+		let fixture = """
+		import Foundation
+		public final class Holder {
+		    public init() {}
+		    public let encodingType: Any.Type = String.Encoding.self
+		}
+		"""
+
+		let description = try DifferentialValueOracle.describe(
+			DifferentialValuePath(fixtureFiles: ["Fixture.swift": fixture]),
+			probes: [DifferentialValueProbe("Holder()")],
+			filesToDelete: &filesToDelete,
+		)
+
+		// Foundation declares `String.Encoding` in an extension of `String`, which swift-foundation, the Foundation of
+		// Linux, declares in `FoundationEssentials`. The runtime spells it `(extension in Foundation):Swift.String.Encoding`.
+		#if canImport(Darwin)
+			let extensionModuleName = "Foundation"
+		#else
+			let extensionModuleName = "FoundationEssentials"
+		#endif
+		#expect(description == """
+		probe Holder()
+		<1> Holder
+		  encodingType: (extension in \(extensionModuleName)):String.Encoding
 
 		""")
 	}
@@ -1326,6 +1928,236 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		""")
 	}
 
+	// MARK: Spent traversals
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_throwsNamingTheProbeAndTheBudget_whenBothPathsSpendTheirTraversalsAtANodeBeyondWhichTheyDiffer() throws {
+		let error = try #require(throws: DifferentialValueOracleError.self) {
+			try DifferentialValueOracle.compare(
+				feature: Self.buildersPath(b2: "Instantiator { B(n: 99) }", lazyB: "LazilyInstantiated { B(n: 3) }"),
+				knownRight: Self.buildersPath(lazyB: "LazilyInstantiated { B(n: 3) }"),
+				probes: [DifferentialValueProbe("Root()")],
+				limits: DifferentialValueLimits(traversalsPerProbe: 1),
+				filesToDelete: &filesToDelete,
+			)
+		}
+
+		// Beyond `b2`, the feature path builds `B(n: 99)` and the known-right path `B(n: 2)`, which neither describes.
+		// The probe spends its traversals at `lazyB` too.
+		#expect(error.path == nil)
+		#expect(error.stage == .runningProbes)
+		#expect(error.description == """
+		Both paths' probe `Root()` spent its 1 traversals at <1> Root > b2, so nothing beneath it is compared. Raise `DifferentialValueLimits.traversalsPerProbe`, or accept it with an exemption equal to this difference:
+		probe `Root()` at <1> Root > b2:
+		  feature:     b2: <5> Instantiator<B> (not called: the probe's 1 traversals are spent)
+		  known right: b2: <5> Instantiator<B> (not called: the probe's 1 traversals are spent)
+		Other nodes where the graph's probes spent their traversals, each accepted only by an exemption of its own: 1
+		""")
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_throwsNamingThePathThatSpentItsTraversals_whenOnlyOnePathSpendsThem() throws {
+		let error = try #require(throws: DifferentialValueOracleError.self) {
+			try DifferentialValueOracle.compare(
+				feature: Self.buildersPath(b1: "nil"),
+				knownRight: Self.buildersPath(),
+				probes: [DifferentialValueProbe("Root()")],
+				limits: DifferentialValueLimits(traversalsPerProbe: 1),
+				filesToDelete: &filesToDelete,
+			)
+		}
+
+		// The known-right path spends its traversal on `b1`, which the feature path does not hold, and none is left for
+		// `b2`, which the feature path calls.
+		#expect(error.path == .knownRight)
+		#expect(error.stage == .runningProbes)
+		#expect(error.description == """
+		The known-right path's probe `Root()` spent its 1 traversals at <1> Root > b2, so nothing beneath it is compared. Raise `DifferentialValueLimits.traversalsPerProbe`, or accept it with an exemption equal to this difference:
+		probe `Root()` at <1> Root > b2:
+		  feature:     b2: <2> Instantiator<B>
+		  known right: b2: <5> Instantiator<B> (not called: the probe's 1 traversals are spent)
+		""")
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_throwsNamingTheProbe_whenAProbeSpendsItsTraversalsAtALazilyInstantiatedWrapper() throws {
+		let error = try #require(throws: DifferentialValueOracleError.self) {
+			try DifferentialValueOracle.compare(
+				feature: Self.buildersPath(b2: "nil", lazyB: "LazilyInstantiated { B(n: 99) }"),
+				knownRight: Self.buildersPath(b2: "nil", lazyB: "LazilyInstantiated { B(n: 3) }"),
+				probes: [DifferentialValueProbe("Root()")],
+				limits: DifferentialValueLimits(traversalsPerProbe: 1),
+				filesToDelete: &filesToDelete,
+			)
+		}
+
+		#expect(error.path == nil)
+		#expect(error.stage == .runningProbes)
+		#expect(error.description == """
+		Both paths' probe `Root()` spent its 1 traversals at <1> Root > lazyB, so nothing beneath it is compared. Raise `DifferentialValueLimits.traversalsPerProbe`, or accept it with an exemption equal to this difference:
+		probe `Root()` at <1> Root > lazyB:
+		  feature:     lazyB: <5> LazilyInstantiated<B> (instance not read: the probe's 1 traversals are spent)
+		  known right: lazyB: <5> LazilyInstantiated<B> (instance not read: the probe's 1 traversals are spent)
+		""")
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_reportsTheDifferencesAndNoError_whenAProbeSpendsItsLastTraversalOnItsLastWrapper() throws {
+		let comparison = try DifferentialValueOracle.compare(
+			feature: Self.buildersPath(b2: "Instantiator { B(n: 99) }"),
+			knownRight: Self.buildersPath(),
+			probes: [DifferentialValueProbe("Root()")],
+			limits: DifferentialValueLimits(traversalsPerProbe: 2),
+			filesToDelete: &filesToDelete,
+		)
+
+		// The probe traverses exactly its two wrappers, so no wrapper goes untraversed.
+		#expect(try #require(comparison).differences == [
+			DifferentialValueDifference(probe: "Root()", path: ["<1> Root", "b2", "instantiate()", "n"], feature: "n: Int 99", knownRight: "n: Int 2"),
+			DifferentialValueDifference(probe: "Root()", path: ["<1> Root", "b2", "instantiate() again", "n"], feature: "n: Int 99", knownRight: "n: Int 2"),
+		])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_reportsOnlyTheDifference_whenAProbeSpendsItsTraversalsBeneathANodeThatDiffers() throws {
+		let fixture = """
+		public final class C: Instantiable {
+		    public init() {}
+		}
+		public final class Left {
+		    public init() {}
+		    public let first = Instantiator { C() }
+		    public let second = Instantiator { C() }
+		}
+		public final class Right {
+		    public init() {}
+		    public let first = Instantiator { C() }
+		    public let second = Instantiator { C() }
+		}
+		public final class Root {
+		    public init(child: AnyObject) {
+		        self.child = child
+		    }
+		    public let child: AnyObject
+		}
+		"""
+		func path(child: String) -> DifferentialValuePath {
+			DifferentialValuePath(fixtureFiles: ["Root.swift": fixture], generatedFiles: ["Root+Make.swift": "extension Root {\n    convenience init() {\n        self.init(child: \(child)())\n    }\n}\n"])
+		}
+
+		let comparison = try DifferentialValueOracle.compare(
+			feature: path(child: "Left"),
+			knownRight: path(child: "Right"),
+			probes: [DifferentialValueProbe("Root()")],
+			limits: DifferentialValueLimits(traversalsPerProbe: 1),
+			filesToDelete: &filesToDelete,
+		)
+
+		// Each path spends its traversal on `child.first`, beneath `child`, whose difference fails the probe and whose
+		// exemption would accept everything beneath it.
+		#expect(try #require(comparison).differences == [
+			DifferentialValueDifference(probe: "Root()", path: ["<1> Root", "child"], feature: "child: <2> Left", knownRight: "child: <2> Right"),
+		])
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func expectDifferentialValuesAgree_acceptsASpentBudget_whenAnExemptionEqualsTheDifferenceWhereTheProbeSpentIt() throws {
+		// A feature whose graph outgrows any budget compares what lies before the node, deliberately.
+		try expectDifferentialValuesAgree(
+			feature: Self.buildersPath(b2: "Instantiator { B(n: 99) }"),
+			knownRight: Self.buildersPath(),
+			probes: [DifferentialValueProbe("Root()")],
+			exempting: [
+				DifferentialValueDifference(
+					probe: "Root()",
+					path: ["<1> Root", "b2"],
+					feature: "b2: <5> Instantiator<B> (not called: the probe's 1 traversals are spent)",
+					knownRight: "b2: <5> Instantiator<B> (not called: the probe's 1 traversals are spent)",
+				),
+			],
+			limits: DifferentialValueLimits(traversalsPerProbe: 1),
+			filesToDelete: &filesToDelete,
+		)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_throwsNamingANodeBeneathAnInstanceReadLast_whenAProbeSpendsItsTraversalsInsideALazilyBuiltInstance() throws {
+		let fixture = """
+		public final class C: Instantiable {
+		    public init(n: Int) {
+		        self.n = n
+		    }
+		    public let n: Int
+		}
+		public final class B {
+		    public init(cBuilder: Instantiator<C>, dBuilder: Instantiator<C>) {
+		        self.cBuilder = cBuilder
+		        self.dBuilder = dBuilder
+		    }
+		    public let cBuilder: Instantiator<C>
+		    public let dBuilder: Instantiator<C>
+		}
+		public final class Root {
+		    public init(lazyB: LazilyInstantiated<B>) {
+		        self.lazyB = lazyB
+		    }
+		    public let lazyB: LazilyInstantiated<B>
+		}
+		"""
+		func path(n: Int) -> DifferentialValuePath {
+			DifferentialValuePath(fixtureFiles: ["Root.swift": fixture], generatedFiles: ["Root+Make.swift": "extension Root {\n    convenience init() {\n        self.init(lazyB: LazilyInstantiated { B(cBuilder: Instantiator { C(n: 1) }, dBuilder: Instantiator { C(n: \(n)) }) })\n    }\n}\n"])
+		}
+
+		let error = try #require(throws: DifferentialValueOracleError.self) {
+			try DifferentialValueOracle.compare(
+				feature: path(n: 99),
+				knownRight: path(n: 2),
+				probes: [DifferentialValueProbe("Root()")],
+				limits: DifferentialValueLimits(traversalsPerProbe: 2),
+				filesToDelete: &filesToDelete,
+			)
+		}
+
+		// The read of `lazyB`'s instance and the calls of `cBuilder` spend both traversals.
+		#expect(error.path == nil)
+		#expect(error.stage == .runningProbes)
+		#expect(error.description == """
+		Both paths' probe `Root()` spent its 2 traversals at <2>.instance > dBuilder, so nothing beneath it is compared. Raise `DifferentialValueLimits.traversalsPerProbe`, or accept it with an exemption equal to this difference:
+		probe `Root()` at <2>.instance > dBuilder:
+		  feature:     dBuilder: <7> Instantiator<C> (not called: the probe's 2 traversals are spent)
+		  known right: dBuilder: <7> Instantiator<C> (not called: the probe's 2 traversals are spent)
+		""")
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_failsOnlyTheGraphThatSpentItsTraversals_whenGraphsAreComparedInBatches() throws {
+		let graphs = [
+			Self.batchGraph(named: "First", featureSharesInstance: false),
+			DifferentialValueGraph(name: "Spending", feature: Self.buildersPath(b2: "Instantiator { B(n: 99) }"), knownRight: Self.buildersPath(), probes: [DifferentialValueProbe("Root()")]),
+		]
+
+		let comparisons = try #require(try DifferentialValueOracle.compare(graphs: graphs, limits: DifferentialValueLimits(traversalsPerProbe: 1), filesToDelete: &filesToDelete))
+
+		// One batch of two paths, compared once: the graph that spent its traversals fails without the batch being
+		// compared again graph by graph.
+		#expect(filesToDelete.count == 2)
+		#expect(try comparisons[0].result.get().differences == [
+			DifferentialValueDifference(probe: "FirstRoot()", path: ["<1> FirstRoot", "e"], feature: "e: nil", knownRight: "e: <2> FirstA (seen, first at <1> FirstRoot > a)"),
+		])
+		let error = try #require(throws: DifferentialValueOracleError.self) { try comparisons[1].result.get() }
+		#expect(error.path == nil)
+		#expect(error.stage == .runningProbes)
+		#expect(error.description.hasPrefix("Both paths' probe `Root()` spent its 1 traversals at <1> Root > b2, "))
+	}
+
 	// MARK: Batches
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
@@ -1511,6 +2343,7 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 		// The extension's `instantiate(…)` stores each parameter, the received one, the default-valued ones, and the
 		// unlabeled one, so the comparator sees the values the generated call passes and the defaults it leaves in place.
+		// The type stores a creation stamp too, as every class of the graph does.
 		#expect(fixture.swiftFileContent.last == """
 		@Instantiable(generateMock: true)
 		extension S35_Ext: Instantiable {
@@ -1520,6 +2353,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 
 		public final class S35_Ext {
+			let differentialValueCreationStamp = S35_CreationStamp.next()
+
 			public init(t4: S35_T6, title: String, retryCount: Int, note: String) {
 				self.t4 = t4
 				self.title = title
@@ -1550,6 +2385,44 @@ struct DifferentialValueComparatorTests: ~Copyable {
 	}
 
 	@Test
+	func fixture_declaresTheCreationStampCounterInTheFirstFile_whenItStoresEveryParameter_forSeed35() {
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 35, storingEveryParameter: true)
+
+		// Every class stores a stamp from the graph's one counter, a class without a body among them, so that the
+		// comparator sees an instance a lazily instantiated wrapper's closure captures, built before the wrapper.
+		#expect(fixture.swiftFileContent.first == """
+		@Instantiable(isRoot: true)
+		public final class S35_Root0: Instantiable {
+			let differentialValueCreationStamp = S35_CreationStamp.next()
+
+			public init(anyT0Builder: ErasedInstantiator<S35_T3, S35_AnyT0>, t4_S35_T6: S35_Leaf, t6Builder: Instantiator<S35_T6>) {
+				self.anyT0Builder = anyT0Builder
+				self.t4_S35_T6 = t4_S35_T6
+				self.t6Builder = t6Builder
+			}
+
+			@Instantiated(fulfilledByType: "S35_T0", erasedToConcreteExistential: true) let anyT0Builder: ErasedInstantiator<S35_T3, S35_AnyT0>
+			@Instantiated let t4_S35_T6: S35_Leaf
+			@Instantiated let t6Builder: Instantiator<S35_T6>
+		}
+
+		public final class S35_Value: Instantiable {
+			let differentialValueCreationStamp = S35_CreationStamp.next()
+		}
+
+		public enum S35_CreationStamp {
+			nonisolated(unsafe) private static var lastStamp = 0
+
+			public static func next() -> Int {
+				lastStamp += 1
+				return lastStamp
+			}
+		}
+
+		""")
+	}
+
+	@Test
 	func fixture_storesEveryParameterInAnUncheckedSendableType_whenAMixedGraphsExtensionReceivesAWrapperThatIsNotSendable_forSeed296() {
 		let fixture = GraphFuzzerGenerator.fixture(forSeed: 296, storingEveryParameter: true)
 
@@ -1564,6 +2437,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 
 		public final class S296_Ext: @unchecked Sendable {
+			let differentialValueCreationStamp = S296_CreationStamp.next()
+
 			public init(t3Builder: Instantiator<S296_T3>, retryCount: Int, note: String) {
 				self.t3Builder = t3Builder
 				self.retryCount = retryCount
@@ -1598,9 +2473,12 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			GraphFuzzerGenerator.fixture(forSeed: 17, storingEveryParameter: storingEveryParameter).swiftFileContent.first { $0.contains("class S17_T8:") }
 		}
 
+		// Each class the file declares also stores a creation stamp.
 		#expect(ownerSource(true) == """
 		@Instantiable
 		public final class S17_T8: Instantiable, S17_T8Protocol {
+			let differentialValueCreationStamp = S17_CreationStamp.next()
+
 			public init(t9: S17_T9, formatter: S17_Formatter = S17_Formatter()) {
 				self.t9 = t9
 				self.formatter = formatter
@@ -1613,6 +2491,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		public protocol S17_T8Protocol: AnyObject {}
 
 		public final class S17_AnyT8 {
+			let differentialValueCreationStamp = S17_CreationStamp.next()
+
 			public init(_ value: S17_T8) {
 				self.value = value
 			}
@@ -1621,6 +2501,8 @@ struct DifferentialValueComparatorTests: ~Copyable {
 		}
 
 		public final class S17_Formatter {
+			let differentialValueCreationStamp = S17_CreationStamp.next()
+
 			public init() {}
 		}
 
@@ -1823,6 +2705,105 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			code = code.replacingOccurrences(of: original, with: replacement)
 		}
 		return code
+	}
+
+	/// The counter a fixture with creation stamps declares, and the stamp each of its classes stores.
+	private static let stampCounter = DifferentialValueCreationStamp.counterDeclaration(named: "Stamp")
+	private static let stampProperty = DifferentialValueCreationStamp.property(counterNamed: "Stamp")
+
+	/// Classes with creation stamps: an `X` lazily instantiated, a `C` built by an instantiator that receives `x: X` by
+	/// value, and two roots holding both, one declaring the builder first and one the wrapper.
+	private static let lazyInstanceReadByBuilderFixture = """
+	\(stampCounter)
+	public final class X {
+	    public init() {}
+	    \(stampProperty)
+	}
+	public final class C: Instantiable {
+	    public init(x: X) {
+	        self.x = x
+	    }
+	    public let x: X
+	    \(stampProperty)
+	}
+	public final class RootBuilderFirst {
+	    public init(cBuilder: Instantiator<C>, lazyX: LazilyInstantiated<X>) {
+	        self.cBuilder = cBuilder
+	        self.lazyX = lazyX
+	    }
+	    public let cBuilder: Instantiator<C>
+	    public let lazyX: LazilyInstantiated<X>
+	    \(stampProperty)
+	}
+	public final class RootLazyFirst {
+	    public init(lazyX: LazilyInstantiated<X>, cBuilder: Instantiator<C>) {
+	        self.lazyX = lazyX
+	        self.cBuilder = cBuilder
+	    }
+	    public let lazyX: LazilyInstantiated<X>
+	    public let cBuilder: Instantiator<C>
+	    \(stampProperty)
+	}
+	"""
+
+	/// A path whose classes carry creation stamps, building a root that holds `a` and a lazily instantiated `B`. The
+	/// generated initializer binds `a` before `initializerBody`.
+	private static func stampedPath(initializerBody: String) -> DifferentialValuePath {
+		let fixture = """
+		\(stampCounter)
+		public final class A {
+		    public init() {}
+		    \(stampProperty)
+		}
+		public final class B {
+		    public init(a: A) {
+		        self.a = a
+		    }
+		    public let a: A
+		    \(stampProperty)
+		}
+		public final class Root {
+		    public init(a: A, lazyB: LazilyInstantiated<B>) {
+		        self.a = a
+		        self.lazyB = lazyB
+		    }
+		    public let a: A
+		    public let lazyB: LazilyInstantiated<B>
+		    \(stampProperty)
+		}
+		"""
+		return DifferentialValuePath(
+			fixtureFiles: ["Root.swift": fixture],
+			generatedFiles: ["Root+Make.swift": "extension Root {\n    convenience init() {\n        let a = A()\n        \(initializerBody)\n    }\n}\n"],
+		)
+	}
+
+	/// A root holding two instantiators and a lazily instantiated wrapper of `B`, each optional.
+	private static let buildersFixture = """
+	public final class B: Instantiable {
+	    public init(n: Int) {
+	        self.n = n
+	    }
+	    public let n: Int
+	}
+	public final class Root {
+	    public init(b1: Instantiator<B>?, b2: Instantiator<B>?, lazyB: LazilyInstantiated<B>?) {
+	        self.b1 = b1
+	        self.b2 = b2
+	        self.lazyB = lazyB
+	    }
+	    public let b1: Instantiator<B>?
+	    public let b2: Instantiator<B>?
+	    public let lazyB: LazilyInstantiated<B>?
+	}
+	"""
+
+	/// A path building `buildersFixture`'s root with `b1`, `b2`, and `lazyB`.
+	private static func buildersPath(b1: String = "Instantiator { B(n: 1) }", b2: String = "Instantiator { B(n: 2) }", lazyB: String = "nil") -> DifferentialValuePath {
+		DifferentialValuePath(
+			fixtureFiles: ["Root.swift": buildersFixture],
+			generatedFiles: ["Root+Make.swift": "extension Root {\n    convenience init() {\n        self.init(b1: \(b1), b2: \(b2), lazyB: \(lazyB))\n    }\n}\n"],
+		)
 	}
 
 	private static func graphPath(generated: String) -> DifferentialValuePath {

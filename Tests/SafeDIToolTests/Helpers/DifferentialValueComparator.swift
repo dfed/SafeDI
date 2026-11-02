@@ -86,8 +86,10 @@ struct DifferentialValueModule {
 ///
 /// The comparator sees only stored properties, a type's own and its superclasses'. A fixture it can judge stores
 /// every dependency and every default-valued parameter a type takes, and an extension's `instantiate(…)` passes each
-/// of its parameters to the type it returns, which stores them; `GraphFuzzerGenerator.fixture(forSeed:
-/// storingEveryParameter:)` gives the fuzzer's graphs that shape. A stored closure is described as `(Function)`,
+/// of its parameters to the type it returns, which stores them; each of its classes stores a creation stamp, so that
+/// the comparator sees an instance a lazily instantiated wrapper's closure captures, built before the wrapper
+/// (`DifferentialValueCreationStamp`). `GraphFuzzerGenerator.fixture(forSeed:storingEveryParameter:)` gives the
+/// fuzzer's graphs that shape. A stored closure is described as `(Function)`,
 /// whatever it does, so two closures always agree and only a closure against `nil` is a difference: a fixture that
 /// needs a closure judged stores what the closure determines, such as what it returns. A set, or a dictionary whose
 /// keys or values hold class instances, is compared by kind and count only: a fixture that needs its elements judged
@@ -118,6 +120,53 @@ struct DifferentialValuePath {
 	let modules: [DifferentialValueModule]
 }
 
+/// The contract a fixture follows so that the comparator sees whether the generated code built a lazily instantiated
+/// wrapper's instance up front, by capturing an instance built before the wrapper or by reading the wrapper early: a
+/// fixture declares one counter per path (`counterDeclaration(named:)`), in a module every stamped type's module
+/// imports, and each class it declares stores a stamp drawn from it (`property(counterNamed:)`), a stored property
+/// labeled `label` of type `Int`. The describer never prints the stamp. When it reads a wrapper's instance last, it
+/// marks the instance `(built before the probe's value)` if the instance is a class instance stamped before the
+/// probe's value that the value does not hold through stored properties, wherever the description first showed it.
+/// A stored property's initial value is set when the initializer begins, after its arguments are built, so generated
+/// code stamps the probe's value after everything it builds for it, and everything the describer builds, calling an
+/// instantiator or reading an instance, is stamped after the value. An instance the value holds is built up front
+/// by design, as a mock builds one the mocked type takes by value, and two paths differ on it by identity. Where the
+/// probe's value is stamped, a `LazilyInstantiated` wrapper's line does not say `already instantiated`, since the
+/// probe's own instantiator calls can read the instance before the wrapper is met; the instance's mark says it
+/// instead, so one early build is one mark.
+///
+/// What the stamps leave unseen: the dependencies of a lazily built instance, and the class instances a lazily built
+/// value that is not a class holds, are not judged, because a mock builds the dependencies its tree receives up
+/// front by design and hands them to lazily built instances (`let x = X(); LazilyInstantiated { B(x: x) }`), so
+/// judging them would mark correct paths; an instance built early inside an instantiator the probe calls is stamped
+/// after the probe's value and passes; and a probe whose value is not a stamped class, such as a struct, gets no
+/// stamp marks, and its wrappers say `already instantiated` as an unstamped fixture's do. A fixture without stamps is
+/// described as before. `GraphFuzzerGenerator.fixture(forSeed:storingEveryParameter: true)` stamps every class of
+/// the graph.
+enum DifferentialValueCreationStamp {
+	/// The label of the stored property that holds a type's stamp.
+	static let label = "differentialValueCreationStamp"
+
+	/// The stored property each stamped class declares, drawing its stamp from the counter `counterName` declares.
+	static func property(counterNamed counterName: String) -> String {
+		"let \(label) = \(counterName).next()"
+	}
+
+	/// The counter a fixture declares once, which every stamped class of a path draws from.
+	static func counterDeclaration(named counterName: String) -> String {
+		"""
+		public enum \(counterName) {
+			nonisolated(unsafe) private static var lastStamp = 0
+
+			public static func next() -> Int {
+				lastStamp += 1
+				return lastStamp
+			}
+		}
+		"""
+	}
+}
+
 /// A Swift expression the comparator evaluates in each path, such as `Root()` or `Feature.mock()`, whose value it
 /// describes under `name`. The expression is compiled in a module that `@testable import`s every module of the
 /// path, so it may name internal declarations, such as a generated `mock()`.
@@ -136,16 +185,32 @@ struct DifferentialValueProbe: Equatable {
 	let expression: String
 }
 
-/// One graph of a batch: its two paths, and the probes that describe what each builds. A batch compiles the graphs
-/// whose paths have one layout into one executable per path, so their declarations must not clash, as the graph
-/// fuzzer's per-seed type-name prefixes keep them apart; their files may share names. A module that every graph of
-/// the batch holds alike, with the same files, is compiled once, so the graphs share its declarations and the
-/// instances its static properties hold, as they would share an instance from a module outside the path.
+/// One graph of a batch: its two paths, the probes that describe what each builds, and the differences between them
+/// that the comparison exempts. A batch compiles the graphs whose paths have one layout into one executable per path,
+/// so their declarations must not clash, as the graph fuzzer's per-seed type-name prefixes keep them apart; their
+/// files may share names. A module that every graph of the batch holds alike, with the same files, is compiled once,
+/// so the graphs share its declarations and the instances its static properties hold, as they would share an
+/// instance from a module outside the path.
 struct DifferentialValueGraph {
+	init(
+		name: String,
+		feature: DifferentialValuePath,
+		knownRight: DifferentialValuePath,
+		probes: [DifferentialValueProbe],
+		exemptions: [DifferentialValueDifference] = [],
+	) {
+		self.name = name
+		self.feature = feature
+		self.knownRight = knownRight
+		self.probes = probes
+		self.exemptions = exemptions
+	}
+
 	let name: String
 	let feature: DifferentialValuePath
 	let knownRight: DifferentialValuePath
 	let probes: [DifferentialValueProbe]
+	let exemptions: [DifferentialValueDifference]
 }
 
 /// How far the comparator lets each probe run.
@@ -155,7 +220,8 @@ struct DifferentialValueLimits: Equatable {
 	///     path's description: far longer than any fuzzer graph's probe takes.
 	///   - traversalsPerProbe: How many wrappers a probe traverses at most, so that a description cannot grow
 	///     exponentially with the builders each type holds: about eleven times what the busiest probe of the fuzzer's
-	///     corpus traverses, 908.
+	///     corpus traverses, 908. A probe that spends them on either path fails its graph's comparison, unless an
+	///     exemption accepts each node where it did.
 	init(probeTimeLimitInSeconds: Int = 60, traversalsPerProbe: Int = 10_000) {
 		self.probeTimeLimitInSeconds = probeTimeLimitInSeconds
 		self.traversalsPerProbe = traversalsPerProbe
@@ -184,8 +250,8 @@ struct DifferentialValueDifference: Equatable, CustomStringConvertible {
 	}
 }
 
-/// What the comparator found: each path's canonical description, and every difference between them, probe by
-/// probe. The paths agree when there is none.
+/// What the comparator found: each path's canonical description, and every difference between them that the
+/// comparison does not exempt, probe by probe. The paths agree when there is none.
 struct DifferentialValueComparison {
 	let featureDescription: String
 	let knownRightDescription: String
@@ -226,9 +292,9 @@ enum DifferentialValuePathRole: String, Equatable {
 	}
 }
 
-/// Why the comparator could not describe a path: the SafeDI runtime or a module of the path does not compile, the
-/// probes do not compile, or the probes did not run to completion, such as a probe that trapped or ran past the time
-/// limit.
+/// Why the comparator could not describe or compare a path: the SafeDI runtime or a module of the path does not
+/// compile, the probes do not compile, the probes did not run to completion, such as a probe that trapped or ran past
+/// the time limit, or a probe spent its traversals at a node no exemption accepts, beneath which nothing is compared.
 struct DifferentialValueOracleError: Error, CustomStringConvertible {
 	enum Stage: Equatable {
 		case locatingBuildArtifacts
@@ -239,7 +305,8 @@ struct DifferentialValueOracleError: Error, CustomStringConvertible {
 	}
 
 	/// The path the error belongs to, or `nil` for one that belongs to no path: locating the build artifacts or
-	/// compiling the runtime, which every path shares, or describing a path on its own.
+	/// compiling the runtime, which every path shares, describing a path on its own, or a probe that spent its
+	/// traversals at the same node on both paths.
 	let path: DifferentialValuePathRole?
 	let stage: Stage
 	let description: String
@@ -258,7 +325,8 @@ struct DifferentialValueOracleError: Error, CustomStringConvertible {
 /// of one with a value; the type and children of a struct, tuple, collection, or enum; and a leaf's dynamic type and
 /// its `String(reflecting:)` (`String "default"`). Some values are described otherwise, so that every run describes
 /// them alike: an `AnyHashable` as the value it wraps, `Data` by its bytes, and a pointer or `ObjectIdentifier` as
-/// `(address)`. A type is named without a leading qualifier that names one of the path's modules, and a private,
+/// `(address)`. A type is named without a leading qualifier that names one of the path's modules, and without the
+/// `(extension in App):` the runtime writes before a type declared in an extension in one of them, and a private,
 /// fileprivate, or local type with `(private)` where the runtime prints an address, so a graph split across modules
 /// compares against the same graph in one module. The elements of a set or dictionary that hold no class instance
 /// are described in the order of their own descriptions.
@@ -267,49 +335,68 @@ struct DifferentialValueOracleError: Error, CustomStringConvertible {
 /// dictionary whose keys or values hold class instances, is described as `(not compared: set of 3 class instances)`,
 /// compared by kind and count only, since which of several alike instances is described first would follow hash
 /// order; an instance an earlier probe held is identified by that probe alone, so two such instances agree; another
-/// leaf whose debug description holds an address or a hash-ordered collection is not canonical; and an
+/// leaf whose debug description holds an address or a hash-ordered collection is not canonical; an
 /// `ErasedInstantiator`, a `SendableErasedInstantiator`, or an instantiator with forwarded properties is not
-/// traversed.
+/// traversed; how often an instance was built, and in what order, is not seen, so an instance built and discarded
+/// is invisible, as is a reordering; when an instance was built is judged only for a lazily built class instance
+/// itself, against the probe's value, as `DifferentialValueCreationStamp` states with what that leaves unseen; and in
+/// a fixture without creation stamps, an instance a `LazilyInstantiated` or `SendableLazilyInstantiated` closure
+/// captures, built before the wrapper, and a `SendableLazilyInstantiated` instance read before the describer met the
+/// wrapper pass too, unless something else holds that instance, which its identity then shows.
 ///
 /// SafeDI's wrappers are classes, numbered as such. An `Instantiator` or `SendableInstantiator` with no forwarded
 /// properties is called twice, and each instance it returns described beneath it (`instantiate()`, `instantiate()
 /// again`), so a builder that hands out one instance, or that captures one built outside it, differs from one that
 /// builds anew on each call; beneath a second call each instantiator is called once. The instance of a
 /// `LazilyInstantiated` or `SendableLazilyInstantiated` is read after the rest of the probe's value (`<4>.instance:
-/// <8> C`), under the calls on the path where its wrapper was met. A wrapper whose owner type and property are on the
-/// path twice already is not traversed (`(not called: …)`), so a cycle, through instantiators or lazily instantiated
-/// wrappers, is unrolled once and its cycle-closing builder called. Each probe traverses at most
-/// `DifferentialValueLimits.traversalsPerProbe` wrappers, past which a wrapper is reported as not traversed, so a
-/// description cannot grow exponentially with the builders each type holds; and a probe that runs past
-/// `DifferentialValueLimits.probeTimeLimitInSeconds` stops the probe executable, which fails its path's description
-/// and, in a batch, its graph alone.
+/// <8> C`), under the calls on the path where its wrapper was met. Where the probe's value stores a creation stamp,
+/// an instance read last that was built before that value, and that the value does not hold, says so (`<4>.instance:
+/// <8> C (built before the probe's value)`), so that one early read, or one instance a closure captures, is one
+/// difference at that line, whichever wrapper kind built it. Otherwise a `LazilyInstantiated` whose instance was
+/// read before the describer met it says so (`(already instantiated, instance read last)`), and a
+/// `SendableLazilyInstantiated` keeps its state in a `Mutex`, which `Mirror` cannot see into. A wrapper whose owner
+/// type and property are on the path twice already is not traversed
+/// (`(not called: …)`), so a cycle, through instantiators or lazily instantiated wrappers, is unrolled once and its
+/// cycle-closing builder called. Each probe traverses at most `DifferentialValueLimits.traversalsPerProbe` wrappers,
+/// past which a wrapper is reported as not traversed, so a description cannot grow exponentially with the builders
+/// each type holds; and a probe that runs past `DifferentialValueLimits.probeTimeLimitInSeconds` stops the probe
+/// executable, which fails its path's description and, in a batch, its graph alone.
 ///
 /// Two descriptions are compared node by node, children by label, with each identity one path numbers paired with
 /// the identity the other path numbers at the same node: every node whose line differs is a difference, and what
-/// lies beneath it is not compared, so a difference that adds or removes an instance renumbers nothing after it.
+/// lies beneath it is not compared, so a difference that adds or removes an instance renumbers nothing after it. Two
+/// lines that differ only in when an instance was built, by `already instantiated` or `(built before the probe's value)`,
+/// still pair, and what lies beneath them, the instance a wrapper refers to, and every later reference to either are
+/// compared as usual, so an exemption of the line accepts the early build alone. A node at which a probe spent its
+/// traversals, on either path, has nothing beneath it to compare, so it fails its graph's comparison with a
+/// `DifferentialValueOracleError`, unless an exemption equal to the difference there accepts it: the node's two
+/// lines, which agree when both paths spent their traversals there. One beneath a difference is part of that
+/// difference.
 ///
 /// Nothing is compiled when `compileVerificationIsEnabled` is `false`: `compare` and `describe` then return `nil`.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 enum DifferentialValueOracle {
-	/// Describes `probes` in each path and compares the descriptions.
+	/// Describes `probes` in each path and compares the descriptions, exempting `exemptions`.
 	/// - Returns: The comparison, or `nil` when compile verification is disabled.
 	static func compare(
 		feature: DifferentialValuePath,
 		knownRight: DifferentialValuePath,
 		probes: [DifferentialValueProbe],
+		exempting exemptions: [DifferentialValueDifference] = [],
 		limits: DifferentialValueLimits = DifferentialValueLimits(),
 		filesToDelete: inout [URL],
 	) throws -> DifferentialValueComparison? {
 		guard compileVerificationIsEnabled else { return nil }
-		let graph = DifferentialValueGraph(name: "", feature: feature, knownRight: knownRight, probes: probes)
+		let graph = DifferentialValueGraph(name: "", feature: feature, knownRight: knownRight, probes: probes, exemptions: exemptions)
 		return try results(of: [graph], limits: limits, filesToDelete: &filesToDelete)[0].get()
 	}
 
-	/// Compares each of `graphs`, compiling the graphs whose paths have one layout into one executable per path, so
-	/// that a batch costs one compile and link of each path beside its graphs' own code, and a graph added to a batch
-	/// costs a fraction of comparing it on its own. Each graph's probes are described as on their own: numbering and
-	/// every `(seen …)` mark start afresh at each graph. When a batch does not compile or run, each of its graphs is
-	/// compared on its own, so that a failure is its graph's, at the cost of comparing each alone.
+	/// Compares each of `graphs`, exempting its exemptions, compiling the graphs whose paths have one layout into one
+	/// executable per path, so that a batch costs one compile and link of each path beside its graphs' own code, and a
+	/// graph added to a batch costs a fraction of comparing it on its own. Each graph's probes are described as on their
+	/// own: numbering and every `(seen …)` mark start afresh at each graph. When a batch does not compile or run, each
+	/// of its graphs is compared on its own, so that a failure is its graph's, at the cost of comparing each alone; a
+	/// graph whose probe spent its traversals fails alone, without the batch being compared again.
 	/// - Returns: Each graph's comparison, in the order of `graphs`, or `nil` when compile verification is disabled.
 	static func compare(
 		graphs: [DifferentialValueGraph],
@@ -447,11 +534,21 @@ enum DifferentialValueOracle {
 			return graphs.map { graph in
 				let range = start..<(start + graph.probes.count)
 				start = range.upperBound
-				return .success(DifferentialValueComparison(
-					featureDescription: featureProbes[range].map(\.text).joined(),
-					knownRightDescription: knownRightProbes[range].map(\.text).joined(),
-					differences: differences(between: featureProbes[range], and: knownRightProbes[range]),
-				))
+				let probeComparisons = zip(featureProbes[range], knownRightProbes[range]).map { feature, knownRight in
+					var comparison = ProbeComparison(feature: feature, knownRight: knownRight)
+					comparison.compare()
+					return comparison
+				}
+				let spentTraversals = probeComparisons.flatMap(\.spentTraversals).filter { !graph.exemptions.contains($0.difference) }
+				if let firstSpentTraversal = spentTraversals.first {
+					return .failure(error(spending: firstSpentTraversal, otherSpentTraversalCount: spentTraversals.count - 1, limits: limits))
+				} else {
+					return .success(DifferentialValueComparison(
+						featureDescription: featureProbes[range].map(\.text).joined(),
+						knownRightDescription: knownRightProbes[range].map(\.text).joined(),
+						differences: probeComparisons.flatMap(\.differences).filter { !graph.exemptions.contains($0) },
+					))
+				}
 			}
 		} catch let error as DifferentialValueOracleError where error.path != nil {
 			guard graphs.count > 1 else { return [.failure(error)] }
@@ -488,16 +585,30 @@ enum DifferentialValueOracle {
 		})
 	}
 
-	/// Every difference between two paths' descriptions of the same probes, probe by probe in probe order.
-	private static func differences(
-		between featureProbes: some Sequence<DescribedProbe>,
-		and knownRightProbes: some Sequence<DescribedProbe>,
-	) -> [DifferentialValueDifference] {
-		zip(featureProbes, knownRightProbes).flatMap { feature, knownRight in
-			var comparison = ProbeComparison(feature: feature, knownRight: knownRight)
-			comparison.compare()
-			return comparison.differences
+	/// The error of a graph whose probe spent its traversals at a node no exemption accepts, the first in probe order and
+	/// then in the order the descriptions print their nodes, beneath which nothing is compared.
+	private static func error(
+		spending spentTraversal: ProbeComparison.SpentTraversal,
+		otherSpentTraversalCount: Int,
+		limits: DifferentialValueLimits,
+	) -> DifferentialValueOracleError {
+		let pathName = switch spentTraversal.path {
+		case .feature:
+			"The feature path's"
+		case .knownRight:
+			"The known-right path's"
+		case nil:
+			"Both paths'"
 		}
+		let difference = spentTraversal.difference
+		let others = otherSpentTraversalCount > 0
+			? "\nOther nodes where the graph's probes spent their traversals, each accepted only by an exemption of its own: \(otherSpentTraversalCount)"
+			: ""
+		return DifferentialValueOracleError(
+			path: spentTraversal.path,
+			stage: .runningProbes,
+			description: "\(pathName) probe `\(difference.probe)` spent its \(limits.traversalsPerProbe) traversals at \(difference.path.joined(separator: " > ")), so nothing beneath it is compared. Raise `DifferentialValueLimits.traversalsPerProbe`, or accept it with an exemption equal to this difference:\n\(difference)\(others)",
+		)
 	}
 
 	/// Describes `path` and parses its description into each probe's section, named as the probe is, failing when the
@@ -676,7 +787,9 @@ enum DifferentialValueOracle {
 	/// How the describer traverses a SafeDI wrapper it meets.
 	enum WrapperTraversal {
 		case instantiate(() -> Any)
-		case readInstanceLast(() -> Any)
+		/// Reads the wrapper's instance after the rest of the probe's value. `isInstantiated` is whether the instance
+		/// was read before the describer met the wrapper.
+		case readInstanceLast(() -> Any, isInstantiated: Bool)
 		case notTraversed(String?)
 	}
 
@@ -712,13 +825,17 @@ enum DifferentialValueOracle {
 
 	extension LazilyInstantiated: DescribedWrapper {
 		var wrapperTraversal: WrapperTraversal {
-			.readInstanceLast { self.instance }
+			// `Mirror` shows the wrapper's private `state`, whose case is `instantiated` once the instance was read.
+			let state = Mirror(reflecting: self).descendant("state")
+			let isInstantiated = state.map { Mirror(reflecting: $0).children.first?.label == "instantiated" } ?? false
+			return .readInstanceLast({ self.instance }, isInstantiated: isInstantiated)
 		}
 	}
 
 	extension SendableLazilyInstantiated: DescribedWrapper {
 		var wrapperTraversal: WrapperTraversal {
-			.readInstanceLast { self.instance }
+			// The wrapper keeps its state in a `Mutex`, which `Mirror` cannot see into.
+			.readInstanceLast({ self.instance }, isInstantiated: false)
 		}
 	}
 
@@ -768,8 +885,13 @@ enum DifferentialValueOracle {
 			numbersByIdentity.removeAll()
 			traversalsLeft = traversalsPerProbe
 			emit("probe \(Self.oneLine(name))")
-			describe(value(), label: "", owner: "probe", indent: 0)
+			let probeValue = value()
+			self.probeValue = probeValue
+			probeStamp = Self.creationStamp(of: probeValue)
+			objectsTheProbesValueHolds = nil
+			describe(probeValue, label: "", owner: "probe", indent: 0)
 			describeDeferredInstances()
+			self.probeValue = nil
 		}
 
 		/// An instance of a `LazilyInstantiated` wrapper to read after the rest of the probe's value, with the calls in
@@ -780,6 +902,12 @@ enum DifferentialValueOracle {
 			let callsOnPath: [String]
 			let isInsideSecondCall: Bool
 		}
+
+		/// The label of the stored property that holds a fixture class's creation stamp, which is never described.
+		private static let creationStampLabel = "\#(DifferentialValueCreationStamp.label)"
+
+		/// What the line of an instance read last adds when the instance was built before the probe's value.
+		private static let builtBeforeProbesValueNote = "\#(DescribedLine.builtBeforeProbesValueNote)"
 
 		private let moduleQualifiers: [String]
 		private let probeTimeLimitInSeconds: UInt32
@@ -800,16 +928,25 @@ enum DifferentialValueOracle {
 		/// Whether an instantiator's second call is being described, beneath which each instantiator is called once.
 		private var isInsideSecondCall = false
 		private var traversalsLeft = 0
+		/// The current probe's value, which the generated code under comparison built.
+		private var probeValue: Any?
+		/// The creation stamp of the current probe's value, when it is a class instance that stores one. Generated code
+		/// builds what the value holds before the value, and the describer builds everything it builds after it.
+		private var probeStamp: Int?
+		/// The class instances the current probe's value holds through stored properties, without calling an
+		/// instantiator or reading a lazily instantiated instance, found when first needed.
+		private var objectsTheProbesValueHolds: Set<ObjectIdentifier>?
 
-		private func describe(_ value: Any, label: String, owner: String, indent: Int) {
+		/// Describes `value`, adding `note` to the line of the class instance it is, or holds as an optional.
+		private func describe(_ value: Any, label: String, owner: String, indent: Int, note: String = "") {
 			let prefix = String(repeating: "  ", count: indent) + (label.isEmpty ? "" : "\(label): ")
 			if type(of: value) == AnyHashable.self, let hashable = value as? AnyHashable {
 				// An `AnyHashable` is described as the value it wraps, so that a set it wraps is described in order.
-				describe(hashable.base, label: label, owner: owner, indent: indent)
+				describe(hashable.base, label: label, owner: owner, indent: indent, note: note)
 			} else if let wrapper = value as? any DescribedWrapper {
 				describe(wrapper: wrapper, prefix: prefix, label: label, owner: owner, indent: indent)
 			} else {
-				describe(nonWrapper: value, prefix: prefix, label: label, owner: owner, indent: indent)
+				describe(nonWrapper: value, prefix: prefix, label: label, owner: owner, indent: indent, note: note)
 			}
 		}
 
@@ -838,11 +975,14 @@ enum DifferentialValueOracle {
 					}
 					callsOnPath.removeLast()
 				}
-			case let .readInstanceLast(read):
+			case let .readInstanceLast(read, isInstantiated):
+				// Where the probe's value is stamped, its instance's stamp tells whether it was built early, and the state
+				// is not written: the probe's own instantiator calls can have read the instance before the wrapper is met.
+				let state = isInstantiated && probeStamp == nil ? "already instantiated, " : ""
 				if let reason = reasonNotToTraverse(call, verb: "read") {
-					emit("\(prefix)<\(number)> \(typeName)\(annotation) (instance not read: \(reason))")
+					emit("\(prefix)<\(number)> \(typeName)\(annotation) (\(state)instance not read: \(reason))")
 				} else {
-					emit("\(prefix)<\(number)> \(typeName)\(annotation) (instance read last)")
+					emit("\(prefix)<\(number)> \(typeName)\(annotation) (\(state)instance read last)")
 					traversalsLeft -= 1
 					deferredInstances.append(DeferredInstance(number: number, read: read, callsOnPath: callsOnPath + [call], isInsideSecondCall: isInsideSecondCall))
 				}
@@ -852,7 +992,7 @@ enum DifferentialValueOracle {
 		}
 
 		/// Why a wrapper met as `call` is not traversed: it is being traversed twice on the path already, or the probe's
-		/// traversals are spent.
+		/// traversals are spent, which the oracle finds by the line's end, `DescribedLine.spentTraversalsSuffix`.
 		private func reasonNotToTraverse(_ call: String, verb: String) -> String? {
 			if callsOnPath.filter({ $0 == call }).count >= 2 {
 				"\(call) is being \(verb) twice on this path"
@@ -863,31 +1003,31 @@ enum DifferentialValueOracle {
 			}
 		}
 
-		private func describe(nonWrapper value: Any, prefix: String, label: String, owner: String, indent: Int) {
+		private func describe(nonWrapper value: Any, prefix: String, label: String, owner: String, indent: Int, note: String) {
 			let typeName = typeName(of: value)
 			if Self.namesAnAddress(typeName) {
 				emit("\(prefix)\(typeName) (address)")
 			} else if Self.dataTypeNames.contains(String(reflecting: type(of: value))), let bytes = value as? any Collection<UInt8> {
 				emit("\(prefix)Data \(bytes.count) bytes \(Self.hexadecimal(Array(bytes)))")
 			} else {
-				describe(mirrored: value, typeName: typeName, prefix: prefix, label: label, owner: owner, indent: indent)
+				describe(mirrored: value, typeName: typeName, prefix: prefix, label: label, owner: owner, indent: indent, note: note)
 			}
 		}
 
-		private func describe(mirrored value: Any, typeName: String, prefix: String, label: String, owner: String, indent: Int) {
+		private func describe(mirrored value: Any, typeName: String, prefix: String, label: String, owner: String, indent: Int, note: String) {
 			let mirror = Mirror(reflecting: value)
 			switch mirror.displayStyle {
 			case .class, .foreignReference:
 				let (number, isFirstVisit, annotation) = identity(of: value as AnyObject)
 				if isFirstVisit {
-					emit("\(prefix)<\(number)> \(typeName)\(annotation)")
+					emit("\(prefix)<\(number)> \(typeName)\(annotation)\(note)")
 					describe(children: storedProperties(of: mirror), owner: typeName, indent: indent + 1)
 				} else {
-					emit("\(prefix)<\(number)> \(typeName) (seen)")
+					emit("\(prefix)<\(number)> \(typeName)\(note) (seen)")
 				}
 			case .optional:
 				if let some = mirror.children.first {
-					describe(some.value, label: label, owner: owner, indent: indent)
+					describe(some.value, label: label, owner: owner, indent: indent, note: note)
 				} else {
 					emit("\(prefix)nil")
 				}
@@ -917,13 +1057,99 @@ enum DifferentialValueOracle {
 			}
 		}
 
-		/// A class instance's stored properties: its superclasses', the root class's first, then its own.
+		/// A class instance's stored properties: its superclasses', the root class's first, then its own, without its
+		/// creation stamp.
 		private func storedProperties(of mirror: Mirror) -> [Mirror.Child] {
+			Self.mirrorsOfClassHierarchy(startingAt: mirror)
+				.reversed()
+				.flatMap { Array($0.children) }
+				.filter { $0.label != Self.creationStampLabel }
+		}
+
+		/// The mirror of a class instance, then the mirror of each of its superclasses.
+		private static func mirrorsOfClassHierarchy(startingAt mirror: Mirror) -> [Mirror] {
 			var mirrors = [mirror]
 			while let superclassMirror = mirrors[mirrors.count - 1].superclassMirror {
 				mirrors.append(superclassMirror)
 			}
-			return mirrors.reversed().flatMap { Array($0.children) }
+			return mirrors
+		}
+
+		/// The class instance `value` is, or holds as an optional.
+		private static func classInstance(of value: Any) -> AnyObject? {
+			let mirror = Mirror(reflecting: value)
+			switch mirror.displayStyle {
+			case .class:
+				return value as AnyObject
+			case .optional:
+				return mirror.children.first.flatMap { classInstance(of: $0.value) }
+			case .foreignReference, .struct, .tuple, .collection, .set, .dictionary, .enum, nil:
+				return nil
+			@unknown default:
+				return nil
+			}
+		}
+
+		/// The creation stamp of the class instance `value` is, or holds as an optional, if its class stores one.
+		private static func creationStamp(of value: Any) -> Int? {
+			classInstance(of: value).flatMap { object in
+				mirrorsOfClassHierarchy(startingAt: Mirror(reflecting: object))
+					.lazy
+					.compactMap { $0.children.first { $0.label == creationStampLabel }?.value as? Int }
+					.first
+			}
+		}
+
+		/// Whether `instance`, the instance of a lazily instantiated wrapper read last, is a class instance built before
+		/// the probe's value that the value does not hold. Generated code builds such an instance when the wrapper is
+		/// first read, which the describer's own instantiator calls and reads do after the value was built. An instance
+		/// the value holds is built up front by design, as a mock builds one the mocked type takes by value, and a path
+		/// that holds it differs from one that does not by its identity.
+		private func isBuiltBeforeTheProbesValue(_ instance: Any) -> Bool {
+			guard let probeStamp, let object = Self.classInstance(of: instance), let stamp = Self.creationStamp(of: object), stamp < probeStamp else {
+				return false
+			}
+			return !objectsHeldByTheProbesValue().contains(ObjectIdentifier(object))
+		}
+
+		private func objectsHeldByTheProbesValue() -> Set<ObjectIdentifier> {
+			if let objectsTheProbesValueHolds {
+				return objectsTheProbesValueHolds
+			} else {
+				var objects = Set<ObjectIdentifier>()
+				if let probeValue {
+					Self.collectObjects(heldBy: probeValue, into: &objects)
+				}
+				objectsTheProbesValueHolds = objects
+				return objects
+			}
+		}
+
+		/// Adds the class instances `value` is or holds through stored properties to `objects`, stopping at SafeDI's
+		/// wrappers, whose instances only calling or reading them reaches.
+		private static func collectObjects(heldBy value: Any, into objects: inout Set<ObjectIdentifier>) {
+			if value is any DescribedWrapper {
+				// The wrapper's builder or instance is the describer's to reach.
+			} else if type(of: value) == AnyHashable.self, let hashable = value as? AnyHashable {
+				collectObjects(heldBy: hashable.base, into: &objects)
+			} else {
+				let mirror = Mirror(reflecting: value)
+				switch mirror.displayStyle {
+				case .class, .foreignReference:
+					guard objects.insert(ObjectIdentifier(value as AnyObject)).inserted else { return }
+					for child in mirrorsOfClassHierarchy(startingAt: mirror).flatMap({ Array($0.children) }) {
+						collectObjects(heldBy: child.value, into: &objects)
+					}
+				case .optional, .struct, .tuple, .collection, .set, .dictionary, .enum, nil:
+					for child in mirror.children {
+						collectObjects(heldBy: child.value, into: &objects)
+					}
+				@unknown default:
+					for child in mirror.children {
+						collectObjects(heldBy: child.value, into: &objects)
+					}
+				}
+			}
 		}
 
 		private func describe(children: [Mirror.Child], owner: String, indent: Int) {
@@ -976,7 +1202,11 @@ enum DifferentialValueOracle {
 				index += 1
 				callsOnPath = deferred.callsOnPath
 				isInsideSecondCall = deferred.isInsideSecondCall
-				describe(deferred.read(), label: "<\(deferred.number)>.instance", owner: "<\(deferred.number)>", indent: 0)
+				let instance = deferred.read()
+				// Marked here, where it is read last, whichever line saw it first, so that one early build is one
+				// difference at one line.
+				let note = isBuiltBeforeTheProbesValue(instance) ? Self.builtBeforeProbesValueNote : ""
+				describe(instance, label: "<\(deferred.number)>.instance", owner: "<\(deferred.number)>", indent: 0, note: note)
 			}
 			callsOnPath = []
 			isInsideSecondCall = false
@@ -1003,11 +1233,15 @@ enum DifferentialValueOracle {
 			unqualified(String(reflecting: type(of: value)))
 		}
 
-		/// `qualifiedName` without a leading qualifier that names a module of the path, and with `(private)` where the
-		/// runtime names the context of a private, fileprivate, or local type by its address: `Swift.Array<App.Outer.Inner>`
-		/// is `Array<Outer.Inner>`, `App.App.Inner` is `App.Inner`, and `App.(unknown context at $1021957f0).Helper` is
+		/// `qualifiedName` without a leading qualifier that names a module of the path, without the runtime's
+		/// `(extension in <module>):` before a type declared in an extension in such a module, and with `(private)` where
+		/// the runtime names the context of a private, fileprivate, or local type by its address:
+		/// `Swift.Array<App.Outer.Inner>` is `Array<Outer.Inner>`, `App.App.Inner` is `App.Inner`,
+		/// `(extension in App):Core.Thing.Inner` is `Thing.Inner`, `(extension in Foundation):Swift.String.Encoding` is
+		/// `(extension in Foundation):String.Encoding`, and `App.(unknown context at $1021957f0).Helper` is
 		/// `(private).Helper`.
 		private func unqualified(_ qualifiedName: String) -> String {
+			let extensionPrefix = "(extension in "
 			var result = ""
 			var remaining = Substring(qualifiedName)
 			var startsQualifiedName = true
@@ -1016,6 +1250,13 @@ enum DifferentialValueOracle {
 					result += "(private)"
 					remaining = remaining[remaining.index(after: end)...]
 					startsQualifiedName = false
+				} else if startsQualifiedName, remaining.hasPrefix(extensionPrefix), let end = remaining.firstIndex(of: ")"), remaining[end...].hasPrefix("):") {
+					// The extension's module, then the extended type's qualified name, which may begin with another extension.
+					let extensionEnd = remaining.index(end, offsetBy: 2)
+					if !moduleQualifiers.contains("\(remaining[remaining.index(remaining.startIndex, offsetBy: extensionPrefix.count)..<end]).") {
+						result += remaining[..<extensionEnd]
+					}
+					remaining = remaining[extensionEnd...]
 				} else if startsQualifiedName, let qualifier = moduleQualifiers.first(where: { remaining.hasPrefix($0) }) {
 					remaining = remaining.dropFirst(qualifier.count)
 					startsQualifiedName = false
@@ -1107,6 +1348,8 @@ private struct DescribedLine {
 	}
 
 	static let seenSuffix = " (seen)"
+	/// How the describer ends the line of a wrapper it does not traverse because the probe's traversals are spent.
+	static let spentTraversalsSuffix = " traversals are spent)"
 
 	let indent: Int
 	/// The line without its indentation.
@@ -1118,6 +1361,25 @@ private struct DescribedLine {
 	let isSeen: Bool
 	/// The value without its identity and `(seen)`.
 	let rest: Substring
+
+	/// Whether the line is a wrapper the describer did not traverse because the probe's traversals were spent, so that
+	/// nothing beneath it is described.
+	var spendsTraversals: Bool {
+		identity != nil && rest.hasSuffix(Self.spentTraversalsSuffix)
+	}
+
+	/// The value without its identity, `(seen)`, and what the describer writes about when an instance was built: the
+	/// `already instantiated, ` of a lazily instantiated wrapper whose instance was read before it was described, and
+	/// the `(built before the probe's value)` of an instance read last.
+	var restWithoutWhenBuilt: String {
+		String(rest)
+			.replacing(" (already instantiated, instance ", with: " (instance ")
+			.replacing(Self.builtBeforeProbesValueNote, with: "")
+	}
+
+	/// What the describer adds to the line of an instance read last that was built before the probe's value, before
+	/// any `(seen)`.
+	static let builtBeforeProbesValueNote = " (built before the probe's value)"
 
 	/// The number of the wrapper whose instance a line read last describes: `6` for `<6>.instance`.
 	var deferredWrapperToken: String {
@@ -1224,7 +1486,18 @@ private struct ProbeComparison {
 		self.knownRight = knownRight
 	}
 
+	/// A compared node at which the probe spent its traversals, on one path or both, so nothing beneath it is compared.
+	struct SpentTraversal {
+		/// The node's lines on each path, which agree when the probe spent its traversals there on both.
+		let difference: DifferentialValueDifference
+		/// The path that spent its traversals there, or `nil` for both.
+		let path: DifferentialValuePathRole?
+	}
+
 	private(set) var differences = [DifferentialValueDifference]()
+	/// The compared nodes at which the probe spent its traversals, in the order the descriptions print them. A node
+	/// beneath a difference is not compared, so one there is part of that difference.
+	private(set) var spentTraversals = [SpentTraversal]()
 
 	mutating func compare() {
 		compareTrees(from: .both(feature.topLevel[0], knownRight.topLevel[0]))
@@ -1260,35 +1533,64 @@ private struct ProbeComparison {
 		while let pair = pairs.popLast() {
 			switch pair {
 			case let .both(featureIndex, knownRightIndex):
-				if linesAgree(featureIndex, knownRightIndex) {
-					pairs += alignedChildren(of: featureIndex, and: knownRightIndex).reversed()
+				let agreement = agreement(featureIndex, knownRightIndex)
+				let featureSpends = feature.lines[featureIndex].spendsTraversals
+				let knownRightSpends = knownRight.lines[knownRightIndex].spendsTraversals
+				if featureSpends || knownRightSpends {
+					spentTraversals.append(SpentTraversal(
+						difference: difference(at: pair),
+						path: featureSpends == knownRightSpends ? nil : featureSpends ? .feature : .knownRight,
+					))
 				} else {
-					record(pair)
+					switch agreement {
+					case .agree:
+						pairs += alignedChildren(of: featureIndex, and: knownRightIndex).reversed()
+					case .differOnlyInWhenBuilt:
+						differences.append(difference(at: pair))
+						pairs += alignedChildren(of: featureIndex, and: knownRightIndex).reversed()
+					case .differ:
+						differences.append(difference(at: pair))
+					}
 				}
 			case .featureOnly, .knownRightOnly:
-				record(pair)
+				differences.append(difference(at: pair))
 			}
 		}
 	}
 
-	/// Whether two lines agree, pairing their identities when both are first visits that agree.
-	private mutating func linesAgree(_ featureIndex: Int, _ knownRightIndex: Int) -> Bool {
+	private enum Agreement {
+		case agree
+		/// The lines differ only in what the describer writes about when an instance was built, a difference at the
+		/// line alone: what lies beneath it, the instance a wrapper's line refers to, and every later reference to
+		/// either are compared as usual.
+		case differOnlyInWhenBuilt
+		case differ
+	}
+
+	/// How two lines agree, pairing their identities when both are first visits that agree, or that differ only in
+	/// when an instance was built.
+	private mutating func agreement(_ featureIndex: Int, _ knownRightIndex: Int) -> Agreement {
 		let featureLine = feature.lines[featureIndex]
 		let knownRightLine = knownRight.lines[knownRightIndex]
 		switch (featureLine.identity, knownRightLine.identity) {
 		case (nil, nil):
-			return featureLine.rest == knownRightLine.rest
+			return featureLine.rest == knownRightLine.rest ? .agree : .differ
 		case let (featureToken?, knownRightToken?):
-			guard featureLine.rest == knownRightLine.rest, featureLine.isSeen == knownRightLine.isSeen else { return false }
+			guard featureLine.isSeen == knownRightLine.isSeen else { return .differ }
 			if featureLine.isSeen {
-				return knownRightTokenByFeatureToken[featureToken] == knownRightToken
-			} else {
+				guard featureLine.restWithoutWhenBuilt == knownRightLine.restWithoutWhenBuilt, knownRightTokenByFeatureToken[featureToken] == knownRightToken else {
+					return .differ
+				}
+				return featureLine.rest == knownRightLine.rest ? .agree : .differOnlyInWhenBuilt
+			} else if featureLine.restWithoutWhenBuilt == knownRightLine.restWithoutWhenBuilt {
 				knownRightTokenByFeatureToken[featureToken] = knownRightToken
 				featureTokenByKnownRightToken[knownRightToken] = featureToken
-				return true
+				return featureLine.rest == knownRightLine.rest ? .agree : .differOnlyInWhenBuilt
+			} else {
+				return .differ
 			}
 		case (_?, nil), (nil, _?):
-			return false
+			return .differ
 		}
 	}
 
@@ -1304,9 +1606,10 @@ private struct ProbeComparison {
 		} + featureChildren.filter { !knownRightKeys.contains($0.key) }.map { .featureOnly($0.index) }
 	}
 
-	private mutating func record(_ pair: NodePair) {
+	/// The difference a node pair shows: each path's line, or `(absent)` where a path has no such node.
+	private func difference(at pair: NodePair) -> DifferentialValueDifference {
 		let absent = "(absent)"
-		let difference = switch pair {
+		return switch pair {
 		case let .both(featureIndex, knownRightIndex):
 			DifferentialValueDifference(probe: knownRight.name, path: knownRight.paths[knownRightIndex], feature: feature.differenceText(of: featureIndex), knownRight: knownRight.differenceText(of: knownRightIndex))
 		case let .featureOnly(featureIndex):
@@ -1314,26 +1617,27 @@ private struct ProbeComparison {
 		case let .knownRightOnly(knownRightIndex):
 			DifferentialValueDifference(probe: knownRight.name, path: knownRight.paths[knownRightIndex], feature: absent, knownRight: knownRight.differenceText(of: knownRightIndex))
 		}
-		differences.append(difference)
 	}
 }
 
 // MARK: - Assertion
 
 /// Records an `Issue` for each difference between what the feature path and the known-right path build for
-/// `probes`, except those equal to one of `exemptions`, with both descriptions. Use it beside a full `==` comparison
-/// of the generated code: a value the feature path builds differently is a defect the code comparison can pass.
+/// `probes`, except those equal to one of `exemptions`, with both descriptions, and throws when a probe spends its
+/// `limits`' traversals at a node no exemption accepts. Use it beside a full `==` comparison of the generated code: a
+/// value the feature path builds differently is a defect the code comparison can pass.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func expectDifferentialValuesAgree(
 	feature: DifferentialValuePath,
 	knownRight: DifferentialValuePath,
 	probes: [DifferentialValueProbe],
 	exempting exemptions: [DifferentialValueDifference] = [],
+	limits: DifferentialValueLimits = DifferentialValueLimits(),
 	filesToDelete: inout [URL],
 	sourceLocation: SourceLocation = #_sourceLocation,
 ) throws {
-	guard let comparison = try DifferentialValueOracle.compare(feature: feature, knownRight: knownRight, probes: probes, filesToDelete: &filesToDelete) else { return }
-	for difference in comparison.differences(exempting: exemptions) {
+	guard let comparison = try DifferentialValueOracle.compare(feature: feature, knownRight: knownRight, probes: probes, exempting: exemptions, limits: limits, filesToDelete: &filesToDelete) else { return }
+	for difference in comparison.differences {
 		Issue.record(
 			"The feature path builds other values than the known-right path for \(difference)\n\(comparison.report)",
 			sourceLocation: sourceLocation,
