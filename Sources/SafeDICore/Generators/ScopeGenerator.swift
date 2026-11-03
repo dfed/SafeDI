@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 import Foundation
+import SwiftParser
 import SwiftSyntax
 
 /// A model capable of generating code for a scope’s dependency tree.
@@ -3900,7 +3901,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// value and the mock calls it where it builds the type, which evaluates the default once per
 				// construction, as production does. The initializer takes the value as an autoclosure, so a
 				// caller still passes a value.
-				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping @Sendable () -> \(typeSource) = \(defaultExpression(defaultParameter))")
+				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping @Sendable () -> \(typeSource) = \(autoclosureDefault(defaultExpression(defaultParameter)))")
 				storedProperties.append("\(innerIndent)let \(defaultParameter.label): @Sendable () -> \(typeSource)")
 			} else {
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(typeSource) = \(defaultExpression(defaultParameter))")
@@ -3931,6 +3932,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		lines.append("\(indent)}")
 		return lines.joined(separator: "\n")
+	}
+
+	/// `expression` as the default of an `@autoclosure` parameter: parenthesized when it is a closure literal, which
+	/// Swift otherwise reads as the autoclosure itself, so that `(() -> Void)? = {}` would declare a closure that
+	/// returns `()`. In parentheses, it is the value the autoclosure returns.
+	private static func autoclosureDefault(_ expression: String) -> String {
+		var parser = Parser(expression)
+		return if ExprSyntax.parse(from: &parser).is(ClosureExprSyntax.self) {
+			"(\(expression))"
+		} else {
+			expression
+		}
 	}
 
 	// MARK: Mock Body Generation
