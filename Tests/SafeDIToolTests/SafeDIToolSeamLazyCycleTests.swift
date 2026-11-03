@@ -24,9 +24,8 @@ import Testing
 @testable import SafeDITool
 
 /// A lazy cycle that re-enters a seam calls the seam's generated initializer again, passing the nearest declaration of
-/// each label the seam receives, as the Manual's `@Received` rule says. Inline's cycle-closing scope reuses the enclosing
-/// builder function, which captured the declarations above the cycle: a defect of main's that its own pull request on
-/// main is to fix, so the seam corpus lists its seed as a known-issue shape until both builds agree.
+/// each label the seam receives, as the Manual's `@Received` rule says. Inline, the builder function the cycle closes on
+/// takes the labels a scope between it and the cycle-closing scope declares again as parameters, so both builds agree.
 struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 	// MARK: Initialization
 
@@ -46,9 +45,8 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesNearestDeclarationToSeamReenteredThroughLazyCycle_whenTypeInsideSeamDeclaresLabelSeamReceives() async throws {
 		// `T3`, the seam, instantiates `T0` through an instantiator and receives `t1Builder`; `T0` declares its own `t1Builder` and
-		// instantiates `T3` again. The nested call passes `T0`'s declaration, the nearest, as the `@Received` rule says. Inline,
-		// the cycle-closing scope reuses `Root`'s builder function, which captured `Root`'s `t1Builder`: a defect of main's, so the
-		// values are compared with a hand-built tree whose closer passes `T0`'s binding, not with the inline build.
+		// instantiates `T3` again. The nested call passes `T0`'s declaration, the nearest, as the `@Received` rule says, and so does
+		// the inline build's cycle-closing scope, which passes it to `Root`'s builder function.
 		let fixture = Self.lazyCycleFixture
 		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(output.dependencyTreeFiles == [
@@ -102,33 +100,6 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			            T1()
 			        }
 			        let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
-			        func __safeDI_t3Builder() -> T3 {
-			            func __safeDI_t0Builder() -> T0 {
-			                func __safeDI_t1Builder() -> T1 {
-			                    T1()
-			                }
-			                let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
-			                let t3Builder = Instantiator<T3>(__safeDI_t3Builder)
-			                return T0(t1Builder: t1Builder, t3Builder: t3Builder)
-			            }
-			            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
-			            return T3(t0Builder: t0Builder, t1Builder: t1Builder)
-			        }
-			        let t3Builder = Instantiator<T3>(__safeDI_t3Builder)
-			        self.init(t1Builder: t1Builder, t3Builder: t3Builder)
-			    }
-			}
-			""",
-		])
-		try expectDifferentialValuesAgree(
-			feature: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: output.dependencyTreeFiles),
-			knownRight: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(inlineFixture(fixture)), generatedFiles: ["Root+SafeDI.swift": generatedFileHeader + """
-			extension Root {
-			    public convenience init() {
-			        func __safeDI_t1Builder() -> T1 {
-			            T1()
-			        }
-			        let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
 			        func __safeDI_t3Builder(t1Builder: Instantiator<T1>) -> T3 {
 			            func __safeDI_t0Builder() -> T0 {
 			                func __safeDI_t1Builder() -> T1 {
@@ -149,7 +120,11 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			        self.init(t1Builder: t1Builder, t3Builder: t3Builder)
 			    }
 			}
-			"""]),
+			""",
+		])
+		try expectDifferentialValuesAgree(
+			feature: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: output.dependencyTreeFiles),
+			knownRight: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(inlineFixture(fixture)), generatedFiles: inlineOutput.dependencyTreeFiles),
 			probes: [DifferentialValueProbe("Root()")],
 			filesToDelete: &filesToDelete,
 		)
@@ -157,7 +132,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsHiddenErrorFromSeamsChain_whenTypeInsideSeamDeclaresLabelSeamReceivesWithAnotherType() async throws {
+	mutating func generate_throwsHiddenErrorFromSeamsChain_whenTypeInsideSeamDeclaresLabelSeamReceivesWithAnotherType() async {
 		// `T0` declares `t1Builder` as `Instantiator<Other>`, so the nested call's receive of `t1Builder: Instantiator<T1>` is hidden
 		// beneath it: the hidden-label error from the seam's chain.
 		let fixture = Self.hiddenCycleFixture
@@ -169,33 +144,16 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		}) {
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
-		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		#expect(inlineOutput.dependencyTreeFiles == [
-			"Root+SafeDI.swift": generatedFileHeader + """
-			extension Root {
-			    public convenience init() {
-			        func __safeDI_t1Builder() -> T1 {
-			            T1()
-			        }
-			        let t1Builder = Instantiator<T1>(__safeDI_t1Builder)
-			        func __safeDI_t3Builder() -> T3 {
-			            func __safeDI_t0Builder() -> T0 {
-			                func __safeDI_t1Builder() -> Other {
-			                    Other()
-			                }
-			                let t1Builder = Instantiator<Other>(__safeDI_t1Builder)
-			                let t3Builder = Instantiator<T3>(__safeDI_t3Builder)
-			                return T0(t1Builder: t1Builder, t3Builder: t3Builder)
-			            }
-			            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
-			            return T3(t0Builder: t0Builder, t1Builder: t1Builder)
-			        }
-			        let t3Builder = Instantiator<T3>(__safeDI_t3Builder)
-			        self.init(t1Builder: t1Builder, t3Builder: t3Builder)
-			    }
-			}
-			""",
-		])
+		// Inline, the cycle-closing scope would pass `T0`'s declaration to `Root`'s builder function: the same error, from
+		// `Root`'s chain.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["T3.swift"]):9:5: error: @Received property `t1Builder: Instantiator<T1>` is hidden in chain: Root -> Instantiator<T3> -> Instantiator<T0> -> T3. `T0` declares `t1Builder: Instantiator<Other>` with the same label, so the types below `T0` receive `t1Builder: Instantiator<Other>` instead. Give `t1Builder: Instantiator<Other>` on `T0` a different label to fix.
+			\(fixtures["T0.swift"]):8:5: note: `t1Builder: Instantiator<Other>` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
 	}
 
 	// MARK: Private

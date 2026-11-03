@@ -458,7 +458,7 @@ public struct NotesApp: App, Instantiable {
 
 SafeDI generates a `ForwardedProperties` typealias for every `@Instantiable` type. This typealias is a tuple containing all properties decorated with `@Forwarded`. `Instantiator.instantiate(_:)` takes a `ForwardedProperties` argument, ensuring that you provide all required runtime dependencies when instantiating the type.
 
-An `Instantiator` is also how types create one another: SafeDI accepts a dependency cycle only when the dependency that closes it is an `@Instantiated` `Instantiator` or `ErasedInstantiator`, or a `Sendable` twin, which builds its type each time it is called.
+An `Instantiator` is also how types create one another: SafeDI accepts a dependency cycle only when the dependency that closes it is an `@Instantiated` `Instantiator` or `ErasedInstantiator`, or a `Sendable` twin, which builds its type each time it is called. A type built again this way receives each `@Received` property from the nearest declaration above it, as any other type does: a flow whose step instantiates its own `session` and a builder for the screen that built it hands the screen built again the step's `session`.
 
 An `Instantiator` is not `Sendable`. To share one across concurrency domains, use its [`Sendable` twin](#sendable-wrappers), `SendableInstantiator`.
 

@@ -1159,8 +1159,12 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 				Self.name,
 			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		}
+		// Inline, the `Z` that `T`'s `zBuilder` builds again inside the cycle is a chain of its own too, as the seam's call site
+		// inside its tree is: its `Reader` receives the `user` the `T` between declares.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
+			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> T -> Instantiator<Z> -> Instantiator<T> -> Instantiator<Z> -> Reader. `T` declares `user: Name` with the same label, so the types below `T` receive `user: Name` instead. Give `user: Name` on `T` a different label to fix.
+			\(fixtures["T.swift"]):9:5: note: `user: Name` is declared here
 			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> T -> Instantiator<Z> -> Instantiator<T> -> Reader. `T` declares `user: Name` with the same label, so the types below `T` receive `user: Name` instead. Give `user: Name` on `T` a different label to fix.
 			\(fixtures["T.swift"]):9:5: note: `user: Name` is declared here
 			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> T -> Instantiator<Z> -> Reader. `T` declares `user: Name` with the same label, so the types below `T` receive `user: Name` instead. Give `user: Name` on `T` a different label to fix.
