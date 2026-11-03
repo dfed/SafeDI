@@ -179,11 +179,13 @@ public final class FileVisitor: SyntaxVisitor {
 		record(instantiableVisitor.conditionalCompilationDecisions)
 		consultedCompilationConditions.formUnion(instantiableVisitor.consultedCompilationConditions)
 		// Recorded from the attribute, whether or not an `instantiate()` method the members' `#if` blocks
-		// may skip produced an instantiable. SafeDI never treats an extension as a root.
+		// may skip produced an instantiable. SafeDI never treats an extension as a root, nor generates its
+		// dependency tree.
 		if node.attributes.instantiableMacro != nil {
 			outputFileDeclarations.recordInstantiable(
 				named: node.extendedType.typeDescription.asSource,
 				isRoot: false,
+				generatesDependencyTree: false,
 				generatesMock: instantiableVisitor.generateMock,
 			)
 		}
@@ -278,7 +280,12 @@ public final class FileVisitor: SyntaxVisitor {
 		consultedCompilationConditions.formUnion(instantiableVisitor.consultedCompilationConditions)
 		let definedType = typeDefined(named: node.name.text)
 		if node.attributes.instantiableMacro != nil {
-			outputFileDeclarations.recordInstantiable(named: definedType.asSource, isRoot: instantiableVisitor.isRoot, generatesMock: instantiableVisitor.generateMock)
+			outputFileDeclarations.recordInstantiable(
+				named: definedType.asSource,
+				isRoot: instantiableVisitor.isRoot,
+				generatesDependencyTree: instantiableVisitor.generatesDependencyTree,
+				generatesMock: instantiableVisitor.generateMock,
+			)
 		}
 
 		// Keep track of how nested we are.

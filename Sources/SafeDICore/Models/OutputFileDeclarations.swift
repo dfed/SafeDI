@@ -33,6 +33,7 @@ public struct OutputFileDeclarations: Codable, Sendable {
 
 	public init(
 		declaresRoot: Bool,
+		declaresDependencyTreeType: Bool = false,
 		declaresMockGeneratingType: Bool,
 		declaresConfiguration: Bool,
 		instantiableTypeNames: Set<String>,
@@ -40,6 +41,7 @@ public struct OutputFileDeclarations: Codable, Sendable {
 		additionalDirectoriesToInclude: [String],
 	) {
 		self.declaresRoot = declaresRoot
+		self.declaresDependencyTreeType = declaresDependencyTreeType
 		self.declaresMockGeneratingType = declaresMockGeneratingType
 		self.declaresConfiguration = declaresConfiguration
 		self.instantiableTypeNames = instantiableTypeNames
@@ -51,6 +53,9 @@ public struct OutputFileDeclarations: Codable, Sendable {
 
 	/// Whether the file declares an `@Instantiable(isRoot: true)` type, whose dependency tree gets its own file.
 	public private(set) var declaresRoot = false
+	/// Whether the file declares an `@Instantiable(generateDependencyTree: true)` type, whose generated dependency
+	/// tree gets its own file in the module that declares it, as a root's does.
+	public private(set) var declaresDependencyTreeType = false
 	/// Whether the file declares an `@Instantiable(generateMock: true)` type or extension, whose mock gets its own file.
 	public private(set) var declaresMockGeneratingType = false
 	/// Whether the file declares a `#SafeDIConfiguration`.
@@ -71,10 +76,12 @@ public struct OutputFileDeclarations: Codable, Sendable {
 	///   - typeName: The type the declaration declares, with its enclosing types: the type a type definition
 	///     defines, or the type an extension extends.
 	///   - isRoot: Whether the declaration is a root.
+	///   - generatesDependencyTree: Whether the declaration sets `generateDependencyTree: true`.
 	///   - generatesMock: Whether the declaration sets `generateMock: true`.
-	public mutating func recordInstantiable(named typeName: String, isRoot: Bool, generatesMock: Bool) {
+	public mutating func recordInstantiable(named typeName: String, isRoot: Bool, generatesDependencyTree: Bool, generatesMock: Bool) {
 		instantiableTypeNames.insert(typeName)
 		declaresRoot = declaresRoot || isRoot
+		declaresDependencyTreeType = declaresDependencyTreeType || generatesDependencyTree
 		declaresMockGeneratingType = declaresMockGeneratingType || generatesMock
 	}
 
@@ -88,6 +95,7 @@ public struct OutputFileDeclarations: Codable, Sendable {
 	/// Records every declaration `other` records.
 	public mutating func formUnion(_ other: OutputFileDeclarations) {
 		declaresRoot = declaresRoot || other.declaresRoot
+		declaresDependencyTreeType = declaresDependencyTreeType || other.declaresDependencyTreeType
 		declaresMockGeneratingType = declaresMockGeneratingType || other.declaresMockGeneratingType
 		declaresConfiguration = declaresConfiguration || other.declaresConfiguration
 		instantiableTypeNames.formUnion(other.instantiableTypeNames)

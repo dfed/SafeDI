@@ -216,6 +216,13 @@ public struct Property: Codable, Hashable, Comparable, Sendable {
 		typeDescription.simpleNameAndGenerics?.generics
 	}
 
+	/// The property with its type made optional. Every caller passes a property whose type is not optional: the forms a
+	/// seam parameter provides are read from a non-optional parameter and from a wrapper's instance, which is never
+	/// optional, and a received property that is optional already is kept as it is.
+	var asOptionalProperty: Property {
+		Property(label: label, typeDescription: .optional(typeDescription))
+	}
+
 	/// The property with its optional type unwrapped, or this property when its type is not optional. Most
 	/// properties are not optional, and creating a property hashes its whole type description.
 	var asUnwrappedProperty: Property {

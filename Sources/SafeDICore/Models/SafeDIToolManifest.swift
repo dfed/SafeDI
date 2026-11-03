@@ -41,10 +41,10 @@ public struct SafeDIToolManifest: Codable, Sendable {
 	}
 
 	/// The list of input-to-output file mappings for dependency tree code generation.
-	/// Each entry maps a Swift file containing `@Instantiable(isRoot: true)` to the
-	/// output file where the generated `public init()` extension should be written.
-	/// `scan` lists a file that declares a root in any clause of its `#if` blocks, and `generate`
-	/// writes every listed output, without code when no root is active.
+	/// Each entry maps a Swift file containing `@Instantiable(isRoot: true)`, or a file of the module's own that
+	/// contains `@Instantiable(generateDependencyTree: true)`, to the output file where the generated `init()`
+	/// extensions should be written. `scan` lists a file that declares such a type in any clause of its `#if`
+	/// blocks, and `generate` writes every listed output, without code when no such declaration is active.
 	public var dependencyTreeGeneration: [InputOutputMap]
 
 	/// The list of input-to-output file mappings for mock code generation.

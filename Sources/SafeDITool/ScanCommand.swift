@@ -162,9 +162,12 @@ func performScan(
 		Set(fileScans.map { projectFilePaths.manifestPath(of: projectFilePaths.projectFilePath(of: $0.path)) }).sorted()
 	}
 
-	// Collect root files and compute output file names.
+	// Collect the files whose dependency trees get a file: those that declare a root, in any input, and those of the
+	// module's own files that declare a type whose dependency tree SafeDI generates in its module, which only that
+	// module generates. One call names them all, so that no two share an output file.
 	let uniqueRootFilePaths = sortedUniqueManifestPaths(
-		(fileScans + additionalFileScans.map(\.fileScan) + plannedOnlyAdditionalFileScans).filter(\.outputFileDeclarations.declaresRoot),
+		(fileScans + additionalFileScans.map(\.fileScan) + plannedOnlyAdditionalFileScans).filter(\.outputFileDeclarations.declaresRoot)
+			+ mockScopedFileScans.filter(\.outputFileDeclarations.declaresDependencyTreeType),
 	)
 	let rootOutputNames = outputFileNames(forFilesAt: uniqueRootFilePaths)
 

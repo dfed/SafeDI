@@ -53,6 +53,8 @@ public enum FixableInstantiableError: DiagnosticError {
 	case mockMethodNonDependencyMissingDefaultValue([Property])
 	case mockOnlyWithGenerateMock
 	case mockOnlyWithIsRoot
+	case generateDependencyTreeWithIsRoot
+	case generateDependencyTreeWithMockOnly
 	case mockOnlyMissingMockMethod(typeName: String, methodName: String)
 	case unlabeledDefaultBeforeUnlabeledParameter(defaultedParameter: Property, followingParameter: Property)
 	case calleeScopeReferenceInDefaultExpression(parameterLabel: String, typeName: String)
@@ -144,6 +146,10 @@ public enum FixableInstantiableError: DiagnosticError {
 			"`mockOnly` and `generateMock` cannot both be `true`: a `mockOnly` declaration provides a hand-written mock. To generate a mock, set `generateMock: true` on the production `@\(InstantiableVisitor.macroName)` declaration instead."
 		case .mockOnlyWithIsRoot:
 			"`mockOnly` types cannot be marked `isRoot`."
+		case .generateDependencyTreeWithIsRoot:
+			"`isRoot` and `generateDependencyTree` cannot both be `true`: a root's dependency tree is generated as a `public init()` that takes nothing, and a type whose dependency tree SafeDI generates in its own module receives what its tree needs as parameters. Keep one."
+		case .generateDependencyTreeWithMockOnly:
+			"`mockOnly` types cannot be marked `generateDependencyTree`: a `mockOnly` declaration provides a hand-written mock and has no dependency tree."
 		case let .mockOnlyMissingMockMethod(typeName, methodName):
 			"@\(InstantiableVisitor.macroName)(mockOnly: true) requires a `static func \(methodName)(…) -> \(typeName)` method."
 		case let .unlabeledDefaultBeforeUnlabeledParameter(defaultedParameter, followingParameter):
@@ -213,6 +219,8 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .mockMethodNonDependencyMissingDefaultValue,
 			     .mockOnlyWithGenerateMock,
 			     .mockOnlyWithIsRoot,
+			     .generateDependencyTreeWithIsRoot,
+			     .generateDependencyTreeWithMockOnly,
 			     .mockOnlyMissingMockMethod,
 			     .unlabeledDefaultBeforeUnlabeledParameter,
 			     .calleeScopeReferenceInDefaultExpression,
@@ -294,6 +302,8 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Remove `generateMock: true`"
 			case .mockOnlyWithIsRoot:
 				"Remove `isRoot: true`"
+			case .generateDependencyTreeWithIsRoot, .generateDependencyTreeWithMockOnly:
+				"Remove `generateDependencyTree: true`"
 			case let .mockOnlyMissingMockMethod(typeName, methodName):
 				"Add `public static func \(methodName)(…) -> \(typeName)` method"
 			case let .unlabeledDefaultBeforeUnlabeledParameter(defaultedParameter, _):

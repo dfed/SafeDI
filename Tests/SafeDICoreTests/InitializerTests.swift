@@ -18,10 +18,45 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import SwiftParser
+import SwiftSyntax
 import Testing
 @testable import SafeDICore
 
 struct InitializerTests {
+	@Test
+	func init_readsGeneratedParameterTypeAsFunctionParameter_forEverySpellingOfAPropertyType() throws {
+		// A seam's generated initializer spells each parameter with `asFunctionParamterSyntax`, and the tree that calls
+		// it matches its arguments as it matches a parsed initializer's, so the type a parsed generated initializer
+		// records must be the property type's `asFunctionParameter`: `@escaping` on a closure, and on an attributed
+		// closure before its attributes, nothing on any other spelling.
+		let spellings = [
+			"() -> Void",
+			"(Int) -> String",
+			"() async throws -> Void",
+			"@Sendable () -> Void",
+			"@MainActor () -> Void",
+			"(() -> Void)?",
+			"(@Sendable () -> Void)?",
+			"(Int, Bool)",
+			"(onTap: () -> Void, count: Int)",
+			"any P",
+			"(any Error) -> Void",
+			"Feature.User",
+			"[String]",
+			"Result<Int, any Error>",
+			"ErasedInstantiator<() -> Void, AnyX>",
+			"Instantiator<X>",
+			"LazilyInstantiated<any Service>",
+		]
+		for spelling in spellings {
+			let type = try #require(Parser.parse(source: "let x: \(spelling)").statements.first?.item.as(VariableDeclSyntax.self)?.bindings.first?.typeAnnotation?.type).typeDescription
+			let parameter = Property(label: "x", typeDescription: type).asFunctionParamterSyntax.description
+			let initializerSyntax = try #require(Parser.parse(source: "init(\(parameter)) {}").statements.first?.item.as(InitializerDeclSyntax.self))
+			#expect(Initializer(initializerSyntax).arguments.map(\.typeDescription) == [type.asFunctionParameter], "\(spelling) is generated as `\(parameter)`")
+		}
+	}
+
 	@Test
 	func generateSafeDIInitializer_throwsWhenInitializerIsPrivateOrFilePrivate() {
 		for accessLevel in [AccessLevel.private, .fileprivate] {

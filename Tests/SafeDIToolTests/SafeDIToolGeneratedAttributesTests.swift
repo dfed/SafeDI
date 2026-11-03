@@ -24,7 +24,8 @@ import Testing
 @testable import SafeDITool
 
 /// The attributes `@Instantiable` puts on the declarations SafeDI generates: `generatedInitializerAttributes` on a
-/// root's generated `init()`, `mockAttributes` on the generated `mock()`, and `generatedAttributes` on both.
+/// root's generated `init()` and on each initializer generated for a type with `generateDependencyTree: true`,
+/// `mockAttributes` on the generated `mock()`, and `generatedAttributes` on both.
 struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 	// MARK: Initialization
 
@@ -385,7 +386,535 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 		""", "Unexpected output \(output.mockFiles["ExternalService+SafeDIMock.swift"] ?? "")")
 	}
 
+	// MARK: Seams
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func dependencyTree_bindsSeamInitializerToMainActor_whenGeneratedInitializerAttributesIsMainActor() async throws {
+		// `Presenter`'s initializer is bound to the main actor, so the seam's generated initializer, which builds it,
+		// compiles only when it is too, and so does the root's, which calls the seam's.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.mainActorSeam(attributes: #"generatedInitializerAttributes: "@MainActor""#) + [Self.root(attributes: #", generatedInitializerAttributes: "@MainActor""#)],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    @MainActor public init() {
+			        func __safeDI_screen() -> Screen {
+			            _ = Screen.__safeDI_Screen_CBF29CE484222325.self
+			            return Screen()
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(screen: screen)
+			    }
+			}
+			""",
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    @MainActor public init() {
+			        let presenter = Presenter()
+			        self.init(presenter: presenter)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_CBF29CE484222325 {}
+			}
+			""",
+		])
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func dependencyTree_compilesCallOfMainActorSeam_whenRootInAnotherModuleIsBoundToMainActor(integration: MultiModuleIntegration) async throws {
+		// The seam in `Core` and the root in `App`: the root's generated `init()`, bound to the main actor, calls the
+		// seam's, which is too, under both integrations.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.mainActorSeamModules(rootAttributes: #", generatedInitializerAttributes: "@MainActor""#),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		let expectedGeneratedFiles: [String: [String: String]] = switch integration {
+		case .moduleInfo:
+			[
+				"Core": ["Core.swift": generatedFileHeader + Self.mainActorSeamCode],
+				"App": ["App.swift": generatedFileHeader + Self.mainActorSeamCallerCode(isolation: "@MainActor ", integration: integration)],
+			]
+		case .swiftPackagePlugin:
+			[
+				"Core": ["Screen+SafeDI.swift": generatedFileHeader + Self.mainActorSeamCode],
+				"App": ["Root+SafeDI.swift": generatedFileHeader + Self.mainActorSeamCallerCode(isolation: "@MainActor ", integration: integration)],
+			]
+		}
+		#expect(output.modules.mapValues(\.generatedFiles) == expectedGeneratedFiles)
+		if compileVerificationIsEnabled {
+			let compilation = try #require(output.compilation)
+			#expect(compilation.modules.map(\.exitCode) == [0, 0])
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func dependencyTree_failsToCompileCallOfMainActorSeam_whenRootInAnotherModuleIsNotBoundToMainActor(integration: MultiModuleIntegration) async throws {
+		// A tree calls a seam's generated initializer from the initializer generated for it, so a root whose
+		// generated `init()` is not bound to the main actor cannot call a seam's that is: the call fails to compile, as
+		// a call of any initializer bound to the main actor does. SafeDI does not check, as it does not for a root
+		// that builds such a type.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.mainActorSeamModules(rootAttributes: ""),
+			integration: integration,
+			compileVerification: .returningOutcomeOnly,
+			filesToDelete: &filesToDelete,
+		)
+
+		let appFileName = switch integration {
+		case .moduleInfo: "App.swift"
+		case .swiftPackagePlugin: "Root+SafeDI.swift"
+		}
+		#expect(try #require(output.modules["App"]).generatedFiles == [appFileName: generatedFileHeader + Self.mainActorSeamCallerCode(isolation: "", integration: integration)])
+		guard compileVerificationIsEnabled else { return }
+		let compilation = try #require(output.compilation)
+		#expect(compilation.modules.map(\.moduleName) == ["Core", "App"])
+		#expect(compilation.modules.map { $0.exitCode == 0 } == [true, false])
+		let failure = try #require(compilation.failure)
+		#expect(failure.standardError.contains("main actor-isolated initializer 'init()'"), "Unexpected compiler output \(failure.standardError)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func dependencyTree_bindsSeamInitializerAndMockToMainActor_whenGeneratedAttributesIsMainActor() async throws {
+		// `generatedAttributes` binds both the seam's generated initializer and its generated `mock()`, which never
+		// calls the initializer and builds `Presenter` itself.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.mainActorSeam(attributes: #"generatedAttributes: "@MainActor", generateMock: true"#) + [Self.root(attributes: #", generatedInitializerAttributes: "@MainActor""#)],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    @MainActor public init() {
+			        func __safeDI_screen() -> Screen {
+			            _ = Screen.__safeDI_Screen_CBF29CE484222325.self
+			            return Screen()
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(screen: screen)
+			    }
+			}
+			""",
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    @MainActor public init() {
+			        let presenter = Presenter()
+			        self.init(presenter: presenter)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_CBF29CE484222325 {}
+			}
+			""",
+		])
+		#expect(output.mockFiles == [
+			"Screen+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            presenter: (() -> Presenter)? = nil
+			        ) {
+			            self.presenter = presenter
+			        }
+
+			        let presenter: (() -> Presenter)?
+			    }
+
+			    @MainActor static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        let presenter = if let safeDIBuilder = safeDIOverrides.presenter { safeDIBuilder() } else { Presenter() }
+			        return Screen(presenter: presenter)
+			    }
+			}
+			#endif
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func dependencyTree_bindsEveryTierToMainActor_whenSeamWithTwoTiersSetsGeneratedInitializerAttributes() async throws {
+		// `Detail`'s initializer is internal, so the `token` it receives only if available is a parameter of an
+		// internal tier, which the public tier calls: both carry the attributes, so either can be called, and the
+		// public tier can call the internal one.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateDependencyTree: true, generatedInitializerAttributes: "@MainActor")
+				public struct Screen: Instantiable {
+				    public init(presenter: Presenter, detail: Detail) {
+				        self.presenter = presenter
+				        self.detail = detail
+				    }
+
+				    @Instantiated let presenter: Presenter
+				    @Instantiated let detail: Detail
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Detail: Instantiable {
+				    init(token: Token?) {
+				        self.token = token
+				    }
+
+				    @Received(onlyIfAvailable: true) let token: Token?
+				}
+				""",
+				Self.mainActorPresenter,
+				"""
+				@Instantiable
+				public struct Token: Instantiable {
+				    public init() {}
+				}
+				""",
+				Self.root(attributes: #", generatedInitializerAttributes: "@MainActor""#),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    @MainActor public init() {
+			        func __safeDI_screen() -> Screen {
+			            _ = Screen.__safeDI_Screen_BEC07F255DE644F9.self
+			            return Screen(token: nil)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(screen: screen)
+			    }
+			}
+			""",
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    @MainActor public init() {
+			        self.init(token: nil)
+			    }
+
+			    @MainActor internal init(token: Token? = nil) {
+			        let presenter = Presenter()
+			        let detail = Detail(token: token)
+			        self.init(presenter: presenter, detail: detail)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_BEC07F255DE644F9 {}
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func dependencyTree_bindsNestedSeamsInitializersToMainActor_whenEachSetsGeneratedInitializerAttributes() async throws {
+		// `Outer`'s generated initializer calls `Inner`'s, so it must be bound to the main actor as `Inner`'s is,
+		// exactly as a root calling a seam must.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateDependencyTree: true, generatedInitializerAttributes: "@MainActor")
+				public struct Outer: Instantiable {
+				    public init(inner: Inner) {
+				        self.inner = inner
+				    }
+
+				    @Instantiated let inner: Inner
+				}
+				""",
+				"""
+				@Instantiable(generateDependencyTree: true, generatedInitializerAttributes: "@MainActor")
+				public struct Inner: Instantiable {
+				    public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated let presenter: Presenter
+				}
+				""",
+				Self.mainActorPresenter,
+				"""
+				@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor")
+				public struct Root: Instantiable {
+				    public init(outer: Outer) {
+				        self.outer = outer
+				    }
+
+				    @Instantiated let outer: Outer
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.dependencyTreeFiles == [
+			"Inner+SafeDI.swift": generatedFileHeader + """
+			extension Inner {
+			    @MainActor public init() {
+			        let presenter = Presenter()
+			        self.init(presenter: presenter)
+			    }
+			}
+
+			extension Inner {
+			    public enum __safeDI_Inner_CBF29CE484222325 {}
+			}
+			""",
+			"Outer+SafeDI.swift": generatedFileHeader + """
+			extension Outer {
+			    @MainActor public init() {
+			        func __safeDI_inner() -> Inner {
+			            _ = Inner.__safeDI_Inner_CBF29CE484222325.self
+			            return Inner()
+			        }
+			        let inner: Inner = __safeDI_inner()
+			        self.init(inner: inner)
+			    }
+			}
+
+			extension Outer {
+			    public enum __safeDI_Outer_CBF29CE484222325 {}
+			}
+			""",
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    @MainActor public init() {
+			        func __safeDI_outer() -> Outer {
+			            _ = Outer.__safeDI_Outer_CBF29CE484222325.self
+			            return Outer()
+			        }
+			        let outer: Outer = __safeDI_outer()
+			        self.init(outer: outer)
+			    }
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func dependencyTree_addsNoAttributesToSeamInitializer_whenOnlyMockAttributesAreGiven() async throws {
+		// `mockAttributes` reaches the generated `mock()` alone, so the seam's generated initializer carries none.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateDependencyTree: true, mockAttributes: "@MainActor", generateMock: true)
+				public struct Screen: Instantiable {
+				    public init(presenter: Presenter) {
+				        self.presenter = presenter
+				    }
+
+				    @Instantiated let presenter: Presenter
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Presenter: Instantiable {
+				    public init() {}
+				}
+				""",
+				Self.root(attributes: ""),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        func __safeDI_screen() -> Screen {
+			            _ = Screen.__safeDI_Screen_CBF29CE484222325.self
+			            return Screen()
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(screen: screen)
+			    }
+			}
+			""",
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    public init() {
+			        let presenter = Presenter()
+			        self.init(presenter: presenter)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_CBF29CE484222325 {}
+			}
+			""",
+		])
+		#expect(output.mockFiles == [
+			"Screen+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Screen {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            presenter: (() -> Presenter)? = nil
+			        ) {
+			            self.presenter = presenter
+			        }
+
+			        let presenter: (() -> Presenter)?
+			    }
+
+			    @MainActor static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Screen {
+			        let presenter = if let safeDIBuilder = safeDIOverrides.presenter { safeDIBuilder() } else { Presenter() }
+			        return Screen(presenter: presenter)
+			    }
+			}
+			#endif
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func dependencyTree_generatesNoInitializer_whenSeamWithGeneratedInitializerAttributesHasNothingToGenerate() async throws {
+		// A seam with nothing to build or pass through generates no initializer, so its attributes go nowhere, and the
+		// root calls the seam's own initializer, which is bound to the main actor, from its own generated `init()`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateDependencyTree: true, generatedInitializerAttributes: "@MainActor")
+				public struct Screen: Instantiable {
+				    @MainActor public init() {}
+				}
+				""",
+				Self.root(attributes: #", generatedInitializerAttributes: "@MainActor""#),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    @MainActor public init() {
+			        let screen = Screen()
+			        self.init(screen: screen)
+			    }
+			}
+			""",
+			"Screen+SafeDI.swift": generatedFileHeader,
+		])
+	}
+
 	// MARK: Private
+
+	/// A `Presenter` whose initializer is bound to the main actor.
+	private static let mainActorPresenter = """
+	@Instantiable
+	public struct Presenter: Instantiable {
+	    @MainActor public init() {}
+	}
+	"""
+
+	/// The seam `Screen`, whose `@Instantiable` takes `generateDependencyTree: true` and then `attributes`, building a
+	/// `Presenter` whose initializer is bound to the main actor.
+	private static func mainActorSeam(attributes: String) -> [String] {
+		[
+			"""
+			@Instantiable(generateDependencyTree: true, \(attributes))
+			public struct Screen: Instantiable {
+			    public init(presenter: Presenter) {
+			        self.presenter = presenter
+			    }
+
+			    @Instantiated let presenter: Presenter
+			}
+			""",
+			mainActorPresenter,
+		]
+	}
+
+	/// The root `Root`, whose `@Instantiable` takes `isRoot: true` and then `attributes`, instantiating `Screen`.
+	private static func root(attributes: String, importing moduleName: String? = nil) -> String {
+		"""
+		\(moduleName.map { "import \($0)\n\n" } ?? "")@Instantiable(isRoot: true\(attributes))
+		public struct Root: Instantiable {
+		    public init(screen: Screen) {
+		        self.screen = screen
+		    }
+
+		    @Instantiated let screen: Screen
+		}
+		"""
+	}
+
+	/// The code generated for `mainActorSeam` with `generatedInitializerAttributes: "@MainActor"`, after the header.
+	private static let mainActorSeamCode = """
+	extension Screen {
+	    @MainActor public init() {
+	        let presenter = Presenter()
+	        self.init(presenter: presenter)
+	    }
+	}
+
+	extension Screen {
+	    public enum __safeDI_Screen_CBF29CE484222325 {}
+	}
+	"""
+
+	/// The code generated in `App` for the root of `mainActorSeamModules`, after the header, whose `init()` carries
+	/// `isolation` and calls the seam with the comment the SwiftPM plugin adds.
+	private static func mainActorSeamCallerCode(isolation: String, integration: MultiModuleIntegration) -> String {
+		let callComment = switch integration {
+		case .moduleInfo:
+			""
+		case .swiftPackagePlugin:
+			" // If this line does not compile, add the SafeDI plugin to the target that declares Screen."
+		}
+		return """
+		#if canImport(Core)
+		import Core
+		#endif
+
+		extension Root {
+		    \(isolation)public init() {
+		        func __safeDI_screen() -> Screen {
+		            _ = Screen.__safeDI_Screen_CBF29CE484222325.self\(callComment)
+		            return Screen()
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        self.init(screen: screen)
+		    }
+		}
+		"""
+	}
+
+	/// `mainActorSeam` with `generatedInitializerAttributes: "@MainActor"` in `Core`, and `root(attributes:)` with
+	/// `rootAttributes` in `App`, in one package.
+	private static func mainActorSeamModules(rootAttributes: String) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Core", packageName: "Shop", swiftFileContent: mainActorSeam(attributes: #"generatedInitializerAttributes: "@MainActor""#)),
+			ModuleFixture(name: "App", packageName: "Shop", swiftFileContent: [root(attributes: rootAttributes, importing: "Core")], dependencies: ["Core"]),
+		]
+	}
 
 	private var filesToDelete: [URL]
 

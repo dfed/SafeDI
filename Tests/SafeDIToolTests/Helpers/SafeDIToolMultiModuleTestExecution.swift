@@ -77,8 +77,12 @@ struct ModuleFixture {
 		verificationCompilationConditions: [String]? = nil,
 		mockConditionalCompilation: String? = nil,
 		deletesSwiftFilesAfterRunning: Bool = false,
+		omitsModuleName: Bool = false,
+		omitsPackageName: Bool = false,
 	) {
 		self.name = name
+		self.omitsModuleName = omitsModuleName
+		self.omitsPackageName = omitsPackageName
 		self.packageName = packageName
 		self.swiftFileContent = swiftFileContent
 		self.swiftFileContentByFilePath = swiftFileContentByFilePath
@@ -102,6 +106,13 @@ struct ModuleFixture {
 	let verificationCompilationConditions: [String]?
 	let mockConditionalCompilation: String?
 	let deletesSwiftFilesAfterRunning: Bool
+	/// Whether `.moduleInfo` runs the module's `generate` without `--module-name`, as a custom script might, so its
+	/// `.safedi` names no module.
+	let omitsModuleName: Bool
+	/// Whether `.moduleInfo` runs the module's `generate` without `--package-name`, as an integration that does not
+	/// know packages does, so the tool cannot verify that two modules share one. The module still compiles in its
+	/// package.
+	let omitsPackageName: Bool
 
 	/// The same module for `executeSafeDIToolQuery`, which names the module after its directory and reads its
 	/// files from there.
@@ -245,12 +256,21 @@ struct MultiModuleFixtureError: Error, CustomStringConvertible {
 ///   - writesTargetGraph: Whether `.swiftPackagePlugin` writes the target graph beside each module's CSV, as the
 ///     SafeDIGenerator plugin does for a Swift package. Without it, as for the Xcode project plugin, the tool knows
 ///     no module.
+///   - scansDuringGenerate: Whether `.swiftPackagePlugin` runs no `scan` and has `generate --output-directory` scan
+///     for itself, naming the module's own files with `--mock-scoped-files`, as a plugin that cannot scan while it
+///     plans the build does. The CSV then names every file by its absolute path.
+///   - moduleInfoOverrides: Under `.moduleInfo`, the `.safedi` file to give the other modules for each named
+///     module instead of running the tool for it – one an earlier run wrote, so a dependent reads module info written
+///     against other declarations than this run's. The module's files are still written, so a consumer's CSV can list
+///     them. Such a run is not compiled.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func executeSafeDIToolMultiModuleTest(
 	modules: [ModuleFixture],
 	integration: MultiModuleIntegration,
 	compileVerification: MultiModuleCompileVerification = .recordingIssues,
 	writesTargetGraph: Bool = true,
+	scansDuringGenerate: Bool = false,
+	moduleInfoOverrides: [String: String] = [:],
 	filesToDelete: inout [URL],
 	sourceLocation: SourceLocation = #_sourceLocation,
 ) async throws -> MultiModuleTestOutput {
@@ -320,14 +340,29 @@ func executeSafeDIToolMultiModuleTest(
 			try FileManager.default.createDirectory(at: moduleInfoDirectory, withIntermediateDirectories: true)
 			let output = moduleInfoDirectory.appendingPathComponent("\(moduleName).safedi")
 			moduleInfoOutput = output
+			if let overridePath = moduleInfoOverrides[moduleName] {
+				// The module's info comes from the earlier run: nothing runs for it.
+				try FileManager.default.copyItem(atPath: overridePath, toPath: output.path)
+				outputs[moduleName] = ModuleTestOutput(
+					generateRan: false,
+					moduleInfo: try ModuleInfo(moduleInfoData: Data(contentsOf: output)),
+					moduleInfoOutputPath: output.path,
+					scanManifest: nil,
+					fixtures: FixturePaths(fileNames: module.fileNames, paths: inputSwiftFilePaths, compilerPaths: compilerSwiftFilePaths),
+					warnings: [],
+					generatedFiles: [:],
+					generateOutput: nil,
+				)
+				continue
+			}
 			var arguments = [
 				swiftFileCSV.path,
 				"--combined-output", outputDirectory.appendingPathComponent("\(moduleName).swift").path,
 				"--module-info-output", output.path,
 				"--compiler-receives-input-paths-unchanged",
-				"--module-name", moduleName,
-				"--package-name", module.fixture.packageName,
-			] + activeCompilationConditionArguments
+			] + (module.fixture.omitsModuleName ? [] : ["--module-name", moduleName])
+				+ (module.fixture.omitsPackageName ? [] : ["--package-name", module.fixture.packageName])
+				+ activeCompilationConditionArguments
 			if !module.fixture.dependencies.isEmpty {
 				let dependentModuleInfoFileCSV = moduleInfoDirectory.appendingPathComponent("\(moduleName)-dependencies.csv")
 				try module.fixture.dependencies
@@ -342,12 +377,15 @@ func executeSafeDIToolMultiModuleTest(
 			let reportedPackageDirectory = try realPath(of: module.packageDirectory)
 			let normalizedPackageDirectory = NormalizedFilePath(reportedPackageDirectory)
 			// As the plugin's `writeInputSwiftFilesCSV` spells each file: relative to the package directory when it
-			// lies inside it, and whole otherwise.
+			// lies inside it, and whole otherwise. A `generate` that scans for itself reads paths from its working
+			// directory, so each is whole.
 			func csvEntry(of file: URL) -> String {
-				NormalizedFilePath(file.path).path(relativeTo: normalizedPackageDirectory)
+				scansDuringGenerate
+					? "\(reportedPackageDirectory)/\(NormalizedFilePath(file.path).path(relativeTo: normalizedPackageDirectory))"
+					: NormalizedFilePath(file.path).path(relativeTo: normalizedPackageDirectory)
 			}
 			inputSwiftFilePaths = module.swiftFiles.map(csvEntry(of:))
-			compilerSwiftFilePaths = inputSwiftFilePaths.map { "\(reportedPackageDirectory)/\($0)" }
+			compilerSwiftFilePaths = scansDuringGenerate ? inputSwiftFilePaths : inputSwiftFilePaths.map { "\(reportedPackageDirectory)/\($0)" }
 			// As the plugin's `sourceModuleRecursiveDependencies`: every transitive dependency not under `checkouts`.
 			let firstPartyDependencies = module.transitiveDependencies
 				.map { writtenModulesByName[$0]! }
@@ -362,6 +400,13 @@ func executeSafeDIToolMultiModuleTest(
 					target: module.graphTarget(spellingFilesAs: csvEntry(of:)),
 					dependencyTargets: firstPartyDependencies.map { $0.graphTarget(spellingFilesAs: csvEntry(of:)) }.sorted { $0.moduleName < $1.moduleName },
 				)).write(to: URL(fileURLWithPath: swiftFileCSV.path + PluginTargetGraph.fileNameSuffix))
+			}
+			if scansDuringGenerate {
+				moduleInfoOutput = nil
+				generateArguments = [swiftFileCSV.path, "--output-directory", outputDirectory.path, "--mock-scoped-files"]
+					+ compilerSwiftFilePaths
+					+ activeCompilationConditionArguments
+				break
 			}
 			let manifestFile = fixtureRoot.appendingPathComponent("Manifests").appendingPathComponent("\(moduleName).json")
 			try FileManager.default.createDirectory(at: manifestFile.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -439,7 +484,8 @@ func executeSafeDIToolMultiModuleTest(
 
 	let compilation: MultiModuleCompileOutcome? = switch compileVerification {
 	case .recordingIssues, .returningOutcomeOnly:
-		try verifyModulesCompile(
+		// A run given another run's module info is not compiled: it has no code for that module.
+		moduleInfoOverrides.isEmpty ? try verifyModulesCompile(
 			writtenModules.map { module in
 				ModuleCompileSources(
 					moduleName: module.fixture.name,
@@ -454,7 +500,7 @@ func executeSafeDIToolMultiModuleTest(
 			recordsIssues: compileVerification == .recordingIssues,
 			filesToDelete: &filesToDelete,
 			sourceLocation: sourceLocation,
-		)
+		) : nil
 	case .skipped:
 		nil
 	}

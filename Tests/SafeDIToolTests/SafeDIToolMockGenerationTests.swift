@@ -24743,6 +24743,81 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		""", "Unexpected output \(output.mockFiles["Dashboard+SafeDIMock.swift"] ?? "")")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_mapsOverSingleOptional_whenErasedOnlyIfAvailableAliasSpellsItsFulfillingTypeOptional() async throws {
+		// An erased `onlyIfAvailable` alias spelled `ofType: Secret?.self` maps over `Secret?` once, in the mock as in
+		// production: `(token as Secret?).map { AnyAuth($0) }`, never `Secret??`, which did not compile.
+		let output = try await executeSafeDIToolTest(swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(token: Secret, holder: Holder) {
+			        self.token = token
+			        self.holder = holder
+			    }
+
+			    @Instantiated let token: Secret
+			    @Instantiated let holder: Holder
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public final class Holder: Instantiable {
+			    public init(authToken: AnyAuth?) {
+			        self.authToken = authToken
+			    }
+
+			    @Received(fulfilledByDependencyNamed: "token", ofType: Secret?.self, erasedToConcreteExistential: true, onlyIfAvailable: true) let authToken: AnyAuth?
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Secret: Instantiable, Auth {
+			    public init() {}
+			}
+
+			public protocol Auth {}
+
+			public struct AnyAuth: Auth {
+			    public init(_ auth: any Auth) {
+			        self.auth = auth
+			    }
+
+			    public let auth: any Auth
+			}
+			""",
+		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.mockFiles == [
+			"Holder+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Holder {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            token: Secret? = nil
+			        ) {
+			            self.token = token
+			        }
+
+			        let token: Secret?
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Holder {
+			        let token: Secret? = safeDIOverrides.token
+			        #sourceLocation(file: "\(output.fixtures["Holder.swift"])", line: 7)
+			        let authToken: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
+			        #sourceLocation()
+			        return Holder(authToken: authToken)
+			    }
+			}
+			#endif
+			""",
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

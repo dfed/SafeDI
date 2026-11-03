@@ -14804,7 +14804,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		// cached paths would match the manifest and generate would
 		// succeed.
 		await assertThrowsError(
-			"Found @\(InstantiableVisitor.macroName)(isRoot: true) in '\(rootFile.path)', but this file is not listed in the manifest’s dependencyTreeGeneration. SafeDI decides which files to generate before the build runs, listing every file that declares a root, a type that sets `generateMock: true`, or a #SafeDIConfiguration in any clause of its `#if` blocks, so the file most likely changed after that decision; building again lists it. A hand-written manifest must list the file, or the type must not be a root.",
+			"Found @\(InstantiableVisitor.macroName)(isRoot: true) in '\(rootFile.path)', but this file is not listed in the manifest’s dependencyTreeGeneration. SafeDI decides which files to generate before the build runs, listing every file that declares a root, a type that sets `generateDependencyTree: true` or `generateMock: true`, or a #SafeDIConfiguration in any clause of its `#if` blocks, so the file most likely changed after that decision; building again lists it. A hand-written manifest must list the file, or the type must not be a root.",
 		) {
 			try await (Generate.parse([
 				swiftFileCSV.path,

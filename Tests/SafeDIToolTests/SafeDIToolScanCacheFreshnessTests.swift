@@ -279,7 +279,7 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 
 		/// The error a fresh parse in `generate` throws, naming the root as the CSV does.
 		var rootNotInManifestMessage: String {
-			"Found @Instantiable(isRoot: true) in '\(rootFile.path)', but this file is not listed in the manifest’s dependencyTreeGeneration. SafeDI decides which files to generate before the build runs, listing every file that declares a root, a type that sets `generateMock: true`, or a #SafeDIConfiguration in any clause of its `#if` blocks, so the file most likely changed after that decision; building again lists it. A hand-written manifest must list the file, or the type must not be a root."
+			"Found @Instantiable(isRoot: true) in '\(rootFile.path)', but this file is not listed in the manifest’s dependencyTreeGeneration. SafeDI decides which files to generate before the build runs, listing every file that declares a root, a type that sets `generateDependencyTree: true` or `generateMock: true`, or a #SafeDIConfiguration in any clause of its `#if` blocks, so the file most likely changed after that decision; building again lists it. A hand-written manifest must list the file, or the type must not be a root."
 		}
 
 		func generate() async throws {

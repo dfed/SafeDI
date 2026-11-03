@@ -973,13 +973,14 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			@Instantiable(generateMock: true, customMockName: "customMock")
 			public struct Pantry: Instantiable {
 			    public init() {}
+			    public init(shelves: Int) {}
 			    public static func customMock() -> Pantry {
 			        Pantry()
 			    }
 			}
 			""",
 			"Oven.swift": """
-			@Instantiable
+			@Instantiable(generateDependencyTree: true)
 			public actor Oven: Instantiable {
 			    public init(level: Void) {
 			        self.level = level

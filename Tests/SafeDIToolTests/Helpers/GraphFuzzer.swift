@@ -87,6 +87,35 @@ struct GraphFuzzerFixture: Equatable {
 		"S\(seed)_"
 	}
 
+	/// The name of each type declared as a seam: the type an `@Instantiable(generateDependencyTree: true…)`
+	/// attribute decorates.
+	var seamTypeNames: [String] {
+		swiftFileContent.flatMap { content -> [String] in
+			let lines = GraphFuzzerSourceLine.lines(of: content)
+			return zip(lines, lines.dropFirst()).compactMap { line, nextLine in
+				guard case let .instantiableAttribute(arguments) = line, arguments.contains("generateDependencyTree: true") else { return nil }
+				return nextLine.declaredTypeName
+			}
+		}
+	}
+
+	/// Whether a type of the graph is declared as a seam.
+	var declaresSeam: Bool {
+		swiftFileContent.contains { $0.contains("generateDependencyTree: true") }
+	}
+
+	/// The same graph with no type declared as a seam, so every tree is built inline: what SafeDI accepted before
+	/// seams existed, which a seam's own errors may reject.
+	var withoutSeams: GraphFuzzerFixture {
+		GraphFuzzerFixture(
+			seed: seed,
+			swiftFileContent: swiftFileContent.map {
+				$0.replacingOccurrences(of: "@Instantiable(generateDependencyTree: true, ", with: "@Instantiable(")
+					.replacingOccurrences(of: "@Instantiable(generateDependencyTree: true)", with: "@Instantiable")
+			},
+		)
+	}
+
 	/// The same graph renamed by `renaming`, with its files listed in reverse order. A tool whose output depends
 	/// only on what a graph declares gives the renamed graph the output it gives this one, renamed.
 	func renamed(by renaming: GraphFuzzerRenaming) -> GraphFuzzerFixture {
@@ -268,6 +297,381 @@ struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
 	}
 }
 
+/// A feature of the generator that is off by default, so the corpus is drawn as it was before the feature existed.
+/// Each feature draws from a stream of its own, seeded from the seed and the feature, which is consumed only when the
+/// feature is on, and has a seed range and pins of its own in `SafeDIToolGraphFuzzerTests`.
+enum GraphFuzzerGeneratorFeature: String, CaseIterable, Comparable {
+	/// One type a root reaches is a seam, declared with `generateDependencyTree: true`, whose tree SafeDI generates
+	/// in an initializer of its own that the trees reaching it call, with receives beneath it of properties
+	/// provided above it, and a rename of one on the seam, which that initializer passes through.
+	case generateDependencyTree
+
+	static func < (lhs: GraphFuzzerGeneratorFeature, rhs: GraphFuzzerGeneratorFeature) -> Bool {
+		lhs.rawValue < rhs.rawValue
+	}
+
+	/// The generator features `fixture` was drawn with, read from its source: a seam is drawn only with
+	/// `generateDependencyTree` on.
+	static func features(drawnIn fixture: GraphFuzzerFixture) -> Set<GraphFuzzerGeneratorFeature> {
+		GraphFuzzerFeature.features(of: fixture).contains(.generateDependencyTree) ? [.generateDependencyTree] : []
+	}
+}
+
+/// What a seam's generated initializer takes, read from the generated code of a graph the tool accepts, which the
+/// seam smoke batch must exercise.
+enum GraphFuzzerSeamOutputFeature: String, CaseIterable, Comparable {
+	/// A parameter defaulting to `nil`: a property the seam's tree receives only if available.
+	case optionalPassThrough
+	/// A required parameter the seam does not declare: a property a receiver in its tree requires.
+	case requiredPassThrough
+	/// A call of a generated initializer passing `.instance` of a wrapper the caller holds for a by-value parameter.
+	case instanceReadAtCall
+	/// A parameter spelled `@escaping`: a closure the seam's tree receives, which every call passes by name.
+	case escapingSeamParameter
+	/// A parameter spelled `@escaping` with another attribute: a `@Sendable` closure.
+	case escapingAttributedSeamParameter
+	/// A parameter of an optional closure type, which is not `@escaping`.
+	case optionalClosureSeamParameter
+
+	static func < (lhs: GraphFuzzerSeamOutputFeature, rhs: GraphFuzzerSeamOutputFeature) -> Bool {
+		lhs.rawValue < rhs.rawValue
+	}
+}
+
+/// The shapes `addingSeam` draws, read from a fixture's source, so that a draw that stops landing fails
+/// `seamCorpus_drawsEachShapeInAtLeastThePinnedShareOfGraphs` rather than a review.
+enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
+	/// A leaf given a `SeamChild` to build, so that it has a tree.
+	case synthesizedChild
+	/// Every root instantiating `SeamShared` under `seamShared`: declared, once, by whichever draw first finds no
+	/// source of its own – a child's plain receive with no plain property provided above every path to the child, a
+	/// rename on the seam with none above the seam, a rename above the seam with none above the renaming type, and
+	/// the lazy draw whenever it synthesizes `seamLazy`, whose instance it is.
+	case synthesizedSharedProvider
+	/// Every root instantiating `SeamShared` lazily under `seamLazy`, where no wrapper is provided above.
+	case synthesizedLazyProvider
+	/// Every root instantiating `SeamHeld` under `seamHeld`, by value, which a child receives only if available as a
+	/// wrapper: a label of the draw's own, which nothing else receives, so the caller passes `nil` rather than the
+	/// receive colliding with a by-value form of the label.
+	case synthesizedHeldProvider
+	/// A seam's child receiving a required non-optional wrapper whose label a type in the seam's tree – another
+	/// child, or a `SeamLink` beneath the receiver – receives by value: the one parameter that provides the instance.
+	case requiredWrapperProvidingByValueForm
+	/// A rename of a provided property on the seam or on a child (`<label>Seam`).
+	case renameOnSeamOrChild
+	/// A rename above the seam (`<label>Above`), received by the new label beneath it.
+	case renameAboveSeam
+	/// A seam's child receiving a `LazilyInstantiated` or `SendableLazilyInstantiated` property the graph holds as
+	/// that wrapper, required or only if available.
+	case wrapperReceiveBeneathSeam
+	/// A seam's child receiving, by value, the instance of a lazily instantiated property, which the caller passes
+	/// as `.instance`.
+	case instanceReceiveBeneathSeam
+	/// A seam's child receiving, only if available, a wrapper of a property the graph holds by value, which no type
+	/// of the seam's children receives or aliases by value, so the caller passes `nil`.
+	case instanceHeldByCaller
+	/// A seam's child receiving, only if available, a wrapper of the other kind than the one the graph holds the
+	/// property as, so the caller passes `nil`.
+	case otherKindWrapperReceiveBeneathSeam
+	/// A seam's child receiving a label as an optional wrapper while a child receives or aliases it by value, or the
+	/// seam aliases it: the label collision the seam reports, drawn in a known share.
+	case collidingFormsBeneathSeam
+	/// Two seams, one beneath the other.
+	case innerSeam
+	/// `addingSpelledProperties`' value spelled as each `GraphFuzzerSpelling`, read from the type it is forwarded as.
+	case spelledClosure
+	case spelledClosureWithParameterAndReturn
+	case spelledSendableClosure
+	case spelledOptionalClosure
+	case spelledOptionalSendableClosure
+	case spelledTupleWithClosure
+	case spelledExistential
+	case spelledClosureTakingExistential
+	case spelledNestedType
+	case spelledArray
+	case spelledResult
+	case spelledTypealias
+	/// The spelled value as the seam's own `@Forwarded` property.
+	case spelledOwnForwarded
+	/// The spelled value as the seam's own `@Received` property.
+	case spelledOwnReceived
+	/// The spelled value as a pass-through a type in the seam's tree requires.
+	case spelledRequiredPassThrough
+	/// The spelled value as a pass-through every type in the seam's tree receives only if available.
+	case spelledOnlyIfAvailablePassThrough
+	/// The spelled value as the property a rename on the seam or in its tree fulfills.
+	case spelledAliasFulfillingProperty
+	/// The spelled value's optional form received only if available by a second child, `SpellSibling`, beside the
+	/// form `SpellChild` receives.
+	case spelledOptionalFormOnSibling
+	/// `SpellChild` or `SpellSeam` declared with `generateMock: true`, so the spelled value reaches a generated mock.
+	case spelledTreeMocked
+	/// `addingUncreatedAliasShapes`' receive of the alias's property beneath the type that declares the
+	/// `onlyIfAvailable` alias, which the seam rejects wherever the alias may not be created.
+	case uncreatedAliasReader
+	/// The type that builds the alias's declaring type also instantiates the alias's property.
+	case uncreatedAliasSamePropertyBeside
+	/// The type that builds the alias's declaring type instantiates the alias's label as another type.
+	case uncreatedAliasOtherTypeBeside
+	/// The type that builds the alias's declaring type instantiates an instantiator under the alias's label.
+	case uncreatedAliasWrapperBeside
+	/// The seam instantiates a property under the alias's label, above the type that builds the declaring type.
+	case uncreatedAliasDeclarationAbove
+	/// The seam takes a parameter under the alias's label: its own receive, or a pass-through another child receives.
+	case uncreatedAliasLabelParameter
+	/// The alias's declaring type also declares an `onlyIfAvailable` alias of the alias.
+	case uncreatedAliasAliasOfAlias
+	/// The caller holds the alias's label in the alias's unwrapped type.
+	case uncreatedAliasLabelHeldByCaller
+	/// The type that builds the alias's declaring type instantiates the alias's fulfilling property, the closest
+	/// declaration of it on that path, while another child of the seam receives it only if available.
+	case uncreatedAliasFulfillingPropertyPruned
+	/// The caller holds the alias's fulfilling property.
+	case uncreatedAliasFulfillingPropertyHeldByCaller
+	/// A receive of the alias's property beneath its declaring type that requires it.
+	case uncreatedAliasRequiredReader
+	/// An alias beneath the declaring type that keeps the alias's label and retypes it to an existential.
+	case uncreatedAliasLabelKeepingAliasReader
+	/// The reader built through an `Instantiator` or a `LazilyInstantiated` wrapper.
+	case uncreatedAliasReaderInsideWrapper
+	/// The reader reached through a nested seam, `AliasPanel`, whose pass-through stands for its receive.
+	case uncreatedAliasReaderInsideNestedSeam
+	/// The reader beneath `AliasMid`, a type between it and the alias's declaring type.
+	case uncreatedAliasDeeperReader
+	/// The alias's declaring type also declares a required alias of the alias.
+	case uncreatedAliasRequiredAliasOfAlias
+	/// The seam itself declares the alias.
+	case uncreatedAliasOnSeamItself
+	/// The alias keeps the label of its fulfilling property and only makes it optional (`aliasToken: AliasValue?` of
+	/// `aliasToken`), a redundant spelling of a plain receive, which is not an alias of itself.
+	case uncreatedAliasLabelKeepingOptionalAlias
+	/// The label-keeping alias declared where its fulfilling property is `AliasLeft`'s own sibling of `AliasDetail`,
+	/// generated after it because `AliasValue` receives `aliasDetail`: the sibling is the alias's own fulfilling
+	/// property, not a declaration of its label, so the alias is passed `nil`, as inline.
+	case uncreatedAliasFulfillingPropertyGeneratedAfterLabelKeepingAlias
+	/// The alias declared where its fulfilling property is still being built: `AliasDetail` is built inside
+	/// `aliasToken`'s builder.
+	case uncreatedAliasFulfillingPropertyBeingBuilt
+	/// The alias declared where its fulfilling property is generated later: `aliasToken` receives `AliasA` only if
+	/// available, and `AliasA` builds `AliasDetail`.
+	case uncreatedAliasFulfillingPropertyGeneratedLater
+	/// The alias's fulfilling property is a required optional parameter of the seam – its own `@Received` or
+	/// `@Forwarded` property, or a property `AliasLeft` requires – which every caller holds a value for.
+	case uncreatedAliasRequiredOptionalParameter
+	/// The alias spelled with the exact optional form of its fulfilling property, `ofType: AliasValue?.self`.
+	case uncreatedAliasExactFormAlias
+	/// A reader, alias-of-alias or same-property draw replaced by its accepted twin: the reader or the second alias
+	/// reads the fulfilling property, or the alias is made required.
+	case uncreatedAliasAcceptedTwin
+
+	static func < (lhs: GraphFuzzerSeamDrawFeature, rhs: GraphFuzzerSeamDrawFeature) -> Bool {
+		lhs.rawValue < rhs.rawValue
+	}
+}
+
+/// A spelling of the type of the value `addingSpelledProperties` draws, which a seam's generated initializer, and every
+/// call of it, must spell as a parsed initializer does: a closure is `@escaping` there, an optional closure is not.
+enum GraphFuzzerSpelling: CaseIterable {
+	case closure
+	case closureWithParameterAndReturn
+	case sendableClosure
+	case optionalClosure
+	case optionalSendableClosure
+	case tupleWithClosure
+	case existential
+	case closureTakingExistential
+	case nestedType
+	case array
+	case result
+	case nonFunctionTypealias
+
+	/// The label of the drawn value wherever it is declared or received.
+	static let label = "spelled"
+
+	/// Whether the spelling can be drawn in a graph whose types are all `Sendable`, which stores only `Sendable`
+	/// values: a closure is then `@Sendable`, which `sendableClosure` and `optionalSendableClosure` already spell.
+	var hasSendableSpelling: Bool {
+		switch self {
+		case .closure, .optionalClosure:
+			false
+		case .closureWithParameterAndReturn, .sendableClosure, .optionalSendableClosure, .tupleWithClosure, .existential, .closureTakingExistential, .nestedType, .array, .result, .nonFunctionTypealias:
+			true
+		}
+	}
+
+	/// Whether a rename can name the value's type in `ofType:`: neither an optional, which `Type.self` cannot spell
+	/// plainly, nor a tuple, whose labeled elements `.self` would read as an expression.
+	var canBeRenamed: Bool {
+		switch self {
+		case .optionalClosure, .optionalSendableClosure, .tupleWithClosure:
+			false
+		case .closure, .closureWithParameterAndReturn, .sendableClosure, .existential, .closureTakingExistential, .nestedType, .array, .result, .nonFunctionTypealias:
+			true
+		}
+	}
+
+	/// The type of the value in a graph whose type names begin with `prefix`, with every closure `@Sendable` when
+	/// `isSendable`.
+	func spelledType(prefix: String, isSendable: Bool) -> String {
+		let sendable = isSendable ? "@Sendable " : ""
+		return switch self {
+		case .closure:
+			"() -> Void"
+		case .closureWithParameterAndReturn:
+			"\(sendable)(Int) -> String"
+		case .sendableClosure:
+			"@Sendable () -> Void"
+		case .optionalClosure:
+			"(() -> Void)?"
+		case .optionalSendableClosure:
+			"(@Sendable () -> Void)?"
+		case .tupleWithClosure:
+			"(onTap: \(sendable)() -> Void, count: Int)"
+		case .existential:
+			"any \(prefix)SpellProtocol"
+		case .closureTakingExistential:
+			"\(sendable)(any \(prefix)SpellProtocol) -> Void"
+		case .nestedType:
+			"\(prefix)SpellOuter.Item"
+		case .array:
+			"[\(prefix)Value]"
+		case .result:
+			"Result<\(prefix)Value, any Error>"
+		case .nonFunctionTypealias:
+			"\(prefix)SpellIdentifier"
+		}
+	}
+
+	/// A value of the spelled type, which a probe of the value comparator passes to a builder that forwards it.
+	func sampleExpression(prefix: String) -> String {
+		switch self {
+		case .closure, .sendableClosure, .optionalClosure, .optionalSendableClosure:
+			"{}"
+		case .closureWithParameterAndReturn:
+			"{ _ in \"\" }"
+		case .tupleWithClosure:
+			"(onTap: {}, count: 1)"
+		case .existential:
+			"\(prefix)SpellConformer()"
+		case .closureTakingExistential:
+			"{ _ in }"
+		case .nestedType:
+			"\(prefix)SpellOuter.Item()"
+		case .array:
+			"[\(prefix)Value()]"
+		case .result:
+			".success(\(prefix)Value())"
+		case .nonFunctionTypealias:
+			"\"id\""
+		}
+	}
+
+	/// The declarations the spelled type names, beside the graph's own `Value`: `Sendable` where the graph's helper
+	/// types are, so that a `Sendable` type can store the value. The existential spellings declare a conformer, the
+	/// value `sampleExpression` passes.
+	func helperDeclarations(prefix: String, areSendable: Bool) -> [String] {
+		switch self {
+		case .existential, .closureTakingExistential:
+			["public protocol \(prefix)SpellProtocol\(areSendable ? ": Sendable" : "") {}", "public final class \(prefix)SpellConformer: \(prefix)SpellProtocol\(areSendable ? ", Sendable" : "") {\n\tpublic init() {}\n}"]
+		case .nestedType:
+			["public enum \(prefix)SpellOuter {\n\tpublic final class Item\(areSendable ? ": Sendable" : "") {\n\t\tpublic init() {}\n\t}\n}"]
+		case .nonFunctionTypealias:
+			["public typealias \(prefix)SpellIdentifier = String"]
+		case .closure, .closureWithParameterAndReturn, .sendableClosure, .optionalClosure, .optionalSendableClosure, .tupleWithClosure, .array, .result:
+			[]
+		}
+	}
+
+	/// The seam draw feature of the spelling.
+	var drawFeature: GraphFuzzerSeamDrawFeature {
+		switch self {
+		case .closure: .spelledClosure
+		case .closureWithParameterAndReturn: .spelledClosureWithParameterAndReturn
+		case .sendableClosure: .spelledSendableClosure
+		case .optionalClosure: .spelledOptionalClosure
+		case .optionalSendableClosure: .spelledOptionalSendableClosure
+		case .tupleWithClosure: .spelledTupleWithClosure
+		case .existential: .spelledExistential
+		case .closureTakingExistential: .spelledClosureTakingExistential
+		case .nestedType: .spelledNestedType
+		case .array: .spelledArray
+		case .result: .spelledResult
+		case .nonFunctionTypealias: .spelledTypealias
+		}
+	}
+
+	/// The spelling of `type`, a type `spelledType(prefix:isSendable:)` returned, read back from its structure.
+	static func spelling(ofType type: String) -> GraphFuzzerSpelling? {
+		if type.hasSuffix("?"), type.contains("->") {
+			type.contains("@Sendable") ? .optionalSendableClosure : .optionalClosure
+		} else if type.hasPrefix("(onTap: ") {
+			.tupleWithClosure
+		} else if type.contains("(any "), type.contains("->") {
+			.closureTakingExistential
+		} else if type.contains("(Int) -> String") {
+			.closureWithParameterAndReturn
+		} else if type == "@Sendable () -> Void" {
+			.sendableClosure
+		} else if type == "() -> Void" {
+			.closure
+		} else if type.hasPrefix("any "), type.hasSuffix("SpellProtocol") {
+			.existential
+		} else if type.hasSuffix("SpellOuter.Item") {
+			.nestedType
+		} else if type.hasPrefix("["), type.hasSuffix("Value]") {
+			.array
+		} else if type.hasPrefix("Result<") {
+			.result
+		} else if type.hasSuffix("SpellIdentifier") {
+			.nonFunctionTypealias
+		} else {
+			nil
+		}
+	}
+
+	/// The optional form of `type`: itself when it is optional, else `type?`, parenthesized when `?` would bind to a
+	/// part of it – a function's result, or an existential's protocol.
+	static func optionalForm(of type: String) -> String {
+		if type.hasSuffix("?") {
+			type
+		} else if isFunctionType(type) || type.hasPrefix("any ") {
+			"(\(type))?"
+		} else {
+			"\(type)?"
+		}
+	}
+
+	/// `type` as `ofType:` spells it before `.self`: parenthesized when `.self` would bind to a part of it.
+	static func ofTypeSpelling(of type: String) -> String {
+		isFunctionType(type) || type.hasPrefix("any ") ? "(\(type))" : type
+	}
+
+	/// Whether `type` is a function type – after its attributes, a parenthesized parameter list followed by ` -> ` –
+	/// rather than a type merely holding one, such as an optional closure or a tuple.
+	static func isFunctionType(_ type: String) -> Bool {
+		var remainder = Substring(type)
+		while remainder.hasPrefix("@") {
+			remainder = remainder.drop { $0 != " " }.dropFirst()
+		}
+		guard remainder.hasPrefix("(") else { return false }
+		var depth = 0
+		for index in remainder.indices {
+			switch remainder[index] {
+			case "(":
+				depth += 1
+			case ")":
+				depth -= 1
+				if depth == 0 {
+					return remainder[remainder.index(after: index)...].hasPrefix(" -> ")
+				}
+			default:
+				break
+			}
+		}
+		return false
+	}
+}
+
 /// Generates graphs of `final class` `@Instantiable` types in two passes.
 ///
 /// The first pass decides what instantiates what. Types are ordered: a type mostly instantiates later types,
@@ -283,8 +687,8 @@ enum GraphFuzzerGenerator {
 	///   which the type it returns then takes and stores. Every class of the graph also stores a creation stamp
 	///   (`DifferentialValueCreationStamp`) from a counter the first file declares. It changes how a type is written,
 	///   never what the seed draws, so the corpus and its pins are those of `false`.
-	static func fixture(forSeed seed: UInt64, storingEveryParameter: Bool = false) -> GraphFuzzerFixture {
-		var builder = Builder(seed: seed, storesEveryParameter: storingEveryParameter)
+	static func fixture(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature> = [], storingEveryParameter: Bool = false) -> GraphFuzzerFixture {
+		var builder = Builder(seed: seed, features: features, storesEveryParameter: storingEveryParameter)
 		return GraphFuzzerFixture(seed: seed, swiftFileContent: builder.build())
 	}
 
@@ -296,7 +700,7 @@ enum GraphFuzzerGenerator {
 
 	private struct TypeDeclaration {
 		let name: String
-		let instantiableArguments: [String]
+		var instantiableArguments: [String]
 		var properties: [PropertyDeclaration]
 		let declaresHelperTypes: Bool
 		/// Protocols the type conforms to beyond those every type of its kind does.
@@ -402,9 +806,14 @@ enum GraphFuzzerGenerator {
 	}
 
 	private struct Builder {
-		init(seed: UInt64, storesEveryParameter: Bool) {
+		init(seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>, storesEveryParameter: Bool) {
+			self.features = features
 			self.storesEveryParameter = storesEveryParameter
 			random = GraphFuzzerRandomNumberGenerator(seed: seed)
+			seamRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.seamRandomSeedMask)
+			spellingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.spellingRandomSeedMask)
+			uncreatedAliasRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.uncreatedAliasRandomSeedMask)
+			labelKeepingAliasRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.labelKeepingAliasRandomSeedMask)
 			generatedNameRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.generatedNameRandomSeedMask)
 			unbuildableDependencyRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencyRandomSeedMask)
 			unbuildableDependencyReceiverRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencyReceiverRandomSeedMask)
@@ -471,9 +880,11 @@ enum GraphFuzzerGenerator {
 			appendMotif(to: &declarations)
 			// Decided last, so that the rest of a seed's graph does not depend on whether it has the extension.
 			let extensionSource = random.percentChance(25) ? extensionDeclarationSource(addingPropertyToOneOf: &declarations) : nil
-			let sources = addingReceiversOfDependenciesMocksCannotBuild(
-				to: addingSiblingAliasChains(to: addingAliasChains(to: addingDependenciesMocksCannotBuild(to: addingPropertiesLabeledAsGeneratedNames(to: declarations)))),
-			)
+			let sources = addingUncreatedAliasShapes(to: addingSpelledProperties(to: addingSeam(
+				to: addingReceiversOfDependenciesMocksCannotBuild(
+					to: addingSiblingAliasChains(to: addingAliasChains(to: addingDependenciesMocksCannotBuild(to: addingPropertiesLabeledAsGeneratedNames(to: declarations)))),
+				),
+			)))
 			.map(source(of:))
 			+ [extensionSource].compactMap(\.self)
 			return storesEveryParameter ? addingCreationStamps(to: sources) : sources
@@ -481,17 +892,19 @@ enum GraphFuzzerGenerator {
 
 		/// `sources` with the creation stamps of `DifferentialValueCreationStamp`: the counter, at the end of the first
 		/// file, which is `Root0`'s, and a stamp as the first stored property of every class the graph declares, each of
-		/// which begins a line with `public final class` and ends it with ` {` or, for a class without a body, ` {}`.
+		/// which begins a line, after its indentation (a nested class's, such as a spelling's `SpellOuter.Item`), with
+		/// `public final class` and ends it with ` {` or, for a class without a body, ` {}`.
 		private func addingCreationStamps(to sources: [String]) -> [String] {
 			let counterName = "\(prefix)CreationStamp"
-			let stamp = "\t" + DifferentialValueCreationStamp.property(counterNamed: counterName)
+			let stamp = DifferentialValueCreationStamp.property(counterNamed: counterName)
 			return sources.enumerated().map { index, source in
 				let lines = source.split(separator: "\n", omittingEmptySubsequences: false).flatMap { line -> [String] in
-					guard line.hasPrefix("public final class ") else { return [String(line)] }
+					let indentation = line.prefix { $0 == "\t" }
+					guard line.dropFirst(indentation.count).hasPrefix("public final class ") else { return [String(line)] }
 					if line.hasSuffix(" {}") {
-						return [String(line.dropLast("}".count)), stamp, "}"]
+						return [String(line.dropLast("}".count)), "\(indentation)\t\(stamp)", "\(indentation)}"]
 					} else {
-						return [String(line), stamp, ""]
+						return [String(line), "\(indentation)\t\(stamp)", ""]
 					}
 				}
 				let stampedSource = lines.joined(separator: "\n")
@@ -591,6 +1004,21 @@ enum GraphFuzzerGenerator {
 		private var aliasChainRandom: GraphFuzzerRandomNumberGenerator
 		/// Draws only the choices of `addingSiblingAliasChains`, as `generatedNameRandom` does for its pass.
 		private var siblingAliasChainRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only the choices of `addingSeam`, which draws only with the `generateDependencyTree` feature on, so
+		/// every graph without it is drawn as before.
+		private var seamRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only the choices of `addingSpelledProperties`, which draws only with the `generateDependencyTree`
+		/// feature on, after `addingSeam` and before `addingUncreatedAliasShapes`, so every graph without it is drawn as
+		/// before and a seam graph it leaves plain is drawn as it was before the pass existed.
+		private var spellingRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only the choices of `addingUncreatedAliasShapes`, which draws only with the `generateDependencyTree`
+		/// feature on, last of every pass, so a seam graph it leaves plain is drawn as it was before the pass existed.
+		private var uncreatedAliasRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether `addingUncreatedAliasShapes`' alias keeps its fulfilling property's label, and then whether
+		/// that property is `AliasLeft`'s own sibling generated after `AliasDetail`: rolls added after the pass's other draws
+		/// were pinned, so that every other graph of the pass is drawn as before.
+		private var labelKeepingAliasRandom: GraphFuzzerRandomNumberGenerator
+		private let features: Set<GraphFuzzerGeneratorFeature>
 		/// How many types that are not `@Instantiable` `addingDependenciesMocksCannotBuild` instantiates.
 		private var unbuildableTypeCount = 0
 		/// The mocked type of the `Sendable` builder motif, when `appendMotif` drew it. It gets no dependency a mock
@@ -1109,8 +1537,8 @@ enum GraphFuzzerGenerator {
 		/// named apart where a builder function around the owner declares the constant's label. A type between the owner
 		/// and the receiver that declares the label with another type hides the constant, which the tool must reject. No
 		/// root reaches the receiver, so no production tree rejects it for receiving a property nothing above it provides.
-		/// It is drawn after every other pass, and `unbuildableDependencyReceiverRandom` draws only for it, so every other
-		/// graph is drawn as before.
+		/// It is drawn after every other base pass (only the `generateDependencyTree` feature's passes follow it), and
+		/// `unbuildableDependencyReceiverRandom` draws only for it, so every other graph is drawn as before.
 		///
 		/// Now and then, too, an owner with `generateMock: true` receives a type of the graph that no root reaches, that has
 		/// no forwarded properties, and that it does not instantiate, which its mock builds beside it. Mostly that type
@@ -1543,6 +1971,652 @@ enum GraphFuzzerGenerator {
 			}
 		}
 
+		// MARK: Seam
+
+		/// With the `generateDependencyTree` feature on, marks one type a root reaches as a seam – a type whose tree
+		/// SafeDI generates in an initializer of its own, which the trees reaching it call – drawn among the types
+		/// with an `@Instantiated` child, and gives its tree the shapes a seam's initializer must pass: a child's
+		/// receive of a property provided above every path to the child, required or `onlyIfAvailable`; a rename of
+		/// one on the seam or on a child; a rename above the seam that a child it is on every path to receives by
+		/// the new label; the forms of one label a seam's tree can receive a lazily instantiated property in – the
+		/// required wrapper, with a by-value form beneath it on a second child, or on a `SeamLink` beneath the
+		/// receiver when the seam has one child; the instance by value, which the caller passes as `.instance`; the
+		/// optional wrapper only if available, of the kind the
+		/// graph holds or, in a mixed graph, of the other kind, which the caller passes `nil`; and, in a known share,
+		/// a by-value form beside the optional wrapper, which the seam rejects as a label collision – a child's
+		/// `onlyIfAvailable` receive of a wrapper of a property the caller holds by value, which the caller passes
+		/// `nil`; and, a quarter of the time, a second seam beneath the first. Where no plain property is provided
+		/// above every path to a drawn child, or above the seam for a rename on it, every root instantiates a
+		/// `SeamShared` type under one label, so a receive of it can always be drawn, and where no wrapper is
+		/// provided above, every root instantiates one of `SeamShared` under `seamLazy`. `seamRandom` draws only for
+		/// this pass, so every graph without the feature is drawn as before.
+		private mutating func addingSeam(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.contains(.generateDependencyTree) else { return declarations }
+			var declarations = declarations
+			func childTypeIndices(of index: Int) -> [Int] {
+				Set(edges.filter { $0.sourceIndex == index }.map(\.targetIndex)).subtracting([index]).sorted()
+			}
+			let rootIndices = declarations.indices.filter { declarations[$0].instantiableArguments.contains("isRoot: true") }
+			var candidates = reachableFromRoots.filter { !childTypeIndices(of: $0).isEmpty }.sorted()
+			/// The declarations of the seam's children, by index in `declarations`: a child the graph's edges name, or
+			/// the `SeamChild` type a leaf is given when no reachable type has a child.
+			var childDeclarationIndices = [Int]()
+			if candidates.isEmpty {
+				guard let leaf = reachableFromRoots.sorted().first else { return declarations }
+				// Every reachable type is a leaf: one gains a child to build, so that it has a tree of its own.
+				let childName = "\(prefix)SeamChild"
+				let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+				declarations.append(TypeDeclaration(name: childName, instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances))
+				if let leafIndex = declarations.firstIndex(where: { $0.name == typeName(leaf) }) {
+					declarations[leafIndex].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "seamChild", type: childName))
+				}
+				childDeclarationIndices = [declarations.count - 1]
+				candidates = [leaf]
+			}
+			let seamTypeIndex = seamRandom.element(of: candidates)
+			func markSeam(_ typeIndex: Int) {
+				guard let index = declarations.firstIndex(where: { $0.name == typeName(typeIndex) }),
+				      !declarations[index].instantiableArguments.contains("generateDependencyTree: true")
+				else { return }
+				// The macro's arguments are ordered: `generateDependencyTree` precedes `generateMock`.
+				declarations[index].instantiableArguments.insert("generateDependencyTree: true", at: 0)
+			}
+			markSeam(seamTypeIndex)
+			if childDeclarationIndices.isEmpty {
+				childDeclarationIndices = childTypeIndices(of: seamTypeIndex).compactMap { child in declarations.firstIndex { $0.name == typeName(child) } }
+			}
+			func add(_ property: PropertyDeclaration, toDeclarationAt index: Int) {
+				guard !declarations[index].properties.contains(where: { $0.label == property.label }) else { return }
+				declarations[index].properties.append(property)
+			}
+			func add(_ property: PropertyDeclaration, toTypeAt typeIndex: Int) {
+				guard let index = declarations.firstIndex(where: { $0.name == typeName(typeIndex) }) else { return }
+				add(property, toDeclarationAt: index)
+			}
+			/// The index of the type the declaration at `index` declares, or `nil` for the synthesized `SeamChild`,
+			/// which only the seam reaches.
+			func typeIndex(ofDeclarationAt index: Int) -> Int? {
+				childTypeIndices(of: seamTypeIndex).first { typeName($0) == declarations[index].name }
+			}
+			/// Whether `candidate` is provided above every path to the child declared at `childIndex`: a receive drawn
+			/// on the child must resolve on each, since another root's path can reach the child without the seam.
+			func isProvidedAboveEveryPath(_ candidate: ProvidedProperty, toChildAt childIndex: Int) -> Bool {
+				guard let childTypeIndex = typeIndex(ofDeclarationAt: childIndex) else { return true }
+				return propertiesProvidedAboveEveryPath(to: childTypeIndex).contains { $0.label == candidate.label && $0.type == candidate.type }
+			}
+			/// The properties provided above every path to the seam that a receive or rename can name plainly: not
+			/// optional, not a wrapper, and of one type throughout the graph, as `aliasProperty` requires of what it
+			/// aliases; the seam itself provides none of them.
+			let plainSources = propertiesProvidedAboveEveryPath(to: seamTypeIndex).filter { candidate in
+				candidate.providerIndex != seamTypeIndex
+					&& !candidate.isOptional
+					&& !candidate.type.contains("<")
+					&& !candidate.type.contains("(")
+					&& provided.allSatisfy { $0.label != candidate.label || $0.type == candidate.type }
+			}
+			let sharedTypeName = "\(prefix)SeamShared"
+			let sharedSource = ProvidedProperty(label: "seamShared", type: sharedTypeName, providerIndex: nil, builtIndex: nil)
+			/// Declares the `SeamShared` type, once, and has every root instantiate it under `seamShared`: a receive
+			/// of it beneath the seam passes through the seam whatever the graph provides above. Its triggers are
+			/// listed on `GraphFuzzerSeamDrawFeature.synthesizedSharedProvider`.
+			func ensureSharedProvider() {
+				guard !declarations.contains(where: { $0.name == sharedTypeName }) else { return }
+				// Conforming as the graph's other types do, so a `@Sendable` builder can capture it where they can: a
+				// mixed graph's types are `@unchecked Sendable`, and `source(of:)` marks a type without helper types so
+				// only in an all-`Sendable` graph.
+				let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+				declarations.append(TypeDeclaration(name: sharedTypeName, instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances))
+				for rootIndex in rootIndices {
+					declarations[rootIndex].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "seamShared", type: sharedTypeName))
+				}
+			}
+			/// A plain source provided above every path to the child declared at `childIndex`, drawing `SeamShared`
+			/// where the graph provides none.
+			func plainSource(forChildAt childIndex: Int) -> ProvidedProperty {
+				let childSources = plainSources.filter { isProvidedAboveEveryPath($0, toChildAt: childIndex) }
+				guard !childSources.isEmpty else {
+					ensureSharedProvider()
+					return sharedSource
+				}
+				return seamRandom.element(of: childSources)
+			}
+			/// Declares the `SeamHeld` type, once, and has every root instantiate it by value under `seamHeld`.
+			func ensureHeldProvider() {
+				let heldTypeName = "\(prefix)SeamHeld"
+				guard !declarations.contains(where: { $0.name == heldTypeName }) else { return }
+				let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+				declarations.append(TypeDeclaration(name: heldTypeName, instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances))
+				for rootIndex in rootIndices {
+					declarations[rootIndex].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "seamHeld", type: heldTypeName))
+				}
+			}
+			/// A new type, `SeamLink`, that only the declaration at `parentIndex` instantiates, beneath which a by-value
+			/// form of a wrapper the parent receives can be drawn when the seam has no second child.
+			func appendSeamLink(beneath parentIndex: Int) -> Int {
+				let linkTypeName = "\(prefix)SeamLink"
+				let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+				declarations[parentIndex].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "seamLink", type: linkTypeName))
+				declarations.append(TypeDeclaration(name: linkTypeName, instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances))
+				return declarations.count - 1
+			}
+			let children = childDeclarationIndices
+			// A child's receive of a property provided above the seam: the initializer's pass-through.
+			if seamRandom.percentChance(85) {
+				let child = seamRandom.element(of: children)
+				let source = plainSource(forChildAt: child)
+				if seamRandom.percentChance(50) {
+					add(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: source.label, type: source.type + "?"), toDeclarationAt: child)
+				} else {
+					add(PropertyDeclaration(attribute: "@Received", label: source.label, type: source.type), toDeclarationAt: child)
+				}
+			}
+			// A rename of a property provided above, on the seam or on a child: the parameter is the property before it.
+			if seamRandom.percentChance(40) {
+				let hostDeclarationIndex = seamRandom.percentChance(50)
+					? declarations.firstIndex { $0.name == typeName(seamTypeIndex) }
+					: seamRandom.element(of: children)
+				if let hostDeclarationIndex {
+					let source = hostDeclarationIndex == declarations.firstIndex(where: { $0.name == typeName(seamTypeIndex) })
+						? (plainSources.isEmpty ? { ensureSharedProvider(); return sharedSource }() : seamRandom.element(of: plainSources))
+						: plainSource(forChildAt: hostDeclarationIndex)
+					add(PropertyDeclaration(
+						attribute: "@Received(fulfilledByDependencyNamed: \"\(source.label)\", ofType: \(source.type).self)",
+						label: "\(source.label)Seam",
+						type: source.type,
+					), toDeclarationAt: hostDeclarationIndex)
+				}
+			}
+			// A rename above the seam, received by its new label beneath it by a child the renaming type is on every
+			// path to: the parameter is the renamed property. Which declaration is on every path to which is read
+			// from the declarations rather than from `dominators`, which a root's extra property, not among the
+			// graph's `edges`, is missing from; the source must be provided above every path to the renaming type.
+			let declarationIndexByName = Dictionary(uniqueKeysWithValues: declarations.enumerated().map { ($1.name, $0) })
+			let rootDeclarationIndices = Set(rootIndices)
+			let childIndicesByDeclaration = declarations.map { declaration in
+				declaration.properties.compactMap { property -> Int? in
+					guard property.attribute.hasPrefix("@Instantiated") else { return nil }
+					return declarationIndexByName[Self.builtTypeName(of: property)]
+				}
+			}
+			func declarationsReachableFromRoots(excluding excludedIndex: Int?) -> Set<Int> {
+				var reached = Set<Int>()
+				var stack = rootIndices.flatMap { childIndicesByDeclaration[$0] }.filter { $0 != excludedIndex }
+				while let current = stack.popLast() {
+					guard reached.insert(current).inserted else { continue }
+					stack += childIndicesByDeclaration[current].filter { $0 != excludedIndex }
+				}
+				return reached
+			}
+			let declarationsReachedFromRoots = declarationsReachableFromRoots(excluding: nil)
+			/// Whether the declaration at `providerIndex` is on every path from a root to the declaration at `index`.
+			func isOnEveryPath(from providerIndex: Int, to index: Int) -> Bool {
+				guard !rootDeclarationIndices.contains(providerIndex), declarationsReachedFromRoots.contains(index) else { return true }
+				return providerIndex == index || !declarationsReachableFromRoots(excluding: providerIndex).contains(index)
+			}
+			let seamDeclarationIndex = declarationIndexByName[typeName(seamTypeIndex)]!
+			let declarationsAboveSeam = (0..<typeCount).filter { typeIndex in
+				guard typeIndex != seamTypeIndex, let index = declarationIndexByName[typeName(typeIndex)] else { return false }
+				return declarationsReachedFromRoots.contains(index) && isOnEveryPath(from: index, to: seamDeclarationIndex)
+			}
+			if seamRandom.percentChance(40), !declarationsAboveSeam.isEmpty {
+				let above = seamRandom.element(of: declarationsAboveSeam)
+				let aboveDeclarationIndex = declarationIndexByName[typeName(above)]!
+				let receivers = children.filter { isOnEveryPath(from: aboveDeclarationIndex, to: $0) }
+				let aboveSources = propertiesProvidedAboveEveryPath(to: above).filter { candidate in
+					plainSources.contains { $0.label == candidate.label && $0.type == candidate.type }
+						&& candidate.providerIndex.map { provider in declarationIndexByName[typeName(provider)].map { isOnEveryPath(from: $0, to: aboveDeclarationIndex) } ?? false } ?? true
+				}
+				if !receivers.isEmpty {
+					let receiver = seamRandom.element(of: receivers)
+					let source = aboveSources.isEmpty ? { ensureSharedProvider(); return sharedSource }() : seamRandom.element(of: aboveSources)
+					add(PropertyDeclaration(
+						attribute: "@Received(fulfilledByDependencyNamed: \"\(source.label)\", ofType: \(source.type).self)",
+						label: "\(source.label)Above",
+						type: source.type,
+					), toTypeAt: above)
+					add(PropertyDeclaration(attribute: "@Received", label: "\(source.label)Above", type: source.type), toDeclarationAt: receiver)
+				}
+			}
+			// The forms a seam's tree receives a lazily instantiated property provided above in, under the rule that a
+			// required wrapper provides every form beneath it, an optional wrapper nothing but itself, and the rest is a
+			// label collision.
+			if seamRandom.percentChance(50) {
+				let child = seamRandom.element(of: children)
+				let lazySources = propertiesProvidedAboveEveryPath(to: seamTypeIndex).filter { candidate in
+					candidate.providerIndex != seamTypeIndex
+						&& !candidate.isOptional
+						&& (candidate.type.hasPrefix("LazilyInstantiated<") || candidate.type.hasPrefix("SendableLazilyInstantiated<"))
+						&& isProvidedAboveEveryPath(candidate, toChildAt: child)
+				}
+				let source: ProvidedProperty
+				if let lazySource = lazySources.isEmpty ? nil : seamRandom.element(of: lazySources) {
+					source = lazySource
+				} else {
+					// Every root instantiates `SeamShared` lazily under one label, so a wrapper receive can always be drawn.
+					// A mixed graph's wrapper is `Sendable`, so a child beneath a `Sendable` builder can read it too.
+					ensureSharedProvider()
+					let wrapper = sendability == .nonSendable ? "LazilyInstantiated" : "SendableLazilyInstantiated"
+					for rootIndex in rootIndices {
+						add(PropertyDeclaration(attribute: "@Instantiated", label: "seamLazy", type: "\(wrapper)<\(sharedTypeName)>"), toDeclarationAt: rootIndex)
+					}
+					source = ProvidedProperty(label: "seamLazy", type: "\(wrapper)<\(sharedTypeName)>", providerIndex: nil, builtIndex: nil)
+				}
+				let instanceType = String(source.type.drop { $0 != "<" }.dropFirst().dropLast())
+				let wrapperKind = String(source.type.prefix { $0 != "<" })
+				let otherKind = wrapperKind.hasPrefix("Sendable") ? String(wrapperKind.dropFirst("Sendable".count)) : "Sendable\(wrapperKind)"
+				let secondChild = children.filter { $0 != child }
+				func byValueForm(toDeclarationAt index: Int) {
+					if seamRandom.percentChance(50) {
+						add(PropertyDeclaration(attribute: "@Received", label: source.label, type: instanceType), toDeclarationAt: index)
+					} else {
+						add(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: source.label, type: instanceType + "?"), toDeclarationAt: index)
+					}
+				}
+				switch seamRandom.integer(in: 0...9) {
+				case 0, 1:
+					// The required wrapper, which provides a by-value form beneath it: on another child, or, where the
+					// seam has one, on a link beneath the receiver.
+					add(PropertyDeclaration(attribute: "@Received", label: source.label, type: source.type), toDeclarationAt: child)
+					if seamRandom.percentChance(70) {
+						byValueForm(toDeclarationAt: secondChild.isEmpty ? appendSeamLink(beneath: child) : seamRandom.element(of: secondChild))
+					}
+				case 2, 3:
+					// The instance by value, which the caller passes as `.instance`.
+					byValueForm(toDeclarationAt: child)
+				case 4, 5:
+					// The optional wrapper, which the caller passes as it holds it.
+					add(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: source.label, type: source.type + "?"), toDeclarationAt: child)
+				case 6, 7:
+					// The optional wrapper of the other kind, which the caller passes `nil`: in a mixed graph, whose
+					// types can hold either kind; elsewhere the graph's own kind.
+					let kind = sendability == .mixed ? otherKind : wrapperKind
+					add(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: source.label, type: "\(kind)<\(instanceType)>?"), toDeclarationAt: child)
+				default:
+					// A by-value form beside the optional wrapper, on two children: the label collision the seam
+					// reports, drawn one lazy draw in five; with one child, the optional wrapper alone.
+					add(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: source.label, type: source.type + "?"), toDeclarationAt: child)
+					if !secondChild.isEmpty {
+						byValueForm(toDeclarationAt: seamRandom.element(of: secondChild))
+					}
+				}
+			}
+			// A child's `onlyIfAvailable` receive of a wrapper of a property the caller holds by value: the caller
+			// passes `nil`, as it does inline, since an instance is no wrapper. The property is the draw's own
+			// (`seamHeld`), which nothing else receives, so no by-value form of the label collides with it. A
+			// `Sendable` graph's types hold only `Sendable` wrappers, a non-`Sendable` graph's only
+			// `LazilyInstantiated`, and a mixed graph's either, as its other wrappers are drawn.
+			if seamRandom.percentChance(35) {
+				let child = seamRandom.element(of: children)
+				ensureHeldProvider()
+				let source = ProvidedProperty(label: "seamHeld", type: "\(prefix)SeamHeld", providerIndex: nil, builtIndex: nil)
+				let drawsSendableWrapper = seamRandom.percentChance(50)
+				let wrapper = switch sendability {
+				case .nonSendable:
+					"LazilyInstantiated"
+				case .sendable:
+					"SendableLazilyInstantiated"
+				case .mixed:
+					drawsSendableWrapper ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+				}
+				add(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: source.label, type: "\(wrapper)<\(source.type)>?"), toDeclarationAt: child)
+			}
+			// A seam beneath the seam, so that a seam reaches a seam.
+			let innerCandidates = childTypeIndices(of: seamTypeIndex).filter { !childTypeIndices(of: $0).isEmpty }
+			if seamRandom.percentChance(25), !innerCandidates.isEmpty {
+				markSeam(seamRandom.element(of: innerCandidates))
+			}
+			return declarations
+		}
+
+		private static let seamRandomSeedMask: UInt64 = 0x7365616D5F747265
+
+		// MARK: Spelled properties
+
+		/// With the `generateDependencyTree` feature on, seven graphs in ten gain a small seam tree of their own whose
+		/// one value, `spelled`, has a type drawn from `GraphFuzzerSpelling`: a closure, a closure with a parameter and
+		/// a return, a `@Sendable` closure, the optional forms of both closures, a tuple holding a closure, an
+		/// existential, a closure taking one, a nested type, an array, a `Result`, or a typealias of a type that is not
+		/// a function. No `@Instantiable` type provides such a value, so it is `@Forwarded`: by `SpellSeam` itself, a
+		/// seam the first root builds through an instantiator, or by `SpellHost`, which the first root builds through
+		/// an instantiator and which instantiates `SpellSeam`. The seam's tree then takes it in each way a seam's
+		/// signature can: the seam's own `@Forwarded` or `@Received` property, a pass-through its child `SpellChild`
+		/// requires or receives only if available, the optional form beside the required one on a second child
+		/// `SpellSibling`, and a rename of it on the seam or on the child. A graph whose wrappers are all `Sendable`
+		/// draws only `Sendable` values, its closures `@Sendable`, since its types are `Sendable` and its builders
+		/// `@Sendable`; every other graph builds the tree through `Instantiator`, which captures any value. Now and then
+		/// the child or the seam generates a mock. `spellingRandom` draws only for this pass.
+		private mutating func addingSpelledProperties(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.contains(.generateDependencyTree), spellingRandom.percentChance(70) else { return declarations }
+			var declarations = declarations
+			let spelling = spellingRandom.element(of: GraphFuzzerSpelling.allCases.filter { sendability != .sendable || $0.hasSendableSpelling })
+			let type = spelling.spelledType(prefix: prefix, isSendable: sendability == .sendable)
+			let optionalForm = GraphFuzzerSpelling.optionalForm(of: type)
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let seamName = "\(prefix)SpellSeam"
+			let childName = "\(prefix)SpellChild"
+			let label = GraphFuzzerSpelling.label
+			var seam = TypeDeclaration(name: seamName, instantiableArguments: ["generateDependencyTree: true"], properties: [], declaresHelperTypes: false, additionalConformances: conformances)
+			seam.additionalDeclarations = spelling.helperDeclarations(prefix: prefix, areSendable: helperTypesAreSendable)
+			var child = TypeDeclaration(name: childName, instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances)
+			var newDeclarations = [TypeDeclaration]()
+			if spellingRandom.percentChance(35) {
+				// The seam forwards the value, so the first root builds the seam through an instantiator.
+				seam.properties.append(PropertyDeclaration(attribute: "@Forwarded", label: label, type: type))
+				declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "spellSeamBuilder", type: "\(instantiator)<\(seamName)>"))
+			} else {
+				// A host forwards the value and instantiates the seam, which now and then receives the value itself.
+				let hostName = "\(prefix)SpellHost"
+				var host = TypeDeclaration(name: hostName, instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances)
+				host.properties.append(PropertyDeclaration(attribute: "@Forwarded", label: label, type: type))
+				host.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "spellSeam", type: seamName))
+				newDeclarations.append(host)
+				declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "spellHostBuilder", type: "\(instantiator)<\(hostName)>"))
+				if spellingRandom.percentChance(40) {
+					seam.properties.append(spellingRandom.percentChance(70) || type.hasSuffix("?")
+						? PropertyDeclaration(attribute: "@Received", label: label, type: type)
+						: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: label, type: optionalForm))
+				}
+			}
+			seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "spellChild", type: childName))
+			// The child receives the value, required or only if available; an existential is now and then received
+			// spelled without `any`, which names the same type.
+			let receivedType = spelling == .existential && spellingRandom.percentChance(50) ? String(type.dropFirst("any ".count)) : type
+			let childIsRequired = spellingRandom.percentChance(65)
+			child.properties.append(childIsRequired
+				? PropertyDeclaration(attribute: "@Received", label: label, type: receivedType)
+				: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: label, type: GraphFuzzerSpelling.optionalForm(of: receivedType)))
+			// A second child receiving the optional form only if available, beside the child's form of the label.
+			if spellingRandom.percentChance(30) {
+				let siblingName = "\(prefix)SpellSibling"
+				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "spellSibling", type: siblingName))
+				newDeclarations.append(TypeDeclaration(
+					name: siblingName,
+					instantiableArguments: [],
+					properties: [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: label, type: optionalForm)],
+					declaresHelperTypes: false,
+					additionalConformances: conformances,
+				))
+			}
+			// A rename of the value on the seam or on the child, which the seam's signature takes before the rename.
+			if spelling.canBeRenamed, !type.hasSuffix("?"), spellingRandom.percentChance(30) {
+				let alias = PropertyDeclaration(
+					attribute: "@Received(fulfilledByDependencyNamed: \"\(label)\", ofType: \(GraphFuzzerSpelling.ofTypeSpelling(of: type)).self)",
+					label: "\(label)Alias",
+					type: type,
+				)
+				if spellingRandom.percentChance(50) {
+					seam.properties.append(alias)
+				} else {
+					child.properties.append(alias)
+				}
+			}
+			if spellingRandom.percentChance(20) {
+				child.instantiableArguments.append("generateMock: true")
+			} else if spellingRandom.percentChance(15) {
+				seam.instantiableArguments.append("generateMock: true")
+			}
+			return declarations + [seam, child] + newDeclarations
+		}
+
+		private static let spellingRandomSeedMask: UInt64 = 0x7370656C6C696E67
+
+		// MARK: Uncreated aliases
+
+		/// With the `generateDependencyTree` feature on, four graphs in ten gain a small seam tree of their own whose
+		/// `onlyIfAvailable` alias may not be created, in the shapes the uncreated-alias walk decides: `AliasSeam`, which
+		/// the first root instantiates, instantiates `AliasLeft`, which instantiates `AliasDetail`, which declares
+		/// `aliasAuth`, an `onlyIfAvailable` alias of `aliasToken` – usually a pass-through received only if available,
+		/// and now and then a required optional parameter (the seam's own `@Received` or `@Forwarded` property, or a
+		/// property `AliasLeft` requires), whose exact-form alias (`ofType: AliasValue?.self`) is always created and
+		/// whose unwrapped-form alias is not; one graph in ten declares the alias on the seam itself. Now and then a
+		/// reader beneath the alias reads its property: `AliasReader` receives it, only if available or required,
+		/// declares a label-keeping alias of it retyped to an existential, is built through a wrapper, is reached
+		/// through a nested seam `AliasPanel`, or sits beneath `AliasMid`; `AliasDetail` aliases the alias as
+		/// `aliasBearer`, only if available or required; a declaration of the alias's label is placed beside
+		/// `AliasDetail` (on `AliasLeft`), above it (on the seam), or as a parameter of the seam (its own receive, or
+		/// `AliasClient`'s pass-through) – the alias's own property, another type, or an instantiator; the caller holds
+		/// `aliasAuth` or `aliasToken`; `AliasLeft` instantiates `aliasToken` itself, which creates the alias on that
+		/// path while `AliasRight` beside it receives `aliasToken` only if available, or declares it so that the alias
+		/// is statically uncreated – `AliasDetail` built inside `aliasToken`'s builder, or `aliasToken` generated after
+		/// `AliasA`, which builds `AliasDetail`; beside an alias that keeps its label, `AliasLeft` now and then
+		/// instantiates `aliasToken` itself while `AliasValue` receives `aliasDetail`, so the alias's own fulfilling
+		/// property is the sibling generated after it. About half of the reader, alias-of-alias and same-property draws
+		/// produce the accepted twin instead – the reader or the second alias reads the fulfilling property, or the
+		/// alias is made required – so the rest of the graph stays accepted and value-checked. `uncreatedAliasRandom`
+		/// draws only for this pass.
+		private mutating func addingUncreatedAliasShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.contains(.generateDependencyTree), uncreatedAliasRandom.percentChance(40) else { return declarations }
+			var declarations = declarations
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func type(_ suffix: String, arguments: [String] = [], properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: arguments, properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+			}
+			let valueType = "\(prefix)AliasValue"
+			let labelType = "\(prefix)AliasLabel"
+			let protocolName = "\(prefix)AliasProto"
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let lazyWrapper = sendability == .sendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			var seam = type("AliasSeam", arguments: ["generateDependencyTree: true"])
+			var left = type("AliasLeft")
+			var detail = type("AliasDetail")
+			var value = type("AliasValue")
+			value.additionalConformances.append(protocolName)
+			value.additionalDeclarations.append("public protocol \(protocolName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+			var newDeclarations = [type("AliasLabel")]
+
+			// How `aliasToken` reaches the seam: a pass-through received only if available, which the seam takes as
+			// `AliasValue? = nil`, or a required optional parameter – the seam's own receive, its own forwarded property,
+			// or a property `AliasLeft` requires – which every caller holds a value for.
+			enum ParameterKind {
+				case onlyIfAvailablePassThrough
+				case ownRequiredOptionalReceive
+				case ownRequiredOptionalForwarded
+				case requiredOptionalPassThrough
+			}
+			let parameterKind: ParameterKind = switch uncreatedAliasRandom.integer(in: 0...9) {
+			case 0...6:
+				.onlyIfAvailablePassThrough
+			case 7:
+				.ownRequiredOptionalReceive
+			case 8:
+				.ownRequiredOptionalForwarded
+			default:
+				.requiredOptionalPassThrough
+			}
+			let isRequiredOptionalParameter = parameterKind != .onlyIfAvailablePassThrough
+			// The alias's `ofType:` spelling: the exact optional form of the parameter, which a required optional
+			// parameter always creates, or the unwrapped form.
+			var aliasFulfillingType = uncreatedAliasRandom.percentChance(isRequiredOptionalParameter ? 60 : 20) ? "\(valueType)?" : valueType
+			let aliasOnSeam = uncreatedAliasRandom.percentChance(10)
+			// The alias keeping its fulfilling property's label and only making it optional – a redundant spelling of a
+			// plain receive, which is not an alias of itself – where its declaring type does not declare `aliasToken`
+			// itself; every reader then reads the alias, and nothing beside it is drawn under `aliasAuth`.
+			let aliasKeepsLabel = !(aliasOnSeam && (parameterKind == .ownRequiredOptionalReceive || parameterKind == .ownRequiredOptionalForwarded)) && labelKeepingAliasRandom.percentChance(10)
+			if aliasKeepsLabel {
+				aliasFulfillingType = valueType
+			}
+			// Whether the alias is required rather than `onlyIfAvailable`: the accepted twin of a declaration of its
+			// property beside its declaring type, drawn below.
+			var aliasIsRequired = false
+			func aliasDeclaration() -> PropertyDeclaration {
+				PropertyDeclaration(
+					attribute: "@Received(fulfilledByDependencyNamed: \"aliasToken\", ofType: \(aliasFulfillingType).self\(aliasIsRequired ? "" : ", onlyIfAvailable: true"))",
+					label: aliasKeepsLabel ? "aliasToken" : "aliasAuth",
+					type: valueType + "?",
+				)
+			}
+			switch parameterKind {
+			case .onlyIfAvailablePassThrough:
+				if uncreatedAliasRandom.percentChance(40) {
+					declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasToken", type: valueType))
+				}
+			case .ownRequiredOptionalReceive, .requiredOptionalPassThrough:
+				// A required `aliasToken: AliasValue?` is fulfilled by its exact form alone, which the root declares as
+				// an alias of the value it instantiates.
+				declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasSource", type: valueType))
+				declarations[0].properties.append(PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"aliasSource\", ofType: \(valueType).self, onlyIfAvailable: true)", label: "aliasToken", type: valueType + "?"))
+				if parameterKind == .ownRequiredOptionalReceive {
+					seam.properties.append(PropertyDeclaration(attribute: "@Received", label: "aliasToken", type: valueType + "?"))
+				} else {
+					left.properties.append(PropertyDeclaration(attribute: "@Received", label: "aliasToken", type: valueType + "?"))
+				}
+			case .ownRequiredOptionalForwarded:
+				seam.properties.append(PropertyDeclaration(attribute: "@Forwarded", label: "aliasToken", type: valueType + "?"))
+			}
+			if uncreatedAliasRandom.percentChance(30) {
+				declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasAuth", type: valueType))
+			}
+			declarations[0].properties.append(parameterKind == .ownRequiredOptionalForwarded
+				? PropertyDeclaration(attribute: "@Instantiated", label: "aliasSeamBuilder", type: "\(instantiator)<\(seam.name)>")
+				: PropertyDeclaration(attribute: "@Instantiated", label: "aliasSeam", type: seam.name))
+			func declarationOfAliasLabel() -> PropertyDeclaration {
+				switch uncreatedAliasRandom.integer(in: 0...2) {
+				case 0:
+					PropertyDeclaration(attribute: "@Instantiated", label: "aliasAuth", type: valueType)
+				case 1:
+					PropertyDeclaration(attribute: "@Instantiated", label: "aliasAuth", type: labelType)
+				default:
+					PropertyDeclaration(attribute: "@Instantiated", label: "aliasAuth", type: "\(instantiator)<\(valueType)>")
+				}
+			}
+			// Drawn whether or not the alias keeps its label, so that the graphs it does not touch are drawn as before.
+			let labelDeclarationDraw = uncreatedAliasRandom.integer(in: 0...19)
+			switch aliasKeepsLabel ? 19 : labelDeclarationDraw {
+			case 0...4:
+				// Beside the alias's declaring type: on the type that builds it, declared before it. Half the time the
+				// accepted twin: the alias made required, which is created wherever its declaring type is built, with
+				// the caller holding its fulfilling property, which the required alias makes a required parameter.
+				let sameProperty = declarationOfAliasLabel()
+				if sameProperty.type == valueType, !aliasOnSeam, parameterKind == .onlyIfAvailablePassThrough, uncreatedAliasRandom.percentChance(50) {
+					aliasIsRequired = true
+					aliasFulfillingType = valueType
+					if !declarations[0].properties.contains(where: { $0.label == "aliasToken" }) {
+						declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasToken", type: valueType))
+					}
+				}
+				left.properties.append(sameProperty)
+			case 5...7 where !aliasOnSeam:
+				// Above the type that builds the alias's declaring type.
+				seam.properties.append(declarationOfAliasLabel())
+			case 8...11:
+				// A parameter of the seam: its own receive, where the seam does not declare the alias itself, or a
+				// pass-through another child receives.
+				if !aliasOnSeam, uncreatedAliasRandom.percentChance(50) {
+					seam.properties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "aliasAuth", type: valueType + "?"))
+				} else {
+					let clientType = uncreatedAliasRandom.percentChance(50) ? valueType : labelType
+					newDeclarations.append(type("AliasClient", properties: [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "aliasAuth", type: clientType + "?")]))
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasClient", type: "\(prefix)AliasClient"))
+				}
+			default:
+				break
+			}
+			// How `AliasLeft` reaches `AliasDetail`, and whether it declares `aliasToken` itself: instantiated beside
+			// `AliasDetail`, which creates the alias on that path; instantiated as the owner of `AliasDetail`'s builder, so
+			// that the alias is declared where `aliasToken` is still being built; or generated after `AliasA`, which
+			// builds `AliasDetail`, so that the alias is declared where `aliasToken` is generated later. Only a pass-through
+			// received only if available leaves `aliasToken` for `AliasLeft` to declare.
+			var leftBuildsDetailDirectly = true
+			if parameterKind == .onlyIfAvailablePassThrough {
+				switch uncreatedAliasRandom.integer(in: 0...19) {
+				case 0...3:
+					left.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasToken", type: valueType))
+					newDeclarations.append(type("AliasRight", properties: [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "aliasToken", type: valueType + "?")]))
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasRight", type: "\(prefix)AliasRight"))
+				case 4...5:
+					left.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasToken", type: valueType))
+					value.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasDetailBuilder", type: "\(instantiator)<\(detail.name)>"))
+					leftBuildsDetailDirectly = false
+				case 6...7:
+					left.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasToken", type: valueType))
+					left.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasA", type: "\(prefix)AliasA"))
+					value.properties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "aliasA", type: "\(prefix)AliasA?"))
+					newDeclarations.append(type("AliasA", properties: [PropertyDeclaration(attribute: "@Instantiated", label: "aliasDetail", type: detail.name)]))
+					leftBuildsDetailDirectly = false
+				default:
+					break
+				}
+			}
+			// A second alias of the alias on its declaring type, only if available or required; half the time the
+			// accepted twin, an alias of the fulfilling property instead.
+			if !aliasOnSeam, uncreatedAliasRandom.percentChance(20) {
+				// Beside an alias that keeps its label, the label names the alias, so the second alias reads it under the
+				// alias's own type.
+				let readsAlias = uncreatedAliasRandom.percentChance(50) || aliasKeepsLabel
+				let readLabel = readsAlias && !aliasKeepsLabel ? "aliasAuth" : "aliasToken"
+				let bearerIsRequired = uncreatedAliasRandom.percentChance(30)
+				detail.properties.append(PropertyDeclaration(
+					attribute: "@Received(fulfilledByDependencyNamed: \"\(readLabel)\", ofType: \(readsAlias ? valueType + "?" : valueType).self\(bearerIsRequired && readsAlias ? "" : ", onlyIfAvailable: true"))",
+					label: "aliasBearer",
+					type: valueType + "?",
+				))
+			}
+			// A reader beneath the alias, in one of the shapes the walk decides; half the time the accepted twin, which
+			// reads the fulfilling property instead.
+			if uncreatedAliasRandom.percentChance(50) {
+				let readsAlias = uncreatedAliasRandom.percentChance(50) && !aliasKeepsLabel
+				let readLabel = readsAlias ? "aliasAuth" : "aliasToken"
+				var reader = type("AliasReader")
+				switch uncreatedAliasRandom.integer(in: 0...9) {
+				case 0...4:
+					reader.properties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: readLabel, type: valueType + "?"))
+				case 5:
+					reader.properties.append(PropertyDeclaration(attribute: "@Received", label: readLabel, type: valueType + "?"))
+				default:
+					// A label-keeping alias retyped to an existential, or, as the twin, an alias of the fulfilling property.
+					reader.properties.append(readsAlias
+						? PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"aliasAuth\", ofType: \(valueType)?.self, onlyIfAvailable: true)", label: "aliasAuth", type: "(any \(protocolName))?")
+						: PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"aliasToken\", ofType: \(valueType).self, onlyIfAvailable: true)", label: "aliasBearer", type: "(any \(protocolName))?"))
+				}
+				newDeclarations.append(reader)
+				var readerHolder = aliasOnSeam && uncreatedAliasRandom.percentChance(50) ? seam : detail
+				switch uncreatedAliasRandom.integer(in: 0...9) {
+				case 0...5:
+					readerHolder.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasReader", type: reader.name))
+				case 6:
+					readerHolder.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasReaderBuilder", type: "\(uncreatedAliasRandom.percentChance(50) ? instantiator : lazyWrapper)<\(reader.name)>"))
+				case 7:
+					// A nested seam, whose pass-through stands for the reader's receive.
+					newDeclarations.append(type("AliasPanel", arguments: ["generateDependencyTree: true"], properties: [PropertyDeclaration(attribute: "@Instantiated", label: "aliasReader", type: reader.name)]))
+					readerHolder.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasPanel", type: "\(prefix)AliasPanel"))
+				default:
+					newDeclarations.append(type("AliasMid", properties: [PropertyDeclaration(attribute: "@Instantiated", label: "aliasReader", type: reader.name)]))
+					readerHolder.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasMid", type: "\(prefix)AliasMid"))
+				}
+				if readerHolder.name == seam.name {
+					seam = readerHolder
+				} else {
+					detail = readerHolder
+				}
+			}
+			// Beside an alias that keeps its label and whose property is an only-if-available pass-through nothing else
+			// declares, `AliasLeft` now and then instantiates `aliasToken` itself while `AliasValue` receives `aliasDetail`:
+			// the alias's own fulfilling property is then the sibling generated after `AliasDetail`, which creates no alias
+			// and passes `AliasDetail` nothing but `nil`, inline and in the seam alike.
+			if aliasKeepsLabel, parameterKind == .onlyIfAvailablePassThrough, leftBuildsDetailDirectly,
+			   !left.properties.contains(where: { $0.label == "aliasToken" }),
+			   !declarations[0].properties.contains(where: { $0.type == valueType }),
+			   labelKeepingAliasRandom.percentChance(40)
+			{
+				left.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasToken", type: valueType))
+				value.properties.append(PropertyDeclaration(attribute: "@Received", label: "aliasDetail", type: detail.name))
+			}
+			if aliasOnSeam {
+				seam.properties.insert(aliasDeclaration(), at: 0)
+			} else {
+				detail.properties.insert(aliasDeclaration(), at: 0)
+			}
+			if leftBuildsDetailDirectly {
+				left.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasDetail", type: detail.name))
+			}
+			seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasLeft", type: left.name))
+			return declarations + [seam, left, detail, value] + newDeclarations
+		}
+
+		private static let uncreatedAliasRandomSeedMask: UInt64 = 0x756E637265617465
+		private static let labelKeepingAliasRandomSeedMask: UInt64 = 0x6B6565704C61626C
+
 		// MARK: Extension
 
 		/// An `@Instantiable` extension of a type that is not itself `@Instantiable`, whose `instantiate(…)` has
@@ -1708,7 +2782,8 @@ enum GraphFuzzerGenerator {
 			}
 			let conformances = ([baseConformances] + declaration.additionalConformances).joined(separator: ", ")
 			var lines = [instantiableAttribute, "public final class \(declaration.name): \(conformances) {"]
-			let parameters = (declaration.properties.map { "\($0.label): \($0.type)" } + declaration.defaultValuedParameters.map(\.declaration)).joined(separator: ", ")
+			// A function-typed parameter is stored, so it escapes.
+			let parameters = (declaration.properties.map { "\($0.label): \(GraphFuzzerSpelling.isFunctionType($0.type) ? "@escaping " : "")\($0.type)" } + declaration.defaultValuedParameters.map(\.declaration)).joined(separator: ", ")
 			let storedParameters = storesEveryParameter ? declaration.defaultValuedParameters : []
 			if declaration.properties.isEmpty, storedParameters.isEmpty {
 				lines.append("\tpublic init(\(parameters)) {}")
@@ -1816,6 +2891,18 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	/// A type built through a `Sendable` wrapper whose subtree has a labeled default-valued initializer parameter and
 	/// a dependency the mock cannot build, both of types that are not `Sendable`.
 	case nonSendableValuesInsideSendableBuilder
+	/// A type declared with `generateDependencyTree: true`, whose tree SafeDI generates in an initializer of its own
+	/// that every tree reaching it calls. Drawn only with the `generateDependencyTree` generator feature on; what its
+	/// initializer takes is a `GraphFuzzerSeamOutputFeature`, read from the generated code.
+	case generateDependencyTree
+
+	/// The features only a graph drawn with the `generateDependencyTree` generator feature has.
+	static let seamCases: [GraphFuzzerFeature] = [.generateDependencyTree]
+
+	/// The features a graph drawn without any generator feature can have, which the smoke batch must exercise.
+	static var baseCases: [GraphFuzzerFeature] {
+		allCases.filter { !seamCases.contains($0) }
+	}
 
 	static func < (lhs: GraphFuzzerFeature, rhs: GraphFuzzerFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -1857,6 +2944,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				case let .instantiableAttribute(arguments):
 					if arguments.contains("isRoot: true") {
 						rootCount += 1
+					}
+					if arguments.contains("generateDependencyTree: true") {
+						features.insert(.generateDependencyTree)
 					}
 					nextTypeIsMocked = arguments.contains("generateMock: true")
 					if nextTypeIsMocked {
@@ -2026,6 +3116,350 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		return features
 	}
 
+	/// The seam shapes drawn in `fixture`, read from its source: the seams, their `@Instantiated` children, and the
+	/// properties of each.
+	static func seamDrawFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerSeamDrawFeature> {
+		var seamNames = Set<String>()
+		var mockedTypeNames = Set<String>()
+		var childNamesBySeam = [String: Set<String>]()
+		var propertiesByType = [String: [(attribute: String, label: String, type: String)]]()
+		for content in fixture.swiftFileContent {
+			var nextTypeIsSeam = false
+			var nextTypeIsMocked = false
+			var currentType: String?
+			for line in GraphFuzzerSourceLine.lines(of: content) {
+				switch line {
+				case let .instantiableAttribute(arguments):
+					nextTypeIsSeam = arguments.contains("generateDependencyTree: true")
+					nextTypeIsMocked = arguments.contains("generateMock: true")
+				case let .typeDeclaration(name):
+					currentType = name
+					propertiesByType[name, default: []] += []
+					if nextTypeIsSeam {
+						seamNames.insert(name)
+					}
+					if nextTypeIsMocked {
+						mockedTypeNames.insert(name)
+					}
+					nextTypeIsSeam = false
+					nextTypeIsMocked = false
+				case let .property(attribute, label, type):
+					guard let currentType else { continue }
+					propertiesByType[currentType, default: []].append((attribute, label, type))
+					if seamNames.contains(currentType), attribute.hasPrefix("@Instantiated") {
+						childNamesBySeam[currentType, default: []].insert(builtTypeName(ofPropertyWithAttribute: attribute, type: type))
+					}
+				case .instantiateMethod, .other:
+					break
+				}
+			}
+		}
+		var features = Set<GraphFuzzerSeamDrawFeature>()
+		let allProperties = propertiesByType.values.flatMap(\.self)
+		func isWrapper(_ type: String) -> Bool {
+			type.hasPrefix("LazilyInstantiated<") || type.hasPrefix("SendableLazilyInstantiated<")
+		}
+		for property in allProperties {
+			if property.label == "seamChild" {
+				features.insert(.synthesizedChild)
+			} else if property.label == "seamShared", property.attribute == "@Instantiated" {
+				features.insert(.synthesizedSharedProvider)
+			} else if property.label == "seamLazy", property.attribute == "@Instantiated" {
+				features.insert(.synthesizedLazyProvider)
+			} else if property.label == "seamHeld", property.attribute == "@Instantiated" {
+				features.insert(.synthesizedHeldProvider)
+			} else if property.attribute.contains("fulfilledByDependencyNamed"), property.label.hasSuffix("Seam") {
+				features.insert(.renameOnSeamOrChild)
+			} else if property.attribute.contains("fulfilledByDependencyNamed"), property.label.hasSuffix("Above") {
+				features.insert(.renameAboveSeam)
+			}
+		}
+		func otherKind(of wrapperType: String) -> String {
+			wrapperType.hasPrefix("Sendable") ? String(wrapperType.dropFirst("Sendable".count)) : "Sendable\(wrapperType)"
+		}
+		/// The label an alias renames: the `fulfilledByDependencyNamed:` argument of `attribute`, or `nil`.
+		func aliasedLabel(of attribute: String) -> String? {
+			guard let range = attribute.range(of: "fulfilledByDependencyNamed: \"") else { return nil }
+			return String(attribute[range.upperBound...].prefix { $0 != "\"" })
+		}
+		/// The names of every type beneath `childNames`, those types included, followed through `@Instantiated`.
+		func treeTypeNames(beneath childNames: Set<String>) -> Set<String> {
+			var treeTypeNames = Set<String>()
+			var typeNamesToVisit = Array(childNames)
+			while let typeName = typeNamesToVisit.popLast() {
+				guard treeTypeNames.insert(typeName).inserted else { continue }
+				for property in propertiesByType[typeName] ?? [] where property.attribute.hasPrefix("@Instantiated") {
+					typeNamesToVisit.append(builtTypeName(ofPropertyWithAttribute: property.attribute, type: property.type))
+				}
+			}
+			return treeTypeNames
+		}
+		for (seamName, childNames) in childNamesBySeam {
+			if !treeTypeNames(beneath: childNames).isDisjoint(with: seamNames.subtracting([seamName])) {
+				features.insert(.innerSeam)
+			}
+			// The labels the seam's children receive by value, whatever the type, or alias, or the seam aliases: a
+			// by-value form of the label beside an optional wrapper receive, which collides.
+			var byValueLabels = Set<String>()
+			for property in propertiesByType[seamName] ?? [] {
+				if let aliasedLabel = aliasedLabel(of: property.attribute) {
+					byValueLabels.insert(aliasedLabel)
+				}
+			}
+			for childName in childNames {
+				for property in propertiesByType[childName] ?? [] where property.attribute.hasPrefix("@Received") {
+					if let aliasedLabel = aliasedLabel(of: property.attribute) {
+						byValueLabels.insert(aliasedLabel)
+					} else if !isWrapper(property.type) {
+						byValueLabels.insert(property.label)
+					}
+				}
+			}
+			let byValueLabelsInTree = Set(treeTypeNames(beneath: childNames).flatMap { typeName in
+				(propertiesByType[typeName] ?? []).filter { $0.attribute.hasPrefix("@Received") && !$0.attribute.contains("fulfilledByDependencyNamed") && !isWrapper($0.type) }.map(\.label)
+			})
+			var optionalWrapperLabels = Set<String>()
+			for childName in childNames {
+				for property in propertiesByType[childName] ?? [] where property.attribute.hasPrefix("@Received") && !property.attribute.contains("fulfilledByDependencyNamed") {
+					let instanceType = String(property.type.dropLast(property.type.hasSuffix("?") ? 1 : 0))
+					if isWrapper(property.type) {
+						let unwrapped = String(instanceType.drop { $0 != "<" }.dropFirst().dropLast())
+						let isOnlyIfAvailable = property.attribute.contains("onlyIfAvailable")
+						if isOnlyIfAvailable {
+							optionalWrapperLabels.insert(property.label)
+						}
+						// Held by value somewhere, as a non-optional wrapper's instance would not be.
+						if isOnlyIfAvailable, allProperties.contains(where: { $0.attribute == "@Instantiated" && $0.label == property.label && $0.type == unwrapped }) {
+							if !byValueLabels.contains(property.label) {
+								features.insert(.instanceHeldByCaller)
+							}
+						} else if isOnlyIfAvailable, allProperties.contains(where: { $0.attribute == "@Instantiated" && $0.label == property.label && $0.type == otherKind(of: instanceType) }) {
+							features.insert(.otherKindWrapperReceiveBeneathSeam)
+						} else {
+							features.insert(.wrapperReceiveBeneathSeam)
+							if !isOnlyIfAvailable, !property.type.hasSuffix("?"), byValueLabelsInTree.contains(property.label) {
+								features.insert(.requiredWrapperProvidingByValueForm)
+							}
+						}
+					} else if allProperties.contains(where: { $0.attribute == "@Instantiated" && $0.label == property.label && isWrapper($0.type) }) {
+						features.insert(.instanceReceiveBeneathSeam)
+					}
+				}
+			}
+			if !byValueLabels.intersection(optionalWrapperLabels).isEmpty {
+				features.insert(.collidingFormsBeneathSeam)
+			}
+			// The spelled value: which way the seam's signature takes it.
+			let label = GraphFuzzerSpelling.label
+			let ownProperties = (propertiesByType[seamName] ?? []).filter { $0.label == label }
+			if ownProperties.contains(where: { $0.attribute == "@Forwarded" }) {
+				features.insert(.spelledOwnForwarded)
+			}
+			if ownProperties.contains(where: { $0.attribute.hasPrefix("@Received") }) {
+				features.insert(.spelledOwnReceived)
+			}
+			let treeReceives = treeTypeNames(beneath: childNames).flatMap { propertiesByType[$0] ?? [] }.filter {
+				$0.label == label && $0.attribute.hasPrefix("@Received")
+			}
+			if ownProperties.isEmpty, !treeReceives.isEmpty {
+				features.insert(treeReceives.contains { !$0.attribute.contains("onlyIfAvailable") } ? .spelledRequiredPassThrough : .spelledOnlyIfAvailablePassThrough)
+			}
+		}
+		for property in allProperties {
+			if property.label == GraphFuzzerSpelling.label, property.attribute == "@Forwarded", let spelling = GraphFuzzerSpelling.spelling(ofType: property.type) {
+				features.insert(spelling.drawFeature)
+			}
+			if aliasedLabel(of: property.attribute) == GraphFuzzerSpelling.label {
+				features.insert(.spelledAliasFulfillingProperty)
+			}
+		}
+		// `addingSpelledProperties`' second child and mocked tree.
+		if propertiesByType.keys.contains(where: { $0.hasSuffix("SpellSibling") }) {
+			features.insert(.spelledOptionalFormOnSibling)
+		}
+		if mockedTypeNames.contains(where: { $0.hasSuffix("SpellChild") || $0.hasSuffix("SpellSeam") }) {
+			features.insert(.spelledTreeMocked)
+		}
+		// `addingUncreatedAliasShapes`' shapes, read from its types, which only that pass declares.
+		func properties(ofTypeNamed suffix: String) -> [(attribute: String, label: String, type: String)] {
+			propertiesByType.first { $0.key.hasSuffix(suffix) }?.value ?? []
+		}
+		func declaresType(named suffix: String) -> Bool {
+			propertiesByType.keys.contains { $0.hasSuffix(suffix) }
+		}
+		let aliasProperties = (properties(ofTypeNamed: "AliasDetail") + properties(ofTypeNamed: "AliasSeam")).filter {
+			($0.label == "aliasAuth" || $0.label == "aliasToken") && aliasedLabel(of: $0.attribute) == "aliasToken"
+		}
+		let aliasKeepsLabel = aliasProperties.contains { $0.label == "aliasToken" }
+		if aliasKeepsLabel {
+			features.insert(.uncreatedAliasLabelKeepingOptionalAlias)
+		}
+		if !aliasProperties.isEmpty {
+			if properties(ofTypeNamed: "AliasSeam").contains(where: { ($0.label == "aliasAuth" || $0.label == "aliasToken") && aliasedLabel(of: $0.attribute) == "aliasToken" }) {
+				features.insert(.uncreatedAliasOnSeamItself)
+			}
+			if aliasProperties.contains(where: { $0.attribute.contains("AliasValue?.self") }) {
+				features.insert(.uncreatedAliasExactFormAlias)
+			}
+			if aliasProperties.contains(where: { !$0.attribute.contains("onlyIfAvailable") }) {
+				features.insert(.uncreatedAliasAcceptedTwin)
+			}
+		}
+		let readerProperties = properties(ofTypeNamed: "AliasReader")
+		// Beneath an alias the seam declares, `AliasLeft`'s own `aliasToken` is nearer to a reader `AliasDetail` builds.
+		let readerIsBeneathLeftsToken = properties(ofTypeNamed: "AliasSeam").contains { $0.label == "aliasToken" && aliasedLabel(of: $0.attribute) == "aliasToken" }
+			&& properties(ofTypeNamed: "AliasLeft").contains { $0.label == "aliasToken" && $0.attribute == "@Instantiated" }
+			&& !properties(ofTypeNamed: "AliasSeam").contains { ["aliasReader", "aliasReaderBuilder", "aliasPanel", "aliasMid"].contains($0.label) }
+		for property in readerProperties {
+			if property.label == "aliasAuth", aliasedLabel(of: property.attribute) == "aliasAuth" {
+				features.insert(.uncreatedAliasLabelKeepingAliasReader)
+			} else if property.label == "aliasAuth", property.attribute == "@Received" {
+				features.insert(.uncreatedAliasRequiredReader)
+			} else if property.label == "aliasAuth" {
+				features.insert(.uncreatedAliasReader)
+			} else if aliasKeepsLabel {
+				// Beneath an alias that keeps its fulfilling property's label, a receive of that label reads the alias,
+				// where no declaration of the label is nearer; an alias of `aliasToken: AliasValue` is hidden by it.
+				if property.label == "aliasToken", aliasedLabel(of: property.attribute) == nil, !readerIsBeneathLeftsToken {
+					features.insert(property.attribute == "@Received" ? .uncreatedAliasRequiredReader : .uncreatedAliasReader)
+				}
+			} else if property.label == "aliasToken" || aliasedLabel(of: property.attribute) == "aliasToken" {
+				features.insert(.uncreatedAliasAcceptedTwin)
+			}
+		}
+		if !readerProperties.isEmpty {
+			for property in properties(ofTypeNamed: "AliasDetail") + properties(ofTypeNamed: "AliasSeam") where property.label == "aliasReaderBuilder" {
+				features.insert(.uncreatedAliasReaderInsideWrapper)
+			}
+			if declaresType(named: "AliasPanel") {
+				features.insert(.uncreatedAliasReaderInsideNestedSeam)
+			}
+			if declaresType(named: "AliasMid") {
+				features.insert(.uncreatedAliasDeeperReader)
+			}
+		}
+		for property in properties(ofTypeNamed: "AliasDetail") where property.label == "aliasBearer" {
+			if aliasedLabel(of: property.attribute) == "aliasToken", !aliasKeepsLabel {
+				features.insert(.uncreatedAliasAcceptedTwin)
+			} else if property.attribute.contains("onlyIfAvailable") {
+				features.insert(.uncreatedAliasAliasOfAlias)
+			} else {
+				features.insert(.uncreatedAliasRequiredAliasOfAlias)
+			}
+		}
+		for property in properties(ofTypeNamed: "AliasLeft") {
+			if property.label == "aliasToken", property.attribute == "@Instantiated" {
+				if properties(ofTypeNamed: "AliasValue").contains(where: { $0.label == "aliasDetailBuilder" }) {
+					features.insert(.uncreatedAliasFulfillingPropertyBeingBuilt)
+				} else if properties(ofTypeNamed: "AliasValue").contains(where: { $0.label == "aliasA" }) {
+					features.insert(.uncreatedAliasFulfillingPropertyGeneratedLater)
+				} else if aliasKeepsLabel, properties(ofTypeNamed: "AliasValue").contains(where: { $0.label == "aliasDetail" && $0.attribute == "@Received" }) {
+					features.insert(.uncreatedAliasFulfillingPropertyGeneratedAfterLabelKeepingAlias)
+				} else {
+					features.insert(.uncreatedAliasFulfillingPropertyPruned)
+				}
+			} else if property.label == "aliasToken", aliasedLabel(of: property.attribute) == nil {
+				features.insert(.uncreatedAliasRequiredOptionalParameter)
+			} else if property.label == "aliasAuth", property.type.hasSuffix("AliasValue") {
+				features.insert(.uncreatedAliasSamePropertyBeside)
+			} else if property.label == "aliasAuth", property.type.hasSuffix("AliasLabel") {
+				features.insert(.uncreatedAliasOtherTypeBeside)
+			} else if property.label == "aliasAuth" {
+				features.insert(.uncreatedAliasWrapperBeside)
+			}
+		}
+		for property in properties(ofTypeNamed: "AliasSeam") {
+			if property.label == "aliasAuth", aliasedLabel(of: property.attribute) == nil {
+				features.insert(property.attribute.hasPrefix("@Instantiated") ? .uncreatedAliasDeclarationAbove : .uncreatedAliasLabelParameter)
+			} else if property.label == "aliasToken", aliasedLabel(of: property.attribute) == nil {
+				features.insert(.uncreatedAliasRequiredOptionalParameter)
+			}
+		}
+		if properties(ofTypeNamed: "AliasClient").contains(where: { $0.label == "aliasAuth" }) {
+			features.insert(.uncreatedAliasLabelParameter)
+		}
+		if !aliasProperties.isEmpty {
+			for (typeName, typeProperties) in propertiesByType where typeName.contains("Root") {
+				if typeProperties.contains(where: { $0.label == "aliasAuth" && $0.type.hasSuffix("AliasValue") }) {
+					features.insert(.uncreatedAliasLabelHeldByCaller)
+				}
+				if typeProperties.contains(where: { $0.label == "aliasToken" }) {
+					features.insert(.uncreatedAliasFulfillingPropertyHeldByCaller)
+				}
+			}
+		}
+		return features
+	}
+
+	/// The name of the type an `@Instantiated` property of `type` with `attribute` builds: its `fulfilledByType:`,
+	/// the generic of its wrapper, or its type.
+	private static func builtTypeName(ofPropertyWithAttribute attribute: String, type: String) -> String {
+		if let fulfilledByTypeRange = attribute.range(of: "fulfilledByType: \"") {
+			String(attribute[fulfilledByTypeRange.upperBound...].prefix { $0 != "\"" })
+		} else if let genericStart = type.firstIndex(of: "<"), let genericEnd = type.lastIndex(of: ">") {
+			String(type[type.index(after: genericStart)..<genericEnd])
+		} else {
+			type
+		}
+	}
+
+	/// What a seam's generated initializer takes, read from the widest tier in the seam's generated file, so that a
+	/// generator which stops drawing a shape cannot hide it: `generatedFiles` is an accepted graph's output and
+	/// `fixture` the graph, whose seams declare the labels that are not pass-throughs.
+	static func seamOutputFeatures(of fixture: GraphFuzzerFixture, generatedFiles: [String: String]) -> Set<GraphFuzzerSeamOutputFeature> {
+		var ownLabelsBySeam = [String: Set<String>]()
+		for content in fixture.swiftFileContent {
+			var nextTypeIsSeam = false
+			var currentSeam: String?
+			for line in GraphFuzzerSourceLine.lines(of: content) {
+				switch line {
+				case let .instantiableAttribute(arguments):
+					nextTypeIsSeam = arguments.contains("generateDependencyTree: true")
+				case let .typeDeclaration(name):
+					currentSeam = nextTypeIsSeam ? name : nil
+					nextTypeIsSeam = false
+					if let currentSeam {
+						ownLabelsBySeam[currentSeam] = []
+					}
+				case let .property(attribute, label, _):
+					if let currentSeam, attribute.hasPrefix("@Received") || attribute == "@Forwarded" {
+						ownLabelsBySeam[currentSeam, default: []].insert(label)
+					}
+				case .instantiateMethod, .other:
+					break
+				}
+			}
+		}
+		var features = Set<GraphFuzzerSeamOutputFeature>()
+		for contents in generatedFiles.values where contents.contains("public enum __safeDI_") {
+			guard let (seamTypeName, parameters) = GraphFuzzerOracle.seamInitializerParameters(inGeneratedFile: contents).first else { continue }
+			for parameter in parameters {
+				let label = parameter.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces)
+				if parameter.contains("= nil") {
+					features.insert(.optionalPassThrough)
+				} else if !(ownLabelsBySeam[seamTypeName] ?? []).contains(label) {
+					features.insert(.requiredPassThrough)
+				}
+				let type = parameter.drop { $0 != ":" }.dropFirst().prefix { $0 != "=" }.trimmingCharacters(in: .whitespaces)
+				if type.hasPrefix("@escaping @") {
+					features.insert(.escapingAttributedSeamParameter)
+				} else if type.hasPrefix("@escaping ") {
+					features.insert(.escapingSeamParameter)
+				} else if type.hasSuffix("?"), type.contains("->") {
+					features.insert(.optionalClosureSeamParameter)
+				}
+			}
+		}
+		// A call of a generated initializer follows the line referring to its guard enum.
+		for contents in generatedFiles.values {
+			let lines = contents.split(separator: "\n", omittingEmptySubsequences: false)
+			for (line, nextLine) in zip(lines, lines.dropFirst()) where line.contains(".__safeDI_") && nextLine.contains(".instance") {
+				features.insert(.instanceReadAtCall)
+			}
+		}
+		return features
+	}
+
 	private static func features(ofPropertyWithAttribute attribute: String, type: String) -> Set<GraphFuzzerFeature> {
 		var features = Set<GraphFuzzerFeature>()
 		let isErased = attribute.contains("erasedToConcreteExistential: true")
@@ -2189,7 +3623,12 @@ enum GraphFuzzerToolOutcome: Equatable {
 	/// fixture files are compared by file name, and the suggestions a diagnostic lists ("Did you mean one of …") in
 	/// any order: the order inside a message is presentation and changes nothing a user does.
 	static func difference(between outcome: GraphFuzzerToolOutcome, and otherOutcome: GraphFuzzerToolOutcome) -> String? {
-		let reduce = GraphFuzzerRenaming.reducingFixturePathsToFileNames(in:)
+		// A seam's guard enum is named after a hash of its signature, which names its parameters' types, so a
+		// renaming changes it as it changes the types: a hash restored textually cannot match, and is reduced away.
+		let reduce = { (text: String) in
+			GraphFuzzerRenaming.reducingFixturePathsToFileNames(in: text)
+				.replacingOccurrences(of: #"(__safeDI_[A-Za-z0-9_]+_)[0-9A-F]{16}\b"#, with: "$1<hash>", options: .regularExpression)
+		}
 		switch (outcome, otherOutcome) {
 		case let (.rejected(diagnostics), .rejected(otherDiagnostics)):
 			return diagnosticEntries(of: reduce(diagnostics)) == diagnosticEntries(of: reduce(otherDiagnostics)) ? nil : "its diagnostics"
@@ -2308,20 +3747,41 @@ struct GraphFuzzerFailure: Equatable {
 		case compilerCrashedOnGeneratedCode = "the Swift compiler crashed on generated code"
 		case renamedGraphDiffers = "the graph renamed to change an order gives other results"
 		case mockTakesWrapperParameterForReceive = "a generated mock takes a LazilyInstantiated parameter for a receive"
+		case seamRejectsGraphInlineAccepts = "the tool rejects the graph with an error that is not a seam's own, and accepts it with no seam"
+		case seamPassesNilWhereInlinePassesValue = "the generated code passes a literal nil more often with the seam than without it"
+		case seamReadsUncreatedAliasBinding = "a seam's generated code reads the binding of an only-if-available alias of a parameter that may be nil other than as its declaring type's argument"
+		case uncreatedAliasSeamRejectedOtherwise = "the tool rejects the uncreated-alias draw's seam with an error that is not the uncreated alias's"
+		/// The exact-form alias of a required optional parameter is always created, so an uncreated-alias error naming
+		/// it rejects a graph the rule accepts.
+		case uncreatedAliasExactFormAliasRejected = "the tool rejects the exact-form alias of a required optional parameter, which is always created"
+		/// A type's own declaration of an alias's label is not a declaration of the label the alias reads, so an
+		/// uncreated-alias error saying a type's alias reads an alias of that label the same type declares rejects an
+		/// alias as an alias of itself.
+		case uncreatedAliasReadsItself = "the tool rejects an alias as an alias of itself"
+		/// The differential value comparator describes other values for a probe of the seam build than for the same
+		/// probe of the inline build, beyond the documented divergences.
+		case seamBuildsOtherValuesThanInline = "the seam build constructs other values than the inline build"
+		/// The comparator could not describe the seam build or the inline build: a path or its probes did not compile
+		/// or run.
+		case valueComparatorCouldNotDescribeGraph = "the differential value comparator could not describe the graph"
 	}
 
 	let seed: UInt64
 	let kind: Kind
 	let details: String
+	/// For `seamBuildsOtherValuesThanInline`, each difference's description: a known issue of that kind documents
+	/// the failure only when every one of them matches one of its signatures.
+	var valueDifferences: [String] = []
 
-	static func reproductionCommand(forSeed seed: UInt64) -> String {
-		"SAFEDI_GRAPH_FUZZER_STARTING_SEED=\(seed) SAFEDI_GRAPH_FUZZER_ITERATIONS=1 swift test --traits sourceBuild --filter SafeDIToolGraphFuzzerTests/longRun"
+	static func reproductionCommand(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>) -> String {
+		let featuresVariable = features.isEmpty ? "" : "SAFEDI_GRAPH_FUZZER_FEATURES=\(features.sorted().map(\.rawValue).joined(separator: ",")) "
+		return "\(featuresVariable)SAFEDI_GRAPH_FUZZER_STARTING_SEED=\(seed) SAFEDI_GRAPH_FUZZER_ITERATIONS=1 swift test --traits sourceBuild --filter SafeDIToolGraphFuzzerTests/longRun"
 	}
 
 	func issueComment(fixture: GraphFuzzerFixture) -> Comment {
 		"""
 		Graph fuzzer seed \(seed): \(kind.rawValue).
-		Reproduce with: \(Self.reproductionCommand(forSeed: seed))
+		Reproduce with: \(Self.reproductionCommand(forSeed: seed, features: GraphFuzzerGeneratorFeature.features(drawnIn: fixture)))
 		\(details)
 		Fixture:
 		\(fixture.description)
@@ -2331,11 +3791,14 @@ struct GraphFuzzerFailure: Equatable {
 
 /// The oracle's verdict on one graph.
 struct GraphFuzzerResult {
-	init(fixture: GraphFuzzerFixture, outcome: GraphFuzzerToolOutcome, failure: GraphFuzzerFailure?, renamedGraphFailures: [GraphFuzzerFailure] = []) {
+	init(fixture: GraphFuzzerFixture, outcome: GraphFuzzerToolOutcome, failure: GraphFuzzerFailure?, laterFailures: [GraphFuzzerFailure] = [], renamedGraphFailures: [GraphFuzzerFailure] = [], isInspectedByValueOracle: Bool = false, isComparedByValueOracle: Bool = false) {
 		self.fixture = fixture
 		self.outcome = outcome
 		self.failure = failure
+		self.laterFailures = laterFailures
 		self.renamedGraphFailures = renamedGraphFailures
+		self.isInspectedByValueOracle = isInspectedByValueOracle
+		self.isComparedByValueOracle = isComparedByValueOracle
 	}
 
 	let fixture: GraphFuzzerFixture
@@ -2344,9 +3807,17 @@ struct GraphFuzzerResult {
 	/// compiler warning, a generated mock takes a `LazilyInstantiated` parameter for a receive, or, failing none of
 	/// those ways, a renamed graph gives other results.
 	let failure: GraphFuzzerFailure?
+	/// The ways the graph fails after `failure` in the oracle's chain, which a known value failure does not mask.
+	let laterFailures: [GraphFuzzerFailure]
 	/// How each renamed graph that gives other results differs, in the order of `GraphFuzzerRenaming.all`, whether
 	/// or not the graph also fails another way.
 	let renamedGraphFailures: [GraphFuzzerFailure]
+	/// Whether the value oracle compared the graph's generated code with its inline build's: the tool accepts the
+	/// graph with its seam and without it.
+	let isInspectedByValueOracle: Bool
+	/// Whether the comparator did compare the two builds: the graph is inspected, its runs agree, and its generated
+	/// code compiles cleanly, since `results(of:)` hands the comparator no graph with a compilation failure.
+	let isComparedByValueOracle: Bool
 
 	var isAccepted: Bool {
 		switch outcome {
@@ -2374,6 +3845,14 @@ struct GraphFuzzerKnownIssue: Equatable {
 		/// The fixture itself fails to compile, with an error whose message contains this text: the macro rejects
 		/// a shape the generator emits before the macro accepts it.
 		case macroRejectsFixture(containing: String)
+		/// The tool rejects the graph with the seam, with an error whose text contains this, and accepts it without.
+		case seamRejectsGraphInlineAccepts(containing: String)
+		/// The generated code passes a literal `nil` more often with the seam than without it, to an argument whose
+		/// description contains this text.
+		case seamPassesNilWhereInlinePassesValue(containing: String)
+		/// The seam build constructs other values than the inline build, with a difference whose description
+		/// contains this text.
+		case seamBuildsOtherValuesThanInline(containing: String)
 	}
 
 	let reason: String
@@ -2395,6 +3874,22 @@ struct GraphFuzzerKnownIssue: Equatable {
 				failure.kind == .renamedGraphDiffers && failure.details.prefix { $0 != "\n" }.contains(text)
 			case let .macroRejectsFixture(text):
 				failure.kind == .fixtureDoesNotCompile && failure.details.contains(text)
+			case let .seamRejectsGraphInlineAccepts(text):
+				failure.kind == .seamRejectsGraphInlineAccepts && failure.details.contains(text)
+			case let .seamPassesNilWhereInlinePassesValue(text):
+				failure.kind == .seamPassesNilWhereInlinePassesValue && failure.details.contains(text)
+			case .seamBuildsOtherValuesThanInline:
+				// Every difference must match one of the shape's value signatures: a documented divergence beside an
+				// undocumented difference is a new failure, not a known one.
+				failure.kind == .seamBuildsOtherValuesThanInline && !failure.valueDifferences.isEmpty && failure.valueDifferences.allSatisfy { difference in
+					signatures.contains { signature in
+						if case let .seamBuildsOtherValuesThanInline(text) = signature {
+							difference.contains(text)
+						} else {
+							false
+						}
+					}
+				}
 			}
 		}
 	}
@@ -2445,14 +3940,20 @@ enum GraphFuzzerFinding: Equatable {
 	/// it fails another way than its known issue documents.
 	case failure(GraphFuzzerFailure)
 
-	init(failure: GraphFuzzerFailure?, knownIssue: GraphFuzzerKnownIssue?) {
+	/// - Parameter laterFailures: The ways the graph fails after `failure` in the oracle's chain. A known value
+	///   failure masks none of them: the first the known issue does not document is the finding.
+	init(failure: GraphFuzzerFailure?, laterFailures: [GraphFuzzerFailure] = [], knownIssue: GraphFuzzerKnownIssue?) {
 		switch (failure, knownIssue) {
 		case (nil, nil):
 			self = .passed
 		case let (nil, knownIssue?):
 			self = .staleKnownIssue(knownIssue)
 		case let (failure?, knownIssue?) where knownIssue.matches(failure):
-			self = .knownIssue(knownIssue, failure)
+			if failure.kind == .seamBuildsOtherValuesThanInline, let unmasked = laterFailures.first(where: { !knownIssue.matches($0) }) {
+				self = .failure(unmasked)
+			} else {
+				self = .knownIssue(knownIssue, failure)
+			}
 		case let (failure?, _):
 			self = .failure(failure)
 		}
@@ -2500,23 +4001,145 @@ struct GraphFuzzerHash {
 
 /// A graph with what two runs of the tool produced for it.
 struct GraphFuzzerToolRuns {
-	/// - Parameter renamedOutcomes: The outcome of the graph renamed by each renaming, with the renaming undone.
+	/// - Parameters:
+	///   - renamedOutcomes: The outcome of the graph renamed by each renaming, with the renaming undone.
+	///   - inlineOutcome: The outcome of the graph with no seam, when the graph declares one and the tool rejected it.
 	init(
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,
 		secondOutcome: GraphFuzzerToolOutcome,
 		renamedOutcomes: [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)] = [],
+		inlineOutcome: GraphFuzzerToolOutcome? = nil,
 	) {
 		self.fixture = fixture
 		self.firstOutcome = firstOutcome
 		self.secondOutcome = secondOutcome
 		self.renamedOutcomes = renamedOutcomes
+		self.inlineOutcome = inlineOutcome
 	}
 
 	let fixture: GraphFuzzerFixture
 	let firstOutcome: GraphFuzzerToolOutcome
 	let secondOutcome: GraphFuzzerToolOutcome
 	let renamedOutcomes: [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)]
+	let inlineOutcome: GraphFuzzerToolOutcome?
+
+	/// The failure of a graph the tool rejects with the seam declared and accepts without it, where the rejection
+	/// is not one of a seam's own errors (`GraphFuzzerOracle.isSeamOnlyRejection`) but an error of the inlined
+	/// validation, which the seam world should not add, or `nil`. A seam's own error is what the seam rules reject
+	/// that inline accepts; any other error is a shape the seam world sees differently than inline, a defect.
+	var differentialFailure: GraphFuzzerFailure? {
+		guard case let .rejected(diagnostics) = firstOutcome, case .accepted = inlineOutcome,
+		      !GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: diagnostics, seamTypeNames: fixture.seamTypeNames)
+		else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .seamRejectsGraphInlineAccepts,
+			details: "With the seam:\n\(diagnostics)\nWithout it, the tool accepts the graph.",
+		)
+	}
+
+	/// The failure of a graph whose `addingUncreatedAliasShapes` seam the tool rejects, where it accepts the graph with
+	/// no seam, with an error about that seam that is not one of the uncreated alias's, or `nil`. That seam's tree has
+	/// no shape any other seam rule rejects.
+	var uncreatedAliasRejectionFailure: GraphFuzzerFailure? {
+		guard case let .rejected(diagnostics) = firstOutcome, case .accepted = inlineOutcome else { return nil }
+		let aliasSeamName = "dependency tree of `\(fixture.typeNamePrefix)AliasSeam`"
+		let errors = diagnostics.split(separator: "\n").filter { $0.contains(": error: ") && $0.contains(aliasSeamName) }
+		let uncreatedAliasErrors = errors.filter { line in GraphFuzzerOracle.uncreatedAliasErrorMarkers.contains { line.contains($0) } }
+		if errors.count > uncreatedAliasErrors.count {
+			return GraphFuzzerFailure(
+				seed: fixture.seed,
+				kind: .uncreatedAliasSeamRejectedOtherwise,
+				details: "With the seam:\n\(diagnostics)\nWithout it, the tool accepts the graph.",
+			)
+		}
+		if uncreatedAliasErrors.contains(where: GraphFuzzerOracle.isUncreatedAliasErrorOfAliasReadingItself) {
+			return GraphFuzzerFailure(
+				seed: fixture.seed,
+				kind: .uncreatedAliasReadsItself,
+				details: "With the seam:\n\(diagnostics)\nWithout it, the tool accepts the graph.",
+			)
+		}
+		// The exact-form alias of a required optional parameter is always created: the walk names an alias that may
+		// be uncreated, so an uncreated-alias error naming this one is an over-rejection. The static shapes, where
+		// the alias is uncreated whatever the parameter, are drawn only for the only-if-available pass-through.
+		let drawFeatures = GraphFuzzerFeature.seamDrawFeatures(of: fixture)
+		if drawFeatures.contains(.uncreatedAliasExactFormAlias), drawFeatures.contains(.uncreatedAliasRequiredOptionalParameter),
+		   uncreatedAliasErrors.contains(where: { $0.contains("`aliasAuth`") })
+		{
+			return GraphFuzzerFailure(
+				seed: fixture.seed,
+				kind: .uncreatedAliasExactFormAliasRejected,
+				details: "With the seam:\n\(diagnostics)\nWithout it, the tool accepts the graph.",
+			)
+		}
+		return nil
+	}
+
+	/// The failure of a graph the tool accepts whose seam's generated code reads the binding of an `onlyIfAvailable`
+	/// alias bound from a parameter that defaults to `nil` anywhere but as the argument of the construction of the
+	/// type that declares the alias, or `nil`. Inline, that alias is not created where the parameter's property is
+	/// unavailable, and any other read finds whatever declaration of the alias's label encloses it, so the seam must
+	/// reject every such read. The literal-`nil` oracle cannot see these: their `nil` is the seam call's.
+	var uncreatedAliasReadFailure: GraphFuzzerFailure? {
+		guard case let .accepted(seamFiles, _) = firstOutcome else { return nil }
+		// The unwrapped-form alias of a required optional parameter may be uncreated as an alias of a parameter that
+		// defaults to `nil` may, so its binding is read the same way; the exact-form alias is always created.
+		let drawFeatures = GraphFuzzerFeature.seamDrawFeatures(of: fixture)
+		let requiredOptionalParameters: Set<String> = drawFeatures.contains(.uncreatedAliasRequiredOptionalParameter) && !drawFeatures.contains(.uncreatedAliasExactFormAlias) ? ["aliasToken"] : []
+		let reads = GraphFuzzerOracle.uncreatedAliasBindingReads(in: seamFiles, requiredOptionalParameters: requiredOptionalParameters)
+		guard !reads.isEmpty else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .seamReadsUncreatedAliasBinding,
+			details: "\(reads.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
+		)
+	}
+
+	/// Whether the value oracle inspected the graph: the tool accepts it with the seam and without it.
+	var isInspectedByValueOracle: Bool {
+		guard case .accepted = firstOutcome, case .accepted = inlineOutcome else { return false }
+		return true
+	}
+
+	/// The failure of a graph the tool accepts with the seam and without it, whose generated code, over the whole
+	/// module, passes a literal `nil` to some argument of some type's construction more often with the seam than
+	/// without it, or `nil`. A seam that passes `nil` where inline passes a value loses a value a receiver gets today.
+	/// The constructions of a seam type itself are not compared: its own tiers and the calls of them pass `nil` for
+	/// what a tier omits, which inline has no counterpart of. A seam that reads a value inline does not (the
+	/// documented divergences) lowers its count, which is no failure.
+	var nilArgumentFailure: GraphFuzzerFailure? {
+		guard case let .accepted(seamFiles, _) = firstOutcome, case let .accepted(inlineFiles, _) = inlineOutcome else { return nil }
+		let seamTypeNames = Set(fixture.swiftFileContent.flatMap { content -> [String] in
+			var nextTypeIsSeam = false
+			var names = [String]()
+			for line in GraphFuzzerSourceLine.lines(of: content) {
+				switch line {
+				case let .instantiableAttribute(arguments):
+					nextTypeIsSeam = arguments.contains("generateDependencyTree: true")
+				case let .typeDeclaration(name):
+					if nextTypeIsSeam {
+						names.append(name)
+					}
+					nextTypeIsSeam = false
+				case .instantiateMethod, .property, .other:
+					break
+				}
+			}
+			return names
+		})
+		let differences = GraphFuzzerOracle.nilArgumentCountsExceeding(
+			GraphFuzzerOracle.nilArgumentCounts(in: seamFiles, typeNamePrefix: fixture.typeNamePrefix, excluding: seamTypeNames),
+			GraphFuzzerOracle.nilArgumentCounts(in: inlineFiles, typeNamePrefix: fixture.typeNamePrefix, excluding: seamTypeNames),
+		)
+		guard !differences.isEmpty else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .seamPassesNilWhereInlinePassesValue,
+			details: "\(differences.joined(separator: "\n"))\nWith the seam:\n\(firstOutcome.description)\nWithout it:\n\(inlineOutcome?.description ?? "")",
+		)
+	}
 
 	/// The failure of each renamed graph that, with its renaming undone, gives another verdict, other
 	/// diagnostics or warnings in any order (the tool sorts them by file, and the files are renamed), each
@@ -2608,12 +4231,13 @@ enum GraphFuzzerOracle {
 	///   which seed was running if the tool crashes the process.
 	static func results(
 		forSeeds seeds: [UInt64],
+		features: Set<GraphFuzzerGeneratorFeature> = [],
 		willRunSeed: @Sendable (UInt64) -> Void = { _ in },
 	) async throws -> [GraphFuzzerResult] {
 		var toolRuns = [GraphFuzzerToolRuns]()
 		for seed in seeds {
 			willRunSeed(seed)
-			await toolRuns.append(try self.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed)))
+			await toolRuns.append(try self.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: features)))
 		}
 		return try results(of: toolRuns)
 	}
@@ -2623,16 +4247,358 @@ enum GraphFuzzerOracle {
 		let compilationFailures = compileVerificationIsEnabled
 			? try compilationFailures(of: toolRuns.filter { $0.runsDifferFailure == nil })
 			: [:]
+		let valueFailures = try valueFailures(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil })
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
+			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.uncreatedAliasRejectionFailure, runs.nilArgumentFailure, runs.uncreatedAliasReadFailure, compilationFailures[runs.fixture.seed], valueFailures[runs.fixture.seed], runs.wrapperParameterFailure, renamedGraphFailures.first].compactMap(\.self)
 			return GraphFuzzerResult(
 				fixture: runs.fixture,
 				outcome: runs.firstOutcome,
-				failure: runs.runsDifferFailure ?? compilationFailures[runs.fixture.seed] ?? runs.wrapperParameterFailure ?? renamedGraphFailures.first,
+				failure: failures.first,
+				laterFailures: Array(failures.dropFirst()),
 				renamedGraphFailures: renamedGraphFailures,
+				isInspectedByValueOracle: runs.isInspectedByValueOracle,
+				isComparedByValueOracle: compileVerificationIsEnabled && runs.isInspectedByValueOracle && runs.runsDifferFailure == nil && compilationFailures[runs.fixture.seed] == nil,
 			)
 		}
 	}
+
+	/// The failure of each graph of `toolRuns` the tool accepts with its seam and without it whose seam build
+	/// constructs other values than its inline build, or whose two builds the differential value comparator could
+	/// not describe, keyed by seed. The seam path is the graph with its seams and the files the tool generated for it,
+	/// the known-right path the same graph with no seam and the files the tool generated for that; the probes are the
+	/// graph's roots and the generated mocks that take no required parameter. Each path is built from the graph drawn
+	/// storing every parameter, so the comparator sees every value the generated code passes; storing changes nothing
+	/// the tool generates. Each graph exempts its documented divergences (`documentedSeamValueDivergences`). The graphs
+	/// of one call are compared in one batch. Nothing is compared when `compileVerificationIsEnabled` is `false`.
+	static func valueFailures(of toolRuns: [GraphFuzzerToolRuns]) throws -> [UInt64: GraphFuzzerFailure] {
+		let inspectedRuns = toolRuns.filter(\.isInspectedByValueOracle)
+		guard !inspectedRuns.isEmpty, compileVerificationIsEnabled else { return [:] }
+		var filesToDelete = [URL]()
+		defer {
+			for fileToDelete in filesToDelete {
+				try? FileManager.default.removeItem(at: fileToDelete)
+			}
+		}
+		let graphs = inspectedRuns.compactMap { runs -> DifferentialValueGraph? in
+			guard case let .accepted(seamFiles, _) = runs.firstOutcome, case let .accepted(inlineFiles, _) = runs.inlineOutcome else { return nil }
+			let storingFixture = GraphFuzzerGenerator.fixture(forSeed: runs.fixture.seed, features: GraphFuzzerGeneratorFeature.features(drawnIn: runs.fixture), storingEveryParameter: true)
+			return DifferentialValueGraph(
+				name: "seed \(runs.fixture.seed)",
+				feature: DifferentialValuePath(fixture: storingFixture, generatedFiles: seamFiles),
+				knownRight: DifferentialValuePath(fixture: storingFixture.withoutSeams, generatedFiles: inlineFiles),
+				probes: storingFixture.differentialValueProbes(generatedFiles: seamFiles),
+				exemptions: Self.documentedSeamValueDivergences(of: runs.fixture),
+			)
+		}
+		guard let comparisons = try DifferentialValueOracle.compare(graphs: graphs, filesToDelete: &filesToDelete) else { return [:] }
+		var failures = [UInt64: GraphFuzzerFailure]()
+		for (runs, comparison) in zip(inspectedRuns, comparisons) {
+			switch comparison.result {
+			case let .success(valueComparison):
+				let differences = valueComparison.differences
+				guard !differences.isEmpty else { continue }
+				failures[runs.fixture.seed] = GraphFuzzerFailure(
+					seed: runs.fixture.seed,
+					kind: .seamBuildsOtherValuesThanInline,
+					details: "\(differences.map(\.description).joined(separator: "\n"))\n\(valueComparison.report)With the seam:\n\(runs.firstOutcome.description)\nWithout it:\n\(runs.inlineOutcome?.description ?? "")",
+					valueDifferences: differences.map(\.description),
+				)
+			case let .failure(error):
+				failures[runs.fixture.seed] = GraphFuzzerFailure(
+					seed: runs.fixture.seed,
+					kind: .valueComparatorCouldNotDescribeGraph,
+					details: "\(error)\nWith the seam:\n\(runs.firstOutcome.description)\nWithout it:\n\(runs.inlineOutcome?.description ?? "")",
+				)
+			}
+		}
+		return failures
+	}
+
+	/// The differences between a seam build and its inline build that the Manual documents, stated exactly, which the
+	/// comparison of `fixture`'s graph exempts. They are the first divergence of the graphs that also fail an inherited
+	/// known-issue shape, so that the shape's seed stays listed there (the graphs that show the first or second
+	/// divergence and nothing else are known issues of the divergence's shape, which matches every difference of a
+	/// failure), and every eager read of the third, one exemption per read: a seam call passes `.instance` of a
+	/// wrapper its caller holds, where inline the receiver inside the seam's tree reads it when it is built, so the
+	/// seam build's description marks the instance `(built before the probe's value)`. Observed from the corpus run,
+	/// as `seamCorpusSeedsOfOtherShapes` is.
+	static func documentedSeamValueDivergences(of fixture: GraphFuzzerFixture) -> [DifferentialValueDifference] {
+		switch fixture.seed {
+		case 239:
+			// The third documented divergence: each root calls the seam `S239_T2` with `seamLazy.instance`, where inline
+			// `S239_T1`, built by an instantiator in the seam's tree, reads it.
+			[
+				DifferentialValueDifference(
+					probe: "S239_Root0()",
+					path: ["<11>.instance"],
+					feature: "<11>.instance: <8> S239_SeamShared (built before the probe's value) (seen, first at <1> S239_Root0 > t0 > anyT2 > value > t1Builder > instantiate() > seamLazy)",
+					knownRight: "<11>.instance: <8> S239_SeamShared (seen, first at <1> S239_Root0 > t0 > anyT2 > value > t1Builder > instantiate() > seamLazy)",
+				),
+				DifferentialValueDifference(
+					probe: "S239_Root1()",
+					path: ["<12>.instance"],
+					feature: "<12>.instance: <8> S239_SeamShared (built before the probe's value) (seen, first at <1> S239_Root1 > t0 > anyT2 > value > t1Builder > instantiate() > seamLazy)",
+					knownRight: "<12>.instance: <8> S239_SeamShared (seen, first at <1> S239_Root1 > t0 > anyT2 > value > t1Builder > instantiate() > seamLazy)",
+				),
+			]
+		case 240:
+			// The third documented divergence: the root calls the seam `S240_T3` with `seamLazy.instance`, where inline
+			// `S240_T5`, built by an instantiator in the seam's tree, reads it.
+			[
+				DifferentialValueDifference(
+					probe: "S240_Root0()",
+					path: ["<68>.instance"],
+					feature: "<68>.instance: <28> S240_SeamShared (built before the probe's value) (seen, first at <1> S240_Root0 > t3 > t5Builder > instantiate() > t3Builder > instantiate() > t5Builder > instantiate() > seamLazy)",
+					knownRight: "<68>.instance: <28> S240_SeamShared (seen, first at <1> S240_Root0 > t3 > t5Builder > instantiate() > t3Builder > instantiate() > t5Builder > instantiate() > seamLazy)",
+				),
+			]
+		case 298:
+			// The third documented divergence: the root calls the seam `S298_T4` with `seamLazy.instance`, where inline
+			// `S298_T2`, built by an instantiator in the seam's tree, reads it.
+			[
+				DifferentialValueDifference(
+					probe: "S298_Root1()",
+					path: ["<16>.instance"],
+					feature: "<16>.instance: <5> S298_SeamShared (built before the probe's value) (seen, first at <1> S298_Root1 > t2Builder > instantiate() > seamLazy)",
+					knownRight: "<16>.instance: <5> S298_SeamShared (seen, first at <1> S298_Root1 > t2Builder > instantiate() > seamLazy)",
+				),
+			]
+		case 358:
+			// The third documented divergence: each root calls the seam `S358_T1` with `seamLazy.instance`, where inline
+			// `S358_T2`, built by an erased instantiator the comparator does not traverse, reads it.
+			[
+				DifferentialValueDifference(
+					probe: "S358_Root0()",
+					path: ["<5>.instance"],
+					feature: "<5>.instance: <7> S358_SeamShared (built before the probe's value)",
+					knownRight: "<5>.instance: <7> S358_SeamShared",
+				),
+				DifferentialValueDifference(
+					probe: "S358_Root1()",
+					path: ["<5>.instance"],
+					feature: "<5>.instance: <6> S358_SeamShared (built before the probe's value)",
+					knownRight: "<5>.instance: <6> S358_SeamShared",
+				),
+				DifferentialValueDifference(
+					probe: "S358_Root2()",
+					path: ["<5>.instance"],
+					feature: "<5>.instance: <6> S358_SeamShared (built before the probe's value)",
+					knownRight: "<5>.instance: <6> S358_SeamShared",
+				),
+			]
+		case 833:
+			// The first documented divergence: the caller holds only the optional form of the alias's fulfilling
+			// property, and the seam creates the alias from it.
+			[DifferentialValueDifference(
+				probe: "S833_Root0()",
+				path: ["<1> S833_Root0", "aliasSeam", "aliasLeft", "aliasDetail", "aliasAuth"],
+				feature: "aliasAuth: <13> S833_AliasValue (seen, first at <1> S833_Root0 > aliasSource)",
+				knownRight: "aliasAuth: nil",
+			)]
+		default:
+			[]
+		}
+	}
+
+	/// How many times the code in `generatedFiles` passes a literal `nil` to each argument of each construction of a
+	/// type whose name begins with `typeNamePrefix`, but those of `excludedTypeNames`, keyed by the type and the
+	/// argument's label, as `Type(label:)`. The oracle's own seam callers are not generated code and are skipped.
+	static func nilArgumentCounts(in generatedFiles: [String: String], typeNamePrefix: String, excluding excludedTypeNames: Set<String>) -> [String: Int] {
+		var counts = [String: Int]()
+		let expression = try! NSRegularExpression(pattern: "(?<![A-Za-z0-9_.])(" + NSRegularExpression.escapedPattern(for: typeNamePrefix) + "[A-Za-z0-9_]+)\\(")
+		for (fileName, contents) in generatedFiles where !fileName.hasSuffix("+SafeDISeamCaller.swift") {
+			let source = contents as NSString
+			for match in expression.matches(in: contents, range: NSRange(location: 0, length: source.length)) {
+				let typeName = source.substring(with: match.range(at: 1))
+				guard !excludedTypeNames.contains(typeName) else { continue }
+				// The arguments run from after the opening parenthesis to the one that closes it.
+				let start = match.range.location + match.range.length
+				var depth = 1
+				var end = start
+				while end < source.length, depth > 0 {
+					switch source.character(at: end) {
+					case 0x28, 0x5B, 0x7B: // ( [ {
+						depth += 1
+					case 0x29, 0x5D, 0x7D: // ) ] }
+						depth -= 1
+					default:
+						break
+					}
+					end += 1
+				}
+				let arguments = source.substring(with: NSRange(location: start, length: max(0, end - start - 1)))
+				for argument in topLevelParameters(arguments) {
+					let parts = argument.split(separator: ":", maxSplits: 1)
+					guard parts.count == 2, parts[1].trimmingCharacters(in: .whitespacesAndNewlines) == "nil" else { continue }
+					counts["\(typeName)(\(parts[0].trimmingCharacters(in: .whitespacesAndNewlines)):)", default: 0] += 1
+				}
+			}
+		}
+		return counts
+	}
+
+	/// A line for each construction argument `seamCounts` passes a literal `nil` more often than `inlineCounts`, in
+	/// order.
+	static func nilArgumentCountsExceeding(_ seamCounts: [String: Int], _ inlineCounts: [String: Int]) -> [String] {
+		seamCounts.keys.sorted().compactMap { key in
+			let seamCount = seamCounts[key] ?? 0
+			let inlineCount = inlineCounts[key] ?? 0
+			return seamCount > inlineCount ? "`\(key)` is passed `nil` \(seamCount) times with the seam and \(inlineCount) without it." : nil
+		}
+	}
+
+	/// Whether `error`, an uncreated-alias error, says a type aliases a property under the label of the uncreated
+	/// alias it reads, and that the reading type declares that alias itself – the message names another declaring
+	/// type only where it is not the reader. A type cannot declare two properties of one label, so that alias reads
+	/// itself, which an alias that keeps its fulfilling property's label does not.
+	static func isUncreatedAliasErrorOfAliasReadingItself(_ error: Substring) -> Bool {
+		let pattern = #"aliases `[^`]+` as `([^`]+)`, and `\1` is an `onlyIfAvailable` alias that is not created "#
+		guard let expression = try? NSRegularExpression(pattern: pattern) else { return false }
+		let text = String(error)
+		return expression.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+	}
+
+	/// What each error of a seam's uncreated `onlyIfAvailable` alias says: a receive beneath it, an alias of it, or a
+	/// declaration of its property beside its declaring type.
+	static let uncreatedAliasErrorMarkers = [
+		"` beneath the `onlyIfAvailable` alias `",
+		"` is an `onlyIfAvailable` alias ",
+		": the `onlyIfAvailable` alias `",
+	]
+
+	/// Each read, in `generatedFiles`, of the binding of an `onlyIfAvailable` alias bound from a parameter of a seam's
+	/// generated initializer that defaults to `nil` – `let <alias>: T? = <parameter>`, or an erased alias mapping it –
+	/// other than as the argument of the construction that ends the body declaring the binding (`return` or
+	/// `self.init`), which is the type that declares the alias. A binding from a nearer declaration of the parameter's
+	/// name is not such an alias, and a read beneath a nearer declaration of the alias's name reads that one. The
+	/// generated code is indented by four spaces a level and opens each body on the line that declares it.
+	///
+	/// - Parameter requiredOptionalParameters: The labels of required parameters of optional type whose aliases are
+	///   read as those of a parameter defaulting to `nil` are: the unwrapped-form alias of such a parameter may be
+	///   uncreated too.
+	static func uncreatedAliasBindingReads(in generatedFiles: [String: String], requiredOptionalParameters: Set<String> = []) -> [String] {
+		var reads = [String]()
+		let declaration = try! NSRegularExpression(pattern: #"^let (`[^`]+`|[A-Za-z_][A-Za-z0-9_]*)(?:: [^=]+)? = (.*)$"#)
+		let function = try! NSRegularExpression(pattern: #"^(?:@Sendable )?func [^(]+\((.*)\) -> .* \{$"#)
+		func match(_ expression: NSRegularExpression, _ line: String) -> [String]? {
+			let source = line as NSString
+			guard let result = expression.firstMatch(in: line, range: NSRange(location: 0, length: source.length)) else { return nil }
+			return (1..<result.numberOfRanges).map { result.range(at: $0).location == NSNotFound ? "" : source.substring(with: result.range(at: $0)) }
+		}
+		/// The labels of `parameters`, a parameter list's text, whose parameters default to `nil` when `defaultingToNil`,
+		/// or are among `requiredOptionalParameters` and are of optional type.
+		func labels(of parameters: String, defaultingToNil: Bool) -> [String] {
+			topLevelParameters(parameters).compactMap { parameter in
+				let parts = parameter.split(separator: ":", maxSplits: 1)
+				guard parts.count == 2 else { return nil }
+				let label = parts[0].trimmingCharacters(in: .whitespaces)
+				let isRequiredOptional = requiredOptionalParameters.contains(label) && parts[1].trimmingCharacters(in: .whitespaces).hasSuffix("?")
+				guard !defaultingToNil || parameter.hasSuffix("= nil") || isRequiredOptional else { return nil }
+				return label
+			}
+		}
+		func references(_ name: String, in line: String) -> Bool {
+			let expression = try! NSRegularExpression(pattern: "(?<![A-Za-z0-9_.`])" + NSRegularExpression.escapedPattern(for: name) + "(?![A-Za-z0-9_`])(?!\\s*:)")
+			return expression.firstMatch(in: line, range: NSRange(location: 0, length: (line as NSString).length)) != nil
+		}
+		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) {
+			let lines = contents.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+			var lineIndex = 0
+			while lineIndex < lines.count {
+				let initializerLine = lines[lineIndex]
+				let trimmed = initializerLine.trimmingCharacters(in: .whitespaces)
+				lineIndex += 1
+				// A tier may carry attributes before its modifier, with spaces inside them (`@available(iOS 17, *)`).
+				guard trimmed.hasSuffix(") {"),
+				      let parametersStart = trimmed.range(of: "init("),
+				      ["public ", "package ", "internal "].contains(where: { modifier in
+				      	trimmed.range(of: "\(modifier)init(")?.upperBound == parametersStart.upperBound
+				      		|| trimmed.range(of: "\(modifier)convenience init(")?.upperBound == parametersStart.upperBound
+				      })
+				else { continue }
+				let parameters = String(trimmed[parametersStart.upperBound..<trimmed.index(trimmed.endIndex, offsetBy: -3)])
+				let defaultingToNil = Set(labels(of: parameters, defaultingToNil: true))
+				guard !defaultingToNil.isEmpty else { continue }
+				let initializerIndent = initializerLine.prefix { $0 == " " }.count
+				// Each open body's indent and the names it declares; the initializer's body first.
+				var scopes = [(indent: Int, names: Set<String>)]()
+				scopes.append((initializerIndent + 4, []))
+				// The bindings of aliases of a parameter defaulting to `nil`: the name and the scope declaring it.
+				var bindings = [(name: String, scopeIndex: Int)]()
+				while lineIndex < lines.count {
+					let line = lines[lineIndex]
+					lineIndex += 1
+					let indent = line.prefix { $0 == " " }.count
+					let code = line.trimmingCharacters(in: .whitespaces)
+					if code == "}", indent == initializerIndent {
+						break
+					}
+					guard !code.isEmpty, !code.hasPrefix("#sourceLocation"), !code.hasPrefix("//") else { continue }
+					while let last = scopes.last, indent < last.indent, scopes.count > 1 {
+						scopes.removeLast()
+						bindings.removeAll { $0.scopeIndex >= scopes.count }
+					}
+					let statement = code.components(separatedBy: " // Declared at ").first ?? code
+					let declared = match(declaration, statement)
+					// A read of a binding – in a declaration, in its value – is the declaring type's construction, which ends
+					// the body that declares the binding, or a read the seam should have rejected.
+					for binding in bindings where references(binding.name, in: declared?[1] ?? statement) {
+						let isShadowed = scopes[(binding.scopeIndex + 1)...].contains { $0.names.contains(binding.name) }
+						let isDeclaringConstruction = indent == scopes[binding.scopeIndex].indent && (statement.hasPrefix("return ") || statement.hasPrefix("self.init("))
+						if !isShadowed, !isDeclaringConstruction {
+							reads.append("\(fileName): `\(statement)` reads `\(binding.name)`.")
+						}
+					}
+					if let parts = declared {
+						let name = parts[0]
+						let value = parts[1]
+						let source = value.hasPrefix("(") ? String(value.dropFirst().prefix { $0 != " " }) : value
+						let resolvesToParameter = defaultingToNil.contains(source) && !scopes.contains { $0.names.contains(source) }
+						scopes[scopes.count - 1].names.insert(name)
+						if resolvesToParameter {
+							bindings.append((name, scopes.count - 1))
+						}
+					}
+					if statement.hasSuffix("{") {
+						var names = Set<String>()
+						if let parts = match(function, statement) {
+							names = Set(labels(of: parts[0], defaultingToNil: false))
+						}
+						scopes.append((indent + 4, names))
+					}
+				}
+			}
+		}
+		return reads
+	}
+
+	/// Whether every error in `diagnostics`, a seam-world rejection, is one of a seam's own: reported at the seam
+	/// about its generated initializer or a call of it, which no inlined tree has. The inlined validation's errors
+	/// name a property or a type; a seam's name the dependency tree of the seam, or the call of its initializer.
+	static func isSeamOnlyRejection(diagnostics: String, seamTypeNames: [String]) -> Bool {
+		let markers = seamOnlyErrorMarkers + seamTypeNames.map { "` is hidden in chain: \($0) -> " }
+		let errors = diagnostics.split(separator: "\n").filter { $0.contains(": error: ") }
+		return !errors.isEmpty && errors.allSatisfy { error in
+			markers.contains { error.contains($0) }
+		}
+	}
+
+	/// What each of a seam's own errors says after the location: the label collision, the tier that cannot take a
+	/// parameter, the redeclared initializer, the declaration the callers cannot see, the read of an uncreated
+	/// `onlyIfAvailable` alias, and the signatures that do not settle all open with the first; a missing module info with the second; and a `@Sendable` builder inside the
+	/// seam capturing a wrapper parameter – declared outside every builder function of the generated initializer,
+	/// whatever the caller would pass – contains the third. An inlined tree's capture names the declaring type
+	/// instead; a mock root's capture of a wrapper it is handed prints the same words, and cannot make a differential
+	/// failure, since a mock is built the same with and without the seam, so inline rejects it too. A receive hidden
+	/// inside a seam's tree is reported hidden in a chain that starts at the seam, on every path and whatever a caller
+	/// holds, where inline reports it only in a chain from a root that provides the property (`isSeamOnlyRejection`
+	/// adds that marker per seam type).
+	private static let seamOnlyErrorMarkers = [
+		"error: SafeDI cannot generate the dependency tree of `",
+		"error: SafeDI cannot generate a call to the initializer SafeDI generated for `",
+		"` receives from outside it, because `",
+	]
 
 	/// Runs the tool twice over `fixture`, and once over it renamed by each of `renamings`.
 	static func toolRuns(of fixture: GraphFuzzerFixture, renamings: [GraphFuzzerRenaming] = GraphFuzzerRenaming.all) async throws -> GraphFuzzerToolRuns {
@@ -2642,11 +4608,17 @@ enum GraphFuzzerOracle {
 			let outcome = try await toolOutcome(of: renamedFixture, fileNames: renaming.fileNames(of: renamedFixture))
 			renamedOutcomes.append((renaming, renaming.restore(outcome, typeNamePrefix: fixture.typeNamePrefix)))
 		}
+		let firstOutcome = try await toolOutcome(of: fixture)
+		// A graph with a seam is run again with no seam: a rejection inline does not make is either a seam's own error
+		// or a defect (`differentialFailure`), and an accepted graph must pass no receiver `nil` that inline passes a
+		// value (`nilArgumentFailure`).
+		let inlineOutcome: GraphFuzzerToolOutcome? = fixture.declaresSeam ? try await toolOutcome(of: fixture.withoutSeams) : nil
 		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
-			firstOutcome: toolOutcome(of: fixture),
+			firstOutcome: firstOutcome,
 			secondOutcome: toolOutcome(of: fixture),
 			renamedOutcomes: renamedOutcomes,
+			inlineOutcome: inlineOutcome,
 		)
 	}
 
@@ -2670,7 +4642,7 @@ enum GraphFuzzerOracle {
 			)
 			let normalize = normalizer(fixtureDirectory: fixtureDirectory(of: fileNames ?? fixture.fileNames, in: output.fixtures))
 			return .accepted(
-				generatedFiles: (output.generatedFiles ?? [:]).mapValues(normalize),
+				generatedFiles: addingSeamCallers(to: (output.generatedFiles ?? [:]).mapValues(normalize)),
 				warnings: output.warnings.map { normalize("\($0)") },
 			)
 		} catch let error as SafeDIToolTestError {
@@ -2718,6 +4690,97 @@ enum GraphFuzzerOracle {
 		}
 		guard outputs[0] != outputs[1] else { return nil }
 		return GraphFuzzerFailure(seed: fixture.seed, kind: .runsDifferAcrossProcesses, details: "First process:\n\(outputs[0])\nSecond process:\n\(outputs[1])")
+	}
+
+	/// `generatedFiles` with, for each seam whose initializer the tool generated – the file holds the enum generated
+	/// beside it – a file holding a hand-written call of that initializer: a function that takes the initializer's
+	/// parameters and passes each on. The oracle compiles it with the rest, so a generated initializer a caller
+	/// outside SafeDI's generation cannot call fails there. Derived from the generated file, so the renamed graphs'
+	/// callers are restored with their files.
+	static func addingSeamCallers(to generatedFiles: [String: String]) -> [String: String] {
+		var generatedFiles = generatedFiles
+		for (fileName, contents) in generatedFiles where contents.contains("public enum __safeDI_") {
+			if let caller = seamCaller(inGeneratedFile: contents) {
+				generatedFiles[fileName.replacingOccurrences(of: "+SafeDI.swift", with: "+SafeDISeamCaller.swift")] = caller
+			}
+		}
+		return generatedFiles
+	}
+
+	/// The parameters of each initializer in `contents`, a seam's generated file, widest tier first, with the seam's
+	/// type name: each the text of one parameter.
+	static func seamInitializerParameters(inGeneratedFile contents: String) -> [(seamTypeName: String, parameters: [String])] {
+		var seamTypeName: String?
+		var initializers = [(seamTypeName: String, parameters: [String])]()
+		for line in contents.split(separator: "\n") {
+			let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+			if seamTypeName == nil, trimmedLine.hasPrefix("extension "), trimmedLine.hasSuffix(" {") {
+				seamTypeName = String(trimmedLine.dropFirst("extension ".count).dropLast(2))
+			} else if let seamTypeName, let parametersStart = trimmedLine.range(of: "init("), trimmedLine.hasSuffix(") {") {
+				let parameters = String(trimmedLine[parametersStart.upperBound..<trimmedLine.index(trimmedLine.endIndex, offsetBy: -3)])
+				initializers.append((seamTypeName, topLevelParameters(parameters)))
+			}
+		}
+		return initializers
+	}
+
+	/// Calls of every generated initializer in `contents`, a seam's generated file, or `nil` when it holds none: for
+	/// each tier, one call passing every parameter and one passing only those without a default, so a tier a
+	/// hand-written caller cannot call fails to compile here.
+	private static func seamCaller(inGeneratedFile contents: String) -> String? {
+		let initializers = seamInitializerParameters(inGeneratedFile: contents)
+		guard let seamTypeName = initializers.first?.seamTypeName else { return nil }
+		var functions = [String]()
+		for (index, initializer) in initializers.enumerated() {
+			let labels = initializer.parameters.map { $0.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces) }
+			let requiredParameters = initializer.parameters.filter { !$0.contains("= nil") }
+			let requiredLabels = requiredParameters.map { $0.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces) }
+			functions.append("""
+			    public static func callTier\(index)(\(initializer.parameters.joined(separator: ", "))) -> \(seamTypeName) {
+			        \(seamTypeName)(\(labels.map { "\($0): \($0)" }.joined(separator: ", ")))
+			    }
+			""")
+			functions.append("""
+			    public static func callTier\(index)Omitting(\(requiredParameters.joined(separator: ", "))) -> \(seamTypeName) {
+			        \(seamTypeName)(\(requiredLabels.map { "\($0): \($0)" }.joined(separator: ", ")))
+			    }
+			""")
+		}
+		return """
+		public enum \(seamTypeName)SeamCaller {
+		\(functions.joined(separator: "\n"))
+		}
+
+		"""
+	}
+
+	/// `parameters`, the text between an initializer's parentheses, split at the commas outside any brackets. The `>`
+	/// of a function type's `->` closes no bracket.
+	static func topLevelParameters(_ parameters: String) -> [String] {
+		var topLevelParameters = [String]()
+		var current = ""
+		var depth = 0
+		for character in parameters {
+			switch character {
+			case "<", "(", "[":
+				depth += 1
+				current.append(character)
+			case ">" where current.last == "-":
+				current.append(character)
+			case ">", ")", "]":
+				depth -= 1
+				current.append(character)
+			case "," where depth == 0:
+				topLevelParameters.append(current)
+				current = ""
+			default:
+				current.append(character)
+			}
+		}
+		if !current.trimmingCharacters(in: .whitespaces).isEmpty {
+			topLevelParameters.append(current)
+		}
+		return topLevelParameters
 	}
 
 	private static func fixtureDirectory(of fileNames: [String], in fixtures: FixturePaths) -> String {

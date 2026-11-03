@@ -4802,7 +4802,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		filesToDelete += [swiftFileCSV, swiftFile, manifestFile, moduleInfoOutput]
 
 		await assertThrowsError(
-			"Found @Instantiable(isRoot: true) in '\(swiftFile.relativePath)', but this file is not listed in the manifest’s dependencyTreeGeneration. SafeDI decides which files to generate before the build runs, listing every file that declares a root, a type that sets `generateMock: true`, or a #SafeDIConfiguration in any clause of its `#if` blocks, so the file most likely changed after that decision; building again lists it. A hand-written manifest must list the file, or the type must not be a root.",
+			"Found @Instantiable(isRoot: true) in '\(swiftFile.relativePath)', but this file is not listed in the manifest’s dependencyTreeGeneration. SafeDI decides which files to generate before the build runs, listing every file that declares a root, a type that sets `generateDependencyTree: true` or `generateMock: true`, or a #SafeDIConfiguration in any clause of its `#if` blocks, so the file most likely changed after that decision; building again lists it. A hand-written manifest must list the file, or the type must not be a root.",
 		) {
 			let tool = try Generate.parse([
 				swiftFileCSV.relativePath,
@@ -4825,6 +4825,35 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 		await assertThrowsError(
 			"Found @Instantiable(generateMock: true) on `Service` in '\(swiftFile.relativePath)', but this file is not listed in the manifest’s mockGeneration. \(Self.manifestPlanningExplanation) A hand-written manifest must list the file, or the type must not set `generateMock: true`.",
+		) {
+			try await generate(swiftFile, manifest: SafeDIToolManifest(
+				dependencyTreeGeneration: [],
+				mockScopedFilePaths: [swiftFile.relativePath],
+			))
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsError_whenDependencyTreeTypeExistsButNotInManifest() async throws {
+		let swiftFile = try writeTemporarySwiftFile("""
+		@Instantiable(generateDependencyTree: true)
+		public struct Screen: Instantiable {
+		    public init(session: Session) {
+		        self.session = session
+		    }
+
+		    @Instantiated let session: Session
+		}
+
+		@Instantiable
+		public struct Session: Instantiable {
+		    public init() {}
+		}
+		""")
+
+		await assertThrowsError(
+			"Found @Instantiable(generateDependencyTree: true) on `Screen` in '\(swiftFile.relativePath)', but this file is not listed in the manifest’s dependencyTreeGeneration. \(Self.manifestPlanningExplanation) A hand-written manifest must list the file, or the type must not set `generateDependencyTree: true`.",
 		) {
 			try await generate(swiftFile, manifest: SafeDIToolManifest(
 				dependencyTreeGeneration: [],
@@ -8009,7 +8038,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	private var filesToDelete = [URL]()
 
-	private static let manifestPlanningExplanation = "SafeDI decides which files to generate before the build runs, listing every file that declares a root, a type that sets `generateMock: true`, or a #SafeDIConfiguration in any clause of its `#if` blocks, so the file most likely changed after that decision; building again lists it."
+	private static let manifestPlanningExplanation = "SafeDI decides which files to generate before the build runs, listing every file that declares a root, a type that sets `generateDependencyTree: true` or `generateMock: true`, or a #SafeDIConfiguration in any clause of its `#if` blocks, so the file most likely changed after that decision; building again lists it."
 
 	/// A new Swift file holding `content`, which the test deletes.
 	private mutating func writeTemporarySwiftFile(_ content: String) throws -> URL {

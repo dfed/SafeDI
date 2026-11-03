@@ -186,8 +186,8 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
-	/// The receiver with `any` removed wherever it appears, as `==` compares it.
-	private var withoutAny: TypeDescription {
+	/// This type with `any` stripped at every depth: the spelling `==` compares, and what the seam guard hashes.
+	var withoutAny: TypeDescription {
 		switch self {
 		case .void, .unknown:
 			self

@@ -237,6 +237,63 @@ struct SafeDIToolReservedNameTests: ~Copyable {
 		""", "Unexpected output \(output.mockConfigurationFile ?? "")")
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func dependencyTree_compiles_whenSeamDeclaresNestedTypesNamedWithGeneratedEnumsPrefix() async throws {
+		// The enum a seam's module generates beside the seam's initializer is named `__safeDI_<Seam>_<hash>`: the
+		// prefix is reserved, and a nested type that only shares it, even with a sixteen-character suffix, compiles
+		// beside the enum. A type that spells the exact hashed name collides with it, as any reserved name does.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(screen: Screen) {
+				        self.screen = screen
+				    }
+
+				    @Instantiated let screen: Screen
+				}
+				""",
+				"""
+				@Instantiable(generateDependencyTree: true)
+				public struct Screen: Instantiable {
+				    public init(cache: Cache) {
+				        self.cache = cache
+				    }
+
+				    @Instantiated let cache: Cache
+
+				    public enum __safeDI_Screen {}
+				    public enum __safeDI_Screen_ {}
+				    public enum __safeDI_Screen_0000000000000000 {}
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Cache: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
+		extension Screen {
+		    public init() {
+		        let cache = Cache()
+		        self.init(cache: cache)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_CBF29CE484222325 {}
+		}
+		""")
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

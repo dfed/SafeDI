@@ -24,8 +24,9 @@ extension AttributeSyntax {
 	public var isRoot: ExprSyntax? {
 		guard let arguments,
 		      let labeledExpressionList = LabeledExprListSyntax(arguments),
-		      let firstLabeledExpression = labeledExpressionList.first,
-		      firstLabeledExpression.label?.text == "isRoot"
+		      let firstLabeledExpression = labeledExpressionList.first(where: {
+		      	$0.label?.text == "isRoot"
+		      })
 		else {
 			return nil
 		}
@@ -36,6 +37,28 @@ extension AttributeSyntax {
 	public var isRootValue: Bool {
 		guard let isRoot,
 		      let boolLiteral = BooleanLiteralExprSyntax(isRoot)
+		else {
+			return false
+		}
+		return boolLiteral.literal.tokenKind == .keyword(.true)
+	}
+
+	public var generateDependencyTree: ExprSyntax? {
+		guard let arguments,
+		      let labeledExpressionList = LabeledExprListSyntax(arguments),
+		      let firstLabeledExpression = labeledExpressionList.first(where: {
+		      	$0.label?.text == "generateDependencyTree"
+		      })
+		else {
+			return nil
+		}
+
+		return firstLabeledExpression.expression
+	}
+
+	public var generatesDependencyTreeValue: Bool {
+		guard let generateDependencyTree,
+		      let boolLiteral = BooleanLiteralExprSyntax(generateDependencyTree)
 		else {
 			return false
 		}

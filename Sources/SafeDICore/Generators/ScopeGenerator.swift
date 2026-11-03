@@ -39,6 +39,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		erasedToConcreteExistential: Bool,
 		isPropertyCycle: Bool,
 		constructionComments: Scope.ConstructionComments,
+		seamCall: SeamCall? = nil,
+		seamRoot: SeamRoot? = nil,
 	) {
 		self.constructionComments = constructionComments
 		if let property {
@@ -53,10 +55,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				),
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				isPropertyCycle: isPropertyCycle,
+				seamCall: seamCall,
 			)
 			description = instantiable.concreteInstantiable.asSource
 		} else {
-			scopeData = .root(instantiable: instantiable)
+			scopeData = .root(instantiable: instantiable, seamRoot: seamRoot)
 			description = instantiable.concreteInstantiable.asSource
 		}
 		self.property = property
@@ -124,12 +127,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.unavailableOptionalProperties = unavailableOptionalProperties
 		self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
 		fulfillingPropertyIsLazilyInstantiatedInstance = false
+		fulfillingPropertyIsRuntimeOptional = false
 		declaredLazilyInstantiatedInstanceProperty = property?.asLazilyInstantiatedInstanceProperty
 		onlyIfAvailableDependencies = instantiable.dependencies.compactMap { dependency in
 			switch dependency.source {
 			case let .received(onlyIfAvailable):
 				onlyIfAvailable
-					? OnlyIfAvailableDependency(unwrappedFulfillingProperty: dependency.property.asUnwrappedProperty, unavailableProperties: [dependency.property])
+					? OnlyIfAvailableDependency(
+						unwrappedFulfillingProperty: dependency.property.asUnwrappedProperty,
+						unavailableProperties: [dependency.property],
+					)
 					: nil
 			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
 				onlyIfAvailable
@@ -250,37 +257,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			)
 		onlyIfAvailableAliasFulfillingProperty = nil
 		onlyIfAvailableAliasPropertyProvidedByEnclosingScope = nil
-		let onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired = Set(
-			propertiesToGenerate.flatMap { propertyToGenerate in
-				propertyToGenerate.onlyIfAvailableUnwrappedReceivedProperties
-					.subtracting(propertiesToDeclare)
-					.subtracting(forwardedProperties)
-			},
-		)
-		.union(
-			instantiable
-				.dependencies
-				.compactMap {
-					switch $0.source {
-					case .instantiated, .forwarded:
-						nil
-					case let .received(onlyIfAvailable):
-						if onlyIfAvailable {
-							$0.property.asUnwrappedProperty
-						} else {
-							nil
-						}
-					case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-						// Skip locally-declared and forwarded fulfilling properties —
-						// the alias binds to the local, not to an ancestor.
-						if onlyIfAvailable, !propertiesToDeclare.contains(fulfillingProperty), !forwardedProperties.contains(fulfillingProperty) {
-							fulfillingProperty.asUnwrappedProperty
-						} else {
-							nil
-						}
-					}
-				},
-		)
+		var onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired = Set<Property>()
+		for propertyToGenerate in propertiesToGenerate {
+			for property in propertyToGenerate.onlyIfAvailableUnwrappedReceivedProperties
+				where !propertiesToDeclare.contains(property) && !forwardedProperties.contains(property)
+			{
+				onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.insert(property)
+			}
+		}
+		for dependency in instantiable.dependencies {
+			switch dependency.source {
+			case .instantiated, .forwarded:
+				continue
+			case let .received(onlyIfAvailable):
+				guard onlyIfAvailable else { continue }
+				onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.insert(dependency.property.asUnwrappedProperty)
+			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+				// Skip locally-declared and forwarded fulfilling properties —
+				// the alias binds to the local, not to an ancestor.
+				guard onlyIfAvailable, !propertiesToDeclare.contains(fulfillingProperty), !forwardedProperties.contains(fulfillingProperty) else { continue }
+				onlyIfAvailableUnwrappedReceivedPropertiesIncludingRequired.insert(fulfillingProperty.asUnwrappedProperty)
+			}
+		}
 		// A property some receiver requires is required, even where others receive
 		// it only if available. Few subtrees receive anything only if available, so the
 		// required properties are unwrapped only for those that do.
@@ -298,6 +296,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		onlyIfAvailable: Bool,
 		isProvidedByEnclosingScope: Bool,
 		fulfillingPropertyIsAlwaysAvailable: Bool,
+		fulfillingPropertyIsRuntimeOptional: Bool,
 		declarationReference: AliasDeclarationReferences.Reference?,
 	) {
 		scopeData = .alias(
@@ -340,6 +339,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.unavailableOptionalProperties = unavailableOptionalProperties
 		lazilyInstantiatedInstanceProperties = []
 		self.fulfillingPropertyIsLazilyInstantiatedInstance = fulfillingPropertyIsLazilyInstantiatedInstance
+		self.fulfillingPropertyIsRuntimeOptional = fulfillingPropertyIsRuntimeOptional
 		declaredLazilyInstantiatedInstanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding
 		self.property = property
 		aliasPropertyIsProvidedByEnclosingScope = isProvidedByEnclosingScope
@@ -365,6 +365,47 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Used both to order child generation (dependencies before dependents) and by mock
 	/// generation to surface dependencies the tree does not itself provide.
 	let receivedProperties: Set<Property>
+
+	/// The generators of this scope's children, in declaration order, for a walk of a seam's tree that reads what
+	/// its generators found. Every generator but the root's is a child of exactly one other.
+	nonisolated var children: [ScopeGenerator] {
+		propertiesToGenerate
+	}
+
+	/// The type this scope builds, or `nil` for an alias.
+	nonisolated var builtInstantiable: Instantiable? {
+		switch scopeData {
+		case let .root(instantiable, _), let .property(instantiable, _, _, _, _, _):
+			instantiable
+		case .alias:
+			nil
+		}
+	}
+
+	/// The parameters of the seam initializer this scope calls, or `nil` for a scope that builds its type.
+	nonisolated var seamCallParameters: [SeamSignature.Parameter]? {
+		if case let .property(_, _, _, _, _, seamCall?) = scopeData {
+			seamCall.parameters
+		} else {
+			nil
+		}
+	}
+
+	/// The seam call this scope makes, or `nil` for a scope that builds its type.
+	nonisolated var seamCall: SeamCall? {
+		if case let .property(_, _, _, _, _, seamCall) = scopeData {
+			seamCall
+		} else {
+			nil
+		}
+	}
+
+	/// The properties this scope provides to the scopes beneath it, which then do not receive them from the scopes
+	/// enclosing it: those it declares, with the instance of each lazily instantiated one, and those its type is
+	/// forwarded, with their instances.
+	nonisolated var providedProperties: Set<Property> {
+		propertiesToDeclare.union(builtInstantiable?.forwardedReceivableProperties ?? [])
+	}
 
 	/// Whether a scope that declares `declaredProperties` and forwards `forwardedProperties` provides
 	/// `property` to the scopes beneath it, which then do not receive it from the scope's ancestors:
@@ -515,20 +556,306 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///
 	/// - Parameter instantiable: The type this root scope builds.
 	func nonSendableWrapperCaptures(ofTreeRootedAt instantiable: Instantiable) async -> [NonSendableWrapperCapture] {
-		await nonSendableWrapperCaptures(
+		// A seam's generated initializer declares its parameters outside every builder function, so a `@Sendable`
+		// builder inside the tree that reads a parameter that is a wrapper, or the instance of a non-optional one,
+		// captures it, as it captures a declaration of the tree. An optional wrapper parameter offers no instance.
+		var declarationsByLabel = [String: [VisibleDeclaration]]()
+		if case let .root(_, seamRoot?) = scopeData {
+			for parameter in seamRoot.signature.parameters {
+				declarationsByLabel[parameter.property.label, default: []].append(VisibleDeclaration(
+					property: parameter.property,
+					instanceProperty: parameter.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding,
+					declaringType: nil,
+					declarationLocation: nil,
+					sendableBuilderDepth: 0,
+				))
+			}
+		}
+		return await nonSendableWrapperCaptures(
 			of: instantiable,
 			unavailableProperties: unavailableProperties(
 				isGeneratedBefore: { _ in false },
 				propertiesGeneratedLater: [],
 			),
 			propertiesGeneratedLater: [],
-			declarationsByLabel: [:],
+			declarationsByLabel: declarationsByLabel,
 			enclosingSendableBuilders: [],
 			chain: [],
 		)
 	}
 
+	/// Why an `onlyIfAvailable` alias in a seam's tree may not be created.
+	enum UncreatedAliasReason: Sendable {
+		/// The alias's fulfilling property may be `nil`: its closest declaration on the path from the seam's root is a
+		/// parameter of the generated initializer that may be `nil`, or an alias of one.
+		case fulfillingPropertyMayBeNil
+		/// The alias's fulfilling property is still being built where the alias is declared.
+		case fulfillingPropertyIsBeingBuilt
+		/// The alias's fulfilling property is generated after the scope that declares the alias.
+		case fulfillingPropertyIsGeneratedLater
+	}
+
+	/// An `onlyIfAvailable` alias in a seam's tree that may not be created on some path.
+	struct UncreatedAlias: Sendable {
+		/// The alias's own property.
+		let property: Property
+		/// The property the alias renames.
+		let fulfillingProperty: Property
+		/// The type that declares the alias.
+		let declaringType: TypeDescription
+		let declarationLocation: Dependency.DeclarationLocation?
+		/// The property whose absence leaves the alias not created: its fulfilling property, or, for an alias of such an
+		/// alias, that alias's.
+		let unavailableProperty: Property
+		let reason: UncreatedAliasReason
+	}
+
+	/// A read in a seam's tree that the seam's generated initializer cannot give the value inline gives it: a read of
+	/// an `onlyIfAvailable` alias that may not be created, which built inline finds whatever declaration of the
+	/// alias's label encloses the alias where the alias is not, and so depends on what encloses the seam.
+	struct UncreatedAliasRead: Sendable {
+		enum Kind: Sendable {
+			/// `readerType` receives `property` – the alias's property, exactly or unwrapped – and the closest
+			/// declaration of its label is the alias.
+			case receive(property: Property, readerType: TypeDescription)
+			/// `readerType` declares `alias`, an alias of `fulfillingProperty` – the uncreated alias's property, exactly
+			/// or unwrapped – and the closest declaration of its label is the uncreated alias.
+			case alias(alias: Property, fulfillingProperty: Property, readerType: TypeDescription)
+			/// `builderType`, which builds the uncreated alias's declaring type, also declares `siblingProperty`, the
+			/// alias's property or its unwrapped form: inline, the declaring type is then passed that declaration where
+			/// the alias is not created, when the builder generates it first.
+			case sameProperty(builderType: TypeDescription, siblingProperty: Property)
+		}
+
+		let kind: Kind
+		let uncreatedAlias: UncreatedAlias
+		/// Where the read is declared: the reading dependency, or, for `sameProperty`, the uncreated alias.
+		let declarationLocation: Dependency.DeclarationLocation?
+	}
+
+	/// The reads of `onlyIfAvailable` aliases that may not be created in the tree this generator roots, a seam's, as
+	/// code generation walks it, in tree order, each reading declaration once: what the path it is first met on says.
+	/// An alias may not be created when its fulfilling property may be `nil` on the path (`fulfillingPropertyIsRuntimeOptional`,
+	/// judged against the closest declaration of that property), when generation does not create it there – its
+	/// fulfilling property is still being built, or is generated later – or when it is an alias of such an alias. Its
+	/// declaring type is passed what inline passes it, but anything else that reads its label reads, inline, whatever
+	/// declaration of the label encloses the alias where the alias is not created, which the seam cannot see: every
+	/// other dependency that reads its property and finds the alias as the closest declaration of its label – a receive
+	/// in its declaring type's tree, a nested seam's parameter standing for the receives in that seam's tree, an alias
+	/// on its declaring type or in that type's tree – and, except for the seam type's own aliases, an alias whose
+	/// declaring type's builder also declares the alias's property, exactly or unwrapped, other than the alias's
+	/// fulfilling property, which inline is what the parent's `isGeneratedBefore` hands the declaring type in the
+	/// alias's place. Empty for every tree that is not a seam's.
+	func uncreatedAliasReads(ofTreeRootedAt instantiable: Instantiable) async -> [UncreatedAliasRead] {
+		guard case .root(_, _?) = scopeData else { return [] }
+		let reads = await uncreatedAliasReads(
+			of: instantiable,
+			propertiesGeneratedLater: [],
+			enclosingUncreatedAliases: [:],
+			builder: nil,
+		)
+		// A type reached on several paths declares its reads once.
+		struct ReadingDeclaration: Hashable {
+			let declarationLocation: Dependency.DeclarationLocation?
+			let declaringType: TypeDescription
+			let property: Property
+			let isSameProperty: Bool
+		}
+		var reportedDeclarations = Set<ReadingDeclaration>()
+		return reads.filter { read in
+			let declaration = switch read.kind {
+			case let .receive(property, readerType):
+				ReadingDeclaration(declarationLocation: read.declarationLocation, declaringType: readerType, property: property, isSameProperty: false)
+			case let .alias(alias, _, readerType):
+				ReadingDeclaration(declarationLocation: read.declarationLocation, declaringType: readerType, property: alias, isSameProperty: false)
+			case .sameProperty:
+				ReadingDeclaration(declarationLocation: read.declarationLocation, declaringType: read.uncreatedAlias.declaringType, property: read.uncreatedAlias.property, isSameProperty: true)
+			}
+			return reportedDeclarations.insert(declaration).inserted
+		}
+	}
+
 	// MARK: Private
+
+	/// - Parameters:
+	///   - instantiable: The type this scope builds. Never a scope that closes a cycle, which constructs nothing.
+	///   - propertiesGeneratedLater: This scope's `propertiesGeneratedLater`, as `generateCode` takes them.
+	///   - enclosingUncreatedAliases: By label, the `onlyIfAvailable` aliases that may not be created and are the
+	///     closest declaration of their label above this scope.
+	///   - builder: The type of the scope that builds this one and the properties of that scope's other children, or
+	///     `nil` for the seam's root.
+	private func uncreatedAliasReads(
+		of instantiable: Instantiable,
+		propertiesGeneratedLater: Set<Property>,
+		enclosingUncreatedAliases: [String: UncreatedAlias],
+		builder: (type: TypeDescription, siblingProperties: [Property])?,
+	) async -> [UncreatedAliasRead] {
+		var reads = [UncreatedAliasRead]()
+		let declaredLabels = Set(instantiable.dependencies.filter { !$0.source.isReceived }.map(\.property.label))
+		/// The enclosing uncreated alias `property` reads, when this type declares nothing of its label – or when the
+		/// reader is `alias`, one of this type's own aliases, and the only declaration of the label is that alias: an
+		/// alias that keeps the label it retypes is not in scope where its own value is read, as `Scope.addAliasGenerator`
+		/// treats a label-keeping alias of a lazily instantiated instance, so its fulfilling expression reads the
+		/// enclosing declaration of the label. Labels are distinct within a type, so no other declaration can be meant.
+		func enclosingUncreatedAlias(readBy property: Property, declaredBy alias: Property? = nil) -> UncreatedAlias? {
+			guard alias?.label == property.label || !declaredLabels.contains(property.label),
+			      let alias = enclosingUncreatedAliases[property.label],
+			      alias.property.asUnwrappedProperty == property.asUnwrappedProperty
+			else { return nil }
+			return alias
+		}
+		// The scope's receives, and the fulfilling properties of the aliases it declares, read what is above it. A
+		// nested seam's parameter stands for the receives inside that seam, which its signature carries.
+		if !enclosingUncreatedAliases.isEmpty {
+			// Each property names one parameter: `validateDependencyLabelsAreDistinct` rejects a seam in a generated tree
+			// that repeats a label before this walk runs, and `seamRoot` emits one pass-through per label, never under
+			// an own label (`parametersShareLabel`).
+			let seamCallParameters: [Property: SeamSignature.Parameter] = if case let .property(_, _, _, _, _, seamCall?) = scopeData {
+				Dictionary(grouping: seamCall.parameters, by: \.property).compactMapValues(\.first)
+			} else {
+				[:]
+			}
+			for dependency in instantiable.dependencies {
+				switch dependency.source {
+				case .received:
+					guard let alias = enclosingUncreatedAlias(readBy: dependency.property) else { continue }
+					if let parameterReceivers = seamCallParameters[dependency.property]?.receivers, !parameterReceivers.isEmpty {
+						// The nested seam's signature records each receiver with the alias it declares, if the receive is an
+						// alias's fulfilling property, so the read is reported as the kind it is.
+						for receiver in parameterReceivers {
+							reads.append(UncreatedAliasRead(
+								kind: receiver.aliasProperty.map { .alias(alias: $0, fulfillingProperty: receiver.property, readerType: receiver.declaringType) }
+									?? .receive(property: receiver.property, readerType: receiver.declaringType),
+								uncreatedAlias: alias,
+								declarationLocation: receiver.declarationLocation,
+							))
+						}
+					} else {
+						reads.append(UncreatedAliasRead(
+							kind: .receive(property: dependency.property, readerType: instantiable.concreteInstantiable),
+							uncreatedAlias: alias,
+							declarationLocation: dependency.declarationLocation,
+						))
+					}
+				case let .aliased(fulfillingProperty, _, _):
+					guard let alias = enclosingUncreatedAlias(readBy: fulfillingProperty, declaredBy: dependency.property) else { continue }
+					reads.append(UncreatedAliasRead(
+						kind: .alias(alias: dependency.property, fulfillingProperty: fulfillingProperty, readerType: instantiable.concreteInstantiable),
+						uncreatedAlias: alias,
+						declarationLocation: dependency.declarationLocation,
+					))
+				case .instantiated, .forwarded:
+					continue
+				}
+			}
+		}
+		let orderedChildren = orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater)
+		// The `onlyIfAvailable` aliases this scope declares that may not be created, by property: those whose
+		// fulfilling property is unavailable or may be `nil`, then the aliases of those on this scope, which are not
+		// created where those are not, to a fixed point. An alias that reads one above takes what that one says.
+		var uncreatedAliases = [Property: UncreatedAlias]()
+		var aliasesToVisit = [(property: Property, fulfillingProperty: Property, declarationLocation: Dependency.DeclarationLocation?)]()
+		for child in orderedChildren {
+			guard case let .alias(property, fulfillingProperty, _, onlyIfAvailable: true, _) = child.generator.scopeData else { continue }
+			let declarationLocation = instantiable.dependencies.first { $0.property == property }?.declarationLocation
+			let reason: UncreatedAliasReason
+			if child.unavailableProperties.contains(fulfillingProperty) {
+				reason = child.generator.unavailableOptionalProperties.contains(fulfillingProperty)
+					? .fulfillingPropertyIsBeingBuilt
+					: .fulfillingPropertyIsGeneratedLater
+			} else if child.generator.fulfillingPropertyIsRuntimeOptional {
+				reason = .fulfillingPropertyMayBeNil
+			} else {
+				aliasesToVisit.append((property, fulfillingProperty, declarationLocation))
+				continue
+			}
+			let enclosingAlias = enclosingUncreatedAlias(readBy: fulfillingProperty, declaredBy: property)
+			uncreatedAliases[property] = UncreatedAlias(
+				property: property,
+				fulfillingProperty: fulfillingProperty,
+				declaringType: instantiable.concreteInstantiable,
+				declarationLocation: declarationLocation,
+				unavailableProperty: enclosingAlias?.unavailableProperty ?? fulfillingProperty,
+				reason: enclosingAlias?.reason ?? reason,
+			)
+		}
+		// An alias of another of this scope's uncreated aliases is not created where that one is not, and takes the
+		// property whose absence leaves that one so, to a fixed point: aliases of one scope never fulfill one another.
+		var foundAlias = !uncreatedAliases.isEmpty
+		while foundAlias {
+			foundAlias = false
+			for alias in aliasesToVisit + uncreatedAliases.values.map({ ($0.property, $0.fulfillingProperty, $0.declarationLocation) }) {
+				guard let readAlias = uncreatedAliases.values.first(where: { $0.property != alias.property && $0.property.asUnwrappedProperty == alias.fulfillingProperty.asUnwrappedProperty }),
+				      uncreatedAliases[alias.property]?.unavailableProperty != readAlias.unavailableProperty
+				else { continue }
+				uncreatedAliases[alias.property] = UncreatedAlias(
+					property: alias.property,
+					fulfillingProperty: alias.fulfillingProperty,
+					declaringType: instantiable.concreteInstantiable,
+					declarationLocation: alias.declarationLocation,
+					unavailableProperty: readAlias.unavailableProperty,
+					reason: readAlias.reason,
+				)
+				foundAlias = true
+			}
+		}
+		// An alias of one of this scope's uncreated aliases reads it, and so does the type built in its place where the
+		// scope that builds this one declares its property too. An alias reads no alias of its own: a type's own
+		// declaration of the label is not a declaration of the label the alias reads, so an alias that keeps its
+		// fulfilling property's label and only makes it optional is not an alias of itself.
+		for dependency in instantiable.dependencies {
+			if case let .aliased(fulfillingProperty, _, _) = dependency.source,
+			   let readAlias = uncreatedAliases.values.first(where: { $0.property != dependency.property && $0.property.asUnwrappedProperty == fulfillingProperty.asUnwrappedProperty })
+			{
+				reads.append(UncreatedAliasRead(
+					kind: .alias(alias: dependency.property, fulfillingProperty: fulfillingProperty, readerType: instantiable.concreteInstantiable),
+					uncreatedAlias: readAlias,
+					declarationLocation: dependency.declarationLocation,
+				))
+			}
+			// Inline, the scope that builds this type passes it the property of an earlier child declaring the alias's
+			// property, exactly or unwrapped, where the alias is not created (its `isGeneratedBefore`), the only route by
+			// which the declaring type is passed anything but the alias or `nil`. A change to that route on main must
+			// change this check. The seam type's own aliases are passed what its caller passes. A sibling that is the
+			// alias's own fulfilling property never takes that route: generated before, it creates the alias; generated
+			// later, inline passes `nil`, as the seam does.
+			if let builder,
+			   let alias = uncreatedAliases[dependency.property],
+			   let siblingProperty = builder.siblingProperties.first(where: { $0 != alias.fulfillingProperty && ($0 == alias.property || $0 == alias.property.asUnwrappedProperty) })
+			{
+				reads.append(UncreatedAliasRead(
+					kind: .sameProperty(builderType: builder.type, siblingProperty: siblingProperty),
+					uncreatedAlias: alias,
+					declarationLocation: alias.declarationLocation,
+				))
+			}
+		}
+		// What this scope declares for the scopes it builds is the closest declaration of its label beneath it: its
+		// forwarded properties and its children, an uncreated alias among them.
+		var childUncreatedAliases = enclosingUncreatedAliases
+		for dependency in instantiable.dependencies where dependency.source == .forwarded {
+			childUncreatedAliases[dependency.property.label] = nil
+		}
+		for child in orderedChildren {
+			guard let property = child.generator.property else { continue }
+			childUncreatedAliases[property.label] = uncreatedAliases[property]
+		}
+		let childProperties = orderedChildren.map(\.generator.property)
+		for (index, child) in orderedChildren.enumerated() {
+			// A scope that closes a cycle constructs nothing: it refers to an enclosing builder function.
+			guard case let .property(childInstantiable, _, _, _, isPropertyCycle, _) = child.generator.scopeData, !isPropertyCycle else { continue }
+			await reads.append(contentsOf: child.generator.uncreatedAliasReads(
+				of: childInstantiable,
+				propertiesGeneratedLater: child.propertiesGeneratedLater,
+				enclosingUncreatedAliases: childUncreatedAliases,
+				builder: (
+					type: instantiable.concreteInstantiable,
+					siblingProperties: childProperties.enumerated().compactMap { $0.offset == index ? nil : $0.element },
+				),
+			))
+		}
+		return reads
+	}
 
 	/// A property that generated code declares, as `nonSendableWrapperCaptures` sees it.
 	private struct VisibleDeclaration {
@@ -536,7 +863,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The by-value property with which receivers read the instance of `property`, when it is lazily instantiated.
 		let instanceProperty: Property?
 		/// The type that declares the property, or `nil` for a property a mock root is handed or promotes because
-		/// its tree receives it from outside the tree.
+		/// its tree receives it from outside the tree, and for a parameter of a seam's generated initializer, which
+		/// the seam's tree receives from outside it too.
 		let declaringType: TypeDescription?
 		let declarationLocation: Dependency.DeclarationLocation?
 		/// How many `@Sendable` builder functions enclose the declaration.
@@ -581,7 +909,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			if let declarations = declarationsByLabel[receivedProperty.label] {
 				let unwrappedReceivedProperty = receivedProperty.asUnwrappedProperty
 				guard let declaration = declarations.first(where: {
-				      	$0.property.asUnwrappedProperty == unwrappedReceivedProperty || $0.instanceProperty == unwrappedReceivedProperty
+				      	$0.property.asUnwrappedProperty == unwrappedReceivedProperty || $0.instanceProperty?.asUnwrappedProperty == unwrappedReceivedProperty
 				      }),
 				      declaration.property.propertyType.isNonSendableWrapper,
 				      declaration.sendableBuilderDepth < sendableBuilderDepth
@@ -683,7 +1011,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				) {
 					captures.append(capture)
 				}
-			} else if case let .property(childInstantiable, childProperty, _, _, isPropertyCycle) = child.generator.scopeData,
+			} else if case let .property(childInstantiable, childProperty, _, _, isPropertyCycle, _) = child.generator.scopeData,
 			          // A scope that closes a cycle constructs nothing: it refers to an enclosing builder function.
 			          !isPropertyCycle
 			{
@@ -704,13 +1032,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	private enum ScopeData {
-		case root(instantiable: Instantiable)
+		/// - Parameter seamRoot: What the root emits when it is a seam's, or `nil` for a root of the dependency tree
+		///   or a mock root.
+		case root(instantiable: Instantiable, seamRoot: SeamRoot?)
+		/// - Parameter seamCall: How the scope calls the seam it stands for, or `nil` for a scope that builds its type.
 		case property(
 			instantiable: Instantiable,
 			property: Property,
 			forwardedProperties: Set<Property>,
 			erasedToConcreteExistential: Bool,
 			isPropertyCycle: Bool,
+			seamCall: SeamCall?,
 		)
 		case alias(
 			property: Property,
@@ -722,7 +1054,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		var forwardedProperties: Set<Property> {
 			switch self {
-			case let .property(_, _, forwardedProperties, _, _):
+			case let .property(_, _, forwardedProperties, _, _, _):
 				forwardedProperties
 			case .root, .alias:
 				[]
@@ -731,14 +1063,21 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		var asDOTNode: String {
 			switch self {
-			case let .root(instantiable):
+			case let .root(instantiable, _):
 				instantiable.concreteInstantiable.asSource
-			case let .property(_, property, _, _, _):
+			case let .property(_, property, _, _, _, _):
 				"\"\(property.asSource)\""
 			case let .alias(property, fulfillingProperty, _, _, _):
 				"\"\(property.asSource) <- \(fulfillingProperty.asSource)\""
 			}
 		}
+	}
+
+	/// What the generator at the root of a seam's tree emits: the seam's generated initializers, one per tier of
+	/// `signature`, the narrowest of which builds the tree and calls the seam's own initializer.
+	struct SeamRoot: Sendable {
+		/// The signature of the generated initializer.
+		let signature: SeamSignature
 	}
 
 	/// The code generation mode.
@@ -787,7 +1126,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private let scopeData: ScopeData
 	/// The received properties that some receiver in this subtree requires — a `@Received`
 	/// dependency, or the fulfilling property of an aliased one, that is not `onlyIfAvailable`.
-	private let requiredReceivedProperties: Set<Property>
+	let requiredReceivedProperties: Set<Property>
 	/// The unwrapped forms of the optional `requiredReceivedProperties`, which a sibling of the
 	/// non-optional form fulfills. Few receives are both required and optional, so this stays small.
 	private let unwrappedOptionalRequiredReceivedProperties: Set<Property>
@@ -813,8 +1152,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The fulfilling properties of the `onlyIfAvailable` aliases in this subtree that a receiver
 	/// requires, which this subtree receives from an ancestor. This subtree is built after them,
 	/// although it receives them only if available. Unlike `requiredReceivedProperties`, these do
-	/// not make a mock parameter required: a mock binds such an alias to the optional parameter.
-	private let requiredAliasFulfillingProperties: Set<Property>
+	/// not make a mock parameter required: a mock binds such an alias to the optional parameter. A seam's
+	/// generated initializer takes one as a required parameter, since nothing inside the tree creates it.
+	let requiredAliasFulfillingProperties: Set<Property>
 	/// The properties of the cycle-closing scopes in this subtree (see `isPropertyCycle`) whose cycle
 	/// closes on a scope enclosing this one. A cycle-closing scope declares no builder function: it
 	/// refers by name to the builder function of the enclosing scope with its property, so no builder
@@ -857,7 +1197,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	nonisolated(unsafe) private var propertiesToGenerate: [ScopeGenerator]
 	/// Properties that this scope declares as a `let` constant, and those its type instantiates that a mock is
 	/// passed instead (see `Scope.propertiesToDeclare`).
-	private let propertiesToDeclare: Set<Property>
+	let propertiesToDeclare: Set<Property>
 	/// The properties of this scope's `onlyIfAvailable` aliases that rename another alias this scope declares.
 	/// Each is not created where the alias it renames is not (see `uncreatedOnlyIfAvailableAliasesOfAliases`).
 	private let onlyIfAvailableAliasesOfAliases: Set<Property>
@@ -866,6 +1206,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private let lazilyInstantiatedInstanceProperties: Set<Property>
 	/// Whether the property an alias renames is in scope only as the instance of a `LazilyInstantiated` property.
 	private let fulfillingPropertyIsLazilyInstantiatedInstance: Bool
+	/// Whether the property an alias renames may be `nil` where the alias is built in a seam's tree: its closest
+	/// declaration on the path from the seam's root is a parameter of the generated initializer that may be `nil`, or
+	/// an `onlyIfAvailable` alias that may not be created (see `Scope.createScopeGenerator`'s
+	/// `runtimeOptionalProperties`). The alias is then bound from it as an optional value, and its declaring type is
+	/// passed that binding. `false` for every other scope.
+	private let fulfillingPropertyIsRuntimeOptional: Bool
 	/// The by-value property with which this scope’s siblings and their subtrees receive the instance of the
 	/// lazily instantiated property this scope declares. `nil` when it declares none.
 	private let declaredLazilyInstantiatedInstanceProperty: Property?
@@ -1383,9 +1729,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		builderFunctionNames: BuilderFunctionNames,
 	) async throws -> String {
 		switch scopeData {
-		case let .root(instantiable):
+		case let .root(instantiable, seamRoot):
 			switch codeGeneration {
 			case .dependencyTree:
+				if let seamRoot {
+					return try await generateSeamRootCode(
+						instantiable: instantiable,
+						seamRoot: seamRoot,
+						unavailableProperties: unavailableProperties,
+						propertiesGeneratedLater: propertiesGeneratedLater,
+						builderFunctionNames: builderFunctionNames,
+					)
+				}
 				let argumentList = try instantiable.generateArgumentList()
 				if instantiable.dependencies.isEmpty {
 					return ""
@@ -1413,6 +1768,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			forwardedProperties,
 			erasedToConcreteExistential,
 			isPropertyCycle,
+			seamCall,
 		):
 			// This scope's own aliases that are not created although the scope building it cannot see it are passed `nil` too.
 			let argumentList = try instantiable.generateArgumentList(
@@ -1428,6 +1784,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let returnLineSansReturn = "\(instantiationDeclaration)(\(argumentList))"
 			// What ends the line that constructs the type, after the construction.
 			let constructionLineEnd = constructionComments.initializer.map { " \($0)" } ?? ""
+			// A call to a seam's generated initializer refers to the enum the seam's module generated for the
+			// signature the call was generated from, on the line before the call, so a call generated from another
+			// signature fails to compile here rather than pass `nil` where the initializer expects a value. The
+			// statement is emitted as the body's only generated property, so the call is made in a builder function.
+			let seamGuardLines: [String] = if let seamCall {
+				["\(Self.standardIndent)_ = \(concreteTypeName).\(seamCall.guardTypeName).self\(seamCall.carriesPluginComment ? " \(Instantiable.seamCallPluginComment(for: instantiable.concreteInstantiable))" : "")"]
+			} else {
+				[]
+			}
 
 			let propertyType = property.propertyType
 			switch propertyType {
@@ -1446,7 +1811,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						}
 					}
 					.joined(separator: ", ")
-				let generatedProperties = try await generateProperties(
+				let generatedProperties = try await seamGuardLines + generateProperties(
 					codeGeneration: codeGeneration,
 					propertiesGeneratedLater: propertiesGeneratedLater,
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
@@ -1520,7 +1885,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// immediately; a lazily instantiated property hands it to its wrapper, which calls it the
 				// first time the instance is requested. Dependency cycle validation treats the property
 				// as a constant, so it is never the repeated property of a cycle.
-				let generatedProperties = try await generateProperties(
+				let generatedProperties = try await seamGuardLines + generateProperties(
 					codeGeneration: codeGeneration,
 					propertiesGeneratedLater: propertiesGeneratedLater,
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
@@ -1556,7 +1921,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let \(property.label) = \(lazilyInstantiatedInstantiation)
 				"""
 			case .constant:
-				let generatedProperties = try await generateProperties(
+				let generatedProperties = try await seamGuardLines + generateProperties(
 					codeGeneration: codeGeneration,
 					propertiesGeneratedLater: propertiesGeneratedLater,
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
@@ -1607,6 +1972,24 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		case let .alias(property, fulfillingProperty, erasedToConcreteExistential, _, declarationReference):
 			if uncreatedAliasProperty(unavailableProperties: unavailableProperties) != nil {
 				return "// Did not create `\(property.asSource)` because `\(fulfillingProperty.asSource)` is unavailable."
+			} else if fulfillingPropertyIsRuntimeOptional {
+				// The fulfilling property may be `nil` here: a parameter of the seam's generated initializer that may
+				// be `nil`, or an alias of one. The alias is bound from it as an optional value, as a mock binds an
+				// alias from an optional override, and its declaring type is passed the binding, as inline passes it
+				// the alias it creates or `nil`. Nothing else reads it: `DependencyTreeGenerator`'s check of a seam's
+				// uncreated aliases rejects every other read of its label (see
+				// `ScopeGenerator.uncreatedAliasReads(ofTreeRootedAt:)`). The fulfilling property is never a wrapper's
+				// instance: an optional wrapper parameter offers no instance, and a wrapper that offers one is required.
+				return Self.referencingDeclaration(
+					of: Self.aliasDeclaration(
+						of: property,
+						fulfilledBy: fulfillingProperty.label,
+						ofType: fulfillingProperty.typeDescription,
+						erasedToConcreteExistential: erasedToConcreteExistential,
+						fulfillingValueMayBeOptional: true,
+					),
+					by: declarationReference,
+				)
 			} else {
 				// The production tree binds an available fulfilling dependency as a non-optional value.
 				return Self.referencingDeclaration(
@@ -1623,6 +2006,76 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				)
 			}
 		}
+	}
+
+	/// The initializers a seam's module generates for the seam, one per tier of its signature, followed by the enum
+	/// every generated call refers to. Each tier but the narrowest passes `nil` for the parameters it omits and calls
+	/// the next narrower tier; the narrowest builds the tree and calls the seam's own initializer.
+	private func generateSeamRootCode(
+		instantiable: Instantiable,
+		seamRoot: SeamRoot,
+		unavailableProperties: Set<Property>,
+		propertiesGeneratedLater: Set<Property>,
+		builderFunctionNames: BuilderFunctionNames,
+	) async throws -> String {
+		let signature = seamRoot.signature
+		let typeName = instantiable.concreteInstantiable.asSource
+		let initializerKeyword = "\(instantiable.declarationType == .classType ? "convenience " : "")init"
+		let bodyIndent = "\(Self.standardIndent)\(Self.standardIndent)"
+		// Every tier carries the attributes a root's generated `init()` carries: a caller can reach any tier, and a
+		// wider tier calls the next narrower one.
+		let attributesPrefix = instantiable.generatedInitializerAttributes.isEmpty ? "" : "\(instantiable.generatedInitializerAttributes) "
+		func parameterList(of parameters: [SeamSignature.Parameter]) -> String {
+			parameters
+				.map { parameter in
+					"\(parameter.property.asFunctionParamterSyntax.description)\(parameter.defaultsToNil ? " = nil" : "")"
+				}
+				.joined(separator: ", ")
+		}
+		let tierParameters = signature.tiers.map(signature.parameters(ofTierAt:))
+		var initializers = [String]()
+		for (index, tier) in signature.tiers.enumerated() {
+			let parameters = tierParameters[index]
+			let body: String
+			if index == signature.tiers.count - 1 {
+				// The narrowest tier builds the tree.
+				let generatedProperties = try await generateProperties(
+					propertiesGeneratedLater: propertiesGeneratedLater,
+					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
+					leadingMemberWhitespace: bodyIndent,
+				)
+				// The seam's own `onlyIfAvailable` aliases that are not created are passed `nil`, as a scope built
+				// by another is.
+				let argumentList = try instantiable.generateArgumentList(
+					unavailableProperties: unavailableProperties.union(uncreatedOnlyIfAvailableAliasesOfAliases(propertiesGeneratedLater: propertiesGeneratedLater)),
+				)
+				body = (generatedProperties + ["\(bodyIndent)self.init(\(argumentList))"]).joined(separator: "\n")
+			} else {
+				// A wider tier passes `nil` for each parameter it omits: one whose type the tier's callers cannot
+				// see, which only a parameter received only if available can be.
+				let tierParameterSet = Set(parameters.map(\.property))
+				let arguments = tierParameters[index + 1]
+					.map { parameter in
+						"\(parameter.property.label.spelledAsArgumentLabel): \(tierParameterSet.contains(parameter.property) ? parameter.property.label : "nil")"
+					}
+					.joined(separator: ", ")
+				body = "\(bodyIndent)self.init(\(arguments))"
+			}
+			initializers.append("""
+			\(Self.standardIndent)\(attributesPrefix)\(tier.spelledOnGeneratedDeclaration) \(initializerKeyword)(\(parameterList(of: parameters))) {
+			\(body)
+			\(Self.standardIndent)}
+			""")
+		}
+		return """
+		extension \(typeName) {
+		\(initializers.joined(separator: "\n\n"))
+		}
+
+		extension \(typeName) {
+		    public enum \(signature.guardTypeName) {}
+		}
+		"""
 	}
 
 	/// The `let` that binds an alias's `property` to `fulfillingExpression`, a value of
@@ -1642,15 +2095,28 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		erasedToConcreteExistential: Bool,
 		fulfillingValueMayBeOptional: Bool,
 	) -> String {
+		"let \(property.asSource) = \(aliasValue(of: property, fulfilledBy: fulfillingExpression, ofType: fulfillingTypeDescription, erasedToConcreteExistential: erasedToConcreteExistential, fulfillingValueMayBeOptional: fulfillingValueMayBeOptional))"
+	}
+
+	/// The value an alias of `property` is bound to from `fulfillingExpression`: that expression, or, for an erased
+	/// alias, the existential wrapping it, mapped over an optional value where the expression may be `nil`.
+	private static func aliasValue(
+		of property: Property,
+		fulfilledBy fulfillingExpression: String,
+		ofType fulfillingTypeDescription: TypeDescription,
+		erasedToConcreteExistential: Bool,
+		fulfillingValueMayBeOptional: Bool,
+	) -> String {
 		let existentialTypeSource = property.typeDescription.unwrapped.asSource
-		let initializer = if !erasedToConcreteExistential {
+		return if !erasedToConcreteExistential {
 			fulfillingExpression
 		} else if fulfillingValueMayBeOptional {
-			"(\(fulfillingExpression) as \(TypeDescription.optional(fulfillingTypeDescription).asSource)).map { \(existentialTypeSource)($0) }"
+			// The fulfilling type's optional form, spelled once: an alias of a property declared optional (`ofType:
+			// Secret?.self`) maps over `Secret?`, never `Secret??`.
+			"(\(fulfillingExpression) as \(fulfillingTypeDescription.isOptional ? fulfillingTypeDescription.asSource : TypeDescription.optional(fulfillingTypeDescription).asSource)).map { \(existentialTypeSource)($0) }"
 		} else {
 			"\(existentialTypeSource)(\(fulfillingExpression))"
 		}
-		return "let \(property.asSource) = \(initializer)"
 	}
 
 	/// Points `code`, an alias's assignment, at its `@Received` declaration as `declarationReference` says:
@@ -3283,7 +3749,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					fulfillingPropertyIsLazilyInstantiatedInstance: childGenerator.fulfillingPropertyIsLazilyInstantiatedInstance,
 					declarationReference: declarationReference,
 				)))
-			} else if case let .property(childInstantiable, childProperty, _, erasedToConcreteExistential, isPropertyCycle) = childGenerator.scopeData {
+			} else if case let .property(childInstantiable, childProperty, _, erasedToConcreteExistential, isPropertyCycle, _) = childGenerator.scopeData {
 				let isInstantiator = !childProperty.propertyType.isConstant
 				let childInsideSendable = insideSendableScope || childGenerator.buildsInSendableFunction
 

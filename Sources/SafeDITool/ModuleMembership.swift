@@ -74,6 +74,7 @@ struct ModuleMembership: Sendable {
 		self.moduleName = moduleName
 		self.packageName = packageName
 		dependencyModuleNames = []
+		dependencyModuleNamesByModuleName = [:]
 		let declaringModule = DeclaringModule(moduleName: moduleName, packageName: packageName)
 		declaringModuleOfFile = { filePath in
 			inputFilePaths.contains(projectFilePaths.projectFilePath(of: filePath)) ? declaringModule : nil
@@ -91,6 +92,11 @@ struct ModuleMembership: Sendable {
 		moduleName = targetGraph.target.moduleName
 		packageName = targetGraph.target.packageID
 		dependencyModuleNames = targetGraph.target.dependencyModuleNames
+		// A module name repeats only in a target graph a hand wrote: the first target keeps it.
+		dependencyModuleNamesByModuleName = Dictionary(
+			([targetGraph.target] + targetGraph.dependencyTargets).map { ($0.moduleName, $0.dependencyModuleNames) },
+			uniquingKeysWith: { first, _ in first },
+		)
 		let declaringModulesByFilePath = Dictionary(
 			([targetGraph.target] + targetGraph.dependencyTargets).flatMap { target in
 				target.sourceFilePaths.map { filePath in
@@ -117,7 +123,15 @@ struct ModuleMembership: Sendable {
 		declaringModuleOfFile(filePath)
 	}
 
+	/// The modules the module named `moduleName` depends on directly, as the target graph lists them, or `nil` when the
+	/// build system said nothing of that module: the options describe only the module `generate` runs for, and the
+	/// target graph lists the planned target and the targets whose files the input CSV holds.
+	func dependencyModuleNames(ofModuleNamed moduleName: String) -> [String]? {
+		dependencyModuleNamesByModuleName[moduleName]
+	}
+
 	private let declaringModuleOfFile: @Sendable (String) -> DeclaringModule?
+	private let dependencyModuleNamesByModuleName: [String: [String]]
 }
 
 extension ModuleInfo {

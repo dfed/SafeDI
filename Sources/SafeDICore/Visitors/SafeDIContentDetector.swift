@@ -250,7 +250,8 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	/// - Parameters:
 	///   - declaredType: The type the declaration declares, which encloses the types among its members.
 	///   - isTypeDefinition: Whether the declaration defines a type, which only a type definition
-	///     can make a root: SafeDI never treats an `@Instantiable` extension as one.
+	///     can make a root, or a type whose dependency tree SafeDI generates: SafeDI never treats an
+	///     `@Instantiable` extension as either.
 	private func visitTypeDeclaration(_ attributes: AttributeListSyntax, declaring declaredType: TypeDescription, isTypeDefinition: Bool) -> SyntaxVisitorContinueKind {
 		enterType(declaredType)
 		switch context {
@@ -260,6 +261,7 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 				outputFileDeclarations.recordInstantiable(
 					named: declaredType.asSource,
 					isRoot: isTypeDefinition && instantiableMacro.isRootValue,
+					generatesDependencyTree: isTypeDefinition && instantiableMacro.generatesDependencyTreeValue,
 					generatesMock: instantiableMacro.generateMockValue,
 				)
 			}
