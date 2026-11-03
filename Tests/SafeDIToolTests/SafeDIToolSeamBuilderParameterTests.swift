@@ -77,7 +77,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// The Manual's seam section shows this example's generated code under the plugin, read here so it cannot drift.
 		guard integration == .swiftPackagePlugin else { return }
 		let manual = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Documentation/Manual.md"), encoding: .utf8)
-		let section = try #require(manual.components(separatedBy: "#### Generating a dependency tree per module").dropFirst().first)
+		let section = try #require(manual.components(separatedBy: "## Generating a dependency tree per module").dropFirst().first)
 			.components(separatedBy: "\n#").first ?? ""
 		let codeBlocks = section.components(separatedBy: "```swift\n").dropFirst().map { $0.components(separatedBy: "\n```").first ?? "" }
 		let featureFile = try #require(output.modules["Feature"]?.generatedFiles["Service+SafeDI.swift"])

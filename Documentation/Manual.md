@@ -2,7 +2,7 @@
 
 SafeDI utilizes both Swift macros and a code generation plugin to read your code and generate a dependency tree. You decorate each type with SafeDI’s macros to declare the dependencies it instantiates, receives, and forwards; when you build, SafeDI validates the tree and generates the code that creates it, along with mocks for your tests and previews.
 
-This manual first describes the macros and how to design a dependency tree with them, then mock generation, then how to [add SafeDI to your build](#installation) and operate it. The sections after those are optional: how SafeDI differs from manual injection, migration guides, example applications, a tour of how SafeDI works under the hood, and introspecting a tree.
+This manual first describes the macros and how to design a dependency tree with them, then mock generation, then how to [add SafeDI to your build](#installation) and operate it. The sections after those are optional: how SafeDI differs from manual injection, migration guides – including [adopting SafeDI in a large codebase](#adopting-safedi-in-a-large-codebase) – example applications, a tour of how SafeDI works under the hood, and introspecting a tree.
 
 ## Macros
 
@@ -32,7 +32,7 @@ Every `@Instantiable`-decorated type must:
 
 3. Spell a nested type in a decorated property’s type with its enclosing types, such as `@Forwarded let configuration: Feature.Configuration` for a `Configuration` declared inside `Feature`: generated code is in an extension where the members of `Feature` are not in scope, and the `@Instantiable` macro warns, with a fix-it, when a type declared inside the decorated type is spelled without it. SafeDI itself qualifies a nested type that an `@Instantiable` declaration [fulfills](#making-protocols-instantiable).
 
-The `@Instantiable` macro guides developers through satisfying the first two requirements with code generation and build-time fix-its. Do not decorate a superclass with `@Instantiable`; see [Inheritance](#inheritance).
+SafeDI guides you through the first two requirements with fix-its: the `@Instantiable` macro as you type, and `SafeDITool` when you build, for access that only the module constructing the type can judge. Do not decorate a superclass with `@Instantiable`; see [Inheritance](#inheritance).
 
 Here is a sample `LoggedInView` implementation that is `@Instantiable`. It is annotated with each of the three dependency-kind macros — `@Forwarded`, `@Received`, and `@Instantiated` — that together describe how dependencies enter a SafeDI scope:
 
@@ -95,123 +95,7 @@ The `@Instantiable` macro reports a `private` or `fileprivate` type, initializer
 
 A module whose build reads another module's files, as the `SafeDIGenerator` package plugin reads those of every module a module depends on, generates a root that module declares only when every type the root's tree constructs is `public` or `open`, as are the types it is nested in and the initializer or `instantiate(…)` method that builds it, and when the tree calls no initializer SafeDI generates for a [seam](#generating-a-dependency-tree-per-module). Otherwise the module that declares the root generates it, when that module runs SafeDI too.
 
-#### Generating a dependency tree per module
-
-A root’s generated `init()` builds the whole tree in the root’s module, so every type the tree reaches must be visible there, and the whole tree is generated and compiled again whenever anything in it changes. A type decorated with `@Instantiable(generateDependencyTree: true)` is a seam: a type whose dependency tree SafeDI generates in its own module, which other trees call. The seam’s module generates an initializer that takes what the tree needs from outside as parameters, and every tree that reaches the seam calls that initializer and treats the seam as a leaf, so changing the seam’s tree recompiles only the seam’s module and the generated calls. A seam may receive and forward dependencies, unlike a root, and may not also be a root or `mockOnly`; the argument is not permitted on an extension.
-
-```swift
-// In module Feature.
-@Instantiable(generateDependencyTree: true)
-public struct Screen: Instantiable {
-    public init(user: User, cache: Cache) {
-        self.user = user
-        self.cache = cache
-    }
-
-    @Received private let user: User
-    @Instantiated private let cache: Cache
-}
-
-@Instantiable
-public struct Cache: Instantiable {
-    public init(database: Database, logger: Logger?) {
-        self.database = database
-        self.logger = logger
-    }
-
-    @Received private let database: Database
-    @Received(onlyIfAvailable: true) private let logger: Logger?
-}
-```
-
-SafeDI generates, in `Feature`:
-
-```swift
-extension Screen {
-    public init(user: User, database: Database, logger: Logger? = nil) {
-        let cache = Cache(database: database, logger: logger)
-        self.init(user: user, cache: cache)
-    }
-}
-
-extension Screen {
-    public enum __safeDI_Screen_154FFE4ADBF72F8B {}
-}
-```
-
-The generated initializer takes the seam’s own `@Received` and `@Forwarded` properties first, in declaration order and as the seam declares them, then every property its tree receives that nothing inside the tree provides, in label order: required where some receiver requires it, keeping an optional type a receiver declares (`session: Session?`) without a default, and defaulting to `nil` where every receiver receives it only if available. The seam’s own `@Received` and `@Forwarded` properties are parameters as the seam declares them; one received only if available defaults to `nil`, like a property the tree receives only if available. A caller whose tree holds a value for a parameter the initializer it can call omits is an error, so no receiver loses a value silently. A tree that reaches the seam calls the generated initializer as it would call any other initializer, passing a property received only if available by the usual availability rule – `nil` where its own tree does not provide it – so no receiver loses a value it gets today, except through the seam’s own `onlyIfAvailable` alias (the second of the four shapes below):
-
-```swift
-// Generated in module App, whose root instantiates Screen.
-func __safeDI_screen() -> Screen {
-    _ = Screen.__safeDI_Screen_154FFE4ADBF72F8B.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
-    return Screen(user: user, database: database, logger: nil)
-}
-```
-
-Each generated call refers to the enum generated beside the initializer, so a stale generated call fails to compile rather than passing `nil` where a value was expected, since adding a `@Received` property beneath the seam adds a parameter and renames the enum. A hand-written call gets only the compiler’s check: it fails to compile when a required parameter is added, a parameter’s type changes, or one is removed, and still compiles, passing `nil`, when a `= nil` parameter is added for a receive that every receiver takes only if available. The seam’s module and each caller compute the initializer from the same declarations, the seam’s module’s own files and the modules it depends on: under the `SafeDIGenerator` plugin from the target graph the plugin writes, and otherwise from the `.safedi` files [Custom build system integration](#custom-build-system-integration) says to pass. The plugin cannot tell whether a dependency target applies it, so every generated call to another module’s seam carries the comment above under the plugin. A seam whose module SafeDI does not know – declared in a directory a `#SafeDIConfiguration` adds, in a `.safedi` written without `--module-name`, or in a file no target of the plugin’s graph lists – is built inline by every tree that reaches it; one whose initializer depends on a declaration its callers cannot see, such as one in its own module’s `additionalDirectoriesToInclude`, is an error at the seam when that changes what a call depends on, as is a declaration outside the tree whose initializer, `instantiate(…)` or mock method takes a parameter’s type as a dependency, when that changes it.
-
-SafeDI generates an initializer at the access level of the seam’s type, as its enclosing types limit it, and a narrower one for each narrower access level among the parameters, which the wider one calls, passing `nil` for the parameters it omits; a required parameter narrower than the seam’s access is an error at the seam that says what to narrow or widen. A parameter of the generated initializer is as visible as the narrowest type it names, as far as SafeDI can prove from the declarations it records – a type’s own `@Instantiable` declaration, the initializers, `instantiate(…)` and mock methods that take it as a dependency, and a short list of standard types – and a type it cannot prove counts as `internal`. A type declared inside an extension of a type whose own `@Instantiable` declaration is in the same module (outside every extension, or itself bounded this way) counts at its own access level, capped by that type’s. Any other type declared inside an extension counts at the extension’s spelled access level (`internal` when it spells none), unless a recorded initializer, `instantiate(…)` or mock method mentions it more widely. For example, a public `Analytics` that a type with a `package` initializer receives inside the tree is still a parameter of the seam’s `public` initializer:
-
-```swift
-extension Service {
-    public init(analytics: Analytics) {
-        let badge = Badge(analytics: analytics)
-        self.init(badge: badge)
-    }
-}
-```
-
-A seam reached through another seam passes the inner seam’s parameters on, each as visible as the types it names prove in the outer seam’s module; a parameter the outer seam’s module cannot pass on is taken by none of its initializers, and a caller holding a value for it is told so. Each tree calls the narrowest initializer it can reach under the rules of [Access levels](#access-levels), which SafeDI checks for the seam’s tree as for a root’s. A seam with no `@Instantiated` or renamed dependency and nothing to pass through gets no generated initializer, and its callers call its own. Mocks never call a seam’s generated initializer: a generated mock builds the whole tree beside the mocked type, as it always has.
-
-The generated initializer passes each dependency to its receivers by label, as a root’s `init()` does, and is generated without knowing what its callers pass, so SafeDI reports an error at the seam, with what to change, wherever one parameter per label cannot reproduce what the tree reads:
-
-- One label received in forms no single parameter provides – a by-value receive beside an optional wrapper receive, two wrapper kinds, or the seam’s own receive beside a form it does not provide. A required non-optional `LazilyInstantiated` or `SendableLazilyInstantiated` provides the by-value forms and the optional form of its kind, and a by-value property its optional form, as inline.
-- A receive whose label a type between the seam and the receiver, the seam included, declares with a property that does not provide it: the hidden-label error the tree gets inline once a caller provides the property.
-- A required parameter narrower than the seam’s type, and an initializer in the seam’s body that takes the generated initializer’s parameters, which the generated one would redeclare.
-
-An `onlyIfAvailable` alias inside the seam whose fulfilling property is a parameter the seam’s callers may pass `nil` for – a pass-through received only if available, or the seam’s own `onlyIfAvailable` receive – or the non-optional form of a parameter of optional type, is bound from that parameter as an optional value, and the type declaring it is passed that value. Where such an alias, or one the tree does not create, is read by anything other than the type declaring it – a receive of its property beneath that type, or another alias of it – or where the type that builds the declaring type also declares the alias’s property or its non-optional form, other than the property the alias is fulfilled by, the seam reports an error, because built inline that read finds whatever declaration of the alias’s label encloses the seam where the alias is not created: receive or alias the fulfilling property itself only if available instead, make the alias required, or give the alias a label nothing beside it declares.
-
-Four shapes differ from building the tree inline, because the seam cannot see its callers:
-
-- A caller whose tree holds only the optional form of an alias’s fulfilling property (`token: Token?`) passes it, and the seam creates the alias from it, where inline the alias is not created.
-- The seam’s own `onlyIfAvailable` alias is bound from its fulfilling parameter, where inline the seam would be passed the property of the alias’s label that the scope building the seam creates.
-- A by-value parameter filled from a wrapper the caller holds reads `.instance` at the call, so the instance is created when the seam is, where inline it is created when the receiver inside the tree is built. SafeDI does not warn about that read.
-- A `@Sendable` builder inside the seam that reads a parameter of a non-`Sendable` wrapper type – `Instantiator`, `ErasedInstantiator`, or `LazilyInstantiated` – is rejected, since the generated initializer declares the parameter outside every builder function, even where inline would pass `nil`: receive the label inside the seam as the `Sendable` wrapper of that kind, and declare it so where the caller declares it.
-
-A seam’s tree may instantiate a type that no `@Instantiable` declaration its module can see fulfills – a protocol whose implementation lives in the app, for instance. The initializer SafeDI generates then takes a builder for it, `<label>Builder`, one for each place the tree builds it: a closure handed a struct of the values in scope there and returning the property’s type – or, where `@Sendable` builder functions lie between the seam and that place, a `@Sendable` closure for the values bound inside the first of them, and so on, the last returning the property’s type. A module that can see an implementation fills the builder in the code it generates, building the implementation from the struct’s fields and from its own tree; a seam that cannot passes the builder up through its own initializer; a root that cannot is an error. A value the implementation receives must be in the struct, or come from the module that fills it. The builder, and each value in the struct, is as visible as the types it names, as a parameter is. A seam whose tree instantiates the seam again, directly or through another seam of its module, hands the builders it took on to that call; a value the implementation reads that such a path binds is an error, as for a builder passed up.
-
-```swift
-// Generated in module Feature, where `Profile` instantiates `userService: any UserService`.
-extension Service {
-    public struct SafeDIScope_Profile_userService {
-        public let analytics: Analytics
-    }
-
-    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
-        let analytics = Analytics()
-        func __safeDI_profile() -> Profile {
-            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(analytics: analytics))
-            return Profile(userService: userService, analytics: analytics)
-        }
-        let profile: Profile = __safeDI_profile()
-        self.init(analytics: analytics, profile: profile)
-    }
-}
-```
-
-```swift
-// Generated in module App, which declares `DefaultUserService`, an implementation of `UserService`.
-func __safeDI_service() -> Service {
-    _ = Service.__safeDI_Service_80890FC499DC6112.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
-    func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
-        let analytics = scope.analytics
-        let userService: any UserService = DefaultUserService(analytics: analytics)
-        return userService
-    }
-    return Service(userServiceBuilder: __safeDI_userServiceBuilder)
-}
-```
+[Access of generated parameters](#access-of-generated-parameters) says how visible the parameters of the initializers and mocks SafeDI generates for other modules are.
 
 #### Making protocols `@Instantiable`
 
@@ -386,7 +270,7 @@ extension Container {
 
 #### Attributes for generated declarations
 
-SafeDI generates an `init()` for each root that has dependencies, initializers for each type with `generateDependencyTree: true` (see [Generating a dependency tree per module](#generating-a-dependency-tree-per-module)), and a `mock()` for each type with `generateMock: true` or listed in a module's `additionalMocksToGenerate` (see [Mock generation](#mock-generation)). The plugin cannot detect every attribute these need from source – a global actor that the initializers they call are bound to, for example – so three `@Instantiable` arguments add attributes to them:
+SafeDI generates an `init()` for each root that has dependencies, initializers for each type with `generateDependencyTree: true` (see [Generating a dependency tree per module](#generating-a-dependency-tree-per-module)), and a `mock()` for each type with `generateMock: true` or `.public`, or listed in a module's `additionalMocksToGenerate` (see [Mock generation](#mock-generation)). The plugin cannot detect every attribute these need from source – a global actor that the initializers they call are bound to, for example – so three `@Instantiable` arguments add attributes to them:
 
 | Argument | Adds its text to |
 | -------- | ---------------- |
@@ -535,7 +419,7 @@ Declare the configuration in a file named `SafeDIConfiguration.swift` in the mod
 **Parameters:**
 
 - `additionalImportedModules`: Module names to import in the generated dependency tree, in addition to the import statements found in files that declare `@Instantiable` types. Default: `[]`.
-- `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. An entry may also name a single Swift file. Only the `SafeDIGenerator` build-tool plugin declares the files it reaches as build inputs; under Tuist and Bazel, list every Swift source in the build target instead (see the note under [Xcode project](#xcode-project)). Default: `[]`.
+- `additionalDirectoriesToInclude`: Directories containing Swift files to include, relative to the executing directory. An entry may also name a single Swift file. Only the `SafeDIGenerator` build tool plugin declares the files it reaches as build inputs, so under Tuist and Bazel, list every Swift source in the build target instead: a Tuist build reads those files but does not rebuild when they change, and cannot read them under user script sandboxing, and a Bazel build cannot see them at all. Default: `[]`.
 - `additionalMocksToGenerate`: Type names from dependent modules to generate `mock()` methods for in this module. The types must be `@Instantiable` in their home module. See [Cross-module mock generation](#cross-module-mock-generation). Default: `[]`.
 - `mockConditionalCompilation`: The conditional compilation flag to wrap generated mock code in (e.g. `"DEBUG"`). Set to `nil` to generate mocks without conditional compilation. Default: `"DEBUG"`.
 
@@ -772,6 +656,136 @@ A protocol composition works as the instantiated type as well, with no typealias
 
 Generated mocks resolve `@Received` dependencies from their declared types rather than from these renames. See [Dependency kinds in the generated mock](#dependency-kinds-in-the-generated-mock) for what that means for `ProfileView.mock()`.
 
+## Generating a dependency tree per module
+
+A root’s generated `init()` builds the whole tree in the root’s module, so every type the tree reaches must be visible there, and the whole tree is generated and compiled again whenever anything in it changes. A type decorated with `@Instantiable(generateDependencyTree: true)` is a seam: its module generates its dependency tree, as an initializer that takes what the tree needs from outside as parameters, and every tree that reaches the seam calls that initializer and treats the seam as a leaf, so changing the seam’s tree recompiles only the seam’s module and the generated calls. A seam may receive and forward dependencies, unlike a root, and may not also be a root or `mockOnly`; the argument is not permitted on an extension. [Adopting SafeDI in a large codebase](#adopting-safedi-in-a-large-codebase) says where seams go.
+
+```swift
+// In module Feature.
+@Instantiable(generateDependencyTree: true)
+public struct Screen: Instantiable {
+    public init(user: User, cache: Cache) {
+        self.user = user
+        self.cache = cache
+    }
+
+    @Received private let user: User
+    @Instantiated private let cache: Cache
+}
+
+@Instantiable
+public struct Cache: Instantiable {
+    public init(database: Database, logger: Logger?) {
+        self.database = database
+        self.logger = logger
+    }
+
+    @Received private let database: Database
+    @Received(onlyIfAvailable: true) private let logger: Logger?
+}
+```
+
+SafeDI generates, in `Feature`:
+
+```swift
+extension Screen {
+    public init(user: User, database: Database, logger: Logger? = nil) {
+        let cache = Cache(database: database, logger: logger)
+        self.init(user: user, cache: cache)
+    }
+}
+
+extension Screen {
+    public enum __safeDI_Screen_154FFE4ADBF72F8B {}
+}
+```
+
+The generated initializer takes the seam’s own `@Received` and `@Forwarded` properties first, in declaration order and as the seam declares them, then every property its tree receives that nothing inside the tree provides, in label order: required where some receiver requires it, keeping an optional type a receiver declares (`session: Session?`) without a default, and defaulting to `nil` where every receiver receives it only if available, as the seam’s own receive only if available does. A tree that reaches the seam calls the generated initializer as it would call any other initializer, passing a property received only if available by the usual [availability rule](#conditionally-receiving-dependencies) – `nil` where its own tree does not provide it, as for `logger` here – so receivers get the values they would get inline, except in the shapes [listed below](#where-a-seam-differs-from-building-its-tree-inline):
+
+```swift
+// Generated in module App, whose root instantiates Screen.
+func __safeDI_screen() -> Screen {
+    _ = Screen.__safeDI_Screen_154FFE4ADBF72F8B.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
+    return Screen(user: user, database: database, logger: nil)
+}
+```
+
+Each generated call refers to the enum generated beside the initializer. Adding a `@Received` property beneath the seam adds a parameter and renames the enum, so a stale generated call fails to compile rather than passing `nil` where a value was expected. A hand-written call gets only the compiler’s check: it fails to compile when a required parameter is added, a parameter’s type changes, or one is removed, and still compiles, passing `nil`, when a `= nil` parameter is added for a receive that every receiver takes only if available.
+
+The seam’s module and each caller compute the initializer from the same declarations, the seam’s module’s own files and the modules it depends on: under the `SafeDIGenerator` plugin from the target graph the plugin writes, and otherwise from the `.safedi` files [Custom build system integration](#custom-build-system-integration) says to pass. The plugin cannot tell whether a dependency target applies it, so every generated call to another module’s seam carries the comment above under the plugin. A seam whose module SafeDI does not know – declared in a directory a `#SafeDIConfiguration` adds, in a `.safedi` written without `--module-name`, or in a file no target of the plugin’s graph lists – is built inline by every tree that reaches it. A seam whose initializer depends on a declaration its callers cannot see, such as one in its own module’s `additionalDirectoriesToInclude`, is an error at the seam when that changes what a call depends on, as is a declaration outside the tree whose initializer, `instantiate(…)` or mock method takes a parameter’s type as a dependency, when that changes it.
+
+The seam’s widest initializer has the access level of the seam’s type, as its enclosing types limit it, and each parameter is as visible as the types it names, with a narrower tier for each narrower level among the parameters, as [Access of generated parameters](#access-of-generated-parameters) below describes; a required parameter narrower than the seam’s type is an error at the seam that says what to narrow or widen. For example, a public `Analytics` that a type with a `package` initializer receives inside the tree is still a parameter of the seam’s `public` initializer:
+
+```swift
+extension Service {
+    public init(analytics: Analytics) {
+        let badge = Badge(analytics: analytics)
+        self.init(badge: badge)
+    }
+}
+```
+
+A seam reached through another seam passes the inner seam’s parameters on, each as visible as the types it names prove in the outer seam’s module; a parameter the outer seam’s module cannot pass on is taken by none of its initializers, and a caller holding a value for it is told so. Each tree calls the narrowest initializer it can reach under the rules of [Access levels](#access-levels), which SafeDI checks for the seam’s tree as for a root’s; a caller whose tree holds a value for a parameter that initializer omits is an error, so no receiver loses a value silently. A seam with no `@Instantiated` or renamed dependency and nothing to pass through gets no generated initializer, and its callers call its own. Mocks never call a seam’s generated initializer: a generated mock builds the whole tree beside the mocked type, as it always has.
+
+A seam’s tree may instantiate a type that no `@Instantiable` declaration its module can see fulfills – a protocol whose implementation lives in the app, for instance. The initializer SafeDI generates then takes a builder for it, `<label>Builder`, one for each place the tree builds it: a closure handed a struct of the values in scope there and returning the property’s type – or, where `@Sendable` builder functions lie between the seam and that place, a `@Sendable` closure for the values bound inside the first of them, and so on, the last returning the property’s type. A module that can see an implementation fills the builder in the code it generates, building the implementation from the struct’s fields and from its own tree; a seam that cannot passes the builder up through its own initializer; a root that cannot is an error. A value the implementation receives must be in the struct, or come from the module that fills it. The builder, and each value in the struct, is as visible as the types it names, as a parameter is. A seam whose tree instantiates the seam again, directly or through another seam of its module, hands the builders it took on to that call; a value the implementation reads that such a path binds is an error, as for a builder passed up.
+
+```swift
+// Generated in module Feature, where `Profile` instantiates `userService: any UserService`.
+extension Service {
+    public struct SafeDIScope_Profile_userService {
+        public let analytics: Analytics
+    }
+
+    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+        let analytics = Analytics()
+        func __safeDI_profile() -> Profile {
+            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(analytics: analytics))
+            return Profile(userService: userService, analytics: analytics)
+        }
+        let profile: Profile = __safeDI_profile()
+        self.init(analytics: analytics, profile: profile)
+    }
+}
+```
+
+```swift
+// Generated in module App, which declares `DefaultUserService`, an implementation of `UserService`.
+func __safeDI_service() -> Service {
+    _ = Service.__safeDI_Service_80890FC499DC6112.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
+    func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+        let analytics = scope.analytics
+        let userService: any UserService = DefaultUserService(analytics: analytics)
+        return userService
+    }
+    return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+}
+```
+
+### Access of generated parameters
+
+The initializers SafeDI generates for a seam, and the [public mocks](#public-mocks) it generates, take parameters that code in other modules passes. Each parameter is as visible as the narrowest type it names, as far as SafeDI can prove from the declarations it records: a type’s own `@Instantiable` declaration, the initializers, `instantiate(…)` methods and mock methods that take the type as a dependency, and a short list of standard types such as `String`, `URL`, and `Result`. A type it cannot prove counts as `internal`. A type declared inside an extension counts at its own access level, capped by the extended type’s when that type’s own `@Instantiable` declaration is in the same module (outside every extension, or itself bounded this way), and otherwise by the extension’s spelled access level (`internal` when the extension spells none or extends a nested type), unless a recorded initializer, `instantiate(…)` or mock method mentions it more widely.
+
+Where the parameters differ in access, SafeDI generates one declaration for each access level, a tier: the narrowest tier builds the tree, and each wider tier takes the parameters code at its level can name and calls the next narrower tier, passing `nil` for the parameters it omits.
+
+A narrower declaration of a standard type’s name in scope (a module’s own `Result`, which SafeDI takes for the standard one), an access-level import, and an `@_spi` type each read as `public`, so they make a tier wider than the compiler accepts, which the compiler reports in the generated file.
+
+### Where a seam differs from building its tree inline
+
+The generated initializer passes each dependency to its receivers by label, as a root’s `init()` does, and is generated without knowing what its callers pass, so SafeDI reports an error at the seam, with what to change, wherever one parameter per label cannot reproduce what the tree reads, or the initializer cannot be declared:
+
+- One label received in forms no single parameter provides – a by-value receive beside an optional wrapper receive, two wrapper kinds, or the seam’s own receive beside a form it does not provide. A required non-optional `LazilyInstantiated` or `SendableLazilyInstantiated` provides the by-value forms and the optional form of its kind, and a by-value property its optional form, as inline.
+- A receive whose label a type between the seam and the receiver, the seam included, declares with a property that does not provide it: the hidden-label error the tree gets inline once a caller provides the property.
+- An initializer in the seam’s body that takes the generated initializer’s parameters, which the generated one would redeclare.
+
+An `onlyIfAvailable` alias inside the seam whose fulfilling property is a parameter the seam’s callers may pass `nil` for – a pass-through received only if available, the seam’s own `onlyIfAvailable` receive, or the non-optional form of a parameter of optional type – is bound from that parameter as an optional value, and the type declaring it is passed that value. A read of such an alias, or of one the tree does not create, by anything but the type declaring it, and a declaration of the alias’s property by the type that builds the declaring type, are errors at the seam, which say what to change.
+
+Four shapes differ from building the tree inline, because the seam cannot see its callers:
+
+- A caller whose tree holds only the optional form of an alias’s fulfilling property (`token: Token?`) passes it, and the seam creates the alias from it, where inline the alias is not created.
+- The seam’s own `onlyIfAvailable` alias is bound from its fulfilling parameter, where inline the seam would be passed the property of the alias’s label that the scope building the seam creates.
+- A by-value parameter filled from a wrapper the caller holds reads `.instance` at the call, so the instance is created when the seam is, where inline it is created when the receiver inside the tree is built. SafeDI does not warn about that read.
+- A `@Sendable` builder inside the seam that reads a parameter of a non-`Sendable` wrapper type – `Instantiator`, `ErasedInstantiator`, or `LazilyInstantiated` – is rejected, since the generated initializer declares the parameter outside every builder function, even where inline would pass `nil`: receive the label inside the seam as the `Sendable` wrapper of that kind, and declare it so where the caller declares it.
+
 ## Mock generation
 
 SafeDI can automatically generate `mock()` methods for `@Instantiable` types, drastically simplifying testing and SwiftUI previews.
@@ -789,7 +803,7 @@ public final class DefaultUserService: UserService, Instantiable {
 }
 ```
 
-By default, `generateMock` is `false` and no mock is generated. Generated mocks are wrapped in `#if DEBUG` by default. To customize the conditional compilation flag, set the `mockConditionalCompilation` parameter in your module’s [`#SafeDIConfiguration`](#safediconfiguration). To bind a generated mock to a global actor, or give it other attributes, see [Attributes for generated declarations](#attributes-for-generated-declarations).
+By default, `generateMock` is `false` and no mock is generated. A mock generated with `generateMock: true` is `internal`; to call it from other modules, see [Cross-module mock generation](#cross-module-mock-generation). Generated mocks are wrapped in `#if DEBUG` by default. To customize the conditional compilation flag, set the `mockConditionalCompilation` parameter in your module’s [`#SafeDIConfiguration`](#safediconfiguration). To bind a generated mock to a global actor, or give it other attributes, see [Attributes for generated declarations](#attributes-for-generated-declarations).
 
 ### Using generated mocks
 
@@ -881,7 +895,7 @@ The table below shows where each dependency kind lands in the three buckets abov
 
 A type with `@Forwarded` properties can only be built by an `Instantiator` handed the forwarded values, so when the mocked type’s tree receives such a type as a constant, `mock()` takes the instance as a parameter, even when the type has a hand-written mock. A received `Instantiator` of the type is built as usual.
 
-A type in a mock’s tree can declare an `@Instantiated(fulfilledByType:)` dependency whose `@Instantiable` declaration the mock’s module cannot see, such as a `DefaultUserService` declared in a module only the app imports. Production code is generated where every module is visible; the mock cannot build the dependency, so `mock()` takes it as a parameter, such as `mock(userService:)`, a `@Sendable` autoclosure when the type that instantiates it is built through a `Sendable` wrapper, as [above](#overriding-dependencies). The parameter does not excuse a missing fulfiller: a root in the mock’s module that reaches the type still fails to generate.
+A type in a mock’s tree can declare an `@Instantiated(fulfilledByType:)` dependency whose `@Instantiable` declaration the mock’s module cannot see, such as a `DefaultUserService` declared in a module only the app imports. The mock cannot build the dependency, so `mock()` takes it as a parameter, such as `mock(userService:)`, a `@Sendable` autoclosure when the type that instantiates it is built through a `Sendable` wrapper, as [above](#overriding-dependencies). The parameter does not excuse a missing fulfiller: a root in the mock’s module that reaches the type still fails to generate.
 
 A `@Received(onlyIfAvailable: true)` dependency gets no `SafeDIOverrides` entry of its own when the mock already builds that dependency — because the mocked type instantiates it, or because another type in the tree requires it — or when nothing fulfills it and another type in the tree requires it, which makes it a required flat `mock()` parameter. It is an optional entry only when every receiver in the tree, renames included, receives it `onlyIfAvailable`; a receiver built inside the instance is passed `nil`, as in production.
 
@@ -1022,12 +1036,12 @@ The hand-written mock also decides which of the production declaration’s depen
 
 ### Cross-module mock generation
 
-Generated mocks have `internal` visibility: each `mock()` a module generates, and each `SafeDIMockConfiguration` its mocks use, is an `internal` member of an extension of the mocked or configured type in that module. They are accessible within that module but not from other modules, which avoids cross-module extension conflicts when multiple modules generate mocks for the same types. Most projects use one of two cross-module mock setups:
+A mock generated with `generateMock: true` is `internal`: each such `mock()` a module generates, and each `SafeDIMockConfiguration` its mocks use, is an `internal` member of an extension of the mocked or configured type in that module, which avoids cross-module extension conflicts when multiple modules generate mocks for the same types. Each module generates mocks only for the types it declares, so add `SafeDIGenerator` (or your integration’s equivalent) to each first-party target that declares a type with `generateMock`. A module whose tests or previews need a mock of a type another module declares has two options:
 
-1. Add `SafeDIGenerator` to each first-party target that owns types with `@Instantiable(generateMock: true)`. Each module generates mocks only for the types it declares. Use this when the module’s own tests or previews need mocks for its own types.
-2. Add `additionalMocksToGenerate` in the consuming module. Use this when the current module needs a local generated `mock()` for a type defined in a dependency module.
+1. List the type in its own `additionalMocksToGenerate`, which generates an internal `mock()` of the type there. The mock constructs the type and its tree in that module, so they must be visible to it, as [Access levels](#access-levels) describes.
+2. Declare the type with `generateMock: .public` in its own module, which generates a `mock()` that other modules call; the types its tree builds can then stay `package` or `internal`. See [Public mocks](#public-mocks).
 
-For the second case, use the `additionalMocksToGenerate` parameter on [`#SafeDIConfiguration`](#safediconfiguration):
+For the first, use the `additionalMocksToGenerate` parameter on [`#SafeDIConfiguration`](#safediconfiguration):
 
 ```swift
 #SafeDIConfiguration(
@@ -1038,7 +1052,7 @@ For the second case, use the `additionalMocksToGenerate` parameter on [`#SafeDIC
 )
 ```
 
-This generates a `mock()` method for each listed type in the current module, even though the type is defined elsewhere. The type must be `@Instantiable` in its home module, but `generateMock: true` is not required there unless that home module also wants to generate its own mock. The generated mock constructs the type and its dependencies in the current module, so they must be visible to it, as [Access levels](#access-levels) describes.
+This generates a `mock()` method for each listed type in the current module, even though the type is defined elsewhere. The type must be `@Instantiable` in its home module, but `generateMock: true` is not required there unless that home module also wants to generate its own mock.
 
 List each type by its declared name, with enclosing types and without the module (`Outer.Inner`, not `MyModule.Outer.Inner`).
 
@@ -1046,7 +1060,7 @@ List each type by its declared name, with enclosing types and without the module
 
 ### Public mocks
 
-`generateMock: .public` generates a `public` `mock()` that tests and previews in other modules, of this package or another, can call. It requires a type declaration that is `public` or `open`, or directly inside a `public extension`, and not generic (the macro reports anything else with a fix-it), and `generateMock: true` is the same as `.internal`. The module that declares the type generates the mock; internal mocks are generated as before.
+`generateMock: .public` generates a `public` `mock()` that tests and previews in other modules, of this package or another, can call. It requires a type declaration that is `public` or `open`, or that spells no access level directly inside a `public extension`, and that is neither generic nor nested in a generic type (the macro reports anything else with a fix-it); `generateMock: true` is the same as `.internal`. The module that declares the type generates the mock; internal mocks are generated as before.
 
 ```swift
 @Instantiable(generateMock: .public)
@@ -1061,7 +1075,7 @@ public struct Service: Instantiable {
 }
 ```
 
-The rule: each parameter of a public `mock()` is as visible as SafeDI can prove the types it names to be, from the declarations it reads, as for a type whose dependency tree it generates (see [Access levels](#access-levels)); a type nothing proves counts as `internal`. So the mock has a `public` tier, which takes what code in any module can name, and one narrower tier for each narrower access its parameters have. The narrowest tier builds the tree, and each wider tier calls the next narrower one, passing `nil` for what it omits:
+Each parameter of a public `mock()` is as visible as the types it names, so the mock has a `public` tier, which takes what code in any module can name, and a narrower tier for each narrower level among its parameters, as [Access of generated parameters](#access-of-generated-parameters) describes:
 
 ```swift
 public static func mock(retries: Int? = nil, analytics: Analytics? = nil, safeDIOverrides: SafeDIOverrides = .init()) -> Service {
@@ -1073,6 +1087,8 @@ package static func mock(retries: Int? = nil, analytics: Analytics? = nil, sessi
 }
 ```
 
+`Service.mock()` builds the whole tree; `Service.mock(analytics: Analytics())` hands the mock a value; `Service.mock(safeDIOverrides: .init(tokenCache: .init(capacity: 5)))` configures a type in the tree.
+
 The parameters, in order, are the type’s `@Forwarded` properties, its construction’s default-valued parameters, the received dependencies the mock cannot build and the builders of its holes, which are required, the received dependencies it builds and those received only if available, by label, and `safeDIOverrides`.
 
 - A received dependency the mock builds is `T? = nil`: `nil` builds it as an internal mock does, and a value is used as it is, the override for it then never called. A lazily received dependency is taken by value.
@@ -1083,17 +1099,24 @@ The parameters, in order, are the type’s `@Forwarded` properties, its construc
 
 A type in the mock’s tree that has a configuration of its own is configured by a `public` struct the module’s public mocks share, `__safeDI_<Module>_<Type>_MockConfiguration`, and built by a function in its own extension that resolves its defaults where its declaration resolves them and mirrors the isolation of the initializer it calls. Each public mock also declares an empty `public enum __safeDI_<Type>_mock_<hash>` that names its signature: every generated call names it, so a call generated from an out-of-date signature fails to compile at the call.
 
-`Service.mock()` builds the whole tree; `Service.mock(analytics: Analytics())` hands the mock a value; `Service.mock(safeDIOverrides: .init(tokenCache: .init(capacity: 5)))` configures a type in the tree.
+A default of a configured type in the tree that reads global-actor-isolated state cannot be evaluated by the `nonisolated` function that provides it, as it cannot by an internal mock’s configuration. [Access of generated parameters](#access-of-generated-parameters) lists the declarations that make a tier wider than the compiler accepts.
 
-A mock another module generates builds a type it cannot construct – whose tree names a declaration that module cannot reach – by calling the type’s public mock, at the narrowest tier the module can reach, passing what its own tree provides for each parameter that tier takes and `nil` for the rest, and its overrides of the type as `safeDIOverrides`. So a value the tree provides is shared with the public mock’s tree as it would be inline, with two exceptions: a dependency the calling tree does not provide, which includes one its module cannot name, is built by each call of a public mock that builds it, and is `nil` in one that receives it only if available; and a lazily instantiated dependency the tree holds is created when the public mock is built. A dependency the called mocks build that more than one receiver shares is built once by the calling mock, where its module can build it, and passed to each. A type the module can construct is built inline, as before. Where the tier the module reaches omits a parameter its tree provides, which the inline mock would hand on, generation fails at the providing declaration, saying how to widen the parameter’s type; a public mock that calls another module’s takes what that call passes as `T? = nil` parameters of its own, so its callers can hand one instance down the chain. Two modules must generate their mocks under one `mockConditionalCompilation`, unless the declaring module’s mocks are unconditional; and a module that reaches a type with a public mock cannot also hold a hand-written method named `mock` for it, which would make every call ambiguous: name it apart and pass it as `customMockName`. A calling module that sees a production `@Instantiable` declaration fulfilling a hole passes a function that builds it from the struct’s values, which no override reaches, as a generated dependency tree’s caller fills a builder, when that is all the declaration’s tree reads and the module can build every type in it; otherwise the calling mock takes the builder as a required parameter of its own and passes it on. A mock tree in an Xcode project target, or one whose declaring module’s module info names no module, builds the type inline where it can, and otherwise generation fails, naming the module info or target to regenerate; so does one that must call a public mock whose declaring module depends on a module whose module info its run was not given, naming the module to add. A public mock whose signature its callers would compute otherwise, because a directory its `#SafeDIConfiguration` adds or a module whose module info names no module declares a type its tree reaches, is an error, as for a generated dependency tree.
+#### Calling a public mock from another module
 
-Stated limits: a default of a configured type in the tree that reads global-actor-isolated state cannot be evaluated by the `nonisolated` function that provides it, as it cannot by an internal mock’s configuration; and a narrower declaration of a standard type’s name in scope, an access-level import, and an `@_spi` type read as `public` make a tier wider than the compiler accepts, which the compiler reports in the generated file. A non-`@Instantiable` type a module declares with the name of a standard type SafeDI counts as `public` (`Result`, `Data`, `Locale`, …) is taken to be the standard one, and the compiler reports it.
+A mock another module generates builds a type it cannot construct – one whose tree names a declaration that module cannot reach – by calling the type’s public mock, at the narrowest tier the module can reach. It passes what its own tree provides for each parameter that tier takes, `nil` for the rest, and its overrides of the type as `safeDIOverrides`; a type the module can construct is built inline, as before. So a value the calling tree provides is shared with the public mock’s tree as it would be inline, with two exceptions: a dependency the calling tree does not provide, which includes one its module cannot name, is built by each call of a public mock that builds it, and is `nil` in one that receives it only if available; and a lazily instantiated dependency the tree holds is created when the public mock is built. A dependency the called mocks build that more than one receiver shares is built once by the calling mock, where its module can build it, and passed to each.
+
+- Where the tier the module reaches omits a parameter its tree provides, which the inline mock would hand on, generation fails at the providing declaration, saying how to widen the parameter’s type. A public mock that calls another module’s takes what that call passes as `T? = nil` parameters of its own, so its callers can hand one instance down the chain.
+- A calling module that sees a production `@Instantiable` declaration fulfilling a hole passes a function that builds it from the struct’s values, which no override reaches, as a generated dependency tree’s caller fills a builder, when that is all the declaration’s tree reads and the module can build every type in it; otherwise the calling mock takes the builder as a required parameter of its own and passes it on.
+- The two modules must generate their mocks under one `mockConditionalCompilation`, unless the declaring module’s mocks are unconditional.
+- A module that reaches a type with a public mock cannot also hold a hand-written method named `mock` for it, which would make every call ambiguous: name it apart and pass it as `customMockName`.
+- A mock tree in an Xcode project target, or one whose declaring module’s module info names no module, builds the type inline where it can, and otherwise generation fails, naming the module info or target to regenerate. A run that was not given the module info of a module the declaring module depends on fails too, naming the module to add.
+- A public mock whose signature its callers would compute otherwise, because a directory its `#SafeDIConfiguration` adds or a module whose module info names no module declares a type its tree reaches, is an error, as for a generated dependency tree.
 
 ## Installation
 
-Integrating SafeDI is a three-step process: add the package, wire the `SafeDIGenerator` plugin into your build, and decorate your types with SafeDI’s macros.
+Integrating SafeDI is a three-step process: add the package, wire SafeDI’s code generation into your build, and decorate your types with SafeDI’s macros.
 
-You can see sample integrations in the [Examples folder](../Examples/). Note that the example projects use the `sourceBuild` trait to build `SafeDITool` from source: consumers using a published release do not need to specify `traits`.
+[Example applications](#example-applications) lists a sample integration for each build system. The Xcode project and Swift package examples take SafeDI from this repository with the `sourceBuild` trait, which builds `SafeDITool` from source: consumers using a published release do not need to specify `traits`.
 
 ### Adding SafeDI as a dependency
 
@@ -1107,11 +1130,11 @@ dependencies: [
 ]
 ```
 
-To install the SafeDI framework into an Xcode project with Swift Package Manager, follow [Apple’s instructions](https://developer.apple.com/documentation/xcode/adding-package-dependencies-to-your-app) to add `https://github.com/dfed/SafeDI.git` as a dependency.
+To install the SafeDI framework into an Xcode project with Swift Package Manager, follow [Apple’s instructions](https://developer.apple.com/documentation/xcode/adding-package-dependencies-to-your-app) to add `https://github.com/dfed/SafeDI.git` as a dependency. A [Bazel](#bazel) or [Tuist](#tuist) project declares the dependency as its section below describes.
 
 ### Generating your dependency tree
 
-SafeDI provides a code generation plugin named `SafeDIGenerator`. This plugin uses a prebuilt binary for fast builds without compiling SwiftSyntax. This plugin works out of the box on most project configurations. If your project uses a custom build system, you can configure your build to utilize the `SafeDITool` command-line executable directly, as [Custom build system integration](#custom-build-system-integration) describes.
+SafeDI’s code generation runs `SafeDITool` in your build. Xcode projects and Swift packages run it through the `SafeDIGenerator` build tool plugin, which uses a prebuilt binary for fast builds without compiling SwiftSyntax and works out of the box on most project configurations. [Bazel](#bazel) and [Tuist](#tuist) projects run it once per module through SafeDI’s Bazel rule and Tuist plugin. Any other build runs `SafeDITool` itself, as [Custom build system integration](#custom-build-system-integration) describes.
 
 #### Xcode project
 
@@ -1130,8 +1153,6 @@ import SafeDI
 The `additionalDirectoriesToInclude` parameter specifies folders outside of your module that SafeDI will scan for Swift source files. Paths must be relative to the executing directory (the directory containing the `.xcodeproj` for Xcode integrations). Use this parameter to specify the paths to dependent modules’ source directories, since Xcode project plugins cannot discover these automatically. You can see [an example of this configuration](../Examples/ExampleMultiProjectIntegration/ExampleMultiProjectIntegration/SafeDIConfiguration.swift) in the [ExampleMultiProjectIntegration](../Examples/ExampleMultiProjectIntegration) project.
 
 > **Note:** Any SafeDI declaration, roots included, may sit behind a bare condition such as `#if DEBUG`; see [Conditional compilation](#conditional-compilation).
-
-> **Note:** Only the `SafeDIGenerator` build-tool plugin declares the files reached through `additionalDirectoriesToInclude` as build inputs. Under Tuist and Bazel, don't rely on `additionalDirectoriesToInclude`. Tuist may read those files but won't rebuild when they change, and can't read them under user script sandboxing; Bazel can't see them at all. List every Swift source in the build target instead.
 
 ##### Installing the prebuilt SafeDITool binary
 
@@ -1155,7 +1176,7 @@ If your first-party code is entirely contained in a Swift Package with one or mo
 
 To generate mocks in other modules, see [Cross-module mock generation](#cross-module-mock-generation).
 
-You can see this integration in practice in the [Example Package Integration](../Examples/Example Package Integration) package.
+You can see this integration in practice in the [Example Package Integration](../Examples/Example%20Package%20Integration) package.
 
 Unlike the `SafeDIGenerator` Xcode project plugin, the `SafeDIGenerator` Swift package plugin finds source files in dependent modules without additional configuration steps. If you find that SafeDI’s generated dependency tree is missing required imports, you may add a `#SafeDIConfiguration` to a file named `SafeDIConfiguration.swift` in your root module with the additional module names:
 
@@ -1200,9 +1221,53 @@ common --@safedi//bazel:prefer_prebuilt_safeditool=false
 
 A build that takes SafeDI from a checkout of its repository rather than from a release – through `local_path_override`, `git_override`, or an `archive_override` of a GitHub archive – always builds `SafeDITool` from that checkout, so the rule never runs a binary older than itself.
 
+#### Tuist
+
+SafeDI’s `SafeDITuist` plugin runs `SafeDITool` in a script phase of each target, before the target compiles. Declare the plugin in `Tuist.swift`, at the tag of the SafeDI version you depend on:
+
+```swift
+let tuist = Tuist(
+    project: .tuist(
+        plugins: [
+            .git(url: "https://github.com/dfed/SafeDI", tag: "<version>", directory: "TuistPlugins/SafeDITuist"),
+        ]
+    )
+)
+```
+
+Depend on SafeDI in `Tuist/Package.swift`, so that `tuist install` fetches the SafeDI library and the prebuilt `SafeDITool` the plugin runs:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/dfed/SafeDI.git", from: "2.2.0"),
+]
+```
+
+In `Project.swift`, `import SafeDITuist`, and give each target that declares SafeDI types the generated source, the script, and a dependency on SafeDI:
+
+```swift
+.target(
+    name: "App",
+    // …
+    sources: SourceFilesList(globs: [
+        .glob("App/**/*.swift"),
+        SafeDI.generatedSource,
+    ]),
+    scripts: [
+        SafeDI.preCompileScript(module: "App", dependencies: ["Subproject"]),
+    ],
+    dependencies: [
+        .target(name: "Subproject"),
+        .external(name: "SafeDI"),
+    ]
+),
+```
+
+`module` names the directory, under the one that holds `Project.swift`, whose Swift files the script passes to `SafeDITool`, and the target’s `.safedi` file. `dependencies` lists the `module` of each target whose `@Instantiable` types this target uses; each must run the script too and be a dependency of this target, so that it writes its `.safedi` file first. The script runs the `SafeDITool` that `tuist install` unpacks into `Tuist/.build`, which it looks for in the directory that holds `Project.swift`. The script also passes the target’s `SWIFT_ACTIVE_COMPILATION_CONDITIONS`, its module name, and its `SWIFT_PACKAGE_NAME` when it sets one (see [Access levels](#access-levels)), and writes the generated code to `SafeDIGenerated.swift`, whose path never changes, so a change to your SafeDI declarations needs a build, not `tuist generate`. Keep the plugin’s tag and the package’s version in step, and run `tuist install` and `tuist generate` after changing them. You can see this integration in practice in the [ExampleTuistIntegration](../Examples/ExampleTuistIntegration) project.
+
 #### Custom build system integration
 
-A build that neither the `SafeDIGenerator` plugin nor the Bazel rule covers – Buck, or a prebuild script – runs `SafeDITool` itself. Our [Releases](https://github.com/dfed/SafeDI/releases) page ships a prebuilt, codesigned `SafeDITool.artifactbundle.zip` that can be downloaded and driven directly from a pre-build script. Two working references drive the tool: the Tuist plugin’s embedded shell in [`TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift`](../TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift), which locates the binary via SPM (for a non-SPM build system, swap that lookup for a `curl` of the artifact bundle), and the Bazel rule and macro at [`bazel/safedi.bzl`](../bazel/safedi.bzl). Both invoke `generate --combined-output --module-info-output` per module and pass dependent modules' `.safedi` files via `--dependent-module-info-file-path`. Set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script.
+A build that neither the `SafeDIGenerator` plugin, the Bazel rule, nor the Tuist plugin covers – Buck, or a prebuild script – runs `SafeDITool` itself. Our [Releases](https://github.com/dfed/SafeDI/releases) page ships a prebuilt, codesigned `SafeDITool.artifactbundle.zip` that can be downloaded and driven directly from a pre-build script. Two working references drive the tool: the Tuist plugin’s embedded shell in [`TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift`](../TuistPlugins/SafeDITuist/ProjectDescriptionHelpers/SafeDI.swift), which locates the binary via SPM (for a non-SPM build system, swap that lookup for a `curl` of the artifact bundle), and the Bazel rule and macro at [`bazel/safedi.bzl`](../bazel/safedi.bzl). Both invoke `generate --combined-output --module-info-output` per module and pass dependent modules' `.safedi` files via `--dependent-module-info-file-path`. Set `ENABLE_USER_SCRIPT_SANDBOXING` to `NO` in the target running the pre-build script.
 
 `SafeDITool` has two subcommands for a build:
 
@@ -1236,7 +1301,7 @@ A build system that runs `generate` once per module should also tell `SafeDITool
 
 `generate --module-info-output` records both in the module’s `.safedi` file, so a module that reads the file knows which module and package declare each type in it, and records as the module’s dependencies the module each `--dependent-module-info-file-path` file records. [Access levels](#access-levels) says how each integration sets `-package-name`. A module whose trees reach a type with `generateDependencyTree: true` that another module declares must be given that module’s `.safedi` and the `.safedi` of each module it records as a dependency (see [Generating a dependency tree per module](#generating-a-dependency-tree-per-module)); SafeDI reports an error naming a missing module.
 
-Given the same input files, `generate` writes the same `.safedi` bytes every time, so a build cache keyed on them stays warm. `query needs --module-info` reads the same files, so a project that writes them can [query what a type needs](#querying-what-a-type-needs) with [the `SafeDITool` its build runs](#running-safeditool-yourself), without parsing its sources again. A `.safedi` file names each file by the path the input CSV gives it, so a CSV of relative paths, like those the Bazel rule and the Tuist plugin write, keeps absolute paths out of it.
+Given the same input files, `generate` writes the same `.safedi` bytes every time, so a build cache keyed on them stays warm, and [`query needs`](#querying-what-a-type-needs) can read them in place of the sources. A `.safedi` file names each file by the path the input CSV gives it, so a CSV of relative paths, like those the Bazel rule and the Tuist plugin write, keeps absolute paths out of it.
 
 A `.safedi` file is binary, and `SafeDITool` reads only those written by a `SafeDITool` that lays them out the same way. After upgrading SafeDI, regenerate each producer’s `.safedi` before its consumers run: a consumer handed one it cannot read fails with an error that names the file.
 
@@ -1351,13 +1416,13 @@ SafeDITool can read the conditions in two ways:
 | Integration | Conditions SafeDITool generates code with |
 |-------------|-------------------------------------------|
 | Swift package plugin, `swift build` with the Swift Build backend: the default in Swift 6.4, and `--build-system swiftbuild` in Swift 6.2 | The build settings. Verified with Swift 6.2 and Swift 6.4. |
-| Swift package plugin, `swift build` with the native backend: the default in Swift 6.2, which ships with Xcode 26, and `--build-system native` in Swift 6.4. `swift build --help` names your toolchain’s default. | What the plugin can see. To guard a production declaration with `DEBUG`, add `.define("DEBUG", .when(configuration: .debug))` to the target’s `swiftSettings`, as the [Example Package Integration](../Examples/Example Package Integration/Package.swift) does. The define is harmless under the other build systems, which read the build settings instead. |
+| Swift package plugin, `swift build` with the native backend: the default in Swift 6.2, which ships with Xcode 26, and `--build-system native` in Swift 6.4. `swift build --help` names your toolchain’s default. | What the plugin can see. To guard a production declaration with `DEBUG`, add `.define("DEBUG", .when(configuration: .debug))` to the target’s `swiftSettings`, as the [Example Package Integration](../Examples/Example%20Package%20Integration/Package.swift) does. The define is harmless under the other build systems, which read the build settings instead. |
 | Swift package plugin, built by Xcode | The build settings, in every configuration. Xcode hands the plugin a package’s `.when(configuration:)` defines as for a debug build whatever configuration it compiles, so the build settings correct what the plugin sees in Release. |
 | Xcode project plugin | The build settings. |
 | Tuist plugin and other prebuild scripts | The target’s `SWIFT_ACTIVE_COMPILATION_CONDITIONS` build setting, passed as `generate --active-compilation-conditions`. The Tuist plugin does not forward `-D` flags in `OTHER_SWIFT_FLAGS`; a script can pass both settings with the `--build-setting-…` options instead. |
 | Bazel `safedi_swift_library` and `safedi_compile` | `DEBUG` in the `dbg` and `fastbuild` compilation modes, `NDEBUG` in the `opt` compilation mode, the target’s `defines`, each `-D` flag in the target’s `copts` (after Make variable expansion, so `-D$(NAME)` reports the value of `--define=NAME=…`), and each `-D` flag passed with `--@rules_swift//swift:copt` (`--@rules_swift//swift:exec_copt` for a target built in the exec configuration). `safedi_swift_library` gives its `swift_library` and its `<name>_safedi` target the same `defines` and `copts`; a hand-written `safedi_compile` must repeat the `defines` and `copts` of the `swift_library` that compiles its output. Not reported: `defines` propagated from a dependency, `--@rules_swift//swift:per_module_swiftcopt`, and copts configured on a custom Swift toolchain. `--copt` and `--define` alone do not reach the Swift compiler, so they never need reporting. |
 
-The Swift package plugin scans the sources of a target’s dependencies with the target’s own conditions, so a condition that guards a production declaration in a dependency must be active on every target whose dependency tree reaches it. Under the Swift package plugin, a condition that guards a production declaration in a module must also be active on every target that calls a seam of that module or of a module depending on it.
+The Swift package plugin scans the sources of a target’s dependencies with the target’s own conditions, so a condition that guards a production declaration in a dependency must be active on every target whose dependency tree reaches it, or that calls a seam of that module or of a module depending on it.
 
 #### Declarations that decide which files SafeDI generates
 
@@ -1401,6 +1466,19 @@ In a manual DI system it is simple for superclasses to receive injected dependen
 ## Migrating to SafeDI
 
 It is strongly recommended that projects adopting SafeDI start their migration by identifying the root of their dependency tree, as [Creating the root of your dependency tree](#creating-the-root-of-your-dependency-tree) describes, and making it `@Instantiable(isRoot: true)`. Once your root object has adopted SafeDI, continue migrating dependencies to SafeDI in either a breadth-first or depth-first manner. As your adoption of SafeDI progresses, you’ll find that you are removing more code than you are adding: many of your dependencies are likely being passed through intermediary objects that do not utilize the dependency except to instantiate a dependency deeper in the tree. Once types further down the dependency tree have adopted SafeDI, you will be able to avoid receiving dependencies in intermediary types.
+
+### Adopting SafeDI in a large codebase
+
+A codebase of many modules adopts SafeDI the same way, from the root down. Four features let it do so without making every type `public` or building the whole tree in the root’s module:
+
+- **Types keep their access levels.** A type and its initializer need be visible only to the module that constructs them: `package` when another module of their package does, `internal` when only their own module does. When generated code cannot reach a declaration, the build names it, with a fix-it. See [Access levels](#access-levels).
+- **Each module can generate its own tree.** Decorate the type at a module’s boundary – a feature’s entry point, or the top of a package – with `generateDependencyTree: true`. Its module generates its tree as an initializer that takes what the tree needs from outside, and the trees above call that initializer, so a change inside the module recompiles only the module and the calls, and in production the types built inside need be visible only there. See [Generating a dependency tree per module](#generating-a-dependency-tree-per-module).
+- **Implementations can live above the feature.** When a module’s tree instantiates a protocol whose implementation only the app can see, the module’s generated initializer takes a builder for it, which the app’s generated code fills. See the builder example in [Generating a dependency tree per module](#generating-a-dependency-tree-per-module).
+- **Mocks cross modules.** Mocks never call a seam’s generated initializer: a mock generated in another module builds the seam’s whole tree, so its types must be visible there. Declare the seam with `generateMock: .public`, and a mock in another module that cannot build its tree calls the `public` `mock()` its own module generates, which tests and previews in other packages can call too, without seeing the types it builds. See [Public mocks](#public-mocks).
+
+A seam needs no root above it, so it can also mark how far adoption has reached: code that does not use SafeDI yet calls the seam’s generated initializer by hand, and an app target can call a seam whose `@Forwarded` properties carry the target’s configuration instead of declaring a root of its own. [Generating a dependency tree per module](#generating-a-dependency-tree-per-module) says what the compiler checks in a hand-written call.
+
+Seams and public mocks need a build that knows which module declares each type. Under the [Swift package](#swift-package) plugin, add `SafeDIGenerator` to each target that declares a root, a seam, or a type with `generateMock`. Under [Bazel](#bazel) and [Tuist](#tuist), every module that declares `@Instantiable` types runs SafeDI, so that the modules depending on it read its `.safedi` file. An Xcode project target knows no module for the files it reads through `additionalDirectoriesToInclude`, so its trees and mocks build the seams and public-mock types declared there inline, and the types in those trees must be visible to it.
 
 ## Migrating from SafeDI 1.x to 2.x
 
@@ -1451,7 +1529,13 @@ safeditool generate input.csv --combined-output ./generated/SafeDI.swift
 
 ## Example applications
 
-We’ve tied everything together with an example multi-user notes application backed by SwiftUI. You can compile and run this code in [an example single-module Xcode project](../Examples/ExampleProjectIntegration). This same multi-user notes app also exists in [an example multi-module Xcode project](../Examples/ExampleMultiProjectIntegration). We have also created [an example multi-module `Package.swift` that integrates with SafeDI](../Examples/Example Package Integration).
+We’ve tied everything together with an example multi-user notes application backed by SwiftUI, which you can compile and run with each build system SafeDI supports:
+
+- [`Examples/ExampleProjectIntegration`](../Examples/ExampleProjectIntegration): a single-module Xcode project with the `SafeDIGenerator` plugin.
+- [`Examples/ExampleMultiProjectIntegration`](../Examples/ExampleMultiProjectIntegration): a multi-module Xcode project, whose app module reads its other module through `additionalDirectoriesToInclude`.
+- [`Examples/Example Package Integration`](../Examples/Example%20Package%20Integration): a multi-module Swift package with the `SafeDIGenerator` plugin on each target.
+- [`Examples/ExampleBazelIntegration`](../Examples/ExampleBazelIntegration): two Bazel modules declared with `safedi_swift_library`, the app module reading the other’s `.safedi` file.
+- [`Examples/ExampleTuistIntegration`](../Examples/ExampleTuistIntegration): two Tuist targets, each running the `SafeDITuist` plugin’s script, the app target reading the other’s `.safedi` file.
 
 ## Under the hood
 
@@ -1459,7 +1543,7 @@ SafeDI has a `SafeDITool` executable that the `SafeDIGenerator` plugin utilizes 
 
 `SafeDITool` utilizes Apple’s [SwiftSyntax](https://github.com/apple/swift-syntax) library to parse your code and find your `@Instantiable` types’ initializers and dependencies. With this information, SafeDI generates a graph of your project’s dependencies and validates it during `SafeDITool` execution. If the graph is invalid, `SafeDITool` reports each problem as a compiler diagnostic at the declaration that caused it, offers an unambiguous repair as a fix-it, and exits non-zero. Each root's tree, and each mocked type's, reports the first problem it finds, and the problems of all of them are reported together, ordered by file, line, and column. Source code is only generated if the dependency graph is valid.
 
-The `SafeDIGenerator` plugin is the only build tool plugin and uses a prebuilt binary by default for fast builds without compiling SwiftSyntax. Due to limitations in Apple’s [Swift Package Manager Plugins](https://github.com/swiftlang/swift-package-manager/blob/main/Sources/PackageManagerDocs/Documentation.docc/Plugins.md), the plugin parses all of your first-party Swift files in a single pass. Projects that utilize `SafeDITool` directly can process Swift files on a per-module basis to further reduce the build-time bottleneck, as [Custom build system integration](#custom-build-system-integration) describes.
+Due to limitations in Apple’s [Swift Package Manager Plugins](https://github.com/swiftlang/swift-package-manager/blob/main/Sources/PackageManagerDocs/Documentation.docc/Plugins.md), the `SafeDIGenerator` plugin parses all of your first-party Swift files in a single pass. The Bazel rule, the Tuist plugin, and other builds that run `SafeDITool` once per module parse each module’s files once, and hand its declarations to the modules that depend on it in a `.safedi` file, as [Custom build system integration](#custom-build-system-integration) describes.
 
 ## Introspecting a SafeDI tree
 

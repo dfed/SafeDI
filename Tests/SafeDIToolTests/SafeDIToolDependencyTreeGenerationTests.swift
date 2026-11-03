@@ -12402,7 +12402,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		// The Manual's seam section shows a fixture and what SafeDI generates for it; both are read from the Manual, so
 		// neither can drift from the tool.
 		let manual = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Documentation/Manual.md"), encoding: .utf8)
-		let section = try #require(manual.components(separatedBy: "#### Generating a dependency tree per module").dropFirst().first)
+		let section = try #require(manual.components(separatedBy: "## Generating a dependency tree per module").dropFirst().first)
 			.components(separatedBy: "\n#").first ?? ""
 		let codeBlocks = section.components(separatedBy: "```swift\n").dropFirst().map { $0.components(separatedBy: "\n```").first ?? "" }
 		// The fourth block illustrates the access a parameter is taken at, and is not generated from these fixtures; the
