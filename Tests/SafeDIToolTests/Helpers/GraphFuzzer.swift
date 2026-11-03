@@ -3321,9 +3321,10 @@ enum GraphFuzzerGenerator {
 					addChild(consumer, label: "proofConsumer")
 				}
 				// An `@Instantiable` type and a plain type declared in an extension of a narrower namespace enum, or now and
-				// then of a public one: SafeDI records no namespace, so it reads either the same way, and a type reached
-				// only through an existential is then proven narrower than every caller in another module reaches,
-				// which still constructs it inline.
+				// then of a public one: the access proof bounds a type by no namespace, so it reads either the same way, and
+				// a type reached only through an existential is then proven narrower than every caller in another module
+				// reaches. The construction check reads the namespace `scan` records, so it rejects a caller's inline build
+				// of the type where the namespace is narrower than that caller can see.
 				if proofRandom.percentChance(16) {
 					let namespaceRoll = proofRandom.integer(in: 0...99)
 					let namespaceAccess: AccessLevel = namespaceRoll < 55 ? .package : namespaceRoll < 80 ? .internal : .public

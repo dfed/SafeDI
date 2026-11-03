@@ -37,6 +37,7 @@ public struct OutputFileDeclarations: Codable, Sendable {
 		declaresMockGeneratingType: Bool,
 		declaresConfiguration: Bool,
 		instantiableTypeNames: Set<String>,
+		extendedTypeNames: Set<String> = [],
 		additionalMocksToGenerate: [String],
 		additionalDirectoriesToInclude: [String],
 	) {
@@ -45,6 +46,7 @@ public struct OutputFileDeclarations: Codable, Sendable {
 		self.declaresMockGeneratingType = declaresMockGeneratingType
 		self.declaresConfiguration = declaresConfiguration
 		self.instantiableTypeNames = instantiableTypeNames
+		self.extendedTypeNames = extendedTypeNames
 		self.additionalMocksToGenerate = additionalMocksToGenerate
 		self.additionalDirectoriesToInclude = additionalDirectoriesToInclude
 	}
@@ -64,6 +66,10 @@ public struct OutputFileDeclarations: Codable, Sendable {
 	/// it. A configuration may list any of them: the listed type's mock gets its file even when the conditions
 	/// leave the declaration inactive, and the file is then written without code.
 	public private(set) var instantiableTypeNames = Set<String>()
+	/// The outermost name of each type an extension extends that is, or declares, an `@Instantiable` declaration: a
+	/// type that can be declared in a file SafeDI otherwise skips, whose access bounds the type the declaration
+	/// declares.
+	public private(set) var extendedTypeNames = Set<String>()
 	/// Every type name the file's configurations list in `additionalMocksToGenerate`, sorted and without duplicates.
 	/// Each listed type's mock gets its own file.
 	public private(set) var additionalMocksToGenerate = [String]()
@@ -75,11 +81,16 @@ public struct OutputFileDeclarations: Codable, Sendable {
 	/// - Parameters:
 	///   - typeName: The type the declaration declares, with its enclosing types: the type a type definition
 	///     defines, or the type an extension extends.
+	///   - extendedType: The type the extension that is the declaration, or that encloses it, extends, if one does.
 	///   - isRoot: Whether the declaration is a root.
 	///   - generatesDependencyTree: Whether the declaration sets `generateDependencyTree: true`.
 	///   - generatesMock: Whether the declaration sets `generateMock: true`.
-	public mutating func recordInstantiable(named typeName: String, isRoot: Bool, generatesDependencyTree: Bool, generatesMock: Bool) {
+	public mutating func recordInstantiable(named typeName: String, inExtensionOf extendedType: TypeDescription?, isRoot: Bool, generatesDependencyTree: Bool, generatesMock: Bool) {
 		instantiableTypeNames.insert(typeName)
+		// The outermost type is the one a declaration in another file spells at its top level.
+		if let extendedTypeName = extendedType?.outermostTypeName {
+			extendedTypeNames.insert(extendedTypeName)
+		}
 		declaresRoot = declaresRoot || isRoot
 		declaresDependencyTreeType = declaresDependencyTreeType || generatesDependencyTree
 		declaresMockGeneratingType = declaresMockGeneratingType || generatesMock
@@ -99,6 +110,7 @@ public struct OutputFileDeclarations: Codable, Sendable {
 		declaresMockGeneratingType = declaresMockGeneratingType || other.declaresMockGeneratingType
 		declaresConfiguration = declaresConfiguration || other.declaresConfiguration
 		instantiableTypeNames.formUnion(other.instantiableTypeNames)
+		extendedTypeNames.formUnion(other.extendedTypeNames)
 		additionalMocksToGenerate = Set(additionalMocksToGenerate + other.additionalMocksToGenerate).sorted()
 		additionalDirectoriesToInclude = Set(additionalDirectoriesToInclude + other.additionalDirectoriesToInclude).sorted()
 	}

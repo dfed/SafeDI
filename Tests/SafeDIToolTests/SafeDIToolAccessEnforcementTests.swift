@@ -1491,6 +1491,165 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		try expectEveryModuleCompiled(output)
 	}
 
+	// MARK: Tests – Types an extension of a plain type declares
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtNamespaceEnum_whenAnotherPackageConstructsPublicTypeDeclaredInUnspelledExtensionOfPackageEnum(integration: MultiModuleIntegration) async {
+		// `Space.swift` holds no SafeDI marker, so `scan` reads it only because an extension holding an `@Instantiable`
+		// type extends a type it may declare.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let spacePath = Self.declarationPath(of: "Space.swift", in: "Feature", fixtures: fixtures, under: integration)
+			return """
+			\(spacePath):2:1: error: `Space`, which encloses `Space.Shelf`, is `package`, so module `App`, in another package, cannot construct `Space.Shelf` in the code SafeDI generates. Make `Space` `public` to fix.
+			\(spacePath):2:1-2:8: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.featureExtendingNamespace(inPackage: "Toolkit", declaredAs: "package enum Space {}"),
+					Self.app(inPackage: "Shop", serviceType: "Screen"),
+				],
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_constructsPublicTypeDeclaredInUnspelledExtensionOfPublicEnum_whenAnotherPackageConstructsIt(integration: MultiModuleIntegration) async throws {
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.featureExtendingNamespace(inPackage: "Toolkit", declaredAs: "public enum Space {}"),
+				Self.app(inPackage: "Shop", serviceType: "Screen"),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(output.modules["App"]).generatedFiles == Self.appGeneratedFiles(under: integration, code: """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_service() -> Screen {
+		            let shelf: any Shelving = Space.Shelf()
+		            return Screen(shelf: shelf)
+		        }
+		        let service: Screen = __safeDI_service()
+		        self.init(service: service)
+		    }
+		}
+		"""))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtNamespaceEnum_whenAnotherModuleOfPackageConstructsPublicTypeDeclaredInUnspelledExtensionOfInternalEnum(integration: MultiModuleIntegration) async {
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let spacePath = Self.declarationPath(of: "Space.swift", in: "Feature", fixtures: fixtures, under: integration)
+			return """
+			\(spacePath):2:1: error: `Space`, which encloses `Space.Shelf`, is `internal`, so module `App`, another module of the same package, cannot construct `Space.Shelf` in the code SafeDI generates. Make `Space` `package` to fix.
+			\(spacePath):2:1-2:1: fixit: package\(" ")
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.featureExtendingNamespace(inPackage: "Shop", declaredAs: "enum Space {}"),
+					Self.app(inPackage: "Shop", serviceType: "Screen"),
+				],
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtExtendedType_whenAnotherModuleConstructsExtensionBasedTypeWhosePlainDeclarationIsInternal(integration: MultiModuleIntegration) async {
+		// The extension caps nothing, and `instantiate()` is `public`, but code that calls it names `Rack`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let rackPath = Self.declarationPath(of: "Rack.swift", in: "Feature", fixtures: fixtures, under: integration)
+			return """
+			\(rackPath):1:1: error: `Rack` is `internal`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Rack` `package` to fix.
+			\(rackPath):1:1-1:1: fixit: package\(" ")
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Feature",
+						packageName: "Shop",
+						swiftFileContentByFilePath: [
+							"Screen.swift": """
+							@Instantiable
+							public final class Screen: Instantiable {
+							    public init(rack: any Racking) {
+							        self.rack = rack
+							    }
+							    @Instantiated(fulfilledByType: "Rack") let rack: any Racking
+							}
+							""",
+							"Rack.swift": """
+							final class Rack: Racking {
+							    init() {}
+							}
+							""",
+							"Rack+Instantiable.swift": """
+							public protocol Racking {}
+
+							@Instantiable
+							extension Rack: Instantiable {
+							    public static func instantiate() -> Rack {
+							        Rack()
+							    }
+							}
+							""",
+						],
+					),
+					Self.app(inPackage: "Shop", serviceType: "Screen"),
+				],
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_assumesPackageAccessWithComment_whenTypeDeclaredInExtensionOfPackageEnumIsConstructedFromModuleOfUnknownPackage() async throws {
+		// Without package names the tool cannot tell whether `App` is in `Feature`'s package, so it accepts the `package`
+		// namespace and says so where it constructs the type the namespace's extension declares.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.featureExtendingNamespace(inPackage: "Shop", declaredAs: "package enum Space {}", omitsPackageName: true),
+				ModuleFixture(
+					name: "App",
+					packageName: "Shop",
+					swiftFileContent: [Self.rootInstantiating("Screen")],
+					dependencies: ["Feature"],
+					omitsPackageName: true,
+				),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(output.modules["App"]).generatedFiles == Self.appGeneratedFiles(under: .moduleInfo, code: """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_service() -> Screen {
+		            let shelf: any Shelving = Space.Shelf() // SafeDI could not verify that Space.Shelf is in this package; `package` access is assumed.
+		            return Screen(shelf: shelf)
+		        }
+		        let service: Screen = __safeDI_service()
+		        self.init(service: service)
+		    }
+		}
+		"""))
+		try expectEveryModuleCompiled(output)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -1611,25 +1770,62 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		)
 	}
 
+	/// A `Feature` module of `packageName` whose public `Screen` instantiates the public `Space.Shelf`, declared in an
+	/// extension of `Space` that spells no access modifier, through the protocol it conforms to alone, as fulfilled by a
+	/// type `fulfilledByType:` names, which no initializer names; `Space` is declared as `spaceDeclaration` spells it, on
+	/// the second line of a file of its own, as adopters declare a namespace enum.
+	private static func featureExtendingNamespace(inPackage packageName: String, declaredAs spaceDeclaration: String, omitsPackageName: Bool = false) -> ModuleFixture {
+		ModuleFixture(
+			name: "Feature",
+			packageName: packageName,
+			swiftFileContentByFilePath: [
+				"Screen.swift": """
+				@Instantiable
+				public final class Screen: Instantiable {
+				    public init(shelf: any Shelving) {
+				        self.shelf = shelf
+				    }
+				    @Instantiated(fulfilledByType: "Space.Shelf") let shelf: any Shelving
+				}
+				""",
+				"Shelf.swift": """
+				public protocol Shelving {}
+
+				extension Space {
+				    @Instantiable
+				    public final class Shelf: Instantiable, Shelving {
+				        public init() {}
+				    }
+				}
+				""",
+				"Space.swift": "// A namespace enum, in its own file as adopters write it.\n" + spaceDeclaration,
+			],
+			omitsPackageName: omitsPackageName,
+		)
+	}
+
+	/// A root that instantiates `serviceType` of `Feature`, which it imports.
+	private static func rootInstantiating(_ serviceType: String) -> String {
+		"""
+		import Feature
+
+		@Instantiable(isRoot: true)
+		final class Root: Instantiable {
+		    init(service: \(serviceType)) {
+		        self.service = service
+		    }
+		    @Instantiated let service: \(serviceType)
+		}
+		"""
+	}
+
 	/// An `App` module of `packageName` depending on `Feature`, which declares `declaration`: by default, a root that
 	/// instantiates `Feature`'s `serviceType`.
 	private static func app(inPackage packageName: String, serviceType: String = "Service", declaring declaration: String? = nil) -> ModuleFixture {
 		ModuleFixture(
 			name: "App",
 			packageName: packageName,
-			swiftFileContent: [
-				declaration ?? """
-				import Feature
-
-				@Instantiable(isRoot: true)
-				final class Root: Instantiable {
-				    init(service: \(serviceType)) {
-				        self.service = service
-				    }
-				    @Instantiated let service: \(serviceType)
-				}
-				""",
-			],
+			swiftFileContent: [declaration ?? rootInstantiating(serviceType)],
 			dependencies: ["Feature"],
 		)
 	}

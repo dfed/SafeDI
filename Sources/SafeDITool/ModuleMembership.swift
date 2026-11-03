@@ -145,6 +145,7 @@ extension ModuleInfo {
 		guard let membership else {
 			return replacing(
 				instantiables: instantiables,
+				plainTypeDeclarations: plainTypeDeclarations,
 				moduleName: moduleName,
 				packageName: packageName,
 				dependencyModuleNames: dependencyModuleNames,
@@ -153,13 +154,16 @@ extension ModuleInfo {
 		// A file usually declares one or two types, and spelling a path for comparison costs more than looking it up.
 		let declaringModuleByFilePath = Dictionary(
 			// safedi-source-rule: allow uniqueKeysWithValues — the keys are the elements of a set of source file paths, each kept at most once.
-			uniqueKeysWithValues: Set(instantiables.compactMap(\.sourceFilePath)).compactMap { sourceFilePath in
+			uniqueKeysWithValues: Set(instantiables.compactMap(\.sourceFilePath) + plainTypeDeclarations.compactMap(\.sourceFilePath)).compactMap { sourceFilePath in
 				membership.declaringModule(ofFileAt: sourceFilePath).map { (sourceFilePath, $0) }
 			},
 		)
 		return replacing(
 			instantiables: instantiables.map { instantiable in
 				instantiable.declared(in: instantiable.sourceFilePath.flatMap { declaringModuleByFilePath[$0] })
+			},
+			plainTypeDeclarations: plainTypeDeclarations.map { plainTypeDeclaration in
+				plainTypeDeclaration.declared(in: plainTypeDeclaration.sourceFilePath.flatMap { declaringModuleByFilePath[$0] })
 			},
 			moduleName: membership.moduleName,
 			packageName: membership.packageName,
@@ -172,15 +176,17 @@ extension ModuleInfo {
 	func declaringEveryInstantiable(in declaringModule: DeclaringModule) -> ModuleInfo {
 		replacing(
 			instantiables: instantiables.map { $0.declared(in: declaringModule) },
+			plainTypeDeclarations: plainTypeDeclarations.map { $0.declared(in: declaringModule) },
 			moduleName: moduleName,
 			packageName: packageName,
 			dependencyModuleNames: dependencyModuleNames,
 		)
 	}
 
-	/// This module with `instantiables`, generated code for the module `moduleName` names.
+	/// This module with `instantiables` and `plainTypeDeclarations`, generated code for the module `moduleName` names.
 	private func replacing(
 		instantiables: [Instantiable],
+		plainTypeDeclarations: [PlainTypeDeclaration],
 		moduleName: String?,
 		packageName: String?,
 		dependencyModuleNames: [String],
@@ -196,6 +202,7 @@ extension ModuleInfo {
 			moduleName: moduleName,
 			packageName: packageName,
 			dependencyModuleNames: dependencyModuleNames,
+			plainTypeDeclarations: plainTypeDeclarations,
 		)
 	}
 }
@@ -210,5 +217,15 @@ extension Instantiable {
 		instantiable.mockDeclarationModuleName = mockInitializer == nil ? nil : declaringModule?.moduleName
 		instantiable.mockDeclarationPackageName = mockInitializer == nil ? nil : declaringModule?.packageName
 		return instantiable
+	}
+}
+
+extension PlainTypeDeclaration {
+	/// This declaration in `declaringModule`.
+	func declared(in declaringModule: DeclaringModule?) -> PlainTypeDeclaration {
+		var plainTypeDeclaration = self
+		plainTypeDeclaration.moduleName = declaringModule?.moduleName
+		plainTypeDeclaration.packageName = declaringModule?.packageName
+		return plainTypeDeclaration
 	}
 }

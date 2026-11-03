@@ -250,9 +250,45 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func scan_cachesTypeDeclarationOfFileWithoutSafeDIMarker_whenExtensionHoldingInstantiableExtendsItsType() async throws {
+		let project = try await scannedProject(alongside: Self.namespaceFiles)
+
+		let cache = try CachedScannedModuleInfo(scanCacheData: Data(contentsOf: scannedModuleInfoURL(forManifestPath: project.manifestFile.path)))
+		#expect(cache.moduleInfo.plainTypeDeclarations.map(\.typeDescription) == [.simple(name: "Space")])
+		#expect(cache.moduleInfo.plainTypeDeclarations.map(\.access.level) == [.package])
+		#expect(cache.moduleInfo.plainTypeDeclarations.map(\.sourceFilePath) == ["Space.swift"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_parsesAfresh_whenFileWithoutSafeDIMarkerDeclaringExtendedTypeChanges() async throws {
+		let project = try await scannedProject(alongside: Self.namespaceFiles)
+		try FileModificationTime(seconds: 0, nanoseconds: 0).apply(toItemAtPath: project.directory.appendingPathComponent("Space.swift").path)
+
+		await assertThrowsError(project.rootNotInManifestMessage) {
+			try await project.generate()
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// A namespace enum in a file of its own, which mentions no SafeDI marker, and an extension of it that declares an
+	/// `@Instantiable` type.
+	private static let namespaceFiles = [
+		"Space.swift": "package enum Space {}",
+		"Shelf.swift": """
+		extension Space {
+		    @Instantiable
+		    public final class Shelf: Instantiable {
+		        public init() {}
+		    }
+		}
+		""",
+	]
 
 	private static let rootContent = """
 	@Instantiable(isRoot: true)
@@ -290,8 +326,9 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 		}
 	}
 
+	/// A project whose root is in `Root.swift`, and which holds the content of `otherFiles` at each file name.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private mutating func scannedProject(throughSymbolicLink: Bool = false) async throws -> ScannedProject {
+	private mutating func scannedProject(throughSymbolicLink: Bool = false, alongside otherFiles: [String: String] = [:]) async throws -> ScannedProject {
 		let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		let rootFile = directory.appendingPathComponent("Root.swift")
@@ -300,8 +337,13 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 		if throughSymbolicLink {
 			try FileManager.default.createSymbolicLink(at: rootFile, withDestinationURL: targetFile)
 		}
+		let otherFileURLs = try otherFiles.keys.sorted().map { fileName in
+			let fileURL = directory.appendingPathComponent(fileName)
+			try otherFiles[fileName]?.write(to: fileURL, atomically: true, encoding: .utf8)
+			return fileURL
+		}
 		let swiftFileCSV = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
-		try rootFile.path.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+		try ([rootFile] + otherFileURLs).map(\.path).joined(separator: ",").write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
 		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")

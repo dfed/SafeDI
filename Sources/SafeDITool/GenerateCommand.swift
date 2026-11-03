@@ -305,6 +305,7 @@ struct Generate: AsyncParsableCommand {
 				additionalMocksToGenerateLocation: sourceConfiguration?.declarationLocation,
 			),
 			seams: seamResolution,
+			plainTypeDeclarations: dependentModuleInfo.flatMap(\.plainTypeDeclarations) + module.plainTypeDeclarations,
 		)
 		if let moduleInfoOutput {
 			try module.moduleInfoData.write(toPath: moduleInfoOutput)
@@ -1186,10 +1187,13 @@ struct Generate: AsyncParsableCommand {
 		// safedi-source-rule: allow uniqueKeysWithValues — `parseSwiftFiles` walks each path of a set once, and names each scan by the path it walked.
 		let rescanByScannedPath = Dictionary(uniqueKeysWithValues: rescans.map { ($0.path, $0) })
 		let staleScannedPaths = Set(staleFileScans.map(\.scannedPath))
-		// A file that no longer mentions SafeDI is not walked, so it contributes nothing, as in a fresh parse.
+		// A file that no longer mentions SafeDI is not walked, so it contributes nothing, as in a fresh parse. Its plain
+		// type declarations depend on no condition, and scan kept those of the types the module's extensions extend.
 		return cachedFileScans.compactMap { cachedFileScan in
 			if staleScannedPaths.contains(cachedFileScan.scannedPath) {
-				rescanByScannedPath[cachedFileScan.scannedPath]?.relocated(to: cachedFileScan.fileScan.path)
+				rescanByScannedPath[cachedFileScan.scannedPath]?
+					.relocated(to: cachedFileScan.fileScan.path)
+					.replacingPlainTypeDeclarations(with: cachedFileScan.fileScan.plainTypeDeclarations)
 			} else if cachedFileScan.fileScan.importOnlyConsultedCompilationConditions.contains(where: hasChangedValue) {
 				// Only the file's imports depend on a changed condition, and its import segments hold them.
 				cachedFileScan.fileScan.withImports(evaluatedWith: evaluator)
