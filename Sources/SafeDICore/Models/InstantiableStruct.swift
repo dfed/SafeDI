@@ -35,7 +35,9 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		enclosingExtensionAccess: AccessDeclaration? = nil,
 		generatedInitializerAttributes: String = "",
 		mockAttributes: String = "",
-		generateMock: Bool = false,
+		declarationIsolation: String? = nil,
+		generateMock: MockGeneration = .none,
+		mockGenerationArgumentRange: Dependency.SourceRange? = nil,
 		mockOnly: Bool = false,
 		mockInitializer: Initializer? = nil,
 		mockReturnType: TypeDescription? = nil,
@@ -61,7 +63,9 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		self.enclosingExtensionAccess = enclosingExtensionAccess
 		self.generatedInitializerAttributes = generatedInitializerAttributes
 		self.mockAttributes = mockAttributes
+		self.declarationIsolation = declarationIsolation
 		self.generateMock = generateMock
+		self.mockGenerationArgumentRange = mockGenerationArgumentRange
 		self.mockOnly = mockOnly
 		self.mockInitializer = mockInitializer
 		self.mockReturnType = mockReturnType
@@ -131,8 +135,33 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// it is given, else its `mockAttributes`. The declaration's own: a `mockOnly` declaration merged into this one,
 	/// whose hand-written mock the generated `mock()` calls, contributes none.
 	public let mockAttributes: String
-	/// Whether to generate a `mock()` method for this type.
-	public let generateMock: Bool
+	/// The isolation spelled on the type declaration this Instantiable was found on, which a member generated in an
+	/// extension of the type inherits: its global actor attribute (`"@MainActor"`), `"nonisolated"`, or `nil` when it
+	/// spells neither. Always `nil` for an extension-based Instantiable, whose extension a generated member is not in.
+	public let declarationIsolation: String?
+	/// Whether the `mock()` generated for this type is isolated to a global actor: the type declaration spells one, or
+	/// `mockAttributes` does.
+	public var generatedMockIsGlobalActorIsolated: Bool {
+		(declarationIsolation.map { $0 != "nonisolated" } ?? false) || Initializer.globalActorAttribute(in: mockAttributes) != nil
+	}
+
+	/// Whether to generate a `mock()` method for this type, and with what access: the `generateMock:` argument.
+	public let generateMock: MockGeneration
+	/// Whether a `mock()` method is generated for this type, with any access.
+	public var generatesMock: Bool {
+		generateMock.generatesMock
+	}
+
+	/// The range of the `generateMock:` argument's value in the file of `declarationLocation`, where a diagnostic about
+	/// the requested mock points and its fix-its edit. `nil` when the declaration spells no `generateMock:` argument.
+	public let mockGenerationArgumentRange: Dependency.SourceRange?
+	/// Where a diagnostic about the requested mock points: the `generateMock:` argument's value, else the declaration.
+	public var mockGenerationArgumentLocation: Dependency.DeclarationLocation? {
+		declarationLocation.map { declarationLocation in
+			mockGenerationArgumentRange.map { Dependency.DeclarationLocation(filePath: declarationLocation.filePath, line: $0.startLine, column: $0.startColumn) } ?? declarationLocation
+		}
+	}
+
 	/// Whether this declaration exists solely for mock generation (user provides a hand-written mock method).
 	/// When `true`, no `init`/`instantiate()` or `Instantiable` conformance is required.
 	public let mockOnly: Bool

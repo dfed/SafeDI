@@ -144,12 +144,13 @@ enum PluginScanner {
 		return stripped.range(of: #"@Instantiable\s*\((.|\n)*?generateDependencyTree\s*:\s*true"#, options: .regularExpression) != nil
 	}
 
-	/// Checks whether a file likely contains `@Instantiable(generateMock: true)`.
+	/// Checks whether a file likely contains an `@Instantiable` whose `generateMock:` argument enables mock generation:
+	/// `true`, `.internal`, `.public`, or `MockGeneration.` followed by either case.
 	private static func fileContainsGenerateMockTrue(at fileURL: URL) -> Bool {
 		guard let content = try? String(contentsOf: fileURL, encoding: .utf8),
 		      content.contains("@Instantiable")
 		else { return false }
 		let stripped = stripSwiftCommentsAndStrings(from: content)
-		return stripped.range(of: #"@Instantiable\s*\((.|\n)*?generateMock\s*:\s*true"#, options: .regularExpression) != nil
+		return stripped.range(of: generateMockEnablingPattern, options: .regularExpression) != nil
 	}
 }

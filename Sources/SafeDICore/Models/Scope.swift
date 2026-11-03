@@ -34,11 +34,13 @@ final class Scope: Hashable {
 		dependenciesLeftOut: [Dependency] = [],
 		constructionComments: ConstructionComments = ConstructionComments(),
 		seamCall: SeamCall? = nil,
+		publicMockCall: PublicMockCall? = nil,
 	) {
 		self.instantiable = instantiable
 		self.dependenciesLeftOut = dependenciesLeftOut
 		self.constructionComments = constructionComments
 		self.seamCall = seamCall
+		self.publicMockCall = publicMockCall
 	}
 
 	deinit {
@@ -88,6 +90,11 @@ final class Scope: Hashable {
 
 	/// How a tree that reaches this scope calls the seam it stands for, or `nil` for a scope that builds its type.
 	let seamCall: SeamCall?
+
+	/// How a mock tree that reaches this scope calls the public mock another module generated for its type, which the
+	/// tree cannot build itself: `instantiable` then declares the mock's signature as its dependencies and builds
+	/// nothing. `nil` for every other scope.
+	let publicMockCall: PublicMockCall?
 
 	/// The properties that this scope is responsible for instantiating.
 	var propertiesToGenerate = [PropertyToGenerate]()
@@ -353,6 +360,8 @@ final class Scope: Hashable {
 	///     initializer's arguments. `nil` for a root of the dependency tree and for a mock root.
 	///   - startsCodeGeneration: Whether each generator of a dependency tree starts generating its code as soon as
 	///     it is created, which a tree built only to read its generators' sets skips.
+	///   - mockHoles: For a public mock's root, the holes its `mock()` takes a builder for, which each site of the tree
+	///     calls, as a seam's tree calls the builders of `seamRoot`'s signature.
 	func createScopeGenerator(
 		for property: Property?,
 		propertyStack: [Property],
@@ -362,6 +371,7 @@ final class Scope: Hashable {
 		alwaysAvailableProperties: Set<Property> = [],
 		runtimeOptionalProperties: Set<Property> = [],
 		seamRoot: ScopeGenerator.SeamRoot? = nil,
+		mockHoles: [SeamSignature.Hole] = [],
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool = false,
 		startsCodeGeneration: Bool = true,
@@ -376,7 +386,8 @@ final class Scope: Hashable {
 			boundProperties: boundProperties,
 			runtimeOptionalProperties: runtimeOptionalProperties,
 			seamRoot: seamRoot,
-			seamHoles: seamRoot.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.signature.holes) } ?? SeamHoles(),
+			seamHoles: seamRoot.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.signature.holes) }
+				?? (mockHoles.isEmpty ? SeamHoles() : SeamHoles(seamType: instantiable.concreteInstantiable, holes: mockHoles)),
 			sitePath: [],
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
@@ -479,7 +490,7 @@ private struct ScopeGeneratorUnderConstruction {
 		func isPropertyUnavailable(_ property: Property) -> Bool {
 			if scope.createdProperties.contains(property) {
 				return false
-			} else if forMockGeneration {
+			} else if forMockGeneration, scope.publicMockCall == nil {
 				// A mock builds, or is handed, every property an ancestor does not
 				// create — onlyIfAvailable dependencies become optional mock parameters.
 				// Only a property that is still being built is unavailable, as in production. A mock promotes a
@@ -490,8 +501,13 @@ private struct ScopeGeneratorUnderConstruction {
 					$0.label == unwrappedProperty.label && $0.typeDescription.unwrapped == unwrappedProperty.typeDescription
 				}
 			} else {
-				let propertyIsAvailableInParentStack = receivableProperties.contains(property) && !childPropertyStack.contains(property)
-				let unwrappedPropertyIsAvailableInParentStack = receivableProperties.contains(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty)
+				// A mock binds what its tree receives, but not what only the public mocks it calls receive: a call passes
+				// such a property only where the tree provides it, as production would, and `nil` elsewhere.
+				func isReceivable(_ property: Property) -> Bool {
+					receivableProperties.contains(property) || (forMockGeneration && boundProperties.contains(property))
+				}
+				let propertyIsAvailableInParentStack = isReceivable(property) && !childPropertyStack.contains(property)
+				let unwrappedPropertyIsAvailableInParentStack = isReceivable(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty)
 				return !(propertyIsAvailableInParentStack || unwrappedPropertyIsAvailableInParentStack)
 			}
 		}
@@ -722,6 +738,7 @@ private struct ScopeGeneratorUnderConstruction {
 			isPropertyCycle: isPropertyCycle,
 			constructionComments: scope.constructionComments,
 			seamCall: scope.seamCall,
+			publicMockCall: scope.publicMockCall,
 			seamRoot: seamRoot,
 			holeCallArguments: holeArguments.map { holeArgument in
 				switch holeArgument {

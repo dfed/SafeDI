@@ -165,13 +165,49 @@ extension AttributeSyntax {
 		return firstLabeledExpression.expression
 	}
 
+	/// Whether the `generateMock:` argument asks for a generated `mock()`, with any access.
 	public var generateMockValue: Bool {
-		guard let generateMock,
-		      let boolLiteral = BooleanLiteralExprSyntax(generateMock)
-		else {
-			return false
+		mockGenerationValue?.generatesMock ?? false
+	}
+
+	/// The `generateMock:` argument: `.none` when it is absent, and `nil` when it is spelled other than as a boolean
+	/// literal, `.none`, `.internal`, `.public`, or `MockGeneration.` followed by one of those cases.
+	public var mockGenerationValue: MockGeneration? {
+		guard let generateMock else {
+			return MockGeneration.none
 		}
-		return boolLiteral.literal.tokenKind == .keyword(.true)
+		return Self.mockGeneration(spelledAs: generateMock)
+	}
+
+	/// The `MockGeneration` an argument spells: a boolean literal, `.none`, `.internal`, `.public`, or `MockGeneration.`
+	/// followed by one of those cases. `nil` for any other spelling.
+	public static func mockGeneration(spelledAs expression: ExprSyntax) -> MockGeneration? {
+		if let boolLiteral = BooleanLiteralExprSyntax(expression) {
+			return boolLiteral.literal.tokenKind == .keyword(.true) ? .internal : MockGeneration.none
+		}
+		guard let memberAccess = MemberAccessExprSyntax(expression),
+		      memberAccess.declName.argumentNames == nil
+		else {
+			return nil
+		}
+		if let base = memberAccess.base {
+			guard let baseReference = DeclReferenceExprSyntax(base),
+			      baseReference.argumentNames == nil,
+			      baseReference.baseName.text == "MockGeneration"
+			else {
+				return nil
+			}
+		}
+		return switch memberAccess.declName.baseName.text {
+		case "none":
+			MockGeneration.none
+		case "internal":
+			.internal
+		case "public":
+			.public
+		default:
+			nil
+		}
 	}
 
 	public var customMockName: ExprSyntax? {

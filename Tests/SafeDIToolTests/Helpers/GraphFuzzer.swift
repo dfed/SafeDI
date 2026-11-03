@@ -75,8 +75,19 @@ struct GraphFuzzerFixture: Equatable {
 	/// `@Instantiable` type each declares.
 	var fileNames: [String] {
 		swiftFileContent.compactMap { content in
-			GraphFuzzerSourceLine.lines(of: content).lazy.compactMap(\.declaredTypeName).first.map { "\($0).swift" }
+			Self.markedFileName(in: content)
+				?? GraphFuzzerSourceLine.lines(of: content).lazy.compactMap(\.declaredTypeName).first.map { "\($0).swift" }
 		}
+	}
+
+	/// What precedes a file's name on one of its first lines, for a file whose name is not its first `@Instantiable`
+	/// type's: one that declares none, or a `SafeDIConfiguration.swift`, which `GraphFuzzerPublicMockDraw` places in a
+	/// directory of its own so that a renaming that prefixes file names keeps the name the tool reads it by.
+	static let fileNameMarker = "// file: "
+
+	/// The name `content` gives itself on one of its first lines (`fileNameMarker`), if it does.
+	private static func markedFileName(in content: String) -> String? {
+		content.split(separator: "\n").prefix(2).first { $0.hasPrefix(fileNameMarker) }.map { String($0.dropFirst(fileNameMarker.count)) }
 	}
 
 	var description: String {
@@ -437,15 +448,22 @@ enum GraphFuzzerGeneratorFeature: String, CaseIterable, Comparable {
 	/// in an initializer of its own that the trees reaching it call, with receives beneath it of properties
 	/// provided above it, and a rename of one on the seam, which that initializer passes through.
 	case generateDependencyTree
+	/// A graph of its own (`GraphFuzzerPublicMockDraw`): types declared with `generateMock: .public` in a declaring
+	/// module, and mocked types in a module of the same package and of another package that reach them.
+	case generateMockPublic
 
 	static func < (lhs: GraphFuzzerGeneratorFeature, rhs: GraphFuzzerGeneratorFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
 	}
 
 	/// The generator features `fixture` was drawn with, read from its source: a seam is drawn only with
-	/// `generateDependencyTree` on.
+	/// `generateDependencyTree` on, and a public mock only with `generateMockPublic` on.
 	static func features(drawnIn fixture: GraphFuzzerFixture) -> Set<GraphFuzzerGeneratorFeature> {
-		GraphFuzzerFeature.features(of: fixture).contains(.generateDependencyTree) ? [.generateDependencyTree] : []
+		if fixture.swiftFileContent.contains(where: { $0.contains("generateMock: .public") }) {
+			[.generateMockPublic]
+		} else {
+			GraphFuzzerFeature.features(of: fixture).contains(.generateDependencyTree) ? [.generateDependencyTree] : []
+		}
 	}
 }
 
@@ -944,8 +962,18 @@ enum GraphFuzzerGenerator {
 	///   (`DifferentialValueCreationStamp`) from a counter the first file declares. It changes how a type is written,
 	///   never what the seed draws, so the corpus and its pins are those of `false`.
 	static func fixture(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature> = [], storingEveryParameter: Bool = false) -> GraphFuzzerFixture {
+		guard !features.contains(.generateMockPublic) else {
+			return GraphFuzzerFixture(seed: seed, swiftFileContent: GraphFuzzerPublicMockDraw(seed: seed).swiftFileContent(storingEveryParameter: storingEveryParameter, isKnownRight: false))
+		}
 		var builder = Builder(seed: seed, features: features, storesEveryParameter: storingEveryParameter)
 		return GraphFuzzerFixture(seed: seed, swiftFileContent: builder.build())
+	}
+
+	/// The known-right path of the `generateMockPublic` feature's value differential for `seed`: its graph with every
+	/// declaration `public` and every `generateMock: .public` turned into `true`, so that every consumer constructs
+	/// everything and inlines today's internal mock of each `.public` type.
+	static func knownRightPublicMockFixture(forSeed seed: UInt64, storingEveryParameter: Bool = false) -> GraphFuzzerFixture {
+		GraphFuzzerFixture(seed: seed, swiftFileContent: GraphFuzzerPublicMockDraw(seed: seed).swiftFileContent(storingEveryParameter: storingEveryParameter, isKnownRight: true))
 	}
 
 	/// The access the generator gave each type of the graph it draws for `seed` and `features` that is narrower than
@@ -953,6 +981,9 @@ enum GraphFuzzerGenerator {
 	/// (`S1_ProofSpace.S1_ProofShelf` for a nested type): the ground truth a seam's generated tiers are checked
 	/// against. Every other type a graph declares is `public`.
 	static func narrowerTypeAccess(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>) -> [String: AccessLevel] {
+		guard !features.contains(.generateMockPublic) else {
+			return GraphFuzzerPublicMockDraw(seed: seed).typeAccess
+		}
 		var builder = Builder(seed: seed, features: features, storesEveryParameter: false)
 		_ = builder.build()
 		return builder.narrowerTypeAccess
@@ -4782,6 +4813,8 @@ enum GraphFuzzerSourceLine: Equatable {
 	/// `line` without the access modifier it begins with, or `line` itself when it begins with none. `nil` never: the
 	/// optional lets a condition bind it.
 	private static func droppingAccessModifier(from line: String) -> Substring? {
+		// A global actor precedes the access modifier, as `GraphFuzzerPublicMockDraw` spells it.
+		let line = line.hasPrefix("@MainActor ") ? String(line.dropFirst("@MainActor ".count)) : line
 		for modifier in ["public ", "package ", "internal "] where line.hasPrefix(modifier) {
 			return line.dropFirst(modifier.count)
 		}
@@ -4925,7 +4958,8 @@ enum GraphFuzzerToolOutcome: Equatable {
 			extensions = []
 		}
 		for line in code.split(separator: "\n", omittingEmptySubsequences: false) {
-			if line.hasPrefix("extension ") {
+			// A public mock's module-level configuration and a forwarder of its default are declarations of their own.
+			if line.hasPrefix("extension ") || line.hasPrefix("/// Configuration for how ") || line.hasPrefix("@usableFromInline ") {
 				endExtension()
 				currentExtension = [line]
 			} else if line.hasPrefix("#") {
@@ -4999,6 +5033,17 @@ struct GraphFuzzerFailure: Equatable {
 		/// The tool accepts a graph whose seam takes a builder for a hole and rejects its visible build: the fill
 		/// accepts what the seam's module, building the fulfilling type inline, rejects.
 		case holeAcceptedWhereVisibleBuildRejects = "the tool accepts a graph with a hole and rejects its visible build"
+		/// The tool rejects a `generateMockPublic` graph with an error that is not a public mock's own, and accepts its
+		/// known-right path: the same graph with every declaration `public` and every `.public` mock `true`.
+		case publicMockRejectsGraphKnownRightAccepts = "the tool rejects the graph with an error that is not a public mock's own, and accepts its known-right path"
+		/// The tool accepts a `generateMockPublic` graph and rejects its known-right path.
+		case knownRightRejectsGraphPublicMockAccepts = "the tool accepts the graph and rejects its known-right path"
+		/// A `public` or `package` declaration in generated code names a type narrower than the declaration, by the access
+		/// the generator gave the type: a public mock, override or configuration SafeDI proved from the wrong declaration.
+		case publicMockDeclarationWiderThanNamedType = "a generated public or package declaration is wider than a type it names"
+		/// The differential value comparator describes other values for a probe of a `generateMockPublic` graph than for
+		/// the same probe of its known-right path, beyond the stated divergences.
+		case publicMockBuildsOtherValuesThanKnownRight = "the graph builds other values than its known-right path"
 	}
 
 	let seed: UInt64
@@ -5091,6 +5136,12 @@ struct GraphFuzzerKnownIssue: Equatable {
 		/// The value comparator could not describe the graph, with details containing this text, such as the error of
 		/// an inline build that does not compile.
 		case valueComparatorCouldNotDescribeGraph(containing: String)
+		/// The tool rejects a `generateMockPublic` graph, with an error whose text contains this, and accepts its
+		/// known-right path.
+		case publicMockRejectsGraphKnownRightAccepts(containing: String)
+		/// A `generateMockPublic` graph builds other values than its known-right path, with a difference whose
+		/// description contains this text.
+		case publicMockBuildsOtherValuesThanKnownRight(containing: String)
 	}
 
 	let reason: String
@@ -5124,6 +5175,19 @@ struct GraphFuzzerKnownIssue: Equatable {
 				failure.kind == .seamBuildsOtherValuesThanInline && !failure.valueDifferences.isEmpty && failure.valueDifferences.allSatisfy { difference in
 					signatures.contains { signature in
 						if case let .seamBuildsOtherValuesThanInline(text) = signature {
+							difference.contains(text)
+						} else {
+							false
+						}
+					}
+				}
+			case let .publicMockRejectsGraphKnownRightAccepts(text):
+				failure.kind == .publicMockRejectsGraphKnownRightAccepts && failure.details.contains(text)
+			case .publicMockBuildsOtherValuesThanKnownRight:
+				// As for the seam's value signatures, every difference must match one.
+				failure.kind == .publicMockBuildsOtherValuesThanKnownRight && !failure.valueDifferences.isEmpty && failure.valueDifferences.allSatisfy { difference in
+					signatures.contains { signature in
+						if case let .publicMockBuildsOtherValuesThanKnownRight(text) = signature {
 							difference.contains(text)
 						} else {
 							false
@@ -5189,7 +5253,7 @@ enum GraphFuzzerFinding: Equatable {
 		case let (nil, knownIssue?):
 			self = .staleKnownIssue(knownIssue)
 		case let (failure?, knownIssue?) where knownIssue.matches(failure):
-			if failure.kind == .seamBuildsOtherValuesThanInline, let unmasked = laterFailures.first(where: { !knownIssue.matches($0) }) {
+			if failure.kind == .seamBuildsOtherValuesThanInline || failure.kind == .publicMockBuildsOtherValuesThanKnownRight, let unmasked = laterFailures.first(where: { !knownIssue.matches($0) }) {
 				self = .failure(unmasked)
 			} else {
 				self = .knownIssue(knownIssue, failure)
@@ -5246,6 +5310,8 @@ struct GraphFuzzerToolRuns {
 	///   - inlineOutcome: The outcome of the graph with no seam, when the graph declares one and the tool rejected it.
 	///   - visibleOutcome: The outcome of the graph's visible build (`GraphFuzzerFixture.withoutHoles`), when the graph
 	///     draws a hole.
+	///   - knownRightOutcome: The outcome of the known-right path of a graph drawn with `generateMockPublic`
+	///     (`GraphFuzzerGenerator.knownRightPublicMockFixture(forSeed:)`).
 	init(
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,
@@ -5253,6 +5319,7 @@ struct GraphFuzzerToolRuns {
 		renamedOutcomes: [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)] = [],
 		inlineOutcome: GraphFuzzerToolOutcome? = nil,
 		visibleOutcome: GraphFuzzerToolOutcome? = nil,
+		knownRightOutcome: GraphFuzzerToolOutcome? = nil,
 	) {
 		self.fixture = fixture
 		self.firstOutcome = firstOutcome
@@ -5260,6 +5327,7 @@ struct GraphFuzzerToolRuns {
 		self.renamedOutcomes = renamedOutcomes
 		self.inlineOutcome = inlineOutcome
 		self.visibleOutcome = visibleOutcome
+		self.knownRightOutcome = knownRightOutcome
 	}
 
 	let fixture: GraphFuzzerFixture
@@ -5268,6 +5336,7 @@ struct GraphFuzzerToolRuns {
 	let renamedOutcomes: [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)]
 	let inlineOutcome: GraphFuzzerToolOutcome?
 	let visibleOutcome: GraphFuzzerToolOutcome?
+	let knownRightOutcome: GraphFuzzerToolOutcome?
 
 	/// The failure of a graph whose seam takes a builder for a hole that the tool accepts while it rejects the graph's
 	/// visible build, or `nil`: a fill may be rejected where inline would read another value, but what the seam's module
@@ -5343,7 +5412,8 @@ struct GraphFuzzerToolRuns {
 	/// unavailable, and any other read finds whatever declaration of the alias's label encloses it, so the seam must
 	/// reject every such read. The literal-`nil` oracle cannot see these: their `nil` is the seam call's.
 	var uncreatedAliasReadFailure: GraphFuzzerFailure? {
-		guard case let .accepted(seamFiles, _) = firstOutcome else { return nil }
+		// A public mock graph's generated mocks are judged by the public mock's own oracles.
+		guard knownRightOutcome == nil, case let .accepted(seamFiles, _) = firstOutcome else { return nil }
 		// The unwrapped-form alias of a required optional parameter may be uncreated as an alias of a parameter that
 		// defaults to `nil` may, so its binding is read the same way; the exact-form alias is always created.
 		let drawFeatures = GraphFuzzerFeature.seamDrawFeatures(of: fixture)
@@ -5360,7 +5430,8 @@ struct GraphFuzzerToolRuns {
 	/// The failure of a graph the tool accepts whose generated seam tier is wider than a type one of its parameters
 	/// names, by the access the generator gave each type it drew (`GraphFuzzerGenerator.narrowerTypeAccess`), or `nil`.
 	var tierAccessFailure: GraphFuzzerFailure? {
-		guard case let .accepted(seamFiles, _) = firstOutcome else { return nil }
+		// A public mock graph's generated declarations are judged by `publicMockAccessFailure`.
+		guard knownRightOutcome == nil, case let .accepted(seamFiles, _) = firstOutcome else { return nil }
 		let findings = GraphFuzzerOracle.tiersWiderThanParameterTypes(
 			in: seamFiles,
 			typeAccess: GraphFuzzerGenerator.narrowerTypeAccess(forSeed: fixture.seed, features: GraphFuzzerGeneratorFeature.features(drawnIn: fixture)),
@@ -5436,10 +5507,16 @@ struct GraphFuzzerToolRuns {
 		return GraphFuzzerFailure(seed: fixture.seed, kind: kind, details: "\(findings.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)\nInline:\n\(inlineOutcome?.description ?? "")")
 	}
 
-	/// Whether the value oracle inspected the graph: the tool accepts it with the seam and without it.
+	/// Whether the value oracle inspected the graph: the tool accepts it with the seam and without it, or accepts a
+	/// `generateMockPublic` graph and its known-right path.
 	var isInspectedByValueOracle: Bool {
-		guard case .accepted = firstOutcome, case .accepted = inlineOutcome else { return false }
-		return true
+		guard case .accepted = firstOutcome else { return false }
+		switch (inlineOutcome, knownRightOutcome) {
+		case (.accepted?, _), (_, .accepted?):
+			return true
+		case (.rejected?, _), (_, .rejected?), (nil, nil):
+			return false
+		}
 	}
 
 	/// The failure of a graph the tool accepts with the seam and without it, whose generated code, over the whole
@@ -5590,7 +5667,7 @@ enum GraphFuzzerOracle {
 		let valueFailures = try valueFailures(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil })
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
-			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.visibleBuildFailure, runs.uncreatedAliasRejectionFailure, runs.nilArgumentFailure, runs.uncreatedAliasReadFailure, runs.tierAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], valueFailures[runs.fixture.seed], runs.wrapperParameterFailure, renamedGraphFailures.first].compactMap(\.self)
+			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.uncreatedAliasRejectionFailure, runs.nilArgumentFailure, runs.uncreatedAliasReadFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], valueFailures[runs.fixture.seed], runs.wrapperParameterFailure, renamedGraphFailures.first].compactMap(\.self)
 			return GraphFuzzerResult(
 				fixture: runs.fixture,
 				outcome: runs.firstOutcome,
@@ -5625,16 +5702,21 @@ enum GraphFuzzerOracle {
 				try? FileManager.default.removeItem(at: fileToDelete)
 			}
 		}
-		let graphs = inspectedRuns.compactMap { runs -> DifferentialValueGraph? in
+		// Each graph beside the runs it judges: a public mock graph's against its known-right path
+		// (`publicMockValueGraph(of:)`), a seam graph's against its inline build.
+		let graphs = inspectedRuns.compactMap { runs -> (runs: GraphFuzzerToolRuns, graph: DifferentialValueGraph)? in
+			if let graph = publicMockValueGraph(of: runs) {
+				return (runs, graph)
+			}
 			guard case let .accepted(seamFiles, _) = runs.firstOutcome, case let .accepted(inlineFiles, _) = runs.inlineOutcome else { return nil }
 			let storingFixture = GraphFuzzerGenerator.fixture(forSeed: runs.fixture.seed, features: GraphFuzzerGeneratorFeature.features(drawnIn: runs.fixture), storingEveryParameter: true)
-			return DifferentialValueGraph(
+			return (runs, DifferentialValueGraph(
 				name: "seed \(runs.fixture.seed)",
 				feature: DifferentialValuePath(fixture: storingFixture, generatedFiles: seamFiles),
 				knownRight: DifferentialValuePath(fixture: storingFixture.withoutSeams, generatedFiles: inlineFiles),
 				probes: storingFixture.differentialValueProbes(generatedFiles: seamFiles),
 				exemptions: Self.documentedSeamValueDivergences(of: runs.fixture),
-			)
+			))
 		}
 		let visibleGraphs = visibleRuns.compactMap { runs -> DifferentialValueGraph? in
 			guard case let .accepted(holeFiles, _) = runs.firstOutcome, case let .accepted(visibleFiles, _) = runs.visibleOutcome else { return nil }
@@ -5646,7 +5728,7 @@ enum GraphFuzzerOracle {
 				probes: storingFixture.differentialValueProbes(generatedFiles: holeFiles),
 			)
 		}
-		guard let comparisons = try DifferentialValueOracle.compare(graphs: graphs + visibleGraphs, filesToDelete: &filesToDelete) else { return [:] }
+		guard let comparisons = try DifferentialValueOracle.compare(graphs: graphs.map(\.graph) + visibleGraphs, filesToDelete: &filesToDelete) else { return [:] }
 		var failures = [UInt64: GraphFuzzerFailure]()
 		for (runs, comparison) in zip(visibleRuns, comparisons.dropFirst(graphs.count)) {
 			switch comparison.result {
@@ -5672,24 +5754,31 @@ enum GraphFuzzerOracle {
 		// that lazy cycle on the outer builder function, a main defect (the shape of seed 662), and hands the second
 		// round the outer seam's values, where the hole build and the visible build both build the seam afresh.
 		let visiblyComparedSeeds = Set(visibleRuns.map(\.fixture.seed))
-		for (runs, comparison) in zip(inspectedRuns, comparisons) where failures[runs.fixture.seed] == nil {
+		for ((runs, _), comparison) in zip(graphs, comparisons) where failures[runs.fixture.seed] == nil {
+			let isPublicMockGraph = runs.knownRightOutcome != nil
+			let builds = isPublicMockGraph
+				? "As drawn:\n\(runs.firstOutcome.description)\nKnown right:\n\(runs.knownRightOutcome?.description ?? "")"
+				: "With the seam:\n\(runs.firstOutcome.description)\nWithout it:\n\(runs.inlineOutcome?.description ?? "")"
 			switch comparison.result {
 			case let .success(valueComparison):
+				// A public mock graph exempts the shape matrix's stated divergences, derived from its leaf calls.
+				let statedDivergences = isPublicMockGraph ? Self.statedPublicMockValueDivergences(in: valueComparison, of: runs) : []
 				let differences = valueComparison.differences.filter { difference in
-					!visiblyComparedSeeds.contains(runs.fixture.seed) || !difference.path.contains("holeSeamBuilder")
+					(!visiblyComparedSeeds.contains(runs.fixture.seed) || !difference.path.contains("holeSeamBuilder"))
+						&& !statedDivergences.contains(difference)
 				}
 				guard !differences.isEmpty else { continue }
 				failures[runs.fixture.seed] = GraphFuzzerFailure(
 					seed: runs.fixture.seed,
-					kind: .seamBuildsOtherValuesThanInline,
-					details: "\(differences.map(\.description).joined(separator: "\n"))\n\(valueComparison.report)With the seam:\n\(runs.firstOutcome.description)\nWithout it:\n\(runs.inlineOutcome?.description ?? "")",
+					kind: isPublicMockGraph ? .publicMockBuildsOtherValuesThanKnownRight : .seamBuildsOtherValuesThanInline,
+					details: "\(differences.map(\.description).joined(separator: "\n"))\n\(valueComparison.report)\(builds)",
 					valueDifferences: differences.map(\.description),
 				)
 			case let .failure(error):
 				failures[runs.fixture.seed] = GraphFuzzerFailure(
 					seed: runs.fixture.seed,
 					kind: .valueComparatorCouldNotDescribeGraph,
-					details: "\(error)\nWith the seam:\n\(runs.firstOutcome.description)\nWithout it:\n\(runs.inlineOutcome?.description ?? "")",
+					details: "\(error)\n\(builds)",
 				)
 			}
 		}
@@ -6094,6 +6183,12 @@ enum GraphFuzzerOracle {
 		let inlineOutcome: GraphFuzzerToolOutcome? = fixture.declaresSeam ? try await toolOutcome(of: fixture.withoutSeams) : nil
 		// A graph with a hole is run again with the fulfilling type in the seam's module, whose values a fill must equal.
 		let visibleOutcome: GraphFuzzerToolOutcome? = fixture.drawsHole ? try await toolOutcome(of: fixture.withoutHoles) : nil
+		// A graph with a public mock is run again as its known-right path, every declaration `public` and every `.public`
+		// mock `true`: the two must accept the same graphs but for a public mock's own errors
+		// (`publicMockAcceptanceFailure`), and build the same values (`valueFailures`).
+		let knownRightOutcome: GraphFuzzerToolOutcome? = GraphFuzzerGeneratorFeature.features(drawnIn: fixture).contains(.generateMockPublic)
+			? try await toolOutcome(of: GraphFuzzerGenerator.knownRightPublicMockFixture(forSeed: fixture.seed))
+			: nil
 		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
 			firstOutcome: firstOutcome,
@@ -6101,6 +6196,7 @@ enum GraphFuzzerOracle {
 			renamedOutcomes: renamedOutcomes,
 			inlineOutcome: inlineOutcome,
 			visibleOutcome: visibleOutcome,
+			knownRightOutcome: knownRightOutcome,
 		)
 	}
 
@@ -6178,7 +6274,10 @@ enum GraphFuzzerOracle {
 				warnings += moduleOutput.warnings.map { normalize("\($0)") }
 			}
 			return .accepted(
-				generatedFiles: addingSeamCallers(to: generatedFiles, seamTypeAccess: fixture.seamTypeAccess, modules: presentModules),
+				generatedFiles: addingPublicMockCallers(
+					to: addingSeamCallers(to: generatedFiles, seamTypeAccess: fixture.seamTypeAccess, modules: presentModules),
+					of: fixture,
+				),
 				warnings: warnings,
 			)
 		} catch let error as SafeDIToolMultiModuleTestError {
@@ -6193,15 +6292,24 @@ enum GraphFuzzerOracle {
 	/// `contents`, a module's combined output, as the files `executeSafeDIToolTest` writes for one module, each with the
 	/// combined output's header and imports: each type's extensions, `<Type>+SafeDI.swift`; each type's mock, the
 	/// conditional block declaring `mock()`, `<Type>+SafeDIMock.swift`; and the mock configurations, the conditional block
-	/// declaring none, `SafeDIMockConfiguration.swift`. A combined output declares its files' extensions in the files'
-	/// path order, which a file-name reversal reverses; one file per type compares, compiles, and is probed as the
-	/// per-file outputs of a graph in one module are.
+	/// declaring none, `SafeDIMockConfiguration.swift`, which a public mock's module-level configurations open with their
+	/// documentation. A combined output declares its files' extensions in the files' path order, which a file-name
+	/// reversal reverses; one file per type compares, compiles, and is probed as the per-file outputs of a graph in one
+	/// module are.
 	static func decomposingCombinedOutput(_ contents: String) -> [String: String] {
 		let lines = contents.split(separator: "\n", omittingEmptySubsequences: false)
-		/// Whether a block begins at `index`: an extension, or a conditional block whose first declaration is one.
+		/// Whether a block begins at `index`: an extension, or a conditional block whose first declaration is one or a
+		/// public mock's module-level configuration.
 		func beginsBlock(at index: Int) -> Bool {
 			lines[index].hasPrefix("extension ")
-				|| lines[index].hasPrefix("#if ") && lines[(index + 1)...].first { !$0.isEmpty }?.hasPrefix("extension ") == true
+				|| beginsPublicConfigurationDeclaration(at: index)
+				|| lines[index].hasPrefix("#if ") && lines[(index + 1)...].first { !$0.isEmpty }.map { firstLine in
+					firstLine.hasPrefix("extension ") || firstLine.hasPrefix("/// Configuration for how ")
+				} == true
+		}
+		/// Whether an unconditional public mock's module-level configuration, or a forwarder of a default, begins at `index`.
+		func beginsPublicConfigurationDeclaration(at index: Int) -> Bool {
+			lines[index].hasPrefix("/// Configuration for how ") || lines[index].hasPrefix("@usableFromInline ")
 		}
 		guard let firstBlock = lines.indices.first(where: beginsBlock(at:)) else { return ["Combined.swift": contents] }
 		let header = lines[..<firstBlock].joined(separator: "\n")
@@ -6213,10 +6321,13 @@ enum GraphFuzzerOracle {
 				continue
 			}
 			let isConditional = lines[index].hasPrefix("#if ")
-			let end = lines[(index + 1)...].firstIndex { isConditional ? $0.hasPrefix("#endif") : $0.hasPrefix("}") } ?? (lines.count - 1)
+			let isForwarder = lines[index].hasPrefix("@usableFromInline ")
+			let end = isForwarder ? index : lines[(index + 1)...].firstIndex { isConditional ? $0.hasPrefix("#endif") : $0.hasPrefix("}") } ?? (lines.count - 1)
 			let block = lines[index...end]
 			let extendedType = block.first { $0.hasPrefix("extension ") }.map { String($0.dropFirst("extension ".count).prefix { $0 != " " && $0 != ":" }) } ?? "Combined"
-			let fileName = if !isConditional {
+			let fileName = if beginsPublicConfigurationDeclaration(at: index) {
+				"SafeDIMockConfiguration.swift"
+			} else if !isConditional {
 				"\(extendedType)+SafeDI.swift"
 			} else if block.contains(where: { $0.contains("static func mock(") }) {
 				"\(extendedType)+SafeDIMock.swift"
@@ -6248,7 +6359,7 @@ enum GraphFuzzerOracle {
 		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		defer { try? FileManager.default.removeItem(at: directory) }
 		let fixtureFiles = try zip(fixture.fileNames, fixture.swiftFileContent).map { fileName, content in
-			let fileURL = directory.appendingPathComponent(fileName)
+			let fileURL = directory.appendingPathComponent(fileName.replacingOccurrences(of: "/", with: "_"))
 			try content.write(to: fileURL, atomically: true, encoding: .utf8)
 			return fileURL
 		}
@@ -6294,6 +6405,40 @@ enum GraphFuzzerOracle {
 					generatedFiles["\(module.name)/\(seamTypeName)+SafeDISeamCaller.swift"] = "import \(GraphFuzzerModule.seamModule.name)\n\n"
 						+ seamCaller(named: "\(seamTypeName)\(callerName)", of: seamTypeName, calling: [(tierIndex, initializers[tierIndex])], seamTypeAccess: seamAccess)
 				}
+			}
+		}
+		return generatedFiles
+	}
+
+	/// What the name of each file `addingPublicMockCallers(to:of:)` adds ends with.
+	static let publicMockCallerFileSuffix = "+SafeDIPublicMockCaller.swift"
+
+	/// `generatedFiles` with, for each hand-written call of a public mock the fixture holds in a file that declares a
+	/// `.public` mock – `GraphFuzzerPublicMockDraw.publicMockCallerMarker`, then the caller's module and the call – a file
+	/// in that module holding a function that makes the call, `<Type>+SafeDIPublicMockCaller.swift`. The oracle compiles
+	/// it with the rest, so a public mock a caller outside SafeDI's generation cannot call, with the builders the draw
+	/// expects, fails there. The known-right path declares no `.public` mock, so it gets none. Read from the fixture's
+	/// text, so a renamed graph's caller is renamed with it and restored with its files.
+	static func addingPublicMockCallers(to generatedFiles: [String: String], of fixture: GraphFuzzerFixture) -> [String: String] {
+		var generatedFiles = generatedFiles
+		for content in fixture.swiftFileContent where content.contains("generateMock: .public") {
+			for line in content.split(separator: "\n") where line.hasPrefix(GraphFuzzerPublicMockDraw.publicMockCallerMarker) {
+				let moduleAndCall = line.dropFirst(GraphFuzzerPublicMockDraw.publicMockCallerMarker.count)
+				guard let colon = moduleAndCall.firstIndex(of: ":"), let callee = moduleAndCall[moduleAndCall.index(after: colon)...].trimmingCharacters(in: .whitespaces).components(separatedBy: ".mock(").first else { continue }
+				let moduleName = String(moduleAndCall[..<colon])
+				let call = moduleAndCall[moduleAndCall.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+				generatedFiles["\(moduleName)/\(callee)\(publicMockCallerFileSuffix)"] = """
+				import \(GraphFuzzerModule.seamModule.name)
+
+				#if DEBUG
+				public enum \(callee)PublicMockCaller {
+				\tpublic static func call() -> \(callee) {
+				\t\t\(call)
+				\t}
+				}
+				#endif
+
+				"""
 			}
 		}
 		return generatedFiles
@@ -6467,7 +6612,9 @@ enum GraphFuzzerOracle {
 				let moduleDirectory = fixtureDirectory.appendingPathComponent(module.name)
 				try FileManager.default.createDirectory(at: moduleDirectory, withIntermediateDirectories: true)
 				let fixtureFiles = try zip(zip(runs.fixture.fileNames, runs.fixture.swiftFileContent), fileModules).filter { $0.1 == module }.map { file, _ in
-					let fileURL = moduleDirectory.appendingPathComponent(file.0)
+					// A file name that names a directory, as a `SafeDIConfiguration.swift` does, is flattened, so that the
+					// files of the graphs one invocation compiles keep names of their own.
+					let fileURL = moduleDirectory.appendingPathComponent(file.0.replacingOccurrences(of: "/", with: "_"))
 					try file.1.write(to: fileURL, atomically: true, encoding: .utf8)
 					return fileURL
 				}

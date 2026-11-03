@@ -24,6 +24,24 @@ import Testing
 @testable import SafeDICore
 
 struct InitializerTests {
+	@Test(arguments: [
+		("init() {}", nil),
+		("nonisolated init() {}", "nonisolated"),
+		("@MainActor init() {}", "@MainActor"),
+		("@available(iOS 17, *) init() {}", nil),
+	] as [(String, String?)])
+	func init_recordsSpelledIsolation_whenInitializerSpellsModifierOrGlobalActor(source: String, spelledIsolation: String?) throws {
+		// A public mock's construction function mirrors the isolation the initializer it calls spells.
+		let initializer = try #require(Parser.parse(source: source).statements.first.flatMap { InitializerDeclSyntax($0.item) })
+		#expect(Initializer(initializer).spelledIsolation == spelledIsolation)
+	}
+
+	@Test
+	func init_recordsSpelledIsolation_whenFunctionSpellsGlobalActor() throws {
+		let function = try #require(Parser.parse(source: "@MainActor static func mock() -> T { T() }").statements.first.flatMap { FunctionDeclSyntax($0.item) })
+		#expect(Initializer(function).spelledIsolation == "@MainActor")
+	}
+
 	@Test
 	func init_readsGeneratedParameterTypeAsFunctionParameter_forEverySpellingOfAPropertyType() throws {
 		// A seam's generated initializer spells each parameter with `asFunctionParamterSyntax`, and the tree that calls

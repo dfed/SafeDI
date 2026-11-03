@@ -120,7 +120,7 @@ struct QueryNeeds: AsyncParsableCommand {
 			// The modules that generate `mock()` for the type: the module of each declaration that sets
 			// `generateMock: true`, and each module whose configuration lists the type.
 			let generatingModuleNames = Set(
-				declarationsOfType.filter(\.generateMock).map { FileAttribution.attribution(ofFileAt: $0.sourceFilePath, in: attributionsByFilePath).moduleName }
+				declarationsOfType.filter(\.generatesMock).map { FileAttribution.attribution(ofFileAt: $0.sourceFilePath, in: attributionsByFilePath).moduleName }
 					+ parsedModules.filter { $0.configuration?.additionalMocksToGenerate.contains(typeName) == true }.map(\.includedModule.name),
 			).sorted()
 			// A mock root is built from the entry under the type's own key (`mockRootInstantiable`), so that entry's

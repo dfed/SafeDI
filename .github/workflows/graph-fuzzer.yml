@@ -4,9 +4,10 @@ name: Graph Fuzzer
 # seed and for any number of graphs, to explore graphs beyond the fixed
 # corpora that ci.yml fuzzes on every pull request and push to main. Its
 # default, `iterations: corpus`, is the selected corpus: seeds
-# 0..<corpusSeedCount of the base corpus, or 0..<seamCorpusSeedCount of the
-# seam corpus when `features` is `generateDependencyTree` (see
-# SafeDIToolGraphFuzzerTests.swift). A failure,
+# 0..<corpusSeedCount of the base corpus, 0..<seamCorpusSeedCount of the
+# seam corpus when `features` is `generateDependencyTree`, or
+# 0..<publicMockCorpusSeedCount of the public mock corpus when `features` is
+# `generateMockPublic` (see SafeDIToolGraphFuzzerTests.swift). A failure,
 # a stale known issue, a problem with the run itself, a crash, or a run that
 # checks no graphs fails the job and names the seeds in the job summary.
 on:
@@ -17,11 +18,11 @@ on:
         required: false
         default: '0'
       features:
-        description: The generator features to draw with, comma-separated (`generateDependencyTree` for the seam corpus), or empty for the base corpus.
+        description: The generator features to draw with, comma-separated (`generateDependencyTree` for the seam corpus, `generateMockPublic` for the public mock corpus), or empty for the base corpus.
         required: false
         default: ''
       iterations:
-        description: The number of graphs to run, or `corpus` for every seed of the selected corpus (corpusSeedCount, or seamCorpusSeedCount with the seam feature).
+        description: The number of graphs to run, or `corpus` for every seed of the selected corpus (corpusSeedCount, seamCorpusSeedCount with the seam feature, or publicMockCorpusSeedCount with the public mock feature).
         required: false
         default: 'corpus'
 

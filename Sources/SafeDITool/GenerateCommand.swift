@@ -252,9 +252,10 @@ struct Generate: AsyncParsableCommand {
 		let typeDescriptionToFulfillingInstantiableMap = try resolveSafeDIFulfilledTypes(instantiables: normalizedInstantiables)
 		// The seams this run generates are those its own files declare; a seam another module declares is called
 		// with the signature that module computed, from the declarations it saw. Which files are the module's own is
-		// found only when a seam exists: without the build system's word, finding them normalizes every input path,
-		// which a project without seams must not pay for, and nothing consults the set for any other declaration.
-		let ownFilePaths: Set<String> = if normalizedInstantiables.contains(where: \.generatesDependencyTree) {
+		// found only when a seam or a public mock exists, since a public mock another module declares is called with
+		// the signature that module computed too: without the build system's word, finding them normalizes every input
+		// path, which a project without either must not pay for, and nothing consults the set for any other declaration.
+		let ownFilePaths: Set<String> = if normalizedInstantiables.contains(where: { $0.generatesDependencyTree || $0.generateMock == .public }) {
 			Set(ownFilePaths(of: module, membership: membership, manifest: manifest, inputFilePaths: inputFilePaths, comparisonFilePaths: comparisonFilePaths))
 		} else {
 			[]
@@ -382,7 +383,7 @@ struct Generate: AsyncParsableCommand {
 						let manifestMockInputPaths = Set(manifest.mockGeneration.map(\.inputFilePath))
 						// Only a module file sharing its name with a configuration's file, or with a mock-generating
 						// declaration's file the manifest does not list by this parse's name, needs matching.
-						let matchedSourceFilePaths = module.instantiables.filter(\.generateMock).compactMap(\.sourceFilePath).filter { !manifestMockInputPaths.contains($0) }
+						let matchedSourceFilePaths = module.instantiables.filter(\.generatesMock).compactMap(\.sourceFilePath).filter { !manifestMockInputPaths.contains($0) }
 							+ module.configurations.compactMap(\.sourceFilePath)
 						let matchedFileNames = Set(matchedSourceFilePaths.map { ($0 as NSString).lastPathComponent })
 						let candidateMockScopedFilePaths = mockScopedFilePaths.filter { matchedFileNames.contains(($0 as NSString).lastPathComponent) }
@@ -415,7 +416,7 @@ struct Generate: AsyncParsableCommand {
 							guard candidateFileNames.contains((sourceFilePath as NSString).lastPathComponent) else { return nil }
 							return mockScopedManifestPath(sourceFilePath)
 						}
-						for instantiable in module.instantiables where instantiable.generateMock {
+						for instantiable in module.instantiables where instantiable.generatesMock {
 							if let sourceFilePath = instantiable.sourceFilePath,
 							   !manifestMockInputPaths.contains(sourceFilePath),
 							   let mockScopedFilePath = mockScopedFilePath(resolving: sourceFilePath),
@@ -443,6 +444,12 @@ struct Generate: AsyncParsableCommand {
 				try sourceConfiguration?.validateAdditionalMocksToGenerate(
 					fulfilledBy: typeDescriptionToFulfillingInstantiableMap,
 					orDeclaredAmong: Set(dependentModuleInfo.flatMap(\.instantiableTypeNamesInAnyClause) + module.instantiableTypeNamesInAnyClause),
+				)
+				// A type another module generates a public mock for is called there, never generated here.
+				try sourceConfiguration?.validateAdditionalMocksToGenerate(
+					namingPublicMocksOf: typeDescriptionToFulfillingInstantiableMap.values.filter { instantiable in
+						instantiable.generateMock == .public && instantiable.moduleName != nil && instantiable.moduleName != module.moduleName
+					},
 				)
 
 				// Accumulate every emission as a `(destination, header, body)`
@@ -495,7 +502,7 @@ struct Generate: AsyncParsableCommand {
 				} else {
 					// Sorted for deterministic combined output.
 					currentModuleMockSourceFiles = Set(
-						module.instantiables.filter(\.generateMock).compactMap(\.sourceFilePath),
+						module.instantiables.filter(\.generatesMock).compactMap(\.sourceFilePath),
 					).sorted()
 				}
 				let hasAnyMockGeneration = !currentModuleMockSourceFiles.isEmpty
@@ -788,7 +795,11 @@ struct Generate: AsyncParsableCommand {
 		membership: ModuleMembership?,
 	) throws -> SeamResolution {
 		let seamInstantiables = normalizedInstantiables.filter(\.generatesDependencyTree)
-		guard !seamInstantiables.isEmpty else { return .none }
+		// The `generateMock: .public` types other modules declare, whose public mocks this module's mock trees call.
+		let publicMockInstantiables = normalizedInstantiables.filter { $0.generateMock == .public && $0.sourceFilePath.map(ownFilePaths.contains) != true }
+		// A module with a public mock of its own checks it over the declarations its callers see.
+		let declaresPublicMock = module.instantiables.contains { $0.generateMock == .public }
+		guard !seamInstantiables.isEmpty || !publicMockInstantiables.isEmpty || declaresPublicMock else { return .none }
 		// A `mockOnly` declaration with `generateDependencyTree: true`, which the macro rejects, has no tree of its own:
 		// reported here, as a plain error at the declaration, since every seam type the generator sees must be a
 		// production declaration's concrete type, which the seam maps rely on.
@@ -811,52 +822,80 @@ struct Generate: AsyncParsableCommand {
 		)
 		var generatedSeams = Set<TypeDescription>()
 		var foreignSeams = [TypeDescription: SeamResolution.ForeignSeam]()
-		var visibleInstantiablesByModuleName = [String: (instantiables: [TypeDescription: Instantiable], readFromModuleInfo: Bool, missingDependencyModuleName: String?, mockCondition: MockCondition?)]()
+		var foreignPublicMocks = [TypeDescription: SeamResolution.ForeignPublicMock]()
+		var visibleInstantiablesByModuleName = [String: VisibleDeclarations]()
+		/// The declarations the module named `moduleName` sees, read once per module.
+		func visibleDeclarations(ofModuleNamed moduleName: String) throws -> VisibleDeclarations {
+			if let cached = visibleInstantiablesByModuleName[moduleName] {
+				return cached
+			}
+			let visible: VisibleDeclarations
+			if let dependentModule = dependentModulesByName[moduleName] {
+				// A dependency this run was not given is recorded, and reported only for a seam a tree reaches.
+				var instantiables = dependentModule.instantiables
+				var missingDependencyModuleName: String?
+				for dependencyModuleName in dependentModule.dependencyModuleNames {
+					if let dependency = dependentModulesByName[dependencyModuleName] {
+						instantiables += dependency.instantiables
+					} else if missingDependencyModuleName == nil {
+						missingDependencyModuleName = dependencyModuleName
+					}
+				}
+				// A module info holds the module's declarations as the module read them, and the configuration it read.
+				visible = try VisibleDeclarations(
+					instantiables: resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables)),
+					readFromModuleInfo: true,
+					missingDependencyModuleName: missingDependencyModuleName,
+					mockCondition: Self.mockCondition(of: dependentModule.configurations.first),
+				)
+			} else {
+				// The module is in the target graph: a declaration's module is named only by the graph, or by the
+				// options, which name this run's own module.
+				let visibleModuleNames = visibleModuleNames(from: moduleName, in: membership)
+				let instantiables = unnormalizedInstantiables.filter { $0.moduleName.map(visibleModuleNames.contains) == true }
+				// This run read the module's files under its own mock condition, while the module reads them under
+				// the one its own configuration names: of the configurations this run read, the one in a file the
+				// graph attributes to the module.
+				let moduleConfiguration = module.configurations.first { configuration in
+					configuration.sourceFilePath.flatMap { membership?.declaringModule(ofFileAt: $0)?.moduleName } == moduleName
+				}
+				visible = try VisibleDeclarations(
+					instantiables: resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables)),
+					readFromModuleInfo: false,
+					missingDependencyModuleName: nil,
+					mockCondition: Self.mockCondition(of: moduleConfiguration),
+				)
+			}
+			visibleInstantiablesByModuleName[moduleName] = visible
+			return visible
+		}
 		// In declaration order, which decides nothing here: a module's visible declarations are read once, whichever
 		// of its seams is met first.
 		for seam in seamInstantiables {
 			if seam.sourceFilePath.map(ownFilePaths.contains) == true {
 				generatedSeams.insert(seam.concreteInstantiable)
 			} else if let moduleName = seam.moduleName {
-				let visible: (instantiables: [TypeDescription: Instantiable], readFromModuleInfo: Bool, missingDependencyModuleName: String?, mockCondition: MockCondition?)
-				if let cached = visibleInstantiablesByModuleName[moduleName] {
-					visible = cached
-				} else if let dependentModule = dependentModulesByName[moduleName] {
-					// A dependency this run was not given is recorded, and reported only for a seam a tree reaches.
-					var instantiables = dependentModule.instantiables
-					var missingDependencyModuleName: String?
-					for dependencyModuleName in dependentModule.dependencyModuleNames {
-						if let dependency = dependentModulesByName[dependencyModuleName] {
-							instantiables += dependency.instantiables
-						} else if missingDependencyModuleName == nil {
-							missingDependencyModuleName = dependencyModuleName
-						}
-					}
-					// A module info holds the module's declarations as the module read them.
-					visible = try (resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables)), true, missingDependencyModuleName, nil)
-					visibleInstantiablesByModuleName[moduleName] = visible
-				} else {
-					// The seam's module is in the target graph: a declaration's module is named only by the graph, or by
-					// the options, which name this run's own module.
-					let visibleModuleNames = visibleModuleNames(from: moduleName, in: membership)
-					let instantiables = unnormalizedInstantiables.filter { $0.moduleName.map(visibleModuleNames.contains) == true }
-					// This run read the module's files under its own mock condition, while the module reads them under
-					// the one its own configuration names: of the configurations this run read, the one in a file the
-					// graph attributes to the module.
-					let moduleConfiguration = module.configurations.first { configuration in
-						configuration.sourceFilePath.flatMap { membership?.declaringModule(ofFileAt: $0)?.moduleName } == moduleName
-					}
-					visible = try (resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables)), false, nil, Self.mockCondition(of: moduleConfiguration))
-					visibleInstantiablesByModuleName[moduleName] = visible
-				}
+				let visible = try visibleDeclarations(ofModuleNamed: moduleName)
 				foreignSeams[seam.concreteInstantiable] = SeamResolution.ForeignSeam(
 					declaringModule: ModuleIdentity(moduleName: moduleName, packageName: seam.packageName),
 					missingDependencyModuleName: visible.missingDependencyModuleName,
 					visibleInstantiables: visible.instantiables,
 					callCarriesPluginComment: !visible.readFromModuleInfo,
-					declaringModuleMockCondition: visible.mockCondition,
+					// A module info holds the module's declarations as the module read them.
+					declaringModuleMockCondition: visible.readFromModuleInfo ? nil : visible.mockCondition,
 				)
 			}
+		}
+		for publicMock in publicMockInstantiables {
+			guard let moduleName = publicMock.moduleName else { continue }
+			let visible = try visibleDeclarations(ofModuleNamed: moduleName)
+			foreignPublicMocks[publicMock.concreteInstantiable] = SeamResolution.ForeignPublicMock(
+				declaringModule: ModuleIdentity(moduleName: moduleName, packageName: publicMock.packageName),
+				missingDependencyModuleName: visible.missingDependencyModuleName,
+				visibleInstantiables: visible.instantiables,
+				callCarriesPluginComment: !visible.readFromModuleInfo,
+				declaringModuleMockCondition: visible.mockCondition,
+			)
 		}
 		// Under the plugin's target graph, which names this module, callers compute this module's seams from the
 		// files the graph lists, which leaves out the directories its configuration adds.
@@ -864,7 +903,7 @@ struct Generate: AsyncParsableCommand {
 		// The declarations the callers of this module's seams see, when some declaration this run sees is not among
 		// them: resolved as the callers resolve them, so a seam's signature can be computed over the callers' view and
 		// compared with this run's. A module whose name is unknown has no callers computing a signature.
-		let callersVisibleInstantiables: [TypeDescription: Instantiable]? = if !generatedSeams.isEmpty, let moduleName = module.moduleName {
+		let callersVisibleInstantiables: [TypeDescription: Instantiable]? = if !generatedSeams.isEmpty || declaresPublicMock, let moduleName = module.moduleName {
 			if callersComputeFromTargetGraph {
 				if unnormalizedInstantiables.contains(where: { $0.moduleName == nil }) {
 					try resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: unnormalizedInstantiables.filter { $0.moduleName.map(visibleModuleNames(from: moduleName, in: membership).contains) == true }))
@@ -884,9 +923,20 @@ struct Generate: AsyncParsableCommand {
 			currentModuleMockCondition: Self.mockCondition(of: configuration),
 			generatedSeams: generatedSeams,
 			foreignSeams: foreignSeams,
+			foreignPublicMocks: foreignPublicMocks,
 			callersComputeFromTargetGraph: callersComputeFromTargetGraph,
 			callersVisibleInstantiables: callersVisibleInstantiables,
 		)
+	}
+
+	/// The declarations a module sees, as `seamResolution` reads them for the seams and public mocks it declares.
+	private struct VisibleDeclarations {
+		let instantiables: [TypeDescription: Instantiable]
+		/// Whether they were read from the module's module info rather than from the files the target graph lists.
+		let readFromModuleInfo: Bool
+		let missingDependencyModuleName: String?
+		/// The condition the module guards its mocks with.
+		let mockCondition: MockCondition
 	}
 
 	/// The condition a module whose configuration is `configuration` guards its mocks and mock-only declarations with,
@@ -1272,6 +1322,26 @@ extension SafeDIConfiguration {
 				severity: .error,
 				location: declarationLocation,
 				message: "This #\(SafeDIConfigurationVisitor.macroName) lists `\(typeName)` in \(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel), but no @\(InstantiableVisitor.macroName) declaration SafeDI read declares `\(typeName)`, so SafeDI cannot generate its mock.\(fulfillingTypeNameDescription)\(similarTypeNamesDescription) Correct the name to that of an @\(InstantiableVisitor.macroName) type, or remove `\(typeName)` from \(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel).",
+			)
+		})
+	}
+}
+
+extension SafeDIConfiguration {
+	/// Reports each `additionalMocksToGenerate` entry that names a type whose public mock (`generateMock: .public`) another
+	/// module generates: that module's `mock()` is the type's mock, and a second one here would make every call ambiguous.
+	/// - Parameter publicMockTypes: The declarations of other modules that set `generateMock: .public`.
+	func validateAdditionalMocksToGenerate(namingPublicMocksOf publicMockTypes: [Instantiable]) throws(AdditionalMocksNameNoInstantiableError) {
+		let moduleNameByTypeName = publicMockTypes.reduce(into: [String: String]()) { result, instantiable in
+			result[instantiable.concreteInstantiable.asSource] = instantiable.moduleName
+		}
+		let typeNames = Set(additionalMocksToGenerate).filter { moduleNameByTypeName[$0] != nil }.sorted()
+		guard !typeNames.isEmpty else { return }
+		throw AdditionalMocksNameNoInstantiableError(sourceDiagnostics: typeNames.map { typeName in
+			SourceDiagnostic(
+				severity: .error,
+				location: declarationLocation,
+				message: "`\(typeName)` already has a public `mock()` generated by `\(moduleNameByTypeName[typeName] ?? "")`. Remove it from \(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel) and call `\(typeName).mock()`.",
 			)
 		})
 	}

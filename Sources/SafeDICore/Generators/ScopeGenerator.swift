@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 import Foundation
+import SwiftParser
 import SwiftSyntax
 
 /// A model capable of generating code for a scope’s dependency tree.
@@ -40,6 +41,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		isPropertyCycle: Bool,
 		constructionComments: Scope.ConstructionComments,
 		seamCall: SeamCall? = nil,
+		publicMockCall: PublicMockCall? = nil,
 		seamRoot: SeamRoot? = nil,
 		holeCallArguments: [HoleCallArgument] = [],
 		passedUpHoles: [SeamSignature.Hole] = [],
@@ -48,6 +50,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fillKey: String? = nil,
 	) {
 		self.constructionComments = constructionComments
+		self.publicMockCall = publicMockCall
 		self.holeCallArguments = holeCallArguments
 		self.fillKey = fillKey
 		ownerPropertyStack = []
@@ -224,6 +227,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			})
 			: []
+		// The properties this scope's own dependencies receive.
+		var ownReceivedProperties = Set<Property>()
 		for dependency in instantiable.dependencies {
 			let receivedProperty: Property
 			let onlyIfAvailable: Bool
@@ -245,12 +250,50 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				onlyIfAvailable = isOnlyIfAvailable
 			}
 			receivedProperties.insert(receivedProperty)
+			ownReceivedProperties.insert(receivedProperty)
 			if !onlyIfAvailable {
 				requiredReceivedProperties.insert(receivedProperty)
 			}
 		}
 		self.receivedProperties = receivedProperties
 		self.requiredReceivedProperties = requiredReceivedProperties
+		// The properties only the leaves that call another module's public mock receive: each receives them only if
+		// available, and passes them where the tree provides them. Nearly every subtree calls no public mock.
+		var receivedOnlyByPublicMockCalls = Set<Property>()
+		if publicMockCall != nil {
+			for dependency in instantiable.dependencies where dependency.source == .received(onlyIfAvailable: true) {
+				receivedOnlyByPublicMockCalls.insert(dependency.property)
+			}
+		}
+		for child in propertiesToGenerate {
+			for property in child.receivedOnlyByPublicMockCalls where isReceivedFromAncestors(property) {
+				receivedOnlyByPublicMockCalls.insert(property)
+			}
+		}
+		if !receivedOnlyByPublicMockCalls.isEmpty {
+			// A property another receiver receives is not only the leaves'.
+			for child in propertiesToGenerate {
+				receivedOnlyByPublicMockCalls.subtract(child.receivedProperties.subtracting(child.receivedOnlyByPublicMockCalls))
+			}
+			if publicMockCall == nil {
+				receivedOnlyByPublicMockCalls.subtract(ownReceivedProperties)
+			}
+		}
+		self.receivedOnlyByPublicMockCalls = receivedOnlyByPublicMockCalls
+		// Of those, the ones some call passes: the tier it reaches takes them. Others are omitted by every call.
+		var passedByPublicMockCalls = Set<Property>()
+		if !receivedOnlyByPublicMockCalls.isEmpty {
+			if let publicMockCall {
+				for parameter in publicMockCall.passedParameters where parameter.dependency.source == .received(onlyIfAvailable: true) {
+					passedByPublicMockCalls.insert(parameter.dependency.property)
+				}
+			}
+			for child in propertiesToGenerate {
+				passedByPublicMockCalls.formUnion(child.passedByPublicMockCalls)
+			}
+			passedByPublicMockCalls.formIntersection(receivedOnlyByPublicMockCalls)
+		}
+		self.passedByPublicMockCalls = passedByPublicMockCalls
 		var unwrappedOptionalRequiredReceivedProperties = Set<Property>()
 		for property in requiredReceivedProperties where property.typeDescription.isOptional {
 			unwrappedOptionalRequiredReceivedProperties.insert(property.asUnwrappedProperty)
@@ -346,6 +389,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			declarationReference: declarationReference,
 		)
 		receivedProperties = [fulfillingProperty]
+		receivedOnlyByPublicMockCalls = []
+		passedByPublicMockCalls = []
 		if onlyIfAvailable {
 			requiredReceivedProperties = []
 			unwrappedOptionalRequiredReceivedProperties = []
@@ -384,6 +429,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		aliasPropertyIsProvidedByEnclosingScope = isProvidedByEnclosingScope
 		// An alias constructs nothing.
 		constructionComments = Scope.ConstructionComments()
+		publicMockCall = nil
 		ownerPropertyStack = []
 		holeCallArguments = []
 		passedUpHoles = []
@@ -410,6 +456,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		scopeData = .hole(property: holeProperty, erasedToConcreteExistential: erasedToConcreteExistential, site: site)
 		self.ownerPropertyStack = ownerPropertyStack
 		receivedProperties = []
+		receivedOnlyByPublicMockCalls = []
+		passedByPublicMockCalls = []
 		requiredReceivedProperties = []
 		unwrappedOptionalRequiredReceivedProperties = []
 		onlyIfAvailableUnwrappedReceivedProperties = []
@@ -436,6 +484,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		property = holeProperty
 		aliasPropertyIsProvidedByEnclosingScope = false
 		constructionComments = Scope.ConstructionComments()
+		publicMockCall = nil
 		holeCallArguments = []
 		passedUpHoles = []
 		stageCalls = []
@@ -529,6 +578,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// Used both to order child generation (dependencies before dependents) and by mock
 	/// generation to surface dependencies the tree does not itself provide.
 	let receivedProperties: Set<Property>
+	/// The properties among `receivedProperties` that only leaves calling another module's public mock receive, each
+	/// only if available (see `Scope.publicMockCall`): a mock takes no parameter or override for them.
+	let receivedOnlyByPublicMockCalls: Set<Property>
+	/// The properties among `receivedOnlyByPublicMockCalls` that some call passes, since the tier it reaches takes them.
+	let passedByPublicMockCalls: Set<Property>
 
 	/// The generators of this scope's children, in declaration order, for a walk of a seam's tree that reads what
 	/// its generators found. Every generator but the root's is a child of exactly one other.
@@ -951,6 +1005,145 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 		return omissions
+	}
+
+	/// A value a mock tree holds for a parameter that the tier of a public mock it calls omits, which the call passes
+	/// `nil` for although the receivers inside the public mock's tree, built inline, would be handed the value.
+	struct PublicMockTierOmission: Sendable {
+		/// The leaf that calls the public mock.
+		let publicMockCall: PublicMockCall
+		/// The parameter the tier omits.
+		let parameter: PublicMockParameter
+		/// The property the leaf receives for the parameter.
+		let receivedProperty: Property
+		/// The declaration whose binding the receivers would read built inline: the property it declares, and the type
+		/// that declares it, and where.
+		let providerProperty: Property
+		let providerDeclaringType: TypeDescription
+		let providerDeclarationLocation: Dependency.DeclarationLocation?
+	}
+
+	/// Every value the mock tree rooted at this scope holds for a parameter that a tier of a public mock it calls omits,
+	/// in the order the tree's code is generated: at each call, each parameter the tier omits that the call's leaf –
+	/// which declares the omitted parameters as receives only if available – would be handed a binding for rather than
+	/// `nil`, as generation decides it (`unavailableProperties`), located at the closest declaration of its label.
+	func publicMockTierOmissions(ofTreeRootedAt instantiable: Instantiable) async -> [PublicMockTierOmission] {
+		await publicMockTierOmissions(of: instantiable, propertiesGeneratedLater: [], declarationsByLabel: [:])
+	}
+
+	private func publicMockTierOmissions(
+		of instantiable: Instantiable,
+		propertiesGeneratedLater: Set<Property>,
+		declarationsByLabel: [String: [VisibleDeclaration]],
+	) async -> [PublicMockTierOmission] {
+		let declaringType = instantiable.concreteInstantiable
+		var declarationLocationByProperty = [Property: Dependency.DeclarationLocation?]()
+		for dependency in instantiable.dependencies where !dependency.source.isReceived {
+			declarationLocationByProperty[dependency.property] = dependency.declarationLocation
+		}
+		func visibleDeclaration(of property: Property, instanceProperty: Property?) -> VisibleDeclaration {
+			VisibleDeclaration(
+				property: property,
+				instanceProperty: instanceProperty,
+				// A property a mock root promotes is declared by no type of the tree.
+				declaringType: declarationLocationByProperty[property] == nil ? nil : declaringType,
+				declarationLocation: declarationLocationByProperty[property] ?? instantiable.declarationLocation,
+				sendableBuilderDepth: 0,
+			)
+		}
+		var scopeDeclarationsByLabel = [String: [VisibleDeclaration]]()
+		for dependency in instantiable.dependencies where dependency.source == .forwarded {
+			scopeDeclarationsByLabel[dependency.property.label, default: []].append(visibleDeclaration(
+				of: dependency.property,
+				instanceProperty: dependency.lazilyInstantiatedInstanceProperty,
+			))
+		}
+		let orderedChildren = orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater)
+		for child in orderedChildren where child.generator.uncreatedAliasProperty(unavailableProperties: child.unavailableProperties) == nil {
+			if let property = child.generator.property {
+				scopeDeclarationsByLabel[property.label, default: []].append(visibleDeclaration(
+					of: property,
+					instanceProperty: child.generator.declaredLazilyInstantiatedInstanceProperty,
+				))
+			}
+		}
+		var childDeclarationsByLabel = declarationsByLabel
+		childDeclarationsByLabel.merge(scopeDeclarationsByLabel) { _, scopeDeclarations in scopeDeclarations }
+
+		var omissions = [PublicMockTierOmission]()
+		for child in orderedChildren {
+			guard case let .property(childInstantiable, _, _, _, isPropertyCycle, _) = child.generator.scopeData,
+			      !isPropertyCycle
+			else { continue }
+			if let publicMockCall = child.generator.publicMockCall {
+				for parameter in publicMockCall.omittedParameters {
+					// The leaf receives the parameter only if available, as its optional form: generation would pass it
+					// `nil` exactly when it is among the leaf's unavailable properties.
+					guard case let .received(property, _) = parameter.role,
+					      let leafDependency = childInstantiable.dependencies.first(where: { $0.property.label == property.label }),
+					      !child.unavailableProperties.contains(leafDependency.property)
+					else { continue }
+					let unwrappedProperty = leafDependency.property.asUnwrappedProperty
+					guard let provider = childDeclarationsByLabel[property.label]?.first(where: {
+						$0.property.asUnwrappedProperty == unwrappedProperty || $0.instanceProperty?.asUnwrappedProperty == unwrappedProperty
+					}) else { continue }
+					omissions.append(PublicMockTierOmission(
+						publicMockCall: publicMockCall,
+						parameter: parameter,
+						receivedProperty: property,
+						providerProperty: provider.property,
+						// A property the mock root promotes is the mocked type's to provide.
+						providerDeclaringType: provider.declaringType ?? declaringType,
+						providerDeclarationLocation: provider.declarationLocation,
+					))
+				}
+			} else {
+				await omissions.append(contentsOf: child.generator.publicMockTierOmissions(
+					of: childInstantiable,
+					propertiesGeneratedLater: child.propertiesGeneratedLater,
+					declarationsByLabel: childDeclarationsByLabel,
+				))
+			}
+		}
+		return omissions
+	}
+
+	/// Each call in the mock tree rooted at this scope of another module's public mock whose condition the calling
+	/// module's mocks do not compile under, with the dependency in the tree that leads to it.
+	func publicMockCallsUnderOtherMockCondition(ofTreeRootedAt instantiable: Instantiable) async -> [PublicMockCallUnderOtherMockCondition] {
+		var calls = [PublicMockCallUnderOtherMockCondition]()
+		// Depth first, on a stack of its own, since a mock tree can be as deep as the module has types.
+		var scopesToVisit = [(generator: self, instantiable: instantiable)]
+		while let (generator, instantiable) = scopesToVisit.popLast() {
+			for child in generator.propertiesToGenerate {
+				guard case let .property(childInstantiable, property, _, _, isPropertyCycle, _) = child.scopeData, !isPropertyCycle else { continue }
+				if let publicMockCall = child.publicMockCall {
+					if !publicMockCall.mockConditionsAgree {
+						calls.append(PublicMockCallUnderOtherMockCondition(
+							publicMockCall: publicMockCall,
+							referenceLocation: instantiable.dependencies.first { $0.property.label == property.label }?.declarationLocation ?? instantiable.declarationLocation,
+						))
+					}
+				} else {
+					scopesToVisit.append((generator: child, instantiable: childInstantiable))
+				}
+			}
+		}
+		return calls
+	}
+
+	/// The concrete type of every scope the tree rooted at this scope builds, this one's excepted.
+	func concreteTypesOfTree() async -> Set<TypeDescription> {
+		var concreteTypes = Set<TypeDescription>()
+		// A stack of its own, since a tree can be as deep as the module has types.
+		var generatorsToVisit = [self]
+		while let generator = generatorsToVisit.popLast() {
+			if case let .property(instantiable, _, _, _, _, _) = generator.scopeData {
+				concreteTypes.insert(instantiable.concreteInstantiable)
+			}
+			generatorsToVisit.append(contentsOf: generator.propertiesToGenerate)
+		}
+		return concreteTypes
 	}
 
 	/// Why an `onlyIfAvailable` alias in a seam's tree may not be created.
@@ -1497,6 +1690,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// default-valued parameter as a `@Sendable` closure, which the mock body calls where it builds the type,
 		/// so the body must know which structs do (`resolveBuilderArguments`).
 		let sendableConfigurationTypeNames: Set<String>
+		/// What the module's public mocks share, when the module generates one (`generateMock: .public`).
+		let publicMockContext: PublicMockContext?
 	}
 
 	private let scopeData: ScopeData
@@ -1595,6 +1790,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The calls of a staged builder's stages made just before this scope's `@Sendable` builder function, each
 	/// binding the stage it returns: empty but where the seam's tree builds a hole beneath that function.
 	private let stageCalls: [String]
+	/// See `MockParameterNode.stageCalls`.
+	nonisolated var stageCallsBeforeBuilderFunction: [String] {
+		stageCalls
+	}
+
 	/// Whether this scope's generated subtree holds a site of a hole of the seam whose tree is generated: such a
 	/// child, a carrier, starts after its siblings that hold none (see `orderedPropertyToGenerateIndices`).
 	let containsBuildSite: Bool
@@ -1626,6 +1826,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	let property: Property?
 	/// The comments the generated code ends the lines that construct this scope's type with.
 	private let constructionComments: Scope.ConstructionComments
+	/// How a mock tree calls the public mock another module generated for this scope's type, or `nil` for a scope
+	/// that builds its type (see `Scope.publicMockCall`).
+	let publicMockCall: PublicMockCall?
+
+	/// For a scope that calls another module's public mock: what the call passes each builder it fills, by label.
+	nonisolated var holeArgumentValuesByLabel: [String: String] {
+		var valuesByLabel = [String: String]()
+		for holeCallArgument in holeCallArguments {
+			valuesByLabel[holeCallArgument.label] = holeCallArgument.value
+		}
+		return valuesByLabel
+	}
+
+	/// For a scope that calls another module's public mock and fills its builders, the code of the fills, which a mock
+	/// declares before the call: each builds the hole's property as the module that declares the fulfilling type builds
+	/// it. Empty until `prepareFillCode()` returns.
+	private(set) var fillCode = [String]()
+
+	/// Generates `fillCode`, which a mock's emission reads and cannot throw.
+	func prepareFillCode() async throws {
+		fillCode = try await generateProperties(
+			propertiesGeneratedLater: [],
+			enclosingFunctionNames: [:],
+			leadingMemberWhitespace: "",
+		)
+	}
 
 	private struct UnavailablePropertiesCacheKey: Hashable {
 		let unavailableProperties: Set<Property>
@@ -2196,7 +2422,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	private static let standardIndent = "    "
+	static let standardIndent = "    "
 
 	// MARK: Code Generation
 
@@ -2253,18 +2479,32 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			seamCall,
 		):
 			// This scope's own aliases that are not created although the scope building it cannot see it are passed `nil` too.
-			let argumentList = try instantiable.generateArgumentList(
-				unavailableProperties: unavailableProperties.union(uncreatedOnlyIfAvailableAliasesOfAliases(propertiesGeneratedLater: propertiesGeneratedLater)),
-				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
-			)
+			let argumentList = if publicMockCall != nil, let mockInitializer = instantiable.mockInitializer {
+				// A call of another module's public mock in a fill a mock declares, which passes each parameter of the tier
+				// in signature order, a builder it fills among them, and no `safeDIOverrides`: no override reaches a fill.
+				mockInitializer.arguments.map { argument in
+					let value = holeArgumentValuesByLabel[argument.innerLabel] ?? instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }).map { dependency in
+						unavailableProperties.contains(dependency.property) ? "nil" : argument.innerLabel
+					} ?? argument.innerLabel
+					return "\(argument.label.spelledAsArgumentLabel): \(value)"
+				}.joined(separator: ", ")
+			} else {
+				try instantiable.generateArgumentList(
+					unavailableProperties: unavailableProperties.union(uncreatedOnlyIfAvailableAliasesOfAliases(propertiesGeneratedLater: propertiesGeneratedLater)),
+					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+				)
+			}
 			let concreteTypeName = instantiable.concreteInstantiable.asSource
-			let instantiationDeclaration = if instantiable.declarationType.isExtension {
+			let instantiationDeclaration = if publicMockCall != nil {
+				"\(concreteTypeName).\(InstantiableVisitor.mockMethodName)"
+			} else if instantiable.declarationType.isExtension {
 				"\(concreteTypeName).\(InstantiableVisitor.instantiateMethodName)"
 			} else {
 				concreteTypeName
 			}
-			// A seam call passes a builder for each of the seam's holes after the tier's parameters.
-			let holeArgumentList = holeCallArguments.map { "\($0.label.spelledAsArgumentLabel): \($0.value)" }
+			// A seam call passes a builder for each of the seam's holes after the tier's parameters; a call of a public
+			// mock passes them among its arguments.
+			let holeArgumentList = publicMockCall == nil ? holeCallArguments.map { "\($0.label.spelledAsArgumentLabel): \($0.value)" } : []
 			let returnLineSansReturn = holeArgumentList.isEmpty
 				? "\(instantiationDeclaration)(\(argumentList))"
 				: "\(instantiationDeclaration)(\(([argumentList].filter { !$0.isEmpty } + holeArgumentList).joined(separator: ", ")))"
@@ -2513,7 +2753,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The declaration of `hole`'s scope type, nested in the seam: one struct of the values in scope at the site, or,
 	/// for a staged builder, an enum holding one struct per stage. Spelled `public`, as the guard enum is, so its
 	/// access is the seam's; each field at its own access.
-	private static func scopeTypeDeclaration(of hole: SeamSignature.Hole) -> String {
+	static func scopeTypeDeclaration(of hole: SeamSignature.Hole) -> String {
 		func structDeclaration(named name: String, fields: [SeamSignature.Hole.Field], indent: String) -> String {
 			guard !fields.isEmpty else { return "\(indent)public struct \(name) {}" }
 			return (["\(indent)public struct \(name) {"]
@@ -2536,7 +2776,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The binding a seam's tree makes at a site of `property`, a hole: the builder's last stage called with the
 	/// values in scope there. A constant is bound with its declared type, as inline binds an existential; a wrapper,
 	/// which the builder returns, without one.
-	private static func buildSiteCode(of property: Property, at site: SeamSignature.Hole) -> String {
+	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole) -> String {
 		let lastStageIndex = site.stages.count - 1
 		let stageFunction = lastStageIndex == 0 ? site.internalName : "\(site.internalName)_\(SeamSignature.Hole.stageName(at: lastStageIndex))"
 		let arguments = site.stages[lastStageIndex].map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.label)" }.joined(separator: ", ")
@@ -2768,11 +3008,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// and type a forwarded property of the mocked type has. Such an entry is named after its `LazilyInstantiated`,
 		/// and no receive of the forwarded property is passed it.
 		let lazilyInstantiatedPropertyByInstanceBesideForwardedProperty: [Property: Property]
+		/// The properties only the calls of other modules' public mocks in the tree receive that the mock takes no
+		/// parameter or override for (`receivedOnlyByPublicMockCallsLeftOut`).
+		let receivedOnlyByPublicMockCallsLeftOut: Set<Property>
 
 		struct RootDefaultParameter {
 			let label: String
 			let typeSource: String
 			let defaultExpression: String
+			/// The parameter's type, without `@escaping`.
+			let typeDescription: TypeDescription
 		}
 
 		struct UncoveredParameter {
@@ -2807,10 +3052,102 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let localName: String
 	}
 
+	/// The names of a mock root's flat parameters, which its `mock()` and a public mock's signature share. See
+	/// `mockRootParameterNames(of:)`.
+	struct MockRootParameterNames {
+		/// The names of the tree's bindings at the mock root's level.
+		let treeBindingNames: Set<String>
+		/// The names the builder functions beneath the mock root's level declare, which no parameter takes.
+		let namesDeclaredInBuilderFunctions: Set<String>
+		/// The labels of the forwarded, default-valued, uncovered and only-if-available parameters, which keep them.
+		let otherFlatLabels: [String]
+		/// The name of each of `MockRootParameters.flatReceivedProperties`, in order.
+		let flatReceivedNames: [String]
+		/// The `onlyIfAvailable` received properties nothing in the mock provides, each with its name.
+		let onlyIfAvailableOverrides: [OnlyIfAvailableOverride]
+	}
+
+	/// The properties only the calls of other modules' public mocks in a mock's tree receive that the mock takes no
+	/// parameter or override for: every one of them, unless the mocked type's mock is public, which takes those a call
+	/// passes and leaves out only those every call omits.
+	static func receivedOnlyByPublicMockCallsLeftOut(receivedOnlyByPublicMockCalls: Set<Property>, passedByPublicMockCalls: Set<Property>, mockedType: Instantiable) -> Set<Property> {
+		mockedType.generateMock == .public
+			? receivedOnlyByPublicMockCalls.subtracting(passedByPublicMockCalls)
+			: receivedOnlyByPublicMockCalls
+	}
+
+	/// The names of the flat parameters of a mock root with `parameters`.
+	static func mockRootParameterNames(of parameters: MockRootParameters) -> MockRootParameterNames {
+		let treePropertyNodes = parameters.parameterTree.propertyNodes
+		let namesDeclaredInBuilderFunctions = Self.namesDeclaredInBuilderFunctions(of: treePropertyNodes)
+		let treeBindingNames = Self.bindingNames(of: treePropertyNodes, labels: Set(treePropertyNodes.map(\.propertyLabel)), labelMap: parameters.rootLabelMap)
+		let uncoveredDependencyNames = parameters.flatUncoveredParameters.map(\.label)
+		// Disambiguate flat received parameter labels when collisions exist.
+		// Include onlyIfAvailable labels so flat params with the same label
+		// get disambiguated: an onlyIfAvailable override keeps its label over
+		// a flat received parameter.
+		// Forwarded parameters keep their original labels (must match init signature).
+		// A flat received parameter is named apart from the root's tree bindings too: a tree node with
+		// its label and another type does not provide it, and the parameter would be hidden by it.
+		let otherFlatLabels = parameters.forwardedDependencies.map(\.property.label)
+			+ parameters.rootDefaultParameters.map(\.label)
+			+ uncoveredDependencyNames
+			+ parameters.onlyIfAvailableReceivedProperties.map(\.label)
+		// Map of (label → (type → disambiguatedLabel)) for flat received
+		// parameters whose label collided with another flat parameter. Builder calls
+		// for child nodes that would reference the original label must substitute
+		// the disambiguated name so the generated code references a real binding.
+		// The instance of a `LazilyInstantiated` beside a forwarded property is named after
+		// its `LazilyInstantiated`, and is only ever read by the wrapper bound below, so a
+		// receive of the forwarded property is not passed it.
+		let flatReceivedNames = Self.namesApart(
+			preferredNames: parameters.flatReceivedProperties.map(\.label),
+			typeDescriptions: parameters.flatReceivedProperties.map { property in
+				parameters.lazilyInstantiatedPropertyByInstanceBesideForwardedProperty[property]?.typeDescription ?? property.typeDescription
+			},
+			namesInScope: Set(otherFlatLabels).union(treeBindingNames),
+			reservedNames: namesDeclaredInBuilderFunctions,
+		)
+		let onlyIfAvailableOverrides: [OnlyIfAvailableOverride] = if parameters.onlyIfAvailableReceivedProperties.isEmpty {
+			[]
+		} else {
+			Self.onlyIfAvailableOverrides(
+				for: parameters.onlyIfAvailableReceivedProperties,
+				namedAfter: parameters.lazilyInstantiatedPropertyByInstanceBesideForwardedProperty,
+				namesInMockScope: Set(parameters.forwardedDependencies.map(\.property.label))
+					.union(parameters.rootDefaultParameters.map(\.label))
+					.union(uncoveredDependencyNames)
+					.union(treeBindingNames),
+				reservedNames: Set(flatReceivedNames).union(namesDeclaredInBuilderFunctions),
+			)
+		}
+		return MockRootParameterNames(
+			treeBindingNames: treeBindingNames,
+			namesDeclaredInBuilderFunctions: namesDeclaredInBuilderFunctions,
+			otherFlatLabels: otherFlatLabels,
+			flatReceivedNames: flatReceivedNames,
+			onlyIfAvailableOverrides: onlyIfAvailableOverrides,
+		)
+	}
+
 	/// The parameters this scope's `mock()` takes as a mock root. See `MockRootParameters`.
 	func mockRootParameters(instantiable: Instantiable) async -> MockRootParameters {
 		// 1. Build the parameter tree.
 		let parameterTree = await rootMockParameterTree
+		// A public mock another module generated builds what its call does not pass, so `mock()` takes no parameter or
+		// override for what only such calls receive, unless it is itself a public mock, which takes what the calls pass
+		// as parameters that default to `nil`, so that its own callers can hand one instance down the chain.
+		let receivedOnlyByPublicMockCallsLeftOut = Self.receivedOnlyByPublicMockCallsLeftOut(
+			receivedOnlyByPublicMockCalls: receivedOnlyByPublicMockCalls,
+			passedByPublicMockCalls: passedByPublicMockCalls,
+			mockedType: instantiable,
+		)
+		let receivedProperties = receivedProperties.subtracting(receivedOnlyByPublicMockCallsLeftOut)
+		let onlyIfAvailableUnwrappedReceivedProperties = receivedOnlyByPublicMockCalls.isEmpty
+			? onlyIfAvailableUnwrappedReceivedProperties
+			: onlyIfAvailableUnwrappedReceivedProperties.filter { property in
+				receivedProperties.contains(property) || receivedProperties.contains(property.asOptionalProperty)
+			}
 
 		// 2. Identify flat parameters.
 
@@ -2843,6 +3180,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					label: argument.label,
 					typeSource: argument.typeDescription.asFunctionParameter.asSource,
 					defaultExpression: defaultExpression,
+					typeDescription: argument.typeDescription.strippingEscaping,
 				))
 				parametersKeepingTheirLabels.append(Property(label: argument.label, typeDescription: argument.typeDescription))
 			}
@@ -2884,7 +3222,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// wrapper the mocked type instantiates and the mock cannot build provides only that wrapper: `mock()` takes the
 		// wrapper, which makes no wrapper of the other kind, so the mock takes the instance as well, as it builds a
 		// wrapper of the other kind beside a wrapper it builds.
-		let mockedTypeUncoveredDependencies = Self.uncoveredInstantiatedDependencies(ofMockedType: instantiable, treePropertyNodes: treePropertyNodes)
+		let mockedTypeUncoveredDependencies = Self.uncoveredInstantiatedDependencies(ofMockedType: instantiable, treePropertyNodes: treePropertyNodes, holeSiteProperties: Set(parameterTree.holeSiteProperties))
 		let mockedTypeUncoveredProperties = Set(mockedTypeUncoveredDependencies.map(\.property))
 		let mockedTypeUncoveredWrapperInstanceProperties = Set(mockedTypeUncoveredDependencies.compactMap(\.lazilyInstantiatedInstanceProperty))
 		/// Whether the tree provides `property` to the receives the caller of `mock()` would otherwise pass it to by
@@ -3048,6 +3386,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			flatUncoveredParameters: flatUncoveredParameters,
 			lazilyInstantiatedReceivedProperties: lazilyInstantiatedReceivedProperties,
 			lazilyInstantiatedPropertyByInstanceBesideForwardedProperty: lazilyInstantiatedPropertyByInstanceBesideForwardedProperty,
+			receivedOnlyByPublicMockCallsLeftOut: receivedOnlyByPublicMockCallsLeftOut,
 		)
 	}
 
@@ -3075,6 +3414,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			return mockReturnType.asSource
 		}()
 
+		// A public mock (`generateMock: .public`) is generated by the module that declares the type, which knows the
+		// context every public mock of the module shares.
+		let publicMock = instantiable.generateMock == .public ? context.publicMockContext : nil
+
 		// 1. Build the parameter tree and identify the flat parameters.
 		let parameters = await mockRootParameters(instantiable: instantiable)
 		let parameterTree = parameters.parameterTree
@@ -3082,53 +3425,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let rootConstructionInitializer = parameters.rootConstructionInitializer
 		let rootDefaultParameters = parameters.rootDefaultParameters
 		let treePropertyNodes = parameterTree.propertyNodes
-		let treePropertyLabels = Set(treePropertyNodes.map(\.propertyLabel))
 		let flatReceivedProperties = parameters.flatReceivedProperties
-		let onlyIfAvailableReceivedProperties = parameters.onlyIfAvailableReceivedProperties
 		let flatUncoveredParameters = parameters.flatUncoveredParameters
 		// The mocked type declares these for its whole tree: `mock()` takes each as a parameter.
-		let mockedTypeUncoveredDependencies = Self.uncoveredInstantiatedDependencies(ofMockedType: instantiable, treePropertyNodes: treePropertyNodes)
+		let mockedTypeUncoveredDependencies = Self.uncoveredInstantiatedDependencies(ofMockedType: instantiable, treePropertyNodes: treePropertyNodes, holeSiteProperties: Set(parameterTree.holeSiteProperties))
 		let lazilyInstantiatedReceivedProperties = parameters.lazilyInstantiatedReceivedProperties
 		let lazilyInstantiatedPropertyByInstanceBesideForwardedProperty = parameters.lazilyInstantiatedPropertyByInstanceBesideForwardedProperty
 
 		// The names `mockRootParameters` named the uncovered dependencies apart from, which the rest of the mock
 		// is named apart from too.
-		let namesDeclaredInBuilderFunctions = Self.namesDeclaredInBuilderFunctions(of: treePropertyNodes)
+		let parameterNames = Self.mockRootParameterNames(of: parameters)
+		let namesDeclaredInBuilderFunctions = parameterNames.namesDeclaredInBuilderFunctions
 		let rootLabelMap = parameters.rootLabelMap
-		let treeBindingNames = Self.bindingNames(of: treePropertyNodes, labels: treePropertyLabels, labelMap: rootLabelMap)
+		let treeBindingNames = parameterNames.treeBindingNames
 		let uncoveredDependencyNames = flatUncoveredParameters.map(\.label)
 		var uncoveredDependencyNameMap = [String: [TypeDescription: String]]()
 		for uncoveredParameter in flatUncoveredParameters where uncoveredParameter.label != uncoveredParameter.property.label {
 			uncoveredDependencyNameMap[uncoveredParameter.property.label, default: [:]][uncoveredParameter.property.typeDescription] = uncoveredParameter.label
 		}
-
-		// Disambiguate flat received parameter labels when collisions exist.
-		// Include onlyIfAvailable labels so flat params with the same label
-		// get disambiguated: an onlyIfAvailable override keeps its label over
-		// a flat received parameter.
-		// Forwarded parameters keep their original labels (must match init signature).
-		// A flat received parameter is named apart from the root's tree bindings too: a tree node with
-		// its label and another type does not provide it, and the parameter would be hidden by it.
-		let otherFlatLabels = forwardedDependencies.map(\.property.label)
-			+ rootDefaultParameters.map(\.label)
-			+ uncoveredDependencyNames
-			+ onlyIfAvailableReceivedProperties.map(\.label)
-		let allFlatLabels = otherFlatLabels + flatReceivedProperties.map(\.label)
-		// Map of (label → (type → disambiguatedLabel)) for flat received
-		// parameters whose label collided with another flat parameter. Builder calls
-		// for child nodes that would reference the original label must substitute
-		// the disambiguated name so the generated code references a real binding.
-		// The instance of a `LazilyInstantiated` beside a forwarded property is named after
-		// its `LazilyInstantiated`, and is only ever read by the wrapper bound below, so a
-		// receive of the forwarded property is not passed it.
-		let flatReceivedNames = Self.namesApart(
-			preferredNames: flatReceivedProperties.map(\.label),
-			typeDescriptions: flatReceivedProperties.map { property in
-				lazilyInstantiatedPropertyByInstanceBesideForwardedProperty[property]?.typeDescription ?? property.typeDescription
-			},
-			namesInScope: Set(otherFlatLabels).union(treeBindingNames),
-			reservedNames: namesDeclaredInBuilderFunctions,
-		)
+		let allFlatLabels = parameterNames.otherFlatLabels + flatReceivedProperties.map(\.label)
+		let flatReceivedNames = parameterNames.flatReceivedNames
 		var flatParameterDisambiguationMap = [String: [TypeDescription: String]]()
 		for (property, name) in zip(flatReceivedProperties, flatReceivedNames)
 			where name != property.label && lazilyInstantiatedPropertyByInstanceBesideForwardedProperty[property] == nil
@@ -3137,25 +3453,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		// safedi-source-rule: allow uniqueKeysWithValues — the keys are the elements of a set, `receivedParameterProperties`.
 		let flatReceivedNameByProperty = Dictionary(uniqueKeysWithValues: zip(flatReceivedProperties, flatReceivedNames))
+		// A builder the tree passes up that a `@Sendable` builder function captures is taken `@Sendable`.
+		let sendablePassedUpBuilders = parameters.parameterTree.passedUpBuildersCapturedBySendableFunctions
 		let flatReceivedParameters = zip(flatReceivedProperties, flatReceivedNames).map { property, name in
 			(
 				label: name,
-				typeSource: property.typeDescription.asFunctionParameter.asSource,
+				typeSource: sendablePassedUpBuilders.contains(property)
+					? TypeDescription.attributed(property.typeDescription, specifiers: [], attributes: ["escaping", "Sendable"]).asSource
+					: property.typeDescription.asFunctionParameter.asSource,
 			)
 		}
-		let onlyIfAvailableOverrides: [OnlyIfAvailableOverride] = if onlyIfAvailableReceivedProperties.isEmpty {
-			[]
-		} else {
-			Self.onlyIfAvailableOverrides(
-				for: onlyIfAvailableReceivedProperties,
-				namedAfter: lazilyInstantiatedPropertyByInstanceBesideForwardedProperty,
-				namesInMockScope: Set(forwardedDependencies.map(\.property.label))
-					.union(rootDefaultParameters.map(\.label))
-					.union(uncoveredDependencyNames)
-					.union(treeBindingNames),
-				reservedNames: Set(flatReceivedParameters.map(\.label)).union(namesDeclaredInBuilderFunctions),
-			)
-		}
+		let onlyIfAvailableOverrides = parameterNames.onlyIfAvailableOverrides
 		// Wrap the instance of each lazily instantiated dependency the mock cannot build, under a name of its
 		// own. Types that receive the dependency as `LazilyInstantiated` are passed that name. Rebinding it
 		// under the dependency's label where they are built would hide the parameter that holds the instance
@@ -3219,15 +3527,26 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		// 3. Simple mock case — no tree, no flat parameters.
-		let hasTree = !parameterTree.isEmpty || !onlyIfAvailableOverrides.isEmpty
+		// A public mock takes each property received only if available as a parameter, not an override.
+		let hasTree = !parameterTree.isEmpty || (publicMock == nil && !onlyIfAvailableOverrides.isEmpty)
 		// SafeDIOverrides is only needed when there are property children or
 		// onlyIfAvailable entries. Alias-only trees emit `let` bindings directly
 		// in the mock body and require no override storage.
-		let hasOverridableTree = !treePropertyNodes.isEmpty || !onlyIfAvailableOverrides.isEmpty
+		let hasOverridableTree = !treePropertyNodes.isEmpty || (publicMock == nil && !onlyIfAvailableOverrides.isEmpty)
 		let hasFlatParameters = !forwardedDependencies.isEmpty
 			|| !rootDefaultParameters.isEmpty
 			|| !flatReceivedParameters.isEmpty
 			|| !flatUncoveredParameters.isEmpty
+			|| (publicMock != nil && !onlyIfAvailableOverrides.isEmpty)
+		let publicMockPlan = publicMock.map { publicMock in
+			Self.publicMockPlan(
+				of: instantiable,
+				parameters: parameters,
+				parameterNames: parameterNames,
+				forwardedParameterMockDefaults: context.forwardedParameterMockDefaults,
+				context: publicMock,
+			)
+		}
 
 		guard hasTree || hasFlatParameters else {
 			let argumentList = try instantiable.generateArgumentList(
@@ -3242,13 +3561,27 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				"\(typeName)(\(argumentList))"
 			}
-			let code = """
-			extension \(typeName) {
-			    \(mockAttributesPrefix)static func mock() -> \(mockMethodReturnType) {
-			        \(construction)\(mockRootConstructionLineEnd(instantiable: instantiable))
-			    }
+			let code = if let publicMockPlan {
+				"""
+				extension \(typeName) {
+				    \(mockAttributesPrefix)public static func mock() -> \(mockMethodReturnType) {
+				        \(construction)\(mockRootConstructionLineEnd(instantiable: instantiable))
+				    }
+				}
+
+				extension \(typeName) {
+				    public enum \(publicMockPlan.guardTypeName) {}
+				}
+				"""
+			} else {
+				"""
+				extension \(typeName) {
+				    \(mockAttributesPrefix)static func mock() -> \(mockMethodReturnType) {
+				        \(construction)\(mockRootConstructionLineEnd(instantiable: instantiable))
+				    }
+				}
+				"""
 			}
-			"""
 			return wrapInConditionalCompilation(code, mockConditionalCompilation: context.mockConditionalCompilation)
 		}
 
@@ -3256,13 +3589,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var lines = [String]()
 		lines.append("extension \(typeName) {")
 
+		if let publicMockPlan, !publicMockPlan.providerDeclarations.isEmpty {
+			lines.append(contentsOf: publicMockPlan.providerDeclarations)
+			lines.append("")
+		}
+		if let publicMockPlan, !publicMockPlan.holes.isEmpty {
+			// The scope struct of each hole's site, which the builder `mock()` takes is handed.
+			for hole in publicMockPlan.holes {
+				lines.append(Self.scopeTypeDeclaration(of: hole))
+				lines.append("")
+			}
+		}
 		if hasOverridableTree {
-			lines.append(Self.generateSafeDIOverridesStruct(
-				rootChildren: treePropertyNodes,
-				rootLabelMap: rootLabelMap,
-				onlyIfAvailableOverrides: onlyIfAvailableOverrides,
-				indent: indent,
-			))
+			if let publicMock, let publicMockPlan {
+				lines.append(Self.publicSafeDIOverridesStruct(
+					rootChildren: treePropertyNodes,
+					rootLabelMap: rootLabelMap,
+					defaultFields: publicMockPlan.defaultFields,
+					mockedType: instantiable,
+					context: publicMock,
+					indent: indent,
+				))
+			} else {
+				lines.append(Self.generateSafeDIOverridesStruct(
+					rootChildren: treePropertyNodes,
+					rootLabelMap: rootLabelMap,
+					onlyIfAvailableOverrides: onlyIfAvailableOverrides,
+					indent: indent,
+				))
+			}
 			lines.append("")
 		}
 
@@ -3332,12 +3687,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 
-		lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
-		lines.append(mockParameters.enumerated().map { index, mockParameter in
-			let separator = index < mockParameters.count - 1 ? "," : ""
-			return mockParameter + separator + (mockParameterComments[index].map { " \($0)" } ?? "")
-		}.joined(separator: "\n"))
-		lines.append("\(indent)) -> \(mockMethodReturnType) {")
+		// A public mock's tiers are emitted around its body once the body is generated.
+		if publicMockPlan == nil {
+			lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
+			lines.append(mockParameters.enumerated().map { index, mockParameter in
+				let separator = index < mockParameters.count - 1 ? "," : ""
+				return mockParameter + separator + (mockParameterComments[index].map { " \($0)" } ?? "")
+			}.joined(separator: "\n"))
+			lines.append("\(indent)) -> \(mockMethodReturnType) {")
+		}
+		let bodyStartIndex = lines.count
+		if let publicMockPlan {
+			lines.append(contentsOf: publicMockPlan.defaultResolutions)
+		}
 
 		// Generate mock body.
 		// Sibling-disambig map renames local `let` bindings when the root's own
@@ -3459,12 +3821,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// The autoclosure parameters are read first: the tree's builder functions call the locals.
 		lines.append(contentsOf: sendableAutoclosureBindings)
 		if hasTree {
-			// Bind onlyIfAvailable overrides first — tree bindings may reference them.
-			for onlyIfAvailableOverride in onlyIfAvailableOverrides {
+			// Bind onlyIfAvailable overrides first — tree bindings may reference them. A public mock's are parameters.
+			for onlyIfAvailableOverride in onlyIfAvailableOverrides where publicMock == nil {
 				lines.append("\(bodyIndent)let \(onlyIfAvailableOverride.name): \(onlyIfAvailableOverride.typeDescription.asSource) = \(ReservedName.mockOverridesParameterName).\(onlyIfAvailableOverride.name)")
 			}
 			lines.append(contentsOf: lazilyInstantiatedBindings)
 			lines.append(contentsOf: rootReceiverBindings)
+			for fillingGenerator in rootItems.fillingGenerators {
+				try await fillingGenerator.prepareFillCode()
+			}
 			let bodyBindings = await Self.generateMockBodyBindings(
 				items: rootItems,
 				propertyNodeLabelMap: rootLabelMap,
@@ -3479,6 +3844,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				overridePathReachable: true,
 				handWrittenMockDefaultParameters: context.handWrittenMockDefaultParameters,
 				sendableConfigurationTypeNames: context.sendableConfigurationTypeNames,
+				publicMock: publicMock.map { publicMock in
+					PublicMockEmission(
+						promotedParameterNames: publicMockPlan?.promotedParameterNames ?? [:],
+						context: publicMock,
+						sendableConfigurationTypeNames: context.sendableConfigurationTypeNames,
+					)
+				},
 			)
 			lines.append(contentsOf: bodyBindings)
 		} else {
@@ -3490,6 +3862,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let returnArgumentList = try generateReturnArgumentList(
 			instantiable: instantiable,
 			disambiguationMap: returnDisambiguationMap,
+			defaultValues: publicMockPlan?.constructionDefaultValues ?? [:],
 		)
 		let mockMethodName = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
 		let returnConstruction = if instantiable.mockInitializer != nil {
@@ -3500,8 +3873,25 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"\(typeName)(\(returnArgumentList))"
 		}
 		lines.append("\(bodyIndent)return \(returnConstruction)\(mockRootConstructionLineEnd(instantiable: instantiable))")
-		lines.append("\(indent)}")
-		lines.append("}")
+		if let publicMockPlan {
+			let body = Array(lines[bodyStartIndex...])
+			lines.removeSubrange(bodyStartIndex...)
+			lines.append(contentsOf: Self.publicMockTiers(
+				of: publicMockPlan,
+				typeName: typeName,
+				returnType: mockMethodReturnType,
+				attributesPrefix: mockAttributesPrefix,
+				narrowestBody: body,
+			))
+			lines.append("}")
+			lines.append("")
+			lines.append("extension \(typeName) {")
+			lines.append("\(indent)public enum \(publicMockPlan.guardTypeName) {}")
+			lines.append("}")
+		} else {
+			lines.append("\(indent)}")
+			lines.append("}")
+		}
 
 		let code = lines.joined(separator: "\n")
 		return wrapInConditionalCompilation(code, mockConditionalCompilation: context.mockConditionalCompilation)
@@ -3517,9 +3907,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// disambiguated name and this map remaps the reference. Flat-received
 	/// parameter renames must NOT be merged in: they target a separate mock
 	/// parameter, and the root's own dep must reference its own parameter.
+	/// - Parameter defaultValues: What a public mock passes for the mocked type's own default-valued parameters, by label,
+	///   when not the binding of the label.
 	private func generateReturnArgumentList(
 		instantiable: Instantiable,
 		disambiguationMap: [String: [TypeDescription: String]] = [:],
+		defaultValues: [String: String] = [:],
 	) throws -> String {
 		let constructionInitializer: Initializer? = if let mockInitializer = instantiable.mockInitializer {
 			mockInitializer
@@ -3560,7 +3953,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					parts.append("\(argument.label.spelledAsArgumentLabel): \(resolved)")
 				}
 			} else if argument.hasDefaultValue, argument.label != "_" {
-				parts.append("\(argument.label.spelledAsArgumentLabel): \(argument.label)")
+				parts.append("\(argument.label.spelledAsArgumentLabel): \(defaultValues[argument.label] ?? argument.label)")
 			}
 		}
 		return parts.joined(separator: ", ")
@@ -3726,6 +4119,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// All arguments from the init or customMock that will be used for construction.
 		/// Determines the builder closure signature (positional unlabeled parameters).
 		let constructionArguments: [Initializer.Argument]
+		/// The isolation the init or customMock spells (`Initializer.spelledIsolation`), which a public mock's
+		/// construction function that calls it mirrors.
+		let constructionIsolation: String?
 		/// The type's declared dependencies.
 		let dependencies: [Dependency]
 		/// The received dependencies that are in scope only as the instance of a `LazilyInstantiated` property.
@@ -3748,6 +4144,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let mockDeclarationLocation: Dependency.DeclarationLocation?
 		/// The comment that ends the line that constructs this node, or `nil` for none.
 		let constructionComment: String?
+		/// How the node calls the public mock another module generated for its type, which the tree cannot build
+		/// itself, or `nil` for a node built as its type's own module would build it.
+		let publicMockCall: PublicMockCall?
+		/// In a public mock's tree, the calls of the stages of staged builders whose next stage starts in this node's
+		/// `@Sendable` builder function, made before the function is declared (`SeamHoles.stageCalls(at:)`).
+		let stageCalls: [String]
+		/// For a node that calls another module's public mock and fills some of its builders, the generator of the call,
+		/// which holds the fills' code (`ScopeGenerator.fillCode`), and what the call passes each builder it fills, by
+		/// label.
+		let fillingGenerator: ScopeGenerator?
+		let holeArgumentValuesByLabel: [String: String]
 		/// What ends the line that constructs this node, after the construction.
 		var constructionLineEnd: String {
 			constructionComment.map { " \($0)" } ?? ""
@@ -3819,6 +4226,33 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// extension. Protocol extensions cannot contain nested type declarations.
 		var configurationTypeName: String {
 			"\(concreteType.asSource).\(Self.configurationStructName)"
+		}
+
+		/// The member of the enclosing overrides that configures this node when it calls a public mock that takes
+		/// `safeDIOverrides`: the mock's own `SafeDIOverrides`, with no builder, since the mock builds the tree. Inside a
+		/// `@Sendable` builder function, where the struct cannot be captured, a `@Sendable` closure that returns it.
+		/// `nil` for every other node.
+		func publicMockOverridesMember(sendable: Bool) -> (type: String, defaultValue: String)? {
+			guard let publicMockCall, publicMockCall.takesOverrides else { return nil }
+			let overridesType = "\(concreteType.asSource).SafeDIOverrides"
+			return sendable
+				? (type: "(@Sendable () -> \(overridesType))?", defaultValue: "nil")
+				: (type: overridesType, defaultValue: ".init()")
+		}
+
+		/// The call of the public mock this node calls (see `publicMockCall`), which takes `safeDIOverrides`: the tier's
+		/// parameters, and the member that configures the node, or the mock's default beneath a pruned edge, where the
+		/// node has none. An erased node wraps the call in its eraser, as `constructionExpression` wraps a construction.
+		/// - Parameter overridesIsSendableClosure: Whether the member that configures the node is a `@Sendable` closure
+		///   (`publicMockOverridesMember(sendable:)`).
+		func publicMockCallExpression(arguments: [String], overridesExpression: String?, overridesIsSendableClosure: Bool) -> String {
+			var labeledArguments = zip(callSiteArguments, arguments).map { "\($0.label.spelledAsArgumentLabel): \($1)" }
+			if let overridesExpression {
+				let overrides = overridesIsSendableClosure ? "\(overridesExpression)?() ?? .init()" : overridesExpression
+				labeledArguments.append("\(ReservedName.mockOverridesParameterName): \(overrides)")
+			}
+			let call = "\(concreteType.asSource).\(InstantiableVisitor.mockMethodName)(\(labeledArguments.joined(separator: ", ")))"
+			return erasedToConcreteExistential ? "\(concreteExistentialType.asSource)(\(call))" : call
 		}
 
 		/// Whether this argument is a non-dependency `_`-labeled defaulted
@@ -4138,6 +4572,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let fulfillingPropertyIsLazilyInstantiatedInstance: Bool
 		/// How the emitted binding refers to the alias property's declaration.
 		let declarationReference: AliasDeclarationReferences.Reference?
+		/// For a site of a hole in a public mock's tree, rather than an alias: the hole, whose builder the site calls
+		/// with the values in scope there to bind `property`.
+		var holeSite: SeamSignature.Hole?
 	}
 
 	// MARK: OnlyIfAvailableOverride
@@ -4145,7 +4582,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// A property a mock root's tree receives only if available that nothing in the mock provides.
 	/// The generated `mock()` reads it from an optional `SafeDIOverrides` field, which defaults to `nil`,
 	/// into a binding of the same name, and hands it to the receivers of the property.
-	private struct OnlyIfAvailableOverride {
+	struct OnlyIfAvailableOverride {
 		/// The property the tree receives: a `@Received(onlyIfAvailable: true)` property, or the
 		/// non-optional fulfilling property of an `onlyIfAvailable` alias.
 		let receivedProperty: Property
@@ -4330,7 +4767,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let childGenerator = child.generator
 			let childPropertiesGeneratedLater = child.propertiesGeneratedLater
 			let childUnavailableProperties = child.unavailableProperties
-			if case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference) = childGenerator.scopeData {
+			if case let .hole(property, erasedToConcreteExistential, site?) = childGenerator.scopeData {
+				// A site of a hole binds its property from the public mock's builder, as an alias binds its own.
+				items.append(.alias(MockAliasNode(
+					property: property,
+					erasedToConcreteExistential: erasedToConcreteExistential,
+					onlyIfAvailable: false,
+					fulfillingLabel: site.builderLabel,
+					fulfillingTypeDescription: site.builderType(qualifiedBy: nil),
+					fulfillingPropertyIsLazilyInstantiatedInstance: false,
+					declarationReference: nil,
+					holeSite: site,
+				)))
+			} else if case let .alias(property, fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable, declarationReference) = childGenerator.scopeData {
 				// The dependency this alias binds is passed `nil` instead.
 				guard childGenerator.uncreatedAliasProperty(unavailableProperties: childUnavailableProperties) == nil else { continue }
 				items.append(.alias(MockAliasNode(
@@ -4403,6 +4852,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					childItems: childItems.isEmpty ? nil : MockTreeItems(childItems),
 					defaultParameters: defaultParameters,
 					constructionArguments: constructionArguments,
+					constructionIsolation: constructionInitializer?.spelledIsolation,
 					dependencies: childInstantiable.dependencies,
 					lazilyInstantiatedInstanceProperties: childGenerator.lazilyInstantiatedInstanceProperties,
 					unavailableProperties: childConstructionUnavailableProperties,
@@ -4412,6 +4862,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					sourceFilePath: childInstantiable.sourceFilePath,
 					mockDeclarationLocation: childInstantiable.mockDeclarationLocation,
 					constructionComment: useMockInitializer ? childGenerator.constructionComments.mockMethod : childGenerator.constructionComments.initializer,
+					publicMockCall: childGenerator.publicMockCall,
+					stageCalls: childGenerator.stageCallsBeforeBuilderFunction,
+					fillingGenerator: childGenerator.holeArgumentValuesByLabel.isEmpty ? nil : childGenerator,
+					holeArgumentValuesByLabel: childGenerator.holeArgumentValuesByLabel,
 					forwardedProperties: forwardedProperties,
 					isPropertyCycle: isPropertyCycle,
 					cycleClosingProperties: childGenerator.cycleClosingProperties,
@@ -4515,7 +4969,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			switch dependency.source {
 			case .instantiated:
 				if childLabels == nil {
-					childLabels = Set(node.propertyChildren.map(\.propertyLabel))
+					childLabels = Set(node.propertyChildren.map(\.propertyLabel)).union(node.children.holeSiteProperties.map(\.label))
 				}
 				return childLabels?.contains(dependency.property.label) == false
 			case .received, .aliased, .forwarded:
@@ -4531,11 +4985,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private static func uncoveredInstantiatedDependencies(
 		ofMockedType instantiable: Instantiable,
 		treePropertyNodes: [MockParameterNode],
+		holeSiteProperties: Set<Property>,
 	) -> [Dependency] {
 		instantiable.dependencies.filter { dependency in
 			switch dependency.source {
 			case .instantiated:
-				!treePropertyNodes.contains(where: {
+				!holeSiteProperties.contains(dependency.property) && !treePropertyNodes.contains(where: {
 					$0.property == dependency.property || $0.property.asLazilyInstantiatedInstanceProperty == dependency.property
 				})
 			case .received, .aliased, .forwarded:
@@ -4603,7 +5058,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	///   type that forwards `x: X` while a dependency it receives requires `x: Instantiator<X>` gets the entry
 	///   `x_Instantiator__X`.
 	/// Returns a dictionary mapping each node's label and property type to its disambiguated label.
-	private static func disambiguatePropertyLabels(
+	static func disambiguatePropertyLabels(
 		for nodes: [MockParameterNode],
 		besideParametersKeepingTheirLabels parametersKeepingTheirLabels: [Property] = [],
 		reservedNames: Set<String> = [],
@@ -4750,7 +5205,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// Returns the disambiguated property label for a node, given a disambiguation map.
-	private static func disambiguatedLabel(
+	static func disambiguatedLabel(
 		for node: MockParameterNode,
 		labelMap: [String: [TypeDescription: String]],
 	) -> String {
@@ -4873,7 +5328,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("\(innerIndent)init(")
 		var initParameters = rootChildren.map { child in
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
-			if child.needsConfigurationStruct {
+			if let publicMockOverridesMember = child.publicMockOverridesMember(sendable: child.requiresSendable) {
+				return "\(memberIndent)\(label): \(publicMockOverridesMember.type) = \(publicMockOverridesMember.defaultValue)"
+			} else if child.needsConfigurationStruct {
 				return "\(memberIndent)\(label): \(child.configurationTypeName) = .init()"
 			} else {
 				let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
@@ -4898,7 +5355,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lines.append("")
 		for child in rootChildren {
 			let label = disambiguatedLabel(for: child, labelMap: rootLabelMap)
-			if child.needsConfigurationStruct {
+			if let publicMockOverridesMember = child.publicMockOverridesMember(sendable: child.requiresSendable) {
+				lines.append("\(innerIndent)let \(label): \(publicMockOverridesMember.type)")
+			} else if child.needsConfigurationStruct {
 				lines.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
 			} else {
 				let sendableAnnotation = child.requiresSendable ? "@Sendable " : ""
@@ -4958,7 +5417,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let childLabelMap = disambiguatePropertyLabels(for: nonCycleChildren)
 		for child in nonCycleChildren {
 			let label = disambiguatedLabel(for: child, labelMap: childLabelMap)
-			if child.needsConfigurationStruct {
+			if let publicMockOverridesMember = child.publicMockOverridesMember(sendable: requiresSendable || child.requiresSendable) {
+				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(publicMockOverridesMember.type) = \(publicMockOverridesMember.defaultValue)")
+				storedProperties.append("\(innerIndent)let \(label): \(publicMockOverridesMember.type)")
+			} else if child.needsConfigurationStruct {
 				initParameters.append("\(innerIndent)\(standardIndent)\(label): \(child.configurationTypeName) = .init()")
 				storedProperties.append("\(innerIndent)let \(label): \(child.configurationTypeName)")
 			} else {
@@ -4988,7 +5450,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// value and the mock calls it where it builds the type, which evaluates the default once per
 				// construction, as production does. The initializer takes the value as an autoclosure, so a
 				// caller still passes a value.
-				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping @Sendable () -> \(typeSource) = \(defaultExpression(defaultParameter))")
+				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping @Sendable () -> \(typeSource) = \(autoclosureDefault(defaultExpression(defaultParameter)))")
 				storedProperties.append("\(innerIndent)let \(defaultParameter.label): @Sendable () -> \(typeSource)")
 			} else {
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(typeSource) = \(defaultExpression(defaultParameter))")
@@ -5021,6 +5483,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		return lines.joined(separator: "\n")
 	}
 
+	/// `expression` as the default of an `@autoclosure` parameter: parenthesized when it is a closure literal, which
+	/// Swift otherwise reads as the autoclosure itself, so that `(() -> Void)? = {}` would declare a closure that
+	/// returns `()`. In parentheses, it is the value the autoclosure returns.
+	static func autoclosureDefault(_ expression: String) -> String {
+		var parser = Parser(expression)
+		return if ExprSyntax.parse(from: &parser).is(ClosureExprSyntax.self) {
+			"(\(expression))"
+		} else {
+			expression
+		}
+	}
+
 	// MARK: Mock Body Generation
 
 	/// Reads `safeDIOverrides` values into locals declared before the outermost
@@ -5039,7 +5513,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// otherwise read `safeDIOverrides`, so every extracted local has exactly
 	/// one reader. The builder that created the extractor then emits the
 	/// recorded `let <localName> = <expression>` lines before its function.
-	private final class SendableOverrideExtractor {
+	final class SendableOverrideExtractor {
 		init(functionName: String) {
 			self.functionName = functionName
 		}
@@ -5096,6 +5570,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		overridePathReachable: Bool,
 		handWrittenMockDefaultParameters: [TypeDescription: [MockParameterNode.DefaultParameter]],
 		sendableConfigurationTypeNames: Set<String>,
+		publicMock: PublicMockEmission? = nil,
 	) async -> [String] {
 		var lines = [String]()
 
@@ -5142,6 +5617,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					indent: indent,
 				))
 			case let .property(node):
+				if let fillingGenerator = node.fillingGenerator {
+					// The fills the call passes, declared where the call is made, as a seam's caller declares them.
+					for line in await fillingGenerator.fillCode.joined(separator: "\n").split(separator: "\n", omittingEmptySubsequences: false) {
+						lines.append(line.isEmpty ? "" : "\(indent)\(line)")
+					}
+				}
+				if let publicMockCall = node.publicMockCall {
+					lines.append("\(indent)\(publicMockCall.guardLine(for: node.concreteType))")
+				}
 				let nodeTypeKey = node.instantiatedTypeDescription.asSource
 				let isCycleNode = ancestorTypes.contains(nodeTypeKey)
 				let builderFunctionNames = builderFunctionNamesByNode?[propertyNodeIndex] ?? BuilderFunctionNames()
@@ -5195,7 +5679,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 
 				let nodeHandWrittenMockDefaultParameters = handWrittenMockDefaultParameters[node.concreteType, default: []]
-				let arguments = resolveBuilderArguments(
+				let arguments = mockBuilderArguments(
 					for: node,
 					nodePath: nodePath,
 					lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
@@ -5204,13 +5688,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					overrideReachable: thisOverrideReachable,
 					handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
 					sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+					publicMock: publicMock,
 				)
-				let constructionExpression = node.constructionExpression(
+				// The member that configures a node calling another module's public mock is a `@Sendable` closure where
+				// the struct holding it is read inside a `@Sendable` builder function.
+				let publicMockOverridesIsSendableClosure = node.requiresSendable || (parentConcreteType.map(sendableConfigurationTypeNames.contains) ?? false)
+				let constructionExpression = mockConstructionExpression(
+					for: node,
 					overrideExpression: overrideExpression,
 					arguments: arguments,
 					overrideReachable: thisOverrideReachable,
 					handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
+					publicMock: publicMock,
+					publicMockOverridesIsSendableClosure: publicMockOverridesIsSendableClosure,
 				)
+				// A node a public mock builds for a received dependency is given the value its caller passed, if any.
+				let promotedParameterName = publicMock?.promotedParameterNames[node.property]
 				// The values of the `@Sendable` autoclosure parameters this node instantiates, bound in its own
 				// scope, before the children that receive them.
 				let sendableAutoclosureBindings = sendableAutoclosureBindings(
@@ -5246,6 +5739,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						overridePathReachable: thisOverrideReachable,
 						handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 						sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+						publicMock: publicMock,
+						promotedParameterName: promotedParameterName,
+						publicMockOverridesIsSendableClosure: publicMockOverridesIsSendableClosure,
 					))
 				} else if node.requiresFunctionWrapper
 					|| hasDisambiguatedReceiver(node, flatParameterDisambiguationMap: combinedDisambiguationMap)
@@ -5304,6 +5800,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						overridePathReachable: thisOverrideReachable,
 						handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 						sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+						publicMock: publicMock?.beneathRoot,
 					)
 
 					// The function's return type gives both branches of the `if`
@@ -5314,7 +5811,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					lines.append(contentsOf: childBindings)
 					lines.append("\(innerIndent)return \(constructionExpression)\(node.constructionLineEnd)")
 					lines.append("\(indent)}")
-					lines.append("\(indent)let \(outerBindingName): \(propertyTypeName) = \(functionName)()")
+					if let promotedParameterName {
+						lines.append("\(indent)let \(outerBindingName): \(propertyTypeName) = \(passing(promotedParameterName, orBuilding: "\(functionName)()"))")
+					} else {
+						lines.append("\(indent)let \(outerBindingName): \(propertyTypeName) = \(functionName)()")
+					}
+				} else if let promotedParameterName {
+					// Both branches give the property's type, which the default construction may not without the annotation.
+					lines.append("\(indent)let \(outerBindingName)\(node.overriddenBindingTypeAnnotation) = \(passing(promotedParameterName, orBuilding: constructionExpression))\(node.constructionLineEnd)")
 				} else {
 					// Leaf constant node — flat binding, no scoping needed.
 					let typeAnnotation = overrideExpression == nil ? "" : node.overriddenBindingTypeAnnotation
@@ -5337,6 +5841,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
 		indent: String,
 	) -> String {
+		if let holeSite = alias.holeSite {
+			return "\(indent)\(buildSiteCode(of: alias.property, at: holeSite))"
+		}
 		let fulfillingLabel = alias.fulfillingLabel
 		let fulfillingValue = if alias.fulfillingPropertyIsLazilyInstantiatedInstance {
 			// The instance is read from the `LazilyInstantiated` binding, which a label collision may have renamed.
@@ -5480,26 +5987,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 		return argumentsToSurface.map { argument in
-			if let dependency = dependenciesByLabel[argument.innerLabel] {
-				if node.unavailableProperties.contains(dependency.property) {
-					"nil"
-				} else if dependency.source.isReceived,
-				          node.lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty)
-				{
-					"\(argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
-				} else if dependency.source.isReceived,
-				          let bindingName = lazilyInstantiatedBindingNames[argument.innerLabel]?[dependency.property.typeDescription]
-				{
-					// The `LazilyInstantiated` the mock wrapped around the instance it was passed.
-					bindingName
-				} else if case .instantiated = dependency.source,
-				          let parameterName = uncoveredDependencyNames[argument.innerLabel]?[dependency.property.typeDescription]
-				{
-					// The `mock()` parameter of an uncovered dependency, named apart from a name in scope.
-					parameterName
-				} else {
-					argument.innerLabel
-				}
+			if let holeArgumentValue = node.holeArgumentValuesByLabel[argument.innerLabel] {
+				// A builder the node's call of another module's public mock fills.
+				holeArgumentValue
+			} else if let dependency = dependenciesByLabel[argument.innerLabel] {
+				dependencyArgument(
+					argument,
+					of: dependency,
+					for: node,
+					lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
+					uncoveredDependencyNames: uncoveredDependencyNames,
+				)
 			} else if !overrideReachable {
 				// The struct is built afresh, so nothing is read from `SafeDIOverrides`, even inside a `@Sendable` function.
 				readingDefault("\(node.configurationTypeName)().\(argument.label)", of: argument)
@@ -5514,6 +6012,35 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				readingDefault("\(nodePath).\(argument.label)", of: argument)
 			}
+		}
+	}
+
+	/// The expression a mock passes `node`'s construction for `argument`, the argument of `dependency`.
+	static func dependencyArgument(
+		_ argument: Initializer.Argument,
+		of dependency: Dependency,
+		for node: MockParameterNode,
+		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
+		uncoveredDependencyNames: [String: [TypeDescription: String]],
+	) -> String {
+		if node.unavailableProperties.contains(dependency.property) {
+			"nil"
+		} else if dependency.source.isReceived,
+		          node.lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty)
+		{
+			"\(argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+		} else if dependency.source.isReceived,
+		          let bindingName = lazilyInstantiatedBindingNames[argument.innerLabel]?[dependency.property.typeDescription]
+		{
+			// The `LazilyInstantiated` the mock wrapped around the instance it was passed.
+			bindingName
+		} else if case .instantiated = dependency.source,
+		          let parameterName = uncoveredDependencyNames[argument.innerLabel]?[dependency.property.typeDescription]
+		{
+			// The `mock()` parameter of an uncovered dependency, named apart from a name in scope.
+			parameterName
+		} else {
+			argument.innerLabel
 		}
 	}
 
@@ -5551,6 +6078,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		overridePathReachable: Bool,
 		handWrittenMockDefaultParameters: [TypeDescription: [MockParameterNode.DefaultParameter]],
 		sendableConfigurationTypeNames: Set<String>,
+		publicMock: PublicMockEmission? = nil,
+		promotedParameterName: String? = nil,
+		publicMockOverridesIsSendableClosure: Bool,
 	) async -> [String] {
 		let forwardedProperties = node.forwardedProperties.sorted()
 		let innerIndent = "\(indent)\(standardIndent)"
@@ -5649,6 +6179,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				overridePathReachable: overridePathReachable,
 				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 				sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+				publicMock: publicMock?.beneathRoot,
 			)
 
 			let nodeHandWrittenMockDefaultParameters = handWrittenMockDefaultParameters[node.concreteType, default: []]
@@ -5661,7 +6192,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// them into locals too. Override closures are read as optionals;
 				// the function body unwraps them and otherwise calls the default
 				// construction directly.
-				functionConstructionArguments = resolveBuilderArguments(
+				functionConstructionArguments = mockBuilderArguments(
 					for: node,
 					nodePath: nodePath,
 					lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
@@ -5670,6 +6201,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					overrideReachable: overridePathReachable,
 					handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
 					sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+					publicMock: publicMock,
 				)
 				functionOverrideExpression = overrideExpression.map {
 					startedSendableOverrideExtractor.extract($0, localNameSuffix: ReservedName.configurationBuilderPropertyName)
@@ -5683,6 +6215,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 
 			let functionReturnType = node.instantiatedTypeDescription.asSource
+			// The stage calls of a public mock's staged builders whose next stage starts in this function, made before it.
+			for stageCall in node.stageCalls {
+				lines.append("\(indent)\(stageCall)")
+			}
 			lines.append("\(indent)\(functionDecorator)func \(functionName)(\(functionArguments)) -> \(functionReturnType) {")
 			lines.append(contentsOf: receiverBindings)
 			lines.append(contentsOf: sendableAutoclosureBindings)
@@ -5694,12 +6230,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// one forces an explicit `return`. The function's return type
 			// gives both branches of an `if` expression a contextual type.
 			let returnKeyword = childBindings.isEmpty && receiverBindings.isEmpty && sendableAutoclosureBindings.isEmpty ? "" : "return "
-			let constructionExpression = node.constructionExpression(
+			let builtConstructionExpression = mockConstructionExpression(
+				for: node,
 				overrideExpression: functionOverrideExpression,
 				arguments: functionConstructionArguments,
 				overrideReachable: overridePathReachable,
 				handWrittenMockDefaultParameters: nodeHandWrittenMockDefaultParameters,
+				publicMock: publicMock,
+				publicMockOverridesIsSendableClosure: publicMockOverridesIsSendableClosure,
 			)
+			// A public mock takes a lazily instantiated dependency it builds by value, so its builder function returns
+			// the value its caller passed, if any.
+			let constructionExpression = if let promotedParameterName, node.property.propertyType.isLazilyInstantiated {
+				passing(promotedParameterName, orBuilding: builtConstructionExpression)
+			} else {
+				builtConstructionExpression
+			}
 			lines.append("\(innerIndent)\(returnKeyword)\(constructionExpression)\(node.constructionLineEnd)")
 			lines.append("\(indent)}")
 		}
@@ -5719,9 +6265,79 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			"""
 		}
 
-		lines.append("\(indent)let \(outerBindingName) = \(instantiatorConstruction)")
+		if let promotedParameterName, !node.property.propertyType.isLazilyInstantiated {
+			// A public mock takes an instantiator it builds for a received dependency as itself.
+			lines.append("\(indent)let \(outerBindingName) = \(passing(promotedParameterName, orBuilding: instantiatorConstruction))")
+		} else {
+			lines.append("\(indent)let \(outerBindingName) = \(instantiatorConstruction)")
+		}
 
 		return lines
+	}
+
+	/// The arguments a mock passes the construction of `node`: those of its construction function in a public mock,
+	/// when its type has a configuration (`publicBuilderArguments`), and otherwise `resolveBuilderArguments`'.
+	private static func mockBuilderArguments(
+		for node: MockParameterNode,
+		nodePath: String,
+		lazilyInstantiatedBindingNames: [String: [TypeDescription: String]],
+		uncoveredDependencyNames: [String: [TypeDescription: String]],
+		sendableOverrideExtractor: SendableOverrideExtractor?,
+		overrideReachable: Bool,
+		handWrittenMockDefaultParameters: [MockParameterNode.DefaultParameter],
+		sendableConfigurationTypeNames: Set<String>,
+		publicMock: PublicMockEmission?,
+	) -> [String] {
+		if let publicMock, node.needsConfigurationStruct {
+			publicBuilderArguments(
+				for: node,
+				nodePath: nodePath,
+				lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
+				uncoveredDependencyNames: uncoveredDependencyNames,
+				sendableOverrideExtractor: sendableOverrideExtractor,
+				overrideReachable: overrideReachable,
+				emission: publicMock,
+			)
+		} else {
+			resolveBuilderArguments(
+				for: node,
+				nodePath: nodePath,
+				lazilyInstantiatedBindingNames: lazilyInstantiatedBindingNames,
+				uncoveredDependencyNames: uncoveredDependencyNames,
+				sendableOverrideExtractor: sendableOverrideExtractor,
+				overrideReachable: overrideReachable,
+				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+				sendableConfigurationTypeNames: sendableConfigurationTypeNames,
+			)
+		}
+	}
+
+	/// The expression that builds `node`: a call of its construction function in a public mock, when its type has a
+	/// configuration (`publicConstructionExpression`), and otherwise `MockParameterNode.constructionExpression`.
+	/// - Parameter publicMockOverridesIsSendableClosure: For a node that calls another module's public mock, whether the
+	///   member that configures it is a `@Sendable` closure: the node is built inside a `@Sendable` builder function, or
+	///   the struct that holds the member is read inside one in some mock (`sendableConfigurationTypeNames`).
+	private static func mockConstructionExpression(
+		for node: MockParameterNode,
+		overrideExpression: String?,
+		arguments: [String],
+		overrideReachable: Bool,
+		handWrittenMockDefaultParameters: [MockParameterNode.DefaultParameter],
+		publicMock: PublicMockEmission?,
+		publicMockOverridesIsSendableClosure: Bool,
+	) -> String {
+		if let publicMockCall = node.publicMockCall, publicMockCall.takesOverrides {
+			node.publicMockCallExpression(arguments: arguments, overridesExpression: overrideExpression, overridesIsSendableClosure: publicMockOverridesIsSendableClosure)
+		} else if publicMock != nil, node.needsConfigurationStruct {
+			publicConstructionExpression(for: node, overrideExpression: overrideExpression, arguments: arguments)
+		} else {
+			node.constructionExpression(
+				overrideExpression: overrideExpression,
+				arguments: arguments,
+				overrideReachable: overrideReachable,
+				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
+			)
+		}
 	}
 
 	/// What ends the line on which a mock root's `mock()` constructs the mocked type `instantiable`, after the
@@ -5747,10 +6363,92 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 // MARK: - [MockTreeItem]
 
 extension [ScopeGenerator.MockTreeItem] {
+	/// The holes of every site in the tree of these items, one per builder, in builder-label order.
+	var holesOfTree: [SeamSignature.Hole] {
+		var holesByBuilderLabel = [String: SeamSignature.Hole]()
+		// A stack of its own, since a mock tree can be as deep as the module has types.
+		var itemsToVisit = self
+		while let item = itemsToVisit.popLast() {
+			switch item {
+			case let .alias(alias):
+				if let holeSite = alias.holeSite {
+					holesByBuilderLabel[holeSite.builderLabel] = holeSite
+				}
+			case let .property(node):
+				itemsToVisit.append(contentsOf: node.children)
+			}
+		}
+		return holesByBuilderLabel.values.sorted { $0.builderLabel < $1.builderLabel }
+	}
+
+	/// The builders of the holes of other modules' public mocks that the calls in the tree of these items pass up, as
+	/// the calling tree receives them, with each one's hole.
+	var passedUpHolesByBuilder: [Property: SeamSignature.Hole] {
+		var holesByBuilder = [Property: SeamSignature.Hole]()
+		// A stack of its own, since a mock tree can be as deep as the module has types.
+		var nodesToVisit = propertyNodes
+		while let node = nodesToVisit.popLast() {
+			if let publicMockCall = node.publicMockCall {
+				let filledBuilderLabels = Set(publicMockCall.filledHoles.map(\.builderLabel))
+				for parameter in publicMockCall.passedParameters where !filledBuilderLabels.contains(parameter.name) {
+					if let hole = parameter.hole {
+						holesByBuilder[parameter.dependency.property] = hole
+					}
+				}
+			}
+			nodesToVisit.append(contentsOf: node.propertyChildren)
+		}
+		return holesByBuilder
+	}
+
+	/// The builders among `passedUpHolesByBuilder` that a call made in a `@Sendable` builder function passes up, which
+	/// the function captures.
+	var passedUpBuildersCapturedBySendableFunctions: Set<Property> {
+		var builders = Set<Property>()
+		// A stack of its own, since a mock tree can be as deep as the module has types.
+		var nodesToVisit = propertyNodes
+		while let node = nodesToVisit.popLast() {
+			if node.requiresSendable, let publicMockCall = node.publicMockCall {
+				let filledBuilderLabels = Set(publicMockCall.filledHoles.map(\.builderLabel))
+				for parameter in publicMockCall.passedParameters where parameter.hole != nil && !filledBuilderLabels.contains(parameter.name) {
+					builders.insert(parameter.dependency.property)
+				}
+			}
+			nodesToVisit.append(contentsOf: node.propertyChildren)
+		}
+		return builders
+	}
+
+	/// The generators of the calls of other modules' public mocks in the tree of these items that fill builders
+	/// (`ScopeGenerator.MockParameterNode.fillingGenerator`).
+	var fillingGenerators: [ScopeGenerator] {
+		var fillingGenerators = [ScopeGenerator]()
+		// A stack of its own, since a mock tree can be as deep as the module has types.
+		var nodesToVisit = propertyNodes
+		while let node = nodesToVisit.popLast() {
+			if let fillingGenerator = node.fillingGenerator {
+				fillingGenerators.append(fillingGenerator)
+			}
+			nodesToVisit.append(contentsOf: node.propertyChildren)
+		}
+		return fillingGenerators
+	}
+
+	/// The properties the sites of holes among these items bind (see `ScopeGenerator.MockAliasNode.holeSite`).
+	var holeSiteProperties: [Property] {
+		compactMap { item in
+			if case let .alias(alias) = item, alias.holeSite != nil {
+				alias.property
+			} else {
+				nil
+			}
+		}
+	}
+
 	/// Property-typed children only. Aliases are plain `let` bindings and do
 	/// not participate in `SafeDIMockConfiguration` / `SafeDIOverrides` or
 	/// sibling disambiguation.
-	fileprivate var propertyNodes: [ScopeGenerator.MockParameterNode] {
+	var propertyNodes: [ScopeGenerator.MockParameterNode] {
 		compactMap {
 			if case let .property(node) = $0 {
 				node

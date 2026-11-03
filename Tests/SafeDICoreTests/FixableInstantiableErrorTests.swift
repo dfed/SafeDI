@@ -169,14 +169,27 @@ struct FixableInstantiableErrorTests {
 
 	@Test
 	func mockOnlyWithGenerateMock_description_mentionsIncompatibleCombination() {
-		let error = FixableInstantiableError.mockOnlyWithGenerateMock
-		#expect(error.description == "`mockOnly` and `generateMock` cannot both be `true`: a `mockOnly` declaration provides a hand-written mock. To generate a mock, set `generateMock: true` on the production `@Instantiable` declaration instead.")
+		let error = FixableInstantiableError.mockOnlyWithGenerateMock(spelling: "true")
+		#expect(error.description == "`mockOnly` cannot be combined with `generateMock: true`, `.internal`, or `.public`: a `mockOnly` declaration provides a hand-written mock. To generate a mock, set `generateMock` on the production `@Instantiable` declaration instead.")
 	}
 
 	@Test
 	func mockOnlyWithGenerateMock_fixIt_mentionsRemovingGenerateMock() {
-		let error = FixableInstantiableError.mockOnlyWithGenerateMock
+		let error = FixableInstantiableError.mockOnlyWithGenerateMock(spelling: "true")
 		#expect(error.fixIt.message == "Remove `generateMock: true`")
+	}
+
+	@Test
+	func defaultValuedAutoclosureParameter_fixIt_mentionsRemovingAutoclosure() {
+		let error = FixableInstantiableError.defaultValuedAutoclosureParameter(parameterLabel: "flag")
+		#expect(error.fixIt.message == "Remove `@autoclosure` from `flag`")
+	}
+
+	@Test
+	func mockGenerationArgumentFixItMessage_fixItID_isMessage() {
+		let message = MockGenerationArgumentFixItMessage(replacement: ".internal")
+		#expect(message.message == "Replace `.public` with `.internal`")
+		#expect("\(message.fixItID)" == #"MessageID(domain: "MockGenerationArgumentFixItMessage", id: "Replace `.public` with `.internal`")"#)
 	}
 
 	@Test

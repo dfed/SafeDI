@@ -357,6 +357,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				generatedInitializerAttributes: generatedInitializerAttributes,
 				mockAttributes: mockAttributes,
 				generateMock: generateMock,
+				mockGenerationArgumentRange: mockGenerationArgumentRange,
 				mockOnly: mockOnly,
 				mockInitializer: mockInitializer,
 				mockReturnType: mockReturnType,
@@ -473,7 +474,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var additionalInstantiables: [TypeDescription]?
 	public private(set) var generatedInitializerAttributes = ""
 	public private(set) var mockAttributes = ""
-	public private(set) var generateMock: Bool = false
+	public private(set) var generateMock: MockGeneration = .none
+	/// The range of the `generateMock:` argument's value, when the declaration spells one.
+	public private(set) var mockGenerationArgumentRange: Dependency.SourceRange?
 	public private(set) var mockOnly: Bool = false
 	public private(set) var customMockName: String?
 	public private(set) var mockInitializer: Initializer?
@@ -595,7 +598,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						enclosingExtensionAccess: enclosingExtensionAccess,
 						generatedInitializerAttributes: generatedInitializerAttributes,
 						mockAttributes: mockAttributes,
+						declarationIsolation: declarationIsolation,
 						generateMock: generateMock,
+						mockGenerationArgumentRange: mockGenerationArgumentRange,
 						mockOnly: mockOnly,
 						mockInitializer: mockInitializer,
 						mockReturnType: mockReturnType,
@@ -628,6 +633,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						generatedInitializerAttributes: generatedInitializerAttributes,
 						mockAttributes: mockAttributes,
 						generateMock: generateMock,
+						mockGenerationArgumentRange: mockGenerationArgumentRange,
 						mockOnly: mockOnly,
 						mockInitializer: mockInitializer,
 						mockReturnType: mockReturnType,
@@ -678,6 +684,8 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// The access the decorated type declaration or extension spells, recorded when it is visited, before any
 	/// instantiable or mock method is found in it.
 	private var instantiableAccess = AccessDeclaration(level: .internal)
+	/// See `Instantiable.declarationIsolation`.
+	private var declarationIsolation: String?
 
 	/// Diagnoses each of `parameters` whose name is encoded differently from a name SafeDI matches it by, as
 	/// `diagnoseNameEncodedDifferently(_:at:)` does. A parameter named `_` names nothing.
@@ -803,6 +811,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		processAttributes(node.attributes, on: macro)
 		processModifiers(on: node)
 		instantiableAccess = node.modifiers.access(introducedBy: node.keyword, sourceLocationConverter: sourceLocationConverter)
+		declarationIsolation = Initializer.spelledIsolation(modifiers: node.modifiers, attributes: node.attributes)
 
 		return .visitChildren
 	}
@@ -836,7 +845,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 			}
 		}
 		func processGenerateMock() {
-			generateMock = macro.generateMockValue
+			// The macro rejects any other spelling, so an unreadable one generates no mock.
+			generateMock = macro.mockGenerationValue ?? .none
+			mockGenerationArgumentRange = macro.generateMock.flatMap { sourceRange(of: $0) }
 		}
 		func processMockOnly() {
 			mockOnly = macro.mockOnlyValue

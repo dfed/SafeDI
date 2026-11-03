@@ -1335,6 +1335,8 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(Self.fixtureHash(forSeeds: seeds) == Self.smokeAndKnownIssueFixtureHash)
 		let seamSeeds = Self.seamSmokeSeeds + Self.seamKnownIssues.flatMap(\.seeds)
 		#expect(Self.fixtureHash(forSeeds: seamSeeds, features: [.generateDependencyTree]) == Self.seamSmokeAndKnownIssueFixtureHash)
+		let publicMockSeeds = Self.publicMockSmokeSeeds + Self.publicMockKnownIssues.flatMap(\.seeds)
+		#expect(Self.fixtureHash(forSeeds: publicMockSeeds, features: [.generateMockPublic]) == Self.publicMockSmokeAndKnownIssueFixtureHash)
 	}
 
 	// MARK: Long run
@@ -1395,6 +1397,8 @@ struct SafeDIToolGraphFuzzerTests {
 		var valueOracleComparedCount = 0
 		var acceptedSpellingDrawFeatures = Set<GraphFuzzerSeamDrawFeature>()
 		var omittedValueGraphCount = 0
+		var publicMockOutputFeatureCounts = [GraphFuzzerPublicMockOutputFeature: Int]()
+		var publicMockOnlyErrorCounts = [String: Int]()
 		var knownIssueCount = 0
 		var failureCount = 0
 		// Batches run concurrently, one per core, but their findings are recorded in seed order, so the report and
@@ -1452,6 +1456,11 @@ struct SafeDIToolGraphFuzzerTests {
 								acceptedSeedsSum.add(seed)
 								if result.failure == nil {
 									acceptedSpellingDrawFeatures.formUnion(GraphFuzzerFeature.seamDrawFeatures(of: result.fixture).intersection(corpus.spellingDrawFeatures))
+									if corpus.features.contains(.generateMockPublic), case let .accepted(generatedFiles, _) = result.outcome {
+										for feature in GraphFuzzerPublicMockDraw.outputFeatures(of: result.fixture, generatedFiles: generatedFiles) {
+											publicMockOutputFeatureCounts[feature, default: 0] += 1
+										}
+									}
 								}
 							}
 							if result.isInspectedByValueOracle {
@@ -1459,6 +1468,12 @@ struct SafeDIToolGraphFuzzerTests {
 							}
 							if case let .rejected(diagnostics) = result.outcome, diagnostics.split(separator: "\n").contains(where: GraphFuzzerOracle.isOmittedValueError) {
 								omittedValueGraphCount += 1
+							}
+							// The graphs each of a public mock's own errors rejects, which the public mock's commits pin.
+							if corpus.features.contains(.generateMockPublic), case let .rejected(diagnostics) = result.outcome {
+								for marker in GraphFuzzerOracle.publicMockOnlyErrorMarkers where diagnostics.contains(marker) {
+									publicMockOnlyErrorCounts[marker, default: 0] += 1
+								}
 							}
 							if result.isComparedByValueOracle {
 								valueOracleComparedCount += 1
@@ -1508,6 +1523,16 @@ struct SafeDIToolGraphFuzzerTests {
 		// The graphs the tool rejects because a caller holds a value its tier omits, which ci.yml's combine job adds up.
 		report.append("omitted-values \(omittedValueGraphCount) \(corpus.omittedValueGraphCount) \(corpus.name)")
 		report.append("spellings \(corpus.name) \(corpus.spellingDrawFeatures.map(\.rawValue).sorted().joined(separator: ",")) \(acceptedSpellingDrawFeatures.map(\.rawValue).sorted().joined(separator: ","))")
+		// The output features of the accepted graphs that pass, with each pinned minimum share as a percentage of the
+		// corpus's accepted graphs, which ci.yml's combine job adds up and checks; and how many graphs each of a public
+		// mock's own errors rejects.
+		if corpus.features.contains(.generateMockPublic) {
+			let counts = GraphFuzzerPublicMockOutputFeature.allCases.map { "\($0.rawValue)=\(publicMockOutputFeatureCounts[$0, default: 0])" }.joined(separator: ",")
+			let minimums = corpus.outputFeatureMinimumShares.sorted { $0.key < $1.key }.map { "\($0.key.rawValue)=\($0.value)" }.joined(separator: ",")
+			report.append("outputs \(corpus.name) \(counts) \(minimums)")
+			let errorCounts = GraphFuzzerOracle.publicMockOnlyErrorMarkers.map { publicMockOnlyErrorCounts[$0, default: 0] }
+			report.append("public-mock-errors \(corpus.name) \(errorCounts.map(String.init).joined(separator: ",")) \(corpus.publicMockErrorGraphCounts.map(String.init).joined(separator: ","))")
+		}
 		// Every corpus that exists, so the combine job can tell a corpus whose shards left no report from none.
 		report.append("corpora \(([Self.baseCorpus] + GraphFuzzerGeneratorFeature.allCases.map { Self.corpus(for: [$0]) }).map(\.name).joined(separator: " "))")
 		if configuration.startingSeed == 0, configuration.iterations == corpus.seedCount,
@@ -1525,6 +1550,13 @@ struct SafeDIToolGraphFuzzerTests {
 			let missingSpellings = corpus.spellingDrawFeatures.subtracting(acceptedSpellingDrawFeatures)
 			if !missingSpellings.isEmpty {
 				reportProblem("No accepted graph of the \(corpus.name) corpus draws \(missingSpellings.map(\.rawValue).sorted().joined(separator: ", ")).")
+			}
+			let errorCounts = GraphFuzzerOracle.publicMockOnlyErrorMarkers.map { publicMockOnlyErrorCounts[$0, default: 0] }
+			if corpus.features.contains(.generateMockPublic), errorCounts != corpus.publicMockErrorGraphCounts {
+				reportProblem("The tool rejected \(errorCounts) graphs of the \(corpus.name) corpus with each of a public mock's own errors (`publicMockOnlyErrorMarkers`), but \(corpus.publicMockErrorGraphCounts) are pinned.")
+			}
+			for (feature, minimumShare) in corpus.outputFeatureMinimumShares.sorted(by: { $0.key < $1.key }) where publicMockOutputFeatureCounts[feature, default: 0] * 100 < minimumShare * acceptedCount {
+				reportProblem("The generated code of \(publicMockOutputFeatureCounts[feature, default: 0]) of the \(acceptedCount) graphs of the \(corpus.name) corpus the tool accepts shows \(feature.rawValue), fewer than the pinned \(minimumShare) percent.")
 			}
 		}
 		report.append("completed \(graphCount) graphs, \(acceptedCount) accepted, \(knownIssueCount) known issues, \(failureCount) unknown failures")
@@ -1584,6 +1616,12 @@ struct SafeDIToolGraphFuzzerTests {
 		/// How many graphs the tool rejects with an error that a caller in another module holds a value the seam tier it
 		/// calls omits, which the omitted-value oracle judges against the inline build.
 		let omittedValueGraphCount: Int
+		/// The least share, in percent of the graphs the tool accepts, of the graphs whose generated code shows each public
+		/// mock output feature, for the features that have one.
+		var outputFeatureMinimumShares = [GraphFuzzerPublicMockOutputFeature: Int]()
+		/// How many graphs the tool rejects with each of a public mock's own errors, in the order of
+		/// `GraphFuzzerOracle.publicMockOnlyErrorMarkers`.
+		var publicMockErrorGraphCounts = [Int]()
 	}
 
 	static let baseCorpus = Corpus(
@@ -1835,8 +1873,235 @@ struct SafeDIToolGraphFuzzerTests {
 	/// The corpus drawn with `features`: the base corpus when there are none, and a feature's corpus for that
 	/// feature. Every feature has a corpus, so the two are the only ones.
 	static func corpus(for features: Set<GraphFuzzerGeneratorFeature>) -> Corpus {
-		features.contains(.generateDependencyTree) ? seamCorpus : baseCorpus
+		if features.contains(.generateMockPublic) {
+			publicMockCorpus
+		} else if features.contains(.generateDependencyTree) {
+			seamCorpus
+		} else {
+			baseCorpus
+		}
 	}
+
+	/// The corpus drawn with the `generateMockPublic` feature: seeds `0..<publicMockCorpusSeedCount`, each a graph of its
+	/// own (`GraphFuzzerPublicMockDraw`) with types declared `generateMock: .public` and the consumers that reach them.
+	static let publicMockCorpus = Corpus(
+		name: GraphFuzzerGeneratorFeature.generateMockPublic.rawValue,
+		features: [.generateMockPublic],
+		seedCount: publicMockCorpusSeedCount,
+		fixtureHash: publicMockCorpusFixtureHash,
+		acceptedSeedCount: publicMockCorpusAcceptedSeedCount,
+		acceptedSeedsSum: publicMockCorpusAcceptedSeedsSum,
+		knownIssues: publicMockKnownIssues,
+		knownIssuesName: "publicMockKnownIssues",
+		staleSeedRemedy: { _, _ in "remove it from `publicMockKnownIssues`" },
+		valueOracleInspectedGraphCount: publicMockCorpusValueOracleInspectedGraphCount,
+		spellingDrawFeatures: [],
+		omittedValueGraphCount: publicMockCorpusOmittedValueGraphCount,
+		outputFeatureMinimumShares: publicMockCorpusOutputFeatureMinimumShares,
+		publicMockErrorGraphCounts: publicMockCorpusErrorGraphCounts,
+	)
+
+	/// The least share of the public mock corpus's accepted graphs whose generated code shows each output feature, in
+	/// percent: the floor of the share the corpus run observed, for each feature the generated code shows today. The
+	/// commits that make another feature show pin it in turn.
+	static let publicMockCorpusOutputFeatureMinimumShares: [GraphFuzzerPublicMockOutputFeature: Int] = [
+		.allNonPublicConfiguration: 30,
+		.configurationStruct: 21,
+		.constructionFunction: 50,
+		.consumerCall: 52,
+		.consumerErasedCall: 13,
+		.consumerErasedInline: 2,
+		.consumerFillReentersPublicMock: 0,
+		.consumerFillsHole: 2,
+		.consumerInline: 22,
+		.consumerPassesHoleBuilderUp: 7,
+		.consumerPassesInstance: 18,
+		.consumerSendableFactory: 10,
+		.defaultRewritten: 54,
+		.forwardedProvider: 1,
+		.holeBuilder: 24,
+		.isolatedConstruction: 1,
+		.moduleConfiguration: 50,
+		.publicTier: 65,
+		.secondTier: 48,
+		.stagedHoleBuilder: 1,
+		.thirdTier: 3,
+	]
+
+	static let publicMockCorpusSeedCount = 1_000
+	static let publicMockCorpusFixtureHash: UInt64 = 0x4C64A1EAB031F06B
+	static let publicMockCorpusAcceptedSeedCount = 747
+	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0x49F6381819B5B6A9
+	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
+	/// value oracle compares.
+	static let publicMockCorpusValueOracleInspectedGraphCount = 747
+	/// How many of the public mock corpus's graphs the tool rejects because a caller provides a value the tier of the public
+	/// mock it calls omits (`leafTierOmitsProvidedValue`), which the long run counts as it counts the seam's.
+	static let publicMockCorpusOmittedValueGraphCount = 97
+	/// How many of the public mock corpus's graphs the tool rejects with each of a public mock's own errors, in the order
+	/// of `GraphFuzzerOracle.publicMockOnlyErrorMarkers`: the public tier, a narrower enclosing type, a leaf tier and a
+	/// nested leaf tier omitting a provided value, the mock condition, the by-name check, and the view that cannot call.
+	static let publicMockCorpusErrorGraphCounts = [123, 0, 97, 0, 36, 0, 0]
+
+	/// The ordinary suite's batch of the public mock corpus: graphs the tool accepts – a consumer in the same package
+	/// calling a public mock with `analytics.instance` of the wrapper it holds, M8.32's stated divergence, of a `@MainActor`
+	/// type whose public tier passes its own provider-defaulted parameter on (seed 0); a third tier, with a consumer in the
+	/// same package only (seed 43); a `Sendable` wrapper above the leaf, a construction function isolated as the initializer
+	/// it calls, and a leaf reached through an `ErasedInstantiator` (seed 46); both consumer modules, a differing mock
+	/// condition and a configuration whose members are all narrower than `public` (seed 142); two leaves that each build
+	/// the `session` their caller cannot name, M8.9b's, a leaf reached through an erased constant, and a hole's builder
+	/// passed up (seed 151); a consumer in another package filling a hole whose fill builds the `.public` type again
+	/// through an `Instantiator`, a fully lazy cycle (seed 197); a staged builder for a hole beneath a `Sendable` wrapper
+	/// (seed 211); a consumer in another package only and a differing mock condition (seed 253); a configuration's
+	/// module-level forwarder of a default's provider, and a hole's builder passed up into a `@Sendable` builder function
+	/// (seed 551) – a graph the public tier rejects (seed 7), and a graph of the configuration order's known issue (seed
+	/// 23). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
+	/// which `publicMockSmokeSeeds_exercisePublicMockFeature_inGraphsTheToolAccepts` checks. Pinned by
+	/// `publicMockSmokeAndKnownIssueFixtureHash`.
+	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 23, 43, 46, 142, 151, 197, 211, 253, 551]
+
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x44F5B09789F791E4
+
+	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
+	/// draw shares no graph with the base corpus.
+	static let publicMockKnownIssues: [GraphFuzzerKnownIssue] = [
+		GraphFuzzerKnownIssue(
+			reason: "SafeDIMockConfiguration.swift declares its configurations (public mocks' module-level structs among them) in the order of the roots that reach them",
+			signatures: [.renamedGraphDiffers(containing: "changes its generated mock configuration code")],
+			seeds: [
+				2, 5, 8, 16, 21, 23, 26, 28, 29, 42, 48, 50, 56, 58, 59, 63,
+				64, 65, 71, 79, 88, 90, 99, 101, 103, 110, 111, 115, 131, 133, 137, 146,
+				148, 150, 152, 157, 158, 168, 175, 178, 192, 199, 204, 209, 219, 220, 225, 231,
+				240, 241, 242, 247, 248, 256, 257, 259, 267, 269, 270, 274, 275, 276, 282, 289,
+				295, 297, 301, 306, 308, 309, 310, 314, 325, 333, 336, 338, 349, 351, 360, 365,
+				367, 368, 369, 374, 378, 380, 381, 389, 398, 402, 405, 412, 414, 415, 417, 419,
+				421, 426, 428, 435, 436, 441, 451, 456, 459, 469, 475, 477, 479, 482, 492, 496,
+				497, 498, 504, 511, 515, 523, 525, 527, 529, 530, 542, 549, 553, 555, 562, 564,
+				580, 584, 586, 587, 592, 597, 598, 600, 603, 610, 611, 613, 615, 618, 619, 623,
+				624, 625, 627, 632, 635, 637, 639, 642, 645, 651, 652, 668, 671, 672, 673, 681,
+				683, 684, 690, 691, 693, 697, 700, 706, 709, 714, 716, 721, 723, 726, 727, 732,
+				735, 738, 740, 745, 747, 748, 751, 753, 754, 755, 756, 759, 760, 762, 765, 772,
+				773, 774, 777, 783, 784, 790, 793, 798, 805, 817, 821, 825, 827, 828, 837, 845,
+				846, 848, 851, 854, 862, 868, 873, 878, 880, 881, 889, 891, 895, 896, 901, 907,
+				909, 911, 912, 923, 925, 932, 936, 937, 945, 946, 958, 959, 964, 968, 970, 976,
+				978, 979, 984, 985, 991, 993, 995,
+			],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "A public mock's parameters are sorted by label (decision 27), so reversing the labels reorders a `.public` consumer's `mock()` and the parameters it surfaces from its leaves",
+			signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")],
+			seeds: [106, 251, 407, 708, 771, 947],
+		),
+		// The base corpus's shape, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy
+		// cycle through it.
+		GraphFuzzerKnownIssue(
+			reason: "A mock's API follows the order of type names or labels: which back-edge of a lazy cycle loses its override, which promoted sibling is passed nil, and the order of overrides",
+			signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")],
+			seeds: [33, 832],
+		),
+		// The base corpus's shape, a main defect, in the known-right path's inline mock: the comparator cannot compile it.
+		GraphFuzzerKnownIssue(
+			reason: "A type receives a label as one type while a type built inside it receives the label as another, and the mock rebinds the first under the label inside the receiver's builder function, where the second then reads it",
+			signatures: [.valueComparatorCouldNotDescribeGraph(containing: "cannot convert value of type")],
+			seeds: [574],
+		),
+	]
+
+	/// How many of the public mock corpus's graphs each shape of `GraphFuzzerPublicMockDraw` lands in, exactly, so a draw
+	/// that stops landing, or a change in a shape's share, fails
+	/// `publicMockCorpus_drawsEachShapeInThePinnedNumberOfGraphs_whenFixturesAreGeneratedWithoutTheTool`.
+	static let publicMockCorpusDrawFeatureCounts: [GraphFuzzerPublicMockDrawFeature: Int] = [
+		.allNonPublicConfiguration: 307,
+		.allowlistedParameterType: 138,
+		.bothConsumerModules: 393,
+		.childDefaultNamingOwnStaticMember: 452,
+		.closureDefault: 225,
+		.consumerHoldsLazilyInstantiatedWrapper: 378,
+		.consumerHoldsOmittedValue: 220,
+		.consumerInstantiatesLeaf: 655,
+		.consumerReachesHoleTypeWithFill: 155,
+		.consumerReachesHoleTypeWithoutFill: 166,
+		.consumerReceivesLeaf: 550,
+		.customMockName: 369,
+		.declaringModuleConfigurationFile: 30,
+		.erasedConstantLeaf: 119,
+		.erasedInstantiatorLeaf: 116,
+		.extensionBasedInstantiable: 212,
+		.fakeExtensionPackage: 165,
+		.fakeMockDefaultedParameter: 344,
+		.fakeMockDependencyBoundParameter: 221,
+		.fakeTypeInternal: 344,
+		.holderlessOmittedValue: 66,
+		.holeBeneathInstantiator: 67,
+		.holeBeneathLazilyInstantiated: 82,
+		.holeBeneathSendableWrapper: 21,
+		.holeCallerInOtherPackage: 278,
+		.holeCallerInSamePackage: 120,
+		.holeDeclaredAsErasedConstant: 77,
+		.holeDeclaredAsErasedInstantiator: 73,
+		.holeDeclaredAsExistential: 86,
+		.holeDeclaredAsInstantiator: 34,
+		.holeFillClosesLazyCycle: 15,
+		.holeFillReceivesField: 24,
+		.holeFillReceivesNonField: 58,
+		.holeOnPublicMockType: 228,
+		.holeScopeHoldsPackageValue: 103,
+		.holeScopeHoldsPublicValue: 140,
+		.instantiableParameterType: 235,
+		.internalInitializer: 520,
+		.lazilyInstantiatedOmittedValueProvider: 68,
+		.lazilyReceivedLabelWithOnlyIfAvailableByValueReceive: 227,
+		.mainActorChildInitializerSpellsIsolation: 66,
+		.mainActorChildIsolatedInitializer: 141,
+		.mainActorChildNonisolatedInitializer: 40,
+		.mockConditionDiffers: 103,
+		.namespaceExtensionPackage: 93,
+		.namespaceExtensionPublic: 44,
+		.namespaceExtensionUnspelled: 78,
+		.narrowerTreeType: 878,
+		.nonOptionalDefault: 694,
+		.omittedValueProviderAfterLeaf: 119,
+		.omittedValueProviderAndLeafReceiveEachOther: 64,
+		.omittedValueProviderBeforeLeaf: 120,
+		.omittedValueProviderUnderSendableBuilder: 36,
+		.onePublicMockType: 369,
+		.optionalDefaultOfPackageType: 282,
+		.optionalDefaultOfPublicType: 267,
+		.optionalDefaultOfUnprovenType: 325,
+		.otherPackageConsumerModuleOnly: 301,
+		.packageInitializer: 797,
+		.plainTypeOnlyDefaultArgumentsName: 325,
+		.plainTypeOnlyPackageInitializersTake: 214,
+		.plainTypePublicInitializerTakes: 200,
+		.protocolSlotFilledByFake: 686,
+		.publicConsumer: 331,
+		.publicConsumerLeavesLeafLabelUnprovided: 103,
+		.qualifiedAllowlistedParameterType: 93,
+		.requiredParameterNarrowerThanPublic: 96,
+		.samePackageConsumerModuleOnly: 306,
+		.sendableErasedInstantiatorLeaf: 15,
+		.sendableWrapperAboveLeaf: 189,
+		.spelledChildDefault: 147,
+		.spelledClosure: 84,
+		.spelledConsumerPasses: 109,
+		.spelledExistential: 129,
+		.spelledForwarded: 157,
+		.spelledGeneric: 145,
+		.spelledNested: 128,
+		.spelledNonOptionalDefault: 150,
+		.spelledOnlyIfAvailableReceive: 159,
+		.spelledOptionalClosure: 136,
+		.spelledOptionalDefault: 169,
+		.spelledPlain: 118,
+		.spelledRequiredReceive: 213,
+		.spelledSendableClosure: 123,
+		.spelledTuple: 120,
+		.spelledTypealias: 127,
+		.threePublicMockTypes: 332,
+		.twoLeavesReceiveUnnameableDependency: 43,
+		.twoPublicMockTypes: 299,
+		.typeInExtensionOfInstantiable: 219,
+	]
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.

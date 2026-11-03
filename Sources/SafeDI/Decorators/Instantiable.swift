@@ -57,7 +57,7 @@
 ///   - mockOnly: Whether this declaration exists solely for mock generation. When `true`, you must provide a hand-written `mock()` method (or a method named by `customMockName`). No `init`/`instantiate()` or `Instantiable` conformance is required. Hand-written mocks take priority over generated ones — a `mockOnly` mock is used even when the production type has `generateMock: true`. A type can have at most one hand-written mock; if the production type also has a hand-written mock, SafeDI emits an error. Mutually exclusive with `generateMock` and `isRoot`. Defaults to `false`.
 ///   - generatedInitializerAttributes: Attributes to add to the initializers SafeDI generates for this type: the `init()` it generates for a root that has dependencies, and each initializer it generates for a type with `generateDependencyTree: true`. Use this when that initializer must be bound to a global actor or carry an availability the plugin cannot detect from source (e.g. a root whose dependencies have `@MainActor` initializers). Example: `@Instantiable(isRoot: true, generatedInitializerAttributes: "@MainActor")`. To add the same attributes to the generated `mock()` too, pass them once as `generatedAttributes` instead.
 ///   - mockAttributes: Attributes to add to the generated `mock()` method. Use this when the type is not bound to a global actor that the mock must be bound to: when the type’s own initializer is bound to it, or when its tree builds a type whose initializer is. Example: `@Instantiable(mockAttributes: "@MainActor", generateMock: true)`.
-///   - generateMock: Whether to generate a `mock()` method for this type. Defaults to `false`.
+///   - generateMock: Whether to generate a `mock()` method for this type, and with what access: `true` (or `.internal`) generates a `mock()` the type's own module calls; `.public` generates a `public` `mock()` that modules of other packages call, and requires a `public` or `open` type declaration; `false` (or `.none`) generates none. Defaults to `false`.
 ///   - customMockName: The name of the canonical hand-written mock method. With `generateMock: true`, the generated `mock()` calls through to this method (it must have a different name to avoid ambiguity). With `mockOnly: true`, SafeDI uses this method as the mock provider for the type. Requires `generateMock: true` or `mockOnly: true`.
 @attached(member, names: named(ForwardedProperties))
 public macro Instantiable(
@@ -68,7 +68,7 @@ public macro Instantiable(
 	mockOnly: Bool = false,
 	generatedInitializerAttributes: StaticString = "",
 	mockAttributes: StaticString = "",
-	generateMock: Bool = false,
+	generateMock: MockGeneration = false,
 	customMockName: StaticString? = nil,
 ) = #externalMacro(module: "SafeDIMacros", type: "InstantiableMacro")
 
@@ -95,7 +95,7 @@ public macro Instantiable(
 ///   - conformsElsewhere: Whether the decorated type already conforms to the `Instantiable` protocol elsewhere. If set to `true`, the macro does not enforce that this declaration conforms to `Instantiable`.
 ///   - mockOnly: Whether this declaration exists solely for mock generation. Mutually exclusive with `generateMock` and `isRoot`. Defaults to `false`.
 ///   - generatedAttributes: Attributes to add to the initializers SafeDI generates for this type – the `init()` it generates for a root that has dependencies, and each initializer it generates for a type with `generateDependencyTree: true` – and to the generated `mock()` method. Example: `@Instantiable(isRoot: true, generatedAttributes: "@MainActor", generateMock: true)`.
-///   - generateMock: Whether to generate a `mock()` method for this type. Defaults to `false`.
+///   - generateMock: Whether to generate a `mock()` method for this type, and with what access: `true` (or `.internal`), `.public`, or `false` (or `.none`). Defaults to `false`.
 ///   - customMockName: The name of the canonical hand-written mock method. Requires `generateMock: true` or `mockOnly: true`.
 @attached(member, names: named(ForwardedProperties))
 public macro Instantiable(
@@ -105,7 +105,7 @@ public macro Instantiable(
 	conformsElsewhere: Bool = false,
 	mockOnly: Bool = false,
 	generatedAttributes: StaticString,
-	generateMock: Bool = false,
+	generateMock: MockGeneration = false,
 	customMockName: StaticString? = nil,
 ) = #externalMacro(module: "SafeDIMacros", type: "InstantiableMacro")
 
