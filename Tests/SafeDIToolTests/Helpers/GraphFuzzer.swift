@@ -738,6 +738,90 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// `HoleLoop` binds `holeLogger` on the re-entry path while `HoleImpl` reads the root's: rejected (C8.14).
 	case holeSeamReentersItselfBeneathBoundLabel
 
+	/// `addingUncreatedAliasExtensions`' second declaration of the alias's label: a lazily instantiated wrapper of the
+	/// alias's property, on `AliasLeft`, `AliasMid` or the seam.
+	case uncreatedAliasLabelLazilyInstantiatedBeside
+	/// `AliasLeft` receiving the alias's label only if available.
+	case uncreatedAliasLabelReceivedBeside
+	/// `AliasMid`, between the alias and its reader, declaring the alias's label.
+	case uncreatedAliasLabelOnMid
+	/// The seam requiring the alias's label, as `AliasLabel` or a wrapper the root provides.
+	case uncreatedAliasSeamRequiresLabel
+	/// The seam receiving the alias's label only if available as `AliasLabel`, a parameter of another type than the alias's.
+	case uncreatedAliasSeamReceivesLabelAsAnotherType
+	/// An `onlyIfAvailable` alias of the pass-through `aliasOther` under the alias's label.
+	case uncreatedAliasLabelAliasesOtherParameter
+	/// `AliasLeft` declaring the alias's label after `AliasDetail`.
+	case uncreatedAliasLabelDeclaredAfterDetail
+	/// The alias's label declared on the seam and on `AliasLeft` both.
+	case uncreatedAliasLabelDeclaredBesideAndAbove
+	/// `AliasClient` receiving a lazily instantiated wrapper under the alias's label.
+	case uncreatedAliasClientReceivesWrapper
+	/// A seam that declares the alias also declaring an alias of it.
+	case uncreatedAliasAliasOfAliasOnSeam
+	/// `AliasReader` receiving `AliasDetail`'s alias of the alias.
+	case uncreatedAliasReaderOfAliasOfAlias
+	/// `AliasReader`'s label-keeping alias of the alias, required.
+	case uncreatedAliasRequiredLabelKeepingAliasReader
+	/// `AliasReader` declaring an alias of `aliasToken` under the alias's own label.
+	case uncreatedAliasReaderRedeclaresAlias
+	/// `AliasValue` receiving `aliasDetail` only if available, so that an `AliasValue` beside it is generated after it.
+	case uncreatedAliasLabelGeneratedAfterDetail
+	/// The seam's own only-if-available receive of the alias's fulfilling property.
+	case uncreatedAliasSeamReceivesFulfillingPropertyOnlyIfAvailable
+	/// `AliasNeed`, a child of the seam requiring the alias's fulfilling property.
+	case uncreatedAliasFulfillingPropertyRequiredBeside
+	/// `movingSelfContainedSeamsIntoSeamModule` moving `AliasSeam`'s tree into the seam's module.
+	case uncreatedAliasAcrossModules
+	/// `SpellSeam`'s tree in the seam's module.
+	case spelledAcrossModules
+	/// `FormsScreen`'s tree in the seam's module.
+	case formsAcrossModules
+	/// `addingLabelFormsSeam`'s seam, `FormsScreen`.
+	case formsSeam
+	/// `FormsDetail` receiving the instance of `formsUser`.
+	case formsByValueReceive
+	/// `FormsSummary` receiving a wrapper of `formsUser`.
+	case formsWrapperReceive
+	/// A required receive of the optional form of `formsUser`.
+	case formsRequiredOptionalReceive
+	/// `FormsPreview` receiving an optional wrapper only if available.
+	case formsOptionalWrapperReceive
+	/// The seam's own receive of `formsUser`.
+	case formsSeamOwnReceive
+	/// `FormsDetail` built inside a `SendableInstantiator`.
+	case formsDetailInSendableBuilder
+	/// The root holding `formsUser` as the instance.
+	case formsCallerHoldsInstance
+	/// The root holding `formsUser` as a wrapper.
+	case formsCallerHoldsWrapper
+	/// `FormsHost` forwarding an optional form of `formsUser`.
+	case formsCallerForwardsOptionalForm
+	/// The root holding the instance and `FormsHost`, nearer the seam, forwarding its optional form.
+	case formsCallerHoldsNearerOptionalInstance
+	/// `FormsUser`'s own tree building the seam.
+	case formsInstanceTreeBuildsSeam
+	/// `FormsUser`'s own tree receiving the seam only if available, through `FormsGate`.
+	case formsInstanceTreeReceivesSeamOnlyIfAvailable
+	/// The root holding no form of `formsUser`.
+	case formsCallerHoldsNothing
+	/// The root declaring `formsUser` after `formsScreen`.
+	case formsUserDeclaredAfterSeam
+	/// `addingAccessProofExtensions`' `Foundation.`-qualified parameter type.
+	case foundationQualifiedAllowlistMention
+	/// The `mockOnly` fake `ProofFake`, whose mock takes `ProofBadge`'s plain theme.
+	case mockOnlyFakeMentionsReceivedType
+	/// A host lazily instantiating an `@Instantiable` value the tree receives.
+	case lazilyInstantiatedProvider
+	/// A host receiving the tree's plain values only if available, which nothing provides.
+	case hostReceivesValuesOnlyIfAvailable
+	/// A host reaching the seam through `ProofSeamHolder` or `ProofOtherSeamHolder`.
+	case seamReachedThroughHolder
+	/// `ProofHost`, the caller in the seam's package, itself a seam.
+	case samePackageHostIsSeam
+	/// `ProofOtherHost`, the caller in another package, itself a seam.
+	case otherPackageHostIsSeam
+
 	static func < (lhs: GraphFuzzerSeamDrawFeature, rhs: GraphFuzzerSeamDrawFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
 	}
@@ -1023,6 +1107,8 @@ enum GraphFuzzerGenerator {
 		var enclosingExtension: String?
 		/// The access of the type the enclosing extension extends, which caps the type's own.
 		var enclosingTypeAccess = AccessLevel.public
+		/// Modules the type's file imports beyond those of its module's header.
+		var imports = [String]()
 
 		/// The type's access as the compiler reads it: its own, capped by the type its extension extends.
 		var effectiveAccess: AccessLevel {
@@ -1177,6 +1263,10 @@ enum GraphFuzzerGenerator {
 			holePassUpRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holePassUpRandomSeedMask)
 			holeReentryRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holeReentryRandomSeedMask)
 			holeSelfReentryRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holeSelfReentryRandomSeedMask)
+			aliasExtensionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.aliasExtensionRandomSeedMask)
+			formsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.formsRandomSeedMask)
+			crossModuleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.crossModuleRandomSeedMask)
+			proofExtensionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.proofExtensionRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
 			let sendabilityRoll = random.integer(in: 0...99)
@@ -1237,11 +1327,15 @@ enum GraphFuzzerGenerator {
 			appendMotif(to: &declarations)
 			// Decided last, so that the rest of a seed's graph does not depend on whether it has the extension.
 			let extensionSource = random.percentChance(25) ? extensionDeclarationSource(addingPropertyToOneOf: &declarations) : nil
-			var finalDeclarations = addingHoleShapes(to: addingAccessProofShapes(to: addingUncreatedAliasShapes(to: addingSpelledProperties(to: addingSeam(
+			let seamDeclarations = addingSeam(
 				to: addingReceiversOfDependenciesMocksCannotBuild(
 					to: addingSiblingAliasChains(to: addingAliasChains(to: addingDependenciesMocksCannotBuild(to: addingPropertiesLabeledAsGeneratedNames(to: declarations)))),
 				),
-			)))))
+			)
+			let aliasDeclarations = addingUncreatedAliasExtensions(to: addingUncreatedAliasShapes(to: addingSpelledProperties(to: seamDeclarations)))
+			var finalDeclarations = movingSelfContainedSeamsIntoSeamModule(
+				addingLabelFormsSeam(to: addingHoleShapes(to: addingAccessProofExtensions(to: addingAccessProofShapes(to: aliasDeclarations)))),
+			)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -1395,6 +1489,14 @@ enum GraphFuzzerGenerator {
 		private var holePassUpRandom: GraphFuzzerRandomNumberGenerator
 		private var holeReentryRandom: GraphFuzzerRandomNumberGenerator
 		private var holeSelfReentryRandom: GraphFuzzerRandomNumberGenerator
+		/// Draw only the choices of the passes added when the seam tests' siblings moved to the fuzzer, each after the
+		/// pass it extends, so that every graph those passes leave plain is drawn as before:
+		/// `addingUncreatedAliasExtensions`, `addingLabelFormsSeam`, `movingSelfContainedSeamsIntoSeamModule` and
+		/// `addingAccessProofExtensions`.
+		private var aliasExtensionRandom: GraphFuzzerRandomNumberGenerator
+		private var formsRandom: GraphFuzzerRandomNumberGenerator
+		private var crossModuleRandom: GraphFuzzerRandomNumberGenerator
+		private var proofExtensionRandom: GraphFuzzerRandomNumberGenerator
 		/// The access of each type `addingAccessProofShapes` declares narrower than `public`, by the name the fixture
 		/// spells it with (`S1_ProofSpace.S1_ProofShelf` for a nested type), which caps every initializer naming it.
 		private var proofTypeAccess = [String: AccessLevel]()
@@ -3542,6 +3644,460 @@ enum GraphFuzzerGenerator {
 		private static let holePassUpRandomSeedMask: UInt64 = 0x686F6C6550617373
 		private static let holeReentryRandomSeedMask: UInt64 = 0x686F6C6552656E74
 		private static let holeSelfReentryRandomSeedMask: UInt64 = 0x686F6C6553656C66
+		private static let aliasExtensionRandomSeedMask: UInt64 = 0x616C696173457874
+		private static let formsRandomSeedMask: UInt64 = 0x666F726D735F726E
+		private static let crossModuleRandomSeedMask: UInt64 = 0x63726F73734D6F64
+		private static let proofExtensionRandomSeedMask: UInt64 = 0x70726F6F66457874
+
+		// MARK: Uncreated alias extensions
+
+		/// With the `generateDependencyTree` feature on, extends four in five of `addingUncreatedAliasShapes`' trees with the
+		/// declarations of the alias's label, and the readers, that pass does not draw: a second declaration of `aliasAuth`
+		/// where no other receive of it leaves the seam – instantiated as the alias's property, as `AliasLabel`, as an
+		/// instantiator or a lazily instantiated wrapper of the alias's property, received only if available as either
+		/// type, or an `onlyIfAvailable` alias of the pass-through `aliasOther` – on `AliasLeft`, before `AliasDetail` or
+		/// after it, on `AliasMid` between the alias and its reader, or on the seam, which may also require it as
+		/// `AliasLabel` or as a lazily instantiated wrapper the root provides; `AliasClient` receiving a wrapper of the label;
+		/// on a seam that declares the alias itself, an alias of that alias; a reader of `AliasDetail`'s alias of its alias; a
+		/// reader's label-keeping alias made required, or a reader declaring an alias of `aliasToken` under the alias's own
+		/// label; `AliasValue` receiving `aliasDetail` only if available, so that an `AliasValue` beside `AliasDetail` is
+		/// generated after it; the seam's own only-if-available receive of `aliasToken`; and `AliasNeed`, a child of the seam
+		/// that requires `aliasToken`. A tree whose alias's property is a required optional parameter gets no new alias or
+		/// reader of an unwrapped form, which `GraphFuzzerToolRuns.uncreatedAliasRejectionFailure` takes for an exact-form
+		/// alias. `aliasExtensionRandom` draws only for this pass.
+		private mutating func addingUncreatedAliasExtensions(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard let seamIndex = declarations.firstIndex(where: { $0.name == "\(prefix)AliasSeam" }),
+			      let leftIndex = declarations.firstIndex(where: { $0.name == "\(prefix)AliasLeft" }),
+			      let detailIndex = declarations.firstIndex(where: { $0.name == "\(prefix)AliasDetail" }),
+			      aliasExtensionRandom.percentChance(80)
+			else { return declarations }
+			var declarations = declarations
+			func index(_ suffix: String) -> Int? {
+				declarations.firstIndex { $0.name == prefix + suffix }
+			}
+			func declares(_ label: String, at index: Int) -> Bool {
+				declarations[index].properties.contains { $0.label == label }
+			}
+			func isAlias(_ property: PropertyDeclaration) -> Bool {
+				property.attribute.contains("fulfilledByDependencyNamed")
+			}
+			let valueType = "\(prefix)AliasValue"
+			let labelType = "\(prefix)AliasLabel"
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let lazyWrapper = sendability == .sendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let seamAndDetail = declarations[seamIndex].properties + declarations[detailIndex].properties
+			let aliasIsOnSeam = declarations[seamIndex].properties.contains { $0.attribute.contains("fulfilledByDependencyNamed: \"aliasToken\"") }
+			let aliasKeepsLabel = seamAndDetail.contains { $0.label == "aliasToken" && $0.attribute.contains("fulfilledByDependencyNamed: \"aliasToken\"") }
+			let parameterIsRequiredOptional = (declarations[seamIndex].properties + declarations[leftIndex].properties).contains {
+				$0.label == "aliasToken" && ($0.attribute == "@Received" || $0.attribute == "@Forwarded")
+			}
+			/// Whether a receive of `aliasAuth` that leaves the seam, which a second one could collide with, is declared.
+			func receivesLabelFromOutside() -> Bool {
+				[seamIndex, leftIndex, index("AliasMid"), index("AliasClient")].compactMap(\.self).contains { holder in
+					declarations[holder].properties.contains { $0.label == "aliasAuth" && !isAlias($0) }
+				}
+			}
+			/// Has the root provide `aliasAuth` as `type`, unless it already declares the label, when only that exact
+			/// declaration serves.
+			func rootProvidesAliasAuth(as type: String) -> Bool {
+				if let existing = declarations[0].properties.first(where: { $0.label == "aliasAuth" }) {
+					return existing.attribute == "@Instantiated" && existing.type == type
+				}
+				declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasAuth", type: type))
+				return true
+			}
+			// A second declaration of the alias's label.
+			if !aliasKeepsLabel, aliasExtensionRandom.percentChance(80) {
+				var hosts = [leftIndex]
+				if !aliasIsOnSeam {
+					hosts.append(seamIndex)
+				}
+				if let midIndex = index("AliasMid") {
+					hosts.append(midIndex)
+				}
+				let host = aliasExtensionRandom.element(of: hosts)
+				let instantiations = [
+					PropertyDeclaration(attribute: "@Instantiated", label: "aliasAuth", type: valueType),
+					PropertyDeclaration(attribute: "@Instantiated", label: "aliasAuth", type: labelType),
+					PropertyDeclaration(attribute: "@Instantiated", label: "aliasAuth", type: "\(instantiator)<\(valueType)>"),
+					PropertyDeclaration(attribute: "@Instantiated", label: "aliasAuth", type: "\(lazyWrapper)<\(valueType)>"),
+				]
+				var receives = [
+					PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "aliasAuth", type: valueType + "?"),
+					PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "aliasAuth", type: labelType + "?"),
+				]
+				if !parameterIsRequiredOptional {
+					receives.append(PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"aliasOther\", ofType: \(valueType).self, onlyIfAvailable: true)", label: "aliasAuth", type: valueType + "?"))
+				}
+				if host == seamIndex {
+					receives += [
+						PropertyDeclaration(attribute: "@Received", label: "aliasAuth", type: labelType),
+						PropertyDeclaration(attribute: "@Received", label: "aliasAuth", type: "\(lazyWrapper)<\(valueType)>"),
+					]
+				}
+				let kind = aliasExtensionRandom.element(of: instantiations + receives)
+				let isReceive = kind.attribute.hasPrefix("@Received")
+				if !declares("aliasAuth", at: host),
+				   !isReceive || !receivesLabelFromOutside(),
+				   kind.attribute != "@Received" || rootProvidesAliasAuth(as: kind.type)
+				{
+					// On `AliasLeft`, before `AliasDetail` or after it.
+					if host == leftIndex, aliasExtensionRandom.percentChance(50) {
+						declarations[host].properties.append(kind)
+					} else {
+						declarations[host].properties.insert(kind, at: 0)
+					}
+				}
+			}
+			// `AliasClient` receiving a wrapper of the label, as a type beside the alias's declaring type.
+			if !aliasKeepsLabel, index("AliasClient") == nil, !receivesLabelFromOutside(), aliasExtensionRandom.percentChance(30) {
+				declarations.append(TypeDeclaration(name: "\(prefix)AliasClient", instantiableArguments: [], properties: [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "aliasAuth", type: "\(lazyWrapper)<\(valueType)>?")], declaresHelperTypes: false, additionalConformances: conformances))
+				declarations[seamIndex].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasClient", type: "\(prefix)AliasClient"))
+			}
+			// On a seam that declares the alias itself, an alias of that alias.
+			if aliasIsOnSeam, !aliasKeepsLabel, !declares("aliasBearer", at: seamIndex), aliasExtensionRandom.percentChance(60) {
+				declarations[seamIndex].properties.append(PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"aliasAuth\", ofType: \(valueType)?.self, onlyIfAvailable: true)", label: "aliasBearer", type: valueType + "?"))
+			}
+			if let readerIndex = index("AliasReader") {
+				let plainReceiveIndex = declarations[readerIndex].properties.firstIndex { ($0.label == "aliasAuth" || $0.label == "aliasToken") && !isAlias($0) }
+				let labelKeepingAliasIndex = declarations[readerIndex].properties.firstIndex { $0.attribute.contains("fulfilledByDependencyNamed: \"aliasAuth\"") && $0.attribute.contains(", onlyIfAvailable: true") }
+				if let plainReceiveIndex, declares("aliasBearer", at: detailIndex), aliasExtensionRandom.percentChance(70) {
+					// A reader of `AliasDetail`'s alias of its alias.
+					let receive = declarations[readerIndex].properties[plainReceiveIndex]
+					declarations[readerIndex].properties[plainReceiveIndex] = PropertyDeclaration(attribute: receive.attribute, label: "aliasBearer", type: valueType + "?")
+				} else if let labelKeepingAliasIndex, aliasExtensionRandom.percentChance(40) {
+					// The reader's label-keeping alias made required.
+					let alias = declarations[readerIndex].properties[labelKeepingAliasIndex]
+					declarations[readerIndex].properties[labelKeepingAliasIndex] = PropertyDeclaration(attribute: alias.attribute.replacingOccurrences(of: ", onlyIfAvailable: true", with: ""), label: alias.label, type: alias.type)
+				} else if let plainReceiveIndex, !aliasKeepsLabel, !aliasIsOnSeam, !parameterIsRequiredOptional, declarations[readerIndex].properties[plainReceiveIndex].label == "aliasAuth", aliasExtensionRandom.percentChance(40) {
+					// The reader declaring an alias of `aliasToken` under the alias's own label.
+					declarations[readerIndex].properties[plainReceiveIndex] = PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"aliasToken\", ofType: \(valueType).self, onlyIfAvailable: true)", label: "aliasAuth", type: valueType + "?")
+				}
+			}
+			// `AliasValue` receiving `aliasDetail` only if available, so that an `AliasValue` beside `AliasDetail` is
+			// generated after it; not where a value of it is forwarded, which the value comparator's probe makes as
+			// `AliasValue()`.
+			let valueIsForwarded = declarations.contains { $0.properties.contains { $0.attribute == "@Forwarded" && $0.type.contains(valueType) } }
+			if let valueIndex = index("AliasValue"), !valueIsForwarded, !declares("aliasDetail", at: valueIndex), aliasExtensionRandom.percentChance(20) {
+				declarations[valueIndex].properties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "aliasDetail", type: "\(prefix)AliasDetail?"))
+			}
+			// The seam's own only-if-available receive of `aliasToken`, or `AliasNeed`, which requires it, with the root
+			// holding it; neither where a type of the tree requires `aliasToken` or a required alias of it, beside which the
+			// seam's own receive would be a second parameter under the label.
+			let treeRequiresToken = declarations.contains { declaration in
+				declaration.name.hasPrefix("\(prefix)Alias") && declaration.properties.contains { property in
+					property.label == "aliasToken" && property.attribute == "@Received"
+						|| property.attribute.contains("fulfilledByDependencyNamed: \"aliasToken\"") && !property.attribute.contains("onlyIfAvailable")
+				}
+			}
+			if !parameterIsRequiredOptional, !treeRequiresToken, !declares("aliasToken", at: seamIndex) {
+				if aliasExtensionRandom.percentChance(15) {
+					declarations[seamIndex].properties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "aliasToken", type: valueType + "?"))
+				} else if aliasExtensionRandom.percentChance(15) {
+					let rootToken = declarations[0].properties.first { $0.label == "aliasToken" }
+					if rootToken == nil || rootToken?.attribute == "@Instantiated" && rootToken?.type == valueType {
+						if rootToken == nil {
+							declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasToken", type: valueType))
+						}
+						declarations.append(TypeDeclaration(name: "\(prefix)AliasNeed", instantiableArguments: [], properties: [PropertyDeclaration(attribute: "@Received", label: "aliasToken", type: valueType)], declaresHelperTypes: false, additionalConformances: conformances))
+						declarations[seamIndex].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "aliasNeed", type: "\(prefix)AliasNeed"))
+					}
+				}
+			}
+			return declarations
+		}
+
+		// MARK: One label's forms
+
+		/// With the `generateDependencyTree` feature on, half of the graphs gain a seam, `FormsScreen`, whose tree receives
+		/// one label, `formsUser`, in the forms a lazily instantiated property can be received in, and a caller that holds
+		/// the label in one of the forms a tree can hold it in: `FormsDetail` receives the instance (required, required
+		/// optional, or only if available), now and then built inside a `SendableInstantiator`; `FormsSummary` receives the
+		/// wrapper the graph's kind allows (the same three ways); `FormsPreview` receives a wrapper of either kind only if
+		/// available; and the seam receives the label itself, as the instance or the wrapper, required or only if available.
+		/// The first root holds `formsUser` as the instance, the wrapper, the other wrapper kind, or nothing; through
+		/// `FormsHost`, which it builds through an instantiator and which forwards the optional instance or the optional
+		/// wrapper and builds the seam, beside or instead of its own instance; or as an instance whose own tree builds the
+		/// seam, or receives it only if available through `FormsGate`. The root declares `formsUser` before or after
+		/// `formsScreen`. Most draws are a mix the seam rules accept with a caller every required receive accepts, so that
+		/// the compile and the value comparator judge them; the rest are any mix and any caller, which the rules or the
+		/// inlined validation may reject. `formsRandom` draws only for this pass.
+		private mutating func addingLabelFormsSeam(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.contains(.generateDependencyTree), formsRandom.percentChance(50) else { return declarations }
+			var declarations = declarations
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			func type(_ suffix: String, arguments: [String] = [], properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				TypeDeclaration(name: "\(prefix)\(suffix)", instantiableArguments: arguments, properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+			}
+			let userType = "\(prefix)FormsUser"
+			// A `Sendable` graph's types store only `Sendable` wrappers, a non-`Sendable` graph's only `LazilyInstantiated`,
+			// whose instance need not be `Sendable`, and a mixed graph's either.
+			let wrapperKinds = switch sendability {
+			case .sendable:
+				["SendableLazilyInstantiated"]
+			case .nonSendable:
+				["LazilyInstantiated"]
+			case .mixed:
+				["LazilyInstantiated", "SendableLazilyInstantiated"]
+			}
+			let wrapper = formsRandom.element(of: wrapperKinds)
+			let otherWrapper = wrapperKinds.first { $0 != wrapper }
+			enum Receive: CaseIterable {
+				case required
+				case requiredOptional
+				case onlyIfAvailable
+			}
+			func receive(_ receive: Receive, ofType receivedType: String) -> PropertyDeclaration {
+				switch receive {
+				case .required:
+					PropertyDeclaration(attribute: "@Received", label: "formsUser", type: receivedType)
+				case .requiredOptional:
+					PropertyDeclaration(attribute: "@Received", label: "formsUser", type: receivedType + "?")
+				case .onlyIfAvailable:
+					PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "formsUser", type: receivedType + "?")
+				}
+			}
+			var screen = type("FormsScreen", arguments: ["generateDependencyTree: true"])
+			var user = type("FormsUser")
+			var newDeclarations = [TypeDeclaration]()
+			// The tree's receivers. Eight draws in ten are a mix the seam rules accept – a required wrapper beside a
+			// by-value form or the optional wrapper of its kind, the optional wrapper alone, or by-value forms alone – and
+			// the rest any mix, which the rules may reject as two parameters under one label.
+			var detailReceive: Receive?
+			var summaryReceive: Receive?
+			var previewWrapper: String?
+			var ownReceive: (receive: Receive, isWrapper: Bool)?
+			if formsRandom.percentChance(80) {
+				switch formsRandom.integer(in: 0...2) {
+				case 0:
+					summaryReceive = .required
+					detailReceive = formsRandom.percentChance(70) ? formsRandom.element(of: [Receive.required, .onlyIfAvailable]) : nil
+					previewWrapper = formsRandom.percentChance(30) ? wrapper : nil
+				case 1:
+					summaryReceive = .onlyIfAvailable
+					previewWrapper = formsRandom.percentChance(25) ? wrapper : nil
+				default:
+					detailReceive = formsRandom.element(of: Receive.allCases)
+				}
+			} else {
+				detailReceive = formsRandom.percentChance(60) ? formsRandom.element(of: Receive.allCases) : nil
+				summaryReceive = formsRandom.percentChance(60) || detailReceive == nil ? formsRandom.element(of: Receive.allCases) : nil
+				if formsRandom.percentChance(25) {
+					// A wrapper of the other kind, where the graph's types can hold one, half the time.
+					if let otherWrapper, formsRandom.percentChance(50) {
+						previewWrapper = otherWrapper
+					} else {
+						previewWrapper = wrapper
+					}
+				}
+				// The seam's own receive of the label.
+				if formsRandom.percentChance(50) {
+					ownReceive = (formsRandom.percentChance(50) ? .required : .onlyIfAvailable, formsRandom.percentChance(50))
+				}
+			}
+			if let ownReceive {
+				screen.properties.append(receive(ownReceive.receive, ofType: ownReceive.isWrapper ? "\(wrapper)<\(userType)>" : userType))
+			}
+			var receivers = [(name: String, property: PropertyDeclaration)]()
+			if let detailReceive {
+				receivers.append(("FormsDetail", receive(detailReceive, ofType: userType)))
+			}
+			if let summaryReceive {
+				receivers.append(("FormsSummary", receive(summaryReceive, ofType: "\(wrapper)<\(userType)>")))
+			}
+			if let previewWrapper {
+				receivers.append(("FormsPreview", receive(.onlyIfAvailable, ofType: "\(previewWrapper)<\(userType)>")))
+			}
+			for (name, property) in receivers {
+				newDeclarations.append(type(name, properties: [property]))
+				let label = "forms" + name.dropFirst("Forms".count)
+				// `FormsDetail` now and then built inside a `@Sendable` builder, in a graph whose types may be captured by one.
+				if name == "FormsDetail", sendability != .nonSendable, formsRandom.percentChance(30) {
+					screen.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "formsDetailBuilder", type: "SendableInstantiator<\(prefix)FormsDetail>"))
+				} else {
+					screen.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: label.prefix(1).lowercased() + label.dropFirst(), type: "\(prefix)\(name)"))
+				}
+			}
+
+			// The caller: what the first root, or the host it builds, holds the label as. Nine draws in ten hold a form every
+			// required receive accepts, where one does.
+			enum Holding: CaseIterable {
+				case instance
+				case wrapper
+				case otherWrapper
+				case forwardedOptionalInstance
+				case forwardedOptionalWrapper
+				case instanceAndNearerForwardedOptionalInstance
+				case instanceWhoseTreeBuildsSeam
+				case instanceWhoseTreeReceivesSeamOnlyIfAvailable
+				case nothing
+			}
+			var holdings = Set(Holding.allCases)
+			func requires(_ receive: Receive?, isWrapper: Bool) {
+				switch (receive, isWrapper) {
+				case (.required?, true):
+					holdings.formIntersection([.wrapper])
+				case (.requiredOptional?, true):
+					holdings.formIntersection([.wrapper, .forwardedOptionalWrapper])
+				case (.required?, false):
+					holdings.formIntersection([.instance, .wrapper, .otherWrapper, .instanceWhoseTreeReceivesSeamOnlyIfAvailable])
+				case (.requiredOptional?, false):
+					holdings.formIntersection([.instance, .forwardedOptionalInstance, .instanceAndNearerForwardedOptionalInstance, .instanceWhoseTreeReceivesSeamOnlyIfAvailable])
+				case (.onlyIfAvailable?, _), (nil, _):
+					break
+				}
+			}
+			requires(detailReceive, isWrapper: false)
+			requires(summaryReceive, isWrapper: true)
+			requires(ownReceive?.receive, isWrapper: ownReceive?.isWrapper ?? false)
+			let compatibleHoldings = Holding.allCases.filter(holdings.contains)
+			let holding = !compatibleHoldings.isEmpty && formsRandom.percentChance(90) ? formsRandom.element(of: compatibleHoldings) : formsRandom.element(of: Holding.allCases)
+			let screenProperty = PropertyDeclaration(attribute: "@Instantiated", label: "formsScreen", type: screen.name)
+			var rootProperties = [PropertyDeclaration]()
+			func host(forwarding forwardedType: String) -> PropertyDeclaration {
+				newDeclarations.append(type("FormsHost", properties: [PropertyDeclaration(attribute: "@Forwarded", label: "formsUser", type: forwardedType), screenProperty]))
+				return PropertyDeclaration(attribute: "@Instantiated", label: "formsHostBuilder", type: "\(instantiator)<\(prefix)FormsHost>")
+			}
+			let userDeclaredFirst = formsRandom.percentChance(50)
+			func rootHolds(_ holding: PropertyDeclaration) {
+				rootProperties = userDeclaredFirst ? [holding, screenProperty] : [screenProperty, holding]
+			}
+			switch holding {
+			case .instance:
+				rootHolds(PropertyDeclaration(attribute: "@Instantiated", label: "formsUser", type: userType))
+			case .wrapper:
+				rootHolds(PropertyDeclaration(attribute: "@Instantiated", label: "formsUser", type: "\(wrapper)<\(userType)>"))
+			case .otherWrapper:
+				rootHolds(PropertyDeclaration(attribute: "@Instantiated", label: "formsUser", type: "\(otherWrapper ?? wrapper)<\(userType)>"))
+			case .forwardedOptionalInstance:
+				rootProperties = [host(forwarding: userType + "?")]
+			case .forwardedOptionalWrapper:
+				rootProperties = [host(forwarding: "\(wrapper)<\(userType)>?")]
+			case .instanceAndNearerForwardedOptionalInstance:
+				// The instance, and a host nearer the seam that forwards its optional form.
+				rootProperties = [PropertyDeclaration(attribute: "@Instantiated", label: "formsUser", type: userType), host(forwarding: userType + "?")]
+			case .instanceWhoseTreeBuildsSeam:
+				user.properties.append(screenProperty)
+				rootProperties = [PropertyDeclaration(attribute: "@Instantiated", label: "formsUser", type: userType)]
+			case .instanceWhoseTreeReceivesSeamOnlyIfAvailable:
+				newDeclarations.append(type("FormsGate", properties: [PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "formsScreen", type: screen.name + "?")]))
+				user.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "formsGate", type: "\(prefix)FormsGate"))
+				rootHolds(PropertyDeclaration(attribute: "@Instantiated", label: "formsUser", type: userType))
+			case .nothing:
+				rootProperties = [screenProperty]
+			}
+			declarations[0].properties += rootProperties
+			return declarations + [screen, user] + newDeclarations
+		}
+
+		// MARK: Self-contained seams across modules
+
+		/// With the `generateDependencyTree` feature on, in a graph split across modules, moves each seam tree whose types
+		/// name no type of the rest of the graph into the seam's module half the time, so that its callers compute its
+		/// signature from what that module's declarations say, as a caller in another module does: `AliasSeam`'s tree (with
+		/// `AliasValue` and `AliasLabel`), `FormsScreen`'s (with `FormsUser` and `FormsGate`; `FormsHost`, a caller, stays),
+		/// and `SpellSeam`'s with its children (`SpellHost`, a caller, stays), unless its value names the graph's own `Value`.
+		/// Decided last, from `crossModuleRandom`, so that every other graph is drawn as before.
+		private mutating func movingSelfContainedSeamsIntoSeamModule(_ declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.contains(.generateDependencyTree), declarations.contains(where: { $0.module == .seamModule }) else { return declarations }
+			var declarations = declarations
+			let prefix = prefix
+			let valueTypeName = "\(prefix)Value"
+			let spellSeamNamesValue = declarations.contains { $0.name == "\(prefix)SpellSeam" && $0.properties.contains { $0.type.contains(valueTypeName) } }
+				|| declarations.contains { $0.name.hasPrefix("\(prefix)Spell") && $0.properties.contains { $0.label == GraphFuzzerSpelling.label && $0.type.contains(valueTypeName) } }
+			let trees: [(isMember: (String) -> Bool, isMovable: Bool)] = [
+				({ $0.hasPrefix("\(prefix)Alias") }, true),
+				({ $0.hasPrefix("\(prefix)Forms") && $0 != "\(prefix)FormsHost" }, true),
+				({ ["SpellSeam", "SpellChild", "SpellSibling"].map { "\(prefix)\($0)" }.contains($0) }, !spellSeamNamesValue),
+			]
+			for tree in trees {
+				guard declarations.contains(where: { tree.isMember($0.name) }), crossModuleRandom.percentChance(50), tree.isMovable else { continue }
+				for index in declarations.indices where tree.isMember(declarations[index].name) {
+					declarations[index].module = .seamModule
+				}
+			}
+			return declarations
+		}
+
+		// MARK: Access proof extensions
+
+		/// With the `generateDependencyTree` feature on, extends `addingAccessProofShapes`' tree with the shapes that pass
+		/// does not draw: half of `ProofMeter`'s `Swift.`-qualified types spelled `Foundation.`-qualified instead; a
+		/// `mockOnly` fake in the seam's module, `ProofFake`, whose mock takes the plain `ProofTheme` `ProofBadge` receives as
+		/// a dependency, at the theme's access or narrower; and a host that holds the tree's values otherwise – lazily
+		/// instantiating an `@Instantiable` value, receiving its plain values only if available rather than forwarding
+		/// them, or reaching the seam through `ProofSeamHolder`, a type of its own module between it and the seam – or that
+		/// is itself a seam, whose tree calls `ProofSeam`'s tier from its own module. `proofExtensionRandom` draws only for
+		/// this pass.
+		private mutating func addingAccessProofExtensions(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			// Declared before the guard's closure: Swift 6.2 rejects a closure that captures a `let` declared later in its
+			// scope ("closure captures 'prefix' before it is declared"); later Swift accepts it.
+			let prefix = prefix
+			guard features.contains(.generateDependencyTree), declarations.contains(where: { $0.name == "\(prefix)ProofSeam" }) else { return declarations }
+			var declarations = declarations
+			func index(_ suffix: String) -> Int? {
+				declarations.firstIndex { $0.name == prefix + suffix }
+			}
+			// A `Foundation.`-qualified standard type, which every module can name.
+			if let meterIndex = index("ProofMeter"), proofExtensionRandom.percentChance(50) {
+				let foundationType = proofExtensionRandom.element(of: ["Foundation.Date", "Foundation.UUID"])
+				declarations[meterIndex].imports.append("Foundation")
+				declarations[meterIndex].properties = declarations[meterIndex].properties.map { property in
+					guard property.label == "proofCount" else { return property }
+					return PropertyDeclaration(attribute: property.attribute, label: property.label, type: foundationType + (property.type.hasSuffix("?") ? "?" : ""))
+				}
+				for hostIndex in [index("ProofHost"), index("ProofOtherHost")].compactMap(\.self) where declarations[hostIndex].properties.contains(where: { $0.label == "proofCount" }) {
+					declarations[hostIndex].imports.append("Foundation")
+					declarations[hostIndex].properties = declarations[hostIndex].properties.map { property in
+						property.label == "proofCount" ? PropertyDeclaration(attribute: property.attribute, label: property.label, type: foundationType) : property
+					}
+				}
+			}
+			// A `mockOnly` fake whose mock mentions the plain theme `ProofBadge` receives, no wider than the theme.
+			if let badgeIndex = index("ProofBadge"), index("ProofTheme") == nil, proofExtensionRandom.percentChance(30) {
+				let themeAccess = proofTypeAccess["\(prefix)ProofTheme"] ?? .public
+				let fakeAccess = proofExtensionRandom.element(of: AccessLevel.allCases.filter { $0 <= themeAccess })
+				let fakeName = "\(prefix)ProofFake"
+				declarations[badgeIndex].additionalDeclarations.append("#if DEBUG\n@Instantiable(mockOnly: true)\n\(fakeAccess.modifier)struct \(fakeName) {\n\t@Received let proofTheme: \(prefix)ProofTheme\n\n\t\(fakeAccess.modifier)static func mock(proofTheme: \(prefix)ProofTheme) -> \(fakeName) {\n\t\t\(fakeName)(proofTheme: proofTheme)\n\t}\n}\n#endif")
+			}
+			let lazyWrapper = sendability == .sendable ? "SendableLazilyInstantiated" : "LazilyInstantiated"
+			for hostSuffix in ["ProofHost", "ProofOtherHost"] {
+				guard let hostIndex = index(hostSuffix) else { continue }
+				let host = declarations[hostIndex]
+				switch proofExtensionRandom.integer(in: 0...9) {
+				case 0:
+					// An `@Instantiable` value lazily instantiated.
+					if let valueIndex = host.properties.firstIndex(where: { $0.attribute == "@Instantiated" && $0.label != "proofSeam" }) {
+						let value = host.properties[valueIndex]
+						declarations[hostIndex].properties[valueIndex] = PropertyDeclaration(attribute: value.attribute, label: value.label, type: "\(lazyWrapper)<\(value.type)>")
+					}
+				case 1:
+					// The plain values received only if available, which nothing above provides.
+					declarations[hostIndex].properties = host.properties.map { property in
+						property.attribute == "@Forwarded" ? PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: property.label, type: property.type + "?") : property
+					}
+				case 2:
+					// The seam reached through a type of the host's module between them.
+					if let seamPropertyIndex = host.properties.firstIndex(where: { $0.label == "proofSeam" }) {
+						let holderName = hostSuffix == "ProofHost" ? "ProofSeamHolder" : "ProofOtherSeamHolder"
+						var holder = TypeDeclaration(name: prefix + holderName, instantiableArguments: [], properties: [host.properties[seamPropertyIndex]], declaresHelperTypes: false, additionalConformances: host.additionalConformances)
+						holder.access = host.access
+						holder.module = host.module
+						declarations[hostIndex].properties[seamPropertyIndex] = PropertyDeclaration(attribute: "@Instantiated", label: "proofSeamHolder", type: holder.name)
+						declarations.append(holder)
+					}
+				default:
+					break
+				}
+				// The host itself a seam, whose tree calls `ProofSeam`'s tier from the host's module.
+				if proofExtensionRandom.percentChance(20) {
+					declarations[hostIndex].instantiableArguments.insert("generateDependencyTree: true", at: 0)
+				}
+			}
+			return declarations
+		}
 
 		// MARK: Extension
 
@@ -3754,7 +4310,8 @@ enum GraphFuzzerGenerator {
 			for additionalDeclaration in declaration.additionalDeclarations {
 				lines += ["", additionalDeclaration]
 			}
-			return (declaration.module.map { $0.fileHeader(omitsPackageName: modulesOmittingPackageName.contains($0), fillsHole: declaration.fillsHole) } ?? "") + lines.joined(separator: "\n") + "\n"
+			let imports = declaration.imports.map { "import \($0)\n" }.joined() + (declaration.imports.isEmpty ? "" : "\n")
+			return (declaration.module.map { $0.fileHeader(omitsPackageName: modulesOmittingPackageName.contains($0), fillsHole: declaration.fillsHole) } ?? "") + imports + lines.joined(separator: "\n") + "\n"
 		}
 
 		/// The narrowest access of the types `addingAccessProofShapes` declares narrower than `public` that `type` names,
@@ -4324,7 +4881,8 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		for property in properties(ofTypeNamed: "AliasSeam") {
 			if property.label == "aliasAuth", aliasedLabel(of: property.attribute) == nil {
 				features.insert(property.attribute.hasPrefix("@Instantiated") ? .uncreatedAliasDeclarationAbove : .uncreatedAliasLabelParameter)
-			} else if property.label == "aliasToken", aliasedLabel(of: property.attribute) == nil {
+			} else if property.label == "aliasToken", aliasedLabel(of: property.attribute) == nil, property.attribute != "@Received(onlyIfAvailable: true)" {
+				// The seam's own only-if-available receive is a parameter that defaults to `nil`, which is no required one.
 				features.insert(.uncreatedAliasRequiredOptionalParameter)
 			}
 		}
@@ -4339,6 +4897,116 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				if typeProperties.contains(where: { $0.label == "aliasToken" }) {
 					features.insert(.uncreatedAliasFulfillingPropertyHeldByCaller)
 				}
+			}
+		}
+		// `addingUncreatedAliasExtensions`' shapes.
+		func isAliasProperty(_ property: (attribute: String, label: String, type: String)) -> Bool {
+			aliasedLabel(of: property.attribute) != nil
+		}
+		let leftProperties = properties(ofTypeNamed: "AliasLeft")
+		let aliasSeamProperties = properties(ofTypeNamed: "AliasSeam")
+		for property in leftProperties + aliasSeamProperties + properties(ofTypeNamed: "AliasMid") where property.label == "aliasAuth" && isWrapper(property.type) {
+			features.insert(.uncreatedAliasLabelLazilyInstantiatedBeside)
+		}
+		if leftProperties.contains(where: { $0.label == "aliasAuth" && $0.attribute == "@Received(onlyIfAvailable: true)" }) {
+			features.insert(.uncreatedAliasLabelReceivedBeside)
+		}
+		if properties(ofTypeNamed: "AliasMid").contains(where: { $0.label == "aliasAuth" && !isAliasProperty($0) }) {
+			features.insert(.uncreatedAliasLabelOnMid)
+		}
+		if aliasSeamProperties.contains(where: { $0.label == "aliasAuth" && $0.attribute == "@Received" }) {
+			features.insert(.uncreatedAliasSeamRequiresLabel)
+		}
+		if aliasSeamProperties.contains(where: { $0.label == "aliasAuth" && $0.attribute == "@Received(onlyIfAvailable: true)" && $0.type.hasSuffix("AliasLabel?") }) {
+			features.insert(.uncreatedAliasSeamReceivesLabelAsAnotherType)
+		}
+		if allProperties.contains(where: { $0.label == "aliasAuth" && aliasedLabel(of: $0.attribute) == "aliasOther" }) {
+			features.insert(.uncreatedAliasLabelAliasesOtherParameter)
+		}
+		if let detailIndex = leftProperties.firstIndex(where: { $0.label == "aliasDetail" }), leftProperties[detailIndex...].contains(where: { $0.label == "aliasAuth" }) {
+			features.insert(.uncreatedAliasLabelDeclaredAfterDetail)
+		}
+		if aliasSeamProperties.contains(where: { $0.label == "aliasAuth" && $0.attribute == "@Instantiated" }), leftProperties.contains(where: { $0.label == "aliasAuth" && !isAliasProperty($0) }) {
+			features.insert(.uncreatedAliasLabelDeclaredBesideAndAbove)
+		}
+		if properties(ofTypeNamed: "AliasClient").contains(where: { $0.label == "aliasAuth" && $0.type.contains("LazilyInstantiated<") }) {
+			features.insert(.uncreatedAliasClientReceivesWrapper)
+		}
+		if aliasSeamProperties.contains(where: { $0.label == "aliasBearer" }) {
+			features.insert(.uncreatedAliasAliasOfAliasOnSeam)
+		}
+		if readerProperties.contains(where: { $0.label == "aliasBearer" && !isAliasProperty($0) }) {
+			features.insert(.uncreatedAliasReaderOfAliasOfAlias)
+		}
+		if readerProperties.contains(where: { aliasedLabel(of: $0.attribute) == "aliasAuth" && !$0.attribute.contains("onlyIfAvailable") }) {
+			features.insert(.uncreatedAliasRequiredLabelKeepingAliasReader)
+		}
+		if readerProperties.contains(where: { $0.label == "aliasAuth" && aliasedLabel(of: $0.attribute) == "aliasToken" }) {
+			features.insert(.uncreatedAliasReaderRedeclaresAlias)
+		}
+		if properties(ofTypeNamed: "AliasValue").contains(where: { $0.label == "aliasDetail" && $0.attribute == "@Received(onlyIfAvailable: true)" }) {
+			features.insert(.uncreatedAliasLabelGeneratedAfterDetail)
+		}
+		if aliasSeamProperties.contains(where: { $0.label == "aliasToken" && $0.attribute == "@Received(onlyIfAvailable: true)" }) {
+			features.insert(.uncreatedAliasSeamReceivesFulfillingPropertyOnlyIfAvailable)
+		}
+		if declaresType(named: "AliasNeed") {
+			features.insert(.uncreatedAliasFulfillingPropertyRequiredBeside)
+		}
+		// `movingSelfContainedSeamsIntoSeamModule`'s trees in the seam's module.
+		for content in fixture.swiftFileContent where GraphFuzzerModule(declaredIn: content) == .seamModule {
+			for line in GraphFuzzerSourceLine.lines(of: content) {
+				guard case let .typeDeclaration(name) = line else { continue }
+				if name.hasSuffix("AliasSeam") {
+					features.insert(.uncreatedAliasAcrossModules)
+				} else if name.hasSuffix("SpellSeam") {
+					features.insert(.spelledAcrossModules)
+				} else if name.hasSuffix("FormsScreen") {
+					features.insert(.formsAcrossModules)
+				}
+			}
+		}
+		// `addingLabelFormsSeam`'s shapes.
+		if declaresType(named: "FormsScreen") {
+			features.insert(.formsSeam)
+			let formsProperties = ["FormsScreen", "FormsDetail", "FormsSummary", "FormsPreview"].flatMap { properties(ofTypeNamed: $0) }
+			if declaresType(named: "FormsDetail") {
+				features.insert(.formsByValueReceive)
+			}
+			if declaresType(named: "FormsSummary") {
+				features.insert(.formsWrapperReceive)
+			}
+			if declaresType(named: "FormsPreview") {
+				features.insert(.formsOptionalWrapperReceive)
+			}
+			if formsProperties.contains(where: { $0.label == "formsUser" && $0.attribute == "@Received" && $0.type.hasSuffix("?") }) {
+				features.insert(.formsRequiredOptionalReceive)
+			}
+			let screenProperties = properties(ofTypeNamed: "FormsScreen")
+			if screenProperties.contains(where: { $0.label == "formsUser" }) {
+				features.insert(.formsSeamOwnReceive)
+			}
+			if screenProperties.contains(where: { $0.label == "formsDetailBuilder" }) {
+				features.insert(.formsDetailInSendableBuilder)
+			}
+			let rootProperties = propertiesByType.first { $0.key.hasSuffix("Root0") }?.value ?? []
+			let rootUser = rootProperties.first { $0.label == "formsUser" }
+			let hasHost = declaresType(named: "FormsHost")
+			if properties(ofTypeNamed: "FormsUser").contains(where: { $0.label == "formsScreen" }) {
+				features.insert(.formsInstanceTreeBuildsSeam)
+			} else if declaresType(named: "FormsGate") {
+				features.insert(.formsInstanceTreeReceivesSeamOnlyIfAvailable)
+			} else if rootUser != nil, hasHost {
+				features.insert(.formsCallerHoldsNearerOptionalInstance)
+			} else if hasHost {
+				features.insert(.formsCallerForwardsOptionalForm)
+			} else if let rootUser {
+				features.insert(isWrapper(rootUser.type) ? .formsCallerHoldsWrapper : .formsCallerHoldsInstance)
+			} else {
+				features.insert(.formsCallerHoldsNothing)
+			}
+			if let screenIndex = rootProperties.firstIndex(where: { $0.label == "formsScreen" }), rootProperties[screenIndex...].contains(where: { $0.label == "formsUser" }) {
+				features.insert(.formsUserDeclaredAfterSeam)
 			}
 		}
 		return features.union(accessProofDrawFeatures(of: fixture)).union(holeDrawFeatures(of: fixture))
@@ -4550,6 +5218,27 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			let hostProperties = properties(of: hostSuffix)
 			if let seamIndex = hostProperties.firstIndex(where: { $0.label == "proofSeam" }), hostProperties[(seamIndex + 1)...].contains(where: { $0.attribute == "@Instantiated" }) {
 				features.insert(.valueDeclaredAfterSeam)
+			}
+		}
+		if properties(of: "ProofMeter").contains(where: { $0.type.hasPrefix("Foundation.") }) {
+			features.insert(.foundationQualifiedAllowlistMention)
+		}
+		if fixture.swiftFileContent.contains(where: { $0.contains("struct \(prefix)ProofFake {") }) {
+			features.insert(.mockOnlyFakeMentionsReceivedType)
+		}
+		for hostSuffix in ["ProofHost", "ProofOtherHost"] {
+			let hostProperties = properties(of: hostSuffix)
+			if hostProperties.contains(where: { $0.type.contains("LazilyInstantiated<") }) {
+				features.insert(.lazilyInstantiatedProvider)
+			}
+			if hostProperties.contains(where: { $0.attribute == "@Received(onlyIfAvailable: true)" }) {
+				features.insert(.hostReceivesValuesOnlyIfAvailable)
+			}
+			if hostProperties.contains(where: { $0.label == "proofSeamHolder" }) {
+				features.insert(.seamReachedThroughHolder)
+			}
+			if fixture.seamTypeNames.contains(prefix + hostSuffix) {
+				features.insert(hostSuffix == "ProofHost" ? .samePackageHostIsSeam : .otherPackageHostIsSeam)
 			}
 		}
 		if fixture.modules != nil {
@@ -5495,7 +6184,9 @@ struct GraphFuzzerToolRuns {
 			}
 		case let .rejected(diagnostics):
 			kind = .seamTierOmitsProvidedValueReportedWhereInlinePassesNil
-			for error in diagnostics.split(separator: "\n") where error.contains(": error: ") {
+			// An outer seam that takes the value from its own callers reports the omission whatever its callers hold, which
+			// the inline build of this graph's callers cannot judge.
+			for error in diagnostics.split(separator: "\n") where error.contains(": error: ") && !GraphFuzzerOracle.isOuterSeamOmittedValueError(error) {
 				guard let label = GraphFuzzerOracle.omittedValueLabel(of: error),
 				      let module = [GraphFuzzerModule.samePackageCaller, .otherPackageCaller].first(where: { error.contains("/Sources/\($0.name)/") }),
 				      !inlinePassesValue(for: label, in: module)
@@ -5766,6 +6457,7 @@ enum GraphFuzzerOracle {
 				let differences = valueComparison.differences.filter { difference in
 					(!visiblyComparedSeeds.contains(runs.fixture.seed) || !difference.path.contains("holeSeamBuilder"))
 						&& !statedDivergences.contains(difference)
+						&& (isPublicMockGraph || !Self.isEagerInstanceRead(difference))
 				}
 				guard !differences.isEmpty else { continue }
 				failures[runs.fixture.seed] = GraphFuzzerFailure(
@@ -5786,77 +6478,13 @@ enum GraphFuzzerOracle {
 	}
 
 	/// The differences between a seam build and its inline build that the Manual documents, stated exactly, which the
-	/// comparison of `fixture`'s graph exempts. They are the first divergence of the graphs that also fail an inherited
+	/// comparison of `fixture`'s graph exempts: the first divergence of the graphs that also fail an inherited
 	/// known-issue shape, so that the shape's seed stays listed there (the graphs that show the first or second
 	/// divergence and nothing else are known issues of the divergence's shape, which matches every difference of a
-	/// failure), and every eager read of the third, one exemption per read: a seam call passes `.instance` of a
-	/// wrapper its caller holds, where inline the receiver inside the seam's tree reads it when it is built, so the
-	/// seam build's description marks the instance `(built before the probe's value)`. Observed from the corpus run,
-	/// as `seamCorpusSeedsOfOtherShapes` is.
+	/// failure). Observed from the corpus run, as `seamCorpusSeedsOfOtherShapes` is. Every eager read of a wrapper's
+	/// instance at a seam call is exempted by its shape instead (`isEagerInstanceRead`).
 	static func documentedSeamValueDivergences(of fixture: GraphFuzzerFixture) -> [DifferentialValueDifference] {
 		switch fixture.seed {
-		case 239:
-			// The third documented divergence: each root calls the seam `S239_T2` with `seamLazy.instance`, where inline
-			// `S239_T1`, built by an instantiator in the seam's tree, reads it.
-			[
-				DifferentialValueDifference(
-					probe: "S239_Root0()",
-					path: ["<11>.instance"],
-					feature: "<11>.instance: <8> S239_SeamShared (built before the probe's value) (seen, first at <1> S239_Root0 > t0 > anyT2 > value > t1Builder > instantiate() > seamLazy)",
-					knownRight: "<11>.instance: <8> S239_SeamShared (seen, first at <1> S239_Root0 > t0 > anyT2 > value > t1Builder > instantiate() > seamLazy)",
-				),
-				DifferentialValueDifference(
-					probe: "S239_Root1()",
-					path: ["<12>.instance"],
-					feature: "<12>.instance: <8> S239_SeamShared (built before the probe's value) (seen, first at <1> S239_Root1 > t0 > anyT2 > value > t1Builder > instantiate() > seamLazy)",
-					knownRight: "<12>.instance: <8> S239_SeamShared (seen, first at <1> S239_Root1 > t0 > anyT2 > value > t1Builder > instantiate() > seamLazy)",
-				),
-			]
-		case 240:
-			// The third documented divergence: the root calls the seam `S240_T3` with `seamLazy.instance`, where inline
-			// `S240_T5`, built by an instantiator in the seam's tree, reads it.
-			[
-				DifferentialValueDifference(
-					probe: "S240_Root0()",
-					path: ["<68>.instance"],
-					feature: "<68>.instance: <28> S240_SeamShared (built before the probe's value) (seen, first at <1> S240_Root0 > t3 > t5Builder > instantiate() > t3Builder > instantiate() > t5Builder > instantiate() > seamLazy)",
-					knownRight: "<68>.instance: <28> S240_SeamShared (seen, first at <1> S240_Root0 > t3 > t5Builder > instantiate() > t3Builder > instantiate() > t5Builder > instantiate() > seamLazy)",
-				),
-			]
-		case 298:
-			// The third documented divergence: the root calls the seam `S298_T4` with `seamLazy.instance`, where inline
-			// `S298_T2`, built by an instantiator in the seam's tree, reads it.
-			[
-				DifferentialValueDifference(
-					probe: "S298_Root1()",
-					path: ["<16>.instance"],
-					feature: "<16>.instance: <5> S298_SeamShared (built before the probe's value) (seen, first at <1> S298_Root1 > t2Builder > instantiate() > seamLazy)",
-					knownRight: "<16>.instance: <5> S298_SeamShared (seen, first at <1> S298_Root1 > t2Builder > instantiate() > seamLazy)",
-				),
-			]
-		case 358:
-			// The third documented divergence: each root calls the seam `S358_T1` with `seamLazy.instance`, where inline
-			// `S358_T2`, built by an erased instantiator the comparator does not traverse, reads it.
-			[
-				DifferentialValueDifference(
-					probe: "S358_Root0()",
-					path: ["<5>.instance"],
-					feature: "<5>.instance: <8> S358_SeamShared (built before the probe's value)",
-					knownRight: "<5>.instance: <8> S358_SeamShared",
-				),
-				DifferentialValueDifference(
-					probe: "S358_Root1()",
-					path: ["<5>.instance"],
-					feature: "<5>.instance: <6> S358_SeamShared (built before the probe's value)",
-					knownRight: "<5>.instance: <6> S358_SeamShared",
-				),
-				DifferentialValueDifference(
-					probe: "S358_Root2()",
-					path: ["<5>.instance"],
-					feature: "<5>.instance: <6> S358_SeamShared (built before the probe's value)",
-					knownRight: "<5>.instance: <6> S358_SeamShared",
-				),
-			]
 		case 833:
 			// The first documented divergence: the caller holds only the optional form of the alias's fulfilling
 			// property, and the seam creates the alias from it.
@@ -5869,6 +6497,17 @@ enum GraphFuzzerOracle {
 		default:
 			[]
 		}
+	}
+
+	/// Whether `difference` is the eager read of a wrapper's instance at a seam call that the Manual lists under "Where a
+	/// seam differs from building its tree inline", and nothing else: a seam call passes `.instance` of a wrapper its
+	/// caller holds, where inline the receiver inside the seam's tree reads it when it is built, so the seam build
+	/// describes the same instance, marked `(built before the probe's value)`, where the inline build does not mark it.
+	static func isEagerInstanceRead(_ difference: DifferentialValueDifference) -> Bool {
+		let marker = " (built before the probe's value)"
+		return difference.path.last?.hasSuffix(".instance") == true
+			&& difference.feature.contains(marker)
+			&& difference.feature.replacingOccurrences(of: marker, with: "") == difference.knownRight
 	}
 
 	/// How many times the code in `generatedFiles` passes a literal `nil` to each argument of each construction of a
@@ -6056,16 +6695,28 @@ enum GraphFuzzerOracle {
 
 	/// Whether `error`, a diagnostic line, reports a caller holding a value for a parameter the seam tier it calls
 	/// omits: "`Host` provides `theme: Theme`, but …", or, where the provider's file cannot be read, "`Host` in module
-	/// `Base` provides `theme: Theme`, but …".
+	/// `Base` provides `theme: Theme`, but …", or, where the caller is an outer seam that takes the value as a parameter
+	/// of its own, "`Outer` takes `theme: Theme?` from its callers, but …".
 	static func isOmittedValueError(_ error: Substring) -> Bool {
-		guard let message = error.range(of: ": error: ").map({ error[$0.upperBound...] }) else { return false }
-		return message.hasPrefix("`") && message.contains("` provides `") && message.contains("`, but ")
+		omittedValueLabel(of: error) != nil
 	}
 
-	/// The label of the parameter an omitted-value error names: `theme` of "`Host` provides `theme: Theme`, but …".
+	/// The label of the parameter an omitted-value error names: `theme` of "`Host` provides `theme: Theme`, but …" or of
+	/// "`Outer` takes `theme: Theme?` from its callers, but …".
 	static func omittedValueLabel(of error: Substring) -> String? {
-		guard isOmittedValueError(error), let provides = error.range(of: "` provides `") else { return nil }
-		return String(error[provides.upperBound...].prefix { $0 != ":" })
+		guard let message = error.range(of: ": error: ").map({ error[$0.upperBound...] }), message.hasPrefix("`") else { return nil }
+		for (opening, closing) in [("` provides `", "`, but "), ("` takes `", "` from its callers, but ")] {
+			if let property = message.range(of: opening), let end = message[property.upperBound...].range(of: closing) {
+				return String(message[property.upperBound..<end.lowerBound].prefix { $0 != ":" })
+			}
+		}
+		return nil
+	}
+
+	/// Whether `error` is an omitted-value error of an outer seam that takes the value from its own callers: "`Outer`
+	/// takes `theme: Theme?` from its callers, but …".
+	static func isOuterSeamOmittedValueError(_ error: Substring) -> Bool {
+		omittedValueLabel(of: error) != nil && error.contains("` from its callers, but ")
 	}
 
 	/// The access levels SafeDI and Swift spell, narrowest first, as `GraphFuzzerGenerator.AccessLevel` orders them.
@@ -6390,8 +7041,12 @@ enum GraphFuzzerOracle {
 			// One file per seam, beside the file that generated it, so that a file's contents never depend on the order
 			// a module's combined output declares its seams in.
 			let directory = fileName.contains("/") ? String(fileName.prefix { $0 != "/" }) + "/" : ""
+			// The modules the generated file imports, which the types a seam's parameters name may need: a module the seam's
+			// module depends on, or `Foundation`.
+			let imports = Set(contents.split(separator: "\n").filter { $0.hasPrefix("import ") }.map(String.init)).sorted()
 			for (seamTypeName, initializers) in initializersBySeam {
-				generatedFiles["\(directory)\(seamTypeName)+SafeDISeamCaller.swift"] = seamCaller(named: "\(seamTypeName)SeamCaller", of: seamTypeName, calling: Array(initializers.enumerated()), seamTypeAccess: seamTypeAccess[seamTypeName] ?? "public")
+				generatedFiles["\(directory)\(seamTypeName)+SafeDISeamCaller.swift"] = imports.map { $0 + "\n" }.joined() + (imports.isEmpty ? "" : "\n")
+					+ seamCaller(named: "\(seamTypeName)SeamCaller", of: seamTypeName, calling: Array(initializers.enumerated()), seamTypeAccess: seamTypeAccess[seamTypeName] ?? "public")
 			}
 			// The callers in the other modules of a split graph, of each seam the seam's module generated.
 			guard fileName.hasPrefix(GraphFuzzerModule.seamModule.name + "/") else { continue }
@@ -6402,7 +7057,8 @@ enum GraphFuzzerOracle {
 					(GraphFuzzerModule.otherPackageCaller, ["public"], "OtherPackageCaller"),
 				] where modules.contains(module) && reachableAccesses.contains(seamAccess) {
 					guard let tierIndex = initializers.lastIndex(where: { reachableAccesses.contains($0.access) }) else { continue }
-					generatedFiles["\(module.name)/\(seamTypeName)+SafeDISeamCaller.swift"] = "import \(GraphFuzzerModule.seamModule.name)\n\n"
+					let callerImports = Set(imports + ["import \(GraphFuzzerModule.seamModule.name)"]).sorted()
+					generatedFiles["\(module.name)/\(seamTypeName)+SafeDISeamCaller.swift"] = callerImports.map { $0 + "\n" }.joined() + "\n"
 						+ seamCaller(named: "\(seamTypeName)\(callerName)", of: seamTypeName, calling: [(tierIndex, initializers[tierIndex])], seamTypeAccess: seamAccess)
 				}
 			}
