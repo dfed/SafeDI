@@ -173,7 +173,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_A1F38183A3184A01.self
+			            _ = Screen.__safeDI_Screen_0A0B087775B360DD.self
 			            return Screen(user: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -183,7 +183,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(user: User?) {
+			    public init(user: User? = nil) {
 			        func __safeDI_left() -> Left {
 			            let user = User()
 			            let reader = Reader(user: user)
@@ -195,7 +195,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_A1F38183A3184A01 {}
+			    public enum __safeDI_Screen_0A0B087775B360DD {}
 			}
 			""",
 		])

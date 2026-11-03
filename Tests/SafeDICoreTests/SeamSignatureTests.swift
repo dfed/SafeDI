@@ -76,9 +76,18 @@ struct SeamSignatureTests {
 		("property", .callShapeAndSettledContent),
 		("isPassThrough", .settledContent),
 		("access", .settledContent),
+		// Derived from the declarations the signature is computed from, as `access` is, which the settled content holds:
+		// what a diagnostic says about the access.
+		("accessCause", .neither),
 		("tierAccess", .callShapeAndSettledContent),
 		("defaultsToNil", .callShapeAndSettledContent),
 		("receivers", .settledContent),
+		// Derived from the nested seam calls the receivers come through, which the settled content holds by their tiers:
+		// what a diagnostic about a parameter on no tier names.
+		("nestedSeamCall", .neither),
+		// Derived from the declarations the signature is computed from, as `access` is: whether a diagnostic offers to
+		// widen the seam's own initializer.
+		("otherInitializerArgumentsAccess", .neither),
 	]
 
 	private static let receiverClassification: [(label: String, projection: Projection)] = [
@@ -89,7 +98,9 @@ struct SeamSignatureTests {
 		("declaringType", .settledContent),
 		("declarationLocation", .neither),
 		("access", .settledContent),
-		("accessIsCappedByInitializer", .settledContent),
+		// Derived from the receiver's declaration – whether the declaring type is extension-based – so it changes only
+		// with `declaringType`, which the settled content holds.
+		("isInstantiateMethodParameter", .neither),
 	]
 
 	private static let receiver = SeamSignature.Receiver(
@@ -97,7 +108,6 @@ struct SeamSignatureTests {
 		declaringType: .simple(name: "Reader"),
 		declarationLocation: .init(filePath: "Reader.swift", line: 7, column: 5),
 		access: .internal,
-		accessIsCappedByInitializer: false,
 	)
 
 	private static let parameter = parameter(withReceiver: receiver)
@@ -115,6 +125,9 @@ struct SeamSignatureTests {
 			tierAccess: label == "tierAccess" ? .package : parameter.tierAccess,
 			defaultsToNil: label == "defaultsToNil" ? false : parameter.defaultsToNil,
 			receivers: label == "receivers" ? [] : parameter.receivers,
+			accessCause: label == "accessCause" ? .unproven(type: .simple(name: "User")) : parameter.accessCause,
+			nestedSeamCall: label == "nestedSeamCall" ? SeamSignature.NestedSeamCall(seamType: .simple(name: "Service"), seamModuleName: "Base", tier: .public, requirement: .public, callerModuleName: "Mid", parameterTierAccess: .package, receivingTypes: [.simple(name: "Badge")]) : parameter.nestedSeamCall,
+			otherInitializerArgumentsAccess: label == "otherInitializerArgumentsAccess" ? .package : parameter.otherInitializerArgumentsAccess,
 		)
 	}
 
@@ -124,8 +137,8 @@ struct SeamSignatureTests {
 			declaringType: label == "declaringType" ? .simple(name: "Writer") : receiver.declaringType,
 			declarationLocation: label == "declarationLocation" ? .init(filePath: "Reader.swift", line: 8, column: 5) : receiver.declarationLocation,
 			access: label == "access" ? .public : receiver.access,
-			accessIsCappedByInitializer: label == "accessIsCappedByInitializer" ? true : receiver.accessIsCappedByInitializer,
 			aliasProperty: label == "aliasProperty" ? Property(label: "authToken", typeDescription: .simple(name: "Token")) : receiver.aliasProperty,
+			isInstantiateMethodParameter: label == "isInstantiateMethodParameter" ? true : receiver.isInstantiateMethodParameter,
 		)
 	}
 

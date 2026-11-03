@@ -551,9 +551,9 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func dependencyTree_bindsEveryTierToMainActor_whenSeamWithTwoTiersSetsGeneratedInitializerAttributes() async throws {
-		// `Detail`'s initializer is internal, so the `token` it receives only if available is a parameter of an
-		// internal tier, which the public tier calls: both carry the attributes, so either can be called, and the
-		// public tier can call the internal one.
+		// `Token` is internal, so the `token` `Detail` receives only if available is a parameter of an internal tier,
+		// which the public tier calls: both carry the attributes, so either can be called, and the public tier can call
+		// the internal one.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -581,8 +581,8 @@ struct SafeDIToolGeneratedAttributesTests: ~Copyable {
 				Self.mainActorPresenter,
 				"""
 				@Instantiable
-				public struct Token: Instantiable {
-				    public init() {}
+				struct Token: Instantiable {
+				    init() {}
 				}
 				""",
 				Self.root(attributes: #", generatedInitializerAttributes: "@MainActor""#),

@@ -1,0 +1,3617 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+import Foundation
+import SafeDICore
+import Testing
+@testable import SafeDITool
+
+/// A seam parameter is as visible as the narrowest type it names, as far as SafeDI can prove it from the declarations it
+/// records: a type's own `@Instantiable` declaration, the initializers, `instantiate(…)` and mock methods that take it
+/// as a dependency, and a short list of standard types. The generated initializer's widest tier is at the seam type's
+/// access, with a narrower tier for each narrower parameter; a required parameter narrower than the seam's type is an
+/// error at the seam, and a caller holding a value the tier it can call omits is an error at the caller.
+struct SafeDIToolSeamAccessProofTests: ~Copyable {
+	// MARK: Initialization
+
+	init() {
+		filesToDelete = [URL]()
+	}
+
+	deinit {
+		for fileToDelete in filesToDelete {
+			try! FileManager.default.removeItem(at: fileToDelete)
+		}
+	}
+
+	// MARK: Fixtures
+
+	/// A public seam `Service` that instantiates `Badge`, whose initializer, at `badgeInitializerAccess`, receives
+	/// `receive`; `extraFiles` declare the received type and anything else; `Root` holds `rootHolds`.
+	private static func badgeFixture(badgeInitializerAccess: String, receive: String, extraFiles: [String], rootHolds: [String]? = nil) -> [String] {
+		let receivedProperty = receive[receive.range(of: " let ")!.upperBound...]
+		let label = String(receivedProperty.prefix { $0 != ":" })
+		let type = receivedProperty.drop { $0 != ":" }.dropFirst().trimmingCharacters(in: .whitespaces)
+		return [
+			seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+			"""
+			@Instantiable
+			public struct Badge: Instantiable {
+			    \(badgeInitializerAccess)init(\(label): \(type)) {
+			        self.\(label) = \(label)
+			    }
+
+			    \(receive)
+			}
+			""",
+		] + (rootHolds.map { [seamFixtureType(named: "Root", isRoot: true, declarations: $0.map { "@Instantiated let \($0)" } + ["@Instantiated let service: Service"])] } ?? []) + extraFiles
+	}
+
+	// MARK: R1: a type's own declaration proves it
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesPublicTypeOnPublicTier_whenInternalInitializerReceivesIt() async throws {
+		// B1.1, B2.5: `Analytics`'s own declaration proves it `public`, whatever access `Badge`'s initializer has.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.badgeFixture(badgeInitializerAccess: "", receive: "@Received(onlyIfAvailable: true) let analytics: Analytics?", extraFiles: [seamFixtureType(named: "Analytics", declarations: [])], rootHolds: ["analytics: Analytics"]),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        let analytics = Analytics()
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_F284641CF6B800FD.self
+			            return Service(analytics: analytics)
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(analytics: analytics, service: service)
+			    }
+			}
+			""",
+			"Service+SafeDI.swift": generatedFileHeader + """
+			extension Service {
+			    public init(analytics: Analytics? = nil) {
+			        let badge = Badge(analytics: analytics)
+			        self.init(badge: badge)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_F284641CF6B800FD {}
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_generatesInternalTier_whenInternalTypeIsReceivedOnlyIfAvailable() async throws {
+		// B1.3: `Token`'s own declaration proves it `internal`: the `public` tier passes `nil` for it.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.badgeFixture(badgeInitializerAccess: "", receive: "@Received(onlyIfAvailable: true) let token: Token?", extraFiles: ["@Instantiable\nstruct Token: Instantiable {\n    init() {}\n}"], rootHolds: []),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_BEC07F255DE644F9.self
+			            return Service(token: nil)
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(service: service)
+			    }
+			}
+			""",
+			"Service+SafeDI.swift": generatedFileHeader + """
+			extension Service {
+			    public init() {
+			        self.init(token: nil)
+			    }
+
+			    internal init(token: Token? = nil) {
+			        let badge = Badge(token: token)
+			        self.init(badge: badge)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_BEC07F255DE644F9 {}
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenPublicTierCannotTakeRequiredInternalType() async {
+		// B1.2: cause (i), remedies in order.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `session: Session`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Session`'s own `@Instantiable` declaration is `internal`. Declare `Session` `public`; declare `Service` `internal`; build `session` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Badge.swift"]):7:5: note: `Badge` receives `session: Session` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.badgeFixture(badgeInitializerAccess: "", receive: "@Received let session: Session", extraFiles: ["@Instantiable\nstruct Session: Instantiable {\n    init() {}\n}"]),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	// MARK: R4: the members that mention a type prove it
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenEveryMemberMentioningPlainTypeIsNarrower() async {
+		// B1.13: cause (ii), every proving declaration listed in source order.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Token`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Token` is `internal` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `internal` (`Badge.init(token:)`, `Vault.init(token:)`). Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Token`'s declaration); declare `Service` `internal`; build `token` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Badge.swift"]):7:5: note: `Badge` receives `token: Token` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.badgeFixture(badgeInitializerAccess: "", receive: "@Received let token: Token", extraFiles: [
+					"public struct Token {\n    public init() {}\n}",
+					"@Instantiable\npublic struct Vault: Instantiable {\n    init(token: Token) {\n        self.token = token\n    }\n\n    @Received let token: Token\n}",
+				]),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenOnlyInitializerInInactiveClauseMentionsTypePublicly() async {
+		// B1.15, B5.1, R7: of `Badge`'s initializers, only the one SafeDI constructs it with proves; the public one in the
+		// inactive clause proves nothing.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Token`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Token` is `internal` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `internal` (`Badge.init(token:)`). Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Token`'s declaration); declare `Service` `internal`; build `token` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Badge.swift"]):13:5: note: `Badge` receives `token: Token` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+					"""
+					@Instantiable
+					public struct Badge: Instantiable {
+					    #if FLAG
+					    public init(token: Token) {
+					        self.token = token
+					    }
+					    #else
+					    init(token: Token) {
+					        self.token = token
+					    }
+					    #endif
+
+					    @Received let token: Token
+					}
+					""",
+					"public struct Token {\n    public init() {}\n}",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_countsNoMention_whenModuleThatNeitherDeclaresSeamNorReceivesParameterMentionsType() async throws {
+		// B1.31's twin, R4: `Lib`'s `Vault` mentions `Theme` publicly, but `Lib` declares neither the seam nor a receiver
+		// of `theme`, so only `Rack`'s `package` initializer, in `Base`, proves `Theme`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
+					"public struct Theme {\n    public init() {}\n}",
+					"@Instantiable\npublic struct Rack: Instantiable {\n    package init(theme: Theme?) {\n        self.theme = theme\n    }\n\n    @Received(onlyIfAvailable: true) let theme: Theme?\n}",
+				]),
+				ModuleFixture(name: "Lib", packageName: "Shop", swiftFileContent: ["import Base\n\n" + seamFixtureType(named: "Vault", declarations: ["@Received let theme: Theme"])], dependencies: ["Base"]),
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: ["import Base\n\n" + seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let rack: Rack"])], dependencies: ["Base", "Lib"]),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service"])], dependencies: ["Base", "Lib", "Feature"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == [
+			"Feature.swift": generatedFileHeader + """
+			#if canImport(Base)
+			import Base
+			#endif
+
+			extension Service {
+			    public init() {
+			        self.init(theme: nil)
+			    }
+
+			    package init(theme: Theme? = nil) {
+			        let rack = Rack(theme: theme)
+			        self.init(rack: rack)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_27F6F01DC5D0EF8E {}
+			}
+			""",
+		])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesTypeOnPublicTier_whenOnlyMockOnlyFakesMockMentionsItPublicly(integration: MultiModuleIntegration) async throws {
+		// B1.10, B5.4, B5.7: the public mock of a `mockOnly` fake in `#if DEBUG` is the only public mention of `Token`. Its
+		// `token` is a dependency, so the mock proves `Token` `public`, in a release build too, which does not compile the
+		// fake: the generated files are the same, and the `public` tier compiles without it.
+		func modules(isReleaseConfiguration: Bool) -> [ModuleFixture] {
+			let feature = Self.mockConditionFeature(fakeCondition: "DEBUG", featureMockCondition: nil)
+			let app = Self.mockConditionApp(appMockCondition: nil)
+			return [
+				ModuleFixture(name: feature.name, packageName: feature.packageName, swiftFileContent: feature.swiftFileContent, isReleaseConfiguration: isReleaseConfiguration),
+				ModuleFixture(name: app.name, packageName: app.packageName, swiftFileContent: app.swiftFileContent, dependencies: app.dependencies, isReleaseConfiguration: isReleaseConfiguration),
+			]
+		}
+		let debugOutput = try await executeSafeDIToolMultiModuleTest(modules: modules(isReleaseConfiguration: false), integration: integration, filesToDelete: &filesToDelete)
+		let releaseOutput = try await executeSafeDIToolMultiModuleTest(modules: modules(isReleaseConfiguration: true), integration: integration, filesToDelete: &filesToDelete)
+		let seamFile = generatedFileHeader + """
+		extension Service {
+		    public init(token: Token) {
+		        let badge = Badge(token: token)
+		        self.init(badge: badge)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_1EB503BFA23A82BA {}
+		}
+		"""
+		switch integration {
+		case .moduleInfo:
+			#expect(releaseOutput.modules["Feature"]?.generatedFiles == ["Feature.swift": seamFile])
+		case .swiftPackagePlugin:
+			#expect(releaseOutput.modules["Feature"]?.generatedFiles == ["Service+SafeDI.swift": seamFile])
+		}
+		#expect(releaseOutput.modules["Feature"]?.generatedFiles == debugOutput.modules["Feature"]?.generatedFiles)
+		#expect(releaseOutput.modules["App"]?.generatedFiles == debugOutput.modules["App"]?.generatedFiles)
+		try expectEveryModuleCompiled(debugOutput)
+		try expectEveryModuleCompiled(releaseOutput)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesPlainTypeOnPublicTier_whenPublicMemberMentionsIt() async throws {
+		// B1.12: one public mention among narrower ones proves the type `public`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.badgeFixture(badgeInitializerAccess: "", receive: "@Received let token: Token", extraFiles: [
+				"public struct Token {\n    public init() {}\n}",
+				"@Instantiable\npublic struct Vault: Instantiable {\n    public init(token: Token) {\n        self.token = token\n    }\n\n    @Received let token: Token\n}",
+			]),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Service+SafeDI.swift": generatedFileHeader + """
+			extension Service {
+			    public init(token: Token) {
+			        let badge = Badge(token: token)
+			        self.init(badge: badge)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_1EB503BFA23A82BA {}
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesStandardTypesOnPublicTier_whenInternalInitializerRequiresThem() async throws {
+		// B2.20: standard types count as `public`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"import Foundation\n\n" + seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+				"""
+				import Foundation
+
+				@Instantiable
+				public struct Badge: Instantiable {
+				    init(launchDate: Date, names: [String], retries: Int) {
+				        self.launchDate = launchDate
+				        self.names = names
+				        self.retries = retries
+				    }
+
+				    @Received let launchDate: Date
+				    @Received let names: [String]
+				    @Received let retries: Int
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Service+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Foundation)
+			import Foundation
+			#endif
+
+			extension Service {
+			    public init(launchDate: Date, names: [String], retries: Int) {
+			        let badge = Badge(launchDate: launchDate, names: names, retries: retries)
+			        self.init(badge: badge)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_064FFFE97BC93B03 {}
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenRequiredAliasesFulfillingTypeIsUnproven() async {
+		// B2.14: D1, an alias's fulfilling type that no recorded member mentions is `internal`.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `session: Session`, which `Consumer` receives through its alias `auth` (`fulfilledByDependencyNamed: "session"`), and cannot pass `nil` for it, since it is required. `Session` is `internal` as far as SafeDI can tell: no `@Instantiable` declaration declares it, and no initializer, `instantiate(…)` or mock method SafeDI records mentions it (`Consumer`'s initializer mentions only `any Auth`). Declare `@Received let session: Session` on `Screen`, so that its initializer, which the compiler checks, states how visible `Session` is (the compiler may then require `Screen`'s initializer, and so the seam, to be narrower); mention `Session` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Screen` `internal`; receive `auth` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Consumer.swift"]):7:5: note: `Consumer` receives `session: Session` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let consumer: Consumer"]),
+					"public protocol Auth {}\n\npublic struct Session: Auth {\n    public init() {}\n}",
+					"""
+					@Instantiable
+					public struct Consumer: Instantiable {
+					    public init(auth: any Auth) {
+					        self.auth = auth
+					    }
+
+					    @Received(fulfilledByDependencyNamed: "session", ofType: Session.self) let auth: any Auth
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	// MARK: R1: extensions
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesTypeOnPublicTier_whenPublicInitializerRaisesExtensionBasedTypeThatMentionsIt() async throws {
+		// B1.8: `Screen`'s public initializer mentions `Shelf`, raising the unspelled extension's bound to `public`, so
+		// `Shelf`'s public `instantiate(theme:)` proves `Theme` `public`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let shelf: Shelf"]),
+				"""
+				public struct Theme {
+				    public init() {}
+				}
+
+				public struct Shelf {
+				    let theme: Theme
+				}
+
+				@Instantiable
+				extension Shelf: Instantiable {
+				    public static func instantiate(theme: Theme) -> Shelf {
+				        Shelf(theme: theme)
+				    }
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    public init(theme: Theme) {
+			        let shelf: Shelf = Shelf.instantiate(theme: theme)
+			        self.init(shelf: shelf)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_DD923990A48765D6 {}
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenExtensionOfInternalTypeMentionsInternalTypeOnPublicMethod() async {
+		// B1.5: an `@Instantiable` extension of an internal type proves its `instantiate(…)`'s parameters only at
+		// `internal`, whatever access the method spells.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `session: Session`, which `Shelf`'s `instantiate(…)` receives, and cannot pass `nil` for it, since it is required. `Session` is `internal` as far as SafeDI can tell: `Shelf` is declared `@Instantiable` on an extension that spells no access level, so its `instantiate(…)` proves its parameter types only at `internal` whatever access the method spells, and no initializer, `instantiate(…)` or mock method SafeDI records mentions `Shelf` or `Session` more widely. If `Shelf` can be `public`, spell the extension's access level as `@Instantiable(conformsElsewhere: true) public extension Shelf`, declaring the `Instantiable` conformance on `Shelf`'s own declaration or in a separate `extension Shelf: Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares `Shelf`, apply `@Instantiable` to its declaration instead; mention `Shelf` or `Session` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Screen` `internal`; build `session` inside the tree; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["AnyShelf.swift"]):9:36: note: `Shelf` receives `session: Session` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let shelf: AnyShelf"]),
+					"""
+					public protocol AnyShelf {}
+
+					struct Session {}
+
+					struct Shelf: AnyShelf {}
+
+					@Instantiable(fulfillingAdditionalTypes: [AnyShelf.self])
+					extension Shelf: Instantiable {
+					    public static func instantiate(session: Session) -> Shelf {
+					        Shelf()
+					    }
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesTypeOnPublicTier_whenTypeInExtensionOfSeamMentionsIt() async throws {
+		// B1.4l: `Helper` is declared inside an extension of `Service`, whose own declaration bounds it: exactly
+		// `public`, so its public initializer proves `Theme` `public`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateDependencyTree: true)
+				public struct Service: Instantiable {
+				    init(helper: Service.Helper) {
+				        self.helper = helper
+				    }
+
+				    @Instantiated let helper: Service.Helper
+				}
+
+				extension Service {
+				    @Instantiable
+				    public struct Helper: Instantiable {
+				        public init(theme: Theme) {
+				            self.theme = theme
+				        }
+
+				        @Received let theme: Theme
+				    }
+				}
+				""",
+				"public struct Theme {\n    public init() {}\n}",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Service+SafeDI.swift": generatedFileHeader + """
+			extension Service {
+			    public init(theme: Theme) {
+			        let helper = Service.Helper(theme: theme)
+			        self.init(helper: helper)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_DD923990A48765D6 {}
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenTypeInUnspelledExtensionOfSeamSpellsNoLevel() async {
+		// B1.4l2: cause (vii), the entry's own term.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `theme: Theme`, which `Service.Helper` receives, and cannot pass `nil` for it, since it is required. `Theme` is `internal` as far as SafeDI can tell: `Service.Helper`'s initializer, which mentions it, is declared inside an extension of `Service` that spells no access level, and `Helper` spells none. Declare `Helper` `public`, or spell the extension's access level (`public extension Service { … }`); mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `internal`; build `theme` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Service.swift"]):17:9: note: `Service.Helper` receives `theme: Theme` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateDependencyTree: true)
+					public struct Service: Instantiable {
+					    init(helper: Service.Helper) {
+					        self.helper = helper
+					    }
+
+					    @Instantiated let helper: Service.Helper
+					}
+
+					extension Service {
+					    @Instantiable
+					    struct Helper: Instantiable {
+					        public init(theme: Theme) {
+					            self.theme = theme
+					        }
+
+					        @Received let theme: Theme
+					    }
+					}
+					""",
+					"public struct Theme {\n    public init() {}\n}",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenSeamIsDeclaredInUnspelledExtensionOfUnrecordedType() async {
+		// B1.4f: cause (v), the seam's own initializer bounded by an extension SafeDI cannot read the level of.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Service.swift"]):4:5: error: SafeDI cannot generate the dependency tree of `Checkout.Service`: its generated `public` initializer, which `Checkout.Service`'s `public` access requires, cannot take `theme: Theme`, which `Checkout.Service` receives, and cannot pass `nil` for it, since it is required. `Theme` is `internal` as far as SafeDI can tell: `Checkout.Service` is declared inside an extension of `Checkout` that spells no access level, and SafeDI cannot see `Checkout`'s, so `Checkout.Service`'s initializer proves its parameter types only at `internal`. If `Checkout` can be `public`, spell the extension's access level (`public extension Checkout { … }`, dropping the modifier on `Service` that Swift then reports as redundant; the compiler rejects a level wider than `Checkout`'s), or declare `Service` in `Checkout`'s body or at top level; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Checkout.Service` `internal`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Checkout.Service`.
+			\(fixtures["Service.swift"]):11:9: note: `Checkout.Service` receives `theme: Theme` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public enum Checkout {}
+
+					extension Checkout {
+					    @Instantiable(generateDependencyTree: true)
+					    public struct Service: Instantiable {
+					        public init(theme: Theme, badge: Badge) {
+					            self.theme = theme
+					            self.badge = badge
+					        }
+
+					        @Received let theme: Theme
+					        @Instantiated let badge: Badge
+					    }
+					}
+					""",
+					"public struct Theme {\n    public init() {}\n}",
+					seamFixtureType(named: "Badge", declarations: []),
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenTypeInUnspelledExtensionOfUnrecordedTypeIsRaisedOnlyToPackage() async {
+		// B1.4c's twin, cause (vi): `Outer` has no declaration SafeDI records, so `Outer.Vault` starts at `internal`, and
+		// `Service`'s `package` initializer raises it to `package`: its public initializer proves `Theme` at `package`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `theme: Theme`, which `Outer.Vault` receives, and cannot pass `nil` for it, since it is required. `Theme` is `package` as far as SafeDI can tell: `Outer.Vault`'s initializer, which mentions it, is declared inside an extension of `Outer` that spells no access level, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions `Outer.Vault` is `package` (`Service.init(vault:)`). If `Outer` can be `public`, spell the extension's access level (`public extension Outer { … }`, dropping the modifier on `Vault` that Swift then reports as redundant; the compiler rejects a level wider than `Outer`'s), or declare `Vault` in `Outer`'s body or at top level; mention `Outer.Vault` or `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `theme` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Vault.swift"]):10:9: note: `Outer.Vault` receives `theme: Theme` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+						"package struct Theme {\n    package init() {}\n}",
+						"""
+						package enum Outer {}
+
+						extension Outer {
+						    @Instantiable
+						    public struct Vault: Instantiable {
+						        public init(theme: Theme) {
+						            self.theme = theme
+						        }
+
+						        @Received let theme: Theme
+						    }
+						}
+						""",
+						"@Instantiable(generateDependencyTree: true)\npublic struct Service: Instantiable {\n    package init(vault: Outer.Vault) {\n        self.vault = vault\n    }\n\n    @Instantiated let vault: Outer.Vault\n}",
+					]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenExtensionBasedTypeIsRaisedOnlyToPackage() async {
+		// B1.19, D5: `Badge`'s `package` initializer is the only declaration that mentions `Shelf`, so the unspelled
+		// `@Instantiable extension Shelf` is raised to `package`, and its public `instantiate(theme:)` proves `Theme` at
+		// `package`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: Theme`, which `Shelf`'s `instantiate(…)` receives, and cannot pass `nil` for it, since it is required. `Theme` is `package` as far as SafeDI can tell: `Shelf`'s `instantiate(…)`, which mentions it, is declared on an extension that spells no access level, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions `Shelf` is `package` (`Badge.init(shelf:)`). If `Shelf` can be `public`, spell the extension's access level as `@Instantiable(conformsElsewhere: true) public extension Shelf`, declaring the `Instantiable` conformance on `Shelf`'s own declaration or in a separate `extension Shelf: Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares `Shelf`, apply `@Instantiable` to its declaration instead; mention `Shelf` or `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Screen` `package`; build `theme` inside the tree; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Theme.swift"]):11:36: note: `Shelf` receives `theme: Theme` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+						"""
+						package struct Theme {
+						    package init() {}
+						}
+
+						package struct Shelf {
+						    let theme: Theme
+						}
+
+						@Instantiable
+						extension Shelf: Instantiable {
+						    public static func instantiate(theme: Theme) -> Shelf {
+						        Shelf(theme: theme)
+						    }
+						}
+						""",
+						"@Instantiable\npublic struct Badge: Instantiable {\n    package init(shelf: Shelf) {\n        self.shelf = shelf\n    }\n\n    @Instantiated let shelf: Shelf\n}",
+						seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+					]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesNoMention_whenUnlabeledDefaultValuedMockArgumentNamesType() async throws {
+		// B1.26b: an argument bound to no dependency mentions nothing, labeled or not.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.badgeFixture(badgeInitializerAccess: "", receive: "@Received(onlyIfAvailable: true) let configuration: Configuration?", extraFiles: [
+				"struct Configuration {\n    init() {}\n}",
+				"""
+				public struct Settings {
+				    public struct Configuration {
+				        public init() {}
+				    }
+				}
+
+				@Instantiable
+				extension Settings: Instantiable {
+				    public static func instantiate() -> Settings {
+				        Settings()
+				    }
+
+				    public static func mock(_ configuration: Configuration = .init()) -> Settings {
+				        Settings()
+				    }
+				}
+				""",
+			]),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Service+SafeDI.swift": generatedFileHeader + """
+			extension Service {
+			    public init() {
+			        self.init(configuration: nil)
+			    }
+
+			    internal init(configuration: Configuration? = nil) {
+			        let badge = Badge(configuration: configuration)
+			        self.init(badge: badge)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_53F2550C79CFD135 {}
+			}
+			""",
+		])
+	}
+
+	// MARK: R6: tiers
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_generatesPublicTierCallingInternalInitializer_whenSeamsOwnInitializerIsNarrowerThanEveryParameter() async throws {
+		// B3.7, B3.10: the widest tier is at the seam type's access, whatever its own initializer's.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateDependencyTree: true)
+				public struct Screen: Instantiable {
+				    init(token: Token, detail: Detail) {
+				        self.token = token
+				        self.detail = detail
+				    }
+
+				    @Received let token: Token
+				    @Instantiated let detail: Detail
+				}
+				""",
+				seamFixtureType(named: "Detail", declarations: ["@Received let session: Session"]),
+				seamFixtureType(named: "Token", declarations: []),
+				seamFixtureType(named: "Session", declarations: []),
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let token: Token", "@Instantiated let session: Session", "@Instantiated let screen: Screen"]),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        let token = Token()
+			        let session = Session()
+			        func __safeDI_screen() -> Screen {
+			            _ = Screen.__safeDI_Screen_68099449ED7A453D.self
+			            return Screen(token: token, session: session)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(token: token, session: session, screen: screen)
+			    }
+			}
+			""",
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    public init(token: Token, session: Session) {
+			        let detail = Detail(session: session)
+			        self.init(token: token, detail: detail)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_68099449ED7A453D {}
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_chainsThreeTiers_whenParametersAreProvenAtThreeLevels() async throws {
+		// B1.4j's chain, R6(1): `flag` is proven `public` by `Service`'s own initializer, `session` and `theme` `package`
+		// by their declaration and by `Badge`'s initializer, and `token` `internal` by its declaration: a tier at each
+		// level, each wider one passing `nil` for what it omits to the next narrower one, which `App`, in the same
+		// package, calls passing what it holds.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+					"public struct Theme {\n    public init() {}\n}\n\npublic struct Flag {\n    public init() {}\n}",
+					"@Instantiable\npackage struct Session: Instantiable {\n    package init() {}\n}",
+					"@Instantiable\nstruct Token: Instantiable {\n    init() {}\n}",
+					"@Instantiable\npublic struct Badge: Instantiable {\n    package init(session: Session?, theme: Theme?) {\n        self.session = session\n        self.theme = theme\n    }\n\n    @Received(onlyIfAvailable: true) let session: Session?\n    @Received(onlyIfAvailable: true) let theme: Theme?\n}",
+					"@Instantiable\npublic struct Tag: Instantiable {\n    init(token: Token?) {\n        self.token = token\n    }\n\n    @Received(onlyIfAvailable: true) let token: Token?\n}",
+					"@Instantiable(generateDependencyTree: true)\npublic struct Service: Instantiable {\n    public init(flag: Flag?, badge: Badge, tag: Tag) {\n        self.flag = flag\n        self.badge = badge\n        self.tag = tag\n    }\n\n    @Received(onlyIfAvailable: true) let flag: Flag?\n    @Instantiated let badge: Badge\n    @Instantiated let tag: Tag\n}",
+				]),
+				ModuleFixture(name: "App", packageName: "Shop", swiftFileContent: [
+					"""
+					import Feature
+					import SafeDI
+
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    package init(session: Session, theme: LazilyInstantiated<Theme>, flag: Flag, service: Service) {
+					        self.session = session
+					        self.theme = theme
+					        self.flag = flag
+					        self.service = service
+					    }
+
+					    @Instantiated let session: Session
+					    @Instantiated let theme: LazilyInstantiated<Theme>
+					    @Instantiated let flag: Flag
+					    @Instantiated let service: Service
+					}
+
+					@Instantiable
+					extension Theme: Instantiable {
+					    public static func instantiate() -> Theme {
+					        Theme()
+					    }
+					}
+
+					@Instantiable
+					extension Flag: Instantiable {
+					    public static func instantiate() -> Flag {
+					        Flag()
+					    }
+					}
+					""",
+				], dependencies: ["Feature"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == [
+			"Feature.swift": generatedFileHeader + """
+			extension Service {
+			    public init(flag: Flag? = nil) {
+			        self.init(flag: flag, session: nil, theme: nil)
+			    }
+
+			    package init(flag: Flag? = nil, session: Session? = nil, theme: Theme? = nil) {
+			        self.init(flag: flag, session: session, theme: theme, token: nil)
+			    }
+
+			    internal init(flag: Flag? = nil, session: Session? = nil, theme: Theme? = nil, token: Token? = nil) {
+			        let badge = Badge(session: session, theme: theme)
+			        let tag = Tag(token: token)
+			        self.init(flag: flag, badge: badge, tag: tag)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_97F8A0D392C5BF51 {}
+			}
+			""",
+		])
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			extension Root {
+			    public init() {
+			        let session = Session()
+			        func __safeDI_theme() -> Theme {
+			            Theme.instantiate()
+			        }
+			        let theme = LazilyInstantiated<Theme>(__safeDI_theme)
+			        let flag: Flag = Flag.instantiate()
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_97F8A0D392C5BF51.self
+			            return Service(flag: flag, session: session, theme: theme.instance)
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(session: session, theme: theme, flag: flag, service: service)
+			    }
+			}
+			""",
+		])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenPublicSeamsOwnRequiredReceiveIsNarrower() async {
+		// B3.13: the seam's own required `@Received` property narrower than its type.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `session: Session`, which `Service` receives, and cannot pass `nil` for it, since it is required. `Session`'s own `@Instantiable` declaration is `internal`. Declare `Session` `public`; declare `Service` `internal`; receive `session` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Service.swift"]):8:5: note: `Service` receives `session: Session` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateDependencyTree: true)
+					public struct Service: Instantiable {
+					    init(session: Session, badge: Badge) {
+					        self.session = session
+					        self.badge = badge
+					    }
+
+					    @Received let session: Session
+					    @Instantiated let badge: Badge
+					}
+					""",
+					"@Instantiable\nstruct Session: Instantiable {\n    init() {}\n}",
+					seamFixtureType(named: "Badge", declarations: []),
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenPublicSeamsOwnForwardedPropertyIsNarrower() async {
+		// B2.2: an own `@Forwarded` property's remedies have no only-if-available form.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `theme: Theme`, which `Service`'s own initializer takes, and cannot pass `nil` for it, since it is required. `Theme` is `internal` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `internal` (`Service.init(theme:badge:)`). Mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Theme`'s declaration); declare `Service` `internal`; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateDependencyTree: true)
+					public struct Service: Instantiable {
+					    init(theme: Theme, badge: Badge) {
+					        self.theme = theme
+					        self.badge = badge
+					    }
+
+					    @Forwarded let theme: Theme
+					    @Instantiated let badge: Badge
+					}
+					""",
+					"public struct Theme {\n    public init() {}\n}",
+					seamFixtureType(named: "Badge", declarations: []),
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesTypeOnPublicTier_whenTypeIsNestedInTypeInExtensionOfSeam() async throws {
+		// B1.4t: `Deep` is declared inside an extension of `Service.Helper`, itself bounded by `Service`: exact `public`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateDependencyTree: true)
+				public struct Service: Instantiable {
+				    init(deep: Service.Helper.Deep) {
+				        self.deep = deep
+				    }
+
+				    @Instantiated let deep: Service.Helper.Deep
+				}
+
+				extension Service {
+				    @Instantiable
+				    public struct Helper: Instantiable {
+				        public init() {}
+				    }
+				}
+
+				extension Service.Helper {
+				    @Instantiable
+				    public struct Deep: Instantiable {
+				        public init(theme: Theme) {
+				            self.theme = theme
+				        }
+
+				        @Received let theme: Theme
+				    }
+				}
+				""",
+				"public struct Theme {\n    public init() {}\n}",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Service+SafeDI.swift": generatedFileHeader + """
+			extension Service {
+			    public init(theme: Theme) {
+			        let deep = Service.Helper.Deep(theme: theme)
+			        self.init(deep: deep)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_DD923990A48765D6 {}
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsExtensionsModifierAsDefaultOnly_whenTypeInExtensionOfSeamSpellsItsOwnLevel() async throws {
+		// B1.4u: an extension's modifier is the default of the declarations inside it, never a cap: `Helper` spells
+		// `public` inside an `internal extension Service`, so it is exactly `public`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateDependencyTree: true)
+				public struct Service: Instantiable {
+				    init(helper: Service.Helper) {
+				        self.helper = helper
+				    }
+
+				    @Instantiated let helper: Service.Helper
+				}
+
+				internal extension Service {
+				    @Instantiable
+				    public struct Helper: Instantiable {
+				        public init(theme: Theme) {
+				            self.theme = theme
+				        }
+
+				        @Received let theme: Theme
+				    }
+				}
+				""",
+				"public struct Theme {\n    public init() {}\n}",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Service+SafeDI.swift": generatedFileHeader + """
+			extension Service {
+			    public init(theme: Theme) {
+			        let helper = Service.Helper(theme: theme)
+			        self.init(helper: helper)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_DD923990A48765D6 {}
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_capsMockAtItsEntrysProof_whenMockMentionsTypeOfDependency() async throws {
+		// B1.36b's twin: nothing raises the extension-based `Shelf`, so its public mock proves its dependency-bound
+		// `theme` only at `internal`, and the seam's `public` tier passes `nil` for it.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.badgeFixture(badgeInitializerAccess: "", receive: "@Received(onlyIfAvailable: true) let theme: Theme?", extraFiles: [
+				"public struct Theme {\n    public init() {}\n}",
+				"""
+				public struct Shelf {}
+
+				@Instantiable
+				extension Shelf: Instantiable {
+				    static func instantiate(theme: Theme) -> Shelf {
+				        Shelf()
+				    }
+
+				    public static func mock(theme: Theme) -> Shelf {
+				        Shelf()
+				    }
+				}
+				""",
+			]),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Service+SafeDI.swift": generatedFileHeader + """
+			extension Service {
+			    public init() {
+			        self.init(theme: nil)
+			    }
+
+			    internal init(theme: Theme? = nil) {
+			        let badge = Badge(theme: theme)
+			        self.init(badge: badge)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_2163FBB3C02B31CD {}
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_capsMockAtItsEntrysRaisedProof_whenPackageInitializerMentionsExtensionBasedType() async throws {
+		// B1.36b: `Rack`'s `package` initializer, which no tree reaches, raises the extension-based `Shelf` to `package`,
+		// so `Shelf`'s public mock proves its dependency-bound `theme` at `package`, never at `public`: `Theme` is
+		// `package`, and a `public` tier taking it would not compile.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+					"""
+					package struct Theme {
+					    package init() {}
+					}
+
+					package struct Shelf {
+					    let theme: Theme
+					}
+
+					@Instantiable
+					extension Shelf: Instantiable {
+					    static func instantiate(theme: Theme) -> Shelf {
+					        Shelf(theme: theme)
+					    }
+
+					    public static func mock(theme: Theme) -> Shelf {
+					        Shelf(theme: theme)
+					    }
+					}
+					""",
+					"@Instantiable\npublic struct Rack: Instantiable {\n    package init(shelf: Shelf) {\n        self.shelf = shelf\n    }\n\n    @Instantiated let shelf: Shelf\n}",
+					"@Instantiable\npublic struct Badge: Instantiable {\n    init(theme: Theme?) {\n        self.theme = theme\n    }\n\n    @Received(onlyIfAvailable: true) let theme: Theme?\n}",
+					seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+				]),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service"])], dependencies: ["Feature"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + Self.twoTierService])
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_27F6F01DC5D0EF8E.self
+			            return Service()
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(service: service)
+			    }
+			}
+			""",
+		])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_capsMergedMockAtItsEntrysProof_whenMockOnlyDeclarationSpellsWiderLevel() async throws {
+		// B1.37: the `mockOnly` declaration of `Outer.Shelf` spells `public`, but its merged entry is the extension-based
+		// declaration of a nested type, which starts at `internal` and nothing raises: the mock's dependency-bound `token`
+		// proves `internal`, so the `public` tier passes `nil`.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.badgeFixture(badgeInitializerAccess: "", receive: "@Received(onlyIfAvailable: true) let token: Token?", extraFiles: [
+				"""
+				struct Token {
+				    init() {}
+				}
+
+				enum Outer {
+				    @Instantiable(mockOnly: true)
+				    public struct Shelf {
+				        let token: Token
+
+				        public static func mock(token: Token = Token()) -> Shelf {
+				            Shelf(token: token)
+				        }
+				    }
+				}
+
+				@Instantiable
+				extension Outer.Shelf: Instantiable {
+				    static func instantiate(token: Token) -> Outer.Shelf {
+				        Outer.Shelf(token: token)
+				    }
+				}
+				""",
+			]),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Service+SafeDI.swift": generatedFileHeader + """
+			extension Service {
+			    public init() {
+			        self.init(token: nil)
+			    }
+
+			    internal init(token: Token? = nil) {
+			        let badge = Badge(token: token)
+			        self.init(badge: badge)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_BEC07F255DE644F9 {}
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsGenericParameterAsModuleLevelType_whenGenericDeclarationsMemberNamesIt() async throws {
+		// B1.33e, stated limit (3): `Cache`'s initializer names its generic parameter `Key`, which the proof reads as the
+		// module-level internal `Key`, proving it `public`: the seam's one `public` tier then names an internal type,
+		// which the compiler reports in the generated file ("initializer cannot be declared public because its parameter
+		// uses an internal type"). The generated text is pinned; it is not compiled.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.badgeFixture(badgeInitializerAccess: "", receive: "@Received(onlyIfAvailable: true) let key: Key?", extraFiles: [
+				"struct Key {}",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Cache<Key: Hashable>: Instantiable {
+				    public init(key: Key) {
+				        self.key = key
+				    }
+
+				    @Forwarded let key: Key
+				}
+				""",
+			]),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
+		)
+		#expect(output.dependencyTreeFiles["Service+SafeDI.swift"] == generatedFileHeader + """
+		extension Service {
+		    public init(key: Key? = nil) {
+		        let badge = Badge(key: key)
+		        self.init(badge: badge)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_5318FC9AB3349E49 {}
+		}
+		""")
+	}
+
+	@Test(arguments: [
+		// B1.33f: a type declared in the body of a generic type.
+		"public struct Box<Key> {\n    @Instantiable\n    public struct Slot: Instantiable {\n        public init(key: Key) {\n            self.key = key\n        }\n\n        @Forwarded let key: Key\n    }\n}",
+		// B1.33g: a type declared in a spelled extension of a generic type.
+		"public struct Box<Key> {}\n\npublic extension Box {\n    @Instantiable\n    struct Slot: Instantiable {\n        public init(key: Key) {\n            self.key = key\n        }\n\n        @Forwarded let key: Key\n    }\n}",
+		// B1.33h: an `@Instantiable` extension of a generic type.
+		"public struct Container<Key>: Instantiable {}\n\n@Instantiable(conformsElsewhere: true)\npublic extension Container {\n    static func instantiate(key: Key) -> Container {\n        Container()\n    }\n}",
+		// B1.33k: a type declared in an extension of a generic `@Instantiable` type, which bounds it exactly.
+		"@Instantiable(generateMock: true)\npublic struct Cache<Key>: Instantiable {\n    public init() {}\n}\n\nextension Cache {\n    @Instantiable(generateMock: true)\n    public struct Inner: Instantiable {\n        public init(key: Key) {\n            self.key = key\n        }\n\n        @Received let key: Key\n    }\n}",
+	])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsGenericParameterAsModuleLevelType_whenGenericParameterClauseInScopeBindsIt(genericDeclaration: String) async throws {
+		// B1.33f–h, B1.33k, stated limit (3): a member's `key: Key` names the generic parameter of an enclosing type, or
+		// of the type an extension extends, which the proof reads as the module-level internal `Key`, proving it
+		// `public`, as for the declaration's own generic parameter (B1.33e). The generated text is pinned; it is not
+		// compiled, since the compiler rejects its `public` tier.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.badgeFixture(badgeInitializerAccess: "", receive: "@Received(onlyIfAvailable: true) let key: Key?", extraFiles: ["struct Key {}", genericDeclaration]),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
+		)
+		#expect(output.dependencyTreeFiles["Service+SafeDI.swift"] == generatedFileHeader + """
+		extension Service {
+		    public init(key: Key? = nil) {
+		        let badge = Badge(key: key)
+		        self.init(badge: badge)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_5318FC9AB3349E49 {}
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_listsEveryProvingDeclaration_whenFirstOneIsCappedByItsOwnType() async {
+		// Regression: `Archive`'s public initializer is capped by its internal type, and its file sorts first; every
+		// declaration that proves `Key` at `internal` is still listed, `Host`'s too.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `key: Key`, which `Archive` receives, and cannot pass `nil` for it, since it is required. `Key` is `internal` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `internal` (`Archive.init(key:)`, `Host.init(key:service:)`). Mention `Key` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Key`'s declaration); declare `Service` `internal`; build `key` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Archive.swift"]):7:5: note: `Archive` receives `key: Key` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let archive: Archive"]),
+					"@Instantiable\nstruct Archive: Instantiable {\n    public init(key: Key) {\n        self.key = key\n    }\n\n    @Received let key: Key\n}",
+					"@Instantiable\nstruct Host: Instantiable {\n    init(key: Key, service: Service) {\n        self.key = key\n        self.service = service\n    }\n\n    @Forwarded let key: Key\n    @Instantiated let service: Service\n}",
+					"public struct Key {\n    public init() {}\n}",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_listsEveryProvingDeclaration_whenFirstOneIsBoundedByExtension() async {
+		// Regression: `Settings.Helper`'s public initializer is capped by `Settings`, and its file sorts first; the cause
+		// still lists every declaration that proves `Tone`, rather than explaining the first one's extension.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Seam.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Seam`: its generated `public` initializer, which `Seam`'s `public` access requires, cannot take `tone: Tone`, which `Settings.Helper` receives, and cannot pass `nil` for it, since it is required. `Tone` is `internal` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `internal` (`Settings.Helper.init(tone:)`, `Host.init(tone:seam:)`). Mention `Tone` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Tone`'s declaration); declare `Seam` `internal`; build `tone` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Seam`.
+			\(fixtures["Helper.swift"]):8:9: note: `Settings.Helper` receives `tone: Tone` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					seamFixtureType(named: "Seam", isSeam: true, declarations: ["@Instantiated let helper: Settings.Helper"]) + "\n\n@Instantiable\nstruct Settings: Instantiable {\n    init() {}\n}\n\npublic struct Tone {\n    public init() {}\n}",
+					"extension Settings {\n    @Instantiable\n    public struct Helper: Instantiable {\n        public init(tone: Tone) {\n            self.tone = tone\n        }\n\n        @Received let tone: Tone\n    }\n}",
+					"@Instantiable\nstruct Host: Instantiable {\n    init(tone: Tone, seam: Seam) {\n        self.tone = tone\n        self.seam = seam\n    }\n\n    @Forwarded let tone: Tone\n    @Instantiated let seam: Seam\n}",
+				],
+				swiftFileContentByFilePath: [:],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	// MARK: R4 and R6(4): what the proof reads, and the causes the shared formatter words
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_provesParameterFromTypesInsideComposition() async throws {
+		// R4: the proof descends into a composition, finding the internal `Auth` there, so the parameter is taken only by
+		// an `internal` tier.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.badgeFixture(badgeInitializerAccess: "", receive: "@Received(onlyIfAvailable: true) let auth: (any Auth & Sendable)?", extraFiles: ["protocol Auth {}"]),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Service+SafeDI.swift": generatedFileHeader + """
+			extension Service {
+			    public init() {
+			        self.init(auth: nil)
+			    }
+
+			    internal init(auth: (any (Auth & Sendable))? = nil) {
+			        let badge = Badge(auth: auth)
+			        self.init(badge: badge)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_692B2B58EF8BFD72 {}
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_provesParameterFromTypesInsideDictionary() async throws {
+		// R4: the proof descends into a dictionary, finding the internal `Theme` there, so the parameter is taken only by
+		// an `internal` tier.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.badgeFixture(badgeInitializerAccess: "", receive: "@Received(onlyIfAvailable: true) let palette: [String: Theme]?", extraFiles: ["struct Theme {}"]),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Service+SafeDI.swift": generatedFileHeader + """
+			extension Service {
+			    public init() {
+			        self.init(palette: nil)
+			    }
+
+			    internal init(palette: [String: Theme]? = nil) {
+			        let badge = Badge(palette: palette)
+			        self.init(badge: badge)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_519C73B63C9A2FDE {}
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_provesUnreadableParameterTypeByItsMentions_whenParserCannotDescribeIt() async throws {
+		// B2.25: SafeDI's parser does not describe an inline array type, so the proof matches it by its spelling, which
+		// `Badge`'s `internal` initializer mentions. Not compiled: an inline array needs a newer platform than the
+		// suite's.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.badgeFixture(badgeInitializerAccess: "", receive: "@Received(onlyIfAvailable: true) let values: [3 of Int]?", extraFiles: []),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			skipCompileVerification: true,
+		)
+		#expect(output.dependencyTreeFiles == [
+			"Service+SafeDI.swift": generatedFileHeader + """
+			extension Service {
+			    public init() {
+			        self.init(values: nil)
+			    }
+
+			    internal init(values: [3 of Int]? = nil) {
+			        let badge = Badge(values: values)
+			        self.init(badge: badge)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_43CEEF672363ED2E {}
+			}
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorListingInstantiateAndMockProvers_whenEachMentionsTypeAtSameLevel() async {
+		// R6(4) cause (ii): `Badge`'s initializer, `Shelf`'s `instantiate(token:)` and `FakeTokenReader`'s mock each prove
+		// `Token` at `internal`, and are listed by member.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Token`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Token` is `internal` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `internal` (`Badge.init(token:)`, `FakeTokenReader.mock(token:)`, `Shelf.instantiate(token:)`). Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Token`'s declaration); declare `Service` `internal`; build `token` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Badge.swift"]):7:5: note: `Badge` receives `token: Token` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.badgeFixture(badgeInitializerAccess: "", receive: "@Received let token: Token", extraFiles: [
+					"public struct Token {\n    public init() {}\n}",
+					"public struct Shelf {}\n\n@Instantiable\nextension Shelf: Instantiable {\n    static func instantiate(token: Token) -> Shelf {\n        Shelf()\n    }\n}",
+					"@Instantiable(mockOnly: true)\nstruct FakeTokenReader {\n    @Received let token: Token\n\n    static func mock(token: Token) -> FakeTokenReader {\n        FakeTokenReader(token: token)\n    }\n}",
+				]),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingMockAsLoneProver_whenItsExtensionIsRaisedOnlyToPackage() async {
+		// R6(4) cause (vi) through a mock: `Shelf`'s public mock is the widest mention of `Theme`, capped at `package`, to
+		// which `Rack`'s initializer raises the extension-based `Shelf`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `theme: Theme`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Theme` is `package` as far as SafeDI can tell: `Shelf`'s `mock(…)`, which mentions it, is declared on an extension that spells no access level, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions `Shelf` is `package` (`Rack.init(shelf:)`). If `Shelf` can be `public`, spell the extension's access level as `@Instantiable(conformsElsewhere: true) public extension Shelf`, declaring the `Instantiable` conformance on `Shelf`'s own declaration or in a separate `extension Shelf: Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares `Shelf`, apply `@Instantiable` to its declaration instead; mention `Shelf` or `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `theme` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: Theme` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+						"package struct Theme {\n    package init() {}\n}\n\npackage struct Shelf {\n    let theme: Theme\n}\n\n@Instantiable\nextension Shelf: Instantiable {\n    static func instantiate(theme: Theme) -> Shelf {\n        Shelf(theme: theme)\n    }\n\n    public static func mock(theme: Theme) -> Shelf {\n        Shelf(theme: theme)\n    }\n}",
+						"@Instantiable\npublic struct Rack: Instantiable {\n    package init(shelf: Shelf) {\n        self.shelf = shelf\n    }\n\n    @Instantiated let shelf: Shelf\n}",
+						"@Instantiable\npublic struct Badge: Instantiable {\n    init(theme: Theme) {\n        self.theme = theme\n    }\n\n    @Received let theme: Theme\n}",
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+					]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenSeamIsDeclaredInSpelledExtensionOfNestedType() async {
+		// B1.4k, cause (v): a spelled extension of a nested type bounds nothing SafeDI can count, so `Outer.Mid.Service`
+		// proves its own initializer's parameter types only at `internal`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):6:5: error: SafeDI cannot generate the dependency tree of `Outer.Mid.Service`: its generated `public` initializer, which `Outer.Mid.Service`'s `public` access requires, cannot take `theme: Theme`, which `Outer.Mid.Service` receives, and cannot pass `nil` for it, since it is required. `Theme` is `internal` as far as SafeDI can tell: `Outer.Mid.Service` is declared inside an extension of `Outer.Mid`, a nested type, whose spelled access level bounds nothing SafeDI can count, so `Outer.Mid.Service`'s initializer proves its parameter types only at `internal`. Declare `Service` in `Outer.Mid`'s body or at top level; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Outer.Mid.Service` `internal`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Outer.Mid.Service`.
+			\(fixtures["Feature"]!["Service.swift"]):13:9: note: `Outer.Mid.Service` receives `theme: Theme` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+						"""
+						package enum Outer {
+						    public enum Mid {}
+						}
+
+						public extension Outer.Mid {
+						    @Instantiable(generateDependencyTree: true)
+						    struct Service: Instantiable {
+						        public init(theme: Theme, badge: Badge) {
+						            self.theme = theme
+						            self.badge = badge
+						        }
+
+						        @Received let theme: Theme
+						        @Instantiated let badge: Badge
+						    }
+						}
+						""",
+						"public struct Theme {\n    public init() {}\n}",
+						seamFixtureType(named: "Badge", declarations: []),
+					]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenParameterTypeIsInExtensionOfNarrowerRecordedType() async {
+		// R6(4) cause (i) for an exact type in an extension: `Settings.Helper` is `package`, capped by `Settings`'s own
+		// declaration.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `helper: Settings.Helper`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Settings.Helper` is `package`: it is declared inside an extension of `Settings`, whose own `@Instantiable` declaration is `package`. Declare `Settings` `public`; declare `Service` `package`; build `helper` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `helper: Settings.Helper` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+						"@Instantiable\npackage struct Settings: Instantiable {\n    package init() {}\n}\n\nextension Settings {\n    @Instantiable\n    public struct Helper: Instantiable {\n        public init() {}\n    }\n}",
+						"@Instantiable\npublic struct Badge: Instantiable {\n    package init(helper: Settings.Helper) {\n        self.helper = helper\n    }\n\n    @Received let helper: Settings.Helper\n}",
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+					]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenParameterTypeIsDeclaredNarrowerInExtensionOfSeam() async {
+		// R6(4) cause (i) for an exact type in an extension: `Service.Helper` spells `package`, and `Service` is public.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `helper: Service.Helper`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Service.Helper` is declared `package`. Declare `Helper` `public`; declare `Service` `package`; build `helper` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `helper: Service.Helper` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+						"@Instantiable(generateDependencyTree: true)\npublic struct Service: Instantiable {\n    public init(badge: Badge) {\n        self.badge = badge\n    }\n\n    @Instantiated let badge: Badge\n}\n\nextension Service {\n    @Instantiable\n    package struct Helper: Instantiable {\n        package init() {}\n    }\n}",
+						"@Instantiable\npublic struct Badge: Instantiable {\n    package init(helper: Service.Helper) {\n        self.helper = helper\n    }\n\n    @Received let helper: Service.Helper\n}",
+					]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenParameterTypeIsExtensionBasedAndNothingRaisesIt() async {
+		// R6(4) cause (iii) for the parameter's own type: the unspelled `@Instantiable extension Shelf` is `internal`,
+		// which `Badge`'s `internal` initializer does not raise.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `shelf: Shelf`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Shelf` is `internal` as far as SafeDI can tell: it is declared `@Instantiable` on an extension that spells no access level, and no initializer, `instantiate(…)` or mock method SafeDI records mentions it more widely. If `Shelf` can be `public`, spell the extension's access level as `@Instantiable(conformsElsewhere: true) public extension Shelf`, declaring the `Instantiable` conformance on `Shelf`'s own declaration or in a separate `extension Shelf: Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares `Shelf`, apply `@Instantiable` to its declaration instead; mention `Shelf` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `internal`; build `shelf` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Badge.swift"]):7:5: note: `Badge` receives `shelf: Shelf` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.badgeFixture(badgeInitializerAccess: "", receive: "@Received let shelf: Shelf", extraFiles: [
+					"public struct Shelf {}\n\n@Instantiable\nextension Shelf: Instantiable {\n    public static func instantiate() -> Shelf {\n        Shelf()\n    }\n}",
+				]),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenParameterTypeIsExtensionBasedAndRaisedOnlyToPackage() async {
+		// R6(4) cause (iii) raised, for the parameter's own type: `Badge`'s `package` initializer raises the unspelled
+		// `@Instantiable extension Shelf` to `package`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `shelf: Shelf`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Shelf` is `package` as far as SafeDI can tell: it is declared `@Instantiable` on an extension that spells no access level, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(shelf:)`). If `Shelf` can be `public`, spell the extension's access level as `@Instantiable(conformsElsewhere: true) public extension Shelf`, declaring the `Instantiable` conformance on `Shelf`'s own declaration or in a separate `extension Shelf: Instantiable {}`, since Swift allows no access level on an extension that declares a conformance, or, if this module declares `Shelf`, apply `@Instantiable` to its declaration instead; mention `Shelf` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `shelf` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `shelf: Shelf` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: Self.badgeFixture(badgeInitializerAccess: "package ", receive: "@Received let shelf: Shelf", extraFiles: [
+						"public struct Shelf {}\n\n@Instantiable\nextension Shelf: Instantiable {\n    public static func instantiate() -> Shelf {\n        Shelf()\n    }\n}",
+					])),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenParameterTypeIsInUnspelledExtensionOfUnrecordedTypeAndNothingRaisesIt() async {
+		// R6(4) cause (v) for the parameter's own type: `Outer.Vault` is declared in an unspelled extension of a type
+		// SafeDI does not record, and `Badge`'s `internal` initializer does not raise it.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `vault: Outer.Vault`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Outer.Vault` is `internal` as far as SafeDI can tell: it is declared inside an extension of `Outer` that spells no access level, and SafeDI cannot see `Outer`'s. If `Outer` can be `public`, spell the extension's access level (`public extension Outer { … }`, dropping the modifier on `Vault` that Swift then reports as redundant; the compiler rejects a level wider than `Outer`'s), or declare `Vault` in `Outer`'s body or at top level; mention `Outer.Vault` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `internal`; build `vault` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Badge.swift"]):7:5: note: `Badge` receives `vault: Outer.Vault` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.badgeFixture(badgeInitializerAccess: "", receive: "@Received let vault: Outer.Vault", extraFiles: [
+					"public enum Outer {}\n\nextension Outer {\n    @Instantiable\n    public struct Vault: Instantiable {\n        public init() {}\n    }\n}",
+				]),
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenParameterTypeIsInUnspelledExtensionOfUnrecordedTypeAndRaisedOnlyToPackage() async {
+		// R6(4) cause (vi) for the parameter's own type: `Badge`'s `package` initializer raises `Outer.Vault` to `package`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `vault: Outer.Vault`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Outer.Vault` is `package` as far as SafeDI can tell: it is declared inside an extension of `Outer`, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(vault:)`). If `Outer` can be `public`, spell the extension's access level (`public extension Outer { … }`, dropping the modifier on `Vault` that Swift then reports as redundant; the compiler rejects a level wider than `Outer`'s), or declare `Vault` in `Outer`'s body or at top level; mention `Outer.Vault` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `vault` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `vault: Outer.Vault` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: Self.badgeFixture(badgeInitializerAccess: "package ", receive: "@Received let vault: Outer.Vault", extraFiles: [
+						"public enum Outer {}\n\nextension Outer {\n    @Instantiable\n    public struct Vault: Instantiable {\n        public init() {}\n    }\n}",
+					])),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	// MARK: R6: the omission's receivers
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingReceiverInsideNestedSeam_whenOuterSeamsTierOmitsParameterPassedThroughIt() async {
+		// R6(3): `Screen`'s tree takes `session` through the nested seam `Internals.Panel`, whose signature carries the
+		// receive inside it, so the error names `Helpers.Detail`, not the nested seam.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `session: Session`, which `Helpers.Detail` receives, and cannot pass `nil` for it, since it is required. `Session` is `internal` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `internal` (`Helpers.Detail.init(session:)`). Mention `Session` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Session`'s declaration); declare `Screen` `internal`; build `session` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Detail.swift"]):8:9: note: `Helpers.Detail` receives `session: Session` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateDependencyTree: true)
+					public struct Screen: Instantiable {
+					    public init(panel: AnyPanel) {
+					        self.panel = panel
+					    }
+
+					    @Instantiated(fulfilledByType: "Internals.Panel", erasedToConcreteExistential: true) let panel: AnyPanel
+					}
+
+					public protocol PanelProtocol {}
+
+					public struct AnyPanel: PanelProtocol {
+					    public init(_ panel: some PanelProtocol) {}
+					}
+					""",
+					"""
+					internal enum Internals {
+					    @Instantiable(generateDependencyTree: true)
+					    public struct Panel: Instantiable, PanelProtocol {
+					        public init(detail: Helpers.Detail) {
+					            self.detail = detail
+					        }
+
+					        @Instantiated let detail: Helpers.Detail
+					    }
+					}
+					""",
+					"""
+					internal enum Helpers {
+					    @Instantiable
+					    public struct Detail: Instantiable {
+					        public init(session: Session) {
+					            self.session = session
+					        }
+
+					        @Received let session: Session
+					    }
+					}
+					""",
+					"public struct Session {\n    public init() {}\n}",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_notesEachReceiverOnceInTreeOrder_whenReceiverIsReachedOnTwoPaths() async {
+		// R6(3): `Detail`, reached through `Right` and `Left`, is noted once, after `Right`, in the order the tree
+		// declares them.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `token: Token`, which `Right` and `Detail` receive, and cannot pass `nil` for it, since it is required. `Token`'s own `@Instantiable` declaration is `internal`. Declare `Token` `public`; declare `Screen` `internal`; build `token` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Right.swift"]):9:5: note: `Right` receives `token: Token` here.
+			\(fixtures["Detail.swift"]):7:5: note: `Detail` receives `token: Token` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let right: Right", "@Instantiated let left: Left"]),
+					seamFixtureType(named: "Right", declarations: ["@Instantiated let detail: Detail", "@Received let token: Token"]),
+					seamFixtureType(named: "Left", declarations: ["@Instantiated let detail: Detail"]),
+					seamFixtureType(named: "Detail", declarations: ["@Received let token: Token"]),
+					"@Instantiable\nstruct Token: Instantiable {\n    init() {}\n}",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_notesSeamsOwnReceiveAndTreesReceiver_whenBothReceiveOmittedParameter() async {
+		// R6(3): the seam's own required `token` and `Right`'s receive of it are one parameter, which both receive: the
+		// error names and notes both, the seam's first.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Token`, which `Service` and `Right` receive, and cannot pass `nil` for it, since it is required. `Token` is `internal` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `internal` (`Right.init(token:)`, `Service.init(token:right:)`). Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Token`'s declaration); declare `Service` `internal`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Service.swift"]):8:5: note: `Service` receives `token: Token` here.
+			\(fixtures["Right.swift"]):7:5: note: `Right` receives `token: Token` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"@Instantiable(generateDependencyTree: true)\npublic struct Service: Instantiable {\n    init(token: Token, right: Right) {\n        self.token = token\n        self.right = right\n    }\n\n    @Received let token: Token\n    @Instantiated let right: Right\n}",
+					"@Instantiable\npublic struct Right: Instantiable {\n    init(token: Token) {\n        self.token = token\n    }\n\n    @Received let token: Token\n}",
+					"public struct Token {\n    public init() {}\n}",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingUnseenReceiver_whenCallersComputationThrowsForParameterItReceives() async {
+		// R8: `Base`'s `.safedi` names no module, so the modules that call `Cache` cannot see `Logger`, whose public
+		// initializer proves `Token` `public` for this module: computed without it, `Token` is `internal`, the callers'
+		// computation throws for `token`, and the error names `Logger`, the receiver of `token` they cannot see.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Cache.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Cache`: the initializer SafeDI generates for it depends on `Logger`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Core", packageName: "Shop", swiftFileContent: ["public struct Token {\n    public init() {}\n}"]),
+					ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: ["import Core\n\n" + seamFixtureType(named: "Logger", declarations: ["@Received let token: Token"])], dependencies: ["Core"], omitsModuleName: true),
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+						"import Base\nimport Core\n\n" + seamFixtureType(named: "Cache", isSeam: true, declarations: ["@Instantiated let store: Helpers.Store", "@Instantiated let logger: Logger"]),
+						"import Core\n\ninternal enum Helpers {\n    @Instantiable\n    public struct Store: Instantiable {\n        public init(token: Token) {\n            self.token = token\n        }\n\n        @Received let token: Token\n    }\n}",
+					], dependencies: ["Base", "Core"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	// MARK: R5: a caller holding a value the tier it can call omits
+
+	/// `Feature`'s public seam `Service`, whose `Badge` receives `theme` only if available at `badgeInitializerAccess`,
+	/// and `App`'s `Shell`, in package `appPackage`, which forwards `theme` and instantiates `Service`.
+	private static func providedValueModules(appPackage: String, badgeInitializerAccess: String = "package ", featureFiles: [String] = []) -> [ModuleFixture] {
+		[
+			ModuleFixture(
+				name: "Feature",
+				packageName: "Shop",
+				swiftFileContent: [
+					"public struct Theme {\n    public init() {}\n}",
+					"""
+					@Instantiable
+					public struct Badge: Instantiable {
+					    \(badgeInitializerAccess)init(theme: Theme?) {
+					        self.theme = theme
+					    }
+
+					    @Received(onlyIfAvailable: true) let theme: Theme?
+					}
+					""",
+					seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+				] + featureFiles,
+			),
+			ModuleFixture(
+				name: "App",
+				packageName: appPackage,
+				swiftFileContent: [
+					"""
+					import Feature
+					import SafeDI
+
+					@Instantiable
+					public struct Shell: Instantiable {
+					    public init(theme: Theme, service: Service) {
+					        self.theme = theme
+					        self.service = service
+					    }
+
+					    @Forwarded let theme: Theme
+					    @Instantiated let service: Service
+					}
+
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(shellBuilder: Instantiator<Shell>) {
+					        self.shellBuilder = shellBuilder
+					    }
+
+					    @Instantiated let shellBuilder: Instantiator<Shell>
+					}
+					""",
+				],
+				dependencies: ["Feature"],
+			),
+		]
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtProvider_whenCallerInAnotherPackageHoldsValueThePublicTierOmits(integration: MultiModuleIntegration) async {
+		// B4.6: `Theme` is `package` as far as SafeDI can tell, so `Service`'s `public` tier, the one `App` can call,
+		// omits `theme`, which `App`'s `Shell` provides: built inline, `Badge` would be handed it.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Shell.swift", in: "App", fixtures, integration)):11:5: error: `Shell` provides `theme: Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(theme:)`). Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Theme`'s declaration); or stop providing `theme` on this path.
+			\(Self.path(of: "Badge.swift", in: "Feature", fixtures, integration)):7:5: note: `Badge` receives `theme: Theme?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.providedValueModules(appPackage: "Other"), integration: integration, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorWhereModuleRefersToProvider_whenProvidersFileCannotBeRead() async {
+		// B4.14: `Base`'s `Holder` provides `theme` to the call of `Service`'s `public` tier that `App` emits, and `Base`'s
+		// files are gone, as a sandboxed Bazel action hands `App` `Base`'s `.safedi` alone: the error is reported where
+		// `App` refers to what leads to the call, and names the provider's module.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):11:5: error: `Holder` in module `Base` provides `theme: Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(theme:)`). Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Theme`'s declaration); or stop providing `theme` on this path.
+			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: Theme?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.providedValueModules(appPackage: "Other")[0],
+					ModuleFixture(
+						name: "Base",
+						packageName: "Other",
+						swiftFileContent: ["import Feature\n\n" + seamFixtureType(named: "Holder", declarations: ["@Forwarded let theme: Theme", "@Instantiated let service: Service"])],
+						dependencies: ["Feature"],
+						deletesSwiftFilesAfterRunning: true,
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Other",
+						swiftFileContent: ["import Base\nimport Feature\nimport SafeDI\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let holderBuilder: Instantiator<Holder>"])],
+						dependencies: ["Feature", "Base"],
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsPackageTierPassingValue_whenCallerInSamePackageHoldsValue(integration: MultiModuleIntegration) async throws {
+		// B4.7, B3.22: the same package reaches the `package` tier, which takes `theme`.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.providedValueModules(appPackage: "Shop"), integration: integration, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == Self.generatedFiles(of: "Feature", sourceFile: "Service", Self.twoTierService, under: integration))
+		#expect(output.modules["App"]?.generatedFiles == Self.generatedFiles(of: "App", sourceFile: "Shell", """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_shellBuilder(theme: Theme) -> Shell {
+		            func __safeDI_service() -> Service {
+		                _ = Service.__safeDI_Service_27F6F01DC5D0EF8E.self
+		                return Service(theme: theme)
+		            }
+		            let service: Service = __safeDI_service()
+		            return Shell(theme: theme, service: service)
+		        }
+		        let shellBuilder = Instantiator<Shell> {
+		            __safeDI_shellBuilder(theme: $0)
+		        }
+		        self.init(shellBuilder: shellBuilder)
+		    }
+		}
+		""", under: integration))
+		try expectEveryModuleCompiled(output)
+	}
+
+	/// Where `App`'s tree holds `theme` for `Service`'s own only-if-available receive.
+	enum OwnReceiveProvider: CaseIterable, Sendable {
+		/// `Shell` forwards it and instantiates `Service`.
+		case forwardedByCaller
+		/// `Root` instantiates it, then `Service`.
+		case instantiatedBeforeSeam
+		/// `Root` instantiates `Service`, then it.
+		case instantiatedAfterSeam
+		/// `Root` instantiates `Service`, then it, as `AppTheme`, which requires `service`: `Service` is built first.
+		case instantiatedRequiringSeam
+		/// Nothing holds it.
+		case none
+	}
+
+	/// `Feature`'s public seam `Service`, which receives `theme: (any Theme)?` itself, only if available, on its
+	/// `package` initializer, the only declaration that mentions the public protocol `Theme`, beside `Badge`, declared
+	/// `badgeAccess`; and `App`, in package `appPackage`, whose tree holds `theme` as `provider` says.
+	private static func ownReceiveModules(appPackage: String, provider: OwnReceiveProvider, badgeAccess: String = "public") -> [ModuleFixture] {
+		let appTheme = "@Instantiable(fulfillingAdditionalTypes: [Theme.self])\npublic struct AppTheme: Theme, Instantiable {\n    public init() {}\n}"
+		let appFiles: [String] = switch provider {
+		case .forwardedByCaller:
+			[
+				"import Feature\nimport SafeDI\n\n" + seamFixtureType(named: "Shell", declarations: ["@Forwarded let theme: any Theme", "@Instantiated let service: Service"]),
+				"import Feature\nimport SafeDI\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"]),
+			]
+		case .instantiatedBeforeSeam:
+			["import Feature\nimport SafeDI\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let theme: any Theme", "@Instantiated let service: Service"]), "import Feature\n\n" + appTheme]
+		case .instantiatedAfterSeam:
+			["import Feature\nimport SafeDI\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service", "@Instantiated let theme: any Theme"]), "import Feature\n\n" + appTheme]
+		case .instantiatedRequiringSeam:
+			[
+				"import Feature\nimport SafeDI\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service", "@Instantiated let theme: any Theme"]),
+				"import Feature\n\n" + seamFixtureType(named: "AppTheme", declarations: ["@Received let service: Service"], conformances: ", Theme").replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Theme.self])\n"),
+			]
+		case .none:
+			["import Feature\nimport SafeDI\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service"])]
+		}
+		return [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Theme {}",
+				"@Instantiable\n\(badgeAccess) struct Badge: Instantiable {\n    \(badgeAccess) init() {}\n}",
+				"""
+				@Instantiable(generateDependencyTree: true)
+				public struct Service: Instantiable {
+				    package init(theme: (any Theme)?, badge: Badge) {
+				        self.theme = theme
+				        self.badge = badge
+				    }
+
+				    @Received(onlyIfAvailable: true) let theme: (any Theme)?
+				    @Instantiated let badge: Badge
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: appPackage, swiftFileContent: appFiles, dependencies: ["Feature"]),
+		]
+	}
+
+	/// `Service`'s generated initializers for `ownReceiveModules`, without the file header.
+	private static let ownReceiveService = """
+	extension Service {
+	    public init() {
+	        self.init(theme: nil)
+	    }
+
+	    package init(theme: (any Theme)? = nil) {
+	        let badge = Badge()
+	        self.init(theme: theme, badge: badge)
+	    }
+	}
+
+	extension Service {
+	    public enum __safeDI_Service_27F6F01DC5D0EF8E {}
+	}
+	"""
+
+	/// The generated files of `module` under `integration`: its one combined file, or, under the SwiftPM plugin, the file
+	/// generated beside `sourceFile`, the file that declares the root, whose calls of another module's seam carry the
+	/// plugin's comment.
+	private static func generatedFiles(of module: String, sourceFile: String, _ code: String, under integration: MultiModuleIntegration) -> [String: String] {
+		switch integration {
+		case .moduleInfo:
+			["\(module).swift": generatedFileHeader + code]
+		case .swiftPackagePlugin:
+			["\(sourceFile)+SafeDI.swift": generatedFileHeader + code.replacingOccurrences(of: "_ = Service.__safeDI_Service_27F6F01DC5D0EF8E.self", with: "_ = Service.__safeDI_Service_27F6F01DC5D0EF8E.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.")]
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases, [OwnReceiveProvider.forwardedByCaller, .instantiatedBeforeSeam, .instantiatedAfterSeam])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtProvider_whenCallerInAnotherPackageHoldsValueForSeamsOwnReceive(integration: MultiModuleIntegration, provider: OwnReceiveProvider) async {
+		// B4.31: the `public` tier `App` can call omits `Service`'s own only-if-available `theme`, which `App`'s tree
+		// provides, however it holds it: built inline, `Service` would be handed it.
+		let (file, line, providerType) = switch provider {
+		case .forwardedByCaller: ("Shell.swift", 11, "Shell")
+		case .instantiatedBeforeSeam: ("Root.swift", 11, "Root")
+		case .instantiatedAfterSeam, .instantiatedRequiringSeam, .none: ("Root.swift", 12, "Root")
+		}
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: file, in: "App", fixtures, integration)):\(line):5: error: `\(providerType)` provides `theme: any Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` receives `theme` itself, only if available, on its `package` initializer, so this call would pass `nil` to `Service`, which would be handed `theme` were its tree built inline. `Theme` is `package` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Service.init(theme:badge:)`). Widen `Service.init(theme:badge:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Theme`'s declaration); or stop providing `theme` on this path.
+			\(Self.path(of: "Service.swift", in: "Feature", fixtures, integration)):8:5: note: `Service` receives `theme: (any Theme)?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.ownReceiveModules(appPackage: "Other", provider: provider), integration: integration, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_offersNoWideningOfSeamsInitializer_whenItsOtherArgumentIsNarrowerThanCallerNeeds() async {
+		// B4.31, R6(4)'s gate: `Service`'s own initializer also takes the `package` `Badge`, so widening it to `public`
+		// would not compile: the remedy is left out.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Shell.swift"]):11:5: error: `Shell` provides `theme: any Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` receives `theme` itself, only if available, on its `package` initializer, so this call would pass `nil` to `Service`, which would be handed `theme` were its tree built inline. `Theme` is `package` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Service.init(theme:badge:)`). Mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Theme`'s declaration); or stop providing `theme` on this path.
+			\(fixtures["Feature"]!["Service.swift"]):8:5: note: `Service` receives `theme: (any Theme)?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.ownReceiveModules(appPackage: "Other", provider: .forwardedByCaller, badgeAccess: "package"), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_defaultsSeamsOwnOnlyIfAvailableReceiveToNil_whenCallerInSamePackageHoldsValue(integration: MultiModuleIntegration) async throws {
+		// B3.16, B4.31: `Service`'s own only-if-available `theme` defaults to `nil` on its `package` tier, which the
+		// `public` tier calls passing `nil`; `App`, in the same package, calls the `package` tier passing `theme`.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.ownReceiveModules(appPackage: "Shop", provider: .forwardedByCaller), integration: integration, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == Self.generatedFiles(of: "Feature", sourceFile: "Service", Self.ownReceiveService, under: integration))
+		#expect(output.modules["App"]?.generatedFiles == Self.generatedFiles(of: "App", sourceFile: "Root", """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_shellBuilder(theme: any Theme) -> Shell {
+		            func __safeDI_service() -> Service {
+		                _ = Service.__safeDI_Service_27F6F01DC5D0EF8E.self
+		                return Service(theme: theme)
+		            }
+		            let service: Service = __safeDI_service()
+		            return Shell(theme: theme, service: service)
+		        }
+		        let shellBuilder = Instantiator<Shell> {
+		            __safeDI_shellBuilder(theme: $0)
+		        }
+		        self.init(shellBuilder: shellBuilder)
+		    }
+		}
+		""", under: integration))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsPublicTierPassingNothing_whenCallerInAnotherPackageHoldsNothingForSeamsOwnReceive(integration: MultiModuleIntegration) async throws {
+		// B4.31: `App` holds no `theme`, so the `public` tier's `nil` is what `Service` would get built inline.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.ownReceiveModules(appPackage: "Other", provider: .none), integration: integration, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == Self.generatedFiles(of: "App", sourceFile: "Root", """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_27F6F01DC5D0EF8E.self
+		            return Service()
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(service: service)
+		    }
+		}
+		""", under: integration))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsPublicTierPassingNothing_whenProviderOfSeamsOwnReceiveRequiresSeam(integration: MultiModuleIntegration) async throws {
+		// B4.31's dropped edge: `AppTheme` requires `service`, so `Service` is built first and passed `nil`, as built
+		// inline: no value is dropped.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.ownReceiveModules(appPackage: "Other", provider: .instantiatedRequiringSeam), integration: integration, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == Self.generatedFiles(of: "App", sourceFile: "Root", """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_27F6F01DC5D0EF8E.self
+		            return Service()
+		        }
+		        let service: Service = __safeDI_service()
+		        let theme: any Theme = AppTheme(service: service)
+		        self.init(service: service, theme: theme)
+		    }
+		}
+		""", under: integration))
+		try expectEveryModuleCompiled(output)
+	}
+
+	/// `Feature`'s public seam `Service`, whose `Badge` receives `theme: (any Theme)?` only if available on a `package`
+	/// initializer, the only declaration that mentions the public protocol `Theme`, and `App`'s root, which
+	/// instantiates `service` and then `theme`, as `AppTheme`, which receives `appThemeReceive`.
+	private static func siblingProviderModules(appThemeReceive: String?) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Theme {}",
+				"@Instantiable\npublic struct Badge: Instantiable {\n    package init(theme: (any Theme)?) {\n        self.theme = theme\n    }\n\n    @Received(onlyIfAvailable: true) let theme: (any Theme)?\n}",
+				seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				"import Feature\nimport SafeDI\n\n" + seamFixtureType(named: "AppTheme", declarations: appThemeReceive.map { [$0] } ?? [], conformances: ", Theme").replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Theme.self])\n"),
+				"import Feature\nimport SafeDI\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service", "@Instantiated let theme: any Theme"]),
+			], dependencies: ["Feature"]),
+		]
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtSiblingProvider_whenProviderIsDeclaredAfterSeam() async {
+		// B4.16: `Root` declares `theme` after `service`, but nothing orders `theme` after the call, so the call's leaf,
+		// which receives `theme` only if available, is generated after it, as `Badge` would be built inline.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):12:5: error: `Root` provides `theme: any Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(theme:)`). Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Theme`'s declaration); or stop providing `theme` on this path.
+			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: (any Theme)?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.siblingProviderModules(appThemeReceive: nil), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsPublicTierPassingNothing_whenProviderRequiresSeamItProvidesFor() async throws {
+		// B4.13b: `AppTheme` requires `service`, so `service` is generated first and the call's leaf, which receives
+		// `theme` only if available, is passed `nil`, as `Badge` would be built inline: no value is dropped.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.siblingProviderModules(appThemeReceive: "@Received let service: Service"), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles == [
+			"Feature.swift": generatedFileHeader + """
+			extension Service {
+			    public init() {
+			        self.init(theme: nil)
+			    }
+
+			    package init(theme: (any Theme)? = nil) {
+			        let badge = Badge(theme: theme)
+			        self.init(badge: badge)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_27F6F01DC5D0EF8E {}
+			}
+			""",
+		])
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_27F6F01DC5D0EF8E.self
+			            return Service()
+			        }
+			        let service: Service = __safeDI_service()
+			        let theme: any Theme = AppTheme(service: service)
+			        self.init(service: service, theme: theme)
+			    }
+			}
+			""",
+		])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtNestedSeamsTypeAlone_whenOuterSeamInAnotherPackageCallsPackageSeam() async {
+		// B3.15 through a seam: `Mid`'s `Outer` cannot construct `Feature`'s `package` seam `Inner`, so the check of every
+		// construction reports `Inner`'s type, and `Outer` reports no omission of the `token` that call stands for.
+		await assertThrowsMultiModuleError(inModule: "Mid", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Inner.swift"]):2:1: error: `Inner` is `package`, so module `Mid`, in another package, cannot construct it in the code SafeDI generates. Make `Inner` `public` to fix.
+			\(fixtures["Feature"]!["Inner.swift"]):2:1-2:8: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+						"""
+						@Instantiable(generateDependencyTree: true)
+						package struct Inner: Instantiable {
+						    package init(badge: Badge) {
+						        self.badge = badge
+						    }
+
+						    @Instantiated let badge: Badge
+						}
+						""",
+						"@Instantiable\npublic struct Badge: Instantiable {\n    package init(token: Token) {\n        self.token = token\n    }\n\n    @Received let token: Token\n}",
+						"@Instantiable\npackage struct Token: Instantiable {\n    package init() {}\n}",
+					]),
+					ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: ["import Feature\n\n" + seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated let inner: Inner"])], dependencies: ["Feature"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtTypeAlone_whenCallerInAnotherPackageCallsPackageSeam() async {
+		// B3.15: a `package` seam's widest tier is `package`, so `App`, in another package, reaches none: the check of
+		// every construction reports the type with its fix-it, never the initializer SafeDI generates.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix.
+			\(fixtures["Feature"]!["Service.swift"]):2:1-2:8: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+						"""
+						@Instantiable(generateDependencyTree: true)
+						package struct Service: Instantiable {
+						    package init(badge: Badge) {
+						        self.badge = badge
+						    }
+
+						    @Instantiated let badge: Badge
+						}
+						""",
+						seamFixtureType(named: "Badge", declarations: []),
+					]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Feature\n\n@Instantiable(isRoot: true)\nfinal class Root: Instantiable {\n    init(service: Service) {\n        self.service = service\n    }\n\n    @Instantiated let service: Service\n}"], dependencies: ["Feature"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenTypeInExtensionOfPackageTypeMentionsTypePublicly() async {
+		// B1.4v: `Settings.Helper` is bounded by `Settings`'s own `package` declaration, cause (vii) with `Settings`'s
+		// term, and never the remedy to spell `public extension Settings`, which Swift rejects.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `theme: Theme`, which `Settings.Helper` receives, and cannot pass `nil` for it, since it is required. `Theme` is `package` as far as SafeDI can tell: `Settings.Helper`'s initializer, which mentions it, is declared inside an extension of `Settings`, whose own `@Instantiable` declaration is `package`. Declare `Settings` `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `theme` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Settings.swift"]):13:9: note: `Settings.Helper` receives `theme: Theme` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+						"public struct Theme {\n    public init() {}\n}",
+						"""
+						@Instantiable
+						package struct Settings: Instantiable {
+						    package init() {}
+						}
+
+						extension Settings {
+						    @Instantiable
+						    public struct Helper: Instantiable {
+						        public init(theme: Theme) {
+						            self.theme = theme
+						        }
+
+						        @Received let theme: Theme
+						    }
+						}
+						""",
+						"""
+						@Instantiable(generateDependencyTree: true)
+						public struct Service: Instantiable {
+						    package init(helper: Settings.Helper) {
+						        self.helper = helper
+						    }
+
+						    @Instantiated let helper: Settings.Helper
+						}
+						""",
+					]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenTypeInExtensionOfTypeAnotherModuleDeclaresIsRaisedOnlyToPackage(omitsModuleNames: Bool) async {
+		// B1.4r, B1.4s: `Base`'s `Service` is no declaration of `Feature`'s own that could bound `Service.Helper`: it is
+		// another module's (B1.4r), or, where neither module's `.safedi` names its module, two unknown module names never
+		// match outside a run's own files (B1.4s). `Helper` starts at `internal`, and `Screen`'s `package` initializer
+		// raises it to `package`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `theme: Theme`, which `Service.Helper` receives, and cannot pass `nil` for it, since it is required. `Theme` is `package` as far as SafeDI can tell: `Service.Helper`'s initializer, which mentions it, is declared inside an extension of `Service` that spells no access level, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions `Service.Helper` is `package` (`Screen.init(helper:)`). If `Service` can be `public`, spell the extension's access level (`public extension Service { … }`, dropping the modifier on `Helper` that Swift then reports as redundant; the compiler rejects a level wider than `Service`'s), or declare `Helper` in `Service`'s body or at top level; mention `Service.Helper` or `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Screen` `package`; build `theme` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Helper.swift"]):10:9: note: `Service.Helper` receives `theme: Theme` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [seamFixtureType(named: "Service", declarations: [])], omitsModuleName: omitsModuleNames),
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+						"package struct Theme {\n    package init() {}\n}",
+						"""
+						package struct Service {}
+
+						extension Service {
+						    @Instantiable
+						    public struct Helper: Instantiable {
+						        public init(theme: Theme) {
+						            self.theme = theme
+						        }
+
+						        @Received let theme: Theme
+						    }
+						}
+						""",
+						"@Instantiable(generateDependencyTree: true)\npublic struct Screen: Instantiable {\n    package init(helper: Service.Helper) {\n        self.helper = helper\n    }\n\n    @Instantiated let helper: Service.Helper\n}",
+					], dependencies: ["Base"], omitsModuleName: omitsModuleNames),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesNoTierParameter_whenOuterSeamReachesInnerSeamsTierThatOmitsIt() async throws {
+		// B4.23, B4.24: `Mid`'s `Shell` reaches the `public` tier of `Base`'s `Service`, which omits `theme`: no tier of
+		// `Shell` takes it, so `App`, holding nothing, calls `Shell()`; holding `theme`, it is told.
+		let modules = [
+			ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
+				"public struct Theme {\n    public init() {}\n}",
+				"@Instantiable\npublic struct Badge: Instantiable {\n    package init(theme: Theme?) {\n        self.theme = theme\n    }\n\n    @Received(onlyIfAvailable: true) let theme: Theme?\n}",
+				seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+			]),
+			ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: ["import Base\n\n" + seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let service: Service"])], dependencies: ["Base"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: modules + [ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Base\nimport Mid\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shell: Shell"])], dependencies: ["Base", "Mid"])],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Base"]?.generatedFiles == ["Base.swift": generatedFileHeader + Self.twoTierService])
+		#expect(output.modules["Mid"]?.generatedFiles == [
+			"Mid.swift": generatedFileHeader + """
+			#if canImport(Base)
+			import Base
+			#endif
+
+			extension Shell {
+			    public init() {
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_27F6F01DC5D0EF8E.self
+			            return Service()
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(service: service)
+			    }
+			}
+
+			extension Shell {
+			    public enum __safeDI_Shell_CBF29CE484222325 {}
+			}
+			""",
+		])
+		try expectEveryModuleCompiled(output)
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Holder.swift"]):11:5: error: `Holder` provides `theme: Theme`, but no initializer SafeDI generated for `Shell` takes it: `Shell`'s dependency tree calls the `public` initializer SafeDI generated for `Service` in module `Base`, the narrowest one module `Mid` can call, which takes `theme` only on its `package` initializer, so calling it would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(theme:)`). Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Theme`'s declaration); or stop providing `theme` on this path.
+			\(fixtures["Base"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: Theme?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: modules + [ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+					"import Base\nimport Mid\n\n" + seamFixtureType(named: "Holder", declarations: ["@Forwarded let theme: Theme", "@Instantiated let shell: Shell"]),
+					"import Base\nimport Mid\nimport SafeDI\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let holderBuilder: Instantiator<Holder>"]),
+				], dependencies: ["Base", "Mid"])],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_carriesInnerSeamsParametersOnOuterSeamsTiers_whenOuterSeamIsInInnerSeamsPackage() async throws {
+		// B3.9, R4: `Mid`'s `Shell` reaches `Base`'s `Service`, in its own package, at the `package` tier, which takes
+		// `theme` and `session`; `Shell` proves each over its own module's declarations, `package`, so its `package` tier
+		// takes them and its `public` tier passes `nil`. `App`, in the package, passes what it holds; `AppOther`, in
+		// another package, holds nothing and calls the `public` tier.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
+					"public struct Theme {\n    public init() {}\n}",
+					"@Instantiable\npackage struct Session: Instantiable {\n    package init() {}\n}",
+					"@Instantiable\npublic struct Badge: Instantiable {\n    package init(theme: Theme?, session: Session?) {\n        self.theme = theme\n        self.session = session\n    }\n\n    @Received(onlyIfAvailable: true) let theme: Theme?\n    @Received(onlyIfAvailable: true) let session: Session?\n}",
+					seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+				]),
+				ModuleFixture(name: "Mid", packageName: "Shop", swiftFileContent: ["import Base\n\n" + seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let service: Service"])], dependencies: ["Base"]),
+				ModuleFixture(name: "App", packageName: "Shop", swiftFileContent: [
+					"""
+					import Base
+					import Mid
+					import SafeDI
+
+					@Instantiable
+					public struct Holder: Instantiable {
+					    package init(theme: Theme, session: Session, shell: Shell) {
+					        self.theme = theme
+					        self.session = session
+					        self.shell = shell
+					    }
+
+					    @Forwarded let theme: Theme
+					    @Instantiated let session: Session
+					    @Instantiated let shell: Shell
+					}
+					""",
+					"import Base\nimport Mid\nimport SafeDI\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let holderBuilder: Instantiator<Holder>"]),
+				], dependencies: ["Base", "Mid"]),
+				ModuleFixture(name: "AppOther", packageName: "Other", swiftFileContent: ["import Base\nimport Mid\n\n" + seamFixtureType(named: "OtherRoot", isRoot: true, declarations: ["@Instantiated let shell: Shell"])], dependencies: ["Base", "Mid"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Mid"]?.generatedFiles == [
+			"Mid.swift": generatedFileHeader + """
+			#if canImport(Base)
+			import Base
+			#endif
+
+			extension Shell {
+			    public init() {
+			        self.init(session: nil, theme: nil)
+			    }
+
+			    package init(session: Session? = nil, theme: Theme? = nil) {
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_05FA4E47A7B6869F.self
+			            return Service(session: session, theme: theme)
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(service: service)
+			    }
+			}
+
+			extension Shell {
+			    public enum __safeDI_Shell_05FA4E47A7B6869F {}
+			}
+			""",
+		])
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Base)
+			import Base
+			#endif
+			#if canImport(Mid)
+			import Mid
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_holderBuilder(theme: Theme) -> Holder {
+			            let session = Session()
+			            func __safeDI_shell() -> Shell {
+			                _ = Shell.__safeDI_Shell_05FA4E47A7B6869F.self
+			                return Shell(session: session, theme: theme)
+			            }
+			            let shell: Shell = __safeDI_shell()
+			            return Holder(theme: theme, session: session, shell: shell)
+			        }
+			        let holderBuilder = Instantiator<Holder> {
+			            __safeDI_holderBuilder(theme: $0)
+			        }
+			        self.init(holderBuilder: holderBuilder)
+			    }
+			}
+			""",
+		])
+		#expect(output.modules["AppOther"]?.generatedFiles == [
+			"AppOther.swift": generatedFileHeader + """
+			#if canImport(Base)
+			import Base
+			#endif
+			#if canImport(Mid)
+			import Mid
+			#endif
+
+			extension OtherRoot {
+			    public init() {
+			        func __safeDI_shell() -> Shell {
+			            _ = Shell.__safeDI_Shell_05FA4E47A7B6869F.self
+			            return Shell()
+			        }
+			        let shell: Shell = __safeDI_shell()
+			        self.init(shell: shell)
+			    }
+			}
+			""",
+		])
+		try expectEveryModuleCompiled(output)
+	}
+
+	/// `Feature`'s public seam `Service`, whose `Badge` receives the plain `Theme` and `Color` only if available on a
+	/// `package` initializer, and `App`, in another package, with `appFiles`.
+	private static func twoOmissionModules(appFiles: [String]) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public struct Theme {\n    public init() {}\n}\n\npublic struct Color {\n    public init() {}\n}",
+				"@Instantiable\npublic struct Badge: Instantiable {\n    package init(theme: Theme?, color: Color?) {\n        self.theme = theme\n        self.color = color\n    }\n\n    @Received(onlyIfAvailable: true) let theme: Theme?\n    @Received(onlyIfAvailable: true) let color: Color?\n}",
+				seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: appFiles.map { "import Feature\nimport SafeDI\n\n" + $0 }, dependencies: ["Feature"]),
+		]
+	}
+
+	/// The error `twoOmissionModules`' call of `Service` reports for a value of `label` that `provider` declares at
+	/// `location`, and its note.
+	private static func omissionError(provider: String, label: String, type: String, at location: String, _ fixtures: [String: FixturePaths]) -> String {
+		"""
+		\(location): error: `\(provider)` provides `\(label): \(type)`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `\(label)` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `\(label)` were it built inline. `\(type)` is `package` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(theme:color:)`). Widen `Badge.init(theme:color:)` to `public`; mention `\(type)` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `\(type)`'s declaration); or stop providing `\(label)` on this path.
+		\(fixtures["Feature"]!["Badge.swift"]):\(label == "theme" ? 8 : 9):5: note: `Badge` receives `\(label): \(type)?` here.
+		"""
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorForEachParameter_whenOneCallOmitsTwoParametersCallerHolds() async {
+		// B4.30, within one call: `Shell` holds `theme` and `color`, both of which the `public` tier omits.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			Self.omissionError(provider: "Shell", label: "theme", type: "Theme", at: "\(fixtures["App"]!["Shell.swift"]):12:5", fixtures) + "\n"
+				+ Self.omissionError(provider: "Shell", label: "color", type: "Color", at: "\(fixtures["App"]!["Shell.swift"]):13:5", fixtures)
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.twoOmissionModules(appFiles: [
+					seamFixtureType(named: "Shell", declarations: ["@Forwarded let theme: Theme", "@Forwarded let color: Color", "@Instantiated let service: Service"]),
+					seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"]),
+				]),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOnce_whenTwoCallsInOneTreeDropTheSameValue() async {
+		// B4.30, within one tree: `Shell`'s own call of `Service` and the one beneath `Holder` would both drop `theme`,
+		// which read the same, so the error is reported once.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			Self.omissionError(provider: "Shell", label: "theme", type: "Theme", at: "\(fixtures["App"]!["Shell.swift"]):12:5", fixtures)
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.twoOmissionModules(appFiles: [
+					seamFixtureType(named: "Shell", declarations: ["@Forwarded let theme: Theme", "@Instantiated let service: Service", "@Instantiated let holder: Holder"]),
+					seamFixtureType(named: "Holder", declarations: ["@Instantiated let service: Service"]),
+					seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"]),
+				]),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfEachRootInSourceOrder_whenTwoRootsDropValues() async {
+		// B4.30, across roots: `ZRoot`'s tree drops `theme` and `ARoot`'s drops `color`; both are reported, in source
+		// order, whatever order the roots are generated in.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			Self.omissionError(provider: "Other", label: "color", type: "Color", at: "\(fixtures["App"]!["Other.swift"]):11:5", fixtures) + "\n"
+				+ Self.omissionError(provider: "Shell", label: "theme", type: "Theme", at: "\(fixtures["App"]!["Shell.swift"]):11:5", fixtures)
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.twoOmissionModules(appFiles: [
+					seamFixtureType(named: "Shell", declarations: ["@Forwarded let theme: Theme", "@Instantiated let service: Service"]),
+					seamFixtureType(named: "ZRoot", isRoot: true, declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"]),
+					seamFixtureType(named: "Other", declarations: ["@Forwarded let color: Color", "@Instantiated let service: Service"]),
+					seamFixtureType(named: "ARoot", isRoot: true, declarations: ["@Instantiated let otherBuilder: Instantiator<Other>"]),
+				]),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtOuterSeam_whenItsTreeHoldsItsParameterForInnerSeamsTierThatOmitsIt() async {
+		// B4.28: `Mid`'s `Outer` takes `theme` from its callers because `Panel` receives it, and its tree calls `Base`'s
+		// `Service` at the `public` tier, which omits it: the error at `Outer` notes `Panel`'s receive, which makes
+		// `theme` its parameter, and `Badge`'s, which the call would pass `nil`.
+		await assertThrowsMultiModuleError(inModule: "Mid", diagnostics: { fixtures in
+			"""
+			\(fixtures["Mid"]!["Outer.swift"]):3:1: error: `Outer` takes `theme: Theme?` from its callers, but the `public` initializer SafeDI generated for `Service` in module `Base`, the narrowest one module `Mid` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(theme:)`). Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Theme`'s declaration); or stop providing `theme` on this path.
+			\(fixtures["Mid"]!["Panel.swift"]):9:5: note: `Panel` receives `theme: Theme?` here.
+			\(fixtures["Base"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: Theme?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
+						"public struct Theme {\n    public init() {}\n}",
+						"@Instantiable\npublic struct Badge: Instantiable {\n    package init(theme: Theme?) {\n        self.theme = theme\n    }\n\n    @Received(onlyIfAvailable: true) let theme: Theme?\n}",
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+					]),
+					ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: [
+						"import Base\n\n" + seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated let panel: Panel", "@Instantiated let service: Service"]),
+						"import Base\n\n" + seamFixtureType(named: "Panel", declarations: ["@Received(onlyIfAvailable: true) let theme: Theme?"]),
+					], dependencies: ["Base"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingFirstNestedCallBySeamType_whenTwoNestedCallsDropTheSameValue() async {
+		// R5(5): `Shell`'s tree calls `ServiceB` and then `ServiceA`, each at a `public` tier that omits `theme`: the
+		// error names one call, the first by seam type, whichever the tree meets first.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Holder.swift"]):11:5: error: `Holder` provides `theme: Theme`, but no initializer SafeDI generated for `Shell` takes it: `Shell`'s dependency tree calls the `public` initializer SafeDI generated for `ServiceA` in module `Base`, the narrowest one module `Mid` can call, which takes `theme` only on its `package` initializer, so calling it would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(theme:)`, `Tag.init(theme:)`). Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Theme`'s declaration); or stop providing `theme` on this path.
+			\(fixtures["Base"]!["Tag.swift"]):7:5: note: `Tag` receives `theme: Theme?` here.
+			\(fixtures["Base"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: Theme?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
+						"public struct Theme {\n    public init() {}\n}",
+						"@Instantiable\npublic struct Badge: Instantiable {\n    package init(theme: Theme?) {\n        self.theme = theme\n    }\n\n    @Received(onlyIfAvailable: true) let theme: Theme?\n}",
+						"@Instantiable\npublic struct Tag: Instantiable {\n    package init(theme: Theme?) {\n        self.theme = theme\n    }\n\n    @Received(onlyIfAvailable: true) let theme: Theme?\n}",
+						seamFixtureType(named: "ServiceA", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+						seamFixtureType(named: "ServiceB", isSeam: true, declarations: ["@Instantiated let tag: Tag"]),
+					]),
+					ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: ["import Base\n\n" + seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let serviceB: ServiceB", "@Instantiated let serviceA: ServiceA"])], dependencies: ["Base"]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+						"import Base\nimport Mid\n\n" + seamFixtureType(named: "Holder", declarations: ["@Forwarded let theme: Theme", "@Instantiated let shell: Shell"]),
+						"import Base\nimport Mid\nimport SafeDI\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let holderBuilder: Instantiator<Holder>"]),
+					], dependencies: ["Base", "Mid"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingNestedCall_whenValueIsDroppedThreeSeamsDeep() async {
+		// B4.29, R5(5): `Top`'s `Outer` reaches `Mid`'s `Shell`, whose tree reaches `Base`'s `Service` at a tier that omits
+		// `theme`, so neither `Shell` nor `Outer` takes it, and `App`'s `Holder`, which provides it, is told which call
+		// drops it.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Holder.swift"]):11:5: error: `Holder` provides `theme: Theme`, but no initializer SafeDI generated for `Outer` takes it: `Outer`'s dependency tree calls the `public` initializer SafeDI generated for `Shell` in module `Mid`, the narrowest one module `Top` can call, which takes `theme` on none of its initializers, so calling it would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(theme:)`). Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Theme`'s declaration); or stop providing `theme` on this path.
+			\(fixtures["Base"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: Theme?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
+						"public struct Theme {\n    public init() {}\n}",
+						"@Instantiable\npublic struct Badge: Instantiable {\n    package init(theme: Theme?) {\n        self.theme = theme\n    }\n\n    @Received(onlyIfAvailable: true) let theme: Theme?\n}",
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+					]),
+					ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: ["import Base\n\n" + seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let service: Service"])], dependencies: ["Base"]),
+					ModuleFixture(name: "Top", packageName: "Other", swiftFileContent: ["import Base\nimport Mid\n\n" + seamFixtureType(named: "Outer", isSeam: true, declarations: ["@Instantiated let shell: Shell"])], dependencies: ["Base", "Mid"]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+						"import Base\nimport Top\n\n" + seamFixtureType(named: "Holder", declarations: ["@Forwarded let theme: Theme", "@Instantiated let outer: Outer"]),
+						"import Base\nimport SafeDI\nimport Top\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let holderBuilder: Instantiator<Holder>"]),
+					], dependencies: ["Base", "Mid", "Top"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtExtendedType_whenAnotherPackageConstructsTypeInExtensionOfPackageType(integration: MultiModuleIntegration) async {
+		// The public-mocks matrix's M1.26: `Settings.Helper` is public, but code naming it names `Settings`, which is
+		// `package`: `App`, in another package, is told to widen `Settings` rather than generating code that does not
+		// compile.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Settings.swift", in: "Core", fixtures, integration)):4:1: error: `Settings`, which encloses `Settings.Helper`, is `package`, so module `App`, in another package, cannot construct `Settings.Helper` in the code SafeDI generates. Make `Settings` `public` to fix.
+			\(Self.path(of: "Settings.swift", in: "Core", fixtures, integration)):4:1-4:8: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Core", packageName: "Shop", swiftFileContent: [
+						"""
+						public protocol HelperProtocol {}
+
+						@Instantiable
+						package struct Settings: Instantiable {
+						    package init() {}
+						}
+
+						extension Settings {
+						    @Instantiable(fulfillingAdditionalTypes: [HelperProtocol.self])
+						    public struct Helper: Instantiable, HelperProtocol {
+						        public init() {}
+						    }
+						}
+						""",
+					]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Core\n\n@Instantiable(isRoot: true)\npublic struct Root: Instantiable {\n    public init(helper: any HelperProtocol) {\n        self.helper = helper\n    }\n\n    @Instantiated let helper: any HelperProtocol\n}"], dependencies: ["Core"]),
+				],
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_leavesDependencysRootWithoutCode_whenItsTreeConstructsTypeInExtensionOfPackageType(integration: MultiModuleIntegration) async throws {
+		// M1.26 on the withheld-root path: `Base`'s root constructs `Settings.Helper`, which code in another package
+		// cannot name, since `Settings` is `package`. Under the SwiftPM plugin `App` reads `Base`'s files and leaves the
+		// root to `Base`, rather than generating code that does not compile; a `.safedi` holds no root to regenerate.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
+					"""
+					public protocol HelperProtocol {}
+
+					@Instantiable
+					package struct Settings: Instantiable {
+					    package init() {}
+					}
+
+					extension Settings {
+					    @Instantiable(fulfillingAdditionalTypes: [HelperProtocol.self])
+					    public struct Helper: HelperProtocol, Instantiable {
+					        public init() {}
+					    }
+					}
+					""",
+					"@Instantiable(isRoot: true)\npublic struct BaseRoot: Instantiable {\n    public init(helper: any HelperProtocol) {\n        self.helper = helper\n    }\n\n    @Instantiated(fulfilledByType: \"Settings.Helper\") let helper: any HelperProtocol\n}",
+				]),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Base\n\n" + seamFixtureType(named: "Unrelated", declarations: [])], dependencies: ["Base"]),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		switch integration {
+		case .moduleInfo:
+			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + "#if canImport(Base)\nimport Base\n#endif\n\n"])
+		case .swiftPackagePlugin:
+			#expect(output.modules["App"]?.generatedFiles == [
+				"BaseRoot+SafeDI.swift": generatedFileHeader + """
+				#if canImport(Base)
+				import Base
+				#endif
+
+				// SafeDI generates the dependency tree of BaseRoot only in the module that declares it, because the tree constructs a declaration that is neither `public` nor `open`.
+				""",
+			])
+		}
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenTypeInExtensionOfExtensionBasedTypeIsRaisedOnlyToPackage() async {
+		// B1.4p: `Panel`'s entry is an `@Instantiable` extension, which bounds nothing exactly, so `Panel.Helper` starts
+		// at `internal` and `Service`'s `package` initializer raises it to `package`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `theme: Theme`, which `Panel.Helper` receives, and cannot pass `nil` for it, since it is required. `Theme` is `package` as far as SafeDI can tell: `Panel.Helper`'s initializer, which mentions it, is declared inside an extension of `Panel` that spells no access level, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions `Panel.Helper` is `package` (`Service.init(helper:)`). If `Panel` can be `public`, spell the extension's access level (`public extension Panel { … }`, dropping the modifier on `Helper` that Swift then reports as redundant; the compiler rejects a level wider than `Panel`'s), or declare `Helper` in `Panel`'s body or at top level; mention `Panel.Helper` or `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `package`; build `theme` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Helper.swift"]):17:9: note: `Panel.Helper` receives `theme: Theme` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+						"package struct Theme {\n    package init() {}\n}",
+						"""
+						public struct Panel {}
+
+						@Instantiable
+						extension Panel: Instantiable {
+						    public static func instantiate() -> Panel {
+						        Panel()
+						    }
+						}
+
+						extension Panel {
+						    @Instantiable
+						    public struct Helper: Instantiable {
+						        public init(theme: Theme) {
+						            self.theme = theme
+						        }
+
+						        @Received let theme: Theme
+						    }
+						}
+						""",
+						"@Instantiable(generateDependencyTree: true)\npublic struct Service: Instantiable {\n    package init(helper: Panel.Helper) {\n        self.helper = helper\n    }\n\n    @Instantiated let helper: Panel.Helper\n}",
+					]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtInitializer_whenCallerInAnotherPackageCallsSeamWithoutSignature() async {
+		// B3.21, R6(6): a seam with nothing to build and nothing to pass has no signature, so callers call its own
+		// initializer, whose `package` level the check of every construction still reports.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(fixtures["Feature"]!["Service.swift"]):3:5-3:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: ["@Instantiable(generateDependencyTree: true)\npublic struct Service: Instantiable {\n    package init() {}\n}"]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service"])], dependencies: ["Feature"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_chainsThreeTiers_whenSeamInUnspelledExtensionReceivesItsOwnParametersOnlyIfAvailable() async throws {
+		// B1.4j: `Checkout.Service`, in an unspelled extension of a public enum SafeDI does not record, proves its own
+		// `theme` at `internal`; `Badge` proves `session` at `package`: three tiers, the `package` one taking `session`,
+		// which `App`, in the same package, passes.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+					"""
+					public enum Checkout {}
+
+					extension Checkout {
+					    @Instantiable(generateDependencyTree: true)
+					    public struct Service: Instantiable {
+					        public init(theme: Theme?, badge: Badge) {
+					            self.theme = theme
+					            self.badge = badge
+					        }
+
+					        @Received(onlyIfAvailable: true) let theme: Theme?
+					        @Instantiated let badge: Badge
+					    }
+					}
+					""",
+					"public struct Theme {\n    public init() {}\n}",
+					"@Instantiable\npublic struct Badge: Instantiable {\n    package init(session: Session?) {\n        self.session = session\n    }\n\n    @Received(onlyIfAvailable: true) let session: Session?\n}",
+					"@Instantiable\npackage struct Session: Instantiable {\n    package init() {}\n}",
+				]),
+				ModuleFixture(name: "App", packageName: "Shop", swiftFileContent: [
+					"import Feature\nimport SafeDI\n\n@Instantiable(isRoot: true)\npublic struct Root: Instantiable {\n    package init(session: Session, service: Checkout.Service) {\n        self.session = session\n        self.service = service\n    }\n\n    @Instantiated let session: Session\n    @Instantiated let service: Checkout.Service\n}",
+				], dependencies: ["Feature"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == [
+			"Feature.swift": generatedFileHeader + """
+			extension Checkout.Service {
+			    public init() {
+			        self.init(session: nil)
+			    }
+
+			    package init(session: Session? = nil) {
+			        self.init(theme: nil, session: session)
+			    }
+
+			    internal init(theme: Theme? = nil, session: Session? = nil) {
+			        let badge = Badge(session: session)
+			        self.init(theme: theme, badge: badge)
+			    }
+			}
+
+			extension Checkout.Service {
+			    public enum __safeDI_Checkout_Service_5399CC1A7F9FA8EA {}
+			}
+			""",
+		])
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			extension Root {
+			    public init() {
+			        let session = Session()
+			        func __safeDI_service() -> Checkout.Service {
+			            _ = Checkout.Service.__safeDI_Checkout_Service_5399CC1A7F9FA8EA.self
+			            return Checkout.Service(session: session)
+			        }
+			        let service: Checkout.Service = __safeDI_service()
+			        self.init(session: session, service: service)
+			    }
+			}
+			""",
+		])
+		try expectEveryModuleCompiled(output)
+	}
+
+	/// `Feature`'s public seam `Service`, whose `Badge` receives `theme: (any Theme)?` only if available on a `package`
+	/// initializer, and `App`, in another package, whose root instantiates `service` and `theme`, in the order
+	/// `themeFirst` says, as `AppTheme`, which receives `service` only if available.
+	private static func mutualProviderModules(themeFirst: Bool) -> [ModuleFixture] {
+		let declarations = ["@Instantiated let service: Service", "@Instantiated let theme: any Theme"]
+		return [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol Theme {}",
+				"@Instantiable\npublic struct Badge: Instantiable {\n    package init(theme: (any Theme)?) {\n        self.theme = theme\n    }\n\n    @Received(onlyIfAvailable: true) let theme: (any Theme)?\n}",
+				seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+			]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				"import Feature\nimport SafeDI\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: themeFirst ? declarations.reversed() : declarations),
+				"import Feature\n\n" + seamFixtureType(named: "AppTheme", declarations: ["@Received(onlyIfAvailable: true) let service: Service?"], conformances: ", Theme").replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Theme.self])\n"),
+			], dependencies: ["Feature"]),
+		]
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtProvider_whenProviderAndSeamReceiveEachOtherOnlyIfAvailableAndSeamIsDeclaredFirst() async {
+		// B4.13d, `service` declared first: the call's leaf keeps its soft edge, so `theme` is built first, passed `nil`
+		// for `service`, and the leaf would read it, as `Badge` would built inline.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):12:5: error: `Root` provides `theme: any Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Badge.init(theme:)`). Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Theme`'s declaration); or stop providing `theme` on this path.
+			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: (any Theme)?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.mutualProviderModules(themeFirst: false), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsPublicTierPassingNothing_whenProviderAndSeamReceiveEachOtherOnlyIfAvailableAndProviderIsDeclaredFirst() async throws {
+		// B4.13d, `theme` declared first: the call's leaf's soft edge is dropped to keep the cycle open, so `Service` is
+		// built first and passed `nil`, as `Badge` would be built inline.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.mutualProviderModules(themeFirst: true), integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_27F6F01DC5D0EF8E.self
+			            return Service()
+			        }
+			        let service: Service = __safeDI_service()
+			        let theme: any Theme = AppTheme(service: service)
+			        self.init(theme: theme, service: service)
+			    }
+			}
+			""",
+		])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_provesTypealiasAndAnotherModulesTypes_whenSeamCarriesThem() async throws {
+		// B7.9, B7.10: `Base`'s public `@Instantiable` `Analytics` is proven by its own declaration; its plain `Theme`
+		// and its closure typealias `Handler`, a name the proof never descends, only by `Badge`'s `package` initializer.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
+					seamFixtureType(named: "Analytics", declarations: []),
+					"public struct Theme {\n    public init() {}\n}\n\npublic typealias Handler = (String) -> Bool",
+				]),
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+					"import Base\n\n@Instantiable\npublic struct Badge: Instantiable {\n    package init(analytics: Analytics, theme: Theme?, handler: Handler?) {\n        self.analytics = analytics\n        self.theme = theme\n        self.handler = handler\n    }\n\n    @Received let analytics: Analytics\n    @Received(onlyIfAvailable: true) let theme: Theme?\n    @Received(onlyIfAvailable: true) let handler: Handler?\n}",
+					"import Base\n\n" + seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+				], dependencies: ["Base"]),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Base\nimport Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let service: Service"])], dependencies: ["Base", "Feature"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == [
+			"Feature.swift": generatedFileHeader + """
+			#if canImport(Base)
+			import Base
+			#endif
+
+			extension Service {
+			    public init(analytics: Analytics) {
+			        self.init(analytics: analytics, handler: nil, theme: nil)
+			    }
+
+			    package init(analytics: Analytics, handler: Handler? = nil, theme: Theme? = nil) {
+			        let badge = Badge(analytics: analytics, theme: theme, handler: handler)
+			        self.init(badge: badge)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_55C38F330B830A08 {}
+			}
+			""",
+		])
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Base)
+			import Base
+			#endif
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			extension Root {
+			    public init() {
+			        let analytics = Analytics()
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_55C38F330B830A08.self
+			            return Service(analytics: analytics)
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(analytics: analytics, service: service)
+			    }
+			}
+			""",
+		])
+		try expectEveryModuleCompiled(output)
+	}
+
+	// MARK: R8: the mock condition
+
+	/// `Feature`'s public seam `Service`, whose `Badge` requires the plain `Token` on a `package` initializer, and
+	/// `FakeTokenReader`, a `mockOnly` fake whose public mock takes `token`, under `#if <fakeCondition>`: the fake's mock is
+	/// the only `public` mention of `Token`. `featureMockCondition`, when set, is the condition `Feature`'s
+	/// `SafeDIConfiguration.swift` names.
+	private static func mockConditionFeature(fakeCondition: String, featureMockCondition: String?) -> ModuleFixture {
+		ModuleFixture(
+			name: "Feature",
+			packageName: "Shop",
+			swiftFileContent: [
+				"public struct Token {\n    public init() {}\n}",
+				"""
+				#if \(fakeCondition)
+				@Instantiable(mockOnly: true)
+				public struct FakeTokenReader {
+				    @Received let token: Token
+
+				    public static func mock(token: Token) -> FakeTokenReader {
+				        FakeTokenReader(token: token)
+				    }
+				}
+				#endif
+				""",
+				"@Instantiable\npublic struct Badge: Instantiable {\n    package init(token: Token) {\n        self.token = token\n    }\n\n    @Received let token: Token\n}",
+				seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+			],
+			swiftFileContentByFilePath: featureMockCondition.map { ["SafeDIConfiguration.swift": "#SafeDIConfiguration(mockConditionalCompilation: \"\($0)\")"] } ?? [:],
+			mockConditionalCompilation: featureMockCondition,
+		)
+	}
+
+	/// `App`, in another package, whose `Shell` forwards `token` and instantiates `Service`. `appMockCondition`, when set,
+	/// is the condition `App`'s `SafeDIConfiguration.swift` names.
+	private static func mockConditionApp(appMockCondition: MockCondition?) -> ModuleFixture {
+		let configuration = appMockCondition.map { mockCondition in
+			"#SafeDIConfiguration(mockConditionalCompilation: \(mockCondition.conditionalCompilation.map { "\"\($0)\"" } ?? "nil"))"
+		}
+		return ModuleFixture(
+			name: "App",
+			packageName: "Other",
+			swiftFileContent: [
+				"import Feature\nimport SafeDI\n\n" + seamFixtureType(named: "Shell", declarations: ["@Forwarded let token: Token", "@Instantiated let service: Service"]),
+				"import Feature\nimport SafeDI\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"]),
+			],
+			swiftFileContentByFilePath: configuration.map { ["SafeDIConfiguration.swift": $0] } ?? [:],
+			dependencies: ["Feature"],
+			mockConditionalCompilation: appMockCondition?.conditionalCompilation,
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtCallingDependency_whenCallersMockConditionDiffersFromSeamModules() async {
+		// B5.6: under the SwiftPM plugin `App` computes `Service`'s signature from `Feature`'s files as it parsed them,
+		// under its own mock condition, `TESTING`, while `Feature` reads them under `DEBUG`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Shell.swift", in: "App", fixtures, .swiftPackagePlugin)):12:5: error: `App` calls the initializer SafeDI generated for `Service` in module `Feature`, whose signature SafeDI computes from `Feature`'s declarations as `Feature` reads them, mock-only declarations under `Feature`'s mock condition included. `Feature` guards its mocks with `DEBUG` and `App` with `TESTING`, so `App` cannot read them as `Feature` does. Use the same `mockConditionalCompilation` in both modules.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [Self.mockConditionFeature(fakeCondition: "DEBUG", featureMockCondition: nil), Self.mockConditionApp(appMockCondition: MockCondition("TESTING"))],
+				integration: .swiftPackagePlugin,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsSeamsPublicTier_whenCallerSharesSeamModulesConfiguredMockCondition() async throws {
+		// B5.6a: both modules name `TESTING` in their own `SafeDIConfiguration.swift`, so `App` reads `Feature`'s fake as
+		// `Feature` does, and its public mock proves `Token` `public` in both.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [Self.mockConditionFeature(fakeCondition: "TESTING", featureMockCondition: "TESTING"), Self.mockConditionApp(appMockCondition: MockCondition("TESTING"))],
+			integration: .swiftPackagePlugin,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == [
+			"Service+SafeDI.swift": generatedFileHeader + """
+			extension Service {
+			    public init(token: Token) {
+			        let badge = Badge(token: token)
+			        self.init(badge: badge)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_1EB503BFA23A82BA {}
+			}
+			""",
+		])
+		#expect(output.modules["App"]?.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_shellBuilder(token: Token) -> Shell {
+			            func __safeDI_service() -> Service {
+			                _ = Service.__safeDI_Service_1EB503BFA23A82BA.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
+			                return Service(token: token)
+			            }
+			            let service: Service = __safeDI_service()
+			            return Shell(token: token, service: service)
+			        }
+			        let shellBuilder = Instantiator<Shell> {
+			            __safeDI_shellBuilder(token: $0)
+			        }
+			        self.init(shellBuilder: shellBuilder)
+			    }
+			}
+			""",
+		])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtCallingDependency_whenSeamModulesConfiguredMockConditionDiffersFromCallersDefault() async {
+		// B5.6b: `Feature` names `TESTING`; `App` declares no configuration, so it guards its mocks with `DEBUG`, and
+		// would not see `Feature`'s fake, which proves `Token` `public` for `Feature`: computed from `App`'s reading,
+		// `Service` would have no tier `App` could call.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Shell.swift", in: "App", fixtures, .swiftPackagePlugin)):12:5: error: `App` calls the initializer SafeDI generated for `Service` in module `Feature`, whose signature SafeDI computes from `Feature`'s declarations as `Feature` reads them, mock-only declarations under `Feature`'s mock condition included. `Feature` guards its mocks with `TESTING` and `App` with `DEBUG`, so `App` cannot read them as `Feature` does. Use the same `mockConditionalCompilation` in both modules.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [Self.mockConditionFeature(fakeCondition: "TESTING", featureMockCondition: "TESTING"), Self.mockConditionApp(appMockCondition: nil)],
+				integration: .swiftPackagePlugin,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtCallingDependency_whenCallerGuardsItsMocksWithNoCondition() async {
+		// R8: a configuration that guards mocks with no condition is a spelling of its own, which `DEBUG` is not.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Shell.swift", in: "App", fixtures, .swiftPackagePlugin)):12:5: error: `App` calls the initializer SafeDI generated for `Service` in module `Feature`, whose signature SafeDI computes from `Feature`'s declarations as `Feature` reads them, mock-only declarations under `Feature`'s mock condition included. `Feature` guards its mocks with `DEBUG` and `App` with no condition, so `App` cannot read them as `Feature` does. Use the same `mockConditionalCompilation` in both modules.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [Self.mockConditionFeature(fakeCondition: "DEBUG", featureMockCondition: nil), Self.mockConditionApp(appMockCondition: MockCondition(nil))],
+				integration: .swiftPackagePlugin,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsSeamsPublicTier_whenCallerReadsSeamModulesModuleInfoUnderAnotherMockCondition() async throws {
+		// R8: `App` reads `Feature`'s `.safedi`, which holds `Feature`'s declarations as `Feature` read them, under
+		// `TESTING`, so `App`'s own `DEBUG` decides nothing.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [Self.mockConditionFeature(fakeCondition: "TESTING", featureMockCondition: "TESTING"), Self.mockConditionApp(appMockCondition: nil)],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Feature"]?.generatedFiles == [
+			"Feature.swift": generatedFileHeader + """
+			extension Service {
+			    public init(token: Token) {
+			        let badge = Badge(token: token)
+			        self.init(badge: badge)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_1EB503BFA23A82BA {}
+			}
+			""",
+		])
+		#expect(output.modules["App"]?.generatedFiles == [
+			"App.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+			#if canImport(SafeDI)
+			import SafeDI
+			#endif
+
+			extension Root {
+			    public init() {
+			        func __safeDI_shellBuilder(token: Token) -> Shell {
+			            func __safeDI_service() -> Service {
+			                _ = Service.__safeDI_Service_1EB503BFA23A82BA.self
+			                return Service(token: token)
+			            }
+			            let service: Service = __safeDI_service()
+			            return Shell(token: token, service: service)
+			        }
+			        let shellBuilder = Instantiator<Shell> {
+			            __safeDI_shellBuilder(token: $0)
+			        }
+			        self.init(shellBuilder: shellBuilder)
+			    }
+			}
+			""",
+		])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_withholdsDependencysRoot_whenItCallsSeamOfModuleWithAnotherMockCondition() async throws {
+		// R8: `Feature`'s `FeatureRoot` calls `Service`, but `App` leaves that root to `Feature`, so no tree `App` generates
+		// calls the seam.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(
+					name: "Feature",
+					packageName: "Shop",
+					swiftFileContent: [
+						seamFixtureType(named: "Theme", declarations: []),
+						seamFixtureType(named: "Badge", declarations: ["@Received let theme: Theme"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+						seamFixtureType(named: "FeatureRoot", isRoot: true, declarations: ["@Instantiated let theme: Theme", "@Instantiated let service: Service"]),
+					],
+					swiftFileContentByFilePath: ["SafeDIConfiguration.swift": "#SafeDIConfiguration(mockConditionalCompilation: \"TESTING\")"],
+					mockConditionalCompilation: "TESTING",
+				),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Feature\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: [])], dependencies: ["Feature"]),
+			],
+			integration: .swiftPackagePlugin,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == [
+			"FeatureRoot+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+			// SafeDI generates the dependency tree of FeatureRoot only in the module that declares it, because the tree calls the initializer SafeDI generates for Service.
+			""",
+			"Root+SafeDI.swift": generatedFileHeader + """
+			#if canImport(Feature)
+			import Feature
+			#endif
+
+
+			""",
+		])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtFirstCallingDependencyInSourceOrder_whenTwentyTypesCallSeamOfModuleWithAnotherMockCondition() async {
+		// R8: one error per seam, at the first dependency in source order that calls it, whichever the walk meets first.
+		let callerNames = (0..<20).map { "Caller" + ($0 < 10 ? "0" : "") + String($0) }
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(Self.path(of: "Caller00.swift", in: "App", fixtures, .swiftPackagePlugin)):12:5: error: `App` calls the initializer SafeDI generated for `Service` in module `Feature`, whose signature SafeDI computes from `Feature`'s declarations as `Feature` reads them, mock-only declarations under `Feature`'s mock condition included. `Feature` guards its mocks with `DEBUG` and `App` with `TESTING`, so `App` cannot read them as `Feature` does. Use the same `mockConditionalCompilation` in both modules.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.mockConditionFeature(fakeCondition: "DEBUG", featureMockCondition: nil),
+					ModuleFixture(
+						name: "App",
+						packageName: "Other",
+						swiftFileContent: callerNames.map { "import Feature\nimport SafeDI\n\n" + seamFixtureType(named: $0, declarations: ["@Forwarded let token: Token", "@Instantiated let service: Service"]) }
+							+ ["import Feature\nimport SafeDI\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: callerNames.map { "@Instantiated let \($0.lowercased())Builder: Instantiator<\($0)>" })],
+						swiftFileContentByFilePath: ["SafeDIConfiguration.swift": "#SafeDIConfiguration(mockConditionalCompilation: \"TESTING\")"],
+						dependencies: ["Feature"],
+						mockConditionalCompilation: "TESTING",
+					),
+				],
+				integration: .swiftPackagePlugin,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	// MARK: Generic declarations
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generateMock_takesForwardedGenericParameter_whenMockedTypeIsGeneric() async throws {
+		// B1.33c: a generic mocked type generates and compiles as it did before seams, its forwarded `key: Key` a
+		// parameter of `mock()` typed by its own generic parameter.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public struct Cache<Key: Hashable>: Instantiable {
+				    public init(key: Key, clock: Clock) {
+				        self.key = key
+				        self.clock = clock
+				    }
+
+				    @Forwarded let key: Key
+				    @Received let clock: Clock
+				}
+				""",
+				seamFixtureType(named: "Clock", declarations: []),
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.mockFiles == [
+			"Cache+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Cache {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            clock: (() -> Clock)? = nil
+			        ) {
+			            self.clock = clock
+			        }
+
+			        let clock: (() -> Clock)?
+			    }
+
+			    static func mock(
+			        key: Key,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Cache {
+			        let clock = if let safeDIBuilder = safeDIOverrides.clock { safeDIBuilder() } else { Clock() }
+			        return Cache(key: key, clock: clock)
+			    }
+			}
+			#endif
+			""",
+		])
+	}
+
+	// MARK: R8: the callers' view
+
+	/// `Service`, whose `Badge` receives `receive` on a `package` initializer, and `Token`, a plain public type with an
+	/// unspelled `@Instantiable` extension, under a target graph that names the module, with `Vault`, whose public
+	/// initializer mentions `Token`, in a directory the module's configuration adds.
+	private static func extensionBasedTokenMentionedInAdditionalDirectory(receive: String) -> (swiftFileContent: [String], additionalDirectorySwiftFileContent: [String]) {
+		(
+			swiftFileContent: [
+				"#SafeDIConfiguration(\n    additionalDirectoriesToInclude: [\"$ADDITIONAL_DIRECTORY\"]\n)",
+				seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+				"@Instantiable\npublic struct Badge: Instantiable {\n    package init(token: \(receive.components(separatedBy: ": ").last!)) {\n        self.token = token\n    }\n\n    \(receive)\n}",
+				"public struct Token {}\n\n@Instantiable\nextension Token: Instantiable {\n    public static func instantiate() -> Token {\n        Token()\n    }\n}",
+			],
+			additionalDirectorySwiftFileContent: [
+				"@Instantiable\npublic struct Vault: Instantiable {\n    public init(token: Token) {\n        self.token = token\n    }\n\n    @Received let token: Token\n}",
+			],
+		)
+	}
+
+	@Test(arguments: ["@Received(onlyIfAvailable: true) let token: Token?", "@Received let token: Token"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingUnseenProver_whenAdditionalDirectoryDeclarationRaisesExtensionBasedType(receive: String) async {
+		// B6.5b: `Vault`'s public initializer raises the extension-based `Token` to `public` in this module's view, which
+		// sees the added directory, and not in the callers', which do not: the seam names `Vault`, the first declaration
+		// the callers cannot see among those that prove `Token`, whether the receive is optional or required.
+		let fixture = Self.extensionBasedTokenMentionedInAdditionalDirectory(receive: receive)
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: the initializer SafeDI generates for it depends on `Vault`, which is declared in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see that declaration, so their calls would not match the initializer. Declare `Vault` in a file of this module, or of a module it depends on.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: fixture.swiftFileContent,
+				additionalDirectorySwiftFileContent: fixture.additionalDirectorySwiftFileContent,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				pluginTargetGraph: { inputSwiftFilePaths in
+					PluginTargetGraph(
+						target: PluginTargetGraph.Target(moduleName: "Feature", packageID: "shop", sourceFilePaths: inputSwiftFilePaths, dependencyModuleNames: []),
+						dependencyTargets: [],
+					)
+				},
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingProverOfParametersCallersFailOn_whenCallersFailOnTwoParameters() async {
+		// R8: the callers, who cannot see the added directory, prove `Token` and `Key` only `package`, so their
+		// computation of `Service` fails on both required parameters at once. The seam names `Vault`, which proves those
+		// two, and not `Atlas`, which comes first but proves only `map`, whose optional parameter the callers take.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: the initializer SafeDI generates for it depends on `Vault`, which is declared in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see that declaration, so their calls would not match the initializer. Declare `Vault` in a file of this module, or of a module it depends on.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"#SafeDIConfiguration(\n    additionalDirectoriesToInclude: [\"$ADDITIONAL_DIRECTORY\"]\n)",
+					seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+					"@Instantiable\npublic struct Badge: Instantiable {\n    package init(token: Token, key: Key, map: Map?) {\n        self.token = token\n        self.key = key\n        self.map = map\n    }\n\n    @Received let token: Token\n    @Received let key: Key\n    @Received(onlyIfAvailable: true) let map: Map?\n}",
+				] + ["Token", "Key", "Map"].map { type in
+					"public struct \(type) {}\n\n@Instantiable\nextension \(type): Instantiable {\n    public static func instantiate() -> \(type) {\n        \(type)()\n    }\n}"
+				},
+				additionalDirectorySwiftFileContent: [
+					"@Instantiable\npublic struct Atlas: Instantiable {\n    public init(map: Map) {\n        self.map = map\n    }\n\n    @Received let map: Map\n}",
+					"@Instantiable\npublic struct Vault: Instantiable {\n    public init(token: Token, key: Key) {\n        self.token = token\n        self.key = key\n    }\n\n    @Received let token: Token\n    @Received let key: Key\n}",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				pluginTargetGraph: { inputSwiftFilePaths in
+					PluginTargetGraph(
+						target: PluginTargetGraph.Target(moduleName: "Feature", packageID: "shop", sourceFilePaths: inputSwiftFilePaths, dependencyModuleNames: []),
+						dependencyTargets: [],
+					)
+				},
+			)
+		}
+	}
+
+	// MARK: Private
+
+	private var filesToDelete: [URL]
+
+	/// `Service`'s generated initializers, without the file header, where `Badge`'s `package` initializer receives the
+	/// plain `Theme` only if available: a `public` tier that passes `nil`, and a `package` one that takes it.
+	private static let twoTierService = """
+	extension Service {
+	    public init() {
+	        self.init(theme: nil)
+	    }
+
+	    package init(theme: Theme? = nil) {
+	        let badge = Badge(theme: theme)
+	        self.init(badge: badge)
+	    }
+	}
+
+	extension Service {
+	    public enum __safeDI_Service_27F6F01DC5D0EF8E {}
+	}
+	"""
+
+	/// The path a diagnostic names `file` of `module` by under `integration`.
+	private static func path(of file: String, in module: String, _ fixtures: [String: FixturePaths], _ integration: MultiModuleIntegration) -> String {
+		guard let moduleFixtures = fixtures[module] else { return "<\(module) did not run>/\(file)" }
+		return switch integration {
+		case .moduleInfo:
+			moduleFixtures[file]
+		case .swiftPackagePlugin:
+			NormalizedFilePath(moduleFixtures.compilerPath(of: file)).path
+		}
+	}
+
+	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
+		guard compileVerificationIsEnabled else { return }
+		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
+		#expect(compilation.modules.map(\.moduleName) == output.moduleNames, sourceLocation: sourceLocation)
+		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
+	}
+}

@@ -161,13 +161,18 @@ extension AccessLevel {
 
 	/// The modifier a fix-it gives a declaration so that it satisfies `requirement`.
 	static func spelling(satisfying requirement: AccessRequirement) -> String {
+		level(satisfying: requirement).spelling
+	}
+
+	/// The narrowest level that satisfies `requirement`, `package` where the package is assumed.
+	static func level(satisfying requirement: AccessRequirement) -> AccessLevel {
 		switch requirement {
 		case .internal:
-			AccessLevel.internal.spelling
+			.internal
 		case .package, .packageUnverified:
-			AccessLevel.package.spelling
+			.package
 		case .public:
-			AccessLevel.public.spelling
+			.public
 		}
 	}
 

@@ -584,6 +584,159 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		)
 	}
 
+	/// A value the tree holds for a parameter of a seam's generated initializer that the tier it calls omits, which
+	/// the call passes `nil` for although the receivers inside the seam, built inline, would be handed the value.
+	struct SeamTierOmission: Sendable {
+		/// The seam's leaf: the call.
+		let seam: Instantiable
+		let seamCall: SeamCall
+		/// The parameter the tier omits, or that no tier takes.
+		let parameter: SeamSignature.Parameter
+		/// Whether no tier of the seam takes the parameter.
+		let isNoTierParameter: Bool
+		/// The declaration whose binding the call would read built inline: the property it declares, the type that
+		/// declares it – `nil` for a parameter of the seam whose tree this is – and where.
+		let providerProperty: Property
+		let providerDeclaringType: TypeDescription?
+		let providerDeclarationLocation: Dependency.DeclarationLocation?
+		/// Where the module refers to what leads to the call, as `DependencyTreeGenerator`'s construction check finds it:
+		/// the closest dependency on the path to it that a type in one of the module's own files declares, or the
+		/// declaration of the tree's root. The error is reported there when the provider's file cannot be read.
+		let referenceLocation: Dependency.DeclarationLocation?
+		/// When the provider is a pass-through parameter of the seam whose tree this is, the receives in that tree that
+		/// make it one, which the error notes beside the omitted parameter's receivers; empty otherwise.
+		var providerReceivers = [SeamSignature.Receiver]()
+	}
+
+	/// Every value the tree rooted at this scope holds for a parameter a seam tier it calls omits, in the order the tree's
+	/// code is generated: at each call of a seam's tier, each parameter the tier omits, or no tier takes, that the
+	/// call's leaf – which declares the whole signature, the omitted parameters as receives only if available – would
+	/// be handed a binding for rather than `nil`, as generation decides it (`unavailableProperties`), located at the
+	/// closest declaration of its label. A seam's own parameters are declarations of the seam's own.
+	/// - Parameters:
+	///   - instantiable: The type this root scope builds.
+	///   - isOwnFile: Whether a file a declaration records is one of the module's own files.
+	func seamTierOmissions(ofTreeRootedAt instantiable: Instantiable, isOwnFile: @escaping @Sendable (String) -> Bool) async -> [SeamTierOmission] {
+		var declarationsByLabel = [String: [VisibleDeclaration]]()
+		if case let .root(_, seamRoot?) = scopeData {
+			for parameter in seamRoot.signature.parameters {
+				let ownDependency = instantiable.dependencies.first { $0.property == parameter.property }
+				declarationsByLabel[parameter.property.label, default: []].append(VisibleDeclaration(
+					property: parameter.property,
+					instanceProperty: parameter.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding,
+					declaringType: ownDependency.map { _ in instantiable.concreteInstantiable },
+					declarationLocation: ownDependency?.declarationLocation ?? instantiable.declarationLocation,
+					sendableBuilderDepth: 0,
+				))
+			}
+		}
+		let omissions = await seamTierOmissions(
+			of: instantiable,
+			propertiesGeneratedLater: [],
+			declarationsByLabel: declarationsByLabel,
+			referenceLocation: instantiable.declarationLocation,
+			isOwnFile: isOwnFile,
+		)
+		guard case let .root(_, seamRoot?) = scopeData else { return omissions }
+		// A provider that is a pass-through parameter of this seam is declared by no type: the receives in this seam's
+		// tree that make it one say why the seam takes it.
+		return omissions.map { omission in
+			var omission = omission
+			if omission.providerDeclaringType == nil {
+				omission.providerReceivers = seamRoot.signature.parameters.first { $0.property == omission.providerProperty }?.receivers ?? []
+			}
+			return omission
+		}
+	}
+
+	private func seamTierOmissions(
+		of instantiable: Instantiable,
+		propertiesGeneratedLater: Set<Property>,
+		declarationsByLabel: [String: [VisibleDeclaration]],
+		referenceLocation: Dependency.DeclarationLocation?,
+		isOwnFile: @escaping @Sendable (String) -> Bool,
+	) async -> [SeamTierOmission] {
+		let declaringType = instantiable.concreteInstantiable
+		var declarationLocationByProperty = [Property: Dependency.DeclarationLocation?]()
+		for dependency in instantiable.dependencies where !dependency.source.isReceived {
+			declarationLocationByProperty[dependency.property] = dependency.declarationLocation
+		}
+		// A child's construction is referred to by this type's dependency that builds it when this type is declared in
+		// one of the module's own files, and otherwise where this type's construction is.
+		let isDeclaredInOwnFile = instantiable.sourceFilePath.map(isOwnFile) ?? false
+		func childReferenceLocation(of property: Property?) -> Dependency.DeclarationLocation? {
+			guard isDeclaredInOwnFile, let property else { return referenceLocation }
+			return declarationLocationByProperty[property].flatMap(\.self) ?? referenceLocation
+		}
+		func visibleDeclaration(of property: Property, instanceProperty: Property?) -> VisibleDeclaration {
+			VisibleDeclaration(
+				property: property,
+				instanceProperty: instanceProperty,
+				declaringType: declaringType,
+				declarationLocation: declarationLocationByProperty[property] ?? instantiable.declarationLocation,
+				sendableBuilderDepth: 0,
+			)
+		}
+		var scopeDeclarationsByLabel = [String: [VisibleDeclaration]]()
+		for dependency in instantiable.dependencies where dependency.source == .forwarded {
+			scopeDeclarationsByLabel[dependency.property.label, default: []].append(visibleDeclaration(
+				of: dependency.property,
+				instanceProperty: dependency.lazilyInstantiatedInstanceProperty,
+			))
+		}
+		let orderedChildren = orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater)
+		for child in orderedChildren where child.generator.uncreatedAliasProperty(unavailableProperties: child.unavailableProperties) == nil {
+			if let property = child.generator.property {
+				scopeDeclarationsByLabel[property.label, default: []].append(visibleDeclaration(
+					of: property,
+					instanceProperty: child.generator.declaredLazilyInstantiatedInstanceProperty,
+				))
+			}
+		}
+		var childDeclarationsByLabel = declarationsByLabel
+		childDeclarationsByLabel.merge(scopeDeclarationsByLabel) { _, scopeDeclarations in scopeDeclarations }
+
+		var omissions = [SeamTierOmission]()
+		for child in orderedChildren {
+			guard case let .property(childInstantiable, _, _, _, isPropertyCycle, seamCall) = child.generator.scopeData,
+			      !isPropertyCycle
+			else { continue }
+			if let seamCall {
+				let omittedParameters = seamCall.omittedParameters.map { ($0, false) } + seamCall.noTierParameters.map { ($0, true) }
+				for (parameter, isNoTierParameter) in omittedParameters {
+					// The leaf receives the parameter only if available, as its optional form: generation passes it
+					// `nil` exactly when it is among the leaf's unavailable properties.
+					guard let leafDependency = childInstantiable.dependencies.first(where: { $0.property.label == parameter.property.label }),
+					      !child.unavailableProperties.contains(leafDependency.property)
+					else { continue }
+					let unwrappedProperty = leafDependency.property.asUnwrappedProperty
+					guard let provider = childDeclarationsByLabel[parameter.property.label]?.first(where: {
+						$0.property.asUnwrappedProperty == unwrappedProperty || $0.instanceProperty?.asUnwrappedProperty == unwrappedProperty
+					}) else { continue }
+					omissions.append(SeamTierOmission(
+						seam: childInstantiable,
+						seamCall: seamCall,
+						parameter: parameter,
+						isNoTierParameter: isNoTierParameter,
+						providerProperty: provider.property,
+						providerDeclaringType: provider.declaringType,
+						providerDeclarationLocation: provider.declarationLocation,
+						referenceLocation: childReferenceLocation(of: child.generator.property),
+					))
+				}
+			} else {
+				await omissions.append(contentsOf: child.generator.seamTierOmissions(
+					of: childInstantiable,
+					propertiesGeneratedLater: child.propertiesGeneratedLater,
+					declarationsByLabel: childDeclarationsByLabel,
+					referenceLocation: childReferenceLocation(of: child.generator.property),
+					isOwnFile: isOwnFile,
+				))
+			}
+		}
+		return omissions
+	}
+
 	/// Why an `onlyIfAvailable` alias in a seam's tree may not be created.
 	enum UncreatedAliasReason: Sendable {
 		/// The alias's fulfilling property may be `nil`: its closest declaration on the path from the seam's root is a
