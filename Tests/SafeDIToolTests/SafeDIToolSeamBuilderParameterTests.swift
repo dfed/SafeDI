@@ -1,0 +1,3321 @@
+// Distributed under the MIT License
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+import Foundation
+import SafeDICore
+import Testing
+@testable import SafeDITool
+
+/// A seam's tree that instantiates a type no `@Instantiable` declaration the seam's module can see fulfills: the
+/// generated initializer takes a builder for each place the tree builds it, a closure handed a struct of the values in
+/// scope there, and a module that can see a fulfilling declaration fills the builder in the code it generates.
+struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
+	// MARK: Initialization
+
+	init() {
+		filesToDelete = [URL]()
+	}
+
+	deinit {
+		for fileToDelete in filesToDelete {
+			try! FileManager.default.removeItem(at: fileToDelete)
+		}
+	}
+
+	// MARK: One hole, filled by a root in another package
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesBuilderForHoleThatCallerFills_whenSeamsModuleCannotSeeFulfillingDeclaration(integration: MultiModuleIntegration) async throws {
+		// C1.2, C3.1: `Profile` instantiates `userService: any UserService`, which only `App` can see `DefaultUserService`
+		// fulfill. `Service`'s initializer takes a builder handed `Profile`'s scope, which `App` fills.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modules(feature: Self.canonicalFeature, app: Self.canonicalApp),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, Self.generatedFiles(module: "Feature", integration: integration, imports: [], rootFiles: [
+			"Service": Self.canonicalServiceCode,
+		]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: integration, imports: ["Feature"], rootFiles: [
+			"Root": """
+			extension Root {
+			    public init() {
+			        func __safeDI_service() -> Service {
+			            _ = Service.__safeDI_Service_80890FC499DC6112.self\(Self.pluginComment(integration, seam: "Service"))
+			            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+			                let analytics = scope.analytics
+			                let userService: any UserService = DefaultUserService(analytics: analytics)
+			                return userService
+			            }
+			            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+			        }
+			        let service: Service = __safeDI_service()
+			        self.init(service: service)
+			    }
+			}
+			""",
+		]))
+		try expectEveryModuleCompiled(output)
+		// The Manual's seam section shows this example's generated code under the plugin, read here so it cannot drift.
+		guard integration == .swiftPackagePlugin else { return }
+		let manual = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Documentation/Manual.md"), encoding: .utf8)
+		let section = try #require(manual.components(separatedBy: "#### Generating a dependency tree per module").dropFirst().first)
+			.components(separatedBy: "\n#").first ?? ""
+		let codeBlocks = section.components(separatedBy: "```swift\n").dropFirst().map { $0.components(separatedBy: "\n```").first ?? "" }
+		let featureFile = try #require(output.modules["Feature"]?.generatedFiles["Service+SafeDI.swift"])
+		let appFile = try #require(output.modules["App"]?.generatedFiles["Root+SafeDI.swift"])
+		#expect(codeBlocks.dropFirst(4).first == "// Generated in module Feature, where `Profile` instantiates `userService: any UserService`.\n" + Self.seamExtension(in: featureFile))
+		#expect(codeBlocks.dropFirst(5).first == "// Generated in module App, which declares `DefaultUserService`, an implementation of `UserService`.\n" + Self.serviceBuilderFunction(in: appFile))
+	}
+
+	// MARK: A root that cannot fill a hole
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsNoInstantiableFoundNamingChain_whenRootsModuleSeesNoFulfillingDeclaration() async {
+		// C3.7, H9: `App` sees no type that fulfills `UserService`, so its root cannot fill `Service`'s builder: reported at
+		// the root's dependency that reaches the seam, with a note at the hole.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):9:5: error: No @Instantiable type or extension module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes a builder for `userService`, and `Root`, a root, must fill it. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
+			\(fixtures["Feature"]!["Profile.swift"]):8:5: note: `Profile` instantiates `userService: any UserService` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(feature: Self.canonicalFeature, app: [Self.canonicalRoot]),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsNoInstantiableFoundNamingChain_whenRootInSeamsModuleCallsSeamWithHole() async {
+		// C3.8: a root in `Feature` sees what `Service`'s module sees, so it cannot fill the builder either.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Root.swift"]):7:5: error: No @Instantiable type or extension module `Feature` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Service -> Profile. `Service` generates its dependency tree in this module, so the initializer SafeDI generated for it takes a builder for `userService`, and `Root`, a root, must fill it. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
+			\(fixtures["Feature"]!["Profile.swift"]):8:5: note: `Profile` instantiates `userService: any UserService` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: Self.canonicalFeature + [Self.canonicalRoot])],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsNoInstantiableFoundWithMockOnlySentence_whenRootsModuleSeesOnlyMockOnlyFulfillingDeclaration() async {
+		// C3.10: a `mockOnly` declaration is used only to generate mocks, so it fills no builder.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):9:5: error: No production @Instantiable declaration module `App` can see fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates in chain: Root -> Service -> Profile. `Service` generates its dependency tree in module `Feature`, which cannot see one either, so the initializer SafeDI generated for it takes a builder for `userService`, and `Root`, a root, must fill it. A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @Instantiable declaration that fulfills `UserService`.
+			\(fixtures["Feature"]!["Profile.swift"]):8:5: note: `Profile` instantiates `userService: any UserService` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(feature: Self.canonicalFeature, app: [
+					"""
+					@Instantiable(fulfillingAdditionalTypes: [UserService.self], mockOnly: true)
+					public struct FakeUserService: UserService, Instantiable {
+					    public static func mock() -> FakeUserService {
+					        FakeUserService()
+					    }
+					}
+					""",
+					Self.canonicalRoot,
+				]),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	// MARK: Where the hole sits
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesBuilderPerWrapperAndStagesItAtSendableBuilderFunctions_whenHolesSitBeneathOrAreWrappers() async throws {
+		// C1.4: beneath an `Instantiator`, the builder is one stage carrying the forwarded `name` and the owner's `cache`.
+		// C1.7: beneath a `SendableInstantiator`, it is staged: `Outer` holds what is bound outside the `@Sendable` builder
+		// function, `Inner` what is bound inside it. C1.10: beneath two, three stages. C1.11: a hole that is a wrapper
+		// returns the declared wrapper, each struct carrying the holes built before it (C2.7).
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modules(feature: Self.wrapperFeature, app: Self.wrapperFulfillers + [Self.wrapperRoot]),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
+		extension ServiceI {
+		    public struct SafeDIScope_ProfileI_userService {
+		        public let analytics: Analytics
+		        public let session: Session
+		        public let name: String
+		        public let cache: Cache
+		    }
+
+		    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_ProfileI_userService) -> any UserService) {
+		        let analytics = Analytics()
+		        let session = Session()
+		        func __safeDI_profileBuilder(name: String) -> ProfileI {
+		            let cache = Cache()
+		            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_ProfileI_userService(analytics: analytics, session: session, name: name, cache: cache))
+		            return ProfileI(name: name, cache: cache, userService: userService, analytics: analytics)
+		        }
+		        let profileBuilder = Instantiator<ProfileI> {
+		            __safeDI_profileBuilder(name: $0)
+		        }
+		        self.init(analytics: analytics, session: session, profileBuilder: profileBuilder)
+		    }
+		}
+
+		extension ServiceI {
+		    public enum __safeDI_ServiceI_26D6A0A45CD0CB4C {}
+		}
+
+		extension ServiceN {
+		    public enum SafeDIScope_ProfileN_userService {
+		        public struct Outer {
+		            public let analytics: Analytics
+		            public let session: Session
+		        }
+
+		        public struct Inner {
+		            public let title: String
+		            public let cache: Cache
+		        }
+
+		        public struct Inner2 {}
+		    }
+
+		    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_ProfileN_userService.Outer) -> @Sendable (SafeDIScope_ProfileN_userService.Inner) -> @Sendable (SafeDIScope_ProfileN_userService.Inner2) -> any UserService) {
+		        let analytics = Analytics()
+		        let session = Session()
+		        let __safeDI_userServiceBuilder_Inner = __safeDI_userServiceBuilder(SafeDIScope_ProfileN_userService.Outer(analytics: analytics, session: session))
+		        @Sendable func __safeDI_screenBuilder(title: String) -> Screen {
+		            let cache = Cache()
+		            let __safeDI_userServiceBuilder_Inner2 = __safeDI_userServiceBuilder_Inner(SafeDIScope_ProfileN_userService.Inner(title: title, cache: cache))
+		            @Sendable func __safeDI_profileBuilder() -> ProfileN {
+		                let userService: any UserService = __safeDI_userServiceBuilder_Inner2(SafeDIScope_ProfileN_userService.Inner2())
+		                return ProfileN(userService: userService, analytics: analytics, title: title)
+		            }
+		            let profileBuilder = SendableInstantiator<ProfileN>(__safeDI_profileBuilder)
+		            return Screen(title: title, cache: cache, profileBuilder: profileBuilder)
+		        }
+		        let screenBuilder = SendableInstantiator<Screen> {
+		            __safeDI_screenBuilder(title: $0)
+		        }
+		        self.init(analytics: analytics, session: session, screenBuilder: screenBuilder)
+		    }
+		}
+
+		extension ServiceN {
+		    public enum __safeDI_ServiceN_A9A24FB92D9729CE {}
+		}
+
+		extension ServiceS {
+		    public enum SafeDIScope_ProfileS_userService {
+		        public struct Outer {
+		            public let analytics: Analytics
+		            public let session: Session
+		        }
+
+		        public struct Inner {
+		            public let name: String
+		            public let cache: Cache
+		        }
+		    }
+
+		    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_ProfileS_userService.Outer) -> @Sendable (SafeDIScope_ProfileS_userService.Inner) -> any UserService) {
+		        let analytics = Analytics()
+		        let session = Session()
+		        let __safeDI_userServiceBuilder_Inner = __safeDI_userServiceBuilder(SafeDIScope_ProfileS_userService.Outer(analytics: analytics, session: session))
+		        @Sendable func __safeDI_profileBuilder(name: String) -> ProfileS {
+		            let cache = Cache()
+		            let userService: any UserService = __safeDI_userServiceBuilder_Inner(SafeDIScope_ProfileS_userService.Inner(name: name, cache: cache))
+		            return ProfileS(name: name, cache: cache, userService: userService, analytics: analytics)
+		        }
+		        let profileBuilder = SendableInstantiator<ProfileS> {
+		            __safeDI_profileBuilder(name: $0)
+		        }
+		        self.init(analytics: analytics, session: session, profileBuilder: profileBuilder)
+		    }
+		}
+
+		extension ServiceS {
+		    public enum __safeDI_ServiceS_0DC60271BFF874B1 {}
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsEachBuilderInCallersTree_whenHolesSitBeneathOrAreWrappers() async throws {
+		// C1.4, C1.7, C1.10, C1.11 in `App`: each fill builds the property as inline builds it there, staged fills returning
+		// each later stage as a `@Sendable` function, wrapper fills returning the wrapper; the values equal the build with
+		// every fulfilling declaration in `Feature`.
+		let modules = Self.modules(feature: Self.wrapperFeature, app: Self.wrapperFulfillers + [Self.wrapperRoot])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
+		extension Root {
+		    public init() {
+		        func __safeDI_serviceI() -> ServiceI {
+		            _ = ServiceI.__safeDI_ServiceI_26D6A0A45CD0CB4C.self
+		            func __safeDI_userServiceBuilder(_ scope: ServiceI.SafeDIScope_ProfileI_userService) -> any UserService {
+		                let analytics = scope.analytics
+		                let userService: any UserService = DefaultUserService(analytics: analytics)
+		                return userService
+		            }
+		            return ServiceI(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let serviceI: ServiceI = __safeDI_serviceI()
+		        func __safeDI_serviceS() -> ServiceS {
+		            _ = ServiceS.__safeDI_ServiceS_0DC60271BFF874B1.self
+		            func __safeDI_userServiceBuilder(_ scope: ServiceS.SafeDIScope_ProfileS_userService.Outer) -> @Sendable (ServiceS.SafeDIScope_ProfileS_userService.Inner) -> any UserService {
+		                let analytics = scope.analytics
+		                @Sendable func __safeDI_userServiceBuilder_Inner(_ scope: ServiceS.SafeDIScope_ProfileS_userService.Inner) -> any UserService {
+		                    let userService: any UserService = DefaultUserService(analytics: analytics)
+		                    return userService
+		                }
+		                return __safeDI_userServiceBuilder_Inner
+		            }
+		            return ServiceS(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let serviceS: ServiceS = __safeDI_serviceS()
+		        func __safeDI_serviceN() -> ServiceN {
+		            _ = ServiceN.__safeDI_ServiceN_A9A24FB92D9729CE.self
+		            func __safeDI_userServiceBuilder(_ scope: ServiceN.SafeDIScope_ProfileN_userService.Outer) -> @Sendable (ServiceN.SafeDIScope_ProfileN_userService.Inner) -> @Sendable (ServiceN.SafeDIScope_ProfileN_userService.Inner2) -> any UserService {
+		                let analytics = scope.analytics
+		                @Sendable func __safeDI_userServiceBuilder_Inner(_ scope: ServiceN.SafeDIScope_ProfileN_userService.Inner) -> @Sendable (ServiceN.SafeDIScope_ProfileN_userService.Inner2) -> any UserService {
+		                    @Sendable func __safeDI_userServiceBuilder_Inner2(_ scope: ServiceN.SafeDIScope_ProfileN_userService.Inner2) -> any UserService {
+		                        let userService: any UserService = DefaultUserService(analytics: analytics)
+		                        return userService
+		                    }
+		                    return __safeDI_userServiceBuilder_Inner2
+		                }
+		                return __safeDI_userServiceBuilder_Inner
+		            }
+		            return ServiceN(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let serviceN: ServiceN = __safeDI_serviceN()
+		        self.init(serviceI: serviceI, serviceS: serviceS, serviceN: serviceN)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: Self.wrapperFeature + Self.wrapperFulfillers, app: [Self.wrapperRoot]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesBuilderPerHoleThatIsWrapper_whenSeamItselfOwnsHoles() async throws {
+		// C1.1, C1.11: `ServiceW` instantiates four wrappers no declaration `Feature` sees fulfills. Each builder returns
+		// the declared wrapper, its label adds `Builder` to the property's, and each struct carries the holes the tree
+		// binds before it (C2.7); the fills build each wrapper as inline builds it.
+		let feature = [
+			"""
+			public protocol UserService: Sendable {}
+
+			public struct AnyUserService: UserService {
+			    public init(_ base: any UserService) {
+			        self.base = base
+			    }
+
+			    let base: any UserService
+			}
+			""",
+			seamFixtureType(named: "Analytics", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+			seamFixtureType(named: "ServiceW", isSeam: true, declarations: [
+				"@Instantiated let analytics: Analytics",
+				"@Instantiated let lazyUserService: LazilyInstantiated<any UserService>",
+				"@Instantiated let sendableLazyUserService: SendableLazilyInstantiated<any UserService>",
+				"@Instantiated(fulfilledByType: \"NamedUserService\", erasedToConcreteExistential: true) let erasedUserServiceBuilder: ErasedInstantiator<String, AnyUserService>",
+				"@Instantiated(fulfilledByType: \"NamedUserService\", erasedToConcreteExistential: true) let sendableErasedUserServiceBuilder: SendableErasedInstantiator<String, AnyUserService>",
+			]),
+		]
+		let fulfillers = Self.wrapperFulfillers + [
+			seamFixtureType(named: "NamedUserService", declarations: ["@Forwarded let name: String", "@Received let analytics: Analytics"], conformances: ", UserService"),
+		]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let serviceW: ServiceW"])
+		let modules = Self.modules(feature: feature, app: fulfillers + [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
+		extension ServiceW {
+		    public struct SafeDIScope_ServiceW_erasedUserServiceBuilder {
+		        public let analytics: Analytics
+		        public let lazyUserService: LazilyInstantiated<any UserService>
+		        public let sendableLazyUserService: SendableLazilyInstantiated<any UserService>
+		    }
+
+		    public struct SafeDIScope_ServiceW_lazyUserService {
+		        public let analytics: Analytics
+		    }
+
+		    public struct SafeDIScope_ServiceW_sendableErasedUserServiceBuilder {
+		        public let analytics: Analytics
+		        public let lazyUserService: LazilyInstantiated<any UserService>
+		        public let sendableLazyUserService: SendableLazilyInstantiated<any UserService>
+		        public let erasedUserServiceBuilder: ErasedInstantiator<String, AnyUserService>
+		    }
+
+		    public struct SafeDIScope_ServiceW_sendableLazyUserService {
+		        public let analytics: Analytics
+		        public let lazyUserService: LazilyInstantiated<any UserService>
+		    }
+
+		    public init(erasedUserServiceBuilderBuilder __safeDI_erasedUserServiceBuilderBuilder: @escaping (SafeDIScope_ServiceW_erasedUserServiceBuilder) -> ErasedInstantiator<String, AnyUserService>, lazyUserServiceBuilder __safeDI_lazyUserServiceBuilder: @escaping (SafeDIScope_ServiceW_lazyUserService) -> LazilyInstantiated<any UserService>, sendableErasedUserServiceBuilderBuilder __safeDI_sendableErasedUserServiceBuilderBuilder: @escaping (SafeDIScope_ServiceW_sendableErasedUserServiceBuilder) -> SendableErasedInstantiator<String, AnyUserService>, sendableLazyUserServiceBuilder __safeDI_sendableLazyUserServiceBuilder: @escaping (SafeDIScope_ServiceW_sendableLazyUserService) -> SendableLazilyInstantiated<any UserService>) {
+		        let analytics = Analytics()
+		        let lazyUserService = __safeDI_lazyUserServiceBuilder(SafeDIScope_ServiceW_lazyUserService(analytics: analytics))
+		        let sendableLazyUserService = __safeDI_sendableLazyUserServiceBuilder(SafeDIScope_ServiceW_sendableLazyUserService(analytics: analytics, lazyUserService: lazyUserService))
+		        let erasedUserServiceBuilder = __safeDI_erasedUserServiceBuilderBuilder(SafeDIScope_ServiceW_erasedUserServiceBuilder(analytics: analytics, lazyUserService: lazyUserService, sendableLazyUserService: sendableLazyUserService))
+		        let sendableErasedUserServiceBuilder = __safeDI_sendableErasedUserServiceBuilderBuilder(SafeDIScope_ServiceW_sendableErasedUserServiceBuilder(analytics: analytics, lazyUserService: lazyUserService, sendableLazyUserService: sendableLazyUserService, erasedUserServiceBuilder: erasedUserServiceBuilder))
+		        self.init(analytics: analytics, lazyUserService: lazyUserService, sendableLazyUserService: sendableLazyUserService, erasedUserServiceBuilder: erasedUserServiceBuilder, sendableErasedUserServiceBuilder: sendableErasedUserServiceBuilder)
+		    }
+		}
+
+		extension ServiceW {
+		    public enum __safeDI_ServiceW_AAF00478E0ADF6EE {}
+		}
+		"""])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
+		extension Root {
+		    public init() {
+		        func __safeDI_serviceW() -> ServiceW {
+		            _ = ServiceW.__safeDI_ServiceW_AAF00478E0ADF6EE.self
+		            func __safeDI_erasedUserServiceBuilderBuilder(_ scope: ServiceW.SafeDIScope_ServiceW_erasedUserServiceBuilder) -> ErasedInstantiator<String, AnyUserService> {
+		                let analytics = scope.analytics
+		                func __safeDI_erasedUserServiceBuilder(name: String) -> NamedUserService {
+		                    NamedUserService(name: name, analytics: analytics)
+		                }
+		                let erasedUserServiceBuilder = ErasedInstantiator<String, AnyUserService> {
+		                    AnyUserService(__safeDI_erasedUserServiceBuilder(name: $0))
+		                }
+		                return erasedUserServiceBuilder
+		            }
+		            func __safeDI_lazyUserServiceBuilder(_ scope: ServiceW.SafeDIScope_ServiceW_lazyUserService) -> LazilyInstantiated<any UserService> {
+		                let analytics = scope.analytics
+		                func __safeDI_lazyUserService() -> DefaultUserService {
+		                    DefaultUserService(analytics: analytics)
+		                }
+		                let lazyUserService = LazilyInstantiated<any UserService>(__safeDI_lazyUserService)
+		                return lazyUserService
+		            }
+		            func __safeDI_sendableErasedUserServiceBuilderBuilder(_ scope: ServiceW.SafeDIScope_ServiceW_sendableErasedUserServiceBuilder) -> SendableErasedInstantiator<String, AnyUserService> {
+		                let analytics = scope.analytics
+		                @Sendable func __safeDI_sendableErasedUserServiceBuilder(name: String) -> NamedUserService {
+		                    NamedUserService(name: name, analytics: analytics)
+		                }
+		                let sendableErasedUserServiceBuilder = SendableErasedInstantiator<String, AnyUserService> {
+		                    AnyUserService(__safeDI_sendableErasedUserServiceBuilder(name: $0))
+		                }
+		                return sendableErasedUserServiceBuilder
+		            }
+		            func __safeDI_sendableLazyUserServiceBuilder(_ scope: ServiceW.SafeDIScope_ServiceW_sendableLazyUserService) -> SendableLazilyInstantiated<any UserService> {
+		                let analytics = scope.analytics
+		                @Sendable func __safeDI_sendableLazyUserService() -> DefaultUserService {
+		                    DefaultUserService(analytics: analytics)
+		                }
+		                let sendableLazyUserService = SendableLazilyInstantiated<any UserService>(__safeDI_sendableLazyUserService)
+		                return sendableLazyUserService
+		            }
+		            return ServiceW(erasedUserServiceBuilderBuilder: __safeDI_erasedUserServiceBuilderBuilder, lazyUserServiceBuilder: __safeDI_lazyUserServiceBuilder, sendableErasedUserServiceBuilderBuilder: __safeDI_sendableErasedUserServiceBuilderBuilder, sendableLazyUserServiceBuilder: __safeDI_sendableLazyUserServiceBuilder)
+		        }
+		        let serviceW: ServiceW = __safeDI_serviceW()
+		        self.init(serviceW: serviceW)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+		// The comparator does not call an erased instantiator, so the probes call each one.
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]), probes: [
+			DifferentialValueProbe("Root()"),
+			DifferentialValueProbe(#"Root().serviceW.erasedUserServiceBuilder.instantiate("first")"#),
+			DifferentialValueProbe(#"Root().serviceW.sendableErasedUserServiceBuilder.instantiate("second")"#),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesBuilderAndStructPerSite_whenTreeBuildsHolesOwnerAtTwoSites() async throws {
+		// C1.18, C4.8, C8.13, C2.21: `Avatar` is built under `home` and under `settings`, so its hole has two sites, each
+		// with its own builder and struct, named by the site's path. The `settings` site's struct carries `home`, built
+		// first, and its fill reads `session`, which only `home`'s subtree declares, from `Root`.
+		let feature = [
+			"public protocol UserService {}",
+			seamFixtureType(named: "Analytics", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Avatar", declarations: ["@Instantiated let userService: any UserService"]),
+			seamFixtureType(named: "Home", declarations: ["@Instantiated let session: Session", "@Instantiated let avatar: Avatar"]),
+			seamFixtureType(named: "Settings", declarations: ["@Instantiated let theme: Theme", "@Instantiated let avatar: Avatar"]),
+			seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let home: Home", "@Instantiated let settings: Settings"]),
+		]
+		let fulfillers = [
+			Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let analytics: Analytics", "@Received(onlyIfAvailable: true) let session: Session?"]),
+		]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let session: Session", "@Instantiated let service: Service"])
+		let modules = Self.modules(feature: feature, app: fulfillers + [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
+		extension Service {
+		    public struct SafeDIScope_Avatar_userService_home_avatar {
+		        public let analytics: Analytics
+		        public let session: Session
+		    }
+
+		    public struct SafeDIScope_Avatar_userService_settings_avatar {
+		        public let analytics: Analytics
+		        public let home: Home
+		        public let theme: Theme
+		    }
+
+		    public init(userServiceBuilder_home_avatar __safeDI_userServiceBuilder_home_avatar: @escaping (SafeDIScope_Avatar_userService_home_avatar) -> any UserService, userServiceBuilder_settings_avatar __safeDI_userServiceBuilder_settings_avatar: @escaping (SafeDIScope_Avatar_userService_settings_avatar) -> any UserService) {
+		        let analytics = Analytics()
+		        func __safeDI_home() -> Home {
+		            let session = Session()
+		            func __safeDI_avatar() -> Avatar {
+		                let userService: any UserService = __safeDI_userServiceBuilder_home_avatar(SafeDIScope_Avatar_userService_home_avatar(analytics: analytics, session: session))
+		                return Avatar(userService: userService)
+		            }
+		            let avatar: Avatar = __safeDI_avatar()
+		            return Home(session: session, avatar: avatar)
+		        }
+		        let home: Home = __safeDI_home()
+		        func __safeDI_settings() -> Settings {
+		            let theme = Theme()
+		            func __safeDI_avatar() -> Avatar {
+		                let userService: any UserService = __safeDI_userServiceBuilder_settings_avatar(SafeDIScope_Avatar_userService_settings_avatar(analytics: analytics, home: home, theme: theme))
+		                return Avatar(userService: userService)
+		            }
+		            let avatar: Avatar = __safeDI_avatar()
+		            return Settings(theme: theme, avatar: avatar)
+		        }
+		        let settings: Settings = __safeDI_settings()
+		        self.init(analytics: analytics, home: home, settings: settings)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_A752688985C0FE6D {}
+		}
+		"""])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
+		extension Root {
+		    public init() {
+		        let session = Session()
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_A752688985C0FE6D.self
+		            func __safeDI_userServiceBuilder_home_avatar(_ scope: Service.SafeDIScope_Avatar_userService_home_avatar) -> any UserService {
+		                let analytics = scope.analytics
+		                let session = scope.session
+		                let userService: any UserService = DefaultUserService(analytics: analytics, session: session)
+		                return userService
+		            }
+		            func __safeDI_userServiceBuilder_settings_avatar(_ scope: Service.SafeDIScope_Avatar_userService_settings_avatar) -> any UserService {
+		                let analytics = scope.analytics
+		                let userService: any UserService = DefaultUserService(analytics: analytics, session: session)
+		                return userService
+		            }
+		            return Service(userServiceBuilder_home_avatar: __safeDI_userServiceBuilder_home_avatar, userServiceBuilder_settings_avatar: __safeDI_userServiceBuilder_settings_avatar)
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(session: session, service: service)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
+	}
+
+	// MARK: What is in scope at the build site
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsSiblingsThatReachNoCarrierFirst_whenSiblingIsDeclaredAfterHolesCarrier() async throws {
+		// C2.9, C2.7, C8.3, C8.5: `theme`, declared after `profile`, which carries the hole, reaches no carrier, so it is
+		// built first and the struct carries it; `cache`, beside the hole, too; `badge` receives the hole, so it follows
+		// it. `DefaultUserService` reads `logger`, which only `Root` holds, so `Root` builds it before the seam.
+		let feature = [
+			"public protocol UserService {}",
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Cache", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Logger", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Badge", declarations: ["@Received let userService: any UserService"]),
+			seamFixtureType(named: "Profile", declarations: ["@Instantiated let badge: Badge", "@Instantiated let userService: any UserService", "@Instantiated let cache: Cache"]),
+			seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let profile: Profile", "@Instantiated let theme: Theme"]),
+		]
+		let fulfillers = [
+			Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let cache: Cache", "@Received let logger: Logger", "@Received let theme: Theme"]),
+		]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service", "@Instantiated let logger: Logger"])
+		let modules = Self.modules(feature: feature, app: fulfillers + [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
+		extension Service {
+		    public struct SafeDIScope_Profile_userService {
+		        public let theme: Theme
+		        public let cache: Cache
+		    }
+
+		    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+		        let theme = Theme()
+		        func __safeDI_profile() -> Profile {
+		            let cache = Cache()
+		            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(theme: theme, cache: cache))
+		            let badge = Badge(userService: userService)
+		            return Profile(badge: badge, userService: userService, cache: cache)
+		        }
+		        let profile: Profile = __safeDI_profile()
+		        self.init(profile: profile, theme: theme)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_592C5947171785EC {}
+		}
+		"""])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
+		extension Root {
+		    public init() {
+		        let logger = Logger()
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_592C5947171785EC.self
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+		                let theme = scope.theme
+		                let cache = scope.cache
+		                let userService: any UserService = DefaultUserService(cache: cache, logger: logger, theme: theme)
+		                return userService
+		            }
+		            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(service: service, logger: logger)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesEnclosingFillToSeamReenteredInsideIt_whenFulfillerInstantiatesSeam() async throws {
+		// C1.16b, H7 (3): `DefaultRouter`, which fills `Profile`'s `router`, instantiates `Flow` again. The call inside the
+		// fill passes the fill by name, so every `Flow` calls it with its own scope, as inline builds a fresh tree for each.
+		let feature = [
+			"public protocol Router {}",
+			seamFixtureType(named: "Analytics", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Profile", declarations: ["@Instantiated let router: any Router", "@Received let analytics: Analytics"]),
+			seamFixtureType(named: "Flow", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let profileBuilder: Instantiator<Profile>"]),
+		]
+		let fulfillers = [Self.fulfillingType(named: "DefaultRouter", fulfilling: "Router", declarations: ["@Instantiated let flowBuilder: Instantiator<Flow>", "@Received let analytics: Analytics"])]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let flow: Flow"])
+		let modules = Self.modules(feature: feature, app: fulfillers + [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
+		extension Root {
+		    public init() {
+		        func __safeDI_flow() -> Flow {
+		            _ = Flow.__safeDI_Flow_39B3DDDDA3DEBB2A.self
+		            func __safeDI_routerBuilder(_ scope: Flow.SafeDIScope_Profile_router) -> any Router {
+		                let analytics = scope.analytics
+		                func __safeDI_router() -> DefaultRouter {
+		                    func __safeDI_flowBuilder() -> Flow {
+		                        _ = Flow.__safeDI_Flow_39B3DDDDA3DEBB2A.self
+		                        return Flow(routerBuilder: __safeDI_routerBuilder)
+		                    }
+		                    let flowBuilder = Instantiator<Flow>(__safeDI_flowBuilder)
+		                    return DefaultRouter(flowBuilder: flowBuilder, analytics: analytics)
+		                }
+		                let router: any Router = __safeDI_router()
+		                return router
+		            }
+		            return Flow(routerBuilder: __safeDI_routerBuilder)
+		        }
+		        let flow: Flow = __safeDI_flow()
+		        self.init(flow: flow)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesEnclosingFillToSeamReenteredInsideIt_whenFillReadsCallerValueAndNoScopeBetweenDeclaresIt() async throws {
+		// C1.16b's proviso, H7 (3): `DefaultRouter` receives `Root`'s `logger` and instantiates `Flow` again. No scope from
+		// the fill to that call declares `logger`, so inline hands the re-entered `Flow`'s router the same `logger`, and the
+		// fill, passed to that call, reads it.
+		let (modules, visibleModules) = Self.reenteredFlowModules(app: [
+			Self.fulfillingType(named: "DefaultRouter", fulfilling: "Router", declarations: ["@Received let logger: Logger", "@Instantiated let flowBuilder: Instantiator<Flow>"]),
+		])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
+		extension Root {
+		    public convenience init() {
+		        let logger = Logger()
+		        func __safeDI_flow() -> Flow {
+		            _ = Flow.__safeDI_Flow_433A5C2DAFFEB914.self
+		            func __safeDI_routerBuilder(_ scope: Flow.SafeDIScope_Profile_router) -> any Router {
+		                func __safeDI_router() -> DefaultRouter {
+		                    func __safeDI_flowBuilder() -> Flow {
+		                        _ = Flow.__safeDI_Flow_433A5C2DAFFEB914.self
+		                        return Flow(routerBuilder: __safeDI_routerBuilder)
+		                    }
+		                    let flowBuilder = Instantiator<Flow>(__safeDI_flowBuilder)
+		                    return DefaultRouter(logger: logger, flowBuilder: flowBuilder)
+		                }
+		                let router: any Router = __safeDI_router()
+		                return router
+		            }
+		            return Flow(routerBuilder: __safeDI_routerBuilder)
+		        }
+		        let flow: Flow = __safeDI_flow()
+		        self.init(logger: logger, flow: flow)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: visibleModules)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarry_whenScopeInsideFillDeclaresLabelFillReadsFromCallerAboveCallThatReentersSeam() async {
+		// C1.27, H7 (2)(2): inline, the `Flow` that `Middle` instantiates hands its router `Middle`'s `logger`; the fill,
+		// passed to that call, is one function, which reads `Root`'s.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultRouter.swift"]):10:5: error: `DefaultRouter` receives `logger: Logger`, which `Middle` declares on the path from the builder for `Profile`'s `router: any Router` to the call by which `Middle` instantiates `Flow` again (`flowBuilder`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`'s values. Declare `@Received let logger: Logger` on `Flow`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `Router` one module `Feature` reads.
+			\(fixtures["App"]!["Middle.swift"]):10:5: note: `Middle` declares `logger: Logger` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.reenteredFlowModules(app: Self.reenteredFlowShadowingApp).modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsReenteredSeamFromItsOwnScope_whenSeamReceivesLabelScopeInsideFillDeclares() async throws {
+		// C1.27's remedy: `Flow` receives `logger`, so the struct carries it, and `Middle`'s call of `Flow` passes its own
+		// `logger`, which the fill reads from the re-entered `Flow`'s struct, as inline would.
+		let (modules, visibleModules) = Self.reenteredFlowModules(flowDeclarations: ["@Received let logger: Logger"], app: Self.reenteredFlowShadowingApp)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles["Feature.swift"].map { ["Flow": Self.seamExtension(in: $0, named: "Flow")] }, ["Flow": """
+		extension Flow {
+		    public struct SafeDIScope_Profile_router {
+		        public let logger: Logger
+		    }
+
+		    public convenience init(logger: Logger, routerBuilder __safeDI_routerBuilder: @escaping (SafeDIScope_Profile_router) -> any Router) {
+		        func __safeDI_profileBuilder() -> Profile {
+		            let router: any Router = __safeDI_routerBuilder(SafeDIScope_Profile_router(logger: logger))
+		            return Profile(router: router)
+		        }
+		        let profileBuilder = Instantiator<Profile>(__safeDI_profileBuilder)
+		        self.init(logger: logger, profileBuilder: profileBuilder)
+		    }
+		}
+		"""])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
+		extension Root {
+		    public convenience init() {
+		        let logger = Logger()
+		        func __safeDI_flow() -> Flow {
+		            _ = Flow.__safeDI_Flow_167A509BB6DFDE55.self
+		            func __safeDI_routerBuilder(_ scope: Flow.SafeDIScope_Profile_router) -> any Router {
+		                let logger = scope.logger
+		                func __safeDI_router() -> DefaultRouter {
+		                    func __safeDI_middle() -> Middle {
+		                        let logger = Logger()
+		                        func __safeDI_flowBuilder() -> Flow {
+		                            _ = Flow.__safeDI_Flow_167A509BB6DFDE55.self
+		                            return Flow(logger: logger, routerBuilder: __safeDI_routerBuilder)
+		                        }
+		                        let flowBuilder = Instantiator<Flow>(__safeDI_flowBuilder)
+		                        return Middle(logger: logger, flowBuilder: flowBuilder)
+		                    }
+		                    let middle: Middle = __safeDI_middle()
+		                    return DefaultRouter(logger: logger, middle: middle)
+		                }
+		                let router: any Router = __safeDI_router()
+		                return router
+		            }
+		            return Flow(logger: logger, routerBuilder: __safeDI_routerBuilder)
+		        }
+		        let flow: Flow = __safeDI_flow()
+		        self.init(logger: logger, flow: flow)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: visibleModules)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_closesCycleOnFillsOwnBuilderFunction_whenFulfillerInstantiatesHolesOwnProperty() async throws {
+		// C1.19, H7 (3)(a): `LoopingUserService` instantiates the hole's own property, so the repeat closes on the builder
+		// function the fill declares for it, as inline closes on the one `A`'s builder declares.
+		let feature = [
+			"""
+			public protocol UserService {}
+
+			public struct AnyUserService: UserService {
+			    public init(_ base: any UserService) {
+			        self.base = base
+			    }
+
+			    let base: any UserService
+			}
+			""",
+			seamFixtureType(named: "Analytics", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Cache", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "A", declarations: ["@Received let analytics: Analytics", "@Instantiated let cache: Cache", #"@Instantiated(fulfilledByType: "LoopingUserService", erasedToConcreteExistential: true) let userServiceBuilder: ErasedInstantiator<(), AnyUserService>"#]),
+			seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let aBuilder: Instantiator<A>"]),
+		]
+		let fulfillers = [seamFixtureType(named: "LoopingUserService", declarations: ["@Received let cache: Cache", #"@Instantiated(fulfilledByType: "LoopingUserService", erasedToConcreteExistential: true) let userServiceBuilder: ErasedInstantiator<(), AnyUserService>"#], conformances: ", UserService")]
+		let modules = Self.modules(feature: feature, app: fulfillers + [Self.canonicalRoot])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
+		extension Root {
+		    public init() {
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_0C354F66C5F32AA5.self
+		            func __safeDI_userServiceBuilderBuilder(_ scope: Service.SafeDIScope_A_userServiceBuilder) -> ErasedInstantiator<(), AnyUserService> {
+		                let cache = scope.cache
+		                func __safeDI_userServiceBuilder() -> LoopingUserService {
+		                    let userServiceBuilder = ErasedInstantiator<(), AnyUserService> {
+		                        AnyUserService(__safeDI_userServiceBuilder())
+		                    }
+		                    return LoopingUserService(cache: cache, userServiceBuilder: userServiceBuilder)
+		                }
+		                let userServiceBuilder = ErasedInstantiator<(), AnyUserService> {
+		                    AnyUserService(__safeDI_userServiceBuilder())
+		                }
+		                return userServiceBuilder
+		            }
+		            return Service(userServiceBuilderBuilder: __safeDI_userServiceBuilderBuilder)
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(service: service)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+		// The comparator does not call an erased instantiator, so the probe calls the fill's twice down.
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [Self.canonicalRoot]), probes: [
+			DifferentialValueProbe("Root()"),
+			DifferentialValueProbe("Root().service.aBuilder.instantiate().userServiceBuilder.instantiate()"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_declaresFillSendable_whenSeamReenteredInsideFillIsCalledInSendableBuilderFunction() async throws {
+		// C1.22: the call of `Flow` inside the fill sits in `flowBuilder`'s `@Sendable` builder function, which captures the
+		// fill it passes, so the fill and its inner stage are `@Sendable` local functions.
+		let feature = [
+			"public protocol Router: Sendable {}",
+			seamFixtureType(named: "Analytics", declarations: [], conformances: ", Sendable"),
+			seamFixtureType(named: "Profile", declarations: ["@Instantiated let router: any Router", "@Received let analytics: Analytics"], conformances: ", Sendable"),
+			seamFixtureType(named: "Flow", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let profileBuilder: SendableInstantiator<Profile>"], conformances: ", Sendable"),
+		]
+		let fulfillers = [Self.fulfillingType(named: "DefaultRouter", fulfilling: "Router", declarations: ["@Instantiated let flowBuilder: SendableInstantiator<Flow>", "@Received let analytics: Analytics"])]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let flow: Flow"])
+		let modules = Self.modules(feature: feature, app: fulfillers + [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
+		extension Root {
+		    public init() {
+		        func __safeDI_flow() -> Flow {
+		            _ = Flow.__safeDI_Flow_BE2FABA424634B89.self
+		            @Sendable func __safeDI_routerBuilder(_ scope: Flow.SafeDIScope_Profile_router.Outer) -> @Sendable (Flow.SafeDIScope_Profile_router.Inner) -> any Router {
+		                let analytics = scope.analytics
+		                @Sendable func __safeDI_routerBuilder_Inner(_ scope: Flow.SafeDIScope_Profile_router.Inner) -> any Router {
+		                    func __safeDI_router() -> DefaultRouter {
+		                        @Sendable func __safeDI_flowBuilder() -> Flow {
+		                            _ = Flow.__safeDI_Flow_BE2FABA424634B89.self
+		                            return Flow(routerBuilder: __safeDI_routerBuilder)
+		                        }
+		                        let flowBuilder = SendableInstantiator<Flow>(__safeDI_flowBuilder)
+		                        return DefaultRouter(flowBuilder: flowBuilder, analytics: analytics)
+		                    }
+		                    let router: any Router = __safeDI_router()
+		                    return router
+		                }
+		                return __safeDI_routerBuilder_Inner
+		            }
+		            return Flow(routerBuilder: __safeDI_routerBuilder)
+		        }
+		        let flow: Flow = __safeDI_flow()
+		        self.init(flow: flow)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsSeamsOwnCycleDiagnostic_whenFillClosesConstantCycleSeamsWalkRejects() async {
+		// C1.21, H7 (4): `Root`'s inline walk closes the cycle on its own lazy `p1Builder`, but `Service`'s walk, from its
+		// root, meets `c: C` again on a constant path through the fill. `App` walks `Service`'s tree from its root and
+		// reports `Service`'s module's diagnostic, at `A.c`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["A.swift"]):8:5: error: Dependency cycle: `C` -> `Instantiator<P1>` -> `A` -> `C`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `c: C` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
+			\(fixtures["Feature"]!["C.swift"]):1:1: note: `C` is part of the cycle
+			\(fixtures["Feature"]!["P1.swift"]):1:1: note: `P1` is part of the cycle
+			\(fixtures["Feature"]!["A.swift"]):1:1: note: `A` is part of the cycle
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.userServiceProtocol,
+						seamFixtureType(named: "C", declarations: ["@Instantiated let p1Builder: Instantiator<P1>"]),
+						seamFixtureType(named: "P1", declarations: ["@Instantiated let a: A"]),
+						seamFixtureType(named: "A", declarations: ["@Instantiated let c: C", "@Instantiated let service: Service"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let userService: any UserService"]),
+					],
+					app: [
+						Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Instantiated let c: C"]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let p1Builder: Instantiator<P1>"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillClosesCycleInSeamTree_whenFillOfPassedUpBuilderRepeatsPropertyOfInnerSeamsPath() async {
+		// C1.24: the fill of `Shell`'s passed-up builder is built with `Service`'s stack, on which `profileBuilder` is.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LoopingUserService.swift"]):10:5: error: SafeDI cannot fill the builder for `Profile`'s `userService: any UserService` in `Service`'s dependency tree: `LoopingUserService`, which fills it, instantiates `profileBuilder: Instantiator<Profile>`, which `Service`'s tree is building where it builds `userService` (Service -> profileBuilder -> Profile -> userService -> LoopingUserService -> profileBuilder). Code generated outside module `Feature` cannot refer to the function `Service`'s initializer builds `Profile` with, and building it again would hand it other values than `Service`'s tree holds. Instantiate the seam where `LoopingUserService` builds `Profile` (`@Instantiated let serviceBuilder: Instantiator<Service>`), so the cycle re-enters through the initializer SafeDI generates for `Service`; make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads.
+			\(fixtures["Feature"]!["Service.swift"]):7:5: note: `Service` instantiates `profileBuilder: Instantiator<Profile>` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+						Self.userServiceProtocol,
+						seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let profileBuilder: Instantiator<Profile>"]),
+					]),
+					ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: ["import Feature\n\n" + seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let service: Service"])], dependencies: ["Feature"]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+						Self.fulfillingType(named: "LoopingUserService", fulfilling: "UserService", declarations: ["@Instantiated let profileBuilder: Instantiator<Profile>"]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shell: Shell"]),
+					].map { "import Feature\nimport Mid\n\n" + $0 }, dependencies: ["Feature", "Mid"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarry_whenFillReadsSiblingThatReceivesCarrierOnlyIfAvailable() async {
+		// C2.15, H4's second residual: `Theme` receives `profile` only if available, so `Home`'s `theme` follows `profile`,
+		// and the struct carries the seam's received `theme` no more, which `Home`'s hides.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `theme: Theme`, which `Home` builds after `profile`, since `Theme` receives `profile` only if available, so the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` does not carry it. Receive `profile` on `Theme` some other way, or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads.
+			\(fixtures["Feature"]!["Home.swift"]):9:5: note: `Home` declares `theme: Theme` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.userServiceProtocol,
+						seamFixtureType(named: "Theme", declarations: ["@Received(onlyIfAvailable: true) let profile: Profile?"]),
+						seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
+						seamFixtureType(named: "Home", declarations: ["@Instantiated let profile: Profile", "@Instantiated let theme: Theme"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Received let theme: Theme", "@Instantiated let home: Home"]),
+					],
+					app: [
+						Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let theme: Theme"]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let theme: Theme", "@Instantiated let service: Service"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	// MARK: Passing a builder up
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesBuilderUpThroughOuterSeam_whenOuterSeamsModuleCannotSeeFulfillingDeclarationEither() async throws {
+		// C3.5, H8: `Shell`, in `Mid`, calls `Service` and sees no type that fulfills `UserService` either, so it takes the
+		// builder, of `Service`'s struct, and passes it on; `App` fills `Shell`'s builder.
+		let modules = Self.passUpModules(appFulfillers: [Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let analytics: Analytics"])])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Mid"]?.generatedFiles, Self.generatedFiles(module: "Mid", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Shell": """
+		extension Shell {
+		    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (Service.SafeDIScope_Profile_userService) -> any UserService) {
+		        let theme = Theme()
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_80890FC499DC6112.self
+		            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(theme: theme, service: service)
+		    }
+		}
+
+		extension Shell {
+		    public enum __safeDI_Shell_80890FC499DC6112 {}
+		}
+		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature", "Mid"], rootFiles: ["Root": """
+		extension Root {
+		    public init() {
+		        func __safeDI_shell() -> Shell {
+		            _ = Shell.__safeDI_Shell_80890FC499DC6112.self
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+		                let analytics = scope.analytics
+		                let userService: any UserService = DefaultUserService(analytics: analytics)
+		                return userService
+		            }
+		            return Shell(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let shell: Shell = __safeDI_shell()
+		        self.init(shell: shell)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsPassedUpBuilderWithCallersValue_whenFillReadsPassingUpSeamsOwnForwardedProperty() async throws {
+		// H8: `Shell`, which passes `Service`'s builder up, forwards `name`, which its caller holds where it calls `Shell`,
+		// so a fill's read of it is no hidden label: the fill reads the caller's `name`, as inline passes it through.
+		let mid = [seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Forwarded let name: String", "@Instantiated let service: Service"])]
+		let fulfillers = [Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let name: String"])]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"])
+		let modules = Self.threeModules(feature: Self.canonicalFeature, mid: mid, app: fulfillers + [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature", "Mid"], rootFiles: ["Root": """
+		extension Root {
+		    public init() {
+		        func __safeDI_shellBuilder(name: String) -> Shell {
+		            _ = Shell.__safeDI_Shell_89C8CD23E5F296E7.self
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+		                let userService: any UserService = DefaultUserService(name: name)
+		                return userService
+		            }
+		            return Shell(name: name, userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let shellBuilder = Instantiator<Shell> {
+		            __safeDI_shellBuilder(name: $0)
+		        }
+		        self.init(shellBuilder: shellBuilder)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(
+			output,
+			modules: modules,
+			visibleModules: Self.threeModules(feature: Self.canonicalFeature + fulfillers, mid: mid, app: [root]),
+			probes: [DifferentialValueProbe(#"Root().shellBuilder.instantiate("name")"#)],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarry_whenFillOfPassedUpBuilderReadsValueOuterSeamBinds() async {
+		// C8.10: inline, `Shell`'s `theme` would be passed through `Service` to `DefaultUserService`; the struct cannot carry
+		// `Shell`'s values, and `Shell`'s caller, which fills the builder, does not hold them.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultUserService.swift"]):10:5: error: `DefaultUserService` receives `theme: Theme`, which `Shell` builds where it calls `Service`, but `Shell` passes the builder for `Profile`'s `userService: any UserService` on from its own caller, which cannot hand it `Shell`'s values. Declare `@Received let theme: Theme` on `Service`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `UserService` one module `Mid` reads, so `Shell` fills the builder itself.
+			\(fixtures["Mid"]!["Shell.swift"]):10:5: note: `Shell` declares `theme: Theme` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.passUpModules(appFulfillers: [Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let theme: Theme"])]),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesBuilderForHoleInsideItsOwnFill_whenFulfillerItFillsWithInstantiatesTypeItsModuleCannotSee() async throws {
+		// C3.13: `Shell`, in `Mid`, fills `Service`'s builder with `DefaultUserService`, whose `logger: any Logger` no
+		// declaration `Mid` sees fulfills: a site of `Shell`'s own tree, whose struct carries `Shell`'s `theme` and the
+		// field of `Service`'s struct the fill binds; `App` fills `Shell`'s builder. `Shell`'s call of `Service` carries a
+		// site, so `theme` starts before it.
+		let feature = [
+			"public protocol UserService {}\npublic protocol Logger {}",
+			seamFixtureType(named: "Analytics", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
+			seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let profile: Profile"]),
+		]
+		let mid = [
+			Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let analytics: Analytics", "@Instantiated let logger: any Logger"]),
+			seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let service: Service", "@Instantiated let theme: Theme"]),
+		]
+		let fulfillers = [Self.fulfillingType(named: "DefaultLogger", fulfilling: "Logger", declarations: ["@Received let analytics: Analytics", "@Received let theme: Theme"])]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shell: Shell"])
+		func modules(feature: [String], mid: [String], app: [String]) -> [ModuleFixture] {
+			[
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature),
+				ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: mid.map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+				ModuleFixture(name: "App", packageName: "Other", swiftFileContent: app.map { "import Feature\nimport Mid\n\n" + $0 }, dependencies: ["Feature", "Mid"]),
+			]
+		}
+		let holeModules = modules(feature: feature, mid: mid, app: fulfillers + [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: holeModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Mid"]?.generatedFiles, Self.generatedFiles(module: "Mid", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Shell": """
+		extension Shell {
+		    public struct SafeDIScope_DefaultUserService_logger {
+		        public let theme: Theme
+		        public let analytics: Analytics
+		    }
+
+		    public init(loggerBuilder __safeDI_loggerBuilder: @escaping (SafeDIScope_DefaultUserService_logger) -> any Logger) {
+		        let theme = Theme()
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_80890FC499DC6112.self
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+		                let analytics = scope.analytics
+		                func __safeDI_userService() -> DefaultUserService {
+		                    let logger: any Logger = __safeDI_loggerBuilder(SafeDIScope_DefaultUserService_logger(theme: theme, analytics: analytics))
+		                    return DefaultUserService(analytics: analytics, logger: logger)
+		                }
+		                let userService: any UserService = __safeDI_userService()
+		                return userService
+		            }
+		            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(service: service, theme: theme)
+		    }
+		}
+
+		extension Shell {
+		    public enum __safeDI_Shell_2A08EB226316B8D9 {}
+		}
+		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature", "Mid"], rootFiles: ["Root": """
+		extension Root {
+		    public init() {
+		        func __safeDI_shell() -> Shell {
+		            _ = Shell.__safeDI_Shell_2A08EB226316B8D9.self
+		            func __safeDI_loggerBuilder(_ scope: Shell.SafeDIScope_DefaultUserService_logger) -> any Logger {
+		                let theme = scope.theme
+		                let analytics = scope.analytics
+		                let logger: any Logger = DefaultLogger(analytics: analytics, theme: theme)
+		                return logger
+		            }
+		            return Shell(loggerBuilder: __safeDI_loggerBuilder)
+		        }
+		        let shell: Shell = __safeDI_shell()
+		        self.init(shell: shell)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: holeModules, visibleModules: modules(feature: feature + mid + fulfillers, mid: [], app: [root]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesFillOfPassedUpBuilderToInnerSeamReenteredInsideIt_whenFulfillerRepeatsOuterSeamsPath() async throws {
+		// C1.23, H7 (3): `App` fills `Shell`'s builder, passed up from `Service`, with `DefaultUserService`, whose `X`
+		// instantiates `Service` again. A fill is keyed by the site it fills, so that call passes the fill it sits in.
+		let (modules, visibleModules) = Self.reenteredServiceModules(
+			app: [Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Instantiated let xBuilder: Instantiator<X>"])],
+			rootDeclarations: ["@Instantiated let shell: Shell"],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Mid"]?.generatedFiles, Self.generatedFiles(module: "Mid", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Shell": """
+		extension Shell {
+		    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (Service.SafeDIScope_Profile_userService) -> any UserService) {
+		        let analytics = Analytics()
+		        func __safeDI_xBuilder() -> X {
+		            func __safeDI_service() -> Service {
+		                _ = Service.__safeDI_Service_80890FC499DC6112.self
+		                return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		            }
+		            let service: Service = __safeDI_service()
+		            return X(analytics: analytics, service: service)
+		        }
+		        let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+		        self.init(analytics: analytics, xBuilder: xBuilder)
+		    }
+		}
+
+		extension Shell {
+		    public enum __safeDI_Shell_80890FC499DC6112 {}
+		}
+		"""]))
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature", "Mid"], rootFiles: ["Root": """
+		extension Root {
+		    public init() {
+		        func __safeDI_shell() -> Shell {
+		            _ = Shell.__safeDI_Shell_80890FC499DC6112.self
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+		                let analytics = scope.analytics
+		                func __safeDI_userService() -> DefaultUserService {
+		                    func __safeDI_xBuilder() -> X {
+		                        func __safeDI_service() -> Service {
+		                            _ = Service.__safeDI_Service_80890FC499DC6112.self
+		                            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		                        }
+		                        let service: Service = __safeDI_service()
+		                        return X(analytics: analytics, service: service)
+		                    }
+		                    let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+		                    return DefaultUserService(xBuilder: xBuilder)
+		                }
+		                let userService: any UserService = __safeDI_userService()
+		                return userService
+		            }
+		            return Shell(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let shell: Shell = __safeDI_shell()
+		        self.init(shell: shell)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: visibleModules)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarry_whenScopeInsideFillOfPassedUpBuilderDeclaresLabelFillReadsFromCallerAboveCallThatReentersInnerSeam() async {
+		// C1.27b, H7 (2)(2): inline, the `Service` that `X` builds beneath `Middle` hands its `DefaultUserService` `Middle`'s
+		// `logger`; the one fill `App` generates reads `Root`'s, which a nested copy of the fill would read again a level down.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Middle` declares on the path from the builder for `Profile`'s `userService: any UserService` to the call by which `X` instantiates `Service` again (`service`), but that call passes the builder on as module `App` fills it, which cannot hand it `Middle`'s values. Declare `@Received let logger: Logger` on `Service`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads.
+			\(fixtures["App"]!["Middle.swift"]):11:5: note: `Middle` declares `logger: Logger` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.reenteredServiceModules(
+					app: [
+						Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let logger: Logger", "@Instantiated let middle: Middle"]),
+						seamFixtureType(named: "Middle", isFinalClass: true, declarations: ["@Instantiated let logger: Logger", "@Instantiated let xBuilder: Instantiator<X>"]),
+					],
+					rootDeclarations: ["@Instantiated let logger: Logger", "@Instantiated let shell: Shell"],
+				).modules,
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesBuilderUpAsSendable_whenOuterSeamCallsInnerSeamInSendableBuilderFunction() async throws {
+		// H8: `Shell` calls `Service` inside `serviceBuilder`'s `@Sendable` builder function, which captures the builder it
+		// passes on, so `Shell` takes it `@Sendable`, and `App`'s fill is `@Sendable` too.
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"public protocol UserService: Sendable {}",
+				seamFixtureType(named: "Analytics", declarations: [], conformances: ", Sendable"),
+				seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService", "@Received let analytics: Analytics"], conformances: ", Sendable"),
+				seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let profile: Profile"], conformances: ", Sendable"),
+			]),
+			ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: ["import Feature\n\n" + seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let serviceBuilder: SendableInstantiator<Service>"])], dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [
+				Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let analytics: Analytics"]),
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shell: Shell"]),
+			].map { "import Feature\nimport Mid\n\n" + $0 }, dependencies: ["Feature", "Mid"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Mid"]?.generatedFiles, ["Mid.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Shell {
+		    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping @Sendable (Service.SafeDIScope_Profile_userService) -> any UserService) {
+		        @Sendable func __safeDI_serviceBuilder() -> Service {
+		            _ = Service.__safeDI_Service_80890FC499DC6112.self
+		            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let serviceBuilder = SendableInstantiator<Service>(__safeDI_serviceBuilder)
+		        self.init(serviceBuilder: serviceBuilder)
+		    }
+		}
+
+		extension Shell {
+		    public enum __safeDI_Shell_3FB03A5FF4BD19B8 {}
+		}
+		"""])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Mid)
+		import Mid
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_shell() -> Shell {
+		            _ = Shell.__safeDI_Shell_3FB03A5FF4BD19B8.self
+		            @Sendable func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+		                let analytics = scope.analytics
+		                let userService: any UserService = DefaultUserService(analytics: analytics)
+		                return userService
+		            }
+		            return Shell(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let shell: Shell = __safeDI_shell()
+		        self.init(shell: shell)
+		    }
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesEveryFillOfEnclosingCall_whenTwoSiteHolesFulfillerReentersSeam() async throws {
+		// C1.26: `Avatar`'s `routerBuilder` has two sites; `DefaultRouter` instantiates `Flow` again. The two fills are
+		// declared consecutively, and the call inside each passes both, so every `Flow` builds both sites with its scopes.
+		let feature = [
+			"""
+			public protocol Router {}
+
+			public struct AnyRouter: Router {
+			    public init(_ base: any Router) {
+			        self.base = base
+			    }
+
+			    let base: any Router
+			}
+			""",
+			seamFixtureType(named: "Analytics", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Avatar", declarations: [#"@Instantiated(fulfilledByType: "DefaultRouter", erasedToConcreteExistential: true) let routerBuilder: ErasedInstantiator<(), AnyRouter>"#, "@Received let analytics: Analytics"]),
+			seamFixtureType(named: "Home", declarations: ["@Instantiated let avatar: Avatar"]),
+			seamFixtureType(named: "Settings", declarations: ["@Instantiated let settingsAvatar: Avatar"]),
+			seamFixtureType(named: "Flow", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let homeBuilder: Instantiator<Home>", "@Instantiated let settingsBuilder: Instantiator<Settings>"]),
+		]
+		let fulfillers = [seamFixtureType(named: "DefaultRouter", declarations: ["@Instantiated let flowBuilder: Instantiator<Flow>", "@Received let analytics: Analytics"], conformances: ", Router")]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let flow: Flow"])
+		let modules = Self.modules(feature: feature, app: fulfillers + [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_flow() -> Flow {
+		            _ = Flow.__safeDI_Flow_E4D917F1575A5CB0.self
+		            func __safeDI_routerBuilderBuilder_homeBuilder_avatar(_ scope: Flow.SafeDIScope_Avatar_routerBuilder_homeBuilder_avatar) -> ErasedInstantiator<(), AnyRouter> {
+		                let analytics = scope.analytics
+		                func __safeDI_routerBuilder() -> DefaultRouter {
+		                    func __safeDI_flowBuilder() -> Flow {
+		                        _ = Flow.__safeDI_Flow_E4D917F1575A5CB0.self
+		                        return Flow(routerBuilderBuilder_homeBuilder_avatar: __safeDI_routerBuilderBuilder_homeBuilder_avatar, routerBuilderBuilder_settingsBuilder_settingsAvatar: __safeDI_routerBuilderBuilder_settingsBuilder_settingsAvatar)
+		                    }
+		                    let flowBuilder = Instantiator<Flow>(__safeDI_flowBuilder)
+		                    return DefaultRouter(flowBuilder: flowBuilder, analytics: analytics)
+		                }
+		                let routerBuilder = ErasedInstantiator<(), AnyRouter> {
+		                    AnyRouter(__safeDI_routerBuilder())
+		                }
+		                return routerBuilder
+		            }
+		            func __safeDI_routerBuilderBuilder_settingsBuilder_settingsAvatar(_ scope: Flow.SafeDIScope_Avatar_routerBuilder_settingsBuilder_settingsAvatar) -> ErasedInstantiator<(), AnyRouter> {
+		                let analytics = scope.analytics
+		                func __safeDI_routerBuilder() -> DefaultRouter {
+		                    func __safeDI_flowBuilder() -> Flow {
+		                        _ = Flow.__safeDI_Flow_E4D917F1575A5CB0.self
+		                        return Flow(routerBuilderBuilder_homeBuilder_avatar: __safeDI_routerBuilderBuilder_homeBuilder_avatar, routerBuilderBuilder_settingsBuilder_settingsAvatar: __safeDI_routerBuilderBuilder_settingsBuilder_settingsAvatar)
+		                    }
+		                    let flowBuilder = Instantiator<Flow>(__safeDI_flowBuilder)
+		                    return DefaultRouter(flowBuilder: flowBuilder, analytics: analytics)
+		                }
+		                let routerBuilder = ErasedInstantiator<(), AnyRouter> {
+		                    AnyRouter(__safeDI_routerBuilder())
+		                }
+		                return routerBuilder
+		            }
+		            return Flow(routerBuilderBuilder_homeBuilder_avatar: __safeDI_routerBuilderBuilder_homeBuilder_avatar, routerBuilderBuilder_settingsBuilder_settingsAvatar: __safeDI_routerBuilderBuilder_settingsBuilder_settingsAvatar)
+		        }
+		        let flow: Flow = __safeDI_flow()
+		        self.init(flow: flow)
+		    }
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+		// The comparator does not call an erased instantiator, so the probes call the router at each site, whose
+		// `flowBuilder` the comparator calls, building a second `Flow` with its own scopes.
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]), probes: [
+			DifferentialValueProbe("Root()"),
+			DifferentialValueProbe("Root().flow.homeBuilder.instantiate().avatar.routerBuilder.instantiate()"),
+			DifferentialValueProbe("Root().flow.settingsBuilder.instantiate().settingsAvatar.routerBuilder.instantiate()"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsValuesInlineBuilds_whenFillReadsWrapperFieldsInstanceOrRepeatsPropertyOfFillersPath() async throws {
+		// Two cells in one fixture, to compile the value comparator's two paths once. C2.6: the struct carries the wrapper
+		// `session`, and the fill passes its instance. C1.20: `DefaultUserService`
+		// instantiates `xBuilder`, which `Root` also instantiates; the fill's stack is `Service`'s, so it builds `xBuilder`
+		// afresh, and `X`'s call of `Service` passes the fill. The values equal the build with the fulfiller in `Feature`.
+		let feature = [
+			Self.userServiceProtocol,
+			seamFixtureType(named: "Analytics", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "X", declarations: ["@Received let analytics: Analytics", "@Instantiated let service: Service"]),
+			seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
+			seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let session: LazilyInstantiated<Session>", "@Instantiated let profileBuilder: Instantiator<Profile>"]),
+		]
+		let fulfillers = [Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let session: Session", "@Instantiated let xBuilder: Instantiator<X>"])]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let xBuilder: Instantiator<X>"])
+		let modules = Self.modules(feature: feature, app: fulfillers + [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        let analytics = Analytics()
+		        func __safeDI_xBuilder() -> X {
+		            func __safeDI_service() -> Service {
+		                _ = Service.__safeDI_Service_98DDE36458C5DD5D.self
+		                func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+		                    let analytics = scope.analytics
+		                    let session = scope.session
+		                    func __safeDI_userService() -> DefaultUserService {
+		                        func __safeDI_xBuilder() -> X {
+		                            func __safeDI_service() -> Service {
+		                                _ = Service.__safeDI_Service_98DDE36458C5DD5D.self
+		                                return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		                            }
+		                            let service: Service = __safeDI_service()
+		                            return X(analytics: analytics, service: service)
+		                        }
+		                        let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+		                        return DefaultUserService(session: session.instance, xBuilder: xBuilder)
+		                    }
+		                    let userService: any UserService = __safeDI_userService()
+		                    return userService
+		                }
+		                return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		            }
+		            let service: Service = __safeDI_service()
+		            return X(analytics: analytics, service: service)
+		        }
+		        let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+		        self.init(analytics: analytics, xBuilder: xBuilder)
+		    }
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_carriesNearestDeclarationAndKeepsSoftReceivesAvailability_whenSiblingsOfCarriersAreDeclaredAfterThem() async throws {
+		// Two cells in one fixture, to compile the value comparator's two paths once. C2.14: `Home`'s `theme`, declared
+		// after the carrier `avatar`, reaches no carrier, so it starts first and is the
+		// field, hiding the seam's received `theme`, as inline hands the fulfiller `Home`'s. C2.18: at `Card`'s level,
+		// `badge` receives the hole only if available and `header` requires `badge`: no edge changes, so `badge` still
+		// follows the hole and gets it.
+		let feature = [
+			Self.userServiceProtocol,
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Avatar", declarations: ["@Instantiated let userService: any UserService"]),
+			seamFixtureType(named: "Home", declarations: ["@Instantiated let avatar: Avatar", "@Instantiated let theme: Theme"]),
+			seamFixtureType(named: "Badge", declarations: ["@Received(onlyIfAvailable: true) let userService: (any UserService)?"]),
+			seamFixtureType(named: "Header", declarations: ["@Received let badge: Badge"]),
+			seamFixtureType(named: "Card", declarations: ["@Instantiated let header: Header", "@Instantiated let badge: Badge", "@Instantiated let userService: any UserService"]),
+			seamFixtureType(named: "Service", isSeam: true, declarations: ["@Received let theme: Theme", "@Instantiated let home: Home", "@Instantiated let card: Card"]),
+		]
+		let fulfillers = [Self.fulfillingType(named: "ThemedUserService", fulfilling: "UserService", declarations: ["@Received(onlyIfAvailable: true) let theme: Theme?"])]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let theme: Theme", "@Instantiated let service: Service"])
+		let modules = Self.modules(feature: feature, app: fulfillers + [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
+		extension Service {
+		    public struct SafeDIScope_Avatar_userService {
+		        public let theme: Theme
+		    }
+
+		    public struct SafeDIScope_Card_userService {
+		        public let theme: Theme
+		        public let home: Home
+		    }
+
+		    public init(theme: Theme, userServiceBuilder_Avatar __safeDI_userServiceBuilder_Avatar: @escaping (SafeDIScope_Avatar_userService) -> any UserService, userServiceBuilder_Card __safeDI_userServiceBuilder_Card: @escaping (SafeDIScope_Card_userService) -> any UserService) {
+		        func __safeDI_home() -> Home {
+		            let theme = Theme()
+		            func __safeDI_avatar() -> Avatar {
+		                let userService: any UserService = __safeDI_userServiceBuilder_Avatar(SafeDIScope_Avatar_userService(theme: theme))
+		                return Avatar(userService: userService)
+		            }
+		            let avatar: Avatar = __safeDI_avatar()
+		            return Home(avatar: avatar, theme: theme)
+		        }
+		        let home: Home = __safeDI_home()
+		        func __safeDI_card() -> Card {
+		            let userService: any UserService = __safeDI_userServiceBuilder_Card(SafeDIScope_Card_userService(theme: theme, home: home))
+		            let badge = Badge(userService: userService)
+		            let header = Header(badge: badge)
+		            return Card(header: header, badge: badge, userService: userService)
+		        }
+		        let card: Card = __safeDI_card()
+		        self.init(theme: theme, home: home, card: card)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_E654774AE1F2F280 {}
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_carriesEveryFieldOfInnerStructAtSiteInsideSeamsOwnFill_whenFulfillerDoesNotReadIt() async throws {
+		// G1, H7: a site inside the fill `Shell` generates for `Service` counts as reading every field of `Service`'s struct,
+		// so `Shell`'s struct for `logger` carries `cache`, which `DefaultUserService` does not read, and `DefaultLogger`
+		// gets `Profile`'s cache, as the build with every fulfiller in `Feature` hands it.
+		let feature = [
+			"public protocol UserService {}\npublic protocol Logger {}",
+			seamFixtureType(named: "Analytics", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Cache", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Profile", isFinalClass: true, declarations: ["@Instantiated let cache: Cache", "@Instantiated let userService: any UserService"]),
+			seamFixtureType(named: "Service", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let profile: Profile"]),
+		]
+		let mid = [
+			Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let analytics: Analytics", "@Instantiated let logger: any Logger"]),
+			seamFixtureType(named: "Shell", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let service: Service", "@Instantiated let theme: Theme"]),
+		]
+		let fulfillers = [Self.fulfillingType(named: "DefaultLogger", fulfilling: "Logger", declarations: ["@Received let cache: Cache"])]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shell: Shell"])
+		let holeModules = Self.threeModules(feature: feature, mid: mid, app: fulfillers + [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: holeModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Mid"]?.generatedFiles, ["Mid.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Shell {
+		    public struct SafeDIScope_DefaultUserService_logger {
+		        public let theme: Theme
+		        public let analytics: Analytics
+		        public let cache: Cache
+		    }
+
+		    public convenience init(loggerBuilder __safeDI_loggerBuilder: @escaping (SafeDIScope_DefaultUserService_logger) -> any Logger) {
+		        let theme = Theme()
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_F97DE995DE37B190.self
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+		                let analytics = scope.analytics
+		                let cache = scope.cache
+		                func __safeDI_userService() -> DefaultUserService {
+		                    let logger: any Logger = __safeDI_loggerBuilder(SafeDIScope_DefaultUserService_logger(theme: theme, analytics: analytics, cache: cache))
+		                    return DefaultUserService(analytics: analytics, logger: logger)
+		                }
+		                let userService: any UserService = __safeDI_userService()
+		                return userService
+		            }
+		            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(service: service, theme: theme)
+		    }
+		}
+
+		extension Shell {
+		    public enum __safeDI_Shell_B1163C678CF056F5 {}
+		}
+		"""])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+		#if canImport(Mid)
+		import Mid
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_shell() -> Shell {
+		            _ = Shell.__safeDI_Shell_B1163C678CF056F5.self
+		            func __safeDI_loggerBuilder(_ scope: Shell.SafeDIScope_DefaultUserService_logger) -> any Logger {
+		                let cache = scope.cache
+		                let logger: any Logger = DefaultLogger(cache: cache)
+		                return logger
+		            }
+		            return Shell(loggerBuilder: __safeDI_loggerBuilder)
+		        }
+		        let shell: Shell = __safeDI_shell()
+		        self.init(shell: shell)
+		    }
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: holeModules, visibleModules: Self.threeModules(feature: feature + mid + fulfillers, mid: [], app: [root]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesUnavailableValueNil_whenFillReceivesOnlyIfAvailablePropertyFillersPathIsBuilding() async throws {
+		// G3, H7 (1): `DefaultUserService` receives `xBuilder` only if available, and the fill is inside the builder function
+		// of `Root`'s `xBuilder`, which is still being built there, so the fill passes `nil`, as the leaf would pass a
+		// pass-through.
+		let feature = [
+			Self.userServiceProtocol,
+			seamFixtureType(named: "Analytics", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Profile", isFinalClass: true, declarations: ["@Instantiated let userService: any UserService", "@Received let analytics: Analytics"]),
+			seamFixtureType(named: "Service", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let profile: Profile"]),
+		]
+		let app = [
+			Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let analytics: Analytics", "@Received(onlyIfAvailable: true) let xBuilder: Instantiator<X>?"]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: ["@Instantiated let service: Service"]),
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let xBuilder: Instantiator<X>"]),
+		]
+		let modules = Self.modules(feature: feature, app: app)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_xBuilder() -> X {
+		            func __safeDI_service() -> Service {
+		                _ = Service.__safeDI_Service_80890FC499DC6112.self
+		                func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+		                    let analytics = scope.analytics
+		                    let userService: any UserService = DefaultUserService(analytics: analytics, xBuilder: nil)
+		                    return userService
+		                }
+		                return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		            }
+		            let service: Service = __safeDI_service()
+		            return X(service: service)
+		        }
+		        let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+		        self.init(xBuilder: xBuilder)
+		    }
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + app.dropLast(), app: [app[2]]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarry_whenFillOfPassedUpBuilderReadsValueBoundInsideCalledSeamsTree() async {
+		// G2, H8: `Shell` passes up `Inner2`'s builder from inside its fill of `Service`'s; inline, `DefaultLogger`'s `cache`
+		// would be `Profile`'s, bound inside `Service`'s tree on the path, which `Shell`'s caller does not hold.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultLogger.swift"]):10:5: error: `DefaultLogger` receives `cache: Cache`, which `Profile` builds on the path where `Shell` calls `Inner2`, but `Shell` passes the builder for `Inner2`'s `logger: any Logger` on from its own caller, which cannot hand it that value. Declare `@Received let cache: Cache` on `Inner2`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `Logger` one module `Mid` reads, so `Shell` fills the builder itself.
+			\(fixtures["Feature"]!["Profile.swift"]):8:5: note: `Profile` declares `cache: Cache` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.threeModules(
+					feature: [
+						"public protocol UserService {}\npublic protocol Logger {}",
+						seamFixtureType(named: "Analytics", isFinalClass: true, declarations: []),
+						seamFixtureType(named: "Cache", isFinalClass: true, declarations: []),
+						seamFixtureType(named: "Inner2", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let logger: any Logger"]),
+						seamFixtureType(named: "Profile", isFinalClass: true, declarations: ["@Instantiated let cache: Cache", "@Instantiated let userService: any UserService"]),
+						seamFixtureType(named: "Service", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let profile: Profile"]),
+					],
+					mid: [
+						Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Instantiated let inner2: Inner2"]),
+						seamFixtureType(named: "Shell", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let service: Service"]),
+					],
+					app: [
+						Self.fulfillingType(named: "DefaultLogger", fulfilling: "Logger", declarations: ["@Received let cache: Cache"]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shell: Shell"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsHoleOfSeamCalledInsideFill_whenFulfillerInstantiatesAnotherSeamWithHole() async throws {
+		// C8.12, H7: `DefaultUserService`, which fills `Service`'s builder, instantiates `Other`, a seam whose `logger` no
+		// declaration `Feature` sees fulfills. The fill calls `Other`'s tier and fills its builder inside itself, and no
+		// call inside either fill re-enters `Service`, so nothing is hidden from the outer fill's reads.
+		let feature = [
+			"public protocol UserService {}\npublic protocol Logger {}",
+			seamFixtureType(named: "Analytics", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService", "@Received let analytics: Analytics"]),
+			seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let profile: Profile"]),
+			seamFixtureType(named: "Other", isSeam: true, declarations: ["@Instantiated let logger: any Logger"]),
+		]
+		let fulfillers = [
+			Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let analytics: Analytics", "@Instantiated let other: Other"]),
+			Self.fulfillingType(named: "DefaultLogger", fulfilling: "Logger", declarations: ["@Received let analytics: Analytics"]),
+		]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service"])
+		let modules = Self.modules(feature: feature, app: fulfillers + [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
+		extension Root {
+		    public init() {
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_80890FC499DC6112.self
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+		                let analytics = scope.analytics
+		                func __safeDI_userService() -> DefaultUserService {
+		                    func __safeDI_other() -> Other {
+		                        _ = Other.__safeDI_Other_1D5D33FC1E63207E.self
+		                        func __safeDI_loggerBuilder(_ scope: Other.SafeDIScope_Other_logger) -> any Logger {
+		                            let logger: any Logger = DefaultLogger(analytics: analytics)
+		                            return logger
+		                        }
+		                        return Other(loggerBuilder: __safeDI_loggerBuilder)
+		                    }
+		                    let other: Other = __safeDI_other()
+		                    return DefaultUserService(analytics: analytics, other: other)
+		                }
+		                let userService: any UserService = __safeDI_userService()
+		                return userService
+		            }
+		            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(service: service)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
+	}
+
+	// MARK: A seam whose tree reaches the seam again
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesOwnBuilderToReenteringCall_whenSeamsOwnTreeReachesSeamThroughVisibleTypes() async throws {
+		// C1.27 (G4), H8: `X`, which `Service`'s tree builds, instantiates `Service` again. A seam takes one builder per site
+		// and never takes a site it already takes, so that call passes `Service`'s own builder, and `App` fills it once.
+		let (modules, visibleModules) = Self.reenteringServiceModules(x: ["@Instantiated let serviceBuilder: Instantiator<Service>"])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
+		extension Service {
+		    public struct SafeDIScope_Profile_userService {
+		        public let analytics: Analytics
+		        public let xBuilder: Instantiator<X>
+		    }
+
+		    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+		        let analytics = Analytics()
+		        func __safeDI_xBuilder() -> X {
+		            func __safeDI_serviceBuilder() -> Service {
+		                _ = Service.__safeDI_Service_9962F9E72912F2E5.self
+		                return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		            }
+		            let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
+		            return X(serviceBuilder: serviceBuilder)
+		        }
+		        let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+		        func __safeDI_profile() -> Profile {
+		            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(analytics: analytics, xBuilder: xBuilder))
+		            return Profile(userService: userService, analytics: analytics)
+		        }
+		        let profile: Profile = __safeDI_profile()
+		        self.init(analytics: analytics, xBuilder: xBuilder, profile: profile)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_9962F9E72912F2E5 {}
+		}
+		"""])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.reenteringServiceAppFiles)
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: visibleModules)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarry_whenFillReadsLabelSeamsTreeBindsOnPathToReenteringCall() async {
+		// C8.14, H8: inline, the `Service` that `X` instantiates hands its `DefaultUserService` `X`'s `logger`; the call passes
+		// `Service`'s builder on unchanged, so the one fill `App` generates would read `Root`'s.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Service`'s tree builds where it instantiates `Service` again, but that call passes the builder `Service` takes for `Profile`'s `userService: any UserService` on unchanged, so the caller that fills it cannot hand it those values. Declare `@Received let logger: Logger` on `Service`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service` fills the builder itself.
+			\(fixtures["Feature"]!["X.swift"]):8:5: note: `X` declares `logger: Logger` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.reenteringServiceModules(x: ["@Instantiated let logger: Logger", "@Instantiated let serviceBuilder: Instantiator<Service>"]).modules,
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesBuilderAroundSeamCycle_whenTwoSeamsOfOneModuleReachEachOtherBesideHole() async throws {
+		// C1.28, H8: `Service`'s tree instantiates `Other`, a seam of its module, whose tree instantiates `Service`. `Other`
+		// passes `Service`'s builder up, and `Service` passes its own to `Other`, which hands it back.
+		let (modules, visibleModules) = Self.reenteringServiceModules(
+			x: ["@Instantiated let otherBuilder: Instantiator<Other>"],
+			other: ["@Instantiated let serviceBuilder: Instantiator<Service>"],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
+		extension Other {
+		    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (Service.SafeDIScope_Profile_userService) -> any UserService) {
+		        func __safeDI_serviceBuilder() -> Service {
+		            _ = Service.__safeDI_Service_9962F9E72912F2E5.self
+		            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
+		        self.init(serviceBuilder: serviceBuilder)
+		    }
+		}
+
+		extension Other {
+		    public enum __safeDI_Other_9962F9E72912F2E5 {}
+		}
+
+		extension Service {
+		    public struct SafeDIScope_Profile_userService {
+		        public let analytics: Analytics
+		        public let xBuilder: Instantiator<X>
+		    }
+
+		    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+		        let analytics = Analytics()
+		        func __safeDI_xBuilder() -> X {
+		            func __safeDI_otherBuilder() -> Other {
+		                _ = Other.__safeDI_Other_9962F9E72912F2E5.self
+		                return Other(userServiceBuilder: __safeDI_userServiceBuilder)
+		            }
+		            let otherBuilder = Instantiator<Other>(__safeDI_otherBuilder)
+		            return X(otherBuilder: otherBuilder)
+		        }
+		        let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+		        func __safeDI_profile() -> Profile {
+		            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(analytics: analytics, xBuilder: xBuilder))
+		            return Profile(userService: userService, analytics: analytics)
+		        }
+		        let profile: Profile = __safeDI_profile()
+		        self.init(analytics: analytics, xBuilder: xBuilder, profile: profile)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_9962F9E72912F2E5 {}
+		}
+		"""])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.reenteringServiceAppFiles)
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: visibleModules)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarry_whenFillReadsLabelSeamOnCycleBindsOnPathToCallBack() async {
+		// C8.15, H8: inline, the `Service` that `Other` instantiates hands its `DefaultUserService` `Other`'s `logger`. The
+		// label reaches `Service`'s own builder through the builder `Other` passes up, which `Service` presents to `Other`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultUserService.swift"]):11:5: error: `DefaultUserService` receives `logger: Logger`, which `Other` builds where it calls `Service`, but `Other` passes the builder for `Profile`'s `userService: any UserService` on from its own caller, which cannot hand it `Other`'s values. Declare `@Received let logger: Logger` on `Service`, so the builder's scope carries it, or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Other` fills the builder itself.
+			\(fixtures["Feature"]!["Other.swift"]):8:5: note: `Other` declares `logger: Logger` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.reenteringServiceModules(
+					x: ["@Instantiated let otherBuilder: Instantiator<Other>"],
+					other: ["@Instantiated let logger: Logger", "@Instantiated let serviceBuilder: Instantiator<Service>"],
+				).modules,
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesOwnBuilderAsSendable_whenReenteringCallSitsInSeamsOwnSendableBuilderFunction() async throws {
+		// C1.29, H8: `Service` calls itself inside `xBuilder`'s `@Sendable` builder function, which captures the builder it
+		// passes, so `Service` takes it `@Sendable`, and `App`'s fill is `@Sendable` too.
+		let (modules, visibleModules) = Self.reenteringServiceModules(
+			xBuilderType: "SendableInstantiator<X>",
+			x: ["@Instantiated let serviceBuilder: Instantiator<Service>"],
+			fulfillerDeclarations: ["@Received let analytics: Analytics"],
+		)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
+		extension Service {
+		    public struct SafeDIScope_Profile_userService {
+		        public let analytics: Analytics
+		        public let xBuilder: SendableInstantiator<X>
+		    }
+
+		    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping @Sendable (SafeDIScope_Profile_userService) -> any UserService) {
+		        let analytics = Analytics()
+		        @Sendable func __safeDI_xBuilder() -> X {
+		            func __safeDI_serviceBuilder() -> Service {
+		                _ = Service.__safeDI_Service_92451113E45555B5.self
+		                return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		            }
+		            let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
+		            return X(serviceBuilder: serviceBuilder)
+		        }
+		        let xBuilder = SendableInstantiator<X>(__safeDI_xBuilder)
+		        func __safeDI_profile() -> Profile {
+		            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(analytics: analytics, xBuilder: xBuilder))
+		            return Profile(userService: userService, analytics: analytics)
+		        }
+		        let profile: Profile = __safeDI_profile()
+		        self.init(analytics: analytics, xBuilder: xBuilder, profile: profile)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_92451113E45555B5 {}
+		}
+		"""])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        let logger = Logger()
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_92451113E45555B5.self
+		            @Sendable func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+		                let analytics = scope.analytics
+		                let userService: any UserService = DefaultUserService(analytics: analytics)
+		                return userService
+		            }
+		            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(logger: logger, service: service)
+		    }
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: visibleModules)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesOneBuilderPerSite_whenTwoSeamsOfOneModulePassUpOneSite() async throws {
+		// C4.13, H8: `Service` calls `A` and `B`, seams that each call `Inner`, whose tree holds the site. A seam takes one
+		// builder per site, whatever route presents it, so `Service` takes one and passes it at both calls.
+		let feature = [
+			Self.userServiceProtocol,
+			seamFixtureType(named: "Analytics", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Inner", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let userService: any UserService"]),
+			seamFixtureType(named: "A", isSeam: true, declarations: ["@Instantiated let inner: Inner"]),
+			seamFixtureType(named: "B", isSeam: true, declarations: ["@Instantiated let inner: Inner"]),
+			seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let bBuilder: Instantiator<B>"]),
+		]
+		let fulfillers = [Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let analytics: Analytics"])]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service"])
+		let modules = Self.modules(feature: feature, app: fulfillers + [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
+		extension A {
+		    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (Inner.SafeDIScope_Inner_userService) -> any UserService) {
+		        func __safeDI_inner() -> Inner {
+		            _ = Inner.__safeDI_Inner_8E5F670DFC871CBC.self
+		            return Inner(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let inner: Inner = __safeDI_inner()
+		        self.init(inner: inner)
+		    }
+		}
+
+		extension A {
+		    public enum __safeDI_A_8E5F670DFC871CBC {}
+		}
+
+		extension B {
+		    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (Inner.SafeDIScope_Inner_userService) -> any UserService) {
+		        func __safeDI_inner() -> Inner {
+		            _ = Inner.__safeDI_Inner_8E5F670DFC871CBC.self
+		            return Inner(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let inner: Inner = __safeDI_inner()
+		        self.init(inner: inner)
+		    }
+		}
+
+		extension B {
+		    public enum __safeDI_B_8E5F670DFC871CBC {}
+		}
+
+		extension Inner {
+		    public struct SafeDIScope_Inner_userService {
+		        public let analytics: Analytics
+		    }
+
+		    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Inner_userService) -> any UserService) {
+		        let analytics = Analytics()
+		        let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Inner_userService(analytics: analytics))
+		        self.init(analytics: analytics, userService: userService)
+		    }
+		}
+
+		extension Inner {
+		    public enum __safeDI_Inner_8E5F670DFC871CBC {}
+		}
+
+		extension Service {
+		    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (Inner.SafeDIScope_Inner_userService) -> any UserService) {
+		        func __safeDI_aBuilder() -> A {
+		            _ = A.__safeDI_A_8E5F670DFC871CBC.self
+		            return A(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+		        func __safeDI_bBuilder() -> B {
+		            _ = B.__safeDI_B_8E5F670DFC871CBC.self
+		            return B(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
+		        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_8E5F670DFC871CBC {}
+		}
+		"""])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_8E5F670DFC871CBC.self
+		            func __safeDI_userServiceBuilder(_ scope: Inner.SafeDIScope_Inner_userService) -> any UserService {
+		                let analytics = scope.analytics
+		                let userService: any UserService = DefaultUserService(analytics: analytics)
+		                return userService
+		            }
+		            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(service: service)
+		    }
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
+	}
+
+	// MARK: What a fill cannot read
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarry_whenFillReadsSiblingBuiltAfterItsCarrier() async {
+		// C2.20, H4's first residual: `z` requires the carrier `p1`, so it starts with the carriers, after `p2`; `p2`'s
+		// fill reads `z`, which inline builds before `p2`. A deliberate gap of the start order, reported with the reorder.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["ZLedger.swift"]):9:5: error: `ZLedger` receives `z: Z`, which `Service`'s dependency tree builds after `p2`, since `Z` requires `p1`, which carries another builder, so the scope SafeDI hands the builder for `P2`'s `ledger: any Ledger` does not carry it. Declare `z` before `p2` in `Service`, or make an @Instantiable declaration that fulfills `Ledger` one module `Feature` reads.
+			\(fixtures["Feature"]!["Service.swift"]):11:5: note: `Service` declares `z: Z` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						"public protocol Clock {}\npublic protocol Ledger {}",
+						seamFixtureType(named: "P1", declarations: ["@Instantiated let clock: any Clock"]),
+						seamFixtureType(named: "P2", declarations: ["@Instantiated let ledger: any Ledger"]),
+						seamFixtureType(named: "Z", declarations: ["@Received let p1: P1"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let p1: P1", "@Instantiated let p2: P2", "@Instantiated let z: Z"]),
+					],
+					app: [
+						Self.fulfillingType(named: "SystemClock", fulfilling: "Clock", declarations: []),
+						Self.fulfillingType(named: "ZLedger", fulfilling: "Ledger", declarations: ["@Received let z: Z"]),
+						Self.canonicalRoot,
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarry_whenFillRequiresValueSeamsTreeReceivesOnlyIfAvailable() async {
+		// C8.6: `Badge` receives `theme` only if available, so the struct carries `theme: Theme?`, which a caller may pass
+		// `nil` for, while `ThemedUserService` requires `theme: Theme`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["ThemedUserService.swift"]):9:5: error: `ThemedUserService` receives `theme: Theme`, which the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` carries only as `theme: Theme?`, since `Service`'s tree receives it only if available. Declare `@Received let theme: Theme` on `Service`, or receive it on `ThemedUserService` with `@Received(onlyIfAvailable: true) let theme: Theme?`.
+			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: Theme?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.userServiceProtocol,
+						seamFixtureType(named: "Theme", declarations: []),
+						seamFixtureType(named: "Badge", declarations: ["@Received(onlyIfAvailable: true) let theme: Theme?"]),
+						seamFixtureType(named: "Profile", declarations: ["@Instantiated let badge: Badge", "@Instantiated let userService: any UserService"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let profile: Profile"]),
+					],
+					app: [
+						Self.fulfillingType(named: "ThemedUserService", fulfilling: "UserService", declarations: ["@Received let theme: Theme"]),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let theme: Theme", "@Instantiated let service: Service"]),
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	// MARK: Cycles through a fill
+
+	@Test(arguments: [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillClosesCycleInSeamTree_whenFulfillerInstantiatesPropertyOfSeamsPath(holeIsConstant: Bool) async {
+		// C1.14, C1.16: `LoopingUserService` instantiates `aBuilder: Instantiator<A>`, which `Service`'s tree is building
+		// where it builds the hole. Code generated in `App` cannot refer to `Service`'s builder function for `A`, and
+		// building `A` again would hold other values. Renaming helps only a lazy hole: a constant one is then a cycle inline.
+		let hole = holeIsConstant
+			? #"@Instantiated(fulfilledByType: "LoopingUserService", erasedToConcreteExistential: true) let userService: AnyUserService"#
+			: #"@Instantiated(fulfilledByType: "LoopingUserService", erasedToConcreteExistential: true) let userServiceBuilder: ErasedInstantiator<(), AnyUserService>"#
+		let (property, renameRemedy) = holeIsConstant
+			? ("userService: AnyUserService", "")
+			: ("userServiceBuilder: ErasedInstantiator<(), AnyUserService>", "; or give `aBuilder` on `LoopingUserService` another label, so the cycle closes at `userServiceBuilder` itself")
+		let label = String(property.prefix { $0 != ":" })
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["LoopingUserService.swift"]):10:5: error: SafeDI cannot fill the builder for `A`'s `\(property)` in `Service`'s dependency tree: `LoopingUserService`, which fills it, instantiates `aBuilder: Instantiator<A>`, which `Service`'s tree is building where it builds `\(label)` (Service -> aBuilder -> A -> \(label) -> LoopingUserService -> aBuilder). Code generated outside module `Feature` cannot refer to the function `Service`'s initializer builds `A` with, and building it again would hand it other values than `Service`'s tree holds. Instantiate the seam where `LoopingUserService` builds `A` (`@Instantiated let serviceBuilder: Instantiator<Service>`), so the cycle re-enters through the initializer SafeDI generates for `Service`; make an @Instantiable declaration that fulfills `LoopingUserService` one module `Feature` reads\(renameRemedy).
+			\(fixtures["Feature"]!["Service.swift"]):9:5: note: `Service` instantiates `aBuilder: Instantiator<A>` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						"""
+						public protocol UserService {}
+
+						public struct AnyUserService: UserService {
+						    public init(_ base: any UserService) {
+						        self.base = base
+						    }
+
+						    let base: any UserService
+						}
+						""",
+						seamFixtureType(named: "Analytics", declarations: []),
+						seamFixtureType(named: "A", declarations: [hole, "@Received let analytics: Analytics"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let aBuilder: Instantiator<A>"]),
+					],
+					app: [
+						seamFixtureType(named: "LoopingUserService", declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Received let analytics: Analytics"], conformances: ", UserService"),
+						Self.canonicalRoot,
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	// MARK: Names
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesBuildersApart_whenLabelsAreKeywordsOrCollideWithParameterTreePropertyOrEachOther() async throws {
+		// One behavior, how builders, structs and their bindings are named apart, over its four triggers, in one compile.
+		// C4.2: `Badge` receives `userServiceBuilder` only if available, so the parameter keeps that label and `Profile`'s
+		// hole is named apart by its owner. C4.4: a keyword label spells `caseBuilder`, `SafeDIScope_Profile_case`, and the
+		// field `` `default` ``. C4.3: `Gadget`'s `userServiceBuilder` would have a builder function named as `Panel`'s
+		// builder is inside `Tray`'s initializer, which binds the builder with an underscore appended. C4.10: `Owner`'s two
+		// sites have equal joined paths, so the later one's names take an underscore.
+		let feature = [
+			"public protocol UserService {}\npublic protocol Clock {}",
+			seamFixtureType(named: "Count", declarations: []),
+			seamFixtureType(named: "Impl", declarations: []),
+			seamFixtureType(named: "Gadget", declarations: ["@Instantiated let userServiceBuilder: Instantiator<Impl>"]),
+			seamFixtureType(named: "Badge", declarations: ["@Received(onlyIfAvailable: true) let userServiceBuilder: Instantiator<Impl>?"]),
+			seamFixtureType(named: "Profile", declarations: ["@Instantiated let `case`: any Clock", "@Instantiated let userService: any UserService", "@Instantiated let badge: Badge"]),
+			seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let `default`: Count", "@Instantiated let profile: Profile"]),
+			seamFixtureType(named: "Panel", declarations: ["@Instantiated let gadget: Gadget", "@Instantiated let userService: any UserService"]),
+			seamFixtureType(named: "Tray", isSeam: true, declarations: ["@Instantiated let panel: Panel"]),
+			seamFixtureType(named: "Owner", declarations: ["@Instantiated let userService: any UserService"]),
+			seamFixtureType(named: "Left", declarations: ["@Instantiated let c: Owner"]),
+			seamFixtureType(named: "Right", declarations: ["@Instantiated let b_c: Owner"]),
+			seamFixtureType(named: "Twin", isSeam: true, declarations: ["@Instantiated let a_b: Left", "@Instantiated let a: Right"]),
+		]
+		let fulfillers = [
+			Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: []),
+			Self.fulfillingType(named: "SystemClock", fulfilling: "Clock", declarations: ["@Received let `default`: Count"]),
+		]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service", "@Instantiated let tray: Tray", "@Instantiated let twin: Twin"])
+		let modules = Self.modules(feature: feature, app: fulfillers + [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
+		extension Service {
+		    public struct SafeDIScope_Profile_case {
+		        public let userServiceBuilder: Instantiator<Impl>?
+		        public let `default`: Count
+		        public let badge: Badge
+		    }
+
+		    public struct SafeDIScope_Profile_userService {
+		        public let userServiceBuilder: Instantiator<Impl>?
+		        public let `default`: Count
+		        public let badge: Badge
+		        public let `case`: any Clock
+		    }
+
+		    public init(userServiceBuilder: Instantiator<Impl>? = nil, caseBuilder __safeDI_caseBuilder: @escaping (SafeDIScope_Profile_case) -> any Clock, userServiceBuilder_Profile __safeDI_userServiceBuilder_Profile: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+		        let `default` = Count()
+		        func __safeDI_profile() -> Profile {
+		            let badge = Badge(userServiceBuilder: userServiceBuilder)
+		            let `case`: any Clock = __safeDI_caseBuilder(SafeDIScope_Profile_case(userServiceBuilder: userServiceBuilder, default: `default`, badge: badge))
+		            let userService: any UserService = __safeDI_userServiceBuilder_Profile(SafeDIScope_Profile_userService(userServiceBuilder: userServiceBuilder, default: `default`, badge: badge, case: `case`))
+		            return Profile(case: `case`, userService: userService, badge: badge)
+		        }
+		        let profile: Profile = __safeDI_profile()
+		        self.init(default: `default`, profile: profile)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_BF0D39F5BAEB8EC2 {}
+		}
+
+		extension Tray {
+		    public struct SafeDIScope_Panel_userService {
+		        public let gadget: Gadget
+		    }
+
+		    public init(userServiceBuilder __safeDI_userServiceBuilder_: @escaping (SafeDIScope_Panel_userService) -> any UserService) {
+		        func __safeDI_panel() -> Panel {
+		            func __safeDI_gadget() -> Gadget {
+		                func __safeDI_userServiceBuilder() -> Impl {
+		                    Impl()
+		                }
+		                let userServiceBuilder = Instantiator<Impl>(__safeDI_userServiceBuilder)
+		                return Gadget(userServiceBuilder: userServiceBuilder)
+		            }
+		            let gadget: Gadget = __safeDI_gadget()
+		            let userService: any UserService = __safeDI_userServiceBuilder_(SafeDIScope_Panel_userService(gadget: gadget))
+		            return Panel(gadget: gadget, userService: userService)
+		        }
+		        let panel: Panel = __safeDI_panel()
+		        self.init(panel: panel)
+		    }
+		}
+
+		extension Tray {
+		    public enum __safeDI_Tray_166F4E9D45C834EA {}
+		}
+
+		extension Twin {
+		    public struct SafeDIScope_Owner_userService_a_b_c {}
+
+		    public struct SafeDIScope_Owner_userService_a_b_c_ {
+		        public let a_b: Left
+		    }
+
+		    public init(userServiceBuilder_a_b_c __safeDI_userServiceBuilder_a_b_c: @escaping (SafeDIScope_Owner_userService_a_b_c) -> any UserService, userServiceBuilder_a_b_c_ __safeDI_userServiceBuilder_a_b_c_: @escaping (SafeDIScope_Owner_userService_a_b_c_) -> any UserService) {
+		        func __safeDI_a_b() -> Left {
+		            func __safeDI_c() -> Owner {
+		                let userService: any UserService = __safeDI_userServiceBuilder_a_b_c(SafeDIScope_Owner_userService_a_b_c())
+		                return Owner(userService: userService)
+		            }
+		            let c: Owner = __safeDI_c()
+		            return Left(c: c)
+		        }
+		        let a_b: Left = __safeDI_a_b()
+		        func __safeDI_a() -> Right {
+		            func __safeDI_b_c() -> Owner {
+		                let userService: any UserService = __safeDI_userServiceBuilder_a_b_c_(SafeDIScope_Owner_userService_a_b_c_(a_b: a_b))
+		                return Owner(userService: userService)
+		            }
+		            let b_c: Owner = __safeDI_b_c()
+		            return Right(b_c: b_c)
+		        }
+		        let a: Right = __safeDI_a()
+		        self.init(a_b: a_b, a: a)
+		    }
+		}
+
+		extension Twin {
+		    public enum __safeDI_Twin_98ACABF092F72676 {}
+		}
+		"""])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, ["App.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_BF0D39F5BAEB8EC2.self
+		            func __safeDI_caseBuilder(_ scope: Service.SafeDIScope_Profile_case) -> any Clock {
+		                let `default` = scope.default
+		                let `case`: any Clock = SystemClock(default: `default`)
+		                return `case`
+		            }
+		            func __safeDI_userServiceBuilder_Profile(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+		                let userService: any UserService = DefaultUserService()
+		                return userService
+		            }
+		            return Service(userServiceBuilder: nil, caseBuilder: __safeDI_caseBuilder, userServiceBuilder_Profile: __safeDI_userServiceBuilder_Profile)
+		        }
+		        let service: Service = __safeDI_service()
+		        func __safeDI_tray() -> Tray {
+		            _ = Tray.__safeDI_Tray_166F4E9D45C834EA.self
+		            func __safeDI_userServiceBuilder(_ scope: Tray.SafeDIScope_Panel_userService) -> any UserService {
+		                let userService: any UserService = DefaultUserService()
+		                return userService
+		            }
+		            return Tray(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let tray: Tray = __safeDI_tray()
+		        func __safeDI_twin() -> Twin {
+		            _ = Twin.__safeDI_Twin_98ACABF092F72676.self
+		            func __safeDI_userServiceBuilder_a_b_c(_ scope: Twin.SafeDIScope_Owner_userService_a_b_c) -> any UserService {
+		                let userService: any UserService = DefaultUserService()
+		                return userService
+		            }
+		            func __safeDI_userServiceBuilder_a_b_c_(_ scope: Twin.SafeDIScope_Owner_userService_a_b_c_) -> any UserService {
+		                let userService: any UserService = DefaultUserService()
+		                return userService
+		            }
+		            return Twin(userServiceBuilder_a_b_c: __safeDI_userServiceBuilder_a_b_c, userServiceBuilder_a_b_c_: __safeDI_userServiceBuilder_a_b_c_)
+		        }
+		        let twin: Twin = __safeDI_twin()
+		        self.init(service: service, tray: tray, twin: twin)
+		    }
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	// MARK: Tiers and field access
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsTierOmitsBuilder_whenHolesOwnerTakesItAtNarrowerAccessThanSeamsTier() async {
+		// C5.2, H2: only `Profile`'s `package` initializer mentions `UserService`, so the builder is `package` as far as
+		// SafeDI can tell, and `Service`'s `public` initializer cannot take it, which every tier takes.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `userServiceBuilder: @escaping (Service.SafeDIScope_Profile_userService) -> any UserService`, the builder for `Profile`'s `userService: any UserService`, which no @Instantiable declaration module `Feature` can see fulfills. `UserService` is `package` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Profile.init(userService:)`). Mention `UserService` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `UserService`'s declaration); declare `Service` `package`; make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service`'s tree builds it; or declare the dependency tree on a `package` type that instantiates `Service`.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.userServiceProtocol,
+						seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]).replacingOccurrences(of: "public init(", with: "package init("),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let profile: Profile"]),
+					],
+					app: [Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: []), Self.canonicalRoot],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarry_whenFillInOtherPackageReadsPackageField() async {
+		// C6.3: `Session`'s own declaration is `package`, so the struct carries `session` at `package` access, which `App`,
+		// in another package, cannot read.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["SessionUserService.swift"]):9:5: error: `SessionUserService` receives `session: Session`, which the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` carries only at `package` access, and module `App` is not in package `Shop`. `Session`'s own `@Instantiable` declaration is `package`. Declare `Session` `public`; or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service`'s tree builds it.
+			\(fixtures["Feature"]!["Service.swift"]):8:5: note: `Service` declares `session: Session` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.userServiceProtocol,
+						seamFixtureType(named: "Session", isFinalClass: true, declarations: []).replacingOccurrences(of: "public ", with: "package "),
+						seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let session: Session", "@Instantiated let profile: Profile"]).replacingOccurrences(of: "public init(", with: "package init("),
+					],
+					app: [Self.fulfillingType(named: "SessionUserService", fulfilling: "UserService", declarations: ["@Received let session: Session"]), Self.canonicalRoot],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesFieldsAtProvenAccessAndCallsTierEachCallerReaches_whenCallersAreInSeamsPackageAndAnother() async throws {
+		// C3.2, C3.3, C5.4, C6.2 (the matrix's `ta`): each field is as visible as its type's proof – `session` and `theme`
+		// `package`, `badge` and `banner` `public` – and the `package` pass-through `theme`, which `Banner` receives only if
+		// available, gives `Service` a `package` tier beside its `public` one, both taking the builder. `Same`, in
+		// `Service`'s package, calls the `package` tier and reads `session`; `Other` calls the `public` tier and reads
+		// `badge`.
+		let feature = [
+			Self.userServiceProtocol,
+			seamFixtureType(named: "Session", isFinalClass: true, declarations: []).replacingOccurrences(of: "public ", with: "package "),
+			seamFixtureType(named: "Theme", isFinalClass: true, declarations: []).replacingOccurrences(of: "public ", with: "package "),
+			seamFixtureType(named: "Badge", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Banner", declarations: ["@Received(onlyIfAvailable: true) let theme: Theme?"]).replacingOccurrences(of: "public init(", with: "package init("),
+			seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
+			seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let session: Session", "@Instantiated let badge: Badge", "@Instantiated let banner: Banner", "@Instantiated let profile: Profile"]).replacingOccurrences(of: "public init(", with: "package init("),
+		]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service"])
+		let modules = [
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature),
+			ModuleFixture(name: "Same", packageName: "Shop", swiftFileContent: [
+				Self.fulfillingType(named: "SessionUserService", fulfilling: "UserService", declarations: ["@Received let session: Session"]).replacingOccurrences(of: "public init(", with: "package init("),
+				root,
+			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+			ModuleFixture(name: "Other", packageName: "Other", swiftFileContent: [
+				Self.fulfillingType(named: "BadgeUserService", fulfilling: "UserService", declarations: ["@Received let badge: Badge"]),
+				root,
+			].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
+		extension Service {
+		    public struct SafeDIScope_Profile_userService {
+		        package let theme: Theme?
+		        package let session: Session
+		        public let badge: Badge
+		        public let banner: Banner
+		    }
+
+		    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+		        self.init(theme: nil, userServiceBuilder: __safeDI_userServiceBuilder)
+		    }
+
+		    package init(theme: Theme? = nil, userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+		        let session = Session()
+		        let badge = Badge()
+		        let banner = Banner(theme: theme)
+		        func __safeDI_profile() -> Profile {
+		            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(theme: theme, session: session, badge: badge, banner: banner))
+		            return Profile(userService: userService)
+		        }
+		        let profile: Profile = __safeDI_profile()
+		        self.init(session: session, badge: badge, banner: banner, profile: profile)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_B4D4F4AEEBDE5D00 {}
+		}
+		"""])
+		expectGeneratedFiles(output.modules["Same"]?.generatedFiles, ["Same.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_B4D4F4AEEBDE5D00.self
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+		                let session = scope.session
+		                let userService: any UserService = SessionUserService(session: session)
+		                return userService
+		            }
+		            return Service(theme: nil, userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(service: service)
+		    }
+		}
+		"""])
+		expectGeneratedFiles(output.modules["Other"]?.generatedFiles, ["Other.swift": generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_B4D4F4AEEBDE5D00.self
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+		                let badge = scope.badge
+		                let userService: any UserService = BadgeUserService(badge: badge)
+		                return userService
+		            }
+		            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(service: service)
+		    }
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesBuilderAndCapsFieldsAtSeamsAccess_whenSeamIsPackage() async throws {
+		// C5.3, C6.4: `UserService` is `package` as far as SafeDI can tell, as is `Service`, so its one `package` tier
+		// takes the builder; `Analytics` is `public`, and its field is capped at `Service`'s `package`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+					Self.userServiceProtocol,
+					seamFixtureType(named: "Analytics", isFinalClass: true, declarations: []),
+					seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService", "@Received let analytics: Analytics"]).replacingOccurrences(of: "public init(", with: "package init("),
+					seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let profile: Profile"]).replacingOccurrences(of: "public ", with: "package "),
+				]),
+				ModuleFixture(name: "App", packageName: "Shop", swiftFileContent: [
+					Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let analytics: Analytics"]),
+					Self.canonicalRoot.replacingOccurrences(of: "public init(", with: "package init("),
+				].map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
+		extension Service {
+		    public struct SafeDIScope_Profile_userService {
+		        package let analytics: Analytics
+		    }
+
+		    package init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+		        let analytics = Analytics()
+		        func __safeDI_profile() -> Profile {
+		            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(analytics: analytics))
+		            return Profile(userService: userService, analytics: analytics)
+		        }
+		        let profile: Profile = __safeDI_profile()
+		        self.init(analytics: analytics, profile: profile)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_5CCDC639FD262B2A {}
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsTierOmitsBuilder_whenOuterPublicSeamPassesUpBuilderOfPackageSeam() async {
+		// C5.5, H8: the struct of `Service`'s builder counts at `Service`'s `package` access, so `Shell`'s `public`
+		// initializer cannot take the builder it passes up.
+		await assertThrowsMultiModuleError(inModule: "Mid", diagnostics: { fixtures in
+			"""
+			\(fixtures["Mid"]!["Shell.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Shell`: its generated `public` initializer, which `Shell`'s `public` access requires, cannot take `userServiceBuilder: @escaping (Service.SafeDIScope_Profile_userService) -> any UserService`, the builder for `Profile`'s `userService: any UserService`, which no @Instantiable declaration module `Mid` can see fulfills. `Service`'s own `@Instantiable` declaration is `package`. Declare `Service` `public`; declare `Shell` `package`; make an @Instantiable declaration that fulfills `UserService` one module `Mid` reads, so `Shell` fills the builder itself; or declare the dependency tree on a `package` type that instantiates `Shell`.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+						Self.userServiceProtocol,
+						seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let profile: Profile"]).replacingOccurrences(of: "public ", with: "package "),
+					]),
+					ModuleFixture(name: "Mid", packageName: "Shop", swiftFileContent: [
+						"import Feature\n\n" + seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let service: Service"]).replacingOccurrences(of: "public init(", with: "package init("),
+					], dependencies: ["Feature"]),
+					ModuleFixture(name: "App", packageName: "Shop", swiftFileContent: [
+						Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: []),
+						seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shell: Shell"]),
+					].map { "import Feature\nimport Mid\n\n" + $0 }, dependencies: ["Feature", "Mid"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarry_whenFillInOtherModuleReadsFieldOnlyInternalInitializerMentions() async {
+		// C6.5: only `Screen`'s `internal` initializer mentions `Token`, so the struct carries `token` at `internal`
+		// access, which `App` cannot read.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["TokenUserService.swift"]):9:5: error: `TokenUserService` receives `token: Token`, which the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` carries only at `internal` access, and module `App` is not module `Feature`. `Token` is `internal` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `internal` (`Screen.init(token:profile:)`). Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Token`'s declaration); or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service`'s tree builds it.
+			\(fixtures["Feature"]!["Screen.swift"]):8:5: note: `Screen` declares `token: Token` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.userServiceProtocol + "\npublic struct Token {\n    public init() {}\n}",
+						seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
+						seamFixtureType(named: "Screen", declarations: ["@Forwarded let token: Token", "@Instantiated let profile: Profile"]).replacingOccurrences(of: "public init(", with: "init("),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let screenBuilder: Instantiator<Screen>"]),
+					],
+					app: [Self.fulfillingType(named: "TokenUserService", fulfilling: "UserService", declarations: ["@Received let token: Token"]), Self.canonicalRoot],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesBuilderAndKeepsMocksFlatParameter_whenSeamThatGeneratesMockHasHole() async throws {
+		// C3.12, H11: a mock builds every seam inline, so `Service`'s mock, which cannot see a fulfilling declaration, takes
+		// the hole as today's parameter, beside the generated initializer that takes the builder.
+		let feature = [
+			Self.userServiceProtocol,
+			seamFixtureType(named: "Analytics", declarations: []),
+			seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService", "@Received let analytics: Analytics"]),
+			seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let profile: Profile"])
+				.replacingOccurrences(of: "@Instantiable(generateDependencyTree: true)", with: "@Instantiable(generateDependencyTree: true, generateMock: true)"),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.modules(feature: feature, app: Self.canonicalApp), integration: .swiftPackagePlugin, filesToDelete: &filesToDelete)
+		#expect(output.modules["Feature"]?.generatedFiles["Service+SafeDI.swift"] == generatedFileHeader + Self.canonicalServiceCode)
+		#expect(output.modules["Feature"]?.generatedFiles["Service+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Service {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            profile: ((any UserService, Analytics) -> Profile)? = nil
+		        ) {
+		            self.analytics = analytics
+		            self.profile = profile
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let profile: ((any UserService, Analytics) -> Profile)?
+		    }
+
+		    static func mock(
+		        userService: UserService,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Service {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        let profile = if let safeDIBuilder = safeDIOverrides.profile { safeDIBuilder(userService, analytics) } else { Profile(userService: userService, analytics: analytics) }
+		        return Service(analytics: analytics, profile: profile)
+		    }
+		}
+		#endif
+		""")
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_renamesBuilderFunctionInsideFill_whenItWouldShadowFillThatCallInsideItPasses() async throws {
+		// C4.11: `Profile`'s hole `router` is filled by `__safeDI_routerBuilder`, and `DefaultRouter`, built inside the fill,
+		// declares `routerBuilder`, whose builder function would be named the same and shadow the fill where the call of
+		// `Flow` inside `DefaultRouter` passes it. That builder function is renamed, as a cycle-closing scope's clash is.
+		let feature = [
+			"public protocol Router {}",
+			seamFixtureType(named: "Analytics", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Gadget", declarations: []),
+			seamFixtureType(named: "Profile", declarations: ["@Instantiated let router: any Router", "@Received let analytics: Analytics"]),
+			seamFixtureType(named: "Flow", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let profileBuilder: Instantiator<Profile>"]),
+		]
+		let fulfillers = [Self.fulfillingType(named: "DefaultRouter", fulfilling: "Router", declarations: ["@Instantiated let routerBuilder: Instantiator<Gadget>", "@Instantiated let flowBuilder: Instantiator<Flow>", "@Received let analytics: Analytics"])]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let flow: Flow"])
+		let modules = Self.modules(feature: feature, app: fulfillers + [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
+		extension Root {
+		    public init() {
+		        func __safeDI_flow() -> Flow {
+		            _ = Flow.__safeDI_Flow_39B3DDDDA3DEBB2A.self
+		            func __safeDI_routerBuilder(_ scope: Flow.SafeDIScope_Profile_router) -> any Router {
+		                let analytics = scope.analytics
+		                func __safeDI_router() -> DefaultRouter {
+		                    func __safeDI_routerBuilder_Gadget() -> Gadget {
+		                        Gadget()
+		                    }
+		                    let routerBuilder = Instantiator<Gadget>(__safeDI_routerBuilder_Gadget)
+		                    func __safeDI_flowBuilder() -> Flow {
+		                        _ = Flow.__safeDI_Flow_39B3DDDDA3DEBB2A.self
+		                        return Flow(routerBuilder: __safeDI_routerBuilder)
+		                    }
+		                    let flowBuilder = Instantiator<Flow>(__safeDI_flowBuilder)
+		                    return DefaultRouter(routerBuilder: routerBuilder, flowBuilder: flowBuilder, analytics: analytics)
+		                }
+		                let router: any Router = __safeDI_router()
+		                return router
+		            }
+		            return Flow(routerBuilder: __safeDI_routerBuilder)
+		        }
+		        let flow: Flow = __safeDI_flow()
+		        self.init(flow: flow)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+	}
+
+	// MARK: Integrations
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsHoleInSeamOfUnnamedModule_whenSeamsModuleIsNotNamed() async {
+		// C9.4a, H12 (i): SafeDI does not know which module declares `Service`, a seam this run generates, so it cannot know
+		// what that module's callers see.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Profile.swift"]):8:5: error: `Service` generates its dependency tree, and `Profile`'s @Instantiated property `userService: any UserService` in it instantiates `UserService`, which no @Instantiable declaration this module reads fulfills. SafeDI does not know which module declares `Service`, so it cannot know what that module's callers see, and the initializer it generates cannot take a builder for `userService`. Make an @Instantiable declaration that fulfills `UserService` one this module reads; run SafeDITool with this module's name (`--module-name`, Bazel's `module_name`); or, under the Xcode project plugin, which names no module, declare `Service` without `generateDependencyTree: true`.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: Self.canonicalFeature, omitsModuleName: true),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: (Self.canonicalApp).map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: [["--module-name", "App"], []])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsSeamInlineWithoutBuilder_whenSeamWithHoleIsDeclaredInAdditionalDirectory(moduleMembershipArguments: [String]) async throws {
+		// C9.4b, H12 (ii): no run generates the initializer of a seam in a directory a `#SafeDIConfiguration` adds, so it
+		// takes no builder and has no hole, named module or not (the Xcode project plugin names none): every tree builds it
+		// inline, here with the fulfiller its module sees. With no builder and no fill, this code is the visible build.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.seamInAdditionalDirectoryModule + [Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: [])],
+			additionalDirectorySwiftFileContent: Self.seamInAdditionalDirectory,
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: moduleMembershipArguments,
+		)
+		#expect(output.dependencyTreeFiles.keys.sorted() == ["Root+SafeDI.swift"])
+		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
+		extension Root {
+		    public init() {
+		        func __safeDI_service() -> Service {
+		            func __safeDI_profile() -> Profile {
+		                let userService: any UserService = DefaultUserService()
+		                return Profile(userService: userService)
+		            }
+		            let profile: Profile = __safeDI_profile()
+		            return Service(profile: profile)
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(service: service)
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsNoInstantiableFound_whenSeamWithHoleIsDeclaredInAdditionalDirectoryAndNothingFulfillsIt() async {
+		// C9.4c, H12 (ii): a tree that builds such a seam inline and sees no fulfiller reports `noInstantiableFound` at the
+		// property, as for any type.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["AdditionalDirectory/Profile.swift"]):7:5: error: No @Instantiable type or extension fulfills `UserService`, which @Instantiated property `userService: any UserService` instantiates. Decorate `UserService`, or an extension of it, with @Instantiable; list `UserService` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: Self.seamInAdditionalDirectoryModule,
+				additionalDirectorySwiftFileContent: Self.seamInAdditionalDirectory,
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				moduleMembershipArguments: ["--module-name", "App"],
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesBuilderBehindCompileTimeAssertion_whenFulfillingDeclarationIsInInactiveClause() async throws {
+		// C9.5: `DefaultUserService` is declared in `Feature` under `#if FOO`, which `Feature`'s run finds inactive, so
+		// `Service` takes a builder, and the generated file asserts the clause it took, so a build with `FOO` fails to
+		// compile rather than call an initializer that takes a builder it does not.
+		let feature = Self.canonicalFeature + [
+			"#if FOO\n" + Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let analytics: Analytics"]) + "\n#endif",
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modules(feature: feature, app: Self.canonicalApp),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + """
+		#if FOO
+		#error("SafeDI scanned this module assuming `#if FOO` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+		#endif
+
+		extension Service {
+		    public struct SafeDIScope_Profile_userService {
+		        public let analytics: Analytics
+		    }
+
+		    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+		        let analytics = Analytics()
+		        func __safeDI_profile() -> Profile {
+		            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(analytics: analytics))
+		            return Profile(userService: userService, analytics: analytics)
+		        }
+		        let profile: Profile = __safeDI_profile()
+		        self.init(analytics: analytics, profile: profile)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_80890FC499DC6112 {}
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	// MARK: Shapes the coverage of the rebase onto row 4b reached
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsNoInstantiableFound_whenSeamsTreeInstantiatesTypeNoNominalTypeCanBe() async {
+		// C7.8, H1 (a): no nominal type can be `[Handler]`, so only hand-written code could build it: it is no hole, and the
+		// seam's module reports `noInstantiableFound` as it does today.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):7:5: error: No @Instantiable type or extension fulfills `[Handler]`, which @Instantiated property `handlers: [Handler]` instantiates. Decorate `[Handler]`, or an extension of it, with @Instantiable; list `[Handler]` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						seamFixtureType(named: "Handler", declarations: []),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let handlers: [Handler]"]),
+					],
+					app: [Self.canonicalRoot],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsHole_whenForeignSeamsTreeReceivesLazilyInstantiatedPassThrough() async throws {
+		// H7 (4): the cycle walk from `Service`'s root, which `App` runs because it fills `Service`'s builder, counts the
+		// instance of `session`, a wrapper the tree receives from outside, as received from outside too.
+		let feature = [
+			Self.userServiceProtocol,
+			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService", "@Received let session: LazilyInstantiated<Session>"]),
+			seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let profile: Profile"]),
+		]
+		let fulfillers = [Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let session: Session"])]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let session: LazilyInstantiated<Session>", "@Instantiated let service: Service"])
+		let modules = Self.modules(feature: feature, app: fulfillers + [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
+		extension Root {
+		    public init() {
+		        func __safeDI_session() -> Session {
+		            Session()
+		        }
+		        let session = LazilyInstantiated<Session>(__safeDI_session)
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_4BE211745CE304B3.self
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+		                let session = scope.session
+		                let userService: any UserService = DefaultUserService(session: session.instance)
+		                return userService
+		            }
+		            return Service(session: session, userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(session: session, service: service)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsFieldThroughAlias_whenFulfillerAliasesFieldOfScopeStruct() async throws {
+		// H7 (2)(1): `DefaultUserService`'s alias of `analytics` reads the field, as inline it reads `Service`'s `analytics`.
+		let fulfillers = [Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: [#"@Received(fulfilledByDependencyNamed: "analytics", ofType: Analytics.self) let renamedAnalytics: Analytics"#])]
+		let modules = Self.modules(feature: Self.canonicalFeature, app: fulfillers + [Self.canonicalRoot])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let fulfillerPath = try #require(output.modules["App"]).fixtures["DefaultUserService.swift"]
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
+		extension Root {
+		    public init() {
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_80890FC499DC6112.self
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+		                let analytics = scope.analytics
+		                func __safeDI_userService() -> DefaultUserService {
+		                    #sourceLocation(file: "\(fulfillerPath)", line: 9)
+		                    let renamedAnalytics: Analytics = analytics
+		                    #sourceLocation()
+		                    return DefaultUserService(renamedAnalytics: renamedAnalytics)
+		                }
+		                let userService: any UserService = __safeDI_userService()
+		                return userService
+		            }
+		            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(service: service)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: Self.canonicalFeature + fulfillers, app: [Self.canonicalRoot]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarry_whenFillReadsSiblingThatRequiresHolesCarrier() async {
+		// H3, H7 (2)(2): `Badge` requires `profile`, which holds the hole, so `Service` builds it after `profile` and the
+		// struct does not carry it; `DefaultUserService` receives it only if available.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["DefaultUserService.swift"]):9:5: error: `DefaultUserService` receives `badge: Badge?`, which `Service`'s dependency tree builds after the scope that builds the builder for `Profile`'s `userService: any UserService`, so the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` does not carry it. Make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads.
+			\(fixtures["Feature"]!["Service.swift"]):9:5: note: `Service` declares `badge: Badge` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.userServiceProtocol,
+						seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
+						seamFixtureType(named: "Badge", declarations: ["@Received let profile: Profile"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let profile: Profile", "@Instantiated let badge: Badge"]),
+					],
+					app: [Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received(onlyIfAvailable: true) let badge: Badge?"]), Self.canonicalRoot],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsFillClosesCycleInSeamTreeNamingEachType_whenTypeFulfillerInstantiatesInstantiatesPropertyOfSeamsPath() async {
+		// C1.14 one level down: `LoopingUserService` instantiates `Middle`, which instantiates `aBuilder: Instantiator<A>`,
+		// which `Service`'s tree is building; the chain names the type that declares each property.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Middle.swift"]):10:5: error: SafeDI cannot fill the builder for `A`'s `userService: any UserService` in `Service`'s dependency tree: `Middle`, beneath `LoopingUserService`, which fills it, instantiates `aBuilder: Instantiator<A>`, which `Service`'s tree is building where it builds `userService` (Service -> aBuilder -> A -> userService -> LoopingUserService -> middle -> Middle -> aBuilder). Code generated outside module `Feature` cannot refer to the function `Service`'s initializer builds `A` with, and building it again would hand it other values than `Service`'s tree holds. Instantiate the seam where `Middle` builds `A` (`@Instantiated let serviceBuilder: Instantiator<Service>`), so the cycle re-enters through the initializer SafeDI generates for `Service`; make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads.
+			\(fixtures["Feature"]!["Service.swift"]):9:5: note: `Service` instantiates `aBuilder: Instantiator<A>` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modules(
+					feature: [
+						Self.userServiceProtocol,
+						seamFixtureType(named: "Analytics", declarations: []),
+						seamFixtureType(named: "A", declarations: ["@Instantiated let userService: any UserService", "@Received let analytics: Analytics"]),
+						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let aBuilder: Instantiator<A>"]),
+					],
+					app: [
+						Self.fulfillingType(named: "LoopingUserService", fulfilling: "UserService", declarations: ["@Instantiated let middle: Middle"]),
+						seamFixtureType(named: "Middle", declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Received let analytics: Analytics"]),
+						Self.canonicalRoot,
+					],
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_drawsFillAsHolesPropertyInDOTTree_whenRootFillsSeamsBuilder() async throws {
+		// The DOT tree draws a fill as the hole's property beneath the seam call, and the fulfiller's tree beneath it.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modules(feature: Self.canonicalFeature, app: Self.canonicalApp),
+			integration: .moduleInfo,
+			writesDOTTrees: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.dotTree == """
+		graph SafeDI {
+		    ranksep=2
+		    Root -- "service: Service"
+		    "service: Service" -- "userService: any UserService"
+		}
+		""")
+	}
+
+	// MARK: Private
+
+	private var filesToDelete: [URL]
+
+	/// `Feature` (package `Shop`) and `App` (package `Other`), which depends on it.
+	private static func modules(feature: [String], app: [String]) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: app.map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+		]
+	}
+
+	/// The first extension of `seam` in `file`, which holds its scope struct and initializer.
+	private static func seamExtension(in file: String, named seam: String = "Service") -> String {
+		let start = file.components(separatedBy: "extension \(seam) {\n").dropFirst().first ?? ""
+		return "extension \(seam) {\n" + (start.components(separatedBy: "\n}\n").first ?? "") + "\n}"
+	}
+
+	/// The builder function of `service` in `file`, unindented to the left margin.
+	private static func serviceBuilderFunction(in file: String) -> String {
+		let lines = file.components(separatedBy: "\n")
+		guard let start = lines.firstIndex(where: { $0.hasSuffix("func __safeDI_service() -> Service {") }) else { return "" }
+		let indent = String(lines[start].prefix { $0 == " " })
+		guard let end = lines[start...].firstIndex(of: indent + "}") else { return "" }
+		return lines[start...end].map { String($0.dropFirst(indent.count)) }.joined(separator: "\n")
+	}
+
+	/// C1.16b's graph with a root that instantiates `logger`: `Feature`'s seam `Flow` instantiates `flowDeclarations` and
+	/// `profileBuilder`, whose `Profile` instantiates `router: any Router`, which only `App`'s `app` fulfills; `App`'s
+	/// `Root` instantiates `logger` and `flow`. The visible modules hold `app` in `Feature`, which builds every value inline.
+	private static func reenteredFlowModules(flowDeclarations: [String] = [], app: [String]) -> (modules: [ModuleFixture], visibleModules: [ModuleFixture]) {
+		let feature = [
+			"public protocol Router {}",
+			seamFixtureType(named: "Logger", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Profile", isFinalClass: true, declarations: ["@Instantiated let router: any Router"]),
+			seamFixtureType(named: "Flow", isSeam: true, isFinalClass: true, declarations: flowDeclarations + ["@Instantiated let profileBuilder: Instantiator<Profile>"]),
+		]
+		let root = seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let logger: Logger", "@Instantiated let flow: Flow"])
+		return (modules(feature: feature, app: app + [root]), modules(feature: feature + app, app: [root]))
+	}
+
+	/// C1.27's `App`: `DefaultRouter` receives `logger` and instantiates `Middle`, which instantiates `logger` and `Flow` again.
+	private static let reenteredFlowShadowingApp = [
+		fulfillingType(named: "DefaultRouter", fulfilling: "Router", declarations: ["@Received let logger: Logger", "@Instantiated let middle: Middle"]),
+		seamFixtureType(named: "Middle", isFinalClass: true, declarations: ["@Instantiated let logger: Logger", "@Instantiated let flowBuilder: Instantiator<Flow>"]),
+	]
+
+	/// C1.23's graph: `Feature`'s seam `Service` instantiates `analytics` and `profileBuilder`, whose `Profile` instantiates
+	/// `userService: any UserService`, and `X` receives `analytics` and instantiates `service`; `Mid`'s seam `Shell`
+	/// instantiates `analytics` and `xBuilder`, and passes `Service`'s builder up; `App` holds `app` and `Root`, which
+	/// declares `rootDeclarations`. The visible modules hold `app` in `Feature`, which builds every value inline.
+	private static func reenteredServiceModules(app: [String], rootDeclarations: [String]) -> (modules: [ModuleFixture], visibleModules: [ModuleFixture]) {
+		let feature = [
+			userServiceProtocol,
+			seamFixtureType(named: "Analytics", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Logger", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
+			seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let profileBuilder: Instantiator<Profile>"]),
+			seamFixtureType(named: "X", declarations: ["@Received let analytics: Analytics", "@Instantiated let service: Service"]),
+		]
+		let mid = [seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let xBuilder: Instantiator<X>"])]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: rootDeclarations)
+		return (threeModules(feature: feature, mid: mid, app: app + [root]), threeModules(feature: feature + app, mid: mid, app: [root]))
+	}
+
+	/// G4's graph: `Feature`'s seam `Service` instantiates `analytics`, `xBuilder` (an `xBuilderType`), and `profile`, whose
+	/// `Profile` instantiates `userService: any UserService`, which only `App`'s `DefaultUserService` (with
+	/// `fulfillerDeclarations`) fulfills; `X` declares `x`, and `Other`, a seam, `other` when given; `App`'s `Root`
+	/// instantiates `logger` and `service`. The visible modules hold `DefaultUserService` in `Feature`.
+	private static func reenteringServiceModules(
+		xBuilderType: String = "Instantiator<X>",
+		x: [String],
+		other: [String]? = nil,
+		fulfillerDeclarations: [String] = ["@Received let analytics: Analytics", "@Received let logger: Logger"],
+	) -> (modules: [ModuleFixture], visibleModules: [ModuleFixture]) {
+		let feature = [
+			userServiceProtocol,
+			seamFixtureType(named: "Analytics", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Logger", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService", "@Received let analytics: Analytics"]),
+			seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let xBuilder: \(xBuilderType)", "@Instantiated let profile: Profile"]),
+			seamFixtureType(named: "X", declarations: x),
+		] + (other.map { [seamFixtureType(named: "Other", isSeam: true, declarations: $0)] } ?? [])
+		let fulfillers = [fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: fulfillerDeclarations)]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let logger: Logger", "@Instantiated let service: Service"])
+		return (modules(feature: feature, app: fulfillers + [root]), modules(feature: feature + fulfillers, app: [root]))
+	}
+
+	/// What `App` generates for G4's root when `Service`'s builder reads `analytics` from its struct and `logger` from
+	/// `Root`, however `Service`'s tree reaches `Service` again.
+	private static let reenteringServiceAppFiles = ["App.swift": generatedFileHeader + """
+	#if canImport(Feature)
+	import Feature
+	#endif
+
+	extension Root {
+	    public init() {
+	        let logger = Logger()
+	        func __safeDI_service() -> Service {
+	            _ = Service.__safeDI_Service_9962F9E72912F2E5.self
+	            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+	                let analytics = scope.analytics
+	                let userService: any UserService = DefaultUserService(analytics: analytics, logger: logger)
+	                return userService
+	            }
+	            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+	        }
+	        let service: Service = __safeDI_service()
+	        self.init(logger: logger, service: service)
+	    }
+	}
+	"""]
+
+	/// C9.4b's module: a `#SafeDIConfiguration` that adds a directory, `UserService`, and `Root`, which instantiates
+	/// `service`.
+	private static let seamInAdditionalDirectoryModule = [
+		"""
+		#SafeDIConfiguration(
+		    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
+		)
+		""",
+		userServiceProtocol,
+		seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service"]),
+	]
+
+	/// C9.4b's added directory: `Service`, a seam, instantiates `profile`, whose `Profile` instantiates `userService`.
+	private static let seamInAdditionalDirectory = [
+		seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let profile: Profile"]),
+		seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
+	]
+
+	/// `Feature` (package `Shop`), `Mid` (package `Other`, importing `Feature`), and `App` (package `Other`, importing both).
+	private static func threeModules(feature: [String], mid: [String], app: [String]) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature),
+			ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: mid.map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: app.map { "import Feature\nimport Mid\n\n" + $0 }, dependencies: ["Feature", "Mid"]),
+		]
+	}
+
+	/// The source of `UserService`, a public protocol.
+	private static let userServiceProtocol = "public protocol UserService {}"
+
+	/// The canonical hole (`h01`): `Service`, the seam, instantiates `analytics` then `profile`; `Profile` instantiates
+	/// `userService: any UserService` and receives `analytics`.
+	private static let canonicalFeature = [
+		seamFixtureType(named: "Analytics", declarations: []),
+		seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService", "@Received let analytics: Analytics"]),
+		seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let profile: Profile"]),
+		userServiceProtocol,
+	]
+
+	/// `App`'s root, which instantiates `service`, and `DefaultUserService`, which fulfills `UserService` and receives
+	/// `analytics`.
+	private static let canonicalApp = [
+		fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let analytics: Analytics"]),
+		seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service"]),
+	]
+
+	/// What `Feature` generates for `Service`, the canonical hole's seam.
+	private static let canonicalServiceCode = """
+	extension Service {
+	    public struct SafeDIScope_Profile_userService {
+	        public let analytics: Analytics
+	    }
+
+	    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+	        let analytics = Analytics()
+	        func __safeDI_profile() -> Profile {
+	            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(analytics: analytics))
+	            return Profile(userService: userService, analytics: analytics)
+	        }
+	        let profile: Profile = __safeDI_profile()
+	        self.init(analytics: analytics, profile: profile)
+	    }
+	}
+
+	extension Service {
+	    public enum __safeDI_Service_80890FC499DC6112 {}
+	}
+	"""
+
+	/// `App`'s root of the canonical hole, which instantiates `service`.
+	private static let canonicalRoot = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service"])
+
+	/// Holes beneath an `Instantiator` (`ServiceI`), a `SendableInstantiator` (`ServiceS`), and two nested ones
+	/// (`ServiceN`), each instantiating `analytics` and a non-`Sendable` `session`, the owner instantiating a
+	/// non-`Sendable` `cache` before its hole.
+	private static let wrapperFeature = [
+		"""
+		public protocol UserService: Sendable {}
+		""",
+		seamFixtureType(named: "Analytics", isFinalClass: true, declarations: [], conformances: ", Sendable"),
+		seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
+		seamFixtureType(named: "Cache", isFinalClass: true, declarations: []),
+		seamFixtureType(named: "ProfileI", declarations: ["@Forwarded let name: String", "@Instantiated let cache: Cache", "@Instantiated let userService: any UserService", "@Received let analytics: Analytics"]),
+		seamFixtureType(named: "ServiceI", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let session: Session", "@Instantiated let profileBuilder: Instantiator<ProfileI>"]),
+		seamFixtureType(named: "ProfileS", declarations: ["@Forwarded let name: String", "@Instantiated let cache: Cache", "@Instantiated let userService: any UserService", "@Received let analytics: Analytics"]),
+		seamFixtureType(named: "ServiceS", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let session: Session", "@Instantiated let profileBuilder: SendableInstantiator<ProfileS>"]),
+		seamFixtureType(named: "ProfileN", declarations: ["@Instantiated let userService: any UserService", "@Received let analytics: Analytics", "@Received let title: String"]),
+		seamFixtureType(named: "Screen", declarations: ["@Forwarded let title: String", "@Instantiated let cache: Cache", "@Instantiated let profileBuilder: SendableInstantiator<ProfileN>"]),
+		seamFixtureType(named: "ServiceN", isSeam: true, declarations: ["@Instantiated let analytics: Analytics", "@Instantiated let session: Session", "@Instantiated let screenBuilder: SendableInstantiator<Screen>"]),
+	]
+
+	/// `DefaultUserService`, which fulfills `UserService` and receives `analytics`.
+	private static let wrapperFulfillers = [
+		fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let analytics: Analytics"]),
+	]
+
+	private static let wrapperRoot = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let serviceI: ServiceI", "@Instantiated let serviceS: ServiceS", "@Instantiated let serviceN: ServiceN"])
+
+	/// The canonical hole's `Feature`, `Mid` (package `Other`), whose seam `Shell` instantiates `theme` and `service`, and
+	/// `App`, whose root instantiates `shell`, with `appFulfillers`.
+	private static func passUpModules(appFulfillers: [String]) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: canonicalFeature),
+			ModuleFixture(name: "Mid", packageName: "Other", swiftFileContent: [
+				"import Feature\n\n" + seamFixtureType(named: "Theme", declarations: []),
+				"import Feature\n\n" + seamFixtureType(named: "Shell", isSeam: true, declarations: ["@Instantiated let theme: Theme", "@Instantiated let service: Service"]),
+			], dependencies: ["Feature"]),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: (appFulfillers + [seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shell: Shell"])]).map { "import Feature\nimport Mid\n\n" + $0 }, dependencies: ["Feature", "Mid"]),
+		]
+	}
+
+	/// A public `@Instantiable` struct named `name` that fulfills `fulfilledType`, with `declarations`.
+	private static func fulfillingType(named name: String, fulfilling fulfilledType: String, declarations: [String]) -> String {
+		seamFixtureType(named: name, declarations: declarations, conformances: ", \(fulfilledType)")
+			.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [\(fulfilledType).self])\n")
+	}
+
+	/// The comment a call to `seam`, another module's seam, carries under `integration`.
+	private static func pluginComment(_ integration: MultiModuleIntegration, seam: String) -> String {
+		switch integration {
+		case .moduleInfo:
+			""
+		case .swiftPackagePlugin:
+			" // If this line does not compile, add the SafeDI plugin to the target that declares \(seam)."
+		}
+	}
+
+	/// The files `integration` generates for `module`, whose roots and seams generate `rootFiles`' code, by type, each
+	/// file importing `imports`: one combined file under `.moduleInfo`, one file per type under `.swiftPackagePlugin`.
+	private static func generatedFiles(module: String, integration: MultiModuleIntegration, imports: [String], rootFiles: [String: String]) -> [String: String] {
+		let importLines = imports.isEmpty ? "" : imports.map { "#if canImport(\($0))\nimport \($0)\n#endif\n" }.joined() + "\n"
+		switch integration {
+		case .moduleInfo:
+			return ["\(module).swift": generatedFileHeader + importLines + rootFiles.sorted { $0.key < $1.key }.map(\.value).joined(separator: "\n\n")]
+		case .swiftPackagePlugin:
+			return Dictionary(uniqueKeysWithValues: rootFiles.map { ("\($0.key)+SafeDI.swift", generatedFileHeader + importLines + $0.value) })
+		}
+	}
+
+	/// Expects the values `output`, the run of `modules`, builds for each root of `App` to equal those the run of
+	/// `visibleModules` builds, the same graph with every fulfilling declaration in the seam's module.
+	private mutating func expectValuesEqualVisibleBuild(
+		_ output: MultiModuleTestOutput,
+		modules: [ModuleFixture],
+		visibleModules: [ModuleFixture],
+		probes: [DifferentialValueProbe] = [DifferentialValueProbe("Root()")],
+		sourceLocation: SourceLocation = #_sourceLocation,
+	) async throws {
+		guard compileVerificationIsEnabled else { return }
+		let visibleOutput = try await executeSafeDIToolMultiModuleTest(modules: visibleModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+		try expectDifferentialValuesAgree(
+			feature: Self.differentialValuePath(of: output, modules: modules),
+			knownRight: Self.differentialValuePath(of: visibleOutput, modules: visibleModules),
+			probes: probes,
+			filesToDelete: &filesToDelete,
+			sourceLocation: sourceLocation,
+		)
+	}
+
+	/// The path the comparator builds from `output`, the run of `modules`: each module's files as the harness wrote
+	/// them, and the files the tool generated for it.
+	private static func differentialValuePath(of output: MultiModuleTestOutput, modules: [ModuleFixture]) throws -> DifferentialValuePath {
+		try DifferentialValuePath(modules: modules.map { module in
+			let sourceDirectory = output.fixtureRoot.appendingPathComponent(module.packageName).appendingPathComponent("Sources").appendingPathComponent(module.name)
+			var fixtureFiles = [String: String]()
+			for fileName in try FileManager.default.contentsOfDirectory(atPath: sourceDirectory.path) where fileName.hasSuffix(".swift") {
+				fixtureFiles[fileName] = try String(contentsOf: sourceDirectory.appendingPathComponent(fileName), encoding: .utf8)
+			}
+			return DifferentialValueModule(
+				name: module.name,
+				packageName: module.packageName,
+				dependencyModuleNames: module.dependencies,
+				fixtureFiles: fixtureFiles,
+				generatedFiles: output.modules[module.name]?.generatedFiles ?? [:],
+			)
+		})
+	}
+
+	/// Expects `generatedFiles` to equal `expected`, recording the files generated when they do not, so a failure shows
+	/// the output in full.
+	private func expectGeneratedFiles(_ generatedFiles: [String: String]?, _ expected: [String: String], sourceLocation: SourceLocation = #_sourceLocation) {
+		#expect(generatedFiles == expected, sourceLocation: sourceLocation)
+		if let generatedFiles, generatedFiles != expected {
+			Issue.record(Comment(rawValue: generatedFiles.sorted { $0.key < $1.key }.map { "=== \($0.key)\n\($0.value)" }.joined(separator: "\n")), sourceLocation: sourceLocation)
+		}
+	}
+
+	/// Expects every module to have compiled, when compile verification runs.
+	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
+		guard compileVerificationIsEnabled else { return }
+		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
+		#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 }, sourceLocation: sourceLocation)
+	}
+}

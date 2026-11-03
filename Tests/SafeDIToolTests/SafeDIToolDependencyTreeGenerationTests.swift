@@ -8084,72 +8084,58 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_generatesSeam_whenItsTreeInstantiatesDeclarationOfModuleInfoNamingNoModuleWithoutChangingItsSignature() async throws {
+	mutating func generate_throwsError_whenItsTreeInstantiatesDeclarationOfModuleInfoNamingNoModule() async {
 		// `Base`'s module info was written without `--module-name`, so the modules that call `Cache` compute its
-		// signature without `Logger`, which `Store` instantiates; that leaves out `Store`'s `logger`, which the callers
-		// never pass, so the two signatures agree and `Core` generates the initializer without an error.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: [
-				ModuleFixture(
-					name: "Base",
-					packageName: "Shop",
-					swiftFileContent: [Self.loggerContent],
-					omitsModuleName: true,
-				),
-				ModuleFixture(
-					name: "Core",
-					packageName: "Shop",
-					swiftFileContent: [
-						"""
-						import Base
+		// signature without `Logger`, which `Store` instantiates: for them `Store`'s `logger` is a hole, whose builder
+		// `Cache`'s generated initializer would take, while `Core`, which sees `Logger`, builds it. The calls would not
+		// match the initializer, so `Core` reports `Cache`, naming `Logger`.
+		await assertThrowsMultiModuleError(inModule: "Core", diagnostics: { fixtures in
+			"\(fixtures["Core"]!["Cache.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Cache`: the initializer SafeDI generates for it depends on `Logger`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`."
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Base",
+						packageName: "Shop",
+						swiftFileContent: [Self.loggerContent],
+						omitsModuleName: true,
+					),
+					ModuleFixture(
+						name: "Core",
+						packageName: "Shop",
+						swiftFileContent: [
+							"""
+							import Base
 
-						@Instantiable(generateDependencyTree: true)
-						public struct Cache: Instantiable {
-						    public init(store: Store) {
-						        self.store = store
-						    }
+							@Instantiable(generateDependencyTree: true)
+							public struct Cache: Instantiable {
+							    public init(store: Store) {
+							        self.store = store
+							    }
 
-						    @Instantiated let store: Store
-						}
-						""",
-						"""
-						import Base
+							    @Instantiated let store: Store
+							}
+							""",
+							"""
+							import Base
 
-						@Instantiable
-						public struct Store: Instantiable {
-						    public init(logger: Logger) {
-						        self.logger = logger
-						    }
+							@Instantiable
+							public struct Store: Instantiable {
+							    public init(logger: Logger) {
+							        self.logger = logger
+							    }
 
-						    @Instantiated let logger: Logger
-						}
-						""",
-					],
-					dependencies: ["Base"],
-				),
-			],
-			integration: .moduleInfo,
-			filesToDelete: &filesToDelete,
-		)
-		#expect(output.modules.mapValues(\.generatedFiles) == [
-			"Base": ["Base.swift": generatedFileHeader],
-			"Core": ["Core.swift": generatedFileHeader + Self.importBlock("Base") + "\n\n" + """
-			extension Cache {
-			    public init() {
-			        func __safeDI_store() -> Store {
-			            let logger = Logger()
-			            return Store(logger: logger)
-			        }
-			        let store: Store = __safeDI_store()
-			        self.init(store: store)
-			    }
-			}
-
-			extension Cache {
-			    public enum __safeDI_Cache_CBF29CE484222325 {}
-			}
-			"""],
-		])
+							    @Instantiated let logger: Logger
+							}
+							""",
+						],
+						dependencies: ["Base"],
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
 	}
 
 	@Test
@@ -10825,176 +10811,126 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_generatesSeam_whenUnseenDeclarationReceivesWhatSeenDeclarationReceives() async throws {
-		// `Logger`, which the callers cannot see, receives `token` as `Store` does: the callers compute the same
-		// parameter from `Store` alone, so the call shape agrees, whatever the receivers, and the seam generates. `App`
-		// computes the signature from what it sees, and its call refers to the guard `Feature` generated.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: [Self.coreTokenModule] + Self.sharedReceiveModules() + [
-				ModuleFixture(
-					name: "App",
-					packageName: "Shop",
-					swiftFileContent: [
-						"""
-						import Core
-						import Feature
+	mutating func generate_throwsError_whenUnseenDeclarationReceivesWhatSeenDeclarationReceives() async {
+		// `Logger`, which the callers cannot see and `Cache` instantiates, receives `token` as `Store` does: the parameter
+		// agrees, but for the callers `logger` is a hole, whose builder `Cache`'s initializer would take, so `Feature`
+		// reports `Cache`, naming `Logger`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"\(fixtures["Feature"]!["Cache.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Cache`: the initializer SafeDI generates for it depends on `Logger`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`."
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [Self.coreTokenModule] + Self.sharedReceiveModules() + [
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContent: [
+							"""
+							import Core
+							import Feature
 
-						@Instantiable(isRoot: true)
-						public struct Root: Instantiable {
-						    public init(token: Token, cache: Cache) {
-						        self.token = token
-						        self.cache = cache
-						    }
+							@Instantiable(isRoot: true)
+							public struct Root: Instantiable {
+							    public init(token: Token, cache: Cache) {
+							        self.token = token
+							        self.cache = cache
+							    }
 
-						    @Instantiated let token: Token
-						    @Instantiated let cache: Cache
-						}
-						""",
-					],
-					dependencies: ["Core", "Feature"],
-				),
-			],
-			integration: .moduleInfo,
-			filesToDelete: &filesToDelete,
-		)
-		#expect(output.modules["App"]?.generatedFiles == [
-			"App.swift": generatedFileHeader + Self.importBlock("Base") + "\n" + Self.importBlock("Core") + "\n" + Self.importBlock("Feature") + "\n\n" + """
-			extension Root {
-			    public init() {
-			        let token = Token()
-			        func __safeDI_cache() -> Cache {
-			            _ = Cache.__safeDI_Cache_1EB503BFA23A82BA.self
-			            return Cache(token: token)
-			        }
-			        let cache: Cache = __safeDI_cache()
-			        self.init(token: token, cache: cache)
-			    }
-			}
-			""",
-		])
-		if compileVerificationIsEnabled {
-			let compilation = try #require(output.compilation)
-			#expect(compilation.modules.map(\.exitCode) == [0, 0, 0, 0])
+							    @Instantiated let token: Token
+							    @Instantiated let cache: Cache
+							}
+							""",
+						],
+						dependencies: ["Core", "Feature"],
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
 		}
-		#expect(output.modules["Feature"]?.generatedFiles == [
-			"Feature.swift": generatedFileHeader + Self.importBlock("Base") + "\n" + Self.importBlock("Core") + "\n\n" + """
-			extension Cache {
-			    public init(token: Token) {
-			        let store = Store(token: token)
-			        let logger = Logger(token: token)
-			        self.init(store: store, logger: logger)
-			    }
-			}
-
-			extension Cache {
-			    public enum __safeDI_Cache_1EB503BFA23A82BA {}
-			}
-			""",
-		])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_generatesSeam_whenUnseenDeclarationReceivesWhatSeenDeclarationReceivesUnderTargetGraph() async throws {
+	mutating func generate_throwsError_whenUnseenDeclarationReceivesWhatSeenDeclarationReceivesUnderTargetGraph() async {
 		// As the previous test under the target graph: `Logger` is declared in a directory the configuration adds.
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				#SafeDIConfiguration(
-				    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
-				)
-				""",
-				"""
-				@Instantiable(generateDependencyTree: true)
-				public struct Cache: Instantiable {
-				    public init(store: Store, logger: Logger) {
-				        self.store = store
-				        self.logger = logger
-				    }
+		await assertThrowsError(diagnostics: { fixtures in
+			"\(fixtures["Cache.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Cache`: the initializer SafeDI generates for it depends on `Logger`, which is declared in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see that declaration, so their calls would not match the initializer. Declare `Logger` in a file of this module, or of a module it depends on."
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					#SafeDIConfiguration(
+					    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
+					)
+					""",
+					"""
+					@Instantiable(generateDependencyTree: true)
+					public struct Cache: Instantiable {
+					    public init(store: Store, logger: Logger) {
+					        self.store = store
+					        self.logger = logger
+					    }
 
-				    @Instantiated let store: Store
-				    @Instantiated let logger: Logger
-				}
-				""",
-				"""
-				@Instantiable
-				public struct Store: Instantiable {
-				    public init(token: Token) {
-				        self.token = token
-				    }
+					    @Instantiated let store: Store
+					    @Instantiated let logger: Logger
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Store: Instantiable {
+					    public init(token: Token) {
+					        self.token = token
+					    }
 
-				    @Received let token: Token
-				}
-				""",
-				"""
-				@Instantiable
-				public struct Token: Instantiable {
-				    public init() {}
-				}
-				""",
-			],
-			additionalDirectorySwiftFileContent: [
-				"""
-				@Instantiable
-				public struct Logger: Instantiable {
-				    public init(token: Token) {
-				        self.token = token
-				    }
+					    @Received let token: Token
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Token: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				additionalDirectorySwiftFileContent: [
+					"""
+					@Instantiable
+					public struct Logger: Instantiable {
+					    public init(token: Token) {
+					        self.token = token
+					    }
 
-				    @Received let token: Token
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-			pluginTargetGraph: { inputSwiftFilePaths in
-				PluginTargetGraph(
-					target: PluginTargetGraph.Target(moduleName: "Core", packageID: "shop", sourceFilePaths: inputSwiftFilePaths, dependencyModuleNames: []),
-					dependencyTargets: [],
-				)
-			},
-		)
-		#expect(output.dependencyTreeFiles["Cache+SafeDI.swift"] == generatedFileHeader + """
-		extension Cache {
-		    public init(token: Token) {
-		        let store = Store(token: token)
-		        let logger = Logger(token: token)
-		        self.init(store: store, logger: logger)
-		    }
+					    @Received let token: Token
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				pluginTargetGraph: { inputSwiftFilePaths in
+					PluginTargetGraph(
+						target: PluginTargetGraph.Target(moduleName: "Core", packageID: "shop", sourceFilePaths: inputSwiftFilePaths, dependencyModuleNames: []),
+						dependencyTargets: [],
+					)
+				},
+			)
 		}
-
-		extension Cache {
-		    public enum __safeDI_Cache_1EB503BFA23A82BA {}
-		}
-		""")
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_generatesInternalSeam_whenUnseenReceiversInitializerIsWiderThanSeenOnes() async throws {
-		// `Logger`'s `public init` proves `token` public, `Helpers.Store`'s initializer, internal by nesting, internal:
-		// the parameter's uncapped access differs between the views, its tier access is `internal` in both, capped at
-		// the seam's type, nested in an internal enum, so the call shape agrees.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: [Self.coreTokenModule] + Self.sharedReceiveModules(cacheIsInternal: true, storeIsInternal: true),
-			integration: .moduleInfo,
-			filesToDelete: &filesToDelete,
-		)
-		#expect(output.modules["Feature"]?.generatedFiles == [
-			"Feature.swift": generatedFileHeader + Self.importBlock("Base") + "\n" + Self.importBlock("Core") + "\n\n" + """
-			extension Internals.Cache {
-			    internal init(token: Token) {
-			        let store = Helpers.Store(token: token)
-			        let logger = Logger(token: token)
-			        self.init(store: store, logger: logger)
-			    }
-			}
-
-			extension Internals.Cache {
-			    public enum __safeDI_Internals_Cache_E15B3D9758D01BA2 {}
-			}
-			""",
-		])
+	mutating func generate_throwsError_whenUnseenReceiverOfInternalSeamIsInstantiatedInItsTree() async {
+		// `Logger`'s `public init` proves `token` public, `Helpers.Store`'s initializer, internal by nesting, internal: the
+		// parameter's tier access is `internal` in both views, capped at the seam's type, but for the callers, who cannot
+		// see `Logger`, `logger` is a hole, so `Feature` reports `Internals.Cache`, naming `Logger`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"\(fixtures["Feature"]!["Cache.swift"]):5:5: error: SafeDI cannot generate the dependency tree of `Internals.Cache`: the initializer SafeDI generates for it depends on `Logger`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`."
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [Self.coreTokenModule] + Self.sharedReceiveModules(cacheIsInternal: true, storeIsInternal: true),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
 	}
 
 	@Test
@@ -11671,63 +11607,51 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_generatesSeam_whenItsTreeInstantiatesAdditionalDirectoryDeclarationWithoutChangingItsSignatureUnderTargetGraph() async throws {
-		// `Store` instantiates `Logger`, declared in a directory the configuration adds: the callers' view leaves out
-		// `Store`'s `logger`, which no caller passes, so the call shapes agree and the seam generates.
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				#SafeDIConfiguration(
-				    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
-				)
-				""",
-				"""
-				@Instantiable(generateDependencyTree: true)
-				public struct Cache: Instantiable {
-				    public init(store: Store) {
-				        self.store = store
-				    }
+	mutating func generate_throwsError_whenItsTreeInstantiatesAdditionalDirectoryDeclarationUnderTargetGraph() async {
+		// The callers cannot see `Logger`, declared in a directory the configuration adds, which `Store` instantiates: for
+		// them `Store`'s `logger` is a hole, so `Core` reports `Cache`, naming `Logger`.
+		await assertThrowsError(diagnostics: { fixtures in
+			"\(fixtures["Cache.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Cache`: the initializer SafeDI generates for it depends on `Logger`, which is declared in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see that declaration, so their calls would not match the initializer. Declare `Logger` in a file of this module, or of a module it depends on."
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					#SafeDIConfiguration(
+					    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
+					)
+					""",
+					"""
+					@Instantiable(generateDependencyTree: true)
+					public struct Cache: Instantiable {
+					    public init(store: Store) {
+					        self.store = store
+					    }
 
-				    @Instantiated let store: Store
-				}
-				""",
-				"""
-				@Instantiable
-				public struct Store: Instantiable {
-				    public init(logger: Logger) {
-				        self.logger = logger
-				    }
+					    @Instantiated let store: Store
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Store: Instantiable {
+					    public init(logger: Logger) {
+					        self.logger = logger
+					    }
 
-				    @Instantiated let logger: Logger
-				}
-				""",
-			],
-			additionalDirectorySwiftFileContent: [Self.loggerContent],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-			pluginTargetGraph: { inputSwiftFilePaths in
-				PluginTargetGraph(
-					target: PluginTargetGraph.Target(moduleName: "Core", packageID: "shop", sourceFilePaths: inputSwiftFilePaths, dependencyModuleNames: []),
-					dependencyTargets: [],
-				)
-			},
-		)
-		#expect(output.dependencyTreeFiles["Cache+SafeDI.swift"] == generatedFileHeader + """
-		extension Cache {
-		    public init() {
-		        func __safeDI_store() -> Store {
-		            let logger = Logger()
-		            return Store(logger: logger)
-		        }
-		        let store: Store = __safeDI_store()
-		        self.init(store: store)
-		    }
+					    @Instantiated let logger: Logger
+					}
+					""",
+				],
+				additionalDirectorySwiftFileContent: [Self.loggerContent],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				pluginTargetGraph: { inputSwiftFilePaths in
+					PluginTargetGraph(
+						target: PluginTargetGraph.Target(moduleName: "Core", packageID: "shop", sourceFilePaths: inputSwiftFilePaths, dependencyModuleNames: []),
+						dependencyTargets: [],
+					)
+				},
+			)
 		}
-
-		extension Cache {
-		    public enum __safeDI_Cache_CBF29CE484222325 {}
-		}
-		""")
 	}
 
 	// MARK: A2' neighbors: required optional wrappers, forwarded wrappers, nested seams, nested and existential types
@@ -12481,8 +12405,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let section = try #require(manual.components(separatedBy: "#### Generating a dependency tree per module").dropFirst().first)
 			.components(separatedBy: "\n#").first ?? ""
 		let codeBlocks = section.components(separatedBy: "```swift\n").dropFirst().map { $0.components(separatedBy: "\n```").first ?? "" }
-		// The fourth block illustrates the access a parameter is taken at, and is not generated from these fixtures.
-		#expect(codeBlocks.count == 4)
+		// The fourth block illustrates the access a parameter is taken at, and is not generated from these fixtures; the
+		// two after it show a seam's builder for a hole, which `SafeDIToolSeamBuilderParameterTests` reads.
+		#expect(codeBlocks.count == 6)
 		let fixture = try #require(codeBlocks.first).replacingOccurrences(of: "// In module Feature.\n", with: "")
 		let generated = try #require(codeBlocks.dropFirst().first)
 		let callerBlock = try #require(codeBlocks.dropFirst(2).first)
