@@ -9625,10 +9625,9 @@ extension DependencyTreeGenerator {
 		init(instantiables: [TypeDescription: Instantiable], plainTypeDeclarations: [PlainTypeDeclaration]) {
 			self.instantiables = instantiables
 			var plainTypeDeclarationsByModuleAndType = [ModuleAndType: [PlainTypeDeclaration]]()
-			// Only a declaration outside every `#if` block and every extension has an access the construction check reads:
-			// one inside an `#if` block exists only in some clauses, and one inside an extension is capped by a type
-			// declared elsewhere, which the compiler checks.
-			for plainTypeDeclaration in plainTypeDeclarations where !plainTypeDeclaration.isInsideConditionalBlock && plainTypeDeclaration.enclosingExtensionAccess == nil {
+			// Only a declaration outside every extension has an access the construction check reads: one inside an
+			// extension is capped by a type declared elsewhere, which the compiler checks.
+			for plainTypeDeclaration in plainTypeDeclarations where plainTypeDeclaration.enclosingExtensionAccess == nil {
 				// A declaration whose module SafeDITool does not know bounds no extension's types, as an `@Instantiable`
 				// declaration of the extended type does not.
 				guard let moduleName = plainTypeDeclaration.moduleName else { continue }
@@ -9639,17 +9638,24 @@ extension DependencyTreeGenerator {
 
 		let instantiables: [TypeDescription: Instantiable]
 
-		/// The plain declaration of `type` in the module named `moduleName`: the one in the file at `sourceFilePath`
+		/// The plain declaration of `type` in the module named `moduleName`: among those in the file at `sourceFilePath`
 		/// when that file declares one, as a `private` type of one file can share its name with a type of another,
-		/// and otherwise the first in the order of the module's files that is visible outside its file
-		/// (`PlainTypeDeclaration.isVisibleOutsideItsFile`): a `private` type of another file cannot be what the
-		/// extension extends, while an imported type of its name can. `nil` when none is, which leaves the extended type
-		/// to the compiler, as an unrecorded one is.
+		/// and otherwise among those visible outside their file (`PlainTypeDeclaration.isVisibleOutsideItsFile`): a
+		/// `private` type of another file cannot be what the extension extends, while an imported type of its name can.
+		/// Of several, which clauses of a platform-conditioned block declare, the narrowest, which every clause the
+		/// compiler may select must allow, and of equally narrow ones the first, in the order of the module's files and
+		/// within a file in source order. `nil` when there is none, which leaves the extended type to the compiler, as an
+		/// unrecorded one is.
 		func plainTypeDeclaration(of type: TypeDescription, inModuleNamed moduleName: String, preferringFileAt sourceFilePath: String?) -> PlainTypeDeclaration? {
 			let candidates = plainTypeDeclarationsByModuleAndType[ModuleAndType(moduleName: moduleName, typeDescription: type)] ?? []
 			// Two declarations whose files are unknown are not known to share one.
-			return sourceFilePath.flatMap { sourceFilePath in candidates.first { $0.sourceFilePath == sourceFilePath } }
-				?? candidates.first(where: \.isVisibleOutsideItsFile)
+			let inPreferredFile = candidates.filter { sourceFilePath != nil && $0.sourceFilePath == sourceFilePath }
+			return (inPreferredFile.isEmpty ? candidates.filter(\.isVisibleOutsideItsFile) : inPreferredFile)
+				.enumerated()
+				.min { lhs, rhs in
+					(TypeAccessProof.normalized(lhs.element.levelBeforeExtendedTypeCap), lhs.offset) < (TypeAccessProof.normalized(rhs.element.levelBeforeExtendedTypeCap), rhs.offset)
+				}?
+				.element
 		}
 
 		private struct ModuleAndType: Hashable {

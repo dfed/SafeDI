@@ -64,9 +64,9 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// `Dock`, the namespace of the holders a consumer may hold, declared `package`, so that only a consumer in the
 	/// declaring module's package can name a holder, and the public tier omits it.
 	case dockPackage
-	/// `Dock` declared `public` inside an `#if` block, from which SafeDI takes no access level, so that the initializer
-	/// receiving a holder proves it narrower than `public`, and the public tier omits it: the middle state of decision 54.
-	case dockUnrecorded
+	/// `Dock` declared `public` inside a platform-conditioned `#if` block, every clause of which SafeDI reads as it reads a
+	/// declaration outside every block, so that `Dock` is exactly `public` and the public tier takes the holder.
+	case dockInsidePlatformBlock
 	/// An `@Instantiable` type declared in an extension of an `@Instantiable` type of the module: an exact entry.
 	case typeInExtensionOfInstantiable
 	/// A value of a type no declaration SafeDI reads declares, received only if available in a leaf's tree, which SafeDI
@@ -94,8 +94,9 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// A consumer declared with `generateMock: .public`, and one that leaves `theme`, which its leaf's tree receives, unprovided.
 	case publicConsumer
 	case publicConsumerLeavesLeafLabelUnprovided
-	/// A consumer holding a value its leaf's tree receives only if available, of a type whose proof is narrower than
-	/// the type's own access, so that the tier the consumer reaches omits it.
+	/// A consumer holding a value its leaf's tree receives only if available, a holder nested in `Dock`. The tier the
+	/// consumer reaches takes it: SafeDI reads `Dock`'s declaration wherever it is, and a consumer in another package
+	/// holds no holder of a `package` `Dock`. The name is from when an unread `Dock` made the tier omit it.
 	case consumerHoldsOmittedValue
 	/// The holder's shapes: received rather than instantiated, declared before or after the leaf, a holder type that
 	/// receives the leaf only if available, lazily instantiated, or built under a `@Sendable` builder.
@@ -415,8 +416,8 @@ struct GraphFuzzerPublicMockDraw {
 	static let publicMockHoleRandomSeedMask: UInt64 = 0x7075626D6B686F6C
 	/// Draws only where the namespaces `Space` and `Dock` are declared and how visible `Dock` is: `Space` in a file of its
 	/// own that holds no SafeDI marker half the time, and `Dock` `package` three times in ten and, in seven of twenty,
-	/// `public` inside an `#if` block. Rolls added after the rest of the draw was pinned, so that its other shapes are
-	/// drawn as before.
+	/// `public` inside a platform-conditioned `#if` block. Rolls added after the rest of the draw was pinned, so that its
+	/// other shapes are drawn as before.
 	static let publicMockNamespaceRandomSeedMask: UInt64 = 0x7075626D6B6E7370
 	/// Draws only whether a leaf's child receives, only if available, a value of a type no declaration SafeDI reads
 	/// declares – the standard library's `StaticString`, which the list of standard types leaves out, by value, in an
@@ -634,10 +635,9 @@ struct GraphFuzzerPublicMockDraw {
 		let declaresSpaceInFileOfItsOwn = namespaceRandom.percentChance(50)
 		let dockRoll = namespaceRandom.integer(in: 0...99)
 		let dockAccess: AccessLevel = dockRoll < 30 ? .package : .public
-		// Half the other graphs declare the `public` `Dock` inside an `#if` block, from which SafeDI takes no access level,
-		// so that only the initializer receiving a holder proves it – narrower than `public`, so the public tier omits it
-		// and a consumer in another package that holds one is told so.
-		let declaresDockUnrecorded = dockRoll >= 65
+		// Half the other graphs declare the `public` `Dock` inside a platform-conditioned `#if` block, every clause of which
+		// SafeDI reads, so that `Dock` is exactly `public`, as outside every block.
+		let declaresDockInsidePlatformBlock = dockRoll >= 65
 		let moduleRoll = random.integer(in: 0...9)
 		let consumerModules: [GraphFuzzerModule] = moduleRoll < 4 ? [.samePackageCaller, .otherPackageCaller] : moduleRoll < 7 ? [.samePackageCaller] : [.otherPackageCaller]
 		let leafCount = random.integer(in: 1...3)
@@ -885,8 +885,8 @@ struct GraphFuzzerPublicMockDraw {
 				leaf.declaration.defaults.append(DefaultParameter(name: "onTap", type: isSendableGraph ? "@Sendable () -> Void" : "() -> Void", defaultValue: "{}"))
 			}
 			// A value the leaf's tree receives only if available that a consumer may hold: a public type declared in an
-			// extension of a public namespace that spells no access level, which the receiving initializer proves no
-			// wider than its own access, so the public tier omits it.
+			// extension of the namespace `Dock` that spells no access level, which `Dock`'s declaration caps: a `package`
+			// `Dock` makes it `package`, so the public tier omits it.
 			if random.percentChance(30) {
 				let holderName = name("Holder\(leafIndex)")
 				let qualifiedName = "\(dockName).\(holderName)"
@@ -907,7 +907,7 @@ struct GraphFuzzerPublicMockDraw {
 				if declared.insert("Dock").inserted {
 					plainDeclarations.append { rendering in
 						let declaration = "\(rendering.modifier(dockAccess))enum \(dockName) {}"
-						return declaresDockUnrecorded ? "#if canImport(Foundation)\n\(declaration)\n#endif" : declaration
+						return declaresDockInsidePlatformBlock ? "#if canImport(Foundation)\n\(declaration)\n#endif" : declaration
 					}
 				}
 				leaf.child.add(received(leaf.holder?.label ?? "", qualifiedName, onlyIfAvailable: true))
@@ -1924,7 +1924,7 @@ extension GraphFuzzerPublicMockDraw {
 			features.insert(.dockPackage)
 		}
 		if fixture.swiftFileContent.contains(where: { $0.contains("#if canImport(Foundation)\npublic enum \(prefix)Dock {}") }) {
-			features.insert(.dockUnrecorded)
+			features.insert(.dockInsidePlatformBlock)
 		}
 		let leafNames = (0...2).map { "\(prefix)T\($0)" }.filter { types.declarations[$0] != nil }
 		switch leafNames.count {

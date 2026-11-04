@@ -90,8 +90,7 @@ public final class FileVisitor: SyntaxVisitor {
 	public override func visit(_ node: IfConfigDeclSyntax) -> SyntaxVisitorContinueKind {
 		// The block's declarations in every clause, including those of nested blocks, which this visitor
 		// reaches again only in the clauses it scans.
-		ifConfigBlockDepth += 1
-		let (content, blockOutputFileDeclarations, blockPlainTypeDeclarations) = node.safeDIContentAmongDeclarations(
+		let (content, blockOutputFileDeclarations, plainTypeNames) = node.safeDIContentAmongDeclarations(
 			enclosedBy: parentType,
 			enclosingTypeAccess: enclosingTypeAccess,
 			inExtensionOf: enclosingExtendedType,
@@ -99,21 +98,31 @@ public final class FileVisitor: SyntaxVisitor {
 			sourceLocationConverter: sourceLocationConverter,
 		)
 		outputFileDeclarations.formUnion(blockOutputFileDeclarations)
-		if ifConfigBlockDepth == 1 {
-			// The outermost block's walk holds every clause of the blocks nested in it, which this visitor walks again
-			// only in the clauses it scans.
-			plainTypeDeclarations.append(contentsOf: blockPlainTypeDeclarations)
-		}
-		let scannable = conditionalCompilationEvaluator.scannableClauses(in: node, guarding: content)
+		// A plain type declaration is recorded from the clauses this visitor scans, which the conditions select as they
+		// select a block guarding production declarations. A block that also guards mock-only declarations keeps the
+		// selection that forces the mock condition active, so a plain type declared there is read under the mock condition,
+		// for production code too: a production declaration that names it is generated for the clause the mock condition
+		// selects, which the compiler checks where the condition is inactive.
+		let declaresPlainType = !plainTypeNames.isEmpty
+		let scannable = conditionalCompilationEvaluator.scannableClauses(in: node, guarding: content == .none && declaresPlainType ? .production : content)
 		activeIfConfigClauses.formUnion(scannable.clauses.map(\.id))
-		record(scannable.decisions)
+		if content == .none {
+			// The conditions decide which plain declarations this visitor records, and the decisions matter, only when the
+			// module keeps a declaration the block could hold, which it decides once every file is walked.
+			if declaresPlainType, !scannable.consultedConditions.isEmpty {
+				plainTypeDeclarationDecisions.append(plainTypeNames.guarded(by: scannable))
+			}
+		} else {
+			record(scannable.decisions)
+		}
 		if importOnlyBlockDepth > 0 {
 			// The enclosing block's source, which `importSegments` holds, contains this block too.
 			importOnlyBlockDepth += 1
 			importOnlyConsultedCompilationConditions.formUnion(scannable.consultedConditions)
 		} else if content == .none, !node.hasError, node.containsImport {
-			// This block decides nothing but which imports this visitor finds, which
-			// ``ImportSegment/conditionalImports(source:)`` lets a caller decide again without the file.
+			// This block decides nothing but which imports this visitor finds, and which plain declarations it records,
+			// which ``ImportSegment/conditionalImports(source:)`` lets a caller decide again without the file for the
+			// imports.
 			importOnlyBlockDepth = 1
 			importSegments.append(.conditionalImports(source: node.trimmedDescription))
 			importOnlyConsultedCompilationConditions.formUnion(scannable.consultedConditions)
@@ -136,7 +145,6 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visitPost(_: IfConfigDeclSyntax) {
-		ifConfigBlockDepth -= 1
 		if importOnlyBlockDepth > 0 {
 			importOnlyBlockDepth -= 1
 		}
@@ -259,10 +267,17 @@ public final class FileVisitor: SyntaxVisitor {
 	public private(set) var encounteredUnexpectedNodesSyntax = false
 	/// How each `#if` condition that guards SafeDI declarations was evaluated, in source order.
 	public private(set) var conditionalCompilationDecisions = [ConditionalCompilationDecision]()
+	/// How the conditions of each `#if` block that guards nothing else SafeDI reads but declares a plain type in some
+	/// clause were evaluated, with the conditions the selection consulted and the types the block declares, in source
+	/// order. Which of them decide what the module reads, and which decisions generated code asserts, depends on which
+	/// declarations the module keeps, which the module decides.
+	public private(set) var plainTypeDeclarationDecisions = [GuardedPlainTypeNames]()
 	/// Every bare condition whose value decided what this visitor found, except imports in `#if` blocks
-	/// that guard nothing else this visitor reports. Walking the same file with any evaluator that gives
-	/// each of these conditions the same value finds the same declarations, configurations, syntax
-	/// errors, and decisions, and the imports `importSegments` describe.
+	/// that guard nothing else this visitor reports, and plain type declarations in `#if` blocks that guard nothing else
+	/// SafeDI reads, whose blocks' conditions `plainTypeDeclarationDecisions` holds. Walking the same file with any
+	/// evaluator that gives each of these conditions the same value finds the same declarations, configurations, syntax
+	/// errors, and decisions, the imports `importSegments` describe, and the plain type declarations outside such blocks
+	/// and in each such block whose conditions are given the same value.
 	public private(set) var consultedCompilationConditions = Set<String>()
 	/// The file's imports in source order, with each `#if` block that guards nothing but imports and
 	/// other code SafeDI ignores kept as source, so its imports can be found again with another evaluator.
@@ -273,10 +288,10 @@ public final class FileVisitor: SyntaxVisitor {
 	/// The declarations that decide which files SafeDI generates, found in every clause of every `#if`
 	/// block. They depend on no condition, so walking the file with any evaluator finds the same.
 	public private(set) var outputFileDeclarations = OutputFileDeclarations()
-	/// Every `struct`, `class`, `actor`, `enum`, `protocol`, and `typealias` declaration that is not `@Instantiable`:
-	/// those outside every `#if` block, directly inside an extension or not, in source order, and, where an `#if` block
-	/// begins, those inside it in every clause, marked `isInsideConditionalBlock`. They depend on no condition, so walking
-	/// the file with any evaluator finds the same.
+	/// Every `struct`, `class`, `actor`, `enum`, `protocol`, and `typealias` declaration that is not `@Instantiable`, outside
+	/// every `#if` block or in a clause this visitor scans, directly inside an extension or not, in source order. The
+	/// conditions of each block that declares one in any clause are among `consultedCompilationConditions`, or, for a
+	/// block that guards nothing else SafeDI reads, among its entry of `plainTypeDeclarationDecisions`.
 	public private(set) var plainTypeDeclarations = [PlainTypeDeclaration]()
 
 	/// A run of a file's imports.
@@ -296,8 +311,6 @@ public final class FileVisitor: SyntaxVisitor {
 	private var enclosingExtensionAccess: AccessDeclaration?
 	/// The type the extension enclosing the walk's position extends, if one does.
 	private var enclosingExtendedType: TypeDescription?
-	/// How many `#if` blocks enclose the walk's position.
-	private var ifConfigBlockDepth = 0
 	private let conditionalCompilationEvaluator: ConditionalCompilationEvaluator
 	private let sourceLocationConverter: SourceLocationConverter?
 	/// The `#if` clauses the evaluator selected for scanning.
@@ -343,7 +356,7 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	/// Makes `type`, which a type definition with `access` defines, the type whose members the walk visits, and
-	/// records it among `plainTypeDeclarations` when it is not `@Instantiable` and no `#if` block encloses it.
+	/// records it among `plainTypeDeclarations` when it is not `@Instantiable`.
 	private func enterType(_ type: TypeDescription, access: AccessDeclaration, isInstantiable: Bool) {
 		recordPlainTypeDeclaration(type, access: access, isInstantiable: isInstantiable)
 		parentType = type
@@ -351,9 +364,9 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	/// Records `type`, which a declaration with `access` declares, among `plainTypeDeclarations` when it is not
-	/// `@Instantiable` and no `#if` block encloses it: the block's walk records the declarations inside it.
+	/// `@Instantiable`.
 	private func recordPlainTypeDeclaration(_ type: TypeDescription, access: AccessDeclaration, isInstantiable: Bool) {
-		if !isInstantiable, ifConfigBlockDepth == 0 {
+		if !isInstantiable {
 			plainTypeDeclarations.append(PlainTypeDeclaration(
 				typeDescription: type,
 				access: access,

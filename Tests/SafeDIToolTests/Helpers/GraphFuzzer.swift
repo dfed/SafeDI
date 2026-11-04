@@ -102,6 +102,38 @@ struct GraphFuzzerFixture: Equatable {
 		return swiftFileContent.map { GraphFuzzerModule(declaredIn: $0) ?? .samePackageCaller }
 	}
 
+	/// The condition of each `#if` and `#elseif` clause that the files of a split graph spell in the modules a module
+	/// depends on, transitively, and not in the module's own, by the module's name: the conditions of the blocks that the
+	/// SwiftPM plugin flow, and only it, reads under the module's conditions and asserts its decisions about in the
+	/// module's generated files (`GraphFuzzerOracle.firstDeclarationOneIntegrationGenerates`). Empty for a graph in one
+	/// module.
+	var conditionsSpelledOnlyInDependencies: [String: Set<String>] {
+		guard let modules else { return [:] }
+		var conditionsByModule = [GraphFuzzerModule: Set<String>]()
+		for (module, content) in zip(modules, swiftFileContent) {
+			for line in content.split(separator: "\n") {
+				let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+				for keyword in ["#if ", "#elseif "] where trimmedLine.hasPrefix(keyword) {
+					conditionsByModule[module, default: []].insert(String(trimmedLine.dropFirst(keyword.count)))
+				}
+			}
+		}
+		var conditionsByModuleName = [String: Set<String>]()
+		for module in Set(modules) {
+			var dependencies = Set<GraphFuzzerModule>()
+			var pendingDependencies = module.dependencies
+			while let dependency = pendingDependencies.popLast() {
+				if dependencies.insert(dependency).inserted {
+					pendingDependencies += dependency.dependencies
+				}
+			}
+			conditionsByModuleName[module.name] = dependencies
+				.reduce(into: Set<String>()) { $0.formUnion(conditionsByModule[$1, default: []]) }
+				.subtracting(conditionsByModule[module, default: []])
+		}
+		return conditionsByModuleName
+	}
+
 	/// The modules of a split graph the tool runs over without their package's name, which their files' first lines say.
 	var modulesOmittingPackageName: Set<GraphFuzzerModule> {
 		Set(swiftFileContent.filter(GraphFuzzerModule.omitsPackageName(declaredIn:)).compactMap(GraphFuzzerModule.init(declaredIn:)))
@@ -1015,8 +1047,12 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case unreadParameterType
 	/// The unread value through a `public` typealias the seam's module declares, which SafeDI reads.
 	case unreadParameterTypeThroughTypealias
-	/// A narrower first-party type the unread tree's child receives only if available, declared inside an `#if` block.
-	case unreadBoundaryInsideConditionalBlock
+	/// A first-party type the unread tree's child receives only if available, declared `public` inside a
+	/// platform-conditioned `#if` block, every clause of which SafeDI reads.
+	case recordedInsideConditionalBlock
+	/// A first-party type the unread tree's child receives only if available, declared narrower in the clause of a flag
+	/// SafeDI evaluates and `public` in its `#else`, which SafeDI reads in the clause the flag selects.
+	case recordedInFlagClause
 	/// The narrower type declared in a `package` extension in a file without a SafeDI marker.
 	case unreadBoundaryInPackageExtension
 	/// The narrower type declared in an unspelled extension of a nested type.
@@ -1775,8 +1811,10 @@ enum GraphFuzzerGenerator {
 		/// lets the seam's `package` tier take (R9).
 		private var holeProtocolAccessRandom: GraphFuzzerRandomNumberGenerator
 		/// Draw only `addingUnreadParameterTypes`' choices: whether a graph gains its tree with a value of a type no
-		/// declaration SafeDI reads declares, and whether that tree names a narrower first-party type at a boundary of the
-		/// three states of decision 54.
+		/// declaration SafeDI reads declares, which counts as `public` (decision 54), and whether that tree names a
+		/// first-party type SafeDI must read a declaration of, which counted as unread would be `public` too: declared
+		/// inside a platform-conditioned `#if` block or a flag's clause, in a `package` extension in a file without a SafeDI
+		/// marker, in an extension of a nested type, or as an `internal` typealias.
 		private var unreadTypeRandom: GraphFuzzerRandomNumberGenerator
 		private var unreadBoundaryRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
@@ -4571,11 +4609,14 @@ enum GraphFuzzerGenerator {
 		/// value and instantiates `UnreadSeam`, whose child `UnreadChild` receives it, spelled by value, received only if
 		/// available, as an array, in a closure, in a tuple, through an existential of a standard protocol, as the nested
 		/// `Unicode.Scalar`, or through a `public` typealias the seam's module declares, which SafeDI then reads. A tenth of
-		/// graphs instead or also give the child an only-if-available receive of a narrower first-party type at a boundary
-		/// of the three states: declared inside an `#if` block, in a `package` extension in a file without a SafeDI marker,
-		/// in an extension of a nested type, or as an `internal` typealias, each of which SafeDI must not count as unread,
-		/// or the seam's `public` tier would not compile. `unreadTypeRandom` and `unreadBoundaryRandom` draw only for this
-		/// pass, after every other.
+		/// graphs instead or also give the child an only-if-available receive of a first-party type SafeDI must read a
+		/// declaration of: declared `public` inside a platform-conditioned `#if` block, every clause of which it reads, or a
+		/// narrower one in a `package` extension in a file without a SafeDI marker, in an extension of a nested type, or as
+		/// an `internal` typealias, each of which, counted as unread, would make the seam's `public` tier fail to compile;
+		/// and half of them, by one more roll, also a receive of a type declared `internal` in the clause of `FUZZ_FLAG`, a
+		/// condition the harness never defines, and `public` in its `#else`, spelled `#if FUZZ_FLAG` or `#if !FUZZ_FLAG` by
+		/// another, so that SafeDI reads the clause the flag selects, at that clause's level, and asserts the decision.
+		/// `unreadTypeRandom` and `unreadBoundaryRandom` draw only for this pass, after every other.
 		private mutating func addingUnreadParameterTypes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard features.contains(.generateDependencyTree) else { return declarations }
 			let drawsUnreadValue = unreadTypeRandom.percentChance(15)
@@ -4624,9 +4665,9 @@ enum GraphFuzzerGenerator {
 				let boundaryAccess: AccessLevel
 				switch unreadBoundaryRandom.integer(in: 0...3) {
 				case 0:
-					// Inside an `#if` block: the middle state, `internal` unless a mention raises it.
+					// Inside a platform-conditioned `#if` block, every clause of which SafeDI reads: `public`.
 					boundaryType = "\(prefix)UnreadGuarded"
-					boundaryAccess = .internal
+					boundaryAccess = .public
 					seam.additionalDeclarations.append("#if canImport(Foundation)\npublic final class \(boundaryType)\(helperTypesAreSendable ? ": Sendable" : "") {}\n#endif")
 				case 1:
 					// In a `package` extension, in a file without a SafeDI marker: `package`, the extension's level. The file is
@@ -4648,8 +4689,22 @@ enum GraphFuzzerGenerator {
 					boundaryAccess = .internal
 					seam.additionalDeclarations.append("typealias \(boundaryType) = Int")
 				}
-				proofTypeAccess[boundaryType] = boundaryAccess
+				if boundaryAccess < .public {
+					proofTypeAccess[boundaryType] = boundaryAccess
+				}
 				child.properties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "unreadBoundary", type: "\(boundaryType)?"))
+				if unreadBoundaryRandom.percentChance(50) {
+					// Declared `internal` in a flag's clause and `public` in its `#else`: `FUZZ_FLAG` is never defined, so
+					// `!FUZZ_FLAG` selects the `internal` declaration, and `FUZZ_FLAG` the `public` one.
+					let flaggedType = "\(prefix)UnreadFlagged"
+					let selectsNarrower = unreadBoundaryRandom.percentChance(50)
+					let conformance = helperTypesAreSendable ? ": Sendable" : ""
+					seam.additionalDeclarations.append("#if \(selectsNarrower ? "!" : "")FUZZ_FLAG\nfinal class \(flaggedType)\(conformance) {}\n#else\npublic final class \(flaggedType)\(conformance) {}\n#endif")
+					if selectsNarrower {
+						proofTypeAccess[flaggedType] = .internal
+					}
+					child.properties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "unreadFlagged", type: "\(flaggedType)?"))
+				}
 			}
 			host.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "unreadSeam", type: seamName))
 			declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "unreadHostBuilder", type: "\(instantiator)<\(hostName)>"))
@@ -5616,7 +5671,7 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		if let boundary = unreadChildProperties.first(where: { $0.label == "unreadBoundary" }) {
 			if boundary.type.hasSuffix("UnreadGuarded?") {
-				features.insert(.unreadBoundaryInsideConditionalBlock)
+				features.insert(.recordedInsideConditionalBlock)
 			} else if boundary.type.hasSuffix("UnreadSpace.Inner.Value?") {
 				features.insert(.unreadBoundaryInExtensionOfNestedType)
 			} else if boundary.type.hasSuffix("UnreadValue?") {
@@ -5624,6 +5679,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			} else {
 				features.insert(.unreadBoundaryInternalTypealias)
 			}
+		}
+		if unreadChildProperties.contains(where: { $0.label == "unreadFlagged" }) {
+			features.insert(.recordedInFlagClause)
 		}
 		// `addingLabelFormsSeam`'s shapes.
 		if declaresType(named: "FormsScreen") {
@@ -7076,14 +7134,16 @@ struct GraphFuzzerToolRuns {
 
 	/// The failure of a graph split across modules that the SwiftPM plugin flow and the module-info flow give another
 	/// verdict, other diagnostics, or other generated declarations (`GraphFuzzerOracle.integrationComparedBlocks(of:)`),
-	/// or `nil`. Both flows lay a module's files out at the same paths, so their diagnostics are compared as they are.
+	/// but for the plugin flow's assertions of decisions about blocks in a dependency's files
+	/// (`GraphFuzzerOracle.firstDeclarationOneIntegrationGenerates`), or `nil`. Both flows lay a module's files out at the
+	/// same paths, so their diagnostics are compared as they are.
 	var integrationsDisagreeFailure: GraphFuzzerFailure? {
 		guard let pluginOutcome else { return nil }
 		let difference: String? = switch (firstOutcome, pluginOutcome) {
 		case let (.rejected(moduleInfoDiagnostics), .rejected(pluginDiagnostics)):
 			moduleInfoDiagnostics == pluginDiagnostics ? nil : "The two flows report other diagnostics."
 		case let (.accepted(moduleInfoFiles, _), .accepted(pluginFiles, _)):
-			GraphFuzzerOracle.firstDeclarationOneIntegrationGenerates(moduleInfoFiles: moduleInfoFiles, pluginFiles: pluginFiles)
+			GraphFuzzerOracle.firstDeclarationOneIntegrationGenerates(moduleInfoFiles: moduleInfoFiles, pluginFiles: pluginFiles, conditionsSpelledOnlyInDependencies: fixture.conditionsSpelledOnlyInDependencies)
 		case (.accepted, .rejected):
 			"The module-info flow accepts the graph, and the SwiftPM plugin flow rejects it."
 		case (.rejected, .accepted):
@@ -8188,21 +8248,51 @@ enum GraphFuzzerOracle {
 	/// The first top-level declaration, in module and then text order, that one of the two flows generates and the other
 	/// does not (`integrationComparedBlocks(of:)`), described with the flow and the module, or `nil` when they generate
 	/// the same declarations.
-	static func firstDeclarationOneIntegrationGenerates(moduleInfoFiles: [String: String], pluginFiles: [String: String]) -> String? {
+	///
+	/// A compile-time assertion of one decision that only the plugin flow writes in a module is no difference when the
+	/// decision's condition is in `conditionsSpelledOnlyInDependencies` for that module: the plugin reads a dependency's
+	/// files under the reading module's conditions, so the reading module asserts the decisions it made about the
+	/// dependency's blocks, as it asserts a dependency's `@Instantiable` decisions (the Manual's limit on a dependency's
+	/// conditions), while the module-info flow reads the dependency's `.safedi` and leaves them to the dependency, which
+	/// asserts them under both flows. Every other block either flow alone generates is a difference.
+	static func firstDeclarationOneIntegrationGenerates(moduleInfoFiles: [String: String], pluginFiles: [String: String], conditionsSpelledOnlyInDependencies: [String: Set<String>]) -> String? {
 		let moduleInfoBlocks = integrationComparedBlocks(of: moduleInfoFiles)
 		let pluginBlocks = integrationComparedBlocks(of: pluginFiles)
 		return Set(moduleInfoBlocks.keys).union(pluginBlocks.keys).sorted().lazy.compactMap { moduleName -> String? in
 			let moduleInfoModuleBlocks = moduleInfoBlocks[moduleName, default: []]
 			let pluginModuleBlocks = pluginBlocks[moduleName, default: []]
+			let dependencyConditions = conditionsSpelledOnlyInDependencies[moduleName, default: []]
 			if let block = moduleInfoModuleBlocks.subtracting(pluginModuleBlocks).sorted().first {
 				return "Only the module-info flow generates, in \(moduleName):\n\(block)"
-			} else if let block = pluginModuleBlocks.subtracting(moduleInfoModuleBlocks).sorted().first {
+			} else if let block = pluginModuleBlocks.subtracting(moduleInfoModuleBlocks).sorted().first(where: { block in
+				compileTimeAssertionCondition(of: block).map { !dependencyConditions.contains($0) } ?? true
+			}) {
 				return "Only the SwiftPM plugin flow generates, in \(moduleName):\n\(block)"
 			} else {
 				return nil
 			}
 		}.first
 	}
+
+	/// The condition of the decision `block` asserts, when `block` is the compile-time assertion of one decision that a
+	/// generated file opens with – `#if <condition>` with an `#error` saying SafeDI assumed it inactive, or
+	/// `#if !(<condition>)` with one saying SafeDI assumed it active, then `#endif` – or `nil`.
+	static func compileTimeAssertionCondition(of block: String) -> String? {
+		let lines = block.split(separator: "\n", omittingEmptySubsequences: false)
+		guard lines.count == 3,
+		      lines[2] == "#endif",
+		      lines[1].hasPrefix(compileTimeAssertionErrorPrefix),
+		      let conditionEnd = lines[1].range(of: "` was ")
+		else { return nil }
+		let condition = String(lines[1][lines[1].index(lines[1].startIndex, offsetBy: compileTimeAssertionErrorPrefix.count)..<conditionEnd.lowerBound])
+		let assumedActive = lines[1][conditionEnd.upperBound...].hasPrefix("active, but it is inactive in this compilation.")
+		let assumedInactive = lines[1][conditionEnd.upperBound...].hasPrefix("inactive, but it is active in this compilation.")
+		guard assumedActive || assumedInactive, lines[0] == "#if " + (assumedActive ? "!(\(condition))" : condition) else { return nil }
+		return condition
+	}
+
+	/// How the `#error` of a compile-time assertion of one decision begins, up to the condition it names.
+	static let compileTimeAssertionErrorPrefix = "#error(\"SafeDI scanned this module assuming `#if "
 
 	/// How each line that begins a block `integrationComparedBlocks(of:)` compares begins: an extension, a conditional
 	/// block, a public mock's module-level configuration or a forwarder of a default, or an import.

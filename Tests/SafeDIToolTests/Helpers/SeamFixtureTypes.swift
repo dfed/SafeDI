@@ -50,10 +50,27 @@ func inlineFixture(_ files: [String]) -> [String] {
 	files.map { $0.replacingOccurrences(of: "@Instantiable(generateDependencyTree: true)", with: "@Instantiable") }
 }
 
-/// `declaration`, of a type that is not `@Instantiable`, inside an `#if` block, from which SafeDI takes no access level
-/// (`PlainTypeDeclaration.isInsideConditionalBlock`): the type counts as `internal`, raised only by the members that
-/// mention it – the middle state of decision 54, between a type SafeDI reads the access of and one it reads no
-/// declaration of, which counts as `public`.
-func unrecordedTypeDeclaration(_ declaration: String) -> String {
+/// `Hubs`, in package `Shop`, whose `@Instantiable` `Hub` a fixture declares `Hub.Theme` in an extension of
+/// (`hubTheme(declarations:)`).
+let hubsModule = ModuleFixture(name: "Hubs", packageName: "Shop", swiftFileContent: ["@Instantiable\npublic struct Hub: Instantiable {\n    public init() {}\n}"])
+
+/// `Hub.Theme`, or `Hub.<name>`, a `public` `@Instantiable` final class with `declarations`, in an unspelled extension of
+/// `hubsModule`'s `Hub`,
+/// in a file that imports `Hubs`. SafeDI bounds a type in an extension of another module's type by that extension, which
+/// counts as `internal`, and raises it only by the mentions in its module or in one whose declaration receives it, so a
+/// module in another package can name it while SafeDI proves it narrower: what a type in a clause the conditions select
+/// could be before SafeDI read such a type's declaration exactly.
+func hubTheme(named name: String = "Theme", declarations: [String] = []) -> String {
+	let theme = seamFixtureType(named: name, isFinalClass: true, declarations: declarations)
+		.split(separator: "\n", omittingEmptySubsequences: false)
+		.map { $0.isEmpty ? "" : "    \($0)" }
+		.joined(separator: "\n")
+	return "import Hubs\n\nextension Hub {\n\(theme)\n}"
+}
+
+/// `declaration`, of a type that is not `@Instantiable`, inside `#if canImport(Foundation)`, which SafeDI records from
+/// every clause: a platform condition is one only the compiler decides, so the type counts as the narrowest level any
+/// clause declares it at, here the one `declaration` spells.
+func platformConditionedDeclaration(_ declaration: String) -> String {
 	"#if canImport(Foundation)\n\(declaration)\n#endif"
 }

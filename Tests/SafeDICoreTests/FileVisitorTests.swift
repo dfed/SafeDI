@@ -2073,8 +2073,9 @@ struct FileVisitorTests {
 
 	@Test
 	func walk_recordsPlainTypeDeclarationsWithEnclosingAccess_insideIfBlocksAndExtensionsToo() {
-		// A declaration inside an `#if` block is recorded from every clause, marked as such, and one directly inside an
-		// extension with the extension's access, which its level takes when it spells none.
+		// A declaration inside a platform-conditioned `#if` block is recorded from every clause the compiler could select,
+		// as one outside every block is, and one directly inside an extension with the extension's access, which its level
+		// takes when it spells none.
 		let syntaxTree = Parser.parse(source: """
 		public enum Outer {
 		    struct Middle {}
@@ -2130,13 +2131,11 @@ struct FileVisitorTests {
 				typeDescription: .nested(name: "Platform", parentType: .simple(name: "Outer")),
 				access: AccessDeclaration(level: .internal, declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 5)),
 				enclosingTypeAccess: [outerAccess],
-				isInsideConditionalBlock: true,
 			),
 			PlainTypeDeclaration(
 				typeDescription: .nested(name: "Platform", parentType: .simple(name: "Outer")),
 				access: AccessDeclaration(level: .internal, declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 5)),
 				enclosingTypeAccess: [outerAccess],
-				isInsideConditionalBlock: true,
 			),
 			PlainTypeDeclaration(
 				typeDescription: .nested(name: "Extended", parentType: .simple(name: "Outer")),
@@ -2153,7 +2152,8 @@ struct FileVisitorTests {
 	}
 
 	@Test
-	func walk_recordsProtocolDeclarations_insideIfBlocksAndExtensionsToo() {
+	func walk_recordsProtocolDeclarations_insideExtensionsToo_andNotInsideClausesTheConditionsSkip() {
+		// `DEBUG` is not active, so the clause that declares `Guarded` is skipped, and nothing records it.
 		let syntaxTree = Parser.parse(source: """
 		package protocol FeedService {}
 		public enum Outer {
@@ -2193,12 +2193,6 @@ struct FileVisitorTests {
 				enclosingTypeAccess: [outerAccess],
 			),
 			PlainTypeDeclaration(
-				typeDescription: .simple(name: "Guarded"),
-				access: AccessDeclaration(level: .internal, declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 6, column: 1)),
-				enclosingTypeAccess: [],
-				isInsideConditionalBlock: true,
-			),
-			PlainTypeDeclaration(
 				typeDescription: .nested(name: "Extended", parentType: .simple(name: "Outer")),
 				access: AccessDeclaration(level: .internal, declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 5)),
 				enclosingTypeAccess: [],
@@ -2212,8 +2206,8 @@ struct FileVisitorTests {
 	}
 
 	@Test
-	func walk_recordsTypealiasDeclarations_atTopLevelInTypeBodiesInsideExtensionsAndInsideIfBlocks() {
-		// C9: a typealias is recorded as any plain type is, with its spelled chain.
+	func walk_recordsTypealiasDeclarations_atTopLevelInTypeBodiesAndInsideExtensions_andNotInsideClausesTheConditionsSkip() {
+		// C9: a typealias is recorded as any plain type is, with its spelled chain; `DEBUG` is not active, so `Debug` is not.
 		let syntaxTree = Parser.parse(source: """
 		public typealias UserID = String
 		package enum Space {
@@ -2263,11 +2257,128 @@ struct FileVisitorTests {
 					isExtension: true,
 				),
 			),
+		])
+	}
+
+	@Test
+	func walk_recordsPlainTypeDeclarationsOfSelectedClauseOnly_whenFlagDecidesBlock() {
+		// IF23: `FLAG` is active, so the `#if` clause is the one the compiler selects, and only its declaration is recorded.
+		let syntaxTree = Parser.parse(source: """
+		#if FLAG
+		package struct Token {}
+		#else
+		public struct Token {}
+		#endif
+		""")
+		let fileVisitor = FileVisitor(
+			conditionalCompilationEvaluator: ConditionalCompilationEvaluator(activeCompilationConditions: ["FLAG"]),
+			sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree),
+		)
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.plainTypeDeclarations == [
 			PlainTypeDeclaration(
-				typeDescription: .simple(name: "Debug"),
-				access: AccessDeclaration(level: .internal, declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 1)),
+				typeDescription: .simple(name: "Token"),
+				access: AccessDeclaration(
+					level: .package,
+					modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 8),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+				),
 				enclosingTypeAccess: [],
-				isInsideConditionalBlock: true,
+			),
+		])
+		#expect(fileVisitor.plainTypeDeclarationDecisions == [
+			GuardedPlainTypeNames(
+				decisions: [ConditionalCompilationDecision(condition: "FLAG", isActive: true)],
+				consultedConditions: ["FLAG"],
+				declaredTypes: [
+					GuardedPlainTypeNames.DeclaredType(name: "Token", outermostName: "Token", level: .package),
+					GuardedPlainTypeNames.DeclaredType(name: "Token", outermostName: "Token", level: .public),
+				],
+			),
+		])
+	}
+
+	@Test
+	func walk_pairsDecisionsWithTypesBlockDeclaresInAnyClause_whenBlockHoldsNothingElseSafeDIReads() {
+		// IF23: the block's decisions and the conditions it consulted are kept with the plain types it declares in any
+		// clause, nested blocks' included – each one's own name, outermost name and level – rather than among the file's,
+		// for the module to consult and assert when it keeps such a declaration. The platform block decides nothing.
+		let syntaxTree = Parser.parse(source: """
+		public enum Space {
+		    #if FLAG
+		    struct Config {}
+		    #else
+		    #if os(Linux)
+		    package struct Config {}
+		    #endif
+		    #endif
+		}
+		#if !OTHER
+		public struct Theme {}
+		#endif
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.plainTypeDeclarationDecisions == [
+			GuardedPlainTypeNames(
+				decisions: [ConditionalCompilationDecision(condition: "FLAG", isActive: false)],
+				consultedConditions: ["FLAG"],
+				declaredTypes: [
+					GuardedPlainTypeNames.DeclaredType(name: "Config", outermostName: "Space", level: .internal),
+					GuardedPlainTypeNames.DeclaredType(name: "Config", outermostName: "Space", level: .package),
+				],
+			),
+			GuardedPlainTypeNames(
+				decisions: [ConditionalCompilationDecision(condition: "!OTHER", isActive: true)],
+				consultedConditions: ["OTHER"],
+				declaredTypes: [GuardedPlainTypeNames.DeclaredType(name: "Theme", outermostName: "Theme", level: .public)],
+			),
+		])
+		#expect(fileVisitor.conditionalCompilationDecisions.isEmpty)
+		#expect(fileVisitor.consultedCompilationConditions.isEmpty)
+	}
+
+	@Test
+	func walk_keepsConditionWithBlock_whenBlockDeclaresPlainTypeInSkippedClause() {
+		// IF23: the block's only clause is skipped, so nothing is recorded, but the condition that skipped it is kept with
+		// the block, which the module consults when it keeps a declaration of `Token`: another value would record it.
+		let syntaxTree = Parser.parse(source: """
+		#if FLAG
+		struct Token {}
+		#endif
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.plainTypeDeclarations.isEmpty)
+		#expect(fileVisitor.consultedCompilationConditions.isEmpty)
+		#expect(fileVisitor.plainTypeDeclarationDecisions == [
+			GuardedPlainTypeNames(
+				decisions: [ConditionalCompilationDecision(condition: "FLAG", isActive: false)],
+				consultedConditions: ["FLAG"],
+				declaredTypes: [GuardedPlainTypeNames.DeclaredType(name: "Token", outermostName: "Token", level: .internal)],
+			),
+		])
+	}
+
+	@Test
+	func walk_keepsConditionOfImportBlockWithBlock_whenItAlsoDeclaresPlainType() {
+		// IF23: a block that holds an import and a plain declaration keeps its condition with the block for what the file
+		// contributes, not only among the conditions that decide its imports.
+		let syntaxTree = Parser.parse(source: """
+		#if FLAG
+		import Foundation
+		struct Token {}
+		#endif
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.consultedCompilationConditions.isEmpty)
+		#expect(fileVisitor.importOnlyConsultedCompilationConditions == ["FLAG"])
+		#expect(fileVisitor.plainTypeDeclarationDecisions == [
+			GuardedPlainTypeNames(
+				decisions: [ConditionalCompilationDecision(condition: "FLAG", isActive: false)],
+				consultedConditions: ["FLAG"],
+				declaredTypes: [GuardedPlainTypeNames.DeclaredType(name: "Token", outermostName: "Token", level: .internal)],
 			),
 		])
 	}

@@ -129,8 +129,8 @@ extension IfConfigDeclSyntax {
 	}
 
 	/// What SafeDI would learn from this block among type declarations, the declarations in every one of its clauses
-	/// that decide which files SafeDI generates, and the declarations of types that are not `@Instantiable` in every one
-	/// of its clauses, including those of the blocks nested in it. All come from one walk of the block.
+	/// that decide which files SafeDI generates, and the outermost names of the types that are not `@Instantiable` it
+	/// declares in any of its clauses, including those of the blocks nested in it. All come from one walk of the block.
 	/// - Parameters:
 	///   - enclosingType: The type whose members the block is among, if any, which encloses the types the block
 	///     declares.
@@ -145,7 +145,7 @@ extension IfConfigDeclSyntax {
 		inExtensionOf extendedType: TypeDescription?,
 		enclosingExtensionAccess: AccessDeclaration? = nil,
 		sourceLocationConverter: SourceLocationConverter? = nil,
-	) -> (content: SafeDIContent, outputFileDeclarations: OutputFileDeclarations, plainTypeDeclarations: [PlainTypeDeclaration]) {
+	) -> (content: SafeDIContent, outputFileDeclarations: OutputFileDeclarations, plainTypeNames: PlainTypeNamesInAnyClause) {
 		let detector = SafeDIContentDetector(
 			context: .declarations,
 			enclosingType: enclosingType,
@@ -155,7 +155,41 @@ extension IfConfigDeclSyntax {
 			sourceLocationConverter: sourceLocationConverter,
 		)
 		detector.walk(self)
-		return (detector.content, detector.outputFileDeclarations, detector.plainTypeDeclarations)
+		return (detector.content, detector.outputFileDeclarations, detector.plainTypeNames)
+	}
+}
+
+/// The plain types an `#if` block declares in any of its clauses, including those of the blocks nested in it: the
+/// declarations a walk of the block could record under some evaluation of its conditions.
+struct PlainTypeNamesInAnyClause {
+	/// Each type whose chain is a chain of names, as deciding whether a read resolves to it needs.
+	private(set) var declaredTypes = Set<GuardedPlainTypeNames.DeclaredType>()
+	/// Whether the block declares no plain type a mention can name, in any clause.
+	var isEmpty: Bool {
+		declaredTypes.isEmpty
+	}
+
+	/// Records `declaration`, unless it is declared inside an extension of a type spelled otherwise than by a name
+	/// (`extension [Int] { … }`), which no mention names by its chain.
+	mutating func record(_ declaration: PlainTypeDeclaration) {
+		if let outermostName = declaration.typeDescription.outermostTypeName {
+			// The type's own name: the last of its chain of names, or the outermost when nothing encloses it.
+			let name = if case let .nested(name, _, _) = declaration.typeDescription {
+				name
+			} else {
+				outermostName
+			}
+			declaredTypes.insert(GuardedPlainTypeNames.DeclaredType(
+				name: name,
+				outermostName: outermostName,
+				level: TypeAccessProof.normalized(declaration.levelBeforeExtendedTypeCap),
+			))
+		}
+	}
+
+	/// The types, with the selection of the block's clauses: `decisions`, and the conditions it consulted.
+	func guarded(by scannable: ScannableClauses) -> GuardedPlainTypeNames {
+		GuardedPlainTypeNames(decisions: scannable.decisions, consultedConditions: scannable.consultedConditions.sorted(), declaredTypes: declaredTypes.sorted())
 	}
 }
 
@@ -186,9 +220,9 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	private(set) var content = SafeDIContent.none
 	/// The declarations among type declarations, in every clause, that decide which files SafeDI generates.
 	private(set) var outputFileDeclarations = OutputFileDeclarations()
-	/// Among type declarations, every `struct`, `class`, `actor`, `enum`, `protocol`, and `typealias` declaration that is
-	/// not `@Instantiable`, in every clause, in source order, each marked `isInsideConditionalBlock`.
-	private(set) var plainTypeDeclarations = [PlainTypeDeclaration]()
+	/// Among type declarations, the outermost names of the `struct`, `class`, `actor`, `enum`, `protocol`, and `typealias`
+	/// declarations that are not `@Instantiable`, in every clause.
+	private(set) var plainTypeNames = PlainTypeNamesInAnyClause()
 
 	override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
 		visitTypeDeclaration(node.attributes, declaring: typeDefined(named: node.name.text), access: node.modifiers.access(introducedBy: node.classKeyword, sourceLocationConverter: sourceLocationConverter), isTypeDefinition: true)
@@ -379,16 +413,15 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 		(enclosingType, enclosingTypeAccess) = outerEnclosingTypes.removeLast()
 	}
 
-	/// Records `type`, which a declaration with `access` declares, among `plainTypeDeclarations` when it is not
-	/// `@Instantiable` and the walk is among type declarations.
+	/// Records the outermost name of `type`, which a declaration with `access` declares, among `plainTypeNames` when it is
+	/// not `@Instantiable` and the walk is among type declarations.
 	private func recordPlainTypeDeclaration(_ type: TypeDescription, access: AccessDeclaration, isInstantiable: Bool) {
 		guard case .declarations = context, !isInstantiable else { return }
-		plainTypeDeclarations.append(PlainTypeDeclaration(
+		plainTypeNames.record(PlainTypeDeclaration(
 			typeDescription: type,
 			access: access,
 			enclosingTypeAccess: enclosingTypeAccess,
 			enclosingExtensionAccess: enclosingExtensionAccess,
-			isInsideConditionalBlock: true,
 		))
 	}
 

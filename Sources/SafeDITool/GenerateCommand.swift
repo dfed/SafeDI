@@ -267,7 +267,7 @@ struct Generate: AsyncParsableCommand {
 				namedBy: projectFilePaths,
 				conditionalCompilation: evaluator,
 				// The proof reads a declaration of another module's file only where a mention names it.
-				keepingDeclarationsOfTypesNamed: mentionedTypeNames(of: initialModule.instantiables),
+				keepingDeclarationsOfTypesNamed: KeptPlainTypeNames(mentioning: mentionedTypeNames(of: initialModule.instantiables)),
 			)
 			parsedModuleInfo = initialModule.including(ModuleInfo(additionalFileScans.map(\.fileScan)))
 		} else {
@@ -1195,13 +1195,24 @@ struct Generate: AsyncParsableCommand {
 		   	inputFilePaths: inputFilePaths,
 		   	// The cached `ModuleInfo` names files as scan recorded them in the manifest.
 		   	configurationFilePaths: Set(manifest.configurationFilePaths),
+		   	mockScopedFilePaths: manifest.mockScopedFilePaths.map(Set.init),
 		   	projectFilePaths: projectFilePaths,
 		   	activeCompilationConditions: activeCompilationConditions,
 		   )
 		{
-			(cached, true)
+			return (cached, true)
 		} else {
-			try await (
+			// Without a list of the module's own files, every input is one, which needs no path spelled for comparison.
+			let isReadingModuleFile: (String) -> Bool = if manifest?.mockScopedFilePaths != nil {
+				Self.isOwnFile(
+					manifest: manifest,
+					inputFilePaths: inputFilePaths,
+					comparisonFilePaths: projectFilePaths ?? ProjectFilePaths(projectRoot: FileManager.default.currentDirectoryPath),
+				)
+			} else {
+				{ _ in true }
+			}
+			return try await (
 				parseModule(
 					filePaths: inputFilePaths,
 					// A fresh parse names files as the CSV does, so the manifest's configuration
@@ -1209,6 +1220,7 @@ struct Generate: AsyncParsableCommand {
 					configurationFilePaths: manifest.map { $0.configurationFilePaths(among: inputFilePaths, in: projectFilePaths) } ?? inputFilePaths,
 					activeCompilationConditions: activeCompilationConditions,
 					keepsTypeDeclarationsOtherModulesCanName: writesModuleInfoWithoutTargetGraph,
+					isReadingModuleFile: isReadingModuleFile,
 				).module,
 				false,
 			)
@@ -1219,6 +1231,7 @@ struct Generate: AsyncParsableCommand {
 		manifestPath: String,
 		inputFilePaths: Set<String>,
 		configurationFilePaths: Set<String>,
+		mockScopedFilePaths: Set<String>?,
 		projectFilePaths: ProjectFilePaths,
 		activeCompilationConditions: Set<String>,
 	) async throws -> ParsedModule? {
@@ -1281,10 +1294,28 @@ struct Generate: AsyncParsableCommand {
 			configuration: configuration,
 		)
 		// Scan kept the plain declarations of the types its walk's declarations mention, which these conditions can select
-		// differently.
-		let scanMentionedTypeNames = mentionedTypeNames(of: cached.moduleInfo.instantiables + cached.conditionSensitiveFileScans.flatMap(\.fileScan.instantiables))
-		guard let fileScans = try await refreshed(cached.conditionSensitiveFileScans, from: cached, activeCompilationConditions: activeCompilationConditions, evaluator: evaluator, mentioningOnlyTypesNamed: scanMentionedTypeNames),
-		      let additionalFileScans = try await refreshed(cached.additionalConditionSensitiveFileScans, from: cached, activeCompilationConditions: activeCompilationConditions, evaluator: evaluator, mentioningOnlyTypesNamed: nil)
+		// differently. The module's files are named as the manifest names them, which is how it lists its own files.
+		guard let fileScans = try await refreshed(
+		      	cached.conditionSensitiveFileScans,
+		      	from: cached,
+		      	activeCompilationConditions: activeCompilationConditions,
+		      	evaluator: evaluator,
+		      	keepingDeclarationsOfTypesNamed: cached.keptPlainTypeNames,
+		      	mentionedByModuleInfo: cached.moduleInfo,
+		      	keepsTypeDeclarationsOtherModulesCanName: writesModuleInfoWithoutTargetGraph,
+		      	isReadingModuleFile: { mockScopedFilePaths?.contains($0) != false },
+		      ),
+		      let additionalFileScans = try await refreshed(
+		      	cached.additionalConditionSensitiveFileScans,
+		      	from: cached,
+		      	activeCompilationConditions: activeCompilationConditions,
+		      	evaluator: evaluator,
+		      	keepingDeclarationsOfTypesNamed: cached.additionalKeptPlainTypeNames,
+		      	mentionedByModuleInfo: nil,
+		      	keepsTypeDeclarationsOtherModulesCanName: false,
+		      	// A file reached through `additionalDirectoriesToInclude` is another module's.
+		      	isReadingModuleFile: { _ in false },
+		      )
 		else {
 			return nil
 		}
@@ -1307,16 +1338,31 @@ struct Generate: AsyncParsableCommand {
 	///
 	/// A file that declares a configuration in any clause of its `#if` blocks could declare a different one
 	/// now, or one where it declared none, which would change the evaluator every file is walked with, so
-	/// then the whole module is parsed afresh. So is a module one of whose files, walked again, now has a declaration
-	/// that mentions a type none of scan's mentioned (`mentionedTypeNames(of:)`), and that is not a top-level
-	/// `@Instantiable` type, when `mentioningOnlyTypesNamed` gives the names scan's did: scan kept the plain
-	/// declarations of the types its walk's declarations mention, and a fresh parse keeps that type's too.
+	/// then the whole module is parsed afresh. So is a module whose declarations, once its files are walked again, mention
+	/// other types than scan's did (`mentionedTypeNames(of:)`), when `mentionedByModuleInfo` gives the module's other
+	/// files: scan kept the plain declarations of the types its walk's declarations mention, and asserted the decisions
+	/// that select a clause declaring one a mention names, and a fresh parse keeps and asserts those of the types the
+	/// module's declarations mention now, in another file as in a file walked again. A top-level `@Instantiable` type's
+	/// name is left out of both sides: its own declaration proves it, so no plain declaration of its name is read, and a
+	/// `#if DEBUG` declaration that mentions one, the usual case, keeps the cache. The name stays in when a plain declaration
+	/// the module keeps under a block with decisions shares it (`FileScan.keptGuardedPlainTypeNames`), such as a nested
+	/// type of that name: a mention of it decides whether that block's decisions are asserted.
+	///
+	/// A file walked again keeps the plain type declarations, and asserts the decisions about them, of the types scan
+	/// kept (`keptTypeNames`), and, when `keepsTypeDeclarationsOtherModulesCanName`, the `package` ones, as a fresh parse
+	/// keeps them. A file that mentions no SafeDI marker but declares such a type is parsed again too: the conditions of
+	/// its blocks select which of its declarations are read.
+	/// - Parameter isReadingModuleFile: Whether the file a cached scan names, as the manifest names it, is one of the
+	///   module's own files (see `parseModule`).
 	private func refreshed(
 		_ cachedFileScans: [CachedFileScan],
 		from cached: CachedScannedModuleInfo,
 		activeCompilationConditions: Set<String>,
 		evaluator: ConditionalCompilationEvaluator,
-		mentioningOnlyTypesNamed scanMentionedTypeNames: Set<String>?,
+		keepingDeclarationsOfTypesNamed keptTypeNames: KeptPlainTypeNames,
+		mentionedByModuleInfo moduleInfo: ModuleInfo?,
+		keepsTypeDeclarationsOtherModulesCanName: Bool,
+		isReadingModuleFile: (String) -> Bool,
 	) async throws -> [FileScan]? {
 		let scanActiveCompilationConditions = Set(cached.activeCompilationConditions)
 		func hasChangedValue(_ condition: String) -> Bool {
@@ -1328,27 +1374,25 @@ struct Generate: AsyncParsableCommand {
 		guard !staleFileScans.contains(where: \.fileScan.outputFileDeclarations.declaresConfiguration) else {
 			return nil
 		}
+		// safedi-source-rule: allow uniqueKeysWithValues — each cached scan names the file scan parsed under its own absolute path.
+		let manifestPathByScannedPath = Dictionary(uniqueKeysWithValues: staleFileScans.map { ($0.scannedPath, $0.fileScan.path) })
 		// Scan parsed every file under its absolute path, so the file is read from the name it is parsed under.
-		let rescans = try await parseSwiftFiles(Set(staleFileScans.map(\.scannedPath)), conditionalCompilation: evaluator)
-		if let scanMentionedTypeNames {
-			// A top-level `@Instantiable` type's own declaration proves it, so no plain declaration of its name is read.
-			let instantiableTypeNames = Set((cached.moduleInfo.instantiables + cachedFileScans.flatMap(\.fileScan.instantiables) + rescans.flatMap(\.instantiables)).compactMap { instantiable in
-				instantiable.concreteInstantiable.popNested == nil ? instantiable.concreteInstantiable.outermostTypeName : nil
-			})
-			guard mentionedTypeNames(of: rescans.flatMap(\.instantiables)).subtracting(instantiableTypeNames).isSubset(of: scanMentionedTypeNames) else {
-				return nil
-			}
-		}
-		// safedi-source-rule: allow uniqueKeysWithValues — `parseSwiftFiles` walks each path of a set once, and names each scan by the path it walked.
+		let rescans = try await parseSwiftFilesDeclaringTypes(
+			Set(staleFileScans.map(\.scannedPath)),
+			conditionalCompilation: evaluator,
+			keepingDeclarationsOfTypesNamed: keptTypeNames,
+			keepsTypeDeclarationsOtherModulesCanName: keepsTypeDeclarationsOtherModulesCanName,
+			isReadingModuleFile: { scannedPath in manifestPathByScannedPath[scannedPath].map(isReadingModuleFile) == true },
+		)
+		// safedi-source-rule: allow uniqueKeysWithValues — `parseSwiftFilesDeclaringTypes` walks or parses each path of a set once, and names each scan by the path it walked.
 		let rescanByScannedPath = Dictionary(uniqueKeysWithValues: rescans.map { ($0.path, $0) })
 		let staleScannedPaths = Set(staleFileScans.map(\.scannedPath))
-		// A file that no longer mentions SafeDI is not walked, so it contributes nothing, as in a fresh parse. Its plain
-		// type declarations depend on no condition, and scan kept those of the types the module's extensions extend.
-		return cachedFileScans.compactMap { cachedFileScan in
+		// A file that mentions no SafeDI marker and no longer declares a type scan kept contributes nothing, as in a fresh
+		// parse.
+		let refreshedFileScans = cachedFileScans.compactMap { cachedFileScan in
 			if staleScannedPaths.contains(cachedFileScan.scannedPath) {
 				rescanByScannedPath[cachedFileScan.scannedPath]?
 					.relocated(to: cachedFileScan.fileScan.path)
-					.replacingPlainTypeDeclarations(with: cachedFileScan.fileScan.plainTypeDeclarations)
 			} else if cachedFileScan.fileScan.importOnlyConsultedCompilationConditions.contains(where: hasChangedValue) {
 				// Only the file's imports depend on a changed condition, and its import segments hold them.
 				cachedFileScan.fileScan.withImports(evaluatedWith: evaluator)
@@ -1356,6 +1400,22 @@ struct Generate: AsyncParsableCommand {
 				cachedFileScan.fileScan
 			}
 		}
+		if let moduleInfo {
+			// Scan kept the declarations, and asserted the decisions, of the types its declarations mentioned; a mention
+			// that appeared or went away would change which a fresh parse keeps and asserts, in a file not walked again too.
+			// Scan's names and these are both read without the top-level `@Instantiable` types of either walk, but for a
+			// name a kept plain declaration under a block with decisions shares, whose decisions a mention of it decides.
+			let guardedTypeNames = Set((cachedFileScans.map(\.fileScan) + refreshedFileScans).flatMap(\.keptGuardedPlainTypeNames))
+			let exemptTypeNames = Set((moduleInfo.instantiables + cachedFileScans.flatMap(\.fileScan.instantiables) + refreshedFileScans.flatMap(\.instantiables)).compactMap { instantiable in
+				instantiable.concreteInstantiable.popNested == nil ? instantiable.concreteInstantiable.outermostTypeName : nil
+			}).subtracting(guardedTypeNames)
+			guard mentionedTypeNames(of: moduleInfo.instantiables + refreshedFileScans.flatMap(\.instantiables)).subtracting(exemptTypeNames)
+				== keptTypeNames.mentionedTypeNames.subtracting(exemptTypeNames)
+			else {
+				return nil
+			}
+		}
+		return refreshedFileScans
 	}
 
 	/// How the compiler spells the paths this tool was handed, or `nil` when this tool does not know.

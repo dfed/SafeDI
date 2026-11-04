@@ -20,21 +20,22 @@
 
 /// How visible each type a seam's generated initializer or a public mock names is, as far as SafeDI can prove it from the
 /// declarations it reads (decision 54). A seam parameter is as visible as the narrowest type it names. Each type it names
-/// is in one of three states:
+/// is in one of two states:
 ///
-/// - RECORDED: an `@Instantiable` declaration of it (an ENTRY), or its plain declaration (`PlainTypeDeclaration`) outside
-///   every `#if` block – directly inside an extension or not – proves it exactly, at the level its chain spells, which the
-///   compiler enforces, capped by the proof of the type an enclosing extension extends.
-/// - DECLARED INSIDE AN `#if` BLOCK: a plain declaration inside an `#if` block, in any clause, is recorded but proves no
-///   level, since the clause the compiler selects decides whether it exists. Such a type counts as `internal`, raised by
-///   the mentions of the declarations in the seam's module or in a module whose declaration receives the parameter. So
-///   does a type whose spelling SafeDI cannot read.
+/// - RECORDED: an `@Instantiable` declaration of it (an ENTRY), or its plain declaration (`PlainTypeDeclaration`) –
+///   outside every `#if` block or in a clause SafeDI scans, directly inside an extension or not – proves it exactly, at
+///   the level its chain spells, which the compiler enforces, capped by the proof of the type an enclosing extension
+///   extends. A type declared in several clauses a platform condition decides counts as the narrowest of them.
 /// - UNREAD: no declaration SafeDI reads declares it, nor a type enclosing it: it is a framework's, a fetched package's, a
-///   binary target's, or a type of a first-party module that does not run SafeDI. It counts as `public`: only a `public`
-///   declaration can be named across a module SafeDI does not read, except a `package` one of a first-party module of the
-///   same package, which then fails to compile at the generated declaration (`unreadTypes(namedBy:mentionedFrom:)` lists
-///   such types for a comment there). A type nested in a recorded type that SafeDI reads no declaration of – a
-///   `typealias` in a protocol's body, a member a macro generates – counts as the type that encloses it.
+///   binary target's, a type of a first-party module that does not run SafeDI, or one declared only in clauses the
+///   reported conditions skip. It counts as `public`: only a `public` declaration can be named across a module SafeDI
+///   does not read, except a `package` one of a first-party module of the same package, which then fails to compile at
+///   the generated declaration (`unreadTypes(namedBy:mentionedFrom:)` lists such types for a comment there). A type
+///   nested in a recorded type that SafeDI reads no declaration of – a `typealias` in a protocol's body, a member a macro
+///   generates – counts as the type that encloses it.
+///
+/// A type whose spelling SafeDI cannot read is in neither: it counts as `internal`, raised by the mentions of the
+/// declarations in the seam's module or in a module whose declaration receives the parameter.
 ///
 /// A type's plain declarations are looked up in the mentioning module first, then, for a mention spelled with a module's
 /// name (`Core.Theme`), in that module, then among the declarations another module declares `package` or wider; the
@@ -43,7 +44,8 @@
 /// Every declaration of the map is an ENTRY, of one of three kinds: a type declaration outside every extension, whose
 /// access is its spelled chain, which the compiler enforces, so no mention raises it (EXACT); a type declaration inside
 /// an extension, bounded by the extended type's own exact entry of the same module when there is one, by its exact plain
-/// declaration, or by `public` when the extended type is unread (then EXACT too), and otherwise by the extension's spelled
+/// declaration, by the exact proof of the nearest type enclosing it that SafeDI reads when it reads none of the extended
+/// type, or by `public` when the extended type is unread (then EXACT too), and otherwise by the extension's spelled
 /// level, `internal` when it spells none or extends a nested type; and an extension-based declaration, exact at its
 /// type's plain declaration, or at `public` when its type is unread, and otherwise bounded the same way. An entry that is
 /// not exact is raised by every mention of its type, at the level of the member that mentions it capped by the proof of
@@ -120,6 +122,10 @@ public struct TypeAccessProof: Sendable {
 					// No `@Instantiable` declaration of the extended type bounds the entry, but its plain declaration,
 					// which the compiler caps the entry by, does.
 					entryKind = .exactInExtension(extendedType: extendedType, ownLevel: ownLevel, extendedTypeProof: resolved.level, extendedTypeIsPlain: true)
+				} else if let extendedType, entries[extendedType] == nil, candidates.isEmpty, let enclosing = exactProofOfNearestEnclosingType(of: extendedType, for: entry) {
+					// SafeDI reads no declaration of the extended type, but one of a type enclosing it, which caps it, as it
+					// caps any type nested in it that SafeDI reads no declaration of.
+					entryKind = .exactInExtension(extendedType: extendedType, ownLevel: ownLevel, extendedTypeProof: enclosing.level, extendedTypeIsPlain: enclosing.isPlain, extendedTypeEnclosingType: enclosing.type)
 				} else if let extendedType, entries[extendedType] == nil, candidates.isEmpty, enclosingTypesAreUnread(of: extendedType, mentionedFrom: .declaration(entry)) {
 					// No declaration SafeDI reads declares the extended type, which is therefore `public`.
 					unreadExtendedTypesByEntry[type] = extendedType
@@ -129,7 +135,6 @@ public struct TypeAccessProof: Sendable {
 						extendedType: extendedType,
 						extension: enclosingExtension,
 						start: ownLevel.capped(by: extendedType.map { Self.extensionBound(enclosingExtension, extendedType: $0) } ?? .internal),
-						extendedTypeHasEntry: extendedType.flatMap { entries[$0] } != nil,
 					)
 				}
 			} else {
@@ -139,10 +144,10 @@ public struct TypeAccessProof: Sendable {
 			return entryKind
 		}
 		/// The exact plain declarations among `candidates`, when every one of them has an exact level, and the narrowest of
-		/// those levels; `nil` when there is none, or when one of them is inside an `#if` block, or inside an extension of
-		/// a type SafeDI proves only by mentions, whose levels the fixed point decides.
+		/// those levels; `nil` when there is none, or when one of them is inside an extension of a type SafeDI proves only by
+		/// mentions, whose levels the fixed point decides.
 		func exactResolution(of candidates: [PlainTypeDeclaration]) -> ResolvedPlainTypeDeclarations? {
-			guard !candidates.isEmpty, candidates.allSatisfy({ !$0.isInsideConditionalBlock }) else { return nil }
+			guard !candidates.isEmpty else { return nil }
 			var levels = [AccessLevel]()
 			for candidate in candidates {
 				guard let level = exactLevel(of: candidate) else { return nil }
@@ -151,8 +156,8 @@ public struct TypeAccessProof: Sendable {
 			guard let level = levels.min(), let first = candidates.first else { return nil }
 			return ResolvedPlainTypeDeclarations(type: first.typeDescription, level: level, declarations: candidates)
 		}
-		/// The level of `declaration`, outside every `#if` block, capped by the exact proof of the type an extension it is
-		/// in extends, or `nil` when that type's proof is not exact.
+		/// The level of `declaration`, capped by the exact proof of the type an extension it is in extends, or `nil` when
+		/// that type's proof is not exact.
 		func exactLevel(of declaration: PlainTypeDeclaration) -> AccessLevel? {
 			let ownLevel = Self.normalized(declaration.levelBeforeExtendedTypeCap)
 			guard let extendedType = declaration.extendedType else { return ownLevel }
@@ -165,6 +170,23 @@ public struct TypeAccessProof: Sendable {
 				return enclosingTypesAreUnread(of: extendedType, mentionedFrom: mentioningModule) ? ownLevel : nil
 			}
 			return exactResolution(of: candidates).map { ownLevel.capped(by: $0.level) }
+		}
+		/// The nearest type enclosing `type` that SafeDI reads a declaration of, as `entry`'s module names it, with its exact
+		/// proof and whether its plain declaration is that proof, or `nil` when there is none, or its proof is not exact: an
+		/// entry of another module, or one SafeDI proves only by mentions.
+		func exactProofOfNearestEnclosingType(of type: TypeDescription, for entry: Instantiable) -> (type: TypeDescription, level: AccessLevel, isPlain: Bool)? {
+			var prefix = type.withoutGenericArguments?.popNested
+			while let enclosingType = prefix {
+				if let enclosingEntry = entries[enclosingType] {
+					guard let enclosingKind = kind(of: enclosingType), let proof = enclosingKind.exactProof, Self.isInSameModule(entry, enclosingEntry, isOwnFile: isOwnFile) else { return nil }
+					return (enclosingType, proof, enclosingKind.isPlainDeclaration)
+				} else {
+					let candidates = plainTypeDeclarations.candidates(named: enclosingType, mentionedFrom: .declaration(entry))
+					guard candidates.isEmpty else { return exactResolution(of: candidates).map { (enclosingType, $0.level, true) } }
+					prefix = enclosingType.popNested
+				}
+			}
+			return nil
 		}
 		/// Whether no declaration SafeDI reads declares a type that encloses `type`.
 		func enclosingTypesAreUnread(of type: TypeDescription, mentionedFrom mentioningModule: MentioningModule) -> Bool {
@@ -247,33 +269,25 @@ public struct TypeAccessProof: Sendable {
 		/// The type is declared inside an extension of `extendedType`, whose own declaration bounds it – its
 		/// `@Instantiable` declaration in the same module, or, when `extendedTypeIsPlain`, its plain declaration: at its
 		/// own level `ownLevel`, capped by `extendedTypeLevel`. `extendedTypeDeclarations` are the extended type's plain
-		/// declarations when the type is itself a plain declaration, which a diagnostic notes; empty otherwise.
-		case declarationInExtensionOfRecordedType(type: TypeDescription, ownLevel: AccessLevel, extendedType: TypeDescription, extendedTypeLevel: AccessLevel, spellsOwnLevel: Bool, extendedTypeIsPlain: Bool, extendedTypeDeclarations: [PlainTypeDeclaration] = [])
+		/// declarations when the type is itself a plain declaration, which a diagnostic notes; empty otherwise. When SafeDI
+		/// reads no declaration of `extendedType` itself, `extendedTypeEnclosingType` is the nearest type enclosing it that
+		/// SafeDI reads, whose declaration bounds it instead.
+		case declarationInExtensionOfRecordedType(type: TypeDescription, ownLevel: AccessLevel, extendedType: TypeDescription, extendedTypeLevel: AccessLevel, spellsOwnLevel: Bool, extendedTypeIsPlain: Bool, extendedTypeDeclarations: [PlainTypeDeclaration] = [], extendedTypeEnclosingType: TypeDescription? = nil)
 		/// The type is declared inside an extension SafeDI does not read as bounding it, or is an extension-based
 		/// declaration – a `mockOnly` one when `isMockOnly` – : it is proven at its extension's bound, raised by
 		/// `raisingProvers` when any mentions it more widely.
-		case declarationInExtension(type: TypeDescription, level: AccessLevel, extendedType: TypeDescription?, extensionIsSpelled: Bool, isExtensionBased: Bool, extendedTypeHasEntry: Bool, raisingProvers: [Prover], isMockOnly: Bool)
-		/// Members SafeDI records that mention the type prove it: `provers`, every one at `level`, the widest, among the
-		/// members of declarations in `mentioningModuleName`, the module whose generated code mentions the type (`nil`
-		/// when its name is unknown), or in the module of a declaration that receives the parameter. `reason` says why
-		/// SafeDI reads no access level of the type.
-		case signatures(type: TypeDescription, level: AccessLevel, provers: [Prover], mentioningModuleName: String?, reason: UnreadAccessReason)
-		/// Nothing proves the type, for `reason`.
-		case unproven(type: TypeDescription, reason: UnreadAccessReason)
+		case declarationInExtension(type: TypeDescription, level: AccessLevel, extendedType: TypeDescription?, extensionIsSpelled: Bool, isExtensionBased: Bool, raisingProvers: [Prover], isMockOnly: Bool)
+		/// Members SafeDI records that mention the type, whose spelling SafeDI cannot read, prove it: `provers`, every one
+		/// at `level`, the widest, among the members of declarations in `mentioningModuleName`, the module whose generated
+		/// code mentions the type (`nil` when its name is unknown), or in the module of a declaration that receives the
+		/// parameter.
+		case signatures(type: TypeDescription, level: AccessLevel, provers: [Prover], mentioningModuleName: String?)
+		/// Nothing proves the type, whose spelling SafeDI cannot read.
+		case unproven(type: TypeDescription)
 		/// The type is nested in `enclosingType`, which `cause` proves, and SafeDI reads no declaration of the type
 		/// itself: a `typealias` in a protocol's body, or a member a macro generates. Swift caps a nested type at the type
 		/// that encloses it.
 		case enclosedBy(type: TypeDescription, enclosingType: TypeDescription, cause: Cause)
-	}
-
-	/// Why SafeDI reads no access level of a type that only mentions prove.
-	public enum UnreadAccessReason: Sendable {
-		/// The type is declared inside an `#if` block, in any clause, in the module named `moduleName`, or `nil` when
-		/// SafeDI knows no name of it. `namesModule` when the module is not the one whose code mentions the type, so a
-		/// diagnostic names it.
-		case conditionalBlock(moduleName: String?, namesModule: Bool)
-		/// SafeDI cannot read the type's spelling.
-		case unreadableSpelling
 	}
 
 	/// A member that mentions a type, at the level it proves the type: its own level capped by the proof of the entry
@@ -482,10 +496,11 @@ public struct TypeAccessProof: Sendable {
 		/// An extension-based declaration of a type whose plain declaration bounds it: exact.
 		case plainDeclaration(ResolvedPlainTypeDeclarations)
 		/// Inside an extension of a type whose own exact entry of the same module, or whose plain declaration, bounds
-		/// it: exact.
-		case exactInExtension(extendedType: TypeDescription, ownLevel: AccessLevel, extendedTypeProof: AccessLevel, extendedTypeIsPlain: Bool)
+		/// it – or, for a type SafeDI reads no declaration of, those of `extendedTypeEnclosingType`, the nearest type
+		/// enclosing it: exact.
+		case exactInExtension(extendedType: TypeDescription, ownLevel: AccessLevel, extendedTypeProof: AccessLevel, extendedTypeIsPlain: Bool, extendedTypeEnclosingType: TypeDescription? = nil)
 		/// Inside an extension that bounds it at `start`.
-		case inExtension(extendedType: TypeDescription?, extension: AccessDeclaration, start: AccessLevel, extendedTypeHasEntry: Bool)
+		case inExtension(extendedType: TypeDescription?, extension: AccessDeclaration, start: AccessLevel)
 		/// An extension-based declaration, bounded at `start`.
 		case extensionBased(start: AccessLevel)
 
@@ -495,7 +510,7 @@ public struct TypeAccessProof: Sendable {
 				level
 			case let .plainDeclaration(resolved):
 				resolved.level
-			case let .exactInExtension(_, ownLevel, extendedTypeProof, _):
+			case let .exactInExtension(_, ownLevel, extendedTypeProof, _, _):
 				ownLevel.capped(by: extendedTypeProof)
 			case .inExtension, .extensionBased:
 				nil
@@ -506,7 +521,7 @@ public struct TypeAccessProof: Sendable {
 			switch self {
 			case .typeDeclaration, .plainDeclaration, .exactInExtension:
 				exactProof ?? .internal
-			case let .inExtension(_, _, start, _), let .extensionBased(start):
+			case let .inExtension(_, _, start), let .extensionBased(start):
 				start
 			}
 		}
@@ -643,7 +658,7 @@ public struct TypeAccessProof: Sendable {
 				return .ownDeclaration(type: type, level: level)
 			case let .plainDeclaration(resolved):
 				return resolved.cause(mentionedFrom: mentioningModule, isOwnFile: plainTypeDeclarations.isOwnFile)
-			case let .exactInExtension(extendedType, ownLevel, extendedTypeProof, extendedTypeIsPlain):
+			case let .exactInExtension(extendedType, ownLevel, extendedTypeProof, extendedTypeIsPlain, extendedTypeEnclosingType):
 				return .declarationInExtensionOfRecordedType(
 					type: type,
 					ownLevel: ownLevel,
@@ -651,15 +666,15 @@ public struct TypeAccessProof: Sendable {
 					extendedTypeLevel: extendedTypeProof,
 					spellsOwnLevel: entries[type]?.access.spellsAccessModifier ?? false,
 					extendedTypeIsPlain: extendedTypeIsPlain,
+					extendedTypeEnclosingType: extendedTypeEnclosingType,
 				)
-			case let .inExtension(extendedType, extensionAccess, _, extendedTypeHasEntry):
+			case let .inExtension(extendedType, extensionAccess, _):
 				return .declarationInExtension(
 					type: type,
 					level: level,
 					extendedType: extendedType,
 					extensionIsSpelled: extensionAccess.spellsAccessModifier,
 					isExtensionBased: false,
-					extendedTypeHasEntry: extendedTypeHasEntry,
 					raisingProvers: shallowProvers(of: type, atLevel: level),
 					isMockOnly: false,
 				)
@@ -670,7 +685,6 @@ public struct TypeAccessProof: Sendable {
 					extendedType: type,
 					extensionIsSpelled: entries[type]?.access.spellsAccessModifier ?? false,
 					isExtensionBased: true,
-					extendedTypeHasEntry: true,
 					raisingProvers: shallowProvers(of: type, atLevel: level),
 					isMockOnly: entries[type]?.mockOnly ?? false,
 				)
@@ -678,9 +692,9 @@ public struct TypeAccessProof: Sendable {
 		}
 		if case .unknown = type {
 			// A spelling SafeDI cannot read could name any type: it counts as `internal`, raised by mentions.
-			return mentionedCause(of: type, reason: .unreadableSpelling, mentionedFrom: mentioningModule, admittedModules: admittedModules)
+			return mentionedCause(of: type, mentionedFrom: mentioningModule, admittedModules: admittedModules)
 		}
-		if let cause = cause(of: type, among: plainTypeDeclarations.candidates(named: type, mentionedFrom: mentioningModule), mentionedFrom: mentioningModule, admittedModules: admittedModules) {
+		if let cause = cause(among: plainTypeDeclarations.candidates(named: type, mentionedFrom: mentioningModule), mentionedFrom: mentioningModule, admittedModules: admittedModules) {
 			return cause
 		}
 		// A type nested in a type SafeDI reads, which it reads no declaration of, is capped by the nearest such type.
@@ -696,15 +710,13 @@ public struct TypeAccessProof: Sendable {
 		return nil
 	}
 
-	/// How `type` is proven by `candidates`, its plain declarations a mention resolves to: the narrowest of the exact
-	/// ones – each at its own level, capped by the proof of the type an extension it is in extends – and of those inside
-	/// an `#if` block, which the admitted mentions prove. An exact declaration wins a tie: a diagnostic can point at it.
-	/// `nil` when there is no candidate.
-	private func cause(of type: TypeDescription, among candidates: [PlainTypeDeclaration], mentionedFrom mentioningModule: MentioningModule, admittedModules: Set<String?>) -> Cause? {
-		var narrowestExact: (level: AccessLevel, cause: Cause)?
+	/// How a type is proven by `candidates`, its plain declarations a mention resolves to: the narrowest of them, each at
+	/// its own level, capped by the proof of the type an extension it is in extends. `nil` when there is no candidate.
+	private func cause(among candidates: [PlainTypeDeclaration], mentionedFrom mentioningModule: MentioningModule, admittedModules: Set<String?>) -> Cause? {
+		var narrowest: (level: AccessLevel, cause: Cause)?
 		var uncappedDeclarations = [PlainTypeDeclaration]()
 		var uncappedLevel: AccessLevel?
-		for candidate in candidates where !candidate.isInsideConditionalBlock {
+		for candidate in candidates {
 			let ownLevel = Self.normalized(candidate.levelBeforeExtendedTypeCap)
 			let extendedTypeCap = candidate.extendedType.flatMap { extendedType in
 				cause(of: extendedType, mentionedFrom: .plainDeclaration(candidate), admittedModules: admittedModules).map { (extendedType: extendedType, cause: $0) }
@@ -719,40 +731,28 @@ public struct TypeAccessProof: Sendable {
 					// The extended type is proven otherwise than by its own declaration, which that proof explains.
 					.enclosedBy(type: candidate.typeDescription, enclosingType: extendedTypeCap.extendedType, cause: extendedTypeCap.cause)
 				}
-				if narrowestExact.map({ candidateCause.level < $0.level }) ?? true {
-					narrowestExact = (candidateCause.level, candidateCause)
+				if narrowest.map({ candidateCause.level < $0.level }) ?? true {
+					narrowest = (candidateCause.level, candidateCause)
 				}
 			} else {
 				uncappedDeclarations.append(candidate)
 				uncappedLevel = min(uncappedLevel ?? ownLevel, ownLevel)
 			}
 		}
-		if let uncappedLevel, narrowestExact.map({ uncappedLevel < $0.level }) ?? true, let first = uncappedDeclarations.first {
-			narrowestExact = (uncappedLevel, ResolvedPlainTypeDeclarations(type: first.typeDescription, level: uncappedLevel, declarations: uncappedDeclarations).cause(mentionedFrom: mentioningModule, isOwnFile: plainTypeDeclarations.isOwnFile))
+		if let uncappedLevel, narrowest.map({ uncappedLevel < $0.level }) ?? true, let first = uncappedDeclarations.first {
+			narrowest = (uncappedLevel, ResolvedPlainTypeDeclarations(type: first.typeDescription, level: uncappedLevel, declarations: uncappedDeclarations).cause(mentionedFrom: mentioningModule, isOwnFile: plainTypeDeclarations.isOwnFile))
 		}
-		guard let firstConditionalDeclaration = candidates.first(where: \.isInsideConditionalBlock) else {
-			return narrowestExact?.cause
-		}
-		let reason = UnreadAccessReason.conditionalBlock(
-			moduleName: firstConditionalDeclaration.moduleName,
-			namesModule: !mentioningModule.declares(firstConditionalDeclaration, isOwnFile: plainTypeDeclarations.isOwnFile),
-		)
-		let mentionedCause = mentionedCause(of: type, reason: reason, mentionedFrom: mentioningModule, admittedModules: admittedModules)
-		if let narrowestExact, narrowestExact.level <= mentionedCause.level {
-			return narrowestExact.cause
-		} else {
-			return mentionedCause
-		}
+		return narrowest?.cause
 	}
 
-	/// How the admitted mentions prove `type`, which SafeDI reads no access level of for `reason`: at the widest level of
-	/// a mention, starting at `internal`.
-	private func mentionedCause(of type: TypeDescription, reason: UnreadAccessReason, mentionedFrom mentioningModule: MentioningModule, admittedModules: Set<String?>) -> Cause {
+	/// How the admitted mentions prove `type`, whose spelling SafeDI cannot read: at the widest level of a mention,
+	/// starting at `internal`.
+	private func mentionedCause(of type: TypeDescription, mentionedFrom mentioningModule: MentioningModule, admittedModules: Set<String?>) -> Cause {
 		let admittedMentions = (mentions[type] ?? []).filter { admittedModules.contains($0.moduleName) }
 		guard let level = admittedMentions.map({ $0.ownLevel.capped(by: proofs[$0.carrier] ?? .internal) }).max() else {
-			return .unproven(type: type, reason: reason)
+			return .unproven(type: type)
 		}
-		return .signatures(type: type, level: level, provers: provers(of: type, atLevel: level, admittedModules: admittedModules), mentioningModuleName: mentioningModule.moduleName, reason: reason)
+		return .signatures(type: type, level: level, provers: provers(of: type, atLevel: level, admittedModules: admittedModules), mentioningModuleName: mentioningModule.moduleName)
 	}
 
 	/// The members that prove `type` at `level`, in source order, each with why it proves less than its own level;
@@ -793,12 +793,12 @@ public struct TypeAccessProof: Sendable {
 		case let .plainDeclaration(resolved):
 			// A carrier's cap names the modules: no seam's module is at hand to tell them apart from.
 			return .plainDeclaration(type: resolved.type, level: resolved.level, declarations: resolved.declarations, namesModules: true)
-		case let .exactInExtension(extendedType, ownLevel, extendedTypeProof, extendedTypeIsPlain):
-			return .declarationInExtensionOfRecordedType(type: carrier, ownLevel: ownLevel, extendedType: extendedType, extendedTypeLevel: extendedTypeProof, spellsOwnLevel: entries[carrier]?.access.spellsAccessModifier ?? false, extendedTypeIsPlain: extendedTypeIsPlain)
-		case let .inExtension(extendedType, extensionAccess, _, extendedTypeHasEntry):
-			return .declarationInExtension(type: carrier, level: level, extendedType: extendedType, extensionIsSpelled: extensionAccess.spellsAccessModifier, isExtensionBased: false, extendedTypeHasEntry: extendedTypeHasEntry, raisingProvers: shallowProvers(of: carrier, atLevel: level), isMockOnly: false)
+		case let .exactInExtension(extendedType, ownLevel, extendedTypeProof, extendedTypeIsPlain, extendedTypeEnclosingType):
+			return .declarationInExtensionOfRecordedType(type: carrier, ownLevel: ownLevel, extendedType: extendedType, extendedTypeLevel: extendedTypeProof, spellsOwnLevel: entries[carrier]?.access.spellsAccessModifier ?? false, extendedTypeIsPlain: extendedTypeIsPlain, extendedTypeEnclosingType: extendedTypeEnclosingType)
+		case let .inExtension(extendedType, extensionAccess, _):
+			return .declarationInExtension(type: carrier, level: level, extendedType: extendedType, extensionIsSpelled: extensionAccess.spellsAccessModifier, isExtensionBased: false, raisingProvers: shallowProvers(of: carrier, atLevel: level), isMockOnly: false)
 		case .extensionBased:
-			return .declarationInExtension(type: carrier, level: level, extendedType: carrier, extensionIsSpelled: entries[carrier]?.access.spellsAccessModifier ?? false, isExtensionBased: true, extendedTypeHasEntry: true, raisingProvers: shallowProvers(of: carrier, atLevel: level), isMockOnly: entries[carrier]?.mockOnly ?? false)
+			return .declarationInExtension(type: carrier, level: level, extendedType: carrier, extensionIsSpelled: entries[carrier]?.access.spellsAccessModifier ?? false, isExtensionBased: true, raisingProvers: shallowProvers(of: carrier, atLevel: level), isMockOnly: entries[carrier]?.mockOnly ?? false)
 		}
 	}
 
@@ -825,10 +825,10 @@ extension TypeAccessProof.Cause {
 		switch self {
 		case let .ownDeclaration(_, level),
 		     let .plainDeclaration(_, level, _, _),
-		     let .declarationInExtension(_, level, _, _, _, _, _, _),
-		     let .signatures(_, level, _, _, _):
+		     let .declarationInExtension(_, level, _, _, _, _, _),
+		     let .signatures(_, level, _, _):
 			level
-		case let .declarationInExtensionOfRecordedType(_, ownLevel, _, extendedTypeLevel, _, _, _):
+		case let .declarationInExtensionOfRecordedType(_, ownLevel, _, extendedTypeLevel, _, _, _, _):
 			ownLevel.capped(by: extendedTypeLevel)
 		case .unproven:
 			.internal
@@ -864,9 +864,9 @@ extension TypeAccessProof {
 
 		let isOwnFile: (@Sendable (String) -> Bool)?
 
-		/// The plain declarations a mention of `type` in a declaration of the module of `mentioning` names, of either
-		/// placement, inside an `#if` block or not, in the order of their files and within a file in source order; empty
-		/// when SafeDI records none that module can name. A mention spelled with a module's name before the type's
+		/// The plain declarations a mention of `type` in a declaration of the module of `mentioning` names, in the order of
+		/// their files and within a file in source order (two clauses of a platform-conditioned block can each declare it);
+		/// empty when SafeDI records none that module can name. A mention spelled with a module's name before the type's
 		/// (`Core.Theme`), where the view holds a module of that name and no type of it, names that module's declarations
 		/// of the rest. Otherwise the mentioning module's own declaration is what Swift resolves the name to, and without
 		/// one, a declaration another module declares `package` or wider: the only kind another module can name. A

@@ -125,7 +125,7 @@ struct SeamSignatureTests {
 			tierAccess: label == "tierAccess" ? .package : parameter.tierAccess,
 			defaultsToNil: label == "defaultsToNil" ? false : parameter.defaultsToNil,
 			receivers: label == "receivers" ? [] : parameter.receivers,
-			accessCause: label == "accessCause" ? .unproven(type: .simple(name: "User"), reason: .conditionalBlock(moduleName: nil, namesModule: false)) : parameter.accessCause,
+			accessCause: label == "accessCause" ? .unproven(type: .simple(name: "User")) : parameter.accessCause,
 			nestedSeamCall: label == "nestedSeamCall" ? SeamSignature.NestedSeamCall(seamType: .simple(name: "Service"), seamModuleName: "Base", tier: .public, requirement: .public, callerModuleName: "Mid", parameterTierAccess: .package, receivingTypes: [.simple(name: "Badge")]) : parameter.nestedSeamCall,
 			otherInitializerArgumentsAccess: label == "otherInitializerArgumentsAccess" ? .package : parameter.otherInitializerArgumentsAccess,
 		)
