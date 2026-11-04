@@ -697,9 +697,9 @@ extension DependencyTreeGenerator.DependencyTreeGeneratorError {
 			}
 			let fill = "\(seamName) generates its dependency tree \(seamModule), so the initializer SafeDI generated for it takes a builder for `\(hole.property.label)`, and `\(rootType.asSource)`, a root, must fill it."
 			let message = if fulfilledByMockOnlyDeclaration {
-				"No production @\(InstantiableVisitor.macroName) declaration \(callerModule) can see fulfills \(reference). \(fill) A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @\(InstantiableVisitor.macroName) declaration that fulfills \(typeName)."
+				"No production @\(InstantiableVisitor.macroName) declaration that \(callerModule) can see fulfills \(reference). \(fill) A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @\(InstantiableVisitor.macroName) declaration that fulfills \(typeName)."
 			} else {
-				"No @\(InstantiableVisitor.macroName) type or extension \(callerModule) can see fulfills \(reference). \(fill) Decorate \(typeName), or an extension of it, with @\(InstantiableVisitor.macroName); list \(typeName) in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it; \(DependencyTreeGenerator.DependencyTreeGeneratorError.fulfillingDeclarationInAnotherModuleRemedy)"
+				"No @\(InstantiableVisitor.macroName) type or extension that \(callerModule) can see fulfills \(reference). \(fill) Decorate \(typeName), or an extension of it, with @\(InstantiableVisitor.macroName); list \(typeName) in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it; \(DependencyTreeGenerator.DependencyTreeGeneratorError.fulfillingDeclarationInAnotherModuleRemedy)"
 			}
 			return [SourceDiagnostic(severity: .error, location: location, message: message)]
 				+ (noteLocation.map { [SourceDiagnostic(severity: .note, location: $0, message: "`\(hole.ownerType.asSource)` instantiates `\(hole.property.asSource)` here.")] } ?? [])
