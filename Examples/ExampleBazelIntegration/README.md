@@ -4,7 +4,9 @@ A Bazel port of `ExampleTuistIntegration`, demonstrating SafeDI's
 cross-module `.safedi` artifact handoff in a Bazel-native way. The
 Swift source code (types, mocks, previews) is byte-for-byte identical
 to the Tuist example — the differences are entirely in the build
-system.
+system — except for the `Models` module and `Subproject`'s seam
+`WindowTitle`, which the Tuist example, built with SafeDI's latest
+release, adopts once a release ships seams.
 
 **Supported host:** macOS arm64 only (matches the
 [`rules_apple`](https://github.com/bazelbuild/rules_apple) macOS
@@ -12,9 +14,20 @@ toolchain). The SafeDI rules themselves are platform-agnostic.
 
 ## What it demonstrates
 
-- **Two `swift_library` targets** (`//Subproject:Subproject`,
+- **Three `swift_library` targets** (`//Models:Models`,
+  `//Subproject:Subproject`,
   `//ExampleBazelIntegration:ExampleBazelIntegration`) that compile
   separately.
+- **A module that declares no `@Instantiable` type runs SafeDI too.**
+  `Subproject`'s seam `WindowTitle` (`generateDependencyTree: true`)
+  receives `Models`' `package` type `NoteTheme` only if available, so
+  the initializer `Subproject` generates for it is `public` without
+  `theme` and `package` with it. SafeDI counts a type it reads no
+  declaration of as `public`, so `Models` is a `safedi_swift_library`
+  and its `Models_safedi` is in the `safedi_deps` of `Subproject` and of
+  the app, whose root calls the seam: without it, the `public`
+  initializer would take a `package` type and fail to compile. All three
+  modules set the same `package_name`.
 - **`safedi_swift_library` macro** — `load("@safedi//bazel:safedi.bzl", "safedi_swift_library")`. It takes a `swift_library`'s attributes and declares two targets from them:
   - `<name>`, the `swift_library`, which compiles `srcs` together with the generated code.
   - `<name>_safedi`, a `safedi_compile` target that runs SafeDITool once over the same `srcs` and writes two outputs:

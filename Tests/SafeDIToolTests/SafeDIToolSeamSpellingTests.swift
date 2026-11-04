@@ -578,7 +578,9 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 	mutating func generate_callsSeamOfAnotherModulePassingTypeOfThirdModule_whenTreeRequiresPropertyWhoseTypeCoreDeclares(integration: MultiModuleIntegration, spelling: CoreSpelling) async throws {
 		// A pass-through whose type comes from a third module, `Core`, which neither the seam's module nor its caller
 		// declares: both compute the parameter's type from the declaration they read and spell it alike, so the guard
-		// hashes match and the call compiles, under both integrations and for each spelling.
+		// hashes match and the call compiles, under both integrations and for each spelling. A `.safedi` records no
+		// `public` declaration of `Core`'s, so under `.moduleInfo` the type is one SafeDI reads no declaration of, which the
+		// comment names.
 		let type = spelling.type
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
@@ -598,6 +600,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					#endif
 
 					extension List {
+					    // SafeDI counts `Settings` as `public`: no module it reads declares it narrower. If `Settings` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
 					    public init(value: Settings) {
 					        let row = Row(value: value)
 					        self.init(row: row)
@@ -616,6 +619,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					#endif
 
 					extension List {
+					    // SafeDI counts `Settings` as `public`: no module it reads declares it narrower. If `Settings` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
 					    public init(value: @escaping (Settings) -> Void) {
 					        let row = Row(value: value)
 					        self.init(row: row)
@@ -634,6 +638,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					#endif
 
 					extension List {
+					    // SafeDI counts `Logging` as `public`: no module it reads declares it narrower. If `Logging` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
 					    public init(value: any Logging) {
 					        let row = Row(value: value)
 					        self.init(row: row)
@@ -652,6 +657,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					#endif
 
 					extension List {
+					    // SafeDI counts `Catalog.Entry` as `public`: no module it reads declares it narrower. If `Catalog.Entry` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
 					    public init(value: Catalog.Entry) {
 					        let row = Row(value: value)
 					        self.init(row: row)

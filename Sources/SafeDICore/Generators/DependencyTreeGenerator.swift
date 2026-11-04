@@ -510,6 +510,13 @@ public actor DependencyTreeGenerator {
 	/// `publicMockContext`, once made.
 	private var memoizedPublicMockContext: PublicMockContext?
 
+	/// The comment the `public` declarations this module generates carry, naming the types they name that it reads no
+	/// declaration of, or `nil` when the run writes none (`SeamResolution.carriesUnreadTypeComment`). Over the
+	/// declarations the module's own seams and public mocks are computed from, as `publicMockContext` reads them.
+	private var unreadTypeComment: UnreadTypeComment? {
+		publicMockContext.unreadTypeComment
+	}
+
 	private func makePublicMockContext() -> PublicMockContext {
 		var moduleNameByType = [TypeDescription: String]()
 		for instantiable in typeDescriptionToFulfillingInstantiableMap.values {
@@ -518,8 +525,10 @@ public actor DependencyTreeGenerator {
 			}
 		}
 		let moduleName = emittingModule?.identity.moduleName
+		let proof = TypeAccessProof(instantiables: typeDescriptionToFulfillingInstantiableMap, plainTypeDeclarations: plainTypeDeclarations, isOwnFile: emittingModule?.isOwnFile)
 		return PublicMockContext(
-			proof: TypeAccessProof(instantiables: typeDescriptionToFulfillingInstantiableMap, plainTypeDeclarations: plainTypeDeclarations, isOwnFile: emittingModule?.isOwnFile),
+			proof: proof,
+			unreadTypeComment: seams.carriesUnreadTypeComment ? UnreadTypeComment(proof: proof, mentioningModule: .generatedCode(ofModuleNamed: moduleName, isRunsOwnModule: true)) : nil,
 			moduleNameByType: moduleNameByType,
 			moduleName: moduleName,
 			configurationTypeNameByType: PublicMockContext.configurationTypeNames(
@@ -2058,6 +2067,11 @@ public actor DependencyTreeGenerator {
 				/// As `treeReachesDeclarationCallersCannotSee`, where `declaration` was read from a dependent module info
 				/// that names no module, which this module's module info therefore cannot name to the callers.
 				case treeReachesDeclarationOfUnnamedModuleInfo(declaration: TypeDescription)
+				/// As `treeReachesDeclarationOfUnnamedModuleInfo` or, `viaTargetGraph`, `treeReachesDeclarationCallersCannotSee`,
+				/// where what the callers cannot see is the plain declaration (`PlainTypeDeclaration`) that proves the type of
+				/// a parameter they would take otherwise: without it, they count the type as one SafeDI reads no declaration
+				/// of, which is `public`. Reported at the declaration.
+				case treeReachesPlainDeclarationCallersCannotSee(declaration: PlainTypeDeclaration, viaTargetGraph: Bool)
 				/// A dependency in the seam's tree reads an `onlyIfAvailable` alias that may not be created, or the type that
 				/// builds the alias's declaring type also declares the alias's property: built inline, that read finds
 				/// whatever declaration of the alias's label encloses the alias where the alias is not created, which
@@ -2191,6 +2205,15 @@ public actor DependencyTreeGenerator {
 				case let .treeReachesDeclarationCallersCannotSee(declaration):
 					receivers = []
 					message = "SafeDI cannot generate the dependency tree of \(seamName): the initializer SafeDI generates for it depends on `\(declaration.asSource)`, which is declared in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see that declaration, so their calls would not match the initializer. Declare `\(declaration.asSource)` in a file of this module, or of a module it depends on."
+				case let .treeReachesPlainDeclarationCallersCannotSee(declaration, viaTargetGraph):
+					receivers = []
+					location = declaration.access.declarationStartLocation ?? location
+					let typeName = "`\(declaration.typeDescription.asSource)`"
+					message = if viaTargetGraph {
+						"SafeDI cannot generate the dependency tree of \(seamName): the initializer SafeDI generates for it takes its parameters at the access this declaration of \(typeName) proves, which is in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see it, so they would count \(typeName) as `public`, and their calls would not match the initializer. Declare \(typeName) in a file of this module, or of a module it depends on."
+					} else {
+						"SafeDI cannot generate the dependency tree of \(seamName): the initializer SafeDI generates for it takes its parameters at the access this declaration of \(typeName) proves, which is in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see it, so they would count \(typeName) as `public`, and their calls would not match the initializer. Generate that module's module info with `--module-name`."
+					}
 				case let .uncreatedAliasRead(read):
 					receivers = []
 					location = read.declarationLocation
@@ -2924,7 +2947,7 @@ public actor DependencyTreeGenerator {
 	/// the same module, outside every extension: the code that names the declared type names the extended type too, so
 	/// the extended type's declaration, and those enclosing it in its file, must be as visible as the construction
 	/// needs. The extended type's own `@Instantiable` declaration is read when it has one, and otherwise its plain
-	/// declaration, which `scan` records outside every `#if` block and extension (`PlainTypeDeclaration`), is looked up
+	/// declaration outside every `#if` block and extension (`PlainTypeDeclaration`), which `scan` records, is looked up
 	/// among the declarations of the module that declares the extension: an extension in another module of a type
 	/// narrower than that module cannot be written. Empty for any other declaration, and for an extended type SafeDI
 	/// does not record, which the compiler reports.
@@ -2944,14 +2967,7 @@ public actor DependencyTreeGenerator {
 		   !extended.declarationType.isExtension
 		{
 			guard extended.enclosingExtensionAccess == nil, extended.moduleName == moduleName else { return [] }
-			return extended.accessNeeds(constructingWithMockMethod: false).filter { accessNeed in
-				switch accessNeed.declaration {
-				case .type, .extensionDeclaringType:
-					true
-				case .member, .extensionDeclaringMember:
-					false
-				}
-			}
+			return extended.accessNeeds(constructingWithMockMethod: false).filter { $0.declaration.declaredType != nil }
 		} else {
 			return extendedTypes.plainTypeDeclaration(of: extendedType, inModuleNamed: moduleName, preferringFileAt: instantiable.sourceFilePath)?.accessNeeds ?? []
 		}
@@ -2961,14 +2977,7 @@ public actor DependencyTreeGenerator {
 	/// and the types enclosing it, never the generated initializer, whose access is at most the type's, nor the seam's
 	/// own initializer, which the generated initializer calls inside the seam's module.
 	fileprivate static func seamLeafAccessNeeds(of leaf: Instantiable) -> [AccessNeed] {
-		leaf.accessNeeds(constructingWithMockMethod: false).filter { accessNeed in
-			switch accessNeed.declaration {
-			case .member, .extensionDeclaringMember:
-				false
-			case .type, .extensionDeclaringType:
-				true
-			}
-		}
+		leaf.accessNeeds(constructingWithMockMethod: false).filter { $0.declaration.declaredType != nil }
 	}
 
 	/// What the paths from a production tree's root to a construction decide about its seam candidate: on each path,
@@ -3418,8 +3427,15 @@ public actor DependencyTreeGenerator {
 		let receivingTypes = differingParameters.flatMap { ownPlan.receiversByLabel[$0.name, default: []].map(\.declaringType) }
 		let fulfillingTypes = differingParameters.compactMap { typeDescriptionToFulfillingInstantiableMap[$0.type.unwrapped.asInstantiatedType]?.concreteInstantiable }
 		let reachedTypes = Self.typesReachable(fromRoots: [type], in: typeDescriptionToFulfillingInstantiableMap)
-		guard let declaration = earliest(receivingTypes) ?? earliest(fulfillingTypes) ?? earliest(reachedTypes) else { return nil }
-		return PublicMockFinding.callersCannotSee(declaration, of: instantiable, viaTargetGraph: seams.callersComputeFromTargetGraph)
+		return if let declaration = earliest(receivingTypes) ?? earliest(fulfillingTypes) ?? earliest(reachedTypes) {
+			PublicMockFinding.callersCannotSee(declaration, of: instantiable, viaTargetGraph: seams.callersComputeFromTargetGraph)
+		} else {
+			// Without a plain declaration that proves a parameter, the callers count its type as one SafeDI reads no
+			// declaration of.
+			Self.earliestUnseenPlainDeclaration(provingAnyOf: differingParameters.map(\.accessCause)).map {
+				PublicMockFinding.callersCannotSeePlainDeclaration($0, of: instantiable, viaTargetGraph: seams.callersComputeFromTargetGraph)
+			}
+		}
 	}
 
 	/// The generators of the modules whose public mocks this module's mock trees call, by module name.
@@ -3849,21 +3865,33 @@ public actor DependencyTreeGenerator {
 				let ownSignature = ownSeamRoot?.signature
 				let callersFailed = callersComputation.failedSeams.contains(seamType)
 				let callersSignature: SeamSignature? = callersFailed ? nil : (callersComputation.seamRoots[seamType] ?? nil)?.signature
-				guard callersFailed || ownSignature?.callShape != callersSignature?.callShape, let declaration = Self.unseenDeclarationToName(
+				guard callersFailed || ownSignature?.callShape != callersSignature?.callShape else { continue }
+				let labelsCallersFailedOn = callersFailed ? Self.parameterLabels(namedBy: callersComputation.errors, about: seam) : nil
+				if let declaration = Self.unseenDeclarationToName(
 					for: seam,
 					ownSignature: ownSignature,
 					callersSignature: callersSignature,
-					labelsCallersFailedOn: callersFailed ? Self.parameterLabels(namedBy: callersComputation.errors, about: seam) : nil,
+					labelsCallersFailedOn: labelsCallersFailedOn,
 					unseenDeclarations: unseenDeclarations,
 					in: typeDescriptionToFulfillingInstantiableMap,
 					proof: ownComputation.proof,
-				) else { continue }
-				errors.append(.seam(.init(
-					seam: seam,
-					kind: seams.callersComputeFromTargetGraph
-						? .treeReachesDeclarationCallersCannotSee(declaration: declaration)
-						: .treeReachesDeclarationOfUnnamedModuleInfo(declaration: declaration),
-				)))
+				) {
+					errors.append(.seam(.init(
+						seam: seam,
+						kind: seams.callersComputeFromTargetGraph
+							? .treeReachesDeclarationCallersCannotSee(declaration: declaration)
+							: .treeReachesDeclarationOfUnnamedModuleInfo(declaration: declaration),
+					)))
+				} else if let plainDeclaration = Self.unseenPlainDeclarationToName(
+					ownSignature: ownSignature,
+					callersSignature: callersSignature,
+					labelsCallersFailedOn: labelsCallersFailedOn,
+				) {
+					errors.append(.seam(.init(
+						seam: seam,
+						kind: .treeReachesPlainDeclarationCallersCannotSee(declaration: plainDeclaration, viaTargetGraph: seams.callersComputeFromTargetGraph),
+					)))
+				}
 			}
 		}
 		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
@@ -3873,6 +3901,24 @@ public actor DependencyTreeGenerator {
 			seamRoots[seamType] = seamRoot
 		}
 		return seamRoots
+	}
+
+	/// The parameters of `ownSignature` a seam's callers would not pass as this run declares them: those
+	/// `labelsCallersFailedOn` names, where the callers could not compute the signature and the error they hit names a
+	/// parameter, else those whose call shape `callersSignature` does not hold.
+	private static func differingParameters(
+		ownSignature: SeamSignature?,
+		callersSignature: SeamSignature?,
+		labelsCallersFailedOn: Set<String>?,
+	) -> [SeamSignature.Parameter] {
+		let callersParameterShapes = Set(callersSignature?.callShape.parameters ?? [])
+		return (ownSignature?.parameters ?? []).filter { parameter in
+			if let labelsCallersFailedOn, !labelsCallersFailedOn.isEmpty {
+				labelsCallersFailedOn.contains(parameter.property.label)
+			} else {
+				!callersParameterShapes.contains(SeamSignature.CallShape.Parameter(parameter))
+			}
+		}
 	}
 
 	/// The declaration the callers of `seam` cannot see that a report of the seam names, from `unseenDeclarations`, in
@@ -3892,14 +3938,7 @@ public actor DependencyTreeGenerator {
 		in typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
 		proof: TypeAccessProof,
 	) -> TypeDescription? {
-		let callersParameterShapes = Set(callersSignature?.callShape.parameters ?? [])
-		let differingParameters = (ownSignature?.parameters ?? []).filter { parameter in
-			if let labelsCallersFailedOn, !labelsCallersFailedOn.isEmpty {
-				labelsCallersFailedOn.contains(parameter.property.label)
-			} else {
-				!callersParameterShapes.contains(SeamSignature.CallShape.Parameter(parameter))
-			}
-		}
+		let differingParameters = differingParameters(ownSignature: ownSignature, callersSignature: callersSignature, labelsCallersFailedOn: labelsCallersFailedOn)
 		func declarationPrecedes(_ left: TypeDescription, _ right: TypeDescription) -> Bool {
 			Self.declarationPrecedes(typeDescriptionToFulfillingInstantiableMap[left]?.declarationLocation, typeDescriptionToFulfillingInstantiableMap[right]?.declarationLocation)
 		}
@@ -3922,6 +3961,31 @@ public actor DependencyTreeGenerator {
 			let reachedTypes = Self.typesReachable(fromRoots: [seam.concreteInstantiable], in: typeDescriptionToFulfillingInstantiableMap)
 			return earliestUnseen(reachedTypes.compactMap { typeDescriptionToFulfillingInstantiableMap[$0]?.concreteInstantiable })
 		}
+	}
+
+	/// The plain declaration the callers of a seam cannot see that a report of the seam names when no `@Instantiable`
+	/// declaration explains why they compute its signature otherwise: the earliest by source location of the plain
+	/// declarations whose module SafeDI knows no name of – which the callers' view drops – that prove a parameter of
+	/// `ownSignature` the callers would not take as such (`unseenDeclarationToName(for:…)` decides which). Without it,
+	/// the callers count the parameter's type as one SafeDI reads no declaration of, which is `public`. `nil` when no
+	/// such declaration proves one.
+	private static func unseenPlainDeclarationToName(
+		ownSignature: SeamSignature?,
+		callersSignature: SeamSignature?,
+		labelsCallersFailedOn: Set<String>?,
+	) -> PlainTypeDeclaration? {
+		earliestUnseenPlainDeclaration(provingAnyOf: differingParameters(ownSignature: ownSignature, callersSignature: callersSignature, labelsCallersFailedOn: labelsCallersFailedOn).map(\.accessCause))
+	}
+
+	/// The earliest by source location of the plain declarations whose module SafeDI knows no name of – which a
+	/// callers' view drops – that prove one of `causes`; `nil` when none does.
+	static func earliestUnseenPlainDeclaration(provingAnyOf causes: [TypeAccessProof.Cause?]) -> PlainTypeDeclaration? {
+		causes
+			.flatMap { $0?.provingPlainDeclarations ?? [] }
+			.filter { $0.moduleName == nil }
+			.min { left, right in
+				Dependency.DeclarationLocation.precedesInSourceOrder(left.access.declarationStartLocation, right.access.declarationStartLocation)
+			}
 	}
 
 	/// The labels of the parameters of `seam` that `errors` – what a computation of the module's seams threw – name: the
@@ -4016,6 +4080,8 @@ public actor DependencyTreeGenerator {
 			)
 		}
 		for (seam, seamRoot, seamRootScope) in generatedSeams {
+			var seamRoot = seamRoot
+			seamRoot.unreadTypeComment = unreadTypeComment
 			rootScopeGenerators.append(try RootScopeInfo(
 				typeDescription: seam.concreteInstantiable,
 				instantiable: seam,
@@ -9398,7 +9464,10 @@ extension DependencyTreeGenerator {
 		init(instantiables: [TypeDescription: Instantiable], plainTypeDeclarations: [PlainTypeDeclaration]) {
 			self.instantiables = instantiables
 			var plainTypeDeclarationsByModuleAndType = [ModuleAndType: [PlainTypeDeclaration]]()
-			for plainTypeDeclaration in plainTypeDeclarations {
+			// Only a declaration outside every `#if` block and every extension has an access the construction check reads:
+			// one inside an `#if` block exists only in some clauses, and one inside an extension is capped by a type
+			// declared elsewhere, which the compiler checks.
+			for plainTypeDeclaration in plainTypeDeclarations where !plainTypeDeclaration.isInsideConditionalBlock && plainTypeDeclaration.enclosingExtensionAccess == nil {
 				// A declaration whose module SafeDITool does not know bounds no extension's types, as an `@Instantiable`
 				// declaration of the extended type does not.
 				guard let moduleName = plainTypeDeclaration.moduleName else { continue }

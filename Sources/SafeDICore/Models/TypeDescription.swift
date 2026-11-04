@@ -670,7 +670,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 
 	/// The nominal type this names, with no generic arguments at any level – what a declaration of it records – or
 	/// `nil` when this names no nominal type.
-	var withoutGenericArguments: TypeDescription? {
+	public var withoutGenericArguments: TypeDescription? {
 		switch self {
 		case let .simple(name, _):
 			.simple(name: name)

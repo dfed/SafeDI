@@ -266,6 +266,8 @@ struct Generate: AsyncParsableCommand {
 				excludingInputFilesAt: Set(inputFilePaths.map(comparisonFilePaths.projectFilePath(of:))),
 				namedBy: projectFilePaths,
 				conditionalCompilation: evaluator,
+				// The proof reads a declaration of another module's file only where a mention names it.
+				keepingDeclarationsOfTypesNamed: mentionedTypeNames(of: initialModule.instantiables),
 			)
 			parsedModuleInfo = initialModule.including(ModuleInfo(additionalFileScans.map(\.fileScan)))
 		} else {
@@ -668,7 +670,8 @@ struct Generate: AsyncParsableCommand {
 						? await generator.dependencyTreeAndMockFileHeader + compileTimeAssertions
 						: fileHeader
 					let bodies = writes.map(\.body).filter { !$0.isEmpty }
-					let code = combinedFileHeader + bodies.joined(separator: "\n\n")
+					// One comment names the types the file's `public` declarations name that SafeDI reads no declaration of.
+					let code = combinedFileHeader + UnreadTypeComment.resolvingMarkers(in: bodies.joined(separator: "\n\n"))
 					// Always write — this flag is used to support Bazel and Buck2, which content-hash their inputs, so a stat-identical re-write costs them nothing. Moreover, these tools require that genrules write the outputs that are expected.
 					try code.write(toPath: combinedOutput)
 				} else {
@@ -974,7 +977,8 @@ struct Generate: AsyncParsableCommand {
 		var callersVisiblePlainTypeDeclarations = [PlainTypeDeclaration]()
 		if !generatedSeams.isEmpty || declaresPublicMock, let moduleName = module.moduleName {
 			if callersComputeFromTargetGraph {
-				if unnormalizedInstantiables.contains(where: { $0.moduleName == nil }) {
+				// A declaration the graph places in no module is in a directory the configuration adds.
+				if unnormalizedInstantiables.contains(where: { $0.moduleName == nil }) || plainTypeDeclarations.contains(where: { $0.moduleName == nil }) {
 					let callersVisibleModuleNames = visibleModuleNames(from: moduleName, in: membership)
 					callersVisibleInstantiables = try resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: unnormalizedInstantiables.filter { $0.moduleName.map(callersVisibleModuleNames.contains) == true }))
 					callersVisiblePlainTypeDeclarations = plainTypeDeclarations.filter { $0.moduleName.map(callersVisibleModuleNames.contains) == true }
@@ -1000,6 +1004,9 @@ struct Generate: AsyncParsableCommand {
 			callersComputeFromTargetGraph: callersComputeFromTargetGraph,
 			callersVisibleInstantiables: callersVisibleInstantiables,
 			callersVisiblePlainTypeDeclarations: callersVisiblePlainTypeDeclarations,
+			// Every build tool plugin's run is given a manifest or an output directory. Any other run – Bazel's, Tuist's, a
+			// custom script's – reads only the modules whose module info it is given.
+			carriesUnreadTypeComment: swiftManifest == nil && outputDirectory == nil,
 		)
 	}
 

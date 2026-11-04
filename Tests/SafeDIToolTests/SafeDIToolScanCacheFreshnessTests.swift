@@ -322,9 +322,99 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func scan_cachesTypeDeclarationInsideConditionalBlock_whenDeclarationsInitializerMentionsIt() async throws {
+		// B7: `Token` is declared inside an `#if` block, once in each clause, in a file whose text holds a SafeDI marker: each
+		// record is cached marked as such, with its spelled level.
+		let project = try await scannedProject(alongside: Self.conditionalTokenFiles)
+
+		let cache = try CachedScannedModuleInfo(scanCacheData: Data(contentsOf: scannedModuleInfoURL(forManifestPath: project.manifestFile.path)))
+		#expect(cache.moduleInfo.plainTypeDeclarations.map(\.typeDescription) == [.simple(name: "Token"), .simple(name: "Token")])
+		#expect(cache.moduleInfo.plainTypeDeclarations.map(\.isInsideConditionalBlock) == [true, true])
+		#expect(cache.moduleInfo.plainTypeDeclarations.map(\.access.level) == [.package, .package])
+		#expect(cache.moduleInfo.plainTypeDeclarations.map(\.sourceFilePath) == ["Badge.swift", "Badge.swift"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_parsesAfresh_whenFileDeclaringTypeInsideConditionalBlockChanges() async throws {
+		// B7: editing the file whose `#if` block declares `Token` reads it again rather than the records scan cached.
+		let project = try await scannedProject(alongside: Self.conditionalTokenFiles)
+		let badgeFile = project.directory.appendingPathComponent("Badge.swift")
+		try Self.conditionalTokenFiles["Badge.swift", default: ""].replacingOccurrences(of: "#if FLAG\npackage struct Token {}", with: "#if FLAG\npublic struct Token {}").write(to: badgeFile, atomically: true, encoding: .utf8)
+		try FileModificationTime(seconds: 0, nanoseconds: 0).apply(toItemAtPath: badgeFile.path)
+
+		await assertThrowsError(project.rootNotInManifestMessage) {
+			try await project.generate()
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func scan_cachesTheSameDeclarationsInsideConditionalBlock_whenScannedWithEitherConditionSet() async throws {
+		// B7b: a declaration inside an `#if` block is recorded from every clause, so scanning without `FLAG` and with it
+		// records the same declarations, which `generate` can reuse under either condition set.
+		let withoutFlag = try await scannedProject(alongside: Self.conditionalTokenFiles)
+		let withFlag = try await scannedAgain(withoutFlag, activeCompilationConditions: ["FLAG"])
+
+		let cacheWithoutFlag = try CachedScannedModuleInfo(scanCacheData: Data(contentsOf: scannedModuleInfoURL(forManifestPath: withoutFlag.manifestFile.path)))
+		let cacheWithFlag = try CachedScannedModuleInfo(scanCacheData: Data(contentsOf: scannedModuleInfoURL(forManifestPath: withFlag.manifestFile.path)))
+		#expect(cacheWithFlag.moduleInfo.plainTypeDeclarations.count == 2)
+		#expect(cacheWithoutFlag.moduleInfo.plainTypeDeclarations == cacheWithFlag.moduleInfo.plainTypeDeclarations)
+		try await withoutFlag.generate(activeCompilationConditions: ["FLAG"])
+		try await withFlag.generate()
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func scan_cachesTypealias_whenFileWithoutSafeDIMarkerDeclaresTypeADeclarationMentions() async throws {
+		// C8: the text search finds `typealias Handler`, so the file is parsed and its typealias recorded.
+		let project = try await scannedProject(alongside: [
+			"Handler.swift": "public typealias Handler = () -> Void",
+			"Badge.swift": """
+			@Instantiable
+			public struct Badge: Instantiable {
+			    public init(handler: @escaping Handler) {
+			        self.handler = handler
+			    }
+
+			    @Received let handler: Handler
+			}
+			""",
+		])
+
+		let cache = try CachedScannedModuleInfo(scanCacheData: Data(contentsOf: scannedModuleInfoURL(forManifestPath: project.manifestFile.path)))
+		#expect(cache.moduleInfo.plainTypeDeclarations.map(\.typeDescription) == [.simple(name: "Handler")])
+		#expect(cache.moduleInfo.plainTypeDeclarations.map(\.access.level) == [.public])
+		#expect(cache.moduleInfo.plainTypeDeclarations.map(\.sourceFilePath) == ["Handler.swift"])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// A `package` type declared inside an `#if` block of a file that also declares a type whose initializer mentions it.
+	private static let conditionalTokenFiles = [
+		"Badge.swift": """
+		#if FLAG
+		package struct Token {}
+		#else
+		package struct Token {
+		    let value: Int
+		}
+		#endif
+
+		@Instantiable
+		public struct Badge: Instantiable {
+		    init(token: Token) {
+		        self.token = token
+		    }
+
+		    @Received let token: Token
+		}
+		""",
+	]
 
 	/// A protocol in a file of its own, which mentions no SafeDI marker, and a declaration whose initializer mentions it.
 	private static let mentionedProtocolFiles = [
@@ -425,6 +515,31 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 			rootFile: rootFile,
 			targetFile: targetFile,
 			swiftFileCSV: swiftFileCSV,
+			manifestFile: manifestFile,
+		)
+	}
+
+	/// `project`, scanned again under `activeCompilationConditions` into a manifest and cache of its own, so that the two
+	/// caches name the same files.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func scannedAgain(_ project: ScannedProject, activeCompilationConditions: [String]) async throws -> ScannedProject {
+		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
+		filesToDelete += [outputDirectory, manifestFile, scannedModuleInfoURL(forManifestPath: manifestFile.path)]
+
+		try await Scan.parse([
+			"--input-sources-file", project.swiftFileCSV.path,
+			"--project-root", project.directory.path,
+			"--output-directory", outputDirectory.path,
+			"--manifest-file", manifestFile.path,
+			"--active-compilation-conditions",
+		] + activeCompilationConditions).run()
+		return ScannedProject(
+			directory: project.directory,
+			rootFile: project.rootFile,
+			targetFile: project.targetFile,
+			swiftFileCSV: project.swiftFileCSV,
 			manifestFile: manifestFile,
 		)
 	}

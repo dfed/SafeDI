@@ -171,7 +171,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// B1.13: cause (ii), every proving declaration listed in source order.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Token`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Token` is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Badge.init(token:)`, `Vault.init(token:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Token` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Token { public static func mock() -> Token }`), which proves `Token` `public`; declare `Service` `internal`; build `token` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Token`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Token` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Badge.init(token:)`, `Vault.init(token:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Token` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Token { public static func mock() -> Token }`), which proves `Token` `public`; declare `Service` `internal`; build `token` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
 			\(fixtures["Badge.swift"]):7:5: note: `Badge` receives `token: Token` here.
 			"""
 		}) {
@@ -193,7 +193,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// inactive clause proves nothing.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Token`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Token` is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Badge.init(token:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Token` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Token { public static func mock() -> Token }`), which proves `Token` `public`; declare `Service` `internal`; build `token` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Token`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Token` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Badge.init(token:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Token` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Token { public static func mock() -> Token }`), which proves `Token` `public`; declare `Service` `internal`; build `token` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
 			\(fixtures["Badge.swift"]):13:5: note: `Badge` receives `token: Token` here.
 			"""
 		}) {
@@ -388,7 +388,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// B2.14: D1, an alias's fulfilling type that no recorded member mentions is `internal`.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `session: Session`, which `Consumer` receives through its alias `auth` (`fulfilledByDependencyNamed: "session"`), and cannot pass `nil` for it, since it is required. `Session` is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it (a type of a module SafeDI does not read, declared inside an `#if` block or an extension, or a typealias), and no initializer, `instantiate(…)` or mock method SafeDI records mentions it (`Consumer`'s initializer mentions only `any Auth`). Declare `@Received let session: Session` on `Screen`, so that its initializer, which the compiler checks, states how visible `Session` is (the compiler may then require `Screen`'s initializer, and so the seam, to be narrower); mention `Session` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Session` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Session { public static func mock() -> Session }`), which proves `Session` `public`; declare `Screen` `internal`; receive `auth` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `session: Session`, which `Consumer` receives through its alias `auth` (`fulfilledByDependencyNamed: "session"`), and cannot pass `nil` for it, since it is required. `Session` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and no initializer, `instantiate(…)` or mock method SafeDI records mentions it (`Consumer`'s initializer mentions only `any Auth`). Declare `@Received let session: Session` on `Screen`, so that its initializer, which the compiler checks, states how visible `Session` is (the compiler may then require `Screen`'s initializer, and so the seam, to be narrower); mention `Session` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Session` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Session { public static func mock() -> Session }`), which proves `Session` `public`; declare `Screen` `internal`; receive `auth` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
 			\(fixtures["Consumer.swift"]):7:5: note: `Consumer` receives `session: Session` here.
 			"""
 		}) {
@@ -648,11 +648,11 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenSeamIsDeclaredInUnspelledExtensionOfUnrecordedType() async {
+	mutating func generate_throwsError_whenSeamIsDeclaredInUnspelledExtensionOfTypeDeclaredInsideConditionalBlock() async {
 		// B1.4f: cause (v), the seam's own initializer bounded by an extension SafeDI cannot read the level of.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):6:5: error: SafeDI cannot generate the dependency tree of `Checkout.Service`: its generated `public` initializer, which `Checkout.Service`'s `public` access requires, cannot take `theme: Theme`, which `Checkout.Service` receives, and cannot pass `nil` for it, since it is required. `Theme` is `internal` as far as SafeDI can tell: `Checkout.Service` is declared inside an extension of `Checkout` that spells no access level, and SafeDI cannot see `Checkout`'s, so `Checkout.Service`'s initializer proves its parameter types only at `internal`. If `Checkout` can be `public`, spell the extension's access level (`public extension Checkout { … }`, dropping the modifier on `Service` that Swift then reports as redundant; the compiler rejects a level wider than `Checkout`'s), or declare `Service` in `Checkout`'s body or at top level; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Checkout.Service` `internal`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Checkout.Service`.
+			\(fixtures["Service.swift"]):6:5: error: SafeDI cannot generate the dependency tree of `Checkout.Service`: its generated `public` initializer, which `Checkout.Service`'s `public` access requires, cannot take `theme: Theme`, which `Checkout.Service` receives, and cannot pass `nil` for it, since it is required. `Theme` is `internal` as far as SafeDI can tell: `Checkout.Service` is declared inside an extension of `Checkout` that spells no access level, and `Checkout` is declared inside an `#if` block, from which SafeDI takes no access level, so `Checkout.Service`'s initializer proves its parameter types only at `internal`. If `Checkout` can be `public`, spell the extension's access level (`public extension Checkout { … }`, dropping the modifier on `Service` that Swift then reports as redundant; the compiler rejects a level wider than `Checkout`'s), or declare `Service` in `Checkout`'s body or at top level; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Checkout.Service` `internal`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Checkout.Service`.
 			\(fixtures["Service.swift"]):13:9: note: `Checkout.Service` receives `theme: Theme` here.
 			"""
 		}) {
@@ -687,7 +687,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenTypeInUnspelledExtensionOfUnrecordedTypeIsRaisedOnlyToPackage() async {
+	mutating func generate_throwsError_whenTypeInUnspelledExtensionOfTypeDeclaredInsideConditionalBlockIsRaisedOnlyToPackage() async {
 		// B1.4c's twin, cause (vi): `Outer` has no declaration SafeDI records, so `Outer.Vault` starts at `internal`, and
 		// `Service`'s `package` initializer raises it to `package`: its public initializer proves `Theme` at `package`.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
@@ -1025,7 +1025,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// B2.2: an own `@Forwarded` property's remedies have no only-if-available form.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `theme: Theme`, which `Service`'s own initializer takes, and cannot pass `nil` for it, since it is required. `Theme` is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Service.init(theme:badge:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; declare `Service` `internal`; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `theme: Theme`, which `Service`'s own initializer takes, and cannot pass `nil` for it, since it is required. `Theme` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Service.init(theme:badge:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; declare `Service` `internal`; or declare the dependency tree on an `internal` type that instantiates `Service`.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
@@ -1400,7 +1400,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// declaration that proves `Key` at `internal` is still listed, `Host`'s too.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `key: Key`, which `Archive` receives, and cannot pass `nil` for it, since it is required. `Key` is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Archive.init(key:)`, `Host.init(key:service:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Key` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Key` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Key { public static func mock() -> Key }`), which proves `Key` `public`; declare `Service` `internal`; build `key` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `key: Key`, which `Archive` receives, and cannot pass `nil` for it, since it is required. `Key` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Archive.init(key:)`, `Host.init(key:service:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Key` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Key` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Key { public static func mock() -> Key }`), which proves `Key` `public`; declare `Service` `internal`; build `key` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
 			\(fixtures["Archive.swift"]):7:5: note: `Archive` receives `key: Key` here.
 			"""
 		}) {
@@ -1424,7 +1424,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// still lists every declaration that proves `Tone`, rather than explaining the first one's extension.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Seam.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Seam`: its generated `public` initializer, which `Seam`'s `public` access requires, cannot take `tone: Tone`, which `Settings.Helper` receives, and cannot pass `nil` for it, since it is required. `Tone` is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Settings.Helper.init(tone:)`, `Host.init(tone:seam:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Tone` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Tone` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Tone { public static func mock() -> Tone }`), which proves `Tone` `public`; declare `Seam` `internal`; build `tone` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Seam`.
+			\(fixtures["Seam.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Seam`: its generated `public` initializer, which `Seam`'s `public` access requires, cannot take `tone: Tone`, which `Settings.Helper` receives, and cannot pass `nil` for it, since it is required. `Tone` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Settings.Helper.init(tone:)`, `Host.init(tone:seam:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Tone` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Tone` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Tone { public static func mock() -> Tone }`), which proves `Tone` `public`; declare `Seam` `internal`; build `tone` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Seam`.
 			\(fixtures["Helper.swift"]):8:9: note: `Settings.Helper` receives `tone: Tone` here.
 			"""
 		}) {
@@ -1542,7 +1542,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// `Token` at `internal`, and are listed by member.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Token`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Token` is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Badge.init(token:)`, `FakeTokenReader.mock(token:)`, `Shelf.instantiate(token:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Token` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Token { public static func mock() -> Token }`), which proves `Token` `public`; declare `Service` `internal`; build `token` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Token`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Token` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Badge.init(token:)`, `FakeTokenReader.mock(token:)`, `Shelf.instantiate(token:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Token` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Token { public static func mock() -> Token }`), which proves `Token` `public`; declare `Service` `internal`; build `token` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
 			\(fixtures["Badge.swift"]):7:5: note: `Badge` receives `token: Token` here.
 			"""
 		}) {
@@ -1754,12 +1754,12 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenParameterTypeIsInUnspelledExtensionOfUnrecordedTypeAndNothingRaisesIt() async {
+	mutating func generate_throwsError_whenParameterTypeIsInUnspelledExtensionOfTypeDeclaredInsideConditionalBlockAndNothingRaisesIt() async {
 		// R6(4) cause (v) for the parameter's own type: `Outer.Vault` is declared in an unspelled extension of a type
 		// SafeDI does not record, and `Badge`'s `internal` initializer does not raise it.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `vault: Outer.Vault`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Outer.Vault` is `internal` as far as SafeDI can tell: it is declared inside an extension of `Outer` that spells no access level, and SafeDI cannot see `Outer`'s. If `Outer` can be `public`, spell the extension's access level (`public extension Outer { … }`, dropping the modifier on `Vault` that Swift then reports as redundant; the compiler rejects a level wider than `Outer`'s), or declare `Vault` in `Outer`'s body or at top level; mention `Outer.Vault` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `internal`; build `vault` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `vault: Outer.Vault`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Outer.Vault` is `internal` as far as SafeDI can tell: it is declared inside an extension of `Outer` that spells no access level, and `Outer` is declared inside an `#if` block, from which SafeDI takes no access level. If `Outer` can be `public`, spell the extension's access level (`public extension Outer { … }`, dropping the modifier on `Vault` that Swift then reports as redundant; the compiler rejects a level wider than `Outer`'s), or declare `Vault` in `Outer`'s body or at top level; mention `Outer.Vault` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; declare `Service` `internal`; build `vault` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
 			\(fixtures["Badge.swift"]):7:5: note: `Badge` receives `vault: Outer.Vault` here.
 			"""
 		}) {
@@ -1775,7 +1775,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenParameterTypeIsInUnspelledExtensionOfUnrecordedTypeAndRaisedOnlyToPackage() async {
+	mutating func generate_throwsError_whenParameterTypeIsInUnspelledExtensionOfTypeDeclaredInsideConditionalBlockAndRaisedOnlyToPackage() async {
 		// R6(4) cause (vi) for the parameter's own type: `Badge`'s `package` initializer raises `Outer.Vault` to `package`.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
@@ -1804,7 +1804,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// receive inside it, so the error names `Helpers.Detail`, not the nested seam.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `session: Session`, which `Helpers.Detail` receives, and cannot pass `nil` for it, since it is required. `Session` is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Helpers.Detail.init(session:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Session` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Session` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Session { public static func mock() -> Session }`), which proves `Session` `public`; declare `Screen` `internal`; build `session` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `session: Session`, which `Helpers.Detail` receives, and cannot pass `nil` for it, since it is required. `Session` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Helpers.Detail.init(session:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Session` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Session` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Session { public static func mock() -> Session }`), which proves `Session` `public`; declare `Screen` `internal`; build `session` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
 			\(fixtures["Detail.swift"]):8:9: note: `Helpers.Detail` receives `session: Session` here.
 			"""
 		}) {
@@ -1893,7 +1893,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// error names and notes both, the seam's first.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Token`, which `Service` and `Right` receive, and cannot pass `nil` for it, since it is required. `Token` is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Right.init(token:)`, `Service.init(token:right:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Token` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Token { public static func mock() -> Token }`), which proves `Token` `public`; declare `Service` `internal`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Token`, which `Service` and `Right` receive, and cannot pass `nil` for it, since it is required. `Token` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Right.init(token:)`, `Service.init(token:right:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Token` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Token { public static func mock() -> Token }`), which proves `Token` `public`; declare `Service` `internal`; receive `token` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Service`.
 			\(fixtures["Service.swift"]):8:5: note: `Service` receives `token: Token` here.
 			\(fixtures["Right.swift"]):7:5: note: `Right` receives `token: Token` here.
 			"""
@@ -2001,7 +2001,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// omits `theme`, which `App`'s `Shell` provides: built inline, `Badge` would be handed it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(Self.path(of: "Shell.swift", in: "App", fixtures, integration)):11:5: error: `Shell` provides `theme: Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
+			\(Self.path(of: "Shell.swift", in: "App", fixtures, integration)):11:5: error: `Shell` provides `theme: Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
 			\(Self.path(of: "Badge.swift", in: "Feature", fixtures, integration)):7:5: note: `Badge` receives `theme: Theme?` here.
 			"""
 		}) {
@@ -2017,7 +2017,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// `App` refers to what leads to the call, and names the provider's module.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):11:5: error: `Holder` in module `Base` provides `theme: Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
+			\(fixtures["App"]!["Root.swift"]):11:5: error: `Holder` in module `Base` provides `theme: Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
 			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: Theme?` here.
 			"""
 		}) {
@@ -2180,7 +2180,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		}
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(Self.path(of: file, in: "App", fixtures, integration)):\(line):5: error: `\(providerType)` provides `theme: any Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` receives `theme` itself, only if available, on its `package` initializer, so this call would pass `nil` to `Service`, which would be handed `theme` were its tree built inline. `Theme` is `package` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Service.init(theme:badge:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Service.init(theme:badge:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
+			\(Self.path(of: file, in: "App", fixtures, integration)):\(line):5: error: `\(providerType)` provides `theme: any Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` receives `theme` itself, only if available, on its `package` initializer, so this call would pass `nil` to `Service`, which would be handed `theme` were its tree built inline. `Theme` is `package` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Service.init(theme:badge:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Service.init(theme:badge:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
 			\(Self.path(of: "Service.swift", in: "Feature", fixtures, integration)):8:5: note: `Service` receives `theme: (any Theme)?` here.
 			"""
 		}) {
@@ -2195,7 +2195,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// would not compile: the remedy is left out.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Shell.swift"]):11:5: error: `Shell` provides `theme: any Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` receives `theme` itself, only if available, on its `package` initializer, so this call would pass `nil` to `Service`, which would be handed `theme` were its tree built inline. `Theme` is `package` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Service.init(theme:badge:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
+			\(fixtures["App"]!["Shell.swift"]):11:5: error: `Shell` provides `theme: any Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` receives `theme` itself, only if available, on its `package` initializer, so this call would pass `nil` to `Service`, which would be handed `theme` were its tree built inline. `Theme` is `package` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Service.init(theme:badge:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
 			\(fixtures["Feature"]!["Service.swift"]):8:5: note: `Service` receives `theme: (any Theme)?` here.
 			"""
 		}) {
@@ -2318,7 +2318,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// which receives `theme` only if available, is generated after it, as `Badge` would be built inline.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):12:5: error: `Root` provides `theme: any Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
+			\(fixtures["App"]!["Root.swift"]):12:5: error: `Root` provides `theme: any Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
 			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: (any Theme)?` here.
 			"""
 		}) {
@@ -2581,7 +2581,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		try expectEveryModuleCompiled(output)
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Holder.swift"]):11:5: error: `Holder` provides `theme: Theme`, but no initializer SafeDI generated for `Shell` takes it: `Shell`'s dependency tree calls the `public` initializer SafeDI generated for `Service` in module `Base`, the narrowest one module `Mid` can call, which takes `theme` only on its `package` initializer, so calling it would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Mid` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
+			\(fixtures["App"]!["Holder.swift"]):11:5: error: `Holder` provides `theme: Theme`, but no initializer SafeDI generated for `Shell` takes it: `Shell`'s dependency tree calls the `public` initializer SafeDI generated for `Service` in module `Base`, the narrowest one module `Mid` can call, which takes `theme` only on its `package` initializer, so calling it would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: it is declared inside an `#if` block in module `Base`, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Mid` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
 			\(fixtures["Base"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: Theme?` here.
 			"""
 		}) {
@@ -2736,7 +2736,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 	/// `location`, and its note.
 	private static func omissionError(provider: String, label: String, type: String, at location: String, _ fixtures: [String: FixturePaths]) -> String {
 		"""
-		\(location): error: `\(provider)` provides `\(label): \(type)`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `\(label)` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `\(label)` were it built inline. `\(type)` is `package` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Badge.init(theme:color:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:color:)` to `public`; mention `\(type)` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `\(type)` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension \(type) { public static func mock() -> \(type) }`), which proves `\(type)` `public`; or stop providing `\(label)` on this path.
+		\(location): error: `\(provider)` provides `\(label): \(type)`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `\(label)` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `\(label)` were it built inline. `\(type)` is `package` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Badge.init(theme:color:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:color:)` to `public`; mention `\(type)` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `\(type)` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension \(type) { public static func mock() -> \(type) }`), which proves `\(type)` `public`; or stop providing `\(label)` on this path.
 		\(fixtures["Feature"]!["Badge.swift"]):\(label == "theme" ? 8 : 9):5: note: `Badge` receives `\(label): \(type)?` here.
 		"""
 	}
@@ -2810,7 +2810,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// `theme` its parameter, and `Badge`'s, which the call would pass `nil`.
 		await assertThrowsMultiModuleError(inModule: "Mid", diagnostics: { fixtures in
 			"""
-			\(fixtures["Mid"]!["Outer.swift"]):3:1: error: `Outer` takes `theme: Theme?` from its callers, but the `public` initializer SafeDI generated for `Service` in module `Base`, the narrowest one module `Mid` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Base` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
+			\(fixtures["Mid"]!["Outer.swift"]):3:1: error: `Outer` takes `theme: Theme?` from its callers, but the `public` initializer SafeDI generated for `Service` in module `Base`, the narrowest one module `Mid` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Base` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
 			\(fixtures["Mid"]!["Panel.swift"]):9:5: note: `Panel` receives `theme: Theme?` here.
 			\(fixtures["Base"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: Theme?` here.
 			"""
@@ -2840,7 +2840,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// error names one call, the first by seam type, whichever the tree meets first.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Holder.swift"]):11:5: error: `Holder` provides `theme: Theme`, but no initializer SafeDI generated for `Shell` takes it: `Shell`'s dependency tree calls the `public` initializer SafeDI generated for `ServiceA` in module `Base`, the narrowest one module `Mid` can call, which takes `theme` only on its `package` initializer, so calling it would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Mid` or on a type that receives it is `package` (`Badge.init(theme:)`, `Tag.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
+			\(fixtures["App"]!["Holder.swift"]):11:5: error: `Holder` provides `theme: Theme`, but no initializer SafeDI generated for `Shell` takes it: `Shell`'s dependency tree calls the `public` initializer SafeDI generated for `ServiceA` in module `Base`, the narrowest one module `Mid` can call, which takes `theme` only on its `package` initializer, so calling it would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: it is declared inside an `#if` block in module `Base`, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Mid` or on a type that receives it is `package` (`Badge.init(theme:)`, `Tag.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
 			\(fixtures["Base"]!["Tag.swift"]):7:5: note: `Tag` receives `theme: Theme?` here.
 			\(fixtures["Base"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: Theme?` here.
 			"""
@@ -2874,7 +2874,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// drops it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Holder.swift"]):11:5: error: `Holder` provides `theme: Theme`, but no initializer SafeDI generated for `Outer` takes it: `Outer`'s dependency tree calls the `public` initializer SafeDI generated for `Shell` in module `Mid`, the narrowest one module `Top` can call, which takes `theme` on none of its initializers, so calling it would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Top` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
+			\(fixtures["App"]!["Holder.swift"]):11:5: error: `Holder` provides `theme: Theme`, but no initializer SafeDI generated for `Outer` takes it: `Outer`'s dependency tree calls the `public` initializer SafeDI generated for `Shell` in module `Mid`, the narrowest one module `Top` can call, which takes `theme` on none of its initializers, so calling it would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: it is declared inside an `#if` block in module `Base`, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Top` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
 			\(fixtures["Base"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: Theme?` here.
 			"""
 		}) {
@@ -3164,7 +3164,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		// for `service`, and the leaf would read it, as `Badge` would built inline.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):12:5: error: `Root` provides `theme: any Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
+			\(fixtures["App"]!["Root.swift"]):12:5: error: `Root` provides `theme: any Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
 			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: (any Theme)?` here.
 			"""
 		}) {
@@ -3207,12 +3207,13 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_provesTypealiasAndAnotherModulesTypes_whenSeamCarriesThem() async throws {
 		// B7.9, B7.10: `Base`'s public `@Instantiable` `Analytics` is proven by its own declaration; its plain `Theme`
-		// and its closure typealias `Handler`, a name the proof never descends, only by `Badge`'s `package` initializer.
+		// and its closure typealias `Handler`, a name the proof never descends, both declared inside an `#if` block, from
+		// which SafeDI takes no access level, only by `Badge`'s `package` initializer.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Base", packageName: "Shop", swiftFileContent: [
 					seamFixtureType(named: "Analytics", declarations: []),
-					unrecordedTypeDeclaration("public struct Theme {\n    public init() {}\n}\n\npublic typealias Handler = (String) -> Bool"),
+					unrecordedTypeDeclaration("package struct Theme {\n    package init() {}\n}\n\npackage typealias Handler = (String) -> Bool"),
 				]),
 				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
 					"import Base\n\n@Instantiable\npublic struct Badge: Instantiable {\n    package init(analytics: Analytics, theme: Theme?, handler: Handler?) {\n        self.analytics = analytics\n        self.theme = theme\n        self.handler = handler\n    }\n\n    @Received let analytics: Analytics\n    @Received(onlyIfAvailable: true) let theme: Theme?\n    @Received(onlyIfAvailable: true) let handler: Handler?\n}",
@@ -3690,6 +3691,42 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingUnseenProverOfRaisedEntry_whenRaisedEntryMentionsParameterTypeTwice() async {
+		// R8: `Atlas`, in the added directory, raises `Outer.Vault`, which an unspelled extension bounds at `internal`,
+		// to `public`, and `Outer.Vault`'s initializer, which mentions `Token` twice, raises `Token` to `public` in
+		// turn – in this module's view, and not in the callers', which see `Outer.Vault` but not `Atlas`. The seam names
+		// `Atlas`, which proves `Token` only through `Outer.Vault`: the walk follows `Outer.Vault`, which both of its
+		// mentions of `Token` reach, and visits it once.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: the initializer SafeDI generates for it depends on `Atlas`, which is declared in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see that declaration, so their calls would not match the initializer. Declare `Atlas` in a file of this module, or of a module it depends on.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"#SafeDIConfiguration(\n    additionalDirectoriesToInclude: [\"$ADDITIONAL_DIRECTORY\"]\n)",
+					seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+					"@Instantiable\npublic struct Badge: Instantiable {\n    package init(token: Token) {\n        self.token = token\n    }\n\n    @Received let token: Token\n}",
+					"#if canImport(Foundation)\npublic struct Token {}\n#endif\n\n@Instantiable\nextension Token: Instantiable {\n    public static func instantiate() -> Token {\n        Token()\n    }\n}",
+					"#if canImport(Foundation)\npublic enum Outer {}\n#endif\n\nextension Outer {\n    @Instantiable\n    public struct Vault: Instantiable {\n        public init(token: Token, spareToken: Token) {\n            self.token = token\n            self.spareToken = spareToken\n        }\n\n        @Received let token: Token\n        @Received let spareToken: Token\n    }\n}",
+				],
+				additionalDirectorySwiftFileContent: [
+					"@Instantiable\npublic struct Atlas: Instantiable {\n    public init(vault: Outer.Vault) {\n        self.vault = vault\n    }\n\n    @Received let vault: Outer.Vault\n}",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				pluginTargetGraph: { inputSwiftFilePaths in
+					PluginTargetGraph(
+						target: PluginTargetGraph.Target(moduleName: "Feature", packageID: "shop", sourceFilePaths: inputSwiftFilePaths, dependencyModuleNames: []),
+						dependencyTargets: [],
+					)
+				},
+			)
+		}
+	}
+
 	// MARK: R9: a type's plain declaration proves it
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -3769,7 +3806,9 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesReceivedTypeOnPublicTier_whenAnotherModuleDeclaresItsProtocolPublicInFileWithoutSafeDIMarker(integration: MultiModuleIntegration) async throws {
 		// F4: `Core` declares `Theme` alone, which none of its own declarations mentions: under the plugin the run reads
-		// `Core`'s file because `Badge` mentions `Theme`, and a `.safedi` records every declaration another module can name.
+		// `Core`'s file because `Badge` mentions `Theme`, while a `.safedi` records only the declarations of `Core`'s that
+		// only its package can name, so under `.moduleInfo` SafeDI reads no declaration of the `public` `Theme`, counts it
+		// as `public` all the same, and names it in the comment.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Core", packageName: "Kit", swiftFileContentByFilePath: ["Theme.swift": "public protocol Theme {}"]),
@@ -3783,7 +3822,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + Self.importLines("Core") + """
 		extension Service {
-		    public init(theme: any Theme) {
+		\(Self.unreadTypeComment(["Theme"], integration))    public init(theme: any Theme) {
 		        let badge = Badge(theme: theme)
 		        self.init(badge: badge)
 		    }
@@ -3796,47 +3835,22 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		try expectEveryModuleCompiled(output)
 	}
 
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_takesReceivedTypeOnPublicTier_whenDependencysFileWithoutSafeDIMarkerDeclaresItPublicWithModifierBeforeKeyword() async throws {
-		// F4 part 3: a `.safedi`-writing run parses a marker-free file whose text has the head of a declaration another module
-		// can name – `public`, then `final`, then the keyword – and records `Palette`, which none of `Core`'s declarations
-		// mentions.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: [
-				ModuleFixture(name: "Core", packageName: "Kit", swiftFileContentByFilePath: ["Palette.swift": "public final class Palette {\n    public init() {}\n}"]),
-				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
-					"import Core\n\n@Instantiable\npublic struct Badge: Instantiable {\n    init(palette: Palette) {\n        self.palette = palette\n    }\n\n    @Received let palette: Palette\n}",
-					seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
-				], dependencies: ["Core"]),
-			],
-			integration: .moduleInfo,
-			filesToDelete: &filesToDelete,
-		)
-		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + Self.importLines("Core") + """
-		extension Service {
-		    public init(palette: Palette) {
-		        let badge = Badge(palette: palette)
-		        self.init(badge: badge)
-		    }
-		}
-
-		extension Service {
-		    public enum __safeDI_Service_B31AFC0310819646 {}
-		}
-		"""])
-		try expectEveryModuleCompiled(output)
-	}
-
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorNamingBothModules_whenTwoModulesTheSeamSeesDeclareTypeAtDifferentLevels(integration: MultiModuleIntegration) async {
 		// F4: `Core` declares `Theme` `package` and `Other` `public`; SafeDI cannot tell which one a mention names, and takes
-		// the narrower.
+		// the narrower. Under the plugin it reads both; a `.safedi` records only the declarations only the module's package
+		// can name, so under `.moduleInfo` it reads `Core`'s alone, and has no `Other.Theme` to suggest.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			let corePath = Self.path(of: "Theme.swift", in: "Core", fixtures, integration)
+			let declarationsAndRemedies = switch integration {
+			case .moduleInfo:
+				"`Theme` is declared `package` in module `Core`. Declare `Theme` `public` in module `Core`;"
+			case .swiftPackagePlugin:
+				"`Theme` is declared `package` in module `Core` and `public` in module `Other`, and SafeDI takes the narrower. Declare `Theme` `public` in module `Core`; spell the type with its module where it is mentioned (`Other.Theme`), so that it names that module's declaration;"
+			}
 			return """
-			\(Self.path(of: "Service.swift", in: "Feature", fixtures, integration)):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `theme: any Theme`, which `Badge` receives, and cannot pass `nil` for it, since it is required. `Theme` is declared `package` in module `Core` and `public` in module `Other`, and SafeDI takes the narrower. Declare `Theme` `public` in module `Core`; spell the type with its module where it is mentioned (`Other.Theme`), so that it names that module's declaration; declare `Service` `package`; build `theme` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(Self.path(of: "Service.swift", in: "Feature", fixtures, integration)):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `theme: any Theme`, which `Badge` receives, and cannot pass `nil` for it, since it is required. \(declarationsAndRemedies) declare `Service` `package`; build `theme` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on a `package` type that instantiates `Service`.
 			\(corePath):1:1: note: `Theme` is declared `package` here.
 			\(corePath):1:1-1:8: fixit: public
 			\(Self.path(of: "Badge.swift", in: "Feature", fixtures, integration)):10:5: note: `Badge` receives `theme: any Theme` here.
@@ -3855,7 +3869,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		let expectedFeatureFileName = integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift"
 		let expectedFeatureFile: String = [generatedFileHeader, String(Self.importLines("Core").dropLast()), Self.importLines("Other"), """
 		extension Service {
-		    public init(theme: any Other.Theme) {
+		\(Self.unreadTypeComment(["Other.Theme"], integration))    public init(theme: any Other.Theme) {
 		        let badge = Badge(theme: theme)
 		        self.init(badge: badge)
 		    }
@@ -3887,7 +3901,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == [integration == .moduleInfo ? "Feature.swift" : "Service+SafeDI.swift": generatedFileHeader + Self.importLines("Core") + """
 		extension Service {
-		    public init(theme: any Theme) {
+		\(Self.unreadTypeComment(["Theme"], integration))    public init(theme: any Theme) {
 		        let badge = Badge(theme: theme)
 		        self.init(badge: badge)
 		    }
@@ -3923,7 +3937,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsErrorSpellingMockOnlyExtension_whenSeamForwardsTypeSafeDIReadsNoDeclarationOfAndUnspelledMockOnlyExtensionMocksIt() async {
+	mutating func generate_throwsErrorSpellingMockOnlyExtension_whenSeamForwardsTypeDeclaredInsideConditionalBlockAndUnspelledMockOnlyExtensionMocksIt() async {
 		// EOU-4: `User` is declared inside an `#if` block, so only its unspelled `mockOnly` extension bounds it, and the
 		// remedy spells that extension's level, with no conformance to move.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
@@ -3976,13 +3990,13 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsErrorCountingOnlyMentionsTiedToParameter_whenDependencysPublicInitializerMentionsTypeSafeDIReadsNoDeclarationOf() async {
-		// BZ-2: `Theme` is declared inside an `#if` block, so SafeDI reads no declaration of it. `Painter`'s `public`
+	mutating func generate_throwsErrorCountingOnlyMentionsTiedToParameter_whenDependencysPublicInitializerMentionsTypeDeclaredInsideConditionalBlock() async {
+		// BZ-2: `Theme` is declared inside an `#if` block, so SafeDI takes no access level from it. `Painter`'s `public`
 		// initializer in `Core` mentions it, but nothing ties that mention to `Screen`'s parameter, so only `Screen`'s own
 		// `internal` initializer proves it, and the sentence says which mentions count.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `package` initializer, which `Screen`'s `package` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Screen.init(theme:store:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Theme` in a `package` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `package` `mockOnly` mock (`@Instantiable(mockOnly: true) package extension Theme { package static func mock() -> Theme }`), which proves `Theme` `package`; declare `Screen` `internal`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Feature"]!["Screen.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `package` initializer, which `Screen`'s `package` access requires, cannot take `theme: Theme`, which `Screen` receives, and cannot pass `nil` for it, since it is required. `Theme` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block in module `Core`, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Screen.init(theme:store:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Theme` in a `package` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `package` `mockOnly` mock (`@Instantiable(mockOnly: true) package extension Theme { package static func mock() -> Theme }`), which proves `Theme` `package`; declare `Screen` `internal`; receive `theme` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
 			\(fixtures["Feature"]!["Screen.swift"]):11:5: note: `Screen` receives `theme: Theme` here.
 			"""
 		}) {
@@ -4152,12 +4166,12 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsErrorListingProverCappedByPlainDeclaration_whenOnlyInstantiateOfPackageTypeMentionsUnrecordedType() async {
+	mutating func generate_throwsErrorListingProverCappedByPlainDeclaration_whenOnlyInstantiateOfPackageTypeMentionsTypeDeclaredInsideConditionalBlock() async {
 		// R9 part 6: `Outer.instantiate(token:)`, spelled `public`, is capped by `Outer`'s own `package` declaration, so it proves
-		// `Token`, which SafeDI reads no declaration of, only `package`.
+		// `Token`, which is declared inside an `#if` block, only `package`.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Token`, which `Outer`'s `instantiate(…)` receives, and cannot pass `nil` for it, since it is required. `Token` is `package` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `package` (`Outer.instantiate(token:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Token` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Token { public static func mock() -> Token }`), which proves `Token` `public`; declare `Service` `package`; build `token` inside the tree; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `token: Token`, which `Outer`'s `instantiate(…)` receives, and cannot pass `nil` for it, since it is required. `Token` is `package` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `package` (`Outer.instantiate(token:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Token` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Token { public static func mock() -> Token }`), which proves `Token` `public`; declare `Service` `package`; build `token` inside the tree; or declare the dependency tree on a `package` type that instantiates `Service`.
 			\(fixtures["Outer.swift"]):7:36: note: `Outer` receives `token: Token` here.
 			"""
 		}) {
@@ -4391,6 +4405,16 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 	    public enum __safeDI_Service_27F6F01DC5D0EF8E {}
 	}
 	"""
+
+	/// The comment line a `.moduleInfo` run's generated file carries above the first `public` declaration that names one
+	/// of `names`, types SafeDI reads no declaration of; none under the plugin, which reads every first-party module.
+	private static func unreadTypeComment(_ names: [String], _ integration: MultiModuleIntegration) -> String {
+		guard integration == .moduleInfo else { return "" }
+		let list = names.map { "`\($0)`" }.joined(separator: " and ")
+		return names.count == 1
+			? "    // SafeDI counts \(list) as `public`: no module it reads declares it narrower. If \(list) is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
+			: "    // SafeDI counts \(list) as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
+	}
 
 	/// The path a diagnostic names `file` of `module` by under `integration`.
 	private static func path(of file: String, in module: String, _ fixtures: [String: FixturePaths], _ integration: MultiModuleIntegration) -> String {

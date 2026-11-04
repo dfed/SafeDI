@@ -46,8 +46,9 @@ struct ModuleFixture {
 	///   - isCheckoutPackage: Whether the module's package is one SwiftPM fetched, laid out under
 	///     `<fixture root>/checkouts/<packageName>/`. The plugin treats a module as third-party when the one
 	///     path component above its package directory is `checkouts` (a checkout target nested deeper slips
-	///     past that check, as the example builds showed) and leaves its files out of a consumer's CSV, so a
-	///     consumer reads its declarations only through a configuration's `additionalDirectoriesToInclude`.
+	///     past that check, as the example builds showed) and leaves its files out of the CSV of a consumer in another
+	///     package, so such a consumer reads its declarations only through a configuration's
+	///     `additionalDirectoriesToInclude`; a consumer that is a module of the same checkout package reads them.
 	///     The harness lays such a module out to match and applies the rule by this flag. Bazel knows no
 	///     checkouts: `.moduleInfo` reads the module's `.safedi` as it does any dependency's.
 	///   - activeCompilationConditions: The conditions the tool is given as `--active-compilation-conditions`:
@@ -68,6 +69,11 @@ struct ModuleFixture {
 	///   - deletesSwiftFilesAfterRunning: Whether the harness deletes the module's Swift files once the tool has run
 	///     for it, as a sandboxed Bazel action hands the modules that depend on it its `.safedi` but not its files. The
 	///     module's files then cannot be compiled, so a test that deletes them skips compile verification.
+	///   - runsSafeDI: Whether the tool runs for the module at all. A module that does not run SafeDI – one a Bazel or
+	///     Tuist project builds without SafeDI's rule or script – is still compiled, and the modules that depend on it
+	///     can import it, but under `.moduleInfo` no `.safedi` of it exists, so they read none of its declarations.
+	///     Under `.swiftPackagePlugin` the plugin reads every first-party module's files, so the module SafeDI does not
+	///     read is a checkout package's (`isCheckoutPackage`), whose own run plans nothing.
 	init(
 		name: String,
 		packageName: String,
@@ -83,8 +89,10 @@ struct ModuleFixture {
 		omitsModuleName: Bool = false,
 		omitsPackageName: Bool = false,
 		isReleaseConfiguration: Bool = false,
+		runsSafeDI: Bool = true,
 	) {
 		self.name = name
+		self.runsSafeDI = runsSafeDI
 		self.isReleaseConfiguration = isReleaseConfiguration
 		self.omitsModuleName = omitsModuleName
 		self.omitsPackageName = omitsPackageName
@@ -120,6 +128,8 @@ struct ModuleFixture {
 	let omitsPackageName: Bool
 	/// Whether the module is built as a release build is: see `init`.
 	let isReleaseConfiguration: Bool
+	/// Whether the tool runs for the module: see `init`.
+	let runsSafeDI: Bool
 
 	/// The conditions the tool is given: `activeCompilationConditions`, with `NDEBUG` in place of `DEBUG` in a release
 	/// build.
@@ -156,7 +166,7 @@ enum MultiModuleIntegration: CaseIterable {
 	/// The SwiftPM plugin's invocations (`SafeDIGenerateDependencyTree.swift`): `scan` while planning the build
 	/// and, only when the manifest plans an output, `generate` with that manifest, as the plugin adds a build
 	/// command only then. Each reads one CSV holding the module's own files and every transitive first-party
-	/// dependency's files – a checkout package's are left out – each relative to the module's package directory
+	/// dependency's files – another checkout package's are left out – each relative to the module's package directory
 	/// when it lies inside it and spelled whole otherwise, with only the module's own files mock-scoped, the
 	/// package directory reported with its symbolic links resolved, and no `.safedi` anywhere. Beside the CSV lies
 	/// the target graph the plugin writes: the module and each module whose files the CSV lists, with its package
@@ -356,6 +366,20 @@ func executeSafeDIToolMultiModuleTest(
 		var generateArguments: [String]?
 		let moduleInfoOutput: URL?
 		var scanManifest: SafeDIToolManifest?
+		guard module.fixture.runsSafeDI else {
+			// The module is compiled, but nothing runs for it, and no `.safedi` of it exists.
+			outputs[moduleName] = ModuleTestOutput(
+				generateRan: false,
+				moduleInfo: nil,
+				moduleInfoOutputPath: nil,
+				scanManifest: nil,
+				fixtures: FixturePaths(fileNames: module.fileNames, paths: module.swiftFiles.map(\.path), compilerPaths: module.swiftFiles.map(\.path)),
+				warnings: [],
+				generatedFiles: [:],
+				generateOutput: nil,
+			)
+			continue
+		}
 		switch integration {
 		case .moduleInfo:
 			inputSwiftFilePaths = module.swiftFiles.map(\.path)
@@ -399,9 +423,11 @@ func executeSafeDIToolMultiModuleTest(
 				arguments += ["--package-name", module.fixture.packageName]
 			}
 			arguments += activeCompilationConditionArguments
-			if !module.fixture.dependencies.isEmpty {
+			// A dependency that does not run SafeDI has no `.safedi` to read.
+			let dependenciesRunningSafeDI = module.fixture.dependencies.filter { writtenModulesByName[$0]?.fixture.runsSafeDI != false }
+			if !dependenciesRunningSafeDI.isEmpty {
 				let dependentModuleInfoFileCSV = moduleInfoDirectory.appendingPathComponent("\(moduleName)-dependencies.csv")
-				try module.fixture.dependencies
+				try dependenciesRunningSafeDI
 					.map { moduleInfoDirectory.appendingPathComponent("\($0).safedi").path }
 					.joined(separator: ",")
 					.write(to: dependentModuleInfoFileCSV, atomically: true, encoding: .utf8)
@@ -422,10 +448,11 @@ func executeSafeDIToolMultiModuleTest(
 			}
 			inputSwiftFilePaths = module.swiftFiles.map(csvEntry(of:))
 			compilerSwiftFilePaths = scansDuringGenerate ? inputSwiftFilePaths : inputSwiftFilePaths.map { "\(reportedPackageDirectory)/\($0)" }
-			// As the plugin's `sourceModuleRecursiveDependencies`: every transitive dependency not under `checkouts`.
+			// As the plugin's `sourceModuleRecursiveDependencies`: every transitive dependency not under `checkouts`,
+			// and every one of the module's own package, which is under `checkouts` when that package is fetched.
 			let firstPartyDependencies = module.transitiveDependencies
 				.map { writtenModulesByName[$0]! }
-				.filter { !$0.fixture.isCheckoutPackage }
+				.filter { !$0.fixture.isCheckoutPackage || $0.packageDirectory.path == module.packageDirectory.path }
 			let csvEntries = inputSwiftFilePaths + firstPartyDependencies.flatMap { $0.swiftFiles.map(csvEntry(of:)) }
 			try csvEntries.joined(separator: ",").write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 			if writesTargetGraph {

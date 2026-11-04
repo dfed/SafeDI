@@ -48,7 +48,7 @@ enum SeamAccessExplanation {
 			return "\(name(type))'s own `@Instantiable` declaration is `\(level.spelledOnGeneratedDeclaration)`."
 		case let .plainDeclaration(type, level, declarations, namesModules):
 			return plainDeclarationSentence(type: type, level: level, declarations: declarations, namesModules: namesModules)
-		case let .declarationInExtensionOfRecordedType(type, ownLevel, extendedType, extendedTypeLevel, _, extendedTypeIsPlain):
+		case let .declarationInExtensionOfRecordedType(type, ownLevel, extendedType, extendedTypeLevel, _, extendedTypeIsPlain, _):
 			return if extendedTypeLevel < ownLevel {
 				"\(name(type)) is `\(extendedTypeLevel.spelledOnGeneratedDeclaration)`: it is declared inside an extension of \(name(extendedType)), \(ownDeclarationPhrase(isPlain: extendedTypeIsPlain)) is `\(extendedTypeLevel.spelledOnGeneratedDeclaration)`."
 			} else {
@@ -66,7 +66,7 @@ enum SeamAccessExplanation {
 					? "it is declared inside \(extensionText)."
 					: "it is declared inside an extension of \(extendedType.map(name) ?? "another type"), and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `\(level.spelledOnGeneratedDeclaration)` (\(proverNames(raisingProvers))).")
 			}
-		case let .signatures(type, level, provers, mentioningModuleName):
+		case let .signatures(type, level, provers, mentioningModuleName, reason):
 			let levelText = "\(name(type)) is `\(level.spelledOnGeneratedDeclaration)` as far as SafeDI can tell: "
 			// A lone prover an extension bounds says why it proves less than its own level; several provers are listed,
 			// whichever way each is capped, so what is said never depends on their source order.
@@ -76,13 +76,32 @@ enum SeamAccessExplanation {
 				// The mentions counted are those tied to the parameter: a mention elsewhere matches the type's name alone,
 				// and could name another type of that name.
 				let module = mentioningModuleName.map { "module `\($0)`" } ?? "this module"
-				return levelText + "SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in \(module) or on a type that receives it is `\(level.spelledOnGeneratedDeclaration)` (\(proverNames(provers))); a mention on any other declaration matches it by name alone, so it does not count."
+				return levelText + "\(reasonClause(reason)), and every initializer, `instantiate(…)` and mock method that mentions it in \(module) or on a type that receives it is `\(level.spelledOnGeneratedDeclaration)` (\(proverNames(provers))); a mention on any other declaration matches it by name alone, so it does not count."
 			}
-		case let .unproven(type):
+		case let .unproven(type, reason):
 			let aliasMentions = receivers.compactMap { receiver in
 				receiver.aliasProperty.map { "\(name(receiver.declaringType))'s initializer mentions only `\($0.typeDescription.asSource)`" }
 			}
-			return "\(name(type)) is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it (a type of a module SafeDI does not read, declared inside an `#if` block or an extension, or a typealias), and no initializer, `instantiate(…)` or mock method SafeDI records mentions it\(aliasMentions.isEmpty ? "" : " (\(aliasMentions.joined(separator: "; ")))")."
+			return "\(name(type)) is `internal` as far as SafeDI can tell: \(reasonClause(reason)), and no initializer, `instantiate(…)` or mock method SafeDI records mentions it\(aliasMentions.isEmpty ? "" : " (\(aliasMentions.joined(separator: "; ")))")."
+		case let .enclosedBy(type, enclosingType, cause):
+			// Swift caps a nested type at the type enclosing it, whose own sentence says how visible that is. Every cause's
+			// sentence begins with the name of the type it proves, possessive only for its own `@Instantiable` declaration.
+			let enclosingPredicate = causeSentence(cause, receivers: []).dropFirst(name(cause.type).count)
+			return if case .ownDeclaration = cause {
+				"\(name(type)) is nested in \(name(enclosingType)), whose\(enclosingPredicate.dropFirst(2))"
+			} else {
+				"\(name(type)) is nested in \(name(enclosingType)), which\(enclosingPredicate)"
+			}
+		}
+	}
+
+	/// Why SafeDI reads no access level of a type, as a clause of a sentence about it.
+	private static func reasonClause(_ reason: TypeAccessProof.UnreadAccessReason) -> String {
+		switch reason {
+		case let .conditionalBlock(moduleName, namesModule):
+			"it is declared inside an `#if` block\(namesModule ? " in \(moduleName.map { "module `\($0)`" } ?? "a module SafeDI knows no name of")" : ""), from which SafeDI takes no access level"
+		case .unreadableSpelling:
+			"SafeDI cannot read its spelling"
 		}
 	}
 
@@ -99,7 +118,7 @@ enum SeamAccessExplanation {
 		parameterKind: ParameterKind,
 	) -> String {
 		var remedies = [String]()
-		if case let .unproven(type)? = cause, case .passThrough = parameterKind {
+		if case let .unproven(type, _)? = cause, case .passThrough = parameterKind {
 			// A receive on the seam puts the type in an initializer the compiler checks, which then proves it.
 			remedies.append("declare `@\(Dependency.Source.receivedRawValue) let \(parameter.label): \(type.asSource)` on \(name(seam)), so that its initializer, which the compiler checks, states how visible \(name(type)) is (the compiler may then require \(name(seam))'s initializer, and so the seam, to be narrower)")
 		}
@@ -128,7 +147,7 @@ enum SeamAccessExplanation {
 
 	/// The remedies the proof of a type gives before any other: what to declare, spell, or mention so the type is
 	/// proven at `neededLevel`.
-	/// - Parameter mockOnlyMockLetsMockBuildType: Whether a `mockOnly` mock of a type SafeDI reads no declaration of,
+	/// - Parameter mockOnlyMockLetsMockBuildType: Whether a `mockOnly` mock of a type declared inside an `#if` block,
 	///   which the remedies offer, also lets the mock that takes the parameter build the type, as a public mock builds a
 	///   type it receives or forwards with its hand-written mock.
 	static func causeRemedies(_ cause: TypeAccessProof.Cause?, neededLevel: AccessLevel, mockOnlyMockLetsMockBuildType: Bool = false) -> [String] {
@@ -139,11 +158,11 @@ enum SeamAccessExplanation {
 			return ["declare \(name(type)) \(level)"]
 		case let .plainDeclaration(type, _, declarations, namesModules):
 			return plainDeclarationRemedies(type: type, declarations: declarations, namesModules: namesModules, neededLevel: neededLevel)
-		case let .declarationInExtensionOfRecordedType(type, ownLevel, extendedType, extendedTypeLevel, spellsOwnLevel, _):
+		case let .declarationInExtensionOfRecordedType(type, ownLevel, extendedType, extendedTypeLevel, spellsOwnLevel, _, _):
 			return [exactExtensionRemedy(type: type, ownLevel: ownLevel, extendedType: extendedType, extendedTypeLevel: extendedTypeLevel, spellsOwnLevel: spellsOwnLevel, neededLevel: neededLevel)]
 		case let .declarationInExtension(type, _, extendedType, _, isExtensionBased, _, _, isMockOnly):
 			return [nonExactExtensionRemedy(type: type, extendedType: extendedType, isExtensionBased: isExtensionBased, isMockOnly: isMockOnly, neededLevel: neededLevel), mentionRemedy(of: [type], neededLevel: neededLevel)]
-		case let .signatures(type, _, provers, _):
+		case let .signatures(type, _, provers, _, reason):
 			if provers.count == 1, let first = provers.first, let bound = first.cap?.extensionBound {
 				switch bound {
 				case let .exact(carrier, ownLevel, extendedType, extendedTypeLevel, spellsOwnLevel, _):
@@ -155,27 +174,49 @@ enum SeamAccessExplanation {
 					return [nonExactExtensionRemedy(type: carrier, extendedType: extendedType, isExtensionBased: isExtensionBased, isMockOnly: isMockOnly, neededLevel: neededLevel), mentionRemedy(of: mentionedTypes, neededLevel: neededLevel)]
 				}
 			} else {
-				// SafeDI reads no declaration of the type, so widening one changes nothing it proves: a mention does, and so
-				// does a `mockOnly` mock in an extension that spells the level.
-				return [mentionRemedy(of: [type], neededLevel: neededLevel), mockOnlyMockRemedy(of: type, neededLevel: neededLevel, letsMockBuildType: mockOnlyMockLetsMockBuildType)]
+				// SafeDI reads no access level of the type, so widening its declaration changes nothing it proves: a mention
+				// does, and so does a `mockOnly` mock in an extension that spells the level.
+				return [mentionRemedy(of: [type], neededLevel: neededLevel)] + mockOnlyMockRemedies(of: type, reason: reason, neededLevel: neededLevel, letsMockBuildType: mockOnlyMockLetsMockBuildType)
 			}
-		case let .unproven(type):
-			return [mentionRemedy(of: [type], neededLevel: neededLevel), mockOnlyMockRemedy(of: type, neededLevel: neededLevel, letsMockBuildType: mockOnlyMockLetsMockBuildType)]
+		case let .unproven(type, reason):
+			return [mentionRemedy(of: [type], neededLevel: neededLevel)] + mockOnlyMockRemedies(of: type, reason: reason, neededLevel: neededLevel, letsMockBuildType: mockOnlyMockLetsMockBuildType)
+		case let .enclosedBy(_, _, cause):
+			// What makes the enclosing type visible makes the nested one, while a mock of the enclosing type builds no
+			// nested one.
+			return causeRemedies(cause, neededLevel: neededLevel)
+		}
+	}
+
+	/// The `mockOnly` mock remedy for a type SafeDI reads no access level of for `reason`: a `mockOnly` extension of a type
+	/// declared inside an `#if` block proves it at the level the extension spells, while a spelling SafeDI cannot read
+	/// names no type an extension can extend.
+	private static func mockOnlyMockRemedies(of type: TypeDescription, reason: TypeAccessProof.UnreadAccessReason, neededLevel: AccessLevel, letsMockBuildType: Bool) -> [String] {
+		switch reason {
+		case .conditionalBlock:
+			[mockOnlyMockRemedy(of: type, neededLevel: neededLevel, letsMockBuildType: letsMockBuildType)]
+		case .unreadableSpelling:
+			[]
 		}
 	}
 
 	/// A note at each declaration in `cause`'s plain declarations that keeps the type from `neededLevel` – the type's
-	/// own, or one enclosing it in its file – with a fix-it that widens it, which an error reported elsewhere cannot
-	/// carry: a fix-it edits the file its diagnostic points at. Empty for any other cause.
+	/// own, one enclosing it in its file, or the extension it takes its level from – with a fix-it that widens it, which
+	/// an error reported elsewhere cannot carry: a fix-it edits the file its diagnostic points at. For a plain declaration
+	/// inside an extension of a type whose plain declaration caps it, the notes are at that declaration; for a type
+	/// nested in another, at the enclosing type's. Empty for any other cause.
 	static func declarationNotes(for cause: TypeAccessProof.Cause?, neededLevel: AccessLevel) -> [SourceDiagnostic] {
-		guard case let .plainDeclaration(_, _, declarations, _)? = cause else { return [] }
 		let level = neededLevel.spelledOnGeneratedDeclaration
-		return declarations.flatMap { declaration in
+		return (cause?.provingPlainDeclarations ?? []).flatMap { declaration in
 			declaration.accessNeeds.compactMap { accessNeed -> SourceDiagnostic? in
-				guard TypeAccessProof.normalized(accessNeed.level) < neededLevel,
-				      case let .type(type) = accessNeed.declaration,
+				guard let type = accessNeed.declaration.declaredType,
+				      TypeAccessProof.normalized(accessNeed.level) < neededLevel,
 				      let location = accessNeed.access.declarationStartLocation
 				else { return nil }
+				let subject = if case .extensionDeclaringType = accessNeed.declaration {
+					"The extension that declares \(name(type)) is `\(accessNeed.level.spelling)` here."
+				} else {
+					"\(name(type)) is declared `\(accessNeed.level.spelling)` here."
+				}
 				// A modifier is replaced, and one is inserted where the declaration begins when it spells none.
 				let fixIt = accessNeed.access.modifierRange.map { SourceDiagnostic.FixIt(range: $0, replacement: level) }
 					?? SourceDiagnostic.FixIt(
@@ -185,7 +226,7 @@ enum SeamAccessExplanation {
 				return SourceDiagnostic(
 					severity: .note,
 					location: location,
-					message: "\(name(type)) is declared `\(accessNeed.level.spelling)` here.",
+					message: subject,
 					fixIts: [fixIt],
 				)
 			}
@@ -234,7 +275,7 @@ enum SeamAccessExplanation {
 		let unverifiedPackage = seamCall.requirement == .packageUnverified && !omission.isNoTierParameter ? ", or `public` if the two modules are in different packages" : ""
 		// Widening the seam's own initializer, for its own property, helps only where its other arguments' types are as
 		// visible as the level needed.
-		if case let .signatures(_, _, provers, _)? = parameter.accessCause, let first = provers.first, first.cap == nil,
+		if case let .signatures(_, _, provers, _, _)? = parameter.accessCause, let first = provers.first, first.cap == nil,
 		   parameter.isPassThrough || first.carrier != omission.seam.concreteInstantiable || parameter.otherInitializerArgumentsAccess >= neededLevel
 		{
 			remedies.append("widen \(first.name) to `\(neededLevel.spelledOnGeneratedDeclaration)`\(unverifiedPackage)")
@@ -331,7 +372,7 @@ enum SeamAccessExplanation {
 		} else if extendedTypeHasEntry {
 			return "an extension of \(name(extendedType)) that spells no access level, which SafeDI counts as `internal`, since it reads \(name(extendedType))'s access only from an `@Instantiable` type declaration of \(name(extendedType)) in the same module that is outside every extension, or inside an extension of a type it reads the same way"
 		} else {
-			return "an extension of \(name(extendedType)) that spells no access level, and SafeDI cannot see \(name(extendedType))'s"
+			return "an extension of \(name(extendedType)) that spells no access level, and \(name(extendedType)) is declared inside an `#if` block, from which SafeDI takes no access level"
 		}
 	}
 
@@ -370,7 +411,7 @@ enum SeamAccessExplanation {
 		guard namesModules else {
 			return "\(name(type)) is declared `\(level.spelledOnGeneratedDeclaration)`."
 		}
-		let declared = levelsByModule.map { "`\($0.level.spelledOnGeneratedDeclaration)` in \($0.moduleName.map { "module `\($0)`" } ?? "another module")" }
+		let declared = levelsByModule.map { "`\($0.level.spelledOnGeneratedDeclaration)` in \($0.moduleName.map { "module `\($0)`" } ?? "a module SafeDI knows no name of")" }
 		guard declared.count > 1 else {
 			return "\(name(type)) is declared \(declared.first ?? "`\(level.spelledOnGeneratedDeclaration)`")."
 		}
@@ -381,13 +422,22 @@ enum SeamAccessExplanation {
 	/// its module, when `namesModules` – or, where another module declares the type at that level, name that module's.
 	private static func plainDeclarationRemedies(type: TypeDescription, declarations: [PlainTypeDeclaration], namesModules: Bool, neededLevel: AccessLevel) -> [String] {
 		let levelsByModule = declarationLevelsByModule(declarations)
-		let narrowerModuleNames = levelsByModule.filter { $0.level < neededLevel }.map { $0.moduleName.map { "`\($0)`" } ?? "another module" }
-		let modules = namesModules && !narrowerModuleNames.isEmpty
-			? " in \(narrowerModuleNames.count > 1 ? "modules" : "module") \(narrowerModuleNames.joinedAsList)"
-			: ""
+		let narrowerModuleNames = levelsByModule.filter { $0.level < neededLevel }.map(\.moduleName)
+		let modules = if !namesModules || narrowerModuleNames.isEmpty {
+			""
+		} else if narrowerModuleNames.allSatisfy({ $0 != nil }) {
+			" in \(narrowerModuleNames.count > 1 ? "modules" : "module") \(narrowerModuleNames.compactMap { $0.map { "`\($0)`" } }.joinedAsList)"
+		} else {
+			" in \(narrowerModuleNames.map { $0.map { "module `\($0)`" } ?? "a module SafeDI knows no name of" }.uniqued().joinedAsList)"
+		}
 		var remedies = ["declare \(name(type)) `\(neededLevel.spelledOnGeneratedDeclaration)`\(modules)"]
 		if let wideEnough = levelsByModule.first(where: { $0.level >= neededLevel }), let moduleName = wideEnough.moduleName {
 			remedies.append("spell the type with its module where it is mentioned (`\(moduleName).\(type.asSource)`), so that it names that module's declaration")
+		}
+		if namesModules, narrowerModuleNames.contains(nil) {
+			// SafeDI takes the level of a declaration in a module it knows no name of as declared, whichever package that
+			// module is in.
+			remedies.append("name the module that declares \(name(type)) where SafeDI runs on it (`module_name` under Bazel, `--module-name` otherwise)")
 		}
 		return remedies
 	}
@@ -396,10 +446,10 @@ enum SeamAccessExplanation {
 	/// module's only one: the compiler rejects a second declaration of a type in one module, and a `private` one, which
 	/// another file's may share a name with, is never among a type's declarations (`isVisibleOutsideItsFile`).
 	private static func declarationLevelsByModule(_ declarations: [PlainTypeDeclaration]) -> [(moduleName: String?, level: AccessLevel)] {
-		declarations.map { ($0.moduleName, TypeAccessProof.normalized($0.effectiveAccessLevel)) }
+		declarations.map { ($0.moduleName, TypeAccessProof.normalized($0.levelBeforeExtendedTypeCap)) }
 	}
 
-	/// The `mockOnly` mock that proves `type`, which SafeDI reads no declaration of, at `neededLevel`: its extension
+	/// The `mockOnly` mock that proves `type`, which is declared inside an `#if` block, at `neededLevel`: its extension
 	/// spells the level, which bounds the type an extension-based declaration declares.
 	private static func mockOnlyMockRemedy(of type: TypeDescription, neededLevel: AccessLevel, letsMockBuildType: Bool) -> String {
 		let level = neededLevel.spelledOnGeneratedDeclaration
@@ -446,12 +496,54 @@ extension TypeAccessProof.Cause {
 	/// The cause as an extension's bound, or `nil` when no extension bounds the type.
 	var extensionBound: SeamAccessExplanation.ExtensionBound? {
 		switch self {
-		case let .declarationInExtensionOfRecordedType(type, ownLevel, extendedType, extendedTypeLevel, spellsOwnLevel, extendedTypeIsPlain):
+		case let .declarationInExtensionOfRecordedType(type, ownLevel, extendedType, extendedTypeLevel, spellsOwnLevel, extendedTypeIsPlain, _):
 			.exact(carrier: type, ownLevel: ownLevel, extendedType: extendedType, extendedTypeLevel: extendedTypeLevel, spellsOwnLevel: spellsOwnLevel, extendedTypeIsPlain: extendedTypeIsPlain)
 		case let .declarationInExtension(type, level, extendedType, extensionIsSpelled, isExtensionBased, extendedTypeHasEntry, raisingProvers, isMockOnly):
 			.nonExact(carrier: type, carrierLevel: level, extendedType: extendedType, extensionIsSpelled: extensionIsSpelled, isExtensionBased: isExtensionBased, extendedTypeHasEntry: extendedTypeHasEntry, raisingProvers: raisingProvers, isMockOnly: isMockOnly)
-		case .ownDeclaration, .plainDeclaration, .signatures, .unproven:
+		case .ownDeclaration, .plainDeclaration, .signatures, .unproven, .enclosedBy:
 			nil
+		}
+	}
+
+	/// The type the cause proves.
+	var type: TypeDescription {
+		switch self {
+		case let .ownDeclaration(type, _),
+		     let .plainDeclaration(type, _, _, _),
+		     let .declarationInExtensionOfRecordedType(type, _, _, _, _, _, _),
+		     let .declarationInExtension(type, _, _, _, _, _, _, _),
+		     let .signatures(type, _, _, _, _),
+		     let .unproven(type, _),
+		     let .enclosedBy(type, _, _):
+			type
+		}
+	}
+
+	/// The plain declarations that prove the cause's type: its own, those of the type the extension it is declared in
+	/// extends, or those that prove the type enclosing it; empty for any other cause.
+	var provingPlainDeclarations: [PlainTypeDeclaration] {
+		switch self {
+		case let .plainDeclaration(_, _, declarations, _):
+			declarations
+		case let .declarationInExtensionOfRecordedType(_, _, _, _, _, _, extendedTypeDeclarations):
+			extendedTypeDeclarations
+		case let .enclosedBy(_, _, cause):
+			cause.provingPlainDeclarations
+		case .ownDeclaration, .declarationInExtension, .signatures, .unproven:
+			[]
+		}
+	}
+
+	/// Whether the cause's remedies leave out a `mockOnly` mock of its type, which lets a mock build the type: they
+	/// offer one, which also proves the type, for a type SafeDI reads no access level of because it is declared inside
+	/// an `#if` block, and none for a spelling SafeDI cannot read, which no extension can extend. For a nested type,
+	/// they offer one of the type that encloses it at most.
+	var leavesOutMockOnlyMockOfType: Bool {
+		switch self {
+		case .ownDeclaration, .plainDeclaration, .declarationInExtensionOfRecordedType, .declarationInExtension, .enclosedBy:
+			true
+		case .signatures, .unproven:
+			false
 		}
 	}
 }

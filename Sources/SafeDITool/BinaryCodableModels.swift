@@ -548,6 +548,8 @@ extension PlainTypeDeclaration: BinarySchemaMember {
 				BinaryLayoutField("typeDescription", \.typeDescription),
 				BinaryLayoutField("access", \.access),
 				BinaryLayoutField("enclosingTypeAccess", \.enclosingTypeAccess),
+				BinaryLayoutField("enclosingExtensionAccess", \.enclosingExtensionAccess),
+				BinaryLayoutField("isInsideConditionalBlock", \.isInsideConditionalBlock),
 				BinaryLayoutField("moduleName", \.moduleName),
 				BinaryLayoutField("packageName", \.packageName),
 				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
@@ -561,6 +563,8 @@ extension PlainTypeDeclaration: BinarySchemaMember {
 			typeDescription: reader.read(),
 			access: reader.read(),
 			enclosingTypeAccess: reader.read(),
+			enclosingExtensionAccess: reader.read() as AccessDeclaration?,
+			isInsideConditionalBlock: reader.read(),
 			moduleName: reader.read() as String?,
 			packageName: reader.read() as String?,
 			sourceFilePath: reader.read() as String?,
@@ -578,6 +582,8 @@ extension PlainTypeDeclaration: BinarySchemaMember {
 			writer.write(typeDescription)
 			writer.write(access)
 			writer.write(enclosingTypeAccess)
+			writer.write(enclosingExtensionAccess)
+			writer.write(isInsideConditionalBlock)
 			writer.write(moduleName)
 			writer.write(packageName)
 			writer.write(sourceFilePath)

@@ -1232,6 +1232,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public let analytics: Analytics
 		    }
 
+		    // SafeDI counts `Logger` as `public`: no module it reads declares it narrower. If `Logger` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
 		    public init(loggerBuilder __safeDI_loggerBuilder: @escaping (SafeDIScope_DefaultUserService_logger) -> any Logger) {
 		        let theme = Theme()
 		        func __safeDI_service() -> Service {
@@ -1707,6 +1708,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        public let cache: Cache
 		    }
 
+		    // SafeDI counts `Logger` as `public`: no module it reads declares it narrower. If `Logger` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
 		    public convenience init(loggerBuilder __safeDI_loggerBuilder: @escaping (SafeDIScope_DefaultUserService_logger) -> any Logger) {
 		        let theme = Theme()
 		        func __safeDI_service() -> Service {
@@ -2702,7 +2704,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// SafeDI can tell, and `Service`'s `public` initializer cannot take it, which every tier takes.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `userServiceBuilder: @escaping (Service.SafeDIScope_Profile_userService) -> any UserService`, the builder for `Profile`'s `userService: any UserService`, which no @Instantiable declaration module `Feature` can see fulfills. `UserService` is `package` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Profile.init(userService:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `UserService` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `UserService` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension UserService { public static func mock() -> UserService }`), which proves `UserService` `public`; declare `Service` `package`; make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service`'s tree builds it; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `userServiceBuilder: @escaping (Service.SafeDIScope_Profile_userService) -> any UserService`, the builder for `Profile`'s `userService: any UserService`, which no @Instantiable declaration module `Feature` can see fulfills. `UserService` is `package` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Profile.init(userService:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `UserService` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `UserService` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension UserService { public static func mock() -> UserService }`), which proves `UserService` `public`; declare `Service` `package`; make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service`'s tree builds it; or declare the dependency tree on a `package` type that instantiates `Service`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -2935,7 +2937,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// access, which `App` cannot read.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["TokenUserService.swift"]):9:5: error: `TokenUserService` receives `token: Token`, which the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` carries only at `internal` access, and module `App` is not module `Feature`. `Token` is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Screen.init(token:profile:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Token` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Token { public static func mock() -> Token }`), which proves `Token` `public`; or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service`'s tree builds it.
+			\(fixtures["App"]!["TokenUserService.swift"]):9:5: error: `TokenUserService` receives `token: Token`, which the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` carries only at `internal` access, and module `App` is not module `Feature`. `Token` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Screen.init(token:profile:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Token` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Token { public static func mock() -> Token }`), which proves `Token` `public`; or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service`'s tree builds it.
 			\(fixtures["Feature"]!["Screen.swift"]):8:5: note: `Screen` declares `token: Token` here.
 			"""
 		}) {

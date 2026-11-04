@@ -14,7 +14,14 @@ safedi_swift_library(
     # conflicts with the one the compiler was handed.
     copts = ["-warnings-as-errors"],
     module_name = "ExampleBazelIntegration",
+    # The package `Subproject` and `Models` belong to, so the code SafeDI
+    # generates here may call `package` initializers it generates there.
+    package_name = "ExampleBazelIntegration",
+    # `Models_safedi` too, since the initializer `Subproject` generates for
+    # its seam `WindowTitle`, which this module's root calls, depends on
+    # what `Models` declares.
     safedi_deps = [
+        "//Models:Models_safedi",
         "//Subproject:Subproject_safedi",
     ],
     visibility = ["//visibility:public"],

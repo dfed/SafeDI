@@ -212,6 +212,17 @@ struct AccessNeed: Hashable, Sendable {
 		case extensionDeclaringMember(Member)
 		/// A method that constructs the type.
 		case member(Member)
+
+		/// The type the declaration declares, itself or through the extension it takes its level from; `nil` for a
+		/// method that constructs a type, or the extension that declares one.
+		var declaredType: TypeDescription? {
+			switch self {
+			case let .type(type), let .extensionDeclaringType(type):
+				type
+			case .extensionDeclaringMember, .member:
+				nil
+			}
+		}
 	}
 
 	/// A method that constructs an `@Instantiable` type.
@@ -322,9 +333,11 @@ extension Instantiable {
 }
 
 extension PlainTypeDeclaration {
-	/// The declarations whose access decides whether code can name this type: the type declarations that enclose it in
-	/// its file, outermost first, and its own declaration, each with the level it spells, or `internal` when it spells
-	/// none, since a recorded declaration is in no extension.
+	/// The declarations whose access decides whether code can name this type, before the type an enclosing extension
+	/// extends caps it: the type declarations that enclose it in its file, outermost first, and its own declaration, each
+	/// with the level it has by itself. The outermost one, when it spells no level and is directly inside an extension
+	/// that spells one, is represented by that extension, as `Instantiable.accessNeeds(constructingWithMockMethod:)`
+	/// represents it.
 	var accessNeeds: [AccessNeed] {
 		// The types enclosing this one, outermost first. Those declared in this file are the innermost, one for each
 		// recorded access.
@@ -334,13 +347,25 @@ extension PlainTypeDeclaration {
 			enclosingTypes.insert(type, at: 0)
 			enclosingType = type.popNested
 		}
-		return zip(enclosingTypes.suffix(enclosingTypeAccess.count) + [typeDescription], enclosingTypeAccess + [access]).map { type, access in
-			AccessNeed(
-				declaration: .type(type),
-				access: access,
-				level: AccessLevel.ownLevel(of: access, directlyInside: nil),
-				isDeclaredWithMockMethod: false,
-			)
+		return zip(enclosingTypes.suffix(enclosingTypeAccess.count) + [typeDescription], enclosingTypeAccess + [access]).enumerated().map { index, typeDeclaration in
+			let (type, access) = typeDeclaration
+			// Only the outermost declaration in the file can be directly inside an extension.
+			let enclosingExtension = index == 0 ? enclosingExtensionAccess : nil
+			return if !access.spellsAccessModifier, let enclosingExtension, enclosingExtension.spellsAccessModifier {
+				AccessNeed(
+					declaration: .extensionDeclaringType(type),
+					access: enclosingExtension,
+					level: enclosingExtension.level.asDefaultOfExtensionMembers,
+					isDeclaredWithMockMethod: false,
+				)
+			} else {
+				AccessNeed(
+					declaration: .type(type),
+					access: access,
+					level: AccessLevel.ownLevel(of: access, directlyInside: enclosingExtension),
+					isDeclaredWithMockMethod: false,
+				)
+			}
 		}
 	}
 }
