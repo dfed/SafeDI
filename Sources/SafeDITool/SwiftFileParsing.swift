@@ -360,10 +360,11 @@ func parseModule(
 	// A file whose text mentions no SafeDI marker is not parsed, but it can declare a type whose plain declaration
 	// SafeDI reads: one an extension holding SafeDI content extends, whose access bounds the types that extension
 	// declares – a namespace enum in a file of its own – and one a declaration's dependencies or members mention, whose
-	// access proves the access of a generated parameter that names it. The extended types' names come from every clause
-	// of every `#if` block; the mentioned types' names from the declarations these conditions select, which
-	// `generate` checks scan's names cover (`keptPlainTypeNames(of:)`). Only the declarations of those types, and of
-	// the types nested in them, are kept: no other plain declaration bounds or proves anything.
+	// access proves the access of a generated parameter that names it. The extended types' names, and the outermost
+	// types enclosing `@Instantiable` types, whose nested types a member names unqualified, come from every clause of
+	// every `#if` block; the mentioned types' names from the declarations these conditions select, which `generate`
+	// checks scan's names cover (`keptPlainTypeNames(of:)`). Only the declarations of those types, and of the types
+	// nested in them, are kept: no other plain declaration bounds or proves anything.
 	let keptTypeNames = keptPlainTypeNames(of: finalFileScans)
 	var mayDeclareTypesNamedBySkippedFilePath = walkedFiles.mayDeclareTypesNamedBySkippedFilePath
 	for file in conventionalConfigurationFileReads {
@@ -647,10 +648,21 @@ extension [SafeDIConfiguration] {
 }
 
 /// The names of the types whose plain declarations a module parsed into `fileScans` keeps: each type an extension that
-/// is or holds an `@Instantiable` extends, in any clause, and each type its declarations mention
-/// (`mentionedTypeNames(of:)`).
+/// is or holds an `@Instantiable` extends and the outermost type enclosing each `@Instantiable` type, in any clause,
+/// and each type its declarations mention (`mentionedTypeNames(of:)`). A member of an `@Instantiable` type can name a
+/// type nested in it, or in a type enclosing it, by the nested type's own name, which a public mock's configuration
+/// qualifies from that type's declaration (`TypeAccessProof.qualifyingNestedTypes(in:writtenWithin:)`).
 func keptPlainTypeNames(of fileScans: [FileScan]) -> Set<String> {
-	Set(fileScans.flatMap(\.outputFileDeclarations.extendedTypeNames)).union(mentionedTypeNames(of: fileScans.flatMap(\.instantiables)))
+	let outputFileDeclarations = fileScans.map(\.outputFileDeclarations)
+	return Set(outputFileDeclarations.flatMap(\.extendedTypeNames))
+		.union(outputFileDeclarations.flatMap(\.instantiableTypeNames).compactMap(outermostTypeName(ofTypeNamed:)))
+		.union(mentionedTypeNames(of: fileScans.flatMap(\.instantiables)))
+}
+
+/// The outermost name of the type `typeName` spells, as `OutputFileDeclarations.instantiableTypeNames` records a type.
+private func outermostTypeName(ofTypeNamed typeName: String) -> String? {
+	var parser = Parser(typeName)
+	return TypeSyntax.parse(from: &parser).typeDescription.outermostTypeName
 }
 
 /// Every name of each type the dependencies – an alias's fulfilling property among them –, initializer or

@@ -4135,7 +4135,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// of is marked for the file's comment.
 		let unreadTypeComment = publicMock?.unreadTypeComment
 		if let publicMockPlan, !publicMockPlan.providerDeclarations.isEmpty {
-			if let marker = unreadTypeComment?.markerLine(namedBy: publicMockPlan.parameters.filter { $0.defaultKind == .provider }.map(\.type), indent: indent) {
+			if let marker = unreadTypeComment?.markerLine(namedBy: publicMockPlan.parameters.filter { $0.defaultKind == .provider }.map(\.provenType), indent: indent) {
 				lines.append(marker)
 			}
 			lines.append(contentsOf: publicMockPlan.providerDeclarations)

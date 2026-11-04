@@ -353,6 +353,28 @@ public struct TypeAccessProof: Sendable {
 		return ParameterAccess(level: narrowest?.level ?? .public, cause: narrowest?.cause)
 	}
 
+	/// `type`, which a member of `enclosingType` spells – its construction initializer, `instantiate(…)` method or
+	/// hand-written mock – with each type it names qualified as Swift resolves the type's outermost name there, so that
+	/// code outside `enclosingType` names the same type: member lookup comes before the enclosing scopes, so a type
+	/// nested in `enclosingType` that SafeDI reads a declaration of wins, then one nested in the type enclosing it, and
+	/// so on outward. Written in `Outer.Child`, `Theme` is `Outer.Child.Theme` when SafeDI reads that declaration, else
+	/// `Outer.Theme` when it reads that one. A name SafeDI reads no nested declaration of – a top-level type, a module's
+	/// name, a name already qualified from the outermost, or a type `enclosingType` inherits from a superclass or a
+	/// protocol – is kept as written, as is every name after the outermost.
+	public func qualifyingNestedTypes(in type: TypeDescription, writtenWithin enclosingType: TypeDescription) -> TypeDescription {
+		// The member is declared where `enclosingType`'s declaration is, in whose module the name resolves.
+		let mentioningModule = entries[enclosingType].map(MentioningModule.declaration) ?? .generatedCode(ofModuleNamed: nil, isRunsOwnModule: true)
+		return type.nestingOutermostNames { name in
+			// The options run from the most qualified outward and end with the name as written, which is kept.
+			TypeDescription.nestedOptions(referencedType: .simple(name: name), within: enclosingType)
+				.dropLast()
+				.first { option in
+					instantiables[option] != nil || !plainTypeDeclarations.candidates(named: option, mentionedFrom: mentioningModule).isEmpty
+				}?
+				.popNested
+		}
+	}
+
 	/// The types that `types` name which no declaration SafeDI reads declares – no entry, no plain declaration a mention
 	/// in `mentioningModule` resolves to, and no recorded type enclosing them – and that counts as `public` therefore,
 	/// with the unread types that the entries and plain declarations they name are declared in extensions of, each once,

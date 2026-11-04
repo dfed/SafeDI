@@ -883,6 +883,56 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// The receiver with each type it names, wherever in the receiver that type sits, nested in the type `enclosingType`
+	/// returns for the type's outermost name – the name Swift looks up where the receiver is written – and every other
+	/// part kept: `Theme?` becomes `Child.Theme?`, `Box<Theme>` becomes `Child.Box<Child.Theme>`, and `Inner.Palette`
+	/// becomes `Child.Inner.Palette` when `enclosingType` returns `Child` for `Theme`, `Box` and `Inner`. A name after the
+	/// outermost is a member of the type before it, so it is kept, as is the text of an `unknown` type.
+	/// - Parameter enclosingType: Returns the type to nest a type of the given outermost name in, or `nil` to keep the
+	///   name as written.
+	public func nestingOutermostNames(in enclosingType: (String) -> TypeDescription?) -> TypeDescription {
+		switch self {
+		case let .simple(name, generics):
+			let nestedGenerics = generics.map { $0.nestingOutermostNames(in: enclosingType) }
+			return if let parentType = enclosingType(name) {
+				.nested(name: name, parentType: parentType, generics: nestedGenerics)
+			} else {
+				.simple(name: name, generics: nestedGenerics)
+			}
+		case let .nested(name, parentType, generics):
+			return .nested(name: name, parentType: parentType.nestingOutermostNames(in: enclosingType), generics: generics.map { $0.nestingOutermostNames(in: enclosingType) })
+		case let .composition(types):
+			return .composition(UnorderedEquatingCollection(types.map { $0.nestingOutermostNames(in: enclosingType) }))
+		case let .optional(type):
+			return .optional(type.nestingOutermostNames(in: enclosingType))
+		case let .implicitlyUnwrappedOptional(type):
+			return .implicitlyUnwrappedOptional(type.nestingOutermostNames(in: enclosingType))
+		case let .some(type):
+			return .some(type.nestingOutermostNames(in: enclosingType))
+		case let .any(type):
+			return .any(type.nestingOutermostNames(in: enclosingType))
+		case let .metatype(type, isType):
+			return .metatype(type.nestingOutermostNames(in: enclosingType), isType: isType)
+		case let .attributed(type, specifiers, attributes):
+			return .attributed(type.nestingOutermostNames(in: enclosingType), specifiers: specifiers, attributes: attributes)
+		case let .array(element):
+			return .array(element: element.nestingOutermostNames(in: enclosingType))
+		case let .dictionary(key, value):
+			return .dictionary(key: key.nestingOutermostNames(in: enclosingType), value: value.nestingOutermostNames(in: enclosingType))
+		case let .tuple(elements):
+			return .tuple(elements.map { TupleElement(label: $0.label, $0.typeDescription.nestingOutermostNames(in: enclosingType)) })
+		case let .closure(arguments, isAsync, doesThrow, returnType):
+			return .closure(
+				arguments: arguments.map { $0.nestingOutermostNames(in: enclosingType) },
+				isAsync: isAsync,
+				doesThrow: doesThrow,
+				returnType: returnType.nestingOutermostNames(in: enclosingType),
+			)
+		case .unknown, .void:
+			return self
+		}
+	}
+
 	/// The names of a simple or nested type from the outermost, such as `["Child", "Config"]` for `Child.Config`, or
 	/// `nil` for any other type, such as the `[Config]` of `[Config].Element`.
 	private var namePath: [String]? {
