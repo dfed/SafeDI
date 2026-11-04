@@ -362,6 +362,14 @@ final class Scope: Hashable {
 	///     it is created, which a tree built only to read its generators' sets skips.
 	///   - mockHoles: For a public mock's root, the holes its `mock()` takes a builder for, which each site of the tree
 	///     calls, as a seam's tree calls the builders of `seamRoot`'s signature.
+	///
+	/// The tree is created again while a scope that a lazy cycle closes on finds other parameters for its builder
+	/// function than it was created with (see `CycleParameter`): its cycle-closing scopes, created before it, pass
+	/// those parameters, and count what they pass among the properties they receive. Nearly every tree has no such
+	/// scope and is created once. A pass changes a scope's parameters only through the parameters of the functions it
+	/// is nested in or that are nested in it, which only add to what it receives or declares, so the passes end once
+	/// the parameters at each level of nesting have settled. A pass that is not the last kicks off code generation
+	/// that nothing reads.
 	func createScopeGenerator(
 		for property: Property?,
 		propertyStack: [Property],
@@ -375,6 +383,46 @@ final class Scope: Hashable {
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool = false,
 		startsCodeGeneration: Bool = true,
+	) throws -> ScopeGenerator {
+		var previousPassGenerator: ScopeGenerator?
+		var scopeGenerator: ScopeGenerator
+		repeat {
+			scopeGenerator = try createScopeGenerator(
+				for: property,
+				propertyStack: propertyStack,
+				receivableProperties: receivableProperties,
+				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
+				boundProperties: boundProperties,
+				alwaysAvailableProperties: alwaysAvailableProperties,
+				runtimeOptionalProperties: runtimeOptionalProperties,
+				seamRoot: seamRoot,
+				mockHoles: mockHoles,
+				erasedToConcreteExistential: erasedToConcreteExistential,
+				forMockGeneration: forMockGeneration,
+				startsCodeGeneration: startsCodeGeneration,
+				previousPassGenerator: previousPassGenerator,
+			)
+			previousPassGenerator = scopeGenerator
+		} while scopeGenerator.cycleParametersChangedInTree
+		return scopeGenerator
+	}
+
+	/// One pass of `createScopeGenerator`, which reads the parameters of the builder functions lazy cycles close on
+	/// from `previousPassGenerator`, the tree the pass before created, or finds none when there is no pass before.
+	private func createScopeGenerator(
+		for property: Property?,
+		propertyStack: [Property],
+		receivableProperties: Set<Property>,
+		lazilyInstantiatedInstanceProperties: Set<Property>,
+		boundProperties: Set<Property>,
+		alwaysAvailableProperties: Set<Property>,
+		runtimeOptionalProperties: Set<Property>,
+		seamRoot: ScopeGenerator.SeamRoot?,
+		mockHoles: [SeamSignature.Hole],
+		erasedToConcreteExistential: Bool,
+		forMockGeneration: Bool,
+		startsCodeGeneration: Bool,
+		previousPassGenerator: ScopeGenerator?,
 	) throws -> ScopeGenerator {
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
 			scope: self,
@@ -392,6 +440,9 @@ final class Scope: Hashable {
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
 			startsCodeGeneration: startsCodeGeneration,
+			previousPassGenerator: previousPassGenerator,
+			cycleParameterContexts: [:],
+			cycleParameterProvidedForms: [],
 		)]
 		while true {
 			let index = scopeGeneratorsUnderConstruction.count - 1
@@ -455,6 +506,9 @@ private struct ScopeGeneratorUnderConstruction {
 		startsCodeGeneration: Bool,
 		fill: SeamSignature.Hole? = nil,
 		fillKey: String? = nil,
+		previousPassGenerator: ScopeGenerator?,
+		cycleParameterContexts: [Property: CycleParameterContext],
+		cycleParameterProvidedForms: Set<Property>,
 	) {
 		var childPropertyStack = propertyStack
 		let isPropertyCycle: Bool
@@ -467,8 +521,51 @@ private struct ScopeGeneratorUnderConstruction {
 		} else {
 			isPropertyCycle = false
 		}
+		// The parameters of this scope's builder function that the pass before found, when a lazy cycle closes on it,
+		// or those of the function a cycle-closing scope refers to. Nearly every scope has neither.
+		let ownCycleParameters = if !isPropertyCycle, fill == nil, property != nil {
+			previousPassGenerator?.foundCycleParameters ?? []
+		} else {
+			[CycleParameter]()
+		}
+		let closedOnContext = if isPropertyCycle, let property {
+			cycleParameterContexts[property]
+		} else {
+			CycleParameterContext?.none
+		}
 		let enclosingScopeReceivableProperties = receivableProperties
-		let receivableProperties = receivableProperties.union(scope.createdProperties)
+		var receivableProperties = receivableProperties.union(scope.createdProperties)
+		// The parameters this scope passes the builder function a lazy cycle closes on that are unavailable where it
+		// passes them, which it passes `nil`: computed below, once `isPropertyUnavailable` can be asked.
+		var cycleParameterUnavailableProperties = Set<Property>()
+		// The function's body reads each parameter's label from the parameter, which hides every other declaration of the
+		// label above it, as a forwarded property does.
+		let callSiteLazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
+		var lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
+		var alwaysAvailableProperties = alwaysAvailableProperties
+		var runtimeOptionalProperties = runtimeOptionalProperties
+		let ownCycleParameterLabels = Set(ownCycleParameters.map(\.property.label))
+		if !ownCycleParameters.isEmpty {
+			// The forms the parameters provide, made available below once the call site's availability is known.
+			lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
+				.filter { !ownCycleParameterLabels.contains($0.label) }
+				.union(ownCycleParameters.compactMap(\.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding))
+			for parameter in ownCycleParameters {
+				if parameter.property.typeDescription.isOptional {
+					// A parameter that may be `nil` is read as a seam's optional parameter is: an `onlyIfAvailable` alias of
+					// its unwrapped form, or of the parameter itself when a caller may pass `nil`, is bound from it as an
+					// optional value.
+					runtimeOptionalProperties = runtimeOptionalProperties.filter { $0.label != parameter.property.label }
+					runtimeOptionalProperties.insert(parameter.property.asUnwrappedProperty)
+					if !parameter.isRequired {
+						runtimeOptionalProperties.insert(parameter.property)
+					}
+				} else {
+					runtimeOptionalProperties = runtimeOptionalProperties.filter { $0.label != parameter.property.label }
+					alwaysAvailableProperties.formUnion(parameter.providedForms)
+				}
+			}
+		}
 		// The properties this scope’s children receive by reading the instance of a `LazilyInstantiated` property.
 		let childLazilyInstantiatedInstanceProperties: Set<Property> = if lazilyInstantiatedInstanceProperties.isEmpty {
 			// Nearly every scope: nothing above it is lazily instantiated, so there is nothing to shadow.
@@ -511,6 +608,29 @@ private struct ScopeGeneratorUnderConstruction {
 				return !(propertyIsAvailableInParentStack || unwrappedPropertyIsAvailableInParentStack)
 			}
 		}
+		if let closedOnContext {
+			// A cycle-closing scope passes each parameter its nearest declaration of the label: one a scope between it and
+			// the function declares, or else the function's own parameter, which is always in scope. A declaration that
+			// does not provide the parameter's form, or that is still being built around this scope, is unavailable. The
+			// function takes no parameter of this scope's own label (see `ScopeGenerator.foundCycleParameters`).
+			let propertiesBuiltBetween = childPropertyStack.dropFirst().prefix { $0 != property }
+			for parameter in closedOnContext.parameters where !parameter.isRequired {
+				guard let declaredForms = closedOnContext.nearestDeclaredForms(ofLabel: parameter.property.label) else { continue }
+				let providingForm = declaredForms.contains(parameter.property) ? parameter.property : parameter.property.asUnwrappedProperty
+				if !declaredForms.contains(providingForm) || propertiesBuiltBetween.contains(providingForm) {
+					cycleParameterUnavailableProperties.insert(parameter.property)
+				}
+			}
+		} else if !ownCycleParameters.isEmpty {
+			// The scope that declares the function passes each parameter the binding in scope where it calls it, as the
+			// function's body read it before, and the body reads every form the parameters provide.
+			for parameter in ownCycleParameters where !parameter.isRequired && isPropertyUnavailable(parameter.property) {
+				cycleParameterUnavailableProperties.insert(parameter.property)
+			}
+			receivableProperties = receivableProperties
+				.filter { !ownCycleParameterLabels.contains($0.label) }
+				.union(ownCycleParameters.flatMap(\.providedForms))
+		}
 		unavailableOptionalProperties = Set<Property>(scope.instantiable.dependencies.flatMap { dependency in
 			switch dependency.source {
 			case .instantiated, .forwarded:
@@ -538,6 +658,42 @@ private struct ScopeGeneratorUnderConstruction {
 		self.receivableProperties = receivableProperties
 		self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
 		self.childLazilyInstantiatedInstanceProperties = childLazilyInstantiatedInstanceProperties
+		self.previousPassGenerator = previousPassGenerator
+		self.ownCycleParameters = ownCycleParameters
+		passedCycleParameters = closedOnContext?.parameters ?? ownCycleParameters
+		self.cycleParameterUnavailableProperties = cycleParameterUnavailableProperties
+		self.callSiteLazilyInstantiatedInstanceProperties = callSiteLazilyInstantiatedInstanceProperties
+		// The scopes beneath this one see what it declares as the nearest declaration of each parameter's label of the
+		// functions enclosing it that lazy cycles close on, and this scope's own function's parameters. Nearly every
+		// scope is beneath no such function.
+		var childCycleParameterContexts = isPropertyCycle ? [:] : cycleParameterContexts
+		if !childCycleParameterContexts.isEmpty {
+			let declaredProperties = scope.createdProperties.union(scope.propertiesToDeclare).union(ownCycleParameters.flatMap(\.providedForms))
+			childCycleParameterContexts = childCycleParameterContexts.mapValues { $0.declaring(declaredProperties) }
+		}
+		if let property, !ownCycleParameters.isEmpty {
+			childCycleParameterContexts[property] = CycleParameterContext(parameters: ownCycleParameters)
+		}
+		self.childCycleParameterContexts = childCycleParameterContexts
+		// The forms the parameters of the functions enclosing this scope provide, which a declaration of their label here
+		// hides from the scopes beneath it, as it hides any declaration above: they then resolve the label to this
+		// scope's declaration, which validation has checked provides what they receive or is passed `nil` for. Nearly
+		// every scope is beneath no such function.
+		var parameterProvidedForms = cycleParameterProvidedForms
+		if !ownCycleParameters.isEmpty {
+			parameterProvidedForms = parameterProvidedForms.filter { !ownCycleParameterLabels.contains($0.label) }.union(ownCycleParameters.flatMap(\.providedForms))
+		}
+		if parameterProvidedForms.isEmpty || isPropertyCycle {
+			childCycleParameterProvidedForms = parameterProvidedForms
+			childReceivableProperties = receivableProperties
+		} else {
+			let declaredProperties = scope.createdProperties.union(scope.propertiesToDeclare)
+			let declaredLabels = Set(declaredProperties.map(\.label))
+			childCycleParameterProvidedForms = parameterProvidedForms.filter { !declaredLabels.contains($0.label) }
+			childReceivableProperties = receivableProperties.subtracting(parameterProvidedForms.filter { form in
+				declaredLabels.contains(form.label) && !declaredProperties.contains(form) && !declaredProperties.contains(form.asUnwrappedProperty)
+			})
+		}
 		// A forwarded property is a parameter of the function that builds the scope, so it is in scope wherever
 		// the scope's tree is built. Nearly every scope forwards nothing, so most share the set they were given.
 		let forwardedProperties = scope.instantiable.forwardedReceivableProperties
@@ -619,7 +775,7 @@ private struct ScopeGeneratorUnderConstruction {
 			propertyStack: hole.fillPropertyStack,
 			// A value the fill takes from the caller's scope is available as it would be to a pass-through of the call:
 			// one the caller's path is still building is not, so a receive of it only if available is passed `nil`.
-			receivableProperties: receivableProperties.filter { !fieldLabels.contains($0.label) && !childPropertyStack.contains($0) }.union(fieldForms),
+			receivableProperties: childReceivableProperties.filter { !fieldLabels.contains($0.label) && !childPropertyStack.contains($0) }.union(fieldForms),
 			lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties.filter { !fieldLabels.contains($0.label) }.union(fieldInstanceProperties),
 			alwaysAvailableProperties: alwaysAvailableProperties.union(fieldForms),
 			boundProperties: boundProperties,
@@ -633,6 +789,12 @@ private struct ScopeGeneratorUnderConstruction {
 			startsCodeGeneration: startsCodeGeneration,
 			fill: hole,
 			fillKey: ScopeGenerator.fillKey(of: hole),
+			// The pass before created a fill's generator around the generator of the property it builds. A fill is a
+			// function of its own, declared where the seam is called, so no function enclosing the call that a lazy cycle
+			// closes on encloses a cycle-closing scope in the fill.
+			previousPassGenerator: previousPassChildGenerator?.children.first,
+			cycleParameterContexts: [:],
+			cycleParameterProvidedForms: [],
 		)
 	}
 
@@ -664,7 +826,7 @@ private struct ScopeGeneratorUnderConstruction {
 				scope: scope,
 				property: property,
 				propertyStack: childPropertyStack,
-				receivableProperties: receivableProperties,
+				receivableProperties: childReceivableProperties,
 				lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 				alwaysAvailableProperties: alwaysAvailableProperties,
 				boundProperties: boundProperties,
@@ -676,8 +838,19 @@ private struct ScopeGeneratorUnderConstruction {
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				forMockGeneration: forMockGeneration,
 				startsCodeGeneration: startsCodeGeneration,
+				previousPassGenerator: previousPassChildGenerator,
+				cycleParameterContexts: childCycleParameterContexts,
+				cycleParameterProvidedForms: childCycleParameterProvidedForms,
 			)
 		}
+	}
+
+	/// The generator the pass before created for the child whose generator is created next, or `nil` in the first pass.
+	private var previousPassChildGenerator: ScopeGenerator? {
+		guard let previousPassChildren = previousPassGenerator?.children,
+		      previousPassChildren.indices.contains(childGenerators.count)
+		else { return nil }
+		return previousPassChildren[childGenerators.count]
 	}
 
 	/// The fills inside one of this scope's fills can refer to: those of enclosing calls, and every fill of this call.
@@ -767,6 +940,10 @@ private struct ScopeGeneratorUnderConstruction {
 				}
 			},
 			stageCalls: seamHoles.stageCalls(at: sitePath),
+			cycleParameters: passedCycleParameters,
+			builtCycleParameters: ownCycleParameters,
+			cycleParameterUnavailableProperties: cycleParameterUnavailableProperties,
+			callSiteLazilyInstantiatedInstanceProperties: callSiteLazilyInstantiatedInstanceProperties,
 		)
 		let scopeGenerator = if let fill {
 			ScopeGenerator(fill: fill, key: fillKey ?? "", child: builtGenerator)
@@ -792,9 +969,34 @@ private struct ScopeGeneratorUnderConstruction {
 	private let enclosingScopeReceivableProperties: Set<Property>
 	/// `enclosingScopeReceivableProperties` and the properties this scope creates.
 	private let receivableProperties: Set<Property>
+	/// The received properties in scope only as the instance of a `LazilyInstantiated` property, where this scope's type
+	/// is constructed: inside its builder function, whose parameters a lazy cycle closes on hide every other declaration
+	/// of their labels.
 	private let lazilyInstantiatedInstanceProperties: Set<Property>
+	/// `lazilyInstantiatedInstanceProperties` where this scope's builder function is called, which its parameters do
+	/// not hide.
+	private let callSiteLazilyInstantiatedInstanceProperties: Set<Property>
 	private let childLazilyInstantiatedInstanceProperties: Set<Property>
 	private let unavailableOptionalProperties: Set<Property>
+	/// The generator the pass before created for this scope, or `nil` in the first pass (see `createScopeGenerator`).
+	private let previousPassGenerator: ScopeGenerator?
+	/// The parameters of this scope's builder function that the pass before found: those a lazy cycle closing on it
+	/// needs. Empty for nearly every scope.
+	private let ownCycleParameters: [CycleParameter]
+	/// The parameters this scope passes a builder function a lazy cycle closes on: its own, or, for a cycle-closing
+	/// scope, those of the function it refers to.
+	private let passedCycleParameters: [CycleParameter]
+	/// Those of `passedCycleParameters` that are unavailable where this scope passes them, which it passes `nil`.
+	private let cycleParameterUnavailableProperties: Set<Property>
+	/// For each function enclosing the scopes this scope builds that a lazy cycle closes on, by the property it builds,
+	/// its parameters with the nearest declaration of each label (see `CycleParameterContext`).
+	private let childCycleParameterContexts: [Property: CycleParameterContext]
+	/// The forms the parameters of the functions enclosing the scopes this scope builds provide, which no declaration
+	/// between those functions and the scopes this one builds hides.
+	private let childCycleParameterProvidedForms: Set<Property>
+	/// `receivableProperties` as the scopes this scope builds see them: without the forms of a parameter of an enclosing
+	/// function that this scope's declaration of the parameter's label hides.
+	private let childReceivableProperties: Set<Property>
 	/// The properties in scope wherever this scope's tree is built: those this scope and the scopes enclosing it
 	/// forward, and those a mock is passed.
 	private let alwaysAvailableProperties: Set<Property>

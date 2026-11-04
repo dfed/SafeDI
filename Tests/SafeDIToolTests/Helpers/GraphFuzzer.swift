@@ -6440,11 +6440,7 @@ enum GraphFuzzerOracle {
 				)
 			}
 		}
-		// A difference from the visible build is reported before one from the inline build. The visible build is the
-		// reference for the hole draw's seam re-entered inside its tree (`holeSeamBuilder`): the inline reference closes
-		// that lazy cycle on the outer builder function, a main defect (the shape of seed 662), and hands the second
-		// round the outer seam's values, where the hole build and the visible build both build the seam afresh.
-		let visiblyComparedSeeds = Set(visibleRuns.map(\.fixture.seed))
+		// A difference from the visible build is reported before one from the inline build.
 		for ((runs, _), comparison) in zip(graphs, comparisons) where failures[runs.fixture.seed] == nil {
 			let isPublicMockGraph = runs.knownRightOutcome != nil
 			let builds = isPublicMockGraph
@@ -6455,9 +6451,7 @@ enum GraphFuzzerOracle {
 				// A public mock graph exempts the shape matrix's stated divergences, derived from its leaf calls.
 				let statedDivergences = isPublicMockGraph ? Self.statedPublicMockValueDivergences(in: valueComparison, of: runs) : []
 				let differences = valueComparison.differences.filter { difference in
-					(!visiblyComparedSeeds.contains(runs.fixture.seed) || !difference.path.contains("holeSeamBuilder"))
-						&& !statedDivergences.contains(difference)
-						&& (isPublicMockGraph || !Self.isEagerInstanceRead(difference))
+					!statedDivergences.contains(difference) && (isPublicMockGraph || !Self.isEagerInstanceRead(difference))
 				}
 				guard !differences.isEmpty else { continue }
 				failures[runs.fixture.seed] = GraphFuzzerFailure(

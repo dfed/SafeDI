@@ -1711,7 +1711,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` checks. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 31, 92, 98, 196, 277, 609]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x6C9D4799C85F4B96
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x6F5E41210DC3503A
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -1891,15 +1891,6 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "The seam's own onlyIfAvailable alias is bound from its fulfilling parameter, where inline the seam is passed the property of the alias's label that the scope building the seam creates (the Manual's second documented divergence)",
 			signatures: [.seamBuildsOtherValuesThanInline(containing: "> aliasSeam > aliasAuth:\n  feature:     aliasAuth: nil")],
 			seeds: [698],
-		),
-		// Found by the comparator in round 7; the seam is right (adjudicated 2026-11-02): the comparator's inline reference
-		// carries a main defect.
-		GraphFuzzerKnownIssue(
-			reason: "A lazy cycle that re-enters the seam builds it again through its generated initializer, which is passed the nearest declaration of a label the seam receives, as the Manual's @Received rule says; the inline build, the comparator's reference, hands the type built on the second round the declaration above the cycle, because main's cycle-closing scope reuses the enclosing builder function (a main defect, fixed in its own pull request); the seed leaves this list when both builds agree",
-			// Every difference of the graph hands the re-entered seam the declaration above the cycle, which the known-right
-			// side describes the same way at each depth.
-			signatures: [.seamBuildsOtherValuesThanInline(containing: "> t0Builder > instantiate() > t1Builder)\n  known right: t1Builder: <2> Instantiator<S662_T1> (seen, first at <1> S662_Root0 > t1Builder)"), .seamBuildsOtherValuesThanInline(containing: "> t0Builder > instantiate() again > t1Builder)\n  known right: t1Builder: <2> Instantiator<S662_T1> (seen, first at <1> S662_Root0 > t1Builder)")],
-			seeds: [662],
 		),
 		// A seed `knownIssues` lists under another shape, whose graph the seam's draw changes so that it fails this one.
 		GraphFuzzerKnownIssue(
