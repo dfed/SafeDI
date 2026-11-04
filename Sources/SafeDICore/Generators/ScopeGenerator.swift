@@ -1955,6 +1955,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	struct SeamRoot: Sendable {
 		/// The signature of the generated initializer.
 		let signature: SeamSignature
+		/// The comment the generated `public` declarations' file carries, naming the types they name that SafeDI reads
+		/// no declaration of, or `nil` when the run writes none.
+		var unreadTypeComment: UnreadTypeComment?
 	}
 
 	/// The code generation mode.
@@ -3398,14 +3401,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					.joined(separator: ", ")
 				body = "\(bodyIndent)self.init(\(arguments))"
 			}
+			let marker = tier == .public
+				? seamRoot.unreadTypeComment?.markerLine(namedBy: parameters.map(\.property.typeDescription) + signature.holes.map(\.property.typeDescription), indent: Self.standardIndent).map { "\($0)\n" }
+				: nil
 			initializers.append("""
-			\(Self.standardIndent)\(attributesPrefix)\(tier.spelledOnGeneratedDeclaration) \(initializerKeyword)(\(parameterList(of: parameters))) {
+			\(marker ?? "")\(Self.standardIndent)\(attributesPrefix)\(tier.spelledOnGeneratedDeclaration) \(initializerKeyword)(\(parameterList(of: parameters))) {
 			\(body)
 			\(Self.standardIndent)}
 			""")
 		}
 		// The scope struct of each site of the seam's own tree, in hole order, before the initializers that build them.
-		let scopeTypes = signature.holes.filter { $0.innerSeamType == nil }.map(Self.scopeTypeDeclaration(of:))
+		// Each `public` declaration that names a type SafeDI reads no declaration of is marked for the file's comment:
+		// a scope struct by its `public` fields, a tier by its parameters and the types its builders return.
+		let scopeTypes = signature.holes.filter { $0.innerSeamType == nil }.map { hole in
+			let declaration = Self.scopeTypeDeclaration(of: hole)
+			guard let marker = seamRoot.unreadTypeComment?.markerLine(namedBy: hole.stages.flatMap { $0.filter { $0.access == .public }.map(\.property.typeDescription) }, indent: Self.standardIndent) else { return declaration }
+			return "\(marker)\n\(declaration)"
+		}
 		return """
 		extension \(typeName) {
 		\((scopeTypes + initializers).joined(separator: "\n\n"))
@@ -4095,13 +4107,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var lines = [String]()
 		lines.append("extension \(typeName) {")
 
+		// Each `public` or `@usableFromInline` declaration of a public mock that names a type SafeDI reads no declaration
+		// of is marked for the file's comment.
+		let unreadTypeComment = publicMock?.unreadTypeComment
 		if let publicMockPlan, !publicMockPlan.providerDeclarations.isEmpty {
+			if let marker = unreadTypeComment?.markerLine(namedBy: publicMockPlan.parameters.filter { $0.defaultKind == .provider }.map(\.type), indent: indent) {
+				lines.append(marker)
+			}
 			lines.append(contentsOf: publicMockPlan.providerDeclarations)
 			lines.append("")
 		}
 		if let publicMockPlan, !publicMockPlan.holes.isEmpty {
 			// The scope struct of each hole's site, which the builder `mock()` takes is handed.
 			for hole in publicMockPlan.holes {
+				if let marker = unreadTypeComment?.markerLine(namedBy: hole.stages.flatMap { $0.filter { $0.access == .public }.map(\.property.typeDescription) }, indent: indent) {
+					lines.append(marker)
+				}
 				lines.append(Self.scopeTypeDeclaration(of: hole))
 				lines.append("")
 			}
@@ -4388,6 +4409,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				returnType: mockMethodReturnType,
 				attributesPrefix: mockAttributesPrefix,
 				narrowestBody: body,
+				unreadTypeComment: unreadTypeComment,
 			))
 			lines.append("}")
 			lines.append("")

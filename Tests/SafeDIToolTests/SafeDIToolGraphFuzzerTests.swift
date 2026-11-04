@@ -122,6 +122,12 @@ struct SafeDIToolGraphFuzzerTests {
 		// A split graph whose modules all name their package, which the SwiftPM plugin flow agreed on with the module-info
 		// flow.
 		#expect(acceptedResults.contains { $0.isComparedAcrossIntegrations })
+		// A graph whose generated code carries the comment naming a type no declaration SafeDI reads declares, which agreed
+		// with its read twin.
+		#expect(acceptedResults.contains { result in
+			guard result.isComparedWithReadTwin, case let .accepted(generatedFiles, _) = result.outcome else { return false }
+			return GraphFuzzerFeature.seamOutputFeatures(of: result.fixture, generatedFiles: generatedFiles).contains(.unreadTypeComment)
+		})
 		#expect(results.contains { !$0.isAccepted && $0.failure == nil }, "Rejected none of \(Self.seamSmokeSeeds.count) graphs")
 	}
 
@@ -280,16 +286,22 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	func integrationsDisagreeFailure_returnsNil_whenOutputsDifferOnlyByCommentsOneFlowWritesForWhatItCannotKnow() {
-		// A flow that cannot spell an alias's file as the compiler does refers to it with a comment, and a seam call carries
-		// a comment where SafeDI cannot know the seam's module generated the initializer it calls.
+		// A flow that cannot spell an alias's file as the compiler does refers to it with a comment, a seam call carries a
+		// comment where SafeDI cannot know the seam's module generated the initializer it calls, and a run without a target
+		// graph names the types it counts as `public` because it reads no declaration of them.
+		let withUnreadTypeComment = Self.rootInitializer.replacingOccurrences(
+			of: "    public convenience init() {",
+			with: "    // SafeDI counts `S31_Secret` as `public`: no module it reads declares it narrower. If `S31_Secret` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n    public convenience init() {",
+		)
 		let withComments = Self.rootInitializer
 			.replacingOccurrences(of: "let authToken: S31_Secret = token", with: "let authToken: S31_Secret = token // Declared at Sources/FuzzApp/S31_Root.swift:8")
 			.replacingOccurrences(of: "_ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self", with: "_ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self // If this line does not compile, add the SafeDI plugin to the target that declares S31_Screen.")
 		let runs = Self.integrationRuns(
-			moduleInfoOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": Self.rootInitializer], warnings: []),
+			moduleInfoOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": withUnreadTypeComment], warnings: []),
 			pluginOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": withComments], warnings: []),
 		)
 		#expect(withComments.components(separatedBy: " // ").count == 3)
+		#expect(withUnreadTypeComment != Self.rootInitializer)
 		#expect(runs.integrationsDisagreeFailure == nil)
 	}
 
@@ -320,6 +332,186 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// An error at the root of that module.
 	private static let rootError = "/x/<fixture-directory>/shop/Sources/FuzzApp/S31_Root.swift:1:1: error: e"
+
+	// MARK: Read twin
+
+	@Test
+	func readTwin_declaresEachUnreadTypePublicInLowestModuleNamingIt_whenGraphDrawsValueOfTypeSafeDIReadsNoDeclarationOf() throws {
+		// Each seam and public mock corpus graph that draws a value of a type no declaration SafeDI reads declares has a read
+		// twin, which renames the type wherever the graph names it and declares the twin once, at the end of the first file
+		// naming it of the lowest module whose files name it, so that every module naming it can see it: renaming the twin
+		// back and dropping that declaration gives the graph back. Between them the corpora twin every type the fuzzer draws.
+		var twinnedTypeNames = Set<String>()
+		for fixture in Self.corpusFixtures(drawingUnreadValue: true) {
+			let readTwin = try #require(fixture.readTwin, "Seed \(fixture.seed) has no read twin")
+			twinnedTypeNames.formUnion(readTwin.unreadTypes.map(\.name))
+			let twinContent = readTwin.fixture.swiftFileContent
+			#expect(twinContent.allSatisfy { content in !readTwin.unreadTypes.contains { $0.isNamed(in: content) } }, "Seed \(fixture.seed)")
+			let declaringIndices = twinContent.indices.filter { twinContent[$0].hasSuffix(readTwin.declarations) }
+			let declaringIndex = try #require(declaringIndices.count == 1 ? declaringIndices.first : nil, "Seed \(fixture.seed)")
+			let restoredContent = twinContent.indices.map { index in
+				readTwin.restoring(index == declaringIndex ? String(twinContent[index].dropLast(readTwin.declarations.count)) : twinContent[index])
+			}
+			#expect(restoredContent == fixture.swiftFileContent, "Seed \(fixture.seed)")
+			let namingIndices = fixture.swiftFileContent.indices.filter { index in readTwin.unreadTypes.contains { $0.isNamed(in: fixture.swiftFileContent[index]) } }
+			if let modules = fixture.modules {
+				#expect(readTwin.declaringModule == modules[declaringIndex], "Seed \(fixture.seed)")
+				#expect(namingIndices.allSatisfy { (modules[declaringIndex], declaringIndex) <= (modules[$0], $0) }, "Seed \(fixture.seed)")
+				#expect(namingIndices.allSatisfy { modules[$0] == modules[declaringIndex] || modules[$0].dependencies.contains(modules[declaringIndex]) }, "Seed \(fixture.seed)")
+			} else {
+				#expect(readTwin.declaringModule == nil, "Seed \(fixture.seed)")
+				#expect(namingIndices.first == declaringIndex, "Seed \(fixture.seed)")
+			}
+		}
+		#expect(twinnedTypeNames == Set(GraphFuzzerReadTwin.UnreadType.all.map(\.name)))
+	}
+
+	@Test
+	func readTwin_isNil_whenGraphDrawsNoValueOfTypeSafeDIReadsNoDeclarationOf() {
+		// A graph naming no type no declaration SafeDI reads declares has nothing to twin: the base corpus's graphs, and the
+		// seam and public mock corpus graphs that do not draw such a value.
+		#expect((0..<UInt64(100)).filter { GraphFuzzerGenerator.fixture(forSeed: $0).readTwin != nil } == [])
+		#expect(Self.corpusFixtures(drawingUnreadValue: false).filter { $0.readTwin != nil }.map(\.seed) == [])
+	}
+
+	@Test
+	func readTwinFailure_reportsVerdict_whenReadTwinIsRejectedWhereGraphIsAccepted() throws {
+		// SafeDI counts a type it reads no declaration of as `public`, so declaring the type `public` where SafeDI reads it
+		// changes no verdict.
+		let fixture = try Self.readTwinFixture()
+		let runs = Self.readTwinRuns(
+			of: fixture,
+			outcome: .accepted(generatedFiles: Self.readTwinFiles(of: fixture, featureCommentNames: ["StaticString"]), warnings: []),
+			readTwinOutcome: .rejected(diagnostics: "/x/<fixture-directory>/shop/Sources/FuzzFeature/\(fixture.typeNamePrefix)UnreadSeam.swift:3:1: error: e"),
+		)
+		#expect(runs.readTwinFailure?.kind == .readTwinDiffers)
+		#expect(runs.readTwinFailure?.details.prefix { $0 != "\n" } == "Declaring `StaticString` `public` where SafeDI reads it changes its verdict.")
+	}
+
+	@Test
+	func readTwinFailure_reportsComment_whenReadTwinsOwnModuleStillNamesTheReadType() throws {
+		// The module that declares the twin reads its declaration, so its comment names no twinned type.
+		let fixture = try Self.readTwinFixture()
+		let files = Self.readTwinFiles(of: fixture, featureCommentNames: ["StaticString"])
+		let runs = Self.readTwinRuns(of: fixture, outcome: .accepted(generatedFiles: files, warnings: []), readTwinOutcome: .accepted(generatedFiles: files, warnings: []))
+		#expect(runs.readTwinFailure?.kind == .readTwinDiffers)
+		#expect(runs.readTwinFailure?.details.prefix { $0 != "\n" } == "Declaring `StaticString` `public` where SafeDI reads it changes the types the comment in FuzzFeature names.")
+	}
+
+	@Test
+	func readTwinFailure_reportsComment_whenModuleReadingTwinThroughModuleInfoStillNamesTheReadType() throws {
+		// The module declaring the twin names it in a declaration, so even a `.safedi` written without a target graph, which
+		// keeps no other `public` declaration, keeps the twin's: a module that depends on it reads the twin there.
+		let fixture = try Self.readTwinFixture()
+		let runs = Self.readTwinRuns(
+			of: fixture,
+			outcome: .accepted(generatedFiles: Self.readTwinFiles(of: fixture, featureCommentNames: ["StaticString"], appCommentNames: ["StaticString"]), warnings: []),
+			readTwinOutcome: .accepted(generatedFiles: Self.readTwinFiles(of: fixture, featureCommentNames: nil, appCommentNames: ["StaticString"]), warnings: []),
+		)
+		#expect(runs.readTwinFailure?.details.prefix { $0 != "\n" } == "Declaring `StaticString` `public` where SafeDI reads it changes the types the comment in FuzzApp names.")
+	}
+
+	@Test
+	func readTwinFailure_isNil_whenReadTwinsCommentsNameEveryTypeTheGraphsNameButTheReadType() throws {
+		// Only the twinned type leaves the comment, in every module; a type no declaration SafeDI reads declares that the
+		// twin does not rename stays in it, and the comment moves to whichever declaration then names one first.
+		let fixture = try Self.readTwinFixture()
+		let runs = Self.readTwinRuns(
+			of: fixture,
+			outcome: .accepted(generatedFiles: Self.readTwinFiles(of: fixture, featureCommentNames: ["Duration", "StaticString"], appCommentNames: ["StaticString"]), warnings: []),
+			readTwinOutcome: .accepted(generatedFiles: Self.readTwinFiles(of: fixture, featureCommentNames: ["Duration"], appCommentNames: nil), warnings: []),
+		)
+		#expect(runs.readTwinFailure == nil)
+	}
+
+	@Test
+	func readTwinFailure_reportsComment_whenReadTwinsCommentStopsNamingAnotherType() throws {
+		// Declaring one type changes how SafeDI counts no other.
+		let fixture = try Self.readTwinFixture()
+		let runs = Self.readTwinRuns(
+			of: fixture,
+			outcome: .accepted(generatedFiles: Self.readTwinFiles(of: fixture, featureCommentNames: ["Duration", "StaticString"]), warnings: []),
+			readTwinOutcome: .accepted(generatedFiles: Self.readTwinFiles(of: fixture, featureCommentNames: nil), warnings: []),
+		)
+		#expect(runs.readTwinFailure?.details.prefix { $0 != "\n" } == "Declaring `StaticString` `public` where SafeDI reads it changes the types the comment in FuzzFeature names.")
+	}
+
+	@Test
+	func readTwinFailure_reportsGeneratedCode_whenReadTwinsSeamTakesTheReadTypeOnNarrowerTier() throws {
+		// A `public` type and a type SafeDI reads no declaration of put a seam's parameter on the same tier.
+		let fixture = try Self.readTwinFixture()
+		let runs = Self.readTwinRuns(
+			of: fixture,
+			outcome: .accepted(generatedFiles: Self.readTwinFiles(of: fixture, featureCommentNames: ["StaticString"]), warnings: []),
+			readTwinOutcome: .accepted(generatedFiles: Self.readTwinFiles(of: fixture, tier: "package", featureCommentNames: nil), warnings: []),
+		)
+		#expect(runs.readTwinFailure?.details.prefix { $0 != "\n" } == "Declaring `StaticString` `public` where SafeDI reads it changes its generated dependency tree code, in FuzzFeature/\(fixture.typeNamePrefix)UnreadSeam+SafeDI.swift.")
+	}
+
+	@Test
+	func readTwinFailure_reportsPluginFlow_whenReadTwinDiffersOnlyAsSwiftPackagePluginRunsTheTool() throws {
+		// The SwiftPM plugin reads the twin's declaration in every module that depends on its module, and writes no comment,
+		// so there the twin's generated code is the graph's byte for byte.
+		let fixture = try Self.readTwinFixture()
+		let runs = Self.readTwinRuns(
+			of: fixture,
+			outcome: .accepted(generatedFiles: Self.readTwinFiles(of: fixture, featureCommentNames: ["StaticString"]), warnings: []),
+			readTwinOutcome: .accepted(generatedFiles: Self.readTwinFiles(of: fixture, featureCommentNames: nil), warnings: []),
+			pluginOutcome: .accepted(generatedFiles: Self.readTwinFiles(of: fixture, featureCommentNames: nil), warnings: []),
+			readTwinPluginOutcome: .accepted(generatedFiles: Self.readTwinFiles(of: fixture, tier: "package", featureCommentNames: nil), warnings: []),
+		)
+		#expect(runs.readTwinFailure?.details.prefix { $0 != "\n" } == "Declaring `StaticString` `public` where SafeDI reads it changes its generated dependency tree code, in FuzzFeature/\(fixture.typeNamePrefix)UnreadSeam+SafeDI.swift, as the SwiftPM plugin runs the tool.")
+	}
+
+	/// The seam corpus's or the public mock corpus's graphs that draw a value of a type no declaration SafeDI reads
+	/// declares (`unreadParameterType`), or those that do not.
+	private static func corpusFixtures(drawingUnreadValue: Bool) -> [GraphFuzzerFixture] {
+		let seamFixtures = (0..<UInt64(seamCorpusSeedCount)).map { GraphFuzzerGenerator.fixture(forSeed: $0, features: [.generateDependencyTree]) }
+			.filter { GraphFuzzerFeature.seamDrawFeatures(of: $0).contains(.unreadParameterType) == drawingUnreadValue }
+		let publicMockFixtures = (0..<UInt64(publicMockCorpusSeedCount)).map { GraphFuzzerGenerator.fixture(forSeed: $0, features: [.generateMockPublic]) }
+			.filter { GraphFuzzerPublicMockDraw.drawFeatures(of: $0).contains(.unreadParameterType) == drawingUnreadValue }
+		return seamFixtures + publicMockFixtures
+	}
+
+	/// The first seam corpus graph whose seam's module receives a `StaticString`, and no other type no declaration SafeDI
+	/// reads declares, that a host in its callers' module forwards.
+	private static func readTwinFixture() throws -> GraphFuzzerFixture {
+		try #require((0..<UInt64(seamCorpusSeedCount)).lazy.map { GraphFuzzerGenerator.fixture(forSeed: $0, features: [.generateDependencyTree]) }.first { fixture in
+			let drawFeatures = GraphFuzzerFeature.seamDrawFeatures(of: fixture)
+			return drawFeatures.contains(.unreadParameterType) && drawFeatures.contains(.unreadAcrossModules)
+				&& fixture.description.contains("StaticString") && !fixture.description.contains("CustomStringConvertible") && !fixture.description.contains("Unicode")
+		})
+	}
+
+	/// The runs of `fixture` with `outcome` and `pluginOutcome` as the two flows gave them, and its read twin's, with the
+	/// twin's rename undone.
+	private static func readTwinRuns(
+		of fixture: GraphFuzzerFixture,
+		outcome: GraphFuzzerToolOutcome,
+		readTwinOutcome: GraphFuzzerToolOutcome,
+		pluginOutcome: GraphFuzzerToolOutcome? = nil,
+		readTwinPluginOutcome: GraphFuzzerToolOutcome? = nil,
+	) -> GraphFuzzerToolRuns {
+		GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome, pluginOutcome: pluginOutcome, readTwinOutcome: readTwinOutcome, readTwinPluginOutcome: readTwinPluginOutcome)
+	}
+
+	/// Generated files of `fixture`'s modules: the seam's initializer on `tier`, which takes the `StaticString`, in
+	/// FuzzFeature, and a public initializer that takes it in FuzzApp, each below the comment naming the given types, one
+	/// or two, when there are any.
+	private static func readTwinFiles(of fixture: GraphFuzzerFixture, tier: String = "public", featureCommentNames: [String]?, appCommentNames: [String]? = nil) -> [String: String] {
+		let prefix = fixture.typeNamePrefix
+		func comment(naming names: [String]?) -> String {
+			guard let names else { return "" }
+			let quotedNames = names.map { "`\($0)`" }
+			return quotedNames.count == 1
+				? "    // SafeDI counts \(quotedNames[0]) as `public`: no module it reads declares it narrower. If \(quotedNames[0]) is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
+				: "    // SafeDI counts \(quotedNames.joined(separator: " and ")) as `public`: no module it reads declares them narrower. If one is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
+		}
+		return [
+			"FuzzFeature/\(prefix)UnreadSeam+SafeDI.swift": "extension \(prefix)UnreadSeam {\n\(comment(naming: featureCommentNames))    \(tier) convenience init(unreadValue: StaticString) {\n        self.init(unreadChild: \(prefix)UnreadChild(unreadValue: unreadValue))\n    }\n}\n",
+			"FuzzApp/\(prefix)UnreadOuter+SafeDI.swift": "extension \(prefix)UnreadOuter {\n\(comment(naming: appCommentNames))    public convenience init(unreadValue: StaticString) {\n        self.init(unreadSeam: \(prefix)UnreadSeam(unreadValue: unreadValue))\n    }\n}\n",
+		]
+	}
 
 	@Test
 	func nilArgumentFailure_reportsArgument_whenSeamPassesLiteralNilWhereInlinePassesValue() {
@@ -1503,6 +1695,39 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func toolOutcome_throwsHarnessError_whenHarnessWritesNoFileOfTheFixturesFirstName() async {
+		// The fixture names its file `Elsewhere.swift`, while the harness names it after `Root`, its `@Instantiable` type, so
+		// the fixture directory of the graph, which the tool rejects since nothing builds `Missing`, cannot be found: the
+		// oracle reports that, and deletes nothing.
+		let fixture = GraphFuzzerFixture(seed: 0, swiftFileContent: ["\(GraphFuzzerFixture.fileNameMarker)Elsewhere.swift\n\n@Instantiable(isRoot: true)\npublic final class Root: Instantiable {\n    public init(missing: Missing) {\n        self.missing = missing\n    }\n\n    @Instantiated let missing: Missing\n}"])
+		let workingDirectory = FileManager.default.currentDirectoryPath
+
+		let error = await #expect(throws: GraphFuzzerInfrastructureError.self) {
+			try await GraphFuzzerOracle.toolOutcome(of: fixture)
+		}
+		#expect(error?.description == "The test harness wrote no fixture named Elsewhere.swift for seed 0: the fixture names its files apart from the names the harness gives them.")
+		#expect(FileManager.default.fileExists(atPath: workingDirectory))
+	}
+
+	@Test
+	func difference_isNil_whenUnreadTypeCommentMovesToAnotherFileOfItsModule() {
+		let comment = "    // SafeDI counts `StaticString` as `public`: no module it reads declares it narrower. If `StaticString` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
+		let commentAboveFirst = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S5_T0+SafeDIMock.swift": "extension S5_T0 {\n\(comment)    public static func mock() {}\n}\n", "FuzzFeature/S5_T1+SafeDIMock.swift": "extension S5_T1 {\n    public static func mock() {}\n}\n"], warnings: [])
+		let commentAboveSecond = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S5_T0+SafeDIMock.swift": "extension S5_T0 {\n    public static func mock() {}\n}\n", "FuzzFeature/S5_T1+SafeDIMock.swift": "extension S5_T1 {\n\(comment)    public static func mock() {}\n}\n"], warnings: [])
+
+		#expect(GraphFuzzerToolOutcome.difference(between: commentAboveFirst, and: commentAboveSecond) == nil)
+	}
+
+	@Test
+	func difference_namesUnreadTypeComments_whenOnlyOneOutcomeCarriesOne() {
+		let comment = "    // SafeDI counts `StaticString` as `public`: no module it reads declares it narrower. If `StaticString` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n"
+		let withComment = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S5_T0+SafeDIMock.swift": "extension S5_T0 {\n\(comment)    public static func mock() {}\n}\n"], warnings: [])
+		let withoutComment = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzFeature/S5_T0+SafeDIMock.swift": "extension S5_T0 {\n    public static func mock() {}\n}\n"], warnings: [])
+
+		#expect(GraphFuzzerToolOutcome.difference(between: withComment, and: withoutComment) == "the comments naming the types it counts as `public` because it reads no declaration of them")
+	}
+
+	@Test
 	func difference_isNil_whenDiagnosticsSuggestTheSamePropertiesInAnotherOrder() {
 		let diagnostics = GraphFuzzerToolOutcome.rejected(diagnostics: "/a/<fixture-directory>/S12_T1.swift:7:2: error: @Received property `t4: S12_T3` is not @Instantiated or @Forwarded in chain: S12_Root0 -> S12_T1. Did you mean one of `t3: S12_T3`, `t4: Instantiator<S12_T3>`, `t6: S12_T3`?")
 		let reorderedSuggestions = GraphFuzzerToolOutcome.rejected(diagnostics: "/b/<fixture-directory>/S12_T1.swift:7:2: error: @Received property `t4: S12_T3` is not @Instantiated or @Forwarded in chain: S12_Root0 -> S12_T1. Did you mean one of `t6: S12_T3`, `t4: Instantiator<S12_T3>`, `t3: S12_T3`?")
@@ -2437,6 +2662,7 @@ struct SafeDIToolGraphFuzzerTests {
 		var acceptedFeatureCounts = [GraphFuzzerFeature: Int]()
 		var valueOracleInspectedCount = 0
 		var valueOracleComparedCount = 0
+		var readTwinGraphCount = 0
 		var acceptedSpellingDrawFeatures = Set<GraphFuzzerSeamDrawFeature>()
 		var omittedValueGraphCount = 0
 		var publicMockOutputFeatureCounts = [GraphFuzzerPublicMockOutputFeature: Int]()
@@ -2475,6 +2701,7 @@ struct SafeDIToolGraphFuzzerTests {
 								isInspectedByValueOracle: results[index].isInspectedByValueOracle,
 								isComparedByValueOracle: results[index].isComparedByValueOracle,
 								isComparedAcrossIntegrations: results[index].isComparedAcrossIntegrations,
+								isComparedWithReadTwin: results[index].isComparedWithReadTwin,
 								valueOracle: results[index].valueOracle,
 							)
 						}
@@ -2529,6 +2756,9 @@ struct SafeDIToolGraphFuzzerTests {
 							if result.isComparedByValueOracle {
 								valueOracleComparedCount += 1
 							}
+							if result.isComparedWithReadTwin {
+								readTwinGraphCount += 1
+							}
 							if let valueOracle = result.valueOracle {
 								valueOracleCounts.add(valueOracle, isCompared: result.isComparedByValueOracle)
 							}
@@ -2582,6 +2812,9 @@ struct SafeDIToolGraphFuzzerTests {
 		// The graphs the comparator compared, which a compilation failure (a known warning among them) keeps below the
 		// inspected count: read from the report rather than derived.
 		report.append("compared \(valueOracleComparedCount) \(corpus.name)")
+		// The graphs the oracle compared with their read twin, with the pin, which ci.yml's combine job adds up: an oracle
+		// that stops running the twins fails it.
+		report.append("read-twins \(readTwinGraphCount) \(corpus.readTwinGraphCount) \(corpus.name)")
 		// The graphs the tool rejects because a caller holds a value its tier omits, which ci.yml's combine job adds up.
 		report.append("omitted-values \(omittedValueGraphCount) \(corpus.omittedValueGraphCount) \(corpus.name)")
 		report.append("spellings \(corpus.name) \(corpus.spellingDrawFeatures.map(\.rawValue).sorted().joined(separator: ",")) \(acceptedSpellingDrawFeatures.map(\.rawValue).sorted().joined(separator: ","))")
@@ -2624,6 +2857,9 @@ struct SafeDIToolGraphFuzzerTests {
 			}
 			if let pinnedValueOracleCounts = corpus.valueOracleCounts, valueOracleCounts != pinnedValueOracleCounts {
 				reportProblem("The value oracle compared and skipped, over the \(corpus.name) corpus, \(valueOracleCounts.reportField), but \(pinnedValueOracleCounts.reportField) is pinned (`corpusValueOracleCounts`).")
+			}
+			if readTwinGraphCount != corpus.readTwinGraphCount {
+				reportProblem("The oracle compared \(readTwinGraphCount) graphs of the \(corpus.name) corpus with their read twin, but \(corpus.readTwinGraphCount) are pinned.")
 			}
 			if omittedValueGraphCount != corpus.omittedValueGraphCount {
 				reportProblem("The tool rejected \(omittedValueGraphCount) graphs of the \(corpus.name) corpus because a caller holds a value its tier omits, but \(corpus.omittedValueGraphCount) are pinned.")
@@ -2769,6 +3005,9 @@ struct SafeDIToolGraphFuzzerTests {
 		/// What the base corpus's value oracle compares and skips over the whole corpus, or `nil` for a corpus that has
 		/// no such oracle.
 		var valueOracleCounts: GraphFuzzerValueOracleCounts?
+		/// How many graphs name a type no declaration SafeDI reads declares, which the oracle runs again as their read
+		/// twin (`GraphFuzzerFixture.readTwin`) and compares with the graph: none for a corpus that draws no such type.
+		var readTwinGraphCount = 0
 
 		/// The seeds whose value-oracle fixture is known not to compile, which the value oracle compares each on its own.
 		var isolatedValueOracleSeeds: Set<UInt64> {
@@ -2859,24 +3098,29 @@ struct SafeDIToolGraphFuzzerTests {
 		valueOracleInspectedGraphCount: seamCorpusValueOracleInspectedGraphCount,
 		spellingDrawFeatures: Set(GraphFuzzerSpelling.allCases.map(\.drawFeature)),
 		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
+		readTwinGraphCount: seamCorpusReadTwinGraphCount,
 	)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0x9B0D8696A59334D8
-	static let seamCorpusAcceptedSeedCount = 266
-	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x4D837B60B874D9E
+	static let seamCorpusFixtureHash: UInt64 = 0x6015FAFC4341AC2E
+	static let seamCorpusAcceptedSeedCount = 269
+	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xA3A589A52249B034
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
 	/// oracle compares.
-	static let seamCorpusValueOracleInspectedGraphCount = 186
+	static let seamCorpusValueOracleInspectedGraphCount = 181
 	/// How many of the seam corpus's graphs the tool rejects because a caller holds a value the tier it calls omits.
-	static let seamCorpusOmittedValueGraphCount = 3
+	static let seamCorpusOmittedValueGraphCount = 0
+	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
+	/// with their read twin.
+	static let seamCorpusReadTwinGraphCount = 153
 
 	/// The ordinary suite's batch of the seam corpus: graphs the tool accepts whose generated code, between them, shows
 	/// every `GraphFuzzerSeamOutputFeature` – both kinds of pass-through, a call reading `.instance`, an `@escaping`
-	/// closure parameter, an `@escaping @Sendable` one, and an optional closure – graphs split across modules, with a
-	/// caller in another package, a caller in the same package run without its package's name and a seam's module run so
-	/// (seeds 19, 31, 98, 180, 609 and 743 between them), the last two also accepted inline, so the batch compiles every
-	/// module, judges an omitted value, compares a split graph's values and compares one across the two integrations;
+	/// closure parameter, an `@escaping @Sendable` one, an optional closure, and the comment naming a type SafeDI reads no
+	/// declaration of (seeds 16 and 609) – graphs split across modules, with a caller in another package, a caller in the
+	/// same package run without its package's name and a seam's module run so (seeds 19, 31, 98, 180, 609 and 743 between
+	/// them), the last two also accepted inline, so the batch compiles every module, compares a split graph's values and
+	/// compares one across the two integrations;
 	/// graphs with a hole whose code, between them, shows every `GraphFuzzerHoleOutputFeature` – a passed-up builder whose
 	/// fill re-enters the inner seam, a staged builder whose fill re-enters its seam, a fill passed to a seam that passes
 	/// its site up, also `@Sendable`, and a fill named apart (seeds 196, 277 and 743 between them) – and that draw, between
@@ -2885,7 +3129,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// hole rolls and the seam tests' draws were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 92, 98, 180, 196, 277, 605, 609, 743]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xD97E8B376A10CA63
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x7D18B713CCF65BDC
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -3032,6 +3276,13 @@ struct SafeDIToolGraphFuzzerTests {
 		.uncreatedAliasFulfillingPropertyRequiredBeside: 32,
 		.uncreatedAliasAcrossModules: 111,
 		.spelledAcrossModules: 175,
+		.unreadParameterType: 153,
+		.unreadParameterTypeThroughTypealias: 16,
+		.unreadBoundaryInsideConditionalBlock: 25,
+		.unreadBoundaryInPackageExtension: 18,
+		.unreadBoundaryInExtensionOfNestedType: 25,
+		.unreadBoundaryInternalTypealias: 28,
+		.unreadAcrossModules: 55,
 		.formsAcrossModules: 145,
 		.formsSeam: 499,
 		.formsByValueReceive: 271,
@@ -3149,6 +3400,7 @@ struct SafeDIToolGraphFuzzerTests {
 		omittedValueGraphCount: publicMockCorpusOmittedValueGraphCount,
 		outputFeatureMinimumShares: publicMockCorpusOutputFeatureMinimumShares,
 		publicMockErrorGraphCounts: publicMockCorpusErrorGraphCounts,
+		readTwinGraphCount: publicMockCorpusReadTwinGraphCount,
 	)
 
 	/// The least share of the public mock corpus's accepted graphs whose generated code shows each output feature, in
@@ -3176,10 +3428,11 @@ struct SafeDIToolGraphFuzzerTests {
 		.secondTier: 37,
 		.stagedHoleBuilder: 1,
 		.thirdTier: 0,
+		.unreadTypeComment: 14,
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0xAF6DFAA2BF826D7C
+	static let publicMockCorpusFixtureHash: UInt64 = 0xEE876DD8FC2E1842
 	static let publicMockCorpusAcceptedSeedCount = 836
 	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0xC2B61A7A5012EBE1
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
@@ -3188,6 +3441,9 @@ struct SafeDIToolGraphFuzzerTests {
 	/// How many of the public mock corpus's graphs the tool rejects because a caller provides a value the tier of the public
 	/// mock it calls omits (`leafTierOmitsProvidedValue`), which the long run counts as it counts the seam's.
 	static let publicMockCorpusOmittedValueGraphCount = 32
+	/// How many of the public mock corpus's graphs name a type no declaration SafeDI reads declares, which the oracle
+	/// compares with their read twin.
+	static let publicMockCorpusReadTwinGraphCount = 260
 	/// How many of the public mock corpus's graphs the tool rejects with each of a public mock's own errors, in the order
 	/// of `GraphFuzzerOracle.publicMockOnlyErrorMarkers`: the public tier, a narrower enclosing type, a leaf tier and a
 	/// nested leaf tier omitting a provided value, the mock condition, the by-name check, and the view that cannot call.
@@ -3204,13 +3460,13 @@ struct SafeDIToolGraphFuzzerTests {
 	/// through an `Instantiator`, a fully lazy cycle (seed 197); a staged builder for a hole beneath a `Sendable` wrapper
 	/// (seed 211); a consumer in another package only and a differing mock condition (seed 253); a configuration's
 	/// module-level forwarder of a default's provider, and a hole's builder passed up into a `@Sendable` builder function
-	/// (seed 551); a third tier, which a parameter of a type SafeDI reads no declaration of makes (seed 92) – a graph the public tier rejects (seed 7), and a graph of the configuration order's known issue (seed
-	/// 23). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
+	/// (seed 551); a third tier (seed 92); the comment naming a type SafeDI reads no declaration of (seed 10) – a graph the
+	/// public tier rejects (seed 7), and a graph of the configuration order's known issue (seed 23). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
 	/// which `publicMockSmokeSeeds_exercisePublicMockFeature_inGraphsTheToolAccepts` checks. Pinned by
 	/// `publicMockSmokeAndKnownIssueFixtureHash`.
-	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 23, 43, 46, 92, 142, 151, 197, 211, 253, 551]
+	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 92, 142, 151, 197, 211, 253, 551]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xEF3456A2336A01AB
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x52D0CA44A9C0FD89
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -3328,6 +3584,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.namespaceInMarkerFreeFile: 101,
 		.dockPackage: 163,
 		.dockUnrecorded: 172,
+		.unreadParameterType: 260,
 		.namespaceExtensionPublic: 44,
 		.namespaceExtensionUnspelled: 78,
 		.narrowerTreeType: 878,

@@ -514,6 +514,11 @@ struct FixturePaths {
 		path(of: fileName, in: pathsByFileName, sourceLocation: sourceLocation)
 	}
 
+	/// The path of the named fixture, or `nil` when the harness wrote no fixture of that name.
+	func writtenPath(of fileName: String) -> String? {
+		pathsByFileName[fileName]
+	}
+
 	/// The path a build system hands the compiler for the named fixture when a build tool plugin runs the tool:
 	/// absolute, beginning with the fixture directory as the build system reports it.
 	func compilerPath(of fileName: String, sourceLocation: SourceLocation = #_sourceLocation) -> String {

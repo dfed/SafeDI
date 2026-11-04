@@ -27,7 +27,7 @@ import SwiftUI
 @Instantiable(isRoot: true) @main
 public struct NotesApp: Instantiable, App {
 	public var body: some Scene {
-		WindowGroup {
+		WindowGroup(windowTitle.text) {
 			if let user = userService.user {
 				// Returns a new instance of `LoggedInView` with the authenticated user forwarded into the subtree.
 				loggedInViewBuilder.instantiate(user)
@@ -46,12 +46,14 @@ public struct NotesApp: Instantiable, App {
 		nameEntryViewBuilder: Instantiator<NameEntryView>,
 		loggedInViewBuilder: Instantiator<LoggedInView>,
 		eventLogger: EventLogger,
+		windowTitle: WindowTitle,
 	) {
 		self.userService = userService
 		self.stringStorage = stringStorage
 		self.nameEntryViewBuilder = nameEntryViewBuilder
 		self.loggedInViewBuilder = loggedInViewBuilder
 		self.eventLogger = eventLogger
+		self.windowTitle = windowTitle
 		eventLogger.record("Launched")
 	}
 
@@ -66,4 +68,7 @@ public struct NotesApp: Instantiable, App {
 	/// A private property that is instantiated when the app is instantiated and records what the app does.
 	/// Which type fulfills it depends on whether `DEBUG` is active; see `EventLogger.swift`.
 	@Instantiated private let eventLogger: EventLogger
+	/// A private property that is instantiated when the app is instantiated and titles the app's window. `Subproject` builds
+	/// its tree: the generated `init()` calls an initializer `Subproject` generates for it.
+	@Instantiated private let windowTitle: WindowTitle
 }

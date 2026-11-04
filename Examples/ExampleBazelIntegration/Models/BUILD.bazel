@@ -1,0 +1,18 @@
+load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
+
+# `Models` declares no `@Instantiable` type, but `Subproject`'s seam
+# `WindowTitle` names its `package` type `NoteTheme`, so `Models` runs
+# SafeDI too and every module whose seam names one of its types lists
+# `Models_safedi` in `safedi_deps`: SafeDI counts a type it reads no
+# declaration of as `public`, and `WindowTitle`'s generated `public`
+# initializer would then take a `package` type, which does not compile.
+safedi_swift_library(
+    name = "Models",
+    srcs = glob(["*.swift"]),
+    module_name = "Models",
+    package_name = "ExampleBazelIntegration",
+    visibility = [
+        "//ExampleBazelIntegration:__pkg__",
+        "//Subproject:__pkg__",
+    ],
+)

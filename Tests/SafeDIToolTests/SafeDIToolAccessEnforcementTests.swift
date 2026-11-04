@@ -2671,6 +2671,38 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtTypealiasNamespace_whenAnotherPackageConstructsTypeInExtensionOfPackageTypealias(integration: MultiModuleIntegration) async {
+		// C7: `Space` is a `package` typealias, which SafeDI now records as any plain declaration: code naming `Space.Shelf`
+		// names `Space`, so `App`, in another package, is told to widen it (and Swift then requires `RealSpace` to be
+		// `public` too, at the typealias).
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let spacePath = switch integration {
+			case .moduleInfo:
+				fixtures["Core"]!["Space.swift"]
+			case .swiftPackagePlugin:
+				NormalizedFilePath(fixtures["Core"]!.compilerPath(of: "Space.swift")).path
+			}
+			return """
+			\(spacePath):2:1: error: `Space`, which encloses `Space.Shelf`, is `package`, so module `App`, in another package, cannot construct `Space.Shelf` in the code SafeDI generates. Make `Space` `public` to fix.
+			\(spacePath):2:1-2:8: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: [
+						"Space.swift": "package enum RealSpace {}\npackage typealias Space = RealSpace",
+						"Shelf.swift": "public protocol Storage {}\n\nextension Space {\n    @Instantiable(fulfillingAdditionalTypes: [Storage.self])\n    public final class Shelf: Instantiable, Storage {\n        public init() {}\n    }\n}",
+					]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Core\n\n@Instantiable(isRoot: true)\npublic struct Root: Instantiable {\n    public init(storage: any Storage) {\n        self.storage = storage\n    }\n\n    @Instantiated let storage: any Storage\n}"], dependencies: ["Core"]),
+				],
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]

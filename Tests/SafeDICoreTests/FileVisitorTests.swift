@@ -2072,9 +2072,9 @@ struct FileVisitorTests {
 	}
 
 	@Test
-	func walk_recordsPlainTypeDeclarationsWithEnclosingTypeAccess_whenNoIfBlockOrExtensionEnclosesThem() {
-		// `os()` blocks are scanned in every clause, so only the rule keeps their types out, as it keeps out a type whose
-		// level an extension would give it.
+	func walk_recordsPlainTypeDeclarationsWithEnclosingAccess_insideIfBlocksAndExtensionsToo() {
+		// A declaration inside an `#if` block is recorded from every clause, marked as such, and one directly inside an
+		// extension with the extension's access, which its level takes when it spells none.
 		let syntaxTree = Parser.parse(source: """
 		public enum Outer {
 		    struct Middle {}
@@ -2126,11 +2126,34 @@ struct FileVisitorTests {
 					),
 				],
 			),
+			PlainTypeDeclaration(
+				typeDescription: .nested(name: "Platform", parentType: .simple(name: "Outer")),
+				access: AccessDeclaration(level: .internal, declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 5)),
+				enclosingTypeAccess: [outerAccess],
+				isInsideConditionalBlock: true,
+			),
+			PlainTypeDeclaration(
+				typeDescription: .nested(name: "Platform", parentType: .simple(name: "Outer")),
+				access: AccessDeclaration(level: .internal, declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 11, column: 5)),
+				enclosingTypeAccess: [outerAccess],
+				isInsideConditionalBlock: true,
+			),
+			PlainTypeDeclaration(
+				typeDescription: .nested(name: "Extended", parentType: .simple(name: "Outer")),
+				access: AccessDeclaration(level: .internal, declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 15, column: 5)),
+				enclosingTypeAccess: [],
+				enclosingExtensionAccess: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 14, startColumn: 1, endLine: 14, endColumn: 7),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 14, column: 1),
+					isExtension: true,
+				),
+			),
 		])
 	}
 
 	@Test
-	func walk_recordsProtocolDeclarations_whenNoIfBlockOrExtensionEnclosesThem() {
+	func walk_recordsProtocolDeclarations_insideIfBlocksAndExtensionsToo() {
 		let syntaxTree = Parser.parse(source: """
 		package protocol FeedService {}
 		public enum Outer {
@@ -2168,6 +2191,83 @@ struct FileVisitorTests {
 					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
 				),
 				enclosingTypeAccess: [outerAccess],
+			),
+			PlainTypeDeclaration(
+				typeDescription: .simple(name: "Guarded"),
+				access: AccessDeclaration(level: .internal, declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 6, column: 1)),
+				enclosingTypeAccess: [],
+				isInsideConditionalBlock: true,
+			),
+			PlainTypeDeclaration(
+				typeDescription: .nested(name: "Extended", parentType: .simple(name: "Outer")),
+				access: AccessDeclaration(level: .internal, declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 5)),
+				enclosingTypeAccess: [],
+				enclosingExtensionAccess: AccessDeclaration(
+					level: .internal,
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 8, column: 1),
+					isExtension: true,
+				),
+			),
+		])
+	}
+
+	@Test
+	func walk_recordsTypealiasDeclarations_atTopLevelInTypeBodiesInsideExtensionsAndInsideIfBlocks() {
+		// C9: a typealias is recorded as any plain type is, with its spelled chain.
+		let syntaxTree = Parser.parse(source: """
+		public typealias UserID = String
+		package enum Space {
+		    public typealias ID = Int
+		}
+		extension Space {
+		    typealias Handler = () -> Void
+		}
+		#if DEBUG
+		typealias Debug = Bool
+		#endif
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		let spaceAccess = AccessDeclaration(
+			level: .package,
+			modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 8),
+			declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+		)
+		#expect(fileVisitor.plainTypeDeclarations == [
+			PlainTypeDeclaration(
+				typeDescription: .simple(name: "UserID"),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 1, startColumn: 1, endLine: 1, endColumn: 7),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+				),
+				enclosingTypeAccess: [],
+			),
+			PlainTypeDeclaration(typeDescription: .simple(name: "Space"), access: spaceAccess, enclosingTypeAccess: []),
+			PlainTypeDeclaration(
+				typeDescription: .nested(name: "ID", parentType: .simple(name: "Space")),
+				access: AccessDeclaration(
+					level: .public,
+					modifierRange: Dependency.SourceRange(startLine: 3, startColumn: 5, endLine: 3, endColumn: 11),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
+				),
+				enclosingTypeAccess: [spaceAccess],
+			),
+			PlainTypeDeclaration(
+				typeDescription: .nested(name: "Handler", parentType: .simple(name: "Space")),
+				access: AccessDeclaration(level: .internal, declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 6, column: 5)),
+				enclosingTypeAccess: [],
+				enclosingExtensionAccess: AccessDeclaration(
+					level: .internal,
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 5, column: 1),
+					isExtension: true,
+				),
+			),
+			PlainTypeDeclaration(
+				typeDescription: .simple(name: "Debug"),
+				access: AccessDeclaration(level: .internal, declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 9, column: 1)),
+				enclosingTypeAccess: [],
+				isInsideConditionalBlock: true,
 			),
 		])
 	}

@@ -64,11 +64,14 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	/// `Dock`, the namespace of the holders a consumer may hold, declared `package`, so that only a consumer in the
 	/// declaring module's package can name a holder, and the public tier omits it.
 	case dockPackage
-	/// `Dock` declared `public` inside an `#if` block, where SafeDI reads no declaration of it, so that the initializer
-	/// receiving a holder proves it narrower than `public`, and the public tier omits it.
+	/// `Dock` declared `public` inside an `#if` block, from which SafeDI takes no access level, so that the initializer
+	/// receiving a holder proves it narrower than `public`, and the public tier omits it: the middle state of decision 54.
 	case dockUnrecorded
 	/// An `@Instantiable` type declared in an extension of an `@Instantiable` type of the module: an exact entry.
 	case typeInExtensionOfInstantiable
+	/// A value of a type no declaration SafeDI reads declares, received only if available in a leaf's tree, which SafeDI
+	/// counts as `public` (decision 54).
+	case unreadParameterType
 	/// An extension-based `@Instantiable` type.
 	case extensionBasedInstantiable
 	/// A required parameter of a type narrower than `public`, which the public tier cannot take.
@@ -239,6 +242,9 @@ enum GraphFuzzerPublicMockOutputFeature: String, CaseIterable, Comparable {
 	case consumerFillsHole
 	case consumerFillReentersPublicMock
 	case consumerPassesHoleBuilderUp
+	/// The comment naming a type the file's `public` declarations name that SafeDI reads no declaration of, which it counts
+	/// as `public` (`GraphFuzzerPublicMockDrawFeature.unreadParameterType`).
+	case unreadTypeComment
 
 	static func < (lhs: GraphFuzzerPublicMockOutputFeature, rhs: GraphFuzzerPublicMockOutputFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -350,6 +356,7 @@ struct GraphFuzzerPublicMockDraw {
 		var holeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockHoleRandomSeedMask)
 		var callShapeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockCallShapeRandomSeedMask)
 		var namespaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockNamespaceRandomSeedMask)
+		var unreadTypeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockUnreadTypeRandomSeedMask)
 		draw(
 			random: &random,
 			spellingRandom: &spellingRandom,
@@ -359,6 +366,7 @@ struct GraphFuzzerPublicMockDraw {
 			holeRandom: &holeRandom,
 			callShapeRandom: &callShapeRandom,
 			namespaceRandom: &namespaceRandom,
+			unreadTypeRandom: &unreadTypeRandom,
 		)
 	}
 
@@ -410,6 +418,12 @@ struct GraphFuzzerPublicMockDraw {
 	/// `public` inside an `#if` block. Rolls added after the rest of the draw was pinned, so that its other shapes are
 	/// drawn as before.
 	static let publicMockNamespaceRandomSeedMask: UInt64 = 0x7075626D6B6E7370
+	/// Draws only whether a leaf's child receives, only if available, a value of a type no declaration SafeDI reads
+	/// declares – the standard library's `StaticString`, which the list of standard types leaves out, by value, in an
+	/// array, in a tuple, or the nested `Unicode.Scalar` – which SafeDI counts as `public`, so that the public tier takes
+	/// it and a run without a target graph names it in the comment (decision 54). Rolls added after the rest of the draw
+	/// was pinned, so that its other shapes are drawn as before.
+	static let publicMockUnreadTypeRandomSeedMask: UInt64 = 0x7075626D6B756E72
 	/// Whether consumers reach `T6`, some in a module that declares an `@Instantiable` type fulfilling its hole, whose
 	/// generated mock fills the builder, and some in one that does not, whose mock takes the builder and passes it on.
 	/// Off, `T6` is called only by its hand-written caller, so the corpus checks the declaring side alone. Its rolls are
@@ -614,14 +628,15 @@ struct GraphFuzzerPublicMockDraw {
 		holeRandom: inout GraphFuzzerRandomNumberGenerator,
 		callShapeRandom: inout GraphFuzzerRandomNumberGenerator,
 		namespaceRandom: inout GraphFuzzerRandomNumberGenerator,
+		unreadTypeRandom: inout GraphFuzzerRandomNumberGenerator,
 	) {
 		// Both rolls are made in every graph, so the stream is consumed the same way whatever the rest of the draw.
 		let declaresSpaceInFileOfItsOwn = namespaceRandom.percentChance(50)
 		let dockRoll = namespaceRandom.integer(in: 0...99)
 		let dockAccess: AccessLevel = dockRoll < 30 ? .package : .public
-		// Half the other graphs declare the `public` `Dock` inside an `#if` block, where SafeDI reads no declaration of it, so
-		// that only the initializer receiving a holder proves it – narrower than `public`, so the public tier omits it and
-		// a consumer in another package that holds one is told so – as before SafeDI read plain declarations.
+		// Half the other graphs declare the `public` `Dock` inside an `#if` block, from which SafeDI takes no access level,
+		// so that only the initializer receiving a holder proves it – narrower than `public`, so the public tier omits it
+		// and a consumer in another package that holds one is told so.
 		let declaresDockUnrecorded = dockRoll >= 65
 		let moduleRoll = random.integer(in: 0...9)
 		let consumerModules: [GraphFuzzerModule] = moduleRoll < 4 ? [.samePackageCaller, .otherPackageCaller] : moduleRoll < 7 ? [.samePackageCaller] : [.otherPackageCaller]
@@ -930,6 +945,11 @@ struct GraphFuzzerPublicMockDraw {
 					leaf.declaration.add(Property(attribute: "@Received", label: label, type: type))
 					leaf.spelledConsumerValue = (label, type)
 				}
+			}
+			// A value of a type no declaration SafeDI reads declares, on its own stream.
+			if unreadTypeRandom.percentChance(15) {
+				let unreadType = unreadTypeRandom.element(of: ["StaticString", "[StaticString]", "(StaticString, Int)", "Unicode.Scalar"])
+				leaf.child.add(received("unread\(leafIndex)", unreadType, onlyIfAvailable: true))
 			}
 			leaf.declaration.properties.insert(Property(attribute: "@Instantiated", label: "t\(3 + leafIndex)", type: leaf.child.name), at: 0)
 			leaf.declaration.names(childAccess)
@@ -1376,7 +1396,6 @@ struct GraphFuzzerPublicMockDraw {
 				declarations.append { _ in "public final class \(valueName)\(sendable) {\n\tpublic init() {}\n}" }
 			}
 			if spelling == .generic {
-				// `Result` and `Error` are not on the proof's allowlist, so the prover mentions them too.
 				declared.insert("SpellResult")
 			}
 		case .existential:
@@ -1961,6 +1980,7 @@ extension GraphFuzzerPublicMockDraw {
 				case "token": features.insert(.plainTypeOnlyPackageInitializersTake)
 				case "badge": features.insert(.plainTypePublicInitializerTakes)
 				case "count": features.insert(property.type.hasPrefix("Swift.") ? .qualifiedAllowlistedParameterType : .allowlistedParameterType)
+				case let label where label.hasPrefix("unread"): features.insert(.unreadParameterType)
 				case "clock": features.insert(.extensionBasedInstantiable)
 				case "seal" where property.attribute == "@Received": features.insert(.requiredParameterNarrowerThanPublic)
 				case "shelf":
@@ -2257,6 +2277,9 @@ extension GraphFuzzerPublicMockDraw {
 		}
 		if tierCounts.contains(where: { $0 >= 3 }) {
 			features.insert(.thirdTier)
+		}
+		if generatedFiles.values.contains(where: { $0.contains("// SafeDI counts `") }) {
+			features.insert(.unreadTypeComment)
 		}
 		return features
 	}

@@ -42,8 +42,8 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 		let tool = try context.tool(named: "SafeDITool").url
 		let outputDirectory = context.pluginWorkDirectoryURL.appending(path: "SafeDIOutput")
 		let targetSwiftFiles = sourceTarget.sourceFiles(withSuffix: ".swift").map(\.url)
-		let dependenciesSourceFiles = sourceTarget
-			.sourceModuleRecursiveDependencies
+		let dependencyTargets = sourceTarget.sourceModuleRecursiveDependencies(inPackageAt: context.package.directoryURL)
+		let dependenciesSourceFiles = dependencyTargets
 			.flatMap {
 				$0
 					.sourceFiles(withSuffix: ".swift")
@@ -62,7 +62,7 @@ struct SafeDIGenerateDependencyTree: BuildToolPlugin {
 		// and declares it, with the CSV, as an input, so a change to the targets that changes no Swift file reruns it.
 		try writeTargetGraph(
 			of: sourceTarget,
-			dependencyTargets: sourceTarget.sourceModuleRecursiveDependencies,
+			dependencyTargets: dependencyTargets,
 			in: context.package,
 			relativeTo: packageRoot,
 			besideInputSourcesFile: inputSourcesFile,
@@ -308,24 +308,29 @@ func writeTargetGraph(
 }
 
 extension Target {
-	var sourceModuleRecursiveDependencies: [SwiftSourceModuleTarget] {
-		recursiveTargetDependencies.compactMap { target in
+	/// The Swift modules this target depends on, directly or through another, that are first-party code: every one of
+	/// the package at `packageDirectory`, which declares this target, and every other one that is not under
+	/// `checkouts`. A package SwiftPM fetched lies under `checkouts`, and so does each of its targets when the package
+	/// being built is itself fetched, as a library package consumed from a URL is: its own targets are still the
+	/// package's first-party code, and a type one of them declares `package` is one its siblings name.
+	func sourceModuleRecursiveDependencies(inPackageAt packageDirectory: URL) -> [SwiftSourceModuleTarget] {
+		let packageDirectoryComponents = packageDirectory.pathComponents
+		return recursiveTargetDependencies.compactMap { target in
 			// Since we only understand Swift files, we only care about SwiftSourceModuleTargets.
 			guard let swiftModule = target as? SwiftSourceModuleTarget else {
 				return nil
 			}
 
 			// We only care about first-party code. Ignore third-party dependencies.
-			guard swiftModule
-				.directoryURL
-				.pathComponents
+			let pathComponents = swiftModule.directoryURL.pathComponents
+			guard pathComponents.starts(with: packageDirectoryComponents) || pathComponents
 				// Removing the module name.
-				.dropLast()
-				// Removing 'Sources'.
-				.dropLast(ifEquals: "Sources")
-				// Removing the package name.
-				.dropLast()
-				.last != "checkouts"
+					.dropLast()
+					// Removing 'Sources'.
+					.dropLast(ifEquals: "Sources")
+					// Removing the package name.
+					.dropLast()
+					.last != "checkouts"
 			else {
 				return nil
 			}

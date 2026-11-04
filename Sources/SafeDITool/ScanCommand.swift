@@ -149,13 +149,16 @@ func performScan(
 			excludingInputFilesAt: allFilePaths,
 			namedBy: projectFilePaths,
 			conditionalCompilation: evaluator,
+			keepingDeclarationsOfTypesNamed: keptPlainTypeNames(of: fileScans),
 		)
-		// Parsed only to plan outputs: the module these conditions select does not include them.
+		// Parsed only to plan outputs: the module these conditions select does not include them, nor their plain
+		// declarations.
 		plannedOnlyAdditionalFileScans = try await parseAdditionalDirectoryFiles(
 			plannedOnlyAdditionalFiles,
 			excludingInputFilesAt: allFilePaths,
 			namedBy: projectFilePaths,
 			conditionalCompilation: evaluator,
+			keepingDeclarationsOfTypesNamed: [],
 		).map(\.fileScan)
 	}
 
@@ -294,6 +297,8 @@ func performScan(
 ///   - projectFilePaths: The paths of the project a manifest names files in, or `nil` to name each file by its
 ///     absolute path.
 ///   - evaluator: The evaluator the module's input files were parsed with.
+///   - moduleTypeNames: The names of the types the module's own declarations mention (`keptPlainTypeNames(of:)`), whose
+///     plain declarations a found file that mentions no SafeDI marker may hold (`parseSwiftFilesDeclaringTypes`).
 /// - Returns: What each found file that is not an input contributes, parsed under its absolute path, so the
 ///   locations it records name the file wherever the tool runs, and named as the manifest names files.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -302,13 +307,15 @@ func parseAdditionalDirectoryFiles(
 	excludingInputFilesAt inputFilePaths: Set<ProjectFilePath>,
 	namedBy projectFilePaths: ProjectFilePaths?,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+	keepingDeclarationsOfTypesNamed moduleTypeNames: Set<String>,
 ) async throws -> [CachedFileScan] {
 	let filePathsToParse = filePaths.subtracting(inputFilePaths)
 	let fileScansByName = try await Dictionary(
-		// safedi-source-rule: allow uniqueKeysWithValues — `parseSwiftFiles` walks each path of a set once, and names each scan by the path it walked.
-		uniqueKeysWithValues: parseSwiftFiles(Set(filePathsToParse.map(\.path)), conditionalCompilation: evaluator).map { ($0.path, $0) },
+		// safedi-source-rule: allow uniqueKeysWithValues — `parseSwiftFilesDeclaringTypes` walks each path of a set once, and names each scan by the path it walked.
+		uniqueKeysWithValues: parseSwiftFilesDeclaringTypes(Set(filePathsToParse.map(\.path)), conditionalCompilation: evaluator, keepingDeclarationsOfTypesNamed: moduleTypeNames).map { ($0.path, $0) },
 	)
-	// A file that does not mention SafeDI is not walked, so it contributes nothing.
+	// A file that does not mention SafeDI, and declares no type that the module or these files mention, is not walked, so it
+	// contributes nothing.
 	return filePathsToParse.compactMap { filePath in
 		fileScansByName[filePath.path].map { fileScan in
 			CachedFileScan(

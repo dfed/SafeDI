@@ -27,6 +27,9 @@
 struct PublicMockContext: Sendable {
 	/// The proof of every type's access over the module's declaration map, which every public mock of the module reads.
 	let proof: TypeAccessProof
+	/// The comment the module's public mocks' file carries, naming the types their `public` declarations name that SafeDI
+	/// reads no declaration of, or `nil` when the run writes none (`SeamResolution.carriesUnreadTypeComment`).
+	let unreadTypeComment: UnreadTypeComment?
 	/// The module that declares each concrete type, where it is known.
 	let moduleNameByType: [TypeDescription: String]
 	/// The module the mocks are generated in, when it is known.
@@ -971,19 +974,37 @@ extension ScopeGenerator {
 
 	/// The tiers of a public mock: the `mock()` of each tier of `plan`, widest first, all carrying `attributesPrefix`.
 	/// The narrowest tier's body is `narrowestBody`; each wider tier calls the next narrower one, passing every
-	/// parameter it takes and `nil` for each it omits, so the call names a label only the narrower tier has.
+	/// parameter it takes and `nil` for each it omits, so the call names a label only the narrower tier has. The `public`
+	/// tier is marked for `unreadTypeComment`, when there is one.
 	static func publicMockTiers(
 		of plan: PublicMockPlan,
 		typeName: String,
 		returnType: String,
 		attributesPrefix: String,
 		narrowestBody: [String],
+		unreadTypeComment: UnreadTypeComment?,
 	) -> [String] {
 		let indent = standardIndent
 		let bodyIndent = "\(indent)\(indent)"
 		var lines = [String]()
 		for (index, tier) in plan.tiers.enumerated() {
 			let parameters = plan.parameters(ofTier: tier)
+			// The `public` tier is marked for the file's comment when it names a type SafeDI reads no declaration of: what a
+			// builder returns, and the value of every other parameter but the overrides, whose type the mock declares.
+			if tier == .public, let marker = unreadTypeComment?.markerLine(
+				namedBy: parameters.compactMap { parameter in
+					if let hole = parameter.hole {
+						hole.property.typeDescription
+					} else if parameter.name == ReservedName.mockOverridesParameterName {
+						nil
+					} else {
+						parameter.type
+					}
+				},
+				indent: indent,
+			) {
+				lines.append(marker)
+			}
 			lines.append("\(indent)\(attributesPrefix)\(tier == .internal ? "" : "\(tier.spelledOnGeneratedDeclaration) ")static func mock(")
 			lines.append(parameters.map { parameter in
 				"\(bodyIndent)\(parameter.name.spelledAsArgumentLabel): \(parameter.typeSource)\(parameter.defaultSource.map { " = \($0)" } ?? "")"
@@ -1114,6 +1135,19 @@ struct PublicMockFinding: Hashable, Sendable {
 		])
 	}
 
+	/// The callers of `instantiable`'s public mock compute its signature without `declaration`, a plain declaration that
+	/// proves a parameter's type narrower than `public`, which they would count as `public`: reported at the declaration.
+	static func callersCannotSeePlainDeclaration(_ declaration: PlainTypeDeclaration, of instantiable: Instantiable, viaTargetGraph: Bool) -> PublicMockFinding {
+		let typeName = "`\(instantiable.concreteInstantiable.asSource)`"
+		let declarationName = "`\(declaration.typeDescription.asSource)`"
+		let message = viaTargetGraph
+			? "SafeDI cannot generate the public mock of \(typeName): it takes its parameters at the access this declaration of \(declarationName) proves, which is in a directory this module's `#SafeDIConfiguration` adds, and the modules that call the mock cannot see it, so they would count \(declarationName) as `public`, and their calls would not match the mock. Declare \(declarationName) in a file of this module, or of a module it depends on."
+			: "SafeDI cannot generate the public mock of \(typeName): it takes its parameters at the access this declaration of \(declarationName) proves, which is in a module whose SafeDI module info names no module, and the modules that call the mock, which compute its signature from the modules this module's module info names, cannot see it, so they would count \(declarationName) as `public`, and their calls would not match the mock. Generate that module's module info with `--module-name`."
+		return PublicMockFinding(sourceDiagnostics: [
+			SourceDiagnostic(severity: .error, location: declaration.access.declarationStartLocation ?? instantiable.mockGenerationArgumentLocation, message: message),
+		])
+	}
+
 	/// `publicTierOmitsRequiredParameter`: the `public` tier the mock requires cannot take `parameter`.
 	static func omittedRequiredParameter(_ parameter: OmittedRequiredParameter, of instantiable: Instantiable) -> PublicMockFinding {
 		let typeName = "`\(instantiable.concreteInstantiable.asSource)`"
@@ -1136,7 +1170,7 @@ struct PublicMockFinding: Hashable, Sendable {
 			parameter.property.asSource
 		}
 		let causeText = SeamAccessExplanation.causeSentence(parameter.cause, receivers: [])
-		// A `mockOnly` mock of a type SafeDI reads no declaration of proves it, and lets the mock build a type it receives
+		// A `mockOnly` mock of a type declared inside an `#if` block proves it, and lets the mock build a type it receives
 		// or forwards, whose parameter then defaults to `nil`.
 		let mockOnlyMockLetsMockBuildType = switch parameter.kind {
 		case .forwarded, .received:
@@ -1145,24 +1179,9 @@ struct PublicMockFinding: Hashable, Sendable {
 			false
 		}
 		var remedies = SeamAccessExplanation.causeRemedies(parameter.cause, neededLevel: .public, mockOnlyMockLetsMockBuildType: mockOnlyMockLetsMockBuildType)
-		let causeType: TypeDescription
-		let causeReadsNoDeclaration: Bool
-		switch parameter.cause {
-		case let .ownDeclaration(type, _),
-		     let .plainDeclaration(type, _, _, _),
-		     let .declarationInExtensionOfRecordedType(type, _, _, _, _, _),
-		     let .declarationInExtension(type, _, _, _, _, _, _, _):
-			causeType = type
-			causeReadsNoDeclaration = false
-		case let .signatures(type, _, _, _),
-		     let .unproven(type):
-			causeType = type
-			causeReadsNoDeclaration = true
-		}
 		switch parameter.kind {
-		case .forwarded where !causeReadsNoDeclaration:
-			// The cause's remedies offer the mock when SafeDI reads no declaration of the type.
-			remedies.append("give `\(causeType.asSource)` a `mockOnly` mock")
+		case .forwarded where parameter.cause.leavesOutMockOnlyMockOfType:
+			remedies.append("give `\(parameter.cause.type.asSource)` a `mockOnly` mock")
 		case .received:
 			remedies.append("receive it with `onlyIfAvailable: true` and an optional type")
 		case .forwarded, .instantiated:
@@ -1173,7 +1192,7 @@ struct PublicMockFinding: Hashable, Sendable {
 			let module = instantiable.moduleName.map { "module `\($0)`" } ?? "this module"
 			remedies.append("declare in \(module), or a module it depends on, a `mockOnly` `@\(InstantiableVisitor.macroName)` type that fulfills `\(holeType)` (`@\(InstantiableVisitor.macroName)(fulfillingAdditionalTypes: [\(holeType).self], mockOnly: true)`), which the mock builds instead of taking `\(hole.builderLabel)`, leaving production's hole as it is")
 		}
-		if case let .signatures(_, _, provers, _) = parameter.cause {
+		if case let .signatures(_, _, provers, _, _) = parameter.cause {
 			// The members that prove the type, by name, each of which proves it at the level it spells.
 			for prover in provers where prover.cap == nil {
 				remedies.append("make \(prover.name) `public`")
@@ -1399,7 +1418,7 @@ extension ScopeGenerator.PublicMockTierOmission {
 		let causeText = parameter.accessCause.map { " " + SeamAccessExplanation.causeSentence($0, receivers: receivers.map { SeamAccessExplanation.Receiver(declaringType: $0.declaringType, aliasProperty: nil, isInstantiateMethodParameter: false) }) } ?? ""
 		var remedies = [String]()
 		let unverifiedPackage = call.requirement == .packageUnverified ? ", or `public` if the two modules are in different packages" : ""
-		if case let .signatures(_, _, provers, _)? = parameter.accessCause, let first = provers.first, first.cap == nil {
+		if case let .signatures(_, _, provers, _, _)? = parameter.accessCause, let first = provers.first, first.cap == nil {
 			remedies.append("widen \(first.name) to `\(neededLevel.spelledOnGeneratedDeclaration)`\(unverifiedPackage)")
 		}
 		remedies += SeamAccessExplanation.causeRemedies(parameter.accessCause, neededLevel: neededLevel)

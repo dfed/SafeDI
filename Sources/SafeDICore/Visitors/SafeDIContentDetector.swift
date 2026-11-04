@@ -128,16 +128,34 @@ extension IfConfigDeclSyntax {
 		return detector.content
 	}
 
-	/// What SafeDI would learn from this block among type declarations, and the declarations in every
-	/// one of its clauses that decide which files SafeDI generates. Both come from one walk of the block.
+	/// What SafeDI would learn from this block among type declarations, the declarations in every one of its clauses
+	/// that decide which files SafeDI generates, and the declarations of types that are not `@Instantiable` in every one
+	/// of its clauses, including those of the blocks nested in it. All come from one walk of the block.
 	/// - Parameters:
 	///   - enclosingType: The type whose members the block is among, if any, which encloses the types the block
 	///     declares.
+	///   - enclosingTypeAccess: The access of each type declaration enclosing the block in its file, outermost first.
 	///   - extendedType: The type the extension the block is in extends, if it is in one.
-	func safeDIContentAmongDeclarations(enclosedBy enclosingType: TypeDescription?, inExtensionOf extendedType: TypeDescription?) -> (content: SafeDIContent, outputFileDeclarations: OutputFileDeclarations) {
-		let detector = SafeDIContentDetector(context: .declarations, enclosingType: enclosingType, extendedType: extendedType)
+	///   - enclosingExtensionAccess: The access of the extension the block is in, if it is in one.
+	///   - sourceLocationConverter: A converter for the tree the block is in, with which each declaration records where
+	///     it begins.
+	func safeDIContentAmongDeclarations(
+		enclosedBy enclosingType: TypeDescription?,
+		enclosingTypeAccess: [AccessDeclaration] = [],
+		inExtensionOf extendedType: TypeDescription?,
+		enclosingExtensionAccess: AccessDeclaration? = nil,
+		sourceLocationConverter: SourceLocationConverter? = nil,
+	) -> (content: SafeDIContent, outputFileDeclarations: OutputFileDeclarations, plainTypeDeclarations: [PlainTypeDeclaration]) {
+		let detector = SafeDIContentDetector(
+			context: .declarations,
+			enclosingType: enclosingType,
+			enclosingTypeAccess: enclosingTypeAccess,
+			extendedType: extendedType,
+			enclosingExtensionAccess: enclosingExtensionAccess,
+			sourceLocationConverter: sourceLocationConverter,
+		)
 		detector.walk(self)
-		return (detector.content, detector.outputFileDeclarations)
+		return (detector.content, detector.outputFileDeclarations, detector.plainTypeDeclarations)
 	}
 }
 
@@ -145,19 +163,35 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	/// - Parameters:
 	///   - enclosingType: The type whose members the walked block is among, if any.
 	///   - extendedType: The type the extension the walked block is in extends, if it is in one.
-	init(context: SafeDIContentContext, enclosingType: TypeDescription? = nil, extendedType: TypeDescription? = nil) {
+	///   - enclosingTypeAccess: The access of each type declaration enclosing the walked block in its file.
+	///   - enclosingExtensionAccess: The access of the extension the walked block is in, if it is in one.
+	///   - sourceLocationConverter: A converter for the tree the walked block is in.
+	init(
+		context: SafeDIContentContext,
+		enclosingType: TypeDescription? = nil,
+		enclosingTypeAccess: [AccessDeclaration] = [],
+		extendedType: TypeDescription? = nil,
+		enclosingExtensionAccess: AccessDeclaration? = nil,
+		sourceLocationConverter: SourceLocationConverter? = nil,
+	) {
 		self.context = context
 		self.enclosingType = enclosingType
+		self.enclosingTypeAccess = enclosingTypeAccess
 		self.extendedType = extendedType
+		self.enclosingExtensionAccess = enclosingExtensionAccess
+		self.sourceLocationConverter = sourceLocationConverter
 		super.init(viewMode: .sourceAccurate)
 	}
 
 	private(set) var content = SafeDIContent.none
 	/// The declarations among type declarations, in every clause, that decide which files SafeDI generates.
 	private(set) var outputFileDeclarations = OutputFileDeclarations()
+	/// Among type declarations, every `struct`, `class`, `actor`, `enum`, `protocol`, and `typealias` declaration that is
+	/// not `@Instantiable`, in every clause, in source order, each marked `isInsideConditionalBlock`.
+	private(set) var plainTypeDeclarations = [PlainTypeDeclaration]()
 
 	override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
-		visitTypeDeclaration(node.attributes, declaring: typeDefined(named: node.name.text), isTypeDefinition: true)
+		visitTypeDeclaration(node.attributes, declaring: typeDefined(named: node.name.text), access: node.modifiers.access(introducedBy: node.classKeyword, sourceLocationConverter: sourceLocationConverter), isTypeDefinition: true)
 	}
 
 	override func visitPost(_: ClassDeclSyntax) {
@@ -165,7 +199,7 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	}
 
 	override func visit(_ node: ActorDeclSyntax) -> SyntaxVisitorContinueKind {
-		visitTypeDeclaration(node.attributes, declaring: typeDefined(named: node.name.text), isTypeDefinition: true)
+		visitTypeDeclaration(node.attributes, declaring: typeDefined(named: node.name.text), access: node.modifiers.access(introducedBy: node.actorKeyword, sourceLocationConverter: sourceLocationConverter), isTypeDefinition: true)
 	}
 
 	override func visitPost(_: ActorDeclSyntax) {
@@ -173,7 +207,7 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	}
 
 	override func visit(_ node: StructDeclSyntax) -> SyntaxVisitorContinueKind {
-		visitTypeDeclaration(node.attributes, declaring: typeDefined(named: node.name.text), isTypeDefinition: true)
+		visitTypeDeclaration(node.attributes, declaring: typeDefined(named: node.name.text), access: node.modifiers.access(introducedBy: node.structKeyword, sourceLocationConverter: sourceLocationConverter), isTypeDefinition: true)
 	}
 
 	override func visitPost(_: StructDeclSyntax) {
@@ -181,18 +215,24 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	}
 
 	override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
-		// Extensions are always top-level, so a block that declares one is in none.
+		// Extensions are always top-level, so a block that declares one is in none, and the types declared directly
+		// inside it are enclosed by no type declaration of the file.
 		extendedType = node.extendedType.typeDescription
-		return visitTypeDeclaration(node.attributes, declaring: node.extendedType.typeDescription, isTypeDefinition: false)
+		enclosingExtensionAccess = node.modifiers.access(introducedBy: node.extensionKeyword, sourceLocationConverter: sourceLocationConverter)
+		return visitTypeDeclaration(node.attributes, declaring: node.extendedType.typeDescription, access: nil, isTypeDefinition: false)
 	}
 
 	override func visitPost(_: ExtensionDeclSyntax) {
 		extendedType = nil
+		enclosingExtensionAccess = nil
 		exitType()
 	}
 
 	override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
-		enterType(typeDefined(named: node.name.text))
+		let declaredType = typeDefined(named: node.name.text)
+		let access = node.modifiers.access(introducedBy: node.enumKeyword, sourceLocationConverter: sourceLocationConverter)
+		recordPlainTypeDeclaration(declaredType, access: access, isInstantiable: node.attributes.instantiableMacro != nil)
+		enterType(declaredType, access: access)
 		return switch context {
 		case .declarations:
 			// Enums can nest instantiable types.
@@ -200,6 +240,25 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 		case .members:
 			.skipChildren
 		}
+	}
+
+	override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
+		// A protocol's body declares nothing SafeDI reads.
+		recordPlainTypeDeclaration(
+			typeDefined(named: node.name.text),
+			access: node.modifiers.access(introducedBy: node.protocolKeyword, sourceLocationConverter: sourceLocationConverter),
+			isInstantiable: false,
+		)
+		return .skipChildren
+	}
+
+	override func visit(_ node: TypeAliasDeclSyntax) -> SyntaxVisitorContinueKind {
+		recordPlainTypeDeclaration(
+			typeDefined(named: node.name.text),
+			access: node.modifiers.access(introducedBy: node.typealiasKeyword, sourceLocationConverter: sourceLocationConverter),
+			isInstantiable: false,
+		)
+		return .skipChildren
 	}
 
 	override func visitPost(_: EnumDeclSyntax) {
@@ -250,20 +309,31 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	// MARK: Private
 
 	private let context: SafeDIContentContext
+	private let sourceLocationConverter: SourceLocationConverter?
 	/// The type whose members the walk is among, if any, which encloses the types declared there.
 	private var enclosingType: TypeDescription?
-	/// The enclosing type of each type declaration the walk is inside, innermost last.
-	private var outerEnclosingTypes = [TypeDescription?]()
+	/// The access of each type declaration enclosing the walk's position in its file, outermost first.
+	private var enclosingTypeAccess: [AccessDeclaration]
+	/// The enclosing type and the access of each enclosing type declaration of each declaration the walk is inside,
+	/// innermost last.
+	private var outerEnclosingTypes = [(type: TypeDescription?, access: [AccessDeclaration])]()
 	/// The type the extension the walk is inside extends, if it is inside one.
 	private var extendedType: TypeDescription?
+	/// The access of the extension the walk is inside, if it is inside one.
+	private var enclosingExtensionAccess: AccessDeclaration?
 
 	/// - Parameters:
 	///   - declaredType: The type the declaration declares, which encloses the types among its members.
+	///   - access: The access the declaration spells, or `nil` for an extension, which encloses its members in no type
+	///     declaration of the file.
 	///   - isTypeDefinition: Whether the declaration defines a type, which only a type definition
 	///     can make a root, or a type whose dependency tree SafeDI generates: SafeDI never treats an
 	///     `@Instantiable` extension as either.
-	private func visitTypeDeclaration(_ attributes: AttributeListSyntax, declaring declaredType: TypeDescription, isTypeDefinition: Bool) -> SyntaxVisitorContinueKind {
-		enterType(declaredType)
+	private func visitTypeDeclaration(_ attributes: AttributeListSyntax, declaring declaredType: TypeDescription, access: AccessDeclaration?, isTypeDefinition: Bool) -> SyntaxVisitorContinueKind {
+		if let access {
+			recordPlainTypeDeclaration(declaredType, access: access, isInstantiable: attributes.instantiableMacro != nil)
+		}
+		enterType(declaredType, access: access)
 		switch context {
 		case .declarations:
 			if let instantiableMacro = attributes.instantiableMacro {
@@ -292,15 +362,34 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 		}
 	}
 
-	/// Makes `type` the enclosing type until the declaration that declares it ends.
-	private func enterType(_ type: TypeDescription) {
-		outerEnclosingTypes.append(enclosingType)
+	/// Makes `type`, declared with `access`, the enclosing type until the declaration that declares it ends. An extension,
+	/// whose `access` is `nil`, is enclosed by no type declaration of the file.
+	private func enterType(_ type: TypeDescription, access: AccessDeclaration?) {
+		outerEnclosingTypes.append((enclosingType, enclosingTypeAccess))
 		enclosingType = type
+		if let access {
+			enclosingTypeAccess.append(access)
+		} else {
+			enclosingTypeAccess = []
+		}
 	}
 
 	/// Restores the enclosing type of the declaration that just ended.
 	private func exitType() {
-		enclosingType = outerEnclosingTypes.removeLast()
+		(enclosingType, enclosingTypeAccess) = outerEnclosingTypes.removeLast()
+	}
+
+	/// Records `type`, which a declaration with `access` declares, among `plainTypeDeclarations` when it is not
+	/// `@Instantiable` and the walk is among type declarations.
+	private func recordPlainTypeDeclaration(_ type: TypeDescription, access: AccessDeclaration, isInstantiable: Bool) {
+		guard case .declarations = context, !isInstantiable else { return }
+		plainTypeDeclarations.append(PlainTypeDeclaration(
+			typeDescription: type,
+			access: access,
+			enclosingTypeAccess: enclosingTypeAccess,
+			enclosingExtensionAccess: enclosingExtensionAccess,
+			isInsideConditionalBlock: true,
+		))
 	}
 
 	private func record(_ found: SafeDIContent) {

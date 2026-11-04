@@ -63,6 +63,12 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 			}
 		}
 		#expect(Set(SafeDIToolGraphFuzzerTests.publicMockCorpusOutputFeatureMinimumShares.keys).subtracting(outputFeatures).sorted() == [])
+		// A graph whose generated code carries the comment naming a type no declaration SafeDI reads declares, which agreed
+		// with its read twin under both flows.
+		#expect(passingResults.contains { result in
+			guard result.isComparedWithReadTwin, case let .accepted(generatedFiles, _) = result.outcome else { return false }
+			return GraphFuzzerPublicMockDraw.outputFeatures(of: result.fixture, generatedFiles: generatedFiles).contains(.unreadTypeComment)
+		})
 		let drawFeatures = passingResults.reduce(into: Set<GraphFuzzerPublicMockDrawFeature>()) { $0.formUnion(GraphFuzzerPublicMockDraw.drawFeatures(of: $1.fixture)) }
 		#expect(Set([GraphFuzzerPublicMockDrawFeature.bothConsumerModules, .otherPackageConsumerModuleOnly, .samePackageConsumerModuleOnly, .sendableWrapperAboveLeaf, .mockConditionDiffers]).subtracting(drawFeatures).sorted() == [])
 		#expect(results.contains { !$0.isAccepted }, "Rejected none of \(SafeDIToolGraphFuzzerTests.publicMockSmokeSeeds.count) graphs")

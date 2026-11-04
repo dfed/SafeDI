@@ -697,7 +697,8 @@ public struct SeamResolution: Sendable {
 		public let declaringModuleMockCondition: MockCondition
 	}
 
-	public init(currentModule: ModuleIdentity, currentModuleMockCondition: MockCondition = MockCondition("DEBUG"), generatedSeams: Set<TypeDescription>, foreignSeams: [TypeDescription: ForeignSeam], foreignPublicMocks: [TypeDescription: ForeignPublicMock] = [:], callersComputeFromTargetGraph: Bool = false, callersVisibleInstantiables: [TypeDescription: Instantiable]? = nil, callersVisiblePlainTypeDeclarations: [PlainTypeDeclaration] = []) {
+	public init(currentModule: ModuleIdentity, currentModuleMockCondition: MockCondition = MockCondition("DEBUG"), generatedSeams: Set<TypeDescription>, foreignSeams: [TypeDescription: ForeignSeam], foreignPublicMocks: [TypeDescription: ForeignPublicMock] = [:], callersComputeFromTargetGraph: Bool = false, callersVisibleInstantiables: [TypeDescription: Instantiable]? = nil, callersVisiblePlainTypeDeclarations: [PlainTypeDeclaration] = [], carriesUnreadTypeComment: Bool = false) {
+		self.carriesUnreadTypeComment = carriesUnreadTypeComment
 		self.currentModule = currentModule
 		self.currentModuleMockCondition = currentModuleMockCondition
 		self.generatedSeams = generatedSeams
@@ -743,6 +744,14 @@ public struct SeamResolution: Sendable {
 	/// The plain type declarations of the modules whose declarations `callersVisibleInstantiables` holds, each with the
 	/// module that declares it: a declaration whose module SafeDI does not know is one the callers cannot see.
 	public let callersVisiblePlainTypeDeclarations: [PlainTypeDeclaration]
+
+	/// Whether the code this run generates names, in a comment, the types its `public` declarations name that no
+	/// declaration it reads declares, which it counts as `public` (`UnreadTypeComment`): a run that is no build tool
+	/// plugin's, under Bazel, Tuist or a custom script, which reads only the modules whose module info it is given, so a
+	/// `package` type of a first-party module that does not run SafeDI is one of them. A plugin's run reads every
+	/// first-party module, and the types it does not read are another package's or a binary target's, which `package`
+	/// access does not reach.
+	public let carriesUnreadTypeComment: Bool
 
 	/// Whether any seam is treated as one, which is when the dependency tree generator builds a second map of scopes.
 	public var isEmpty: Bool {

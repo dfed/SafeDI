@@ -187,6 +187,21 @@ struct GraphFuzzerFixture: Equatable {
 			swiftFileContent: swiftFileContent.reversed().map { renaming.rename($0, typeNamePrefix: typeNamePrefix) },
 		)
 	}
+
+	/// The graph's read twin (`GraphFuzzerReadTwin`), or `nil` when the graph names none of the types no declaration
+	/// SafeDI reads declares that the fuzzer draws (`GraphFuzzerReadTwin.UnreadType.all`).
+	var readTwin: GraphFuzzerReadTwin? {
+		let unreadTypes = GraphFuzzerReadTwin.UnreadType.all.filter { type in swiftFileContent.contains(where: type.isNamed(in:)) }
+		let modules = modules
+		// The first file naming one of the types, of the lowest module, in dependency order, whose files name one.
+		guard let declaringIndex = swiftFileContent.indices
+			.filter({ index in unreadTypes.contains { $0.isNamed(in: swiftFileContent[index]) } })
+			.min(by: { (modules?[$0] ?? .seamModule, $0) < (modules?[$1] ?? .seamModule, $1) })
+		else { return nil }
+		var content = swiftFileContent.map { file in unreadTypes.reduce(file) { $1.renamingToTwin(in: $0) } }
+		content[declaringIndex] += GraphFuzzerReadTwin.declarations(of: unreadTypes)
+		return GraphFuzzerReadTwin(fixture: GraphFuzzerFixture(seed: seed, swiftFileContent: content), declaringModule: modules?[declaringIndex], unreadTypes: unreadTypes)
+	}
 }
 
 /// A module of a graph split across modules. Every split graph uses the same module names and packages, so the modules
@@ -440,6 +455,168 @@ struct GraphFuzzerRenaming: Equatable, CustomStringConvertible {
 	}
 }
 
+/// A graph's read twin: the graph with each type it names that no declaration SafeDI reads declares – the value of
+/// `addingUnreadParameterTypes`, and the unread receives of `GraphFuzzerPublicMockDraw` – renamed to its twin, which the
+/// twin declares `public` once, at the end of the first file naming it of the lowest module, in dependency order, whose
+/// files name it, so that every module naming it can see it: the receiver's module, never the module of the host that
+/// forwards the value, which the seam's module cannot import. Decision 54 counts a type SafeDI reads no declaration of
+/// as `public`, so SafeDI must give the twin the graph's verdict and, with the rename undone, the graph's diagnostics
+/// and generated code, but for the comment a run without a target graph writes, which names no twinned type
+/// (`difference(between:and:)`).
+struct GraphFuzzerReadTwin {
+	/// A type no declaration SafeDI reads declares, which the fuzzer draws, and the `public` declaration of its twin.
+	struct UnreadType: Sendable {
+		/// The type's name as a graph spells it: a top-level name of the standard library.
+		let name: String
+		/// The declaration of a `public` type of the twin's name, given that name.
+		let declaration: @Sendable (String) -> String
+
+		/// `name` with the case of its last letter flipped: a name no graph declares, of `name`'s length, so that every
+		/// column a diagnostic reports is unchanged, and sorting against every other name as `name` does, so that every
+		/// list SafeDI orders by name keeps its order. Undoing the rename then restores the graph's output byte for byte.
+		var twinName: String {
+			String(name.dropLast()) + (name.last.map { $0.isUppercase ? $0.lowercased() : $0.uppercased() } ?? "")
+		}
+
+		/// The declaration of the twin.
+		var twinDeclaration: String {
+			declaration(twinName)
+		}
+
+		/// Whether `text` names the type: its name with no letter, digit or underscore on either side.
+		func isNamed(in text: String) -> Bool {
+			text.range(of: Self.wholeName(name), options: .regularExpression) != nil
+		}
+
+		/// `text` with the type renamed to its twin wherever it names it.
+		func renamingToTwin(in text: String) -> String {
+			text.replacingOccurrences(of: Self.wholeName(name), with: twinName, options: .regularExpression)
+		}
+
+		/// `text`, from the tool's run over a twin, with the twin renamed back.
+		func restoring(in text: String) -> String {
+			text.replacingOccurrences(of: twinName, with: name)
+		}
+
+		private static func wholeName(_ name: String) -> String {
+			"(?<![A-Za-z0-9_])" + NSRegularExpression.escapedPattern(for: name) + "(?![A-Za-z0-9_])"
+		}
+
+		/// Every type no declaration SafeDI reads declares that a corpus draws: `StaticString`, which the list of standard
+		/// types leaves out, the protocol `CustomStringConvertible` of an existential, and `Unicode`, which `Unicode.Scalar`
+		/// is nested in.
+		static let all = [
+			UnreadType(name: "StaticString", declaration: { "public struct \($0): Sendable {}" }),
+			UnreadType(name: "CustomStringConvertible", declaration: { "public protocol \($0) {}" }),
+			UnreadType(name: "Unicode", declaration: { "public enum \($0) {\n\tpublic struct Scalar: Sendable {}\n}" }),
+		]
+	}
+
+	/// The twin's graph.
+	let fixture: GraphFuzzerFixture
+	/// The module whose file declares the twins, or `nil` for a graph in one module.
+	let declaringModule: GraphFuzzerModule?
+	/// The types the graph names that the twin renames, in the order of `UnreadType.all`.
+	let unreadTypes: [UnreadType]
+
+	/// What the twin appends to the file that declares the twins.
+	var declarations: String {
+		Self.declarations(of: unreadTypes)
+	}
+
+	/// What a twin of `unreadTypes` appends to the file that declares the twins.
+	static func declarations(of unreadTypes: [UnreadType]) -> String {
+		"\n" + unreadTypes.map(\.twinDeclaration).joined(separator: "\n\n") + "\n"
+	}
+
+	/// The names of `unreadTypes`, as a sentence lists them.
+	var unreadTypeNames: String {
+		let names = unreadTypes.map { "`\($0.name)`" }
+		return switch names.count {
+		case 0, 1:
+			names.joined()
+		case 2:
+			names.joined(separator: " and ")
+		default:
+			names.dropLast().joined(separator: ", ") + ", and " + names[names.count - 1]
+		}
+	}
+
+	/// `text`, from the tool's run over the twin, with the twins renamed back.
+	func restoring(_ text: String) -> String {
+		unreadTypes.reduce(text) { $1.restoring(in: $0) }
+	}
+
+	/// `outcome`, from the tool's run over the twin, with the twins renamed back.
+	func restoring(_ outcome: GraphFuzzerToolOutcome) -> GraphFuzzerToolOutcome {
+		switch outcome {
+		case let .rejected(diagnostics):
+			.rejected(diagnostics: restoring(diagnostics))
+		case let .accepted(generatedFiles, warnings):
+			.accepted(
+				generatedFiles: Dictionary(uniqueKeysWithValues: generatedFiles.map { (restoring($0.key), restoring($0.value)) }),
+				warnings: warnings.map(restoring),
+			)
+		}
+	}
+
+	/// The first aspect in which `twinOutcome`, the twin's outcome with its rename undone, differs from `outcome`, the
+	/// graph's under the same flow, beyond what reading the twins' declarations may change, or `nil`. Two outcomes are
+	/// compared as `GraphFuzzerToolOutcome.difference(between:and:)` compares them – the verdict, the diagnostics in any
+	/// order, the generated files' names and code byte for byte, the warnings – but for the comment a run without a target
+	/// graph writes (`GraphFuzzerOracle.unreadTypeCommentPrefix`), which is compared by the types it names in each module:
+	/// none of the twinned types, and every other type the graph's names there. The module declaring the twins reads
+	/// their declarations, and names them in a declaration – the receive the twin was declared for – so its `.safedi`
+	/// file keeps them even when it is written without a target graph, which keeps no other `public` declaration
+	/// (`keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesPackageCanName:)`), and every module that
+	/// depends on it reads them there. The SwiftPM plugin writes no comment, so there the twin's files are the graph's
+	/// byte for byte.
+	func difference(between outcome: GraphFuzzerToolOutcome, and twinOutcome: GraphFuzzerToolOutcome) -> String? {
+		guard case let .accepted(generatedFiles, warnings) = outcome, case let .accepted(twinGeneratedFiles, twinWarnings) = twinOutcome else {
+			return GraphFuzzerToolOutcome.difference(between: outcome, and: twinOutcome)
+		}
+		if Set(generatedFiles.keys) != Set(twinGeneratedFiles.keys) {
+			return "the names of its generated files"
+		}
+		let commentedTypeNames = Self.commentedTypeNamesByModule(in: generatedFiles)
+		let twinCommentedTypeNames = Self.commentedTypeNamesByModule(in: twinGeneratedFiles)
+		for moduleName in Set(commentedTypeNames.keys).union(twinCommentedTypeNames.keys).sorted() {
+			let expectedTypeNames = commentedTypeNames[moduleName, default: []].filter { typeName in !unreadTypes.contains { $0.isNamed(in: typeName) } }
+			guard twinCommentedTypeNames[moduleName, default: []] == expectedTypeNames else {
+				return "the types the comment in \(moduleName.isEmpty ? "its module" : moduleName) names"
+			}
+		}
+		return GraphFuzzerToolOutcome.difference(
+			between: .accepted(generatedFiles: generatedFiles.mapValues(Self.removingUnreadTypeComments), warnings: warnings),
+			and: .accepted(generatedFiles: twinGeneratedFiles.mapValues(Self.removingUnreadTypeComments), warnings: twinWarnings),
+		)
+	}
+
+	/// The types the comments of `generatedFiles` name, by the name of the module of each file: what precedes the file's
+	/// own name, or the empty name for a graph in one module, whose files name no module.
+	private static func commentedTypeNamesByModule(in generatedFiles: [String: String]) -> [String: Set<String>] {
+		var typeNamesByModule = [String: Set<String>]()
+		for (fileName, contents) in generatedFiles {
+			let moduleName = fileName.contains("/") ? String(fileName.prefix { $0 != "/" }) : ""
+			for line in contents.split(separator: "\n") {
+				let comment = line.trimmingCharacters(in: .whitespaces)
+				guard comment.hasPrefix(GraphFuzzerOracle.unreadTypeCommentPrefix), let listEnd = comment.range(of: " as `public`:") else { continue }
+				// The list is each type's spelling in backticks, joined by commas and an `and`, as `` `A`, `B`, and `C` ``.
+				let list = comment[comment.index(comment.startIndex, offsetBy: GraphFuzzerOracle.unreadTypeCommentPrefix.count - 1)..<listEnd.lowerBound]
+				typeNamesByModule[moduleName, default: []].formUnion(list.components(separatedBy: "`").enumerated().filter { $0.offset % 2 == 1 }.map(\.element))
+			}
+		}
+		return typeNamesByModule
+	}
+
+	/// `code` without the lines of the comment a run without a target graph writes.
+	private static func removingUnreadTypeComments(from code: String) -> String {
+		code.split(separator: "\n", omittingEmptySubsequences: false)
+			.filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix(GraphFuzzerOracle.unreadTypeCommentPrefix) }
+			.joined(separator: "\n")
+	}
+}
+
 /// A feature of the generator that is off by default, so the corpus is drawn as it was before the feature existed.
 /// Each feature draws from a stream of its own, seeded from the seed and the feature, which is consumed only when the
 /// feature is on, and has a seed range and pins of its own in `SafeDIToolGraphFuzzerTests`.
@@ -482,6 +659,9 @@ enum GraphFuzzerSeamOutputFeature: String, CaseIterable, Comparable {
 	case escapingAttributedSeamParameter
 	/// A parameter of an optional closure type, which is not `@escaping`.
 	case optionalClosureSeamParameter
+	/// The comment of a run without a target graph naming a type the file's `public` declarations name that SafeDI reads
+	/// no declaration of, which it counts as `public` (`addingUnreadParameterTypes`).
+	case unreadTypeComment
 
 	static func < (lhs: GraphFuzzerSeamOutputFeature, rhs: GraphFuzzerSeamOutputFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -831,6 +1011,20 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case uncreatedAliasAcrossModules
 	/// `SpellSeam`'s tree in the seam's module.
 	case spelledAcrossModules
+	/// `addingUnreadParameterTypes`' value of a type no declaration SafeDI reads declares, which it counts as `public`.
+	case unreadParameterType
+	/// The unread value through a `public` typealias the seam's module declares, which SafeDI reads.
+	case unreadParameterTypeThroughTypealias
+	/// A narrower first-party type the unread tree's child receives only if available, declared inside an `#if` block.
+	case unreadBoundaryInsideConditionalBlock
+	/// The narrower type declared in a `package` extension in a file without a SafeDI marker.
+	case unreadBoundaryInPackageExtension
+	/// The narrower type declared in an unspelled extension of a nested type.
+	case unreadBoundaryInExtensionOfNestedType
+	/// The narrower type an `internal` typealias.
+	case unreadBoundaryInternalTypealias
+	/// `UnreadSeam`'s tree in the seam's module.
+	case unreadAcrossModules
 	/// `FormsScreen`'s tree in the seam's module.
 	case formsAcrossModules
 	/// `addingLabelFormsSeam`'s seam, `FormsScreen`.
@@ -1326,6 +1520,8 @@ enum GraphFuzzerGenerator {
 			proofExtensionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.proofExtensionRandomSeedMask)
 			markerFreeFileRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.markerFreeFileRandomSeedMask)
 			holeProtocolAccessRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holeProtocolAccessRandomSeedMask)
+			unreadTypeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unreadTypeRandomSeedMask)
+			unreadBoundaryRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unreadBoundaryRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
 			let sendabilityRoll = random.integer(in: 0...99)
@@ -1393,7 +1589,7 @@ enum GraphFuzzerGenerator {
 			)
 			let aliasDeclarations = addingUncreatedAliasExtensions(to: addingUncreatedAliasShapes(to: addingSpelledProperties(to: seamDeclarations)))
 			var finalDeclarations = movingSelfContainedSeamsIntoSeamModule(
-				addingLabelFormsSeam(to: addingHoleShapes(to: addingAccessProofExtensions(to: addingAccessProofShapes(to: aliasDeclarations)))),
+				addingUnreadParameterTypes(to: addingLabelFormsSeam(to: addingHoleShapes(to: addingAccessProofExtensions(to: addingAccessProofShapes(to: aliasDeclarations))))),
 			)
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
@@ -1578,6 +1774,11 @@ enum GraphFuzzerGenerator {
 		/// its builder `package` too and `HoleSeam`'s own initializer `internal`, which only the protocol's own declaration
 		/// lets the seam's `package` tier take (R9).
 		private var holeProtocolAccessRandom: GraphFuzzerRandomNumberGenerator
+		/// Draw only `addingUnreadParameterTypes`' choices: whether a graph gains its tree with a value of a type no
+		/// declaration SafeDI reads declares, and whether that tree names a narrower first-party type at a boundary of the
+		/// three states of decision 54.
+		private var unreadTypeRandom: GraphFuzzerRandomNumberGenerator
+		private var unreadBoundaryRandom: GraphFuzzerRandomNumberGenerator
 		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
 		/// module of the type, `ownerName`, whose file it was drawn in.
 		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
@@ -4349,6 +4550,8 @@ enum GraphFuzzerGenerator {
 				({ $0.hasPrefix("\(prefix)Alias") }, true),
 				({ $0.hasPrefix("\(prefix)Forms") && $0 != "\(prefix)FormsHost" }, true),
 				({ ["SpellSeam", "SpellChild", "SpellSibling"].map { "\(prefix)\($0)" }.contains($0) }, !spellSeamNamesValue),
+				// Drawn last, so that a graph without `addingUnreadParameterTypes`' tree draws as before.
+				({ ["UnreadSeam", "UnreadChild"].map { "\(prefix)\($0)" }.contains($0) }, true),
 			]
 			for tree in trees {
 				guard declarations.contains(where: { tree.isMember($0.name) }), crossModuleRandom.percentChance(50), tree.isMovable else { continue }
@@ -4358,6 +4561,103 @@ enum GraphFuzzerGenerator {
 			}
 			return declarations
 		}
+
+		// MARK: Unread parameter types
+
+		/// With the `generateDependencyTree` feature on, three graphs in twenty gain a small seam tree of their own whose
+		/// value, `unreadValue`, has a type no declaration SafeDI reads declares, which it counts as `public` (decision 54):
+		/// the standard library's `StaticString`, which the list of standard types leaves out, so that the comment of a run
+		/// without a target graph names it. `UnreadHost`, which the first root builds through an instantiator, forwards the
+		/// value and instantiates `UnreadSeam`, whose child `UnreadChild` receives it, spelled by value, received only if
+		/// available, as an array, in a closure, in a tuple, through an existential of a standard protocol, as the nested
+		/// `Unicode.Scalar`, or through a `public` typealias the seam's module declares, which SafeDI then reads. A tenth of
+		/// graphs instead or also give the child an only-if-available receive of a narrower first-party type at a boundary
+		/// of the three states: declared inside an `#if` block, in a `package` extension in a file without a SafeDI marker,
+		/// in an extension of a nested type, or as an `internal` typealias, each of which SafeDI must not count as unread,
+		/// or the seam's `public` tier would not compile. `unreadTypeRandom` and `unreadBoundaryRandom` draw only for this
+		/// pass, after every other.
+		private mutating func addingUnreadParameterTypes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.contains(.generateDependencyTree) else { return declarations }
+			let drawsUnreadValue = unreadTypeRandom.percentChance(15)
+			let drawsBoundary = unreadBoundaryRandom.percentChance(10)
+			guard drawsUnreadValue || drawsBoundary else { return declarations }
+			var declarations = declarations
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let seamName = "\(prefix)UnreadSeam"
+			let childName = "\(prefix)UnreadChild"
+			let hostName = "\(prefix)UnreadHost"
+			var seam = TypeDeclaration(name: seamName, instantiableArguments: ["generateDependencyTree: true"], properties: [PropertyDeclaration(attribute: "@Instantiated", label: "unreadChild", type: childName)], declaresHelperTypes: false, additionalConformances: conformances)
+			var child = TypeDeclaration(name: childName, instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances)
+			var host = TypeDeclaration(name: hostName, instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances)
+			if drawsUnreadValue {
+				let isSendable = sendability == .sendable
+				let aliasName = "\(prefix)UnreadAlias"
+				// The forwarded type, and the receive of it.
+				let (forwardedType, receive): (String, PropertyDeclaration) = switch unreadTypeRandom.integer(in: 0...7) {
+				case 0:
+					("StaticString", PropertyDeclaration(attribute: "@Received", label: "unreadValue", type: "StaticString"))
+				case 1:
+					("StaticString", PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "unreadValue", type: "StaticString?"))
+				case 2:
+					("[StaticString]", PropertyDeclaration(attribute: "@Received", label: "unreadValue", type: "[StaticString]"))
+				case 3:
+					(isSendable ? "@Sendable (StaticString) -> Void" : "(StaticString) -> Void", PropertyDeclaration(attribute: "@Received", label: "unreadValue", type: isSendable ? "@Sendable (StaticString) -> Void" : "(StaticString) -> Void"))
+				case 4:
+					("(StaticString, Int)", PropertyDeclaration(attribute: "@Received", label: "unreadValue", type: "(StaticString, Int)"))
+				case 5:
+					(isSendable ? "any CustomStringConvertible & Sendable" : "any CustomStringConvertible", PropertyDeclaration(attribute: "@Received", label: "unreadValue", type: isSendable ? "any CustomStringConvertible & Sendable" : "any CustomStringConvertible"))
+				case 6:
+					("Unicode.Scalar", PropertyDeclaration(attribute: "@Received", label: "unreadValue", type: "Unicode.Scalar"))
+				default:
+					(aliasName, PropertyDeclaration(attribute: "@Received", label: "unreadValue", type: aliasName))
+				}
+				if forwardedType == aliasName {
+					seam.additionalDeclarations.append("public typealias \(aliasName) = StaticString")
+				}
+				child.properties.append(receive)
+				host.properties.append(PropertyDeclaration(attribute: "@Forwarded", label: "unreadValue", type: forwardedType))
+			}
+			if drawsBoundary {
+				let spaceName = "\(prefix)UnreadSpace"
+				let boundaryType: String
+				let boundaryAccess: AccessLevel
+				switch unreadBoundaryRandom.integer(in: 0...3) {
+				case 0:
+					// Inside an `#if` block: the middle state, `internal` unless a mention raises it.
+					boundaryType = "\(prefix)UnreadGuarded"
+					boundaryAccess = .internal
+					seam.additionalDeclarations.append("#if canImport(Foundation)\npublic final class \(boundaryType)\(helperTypesAreSendable ? ": Sendable" : "") {}\n#endif")
+				case 1:
+					// In a `package` extension, in a file without a SafeDI marker: `package`, the extension's level. The file is
+					// named after the type it declares first, as `executeSafeDIToolTest` names a file.
+					let valueName = "\(prefix)UnreadValue"
+					boundaryType = "\(spaceName).\(valueName)"
+					boundaryAccess = .package
+					seam.additionalDeclarations.append("public enum \(spaceName) {}")
+					markerFreeFiles.append((ownerName: seamName, fileName: "\(valueName).swift", declaration: "package extension \(spaceName) {\n\tfinal class \(valueName)\(helperTypesAreSendable ? ": Sendable" : "") {}\n}"))
+				case 2:
+					// In an unspelled extension of a nested type: `internal`.
+					boundaryType = "\(spaceName).Inner.Value"
+					boundaryAccess = .internal
+					seam.additionalDeclarations.append("public enum \(spaceName) {\n\tpublic enum Inner {}\n}")
+					seam.additionalDeclarations.append("extension \(spaceName).Inner {\n\tfinal class Value\(helperTypesAreSendable ? ": Sendable" : "") {}\n}")
+				default:
+					// An `internal` typealias of a public type.
+					boundaryType = "\(prefix)UnreadInternalAlias"
+					boundaryAccess = .internal
+					seam.additionalDeclarations.append("typealias \(boundaryType) = Int")
+				}
+				proofTypeAccess[boundaryType] = boundaryAccess
+				child.properties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "unreadBoundary", type: "\(boundaryType)?"))
+			}
+			host.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "unreadSeam", type: seamName))
+			declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "unreadHostBuilder", type: "\(instantiator)<\(hostName)>"))
+			return declarations + [seam, child, host]
+		}
+
+		private static let unreadTypeRandomSeedMask: UInt64 = 0x756E726561645479
+		private static let unreadBoundaryRandomSeedMask: UInt64 = 0x756E726561644264
 
 		// MARK: Access proof extensions
 
@@ -5301,7 +5601,28 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 					features.insert(.spelledAcrossModules)
 				} else if name.hasSuffix("FormsScreen") {
 					features.insert(.formsAcrossModules)
+				} else if name.hasSuffix("UnreadSeam") {
+					features.insert(.unreadAcrossModules)
 				}
+			}
+		}
+		// `addingUnreadParameterTypes`' shapes.
+		let unreadChildProperties = properties(ofTypeNamed: "UnreadChild")
+		if unreadChildProperties.contains(where: { $0.label == "unreadValue" }) {
+			features.insert(.unreadParameterType)
+			if unreadChildProperties.contains(where: { $0.label == "unreadValue" && $0.type.hasSuffix("UnreadAlias") }) {
+				features.insert(.unreadParameterTypeThroughTypealias)
+			}
+		}
+		if let boundary = unreadChildProperties.first(where: { $0.label == "unreadBoundary" }) {
+			if boundary.type.hasSuffix("UnreadGuarded?") {
+				features.insert(.unreadBoundaryInsideConditionalBlock)
+			} else if boundary.type.hasSuffix("UnreadSpace.Inner.Value?") {
+				features.insert(.unreadBoundaryInExtensionOfNestedType)
+			} else if boundary.type.hasSuffix("UnreadValue?") {
+				features.insert(.unreadBoundaryInPackageExtension)
+			} else {
+				features.insert(.unreadBoundaryInternalTypealias)
 			}
 		}
 		// `addingLabelFormsSeam`'s shapes.
@@ -5740,6 +6061,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				features.insert(.instanceReadAtCall)
 			}
 		}
+		if generatedFiles.values.contains(where: { $0.contains("// SafeDI counts `") }) {
+			features.insert(.unreadTypeComment)
+		}
 		return features
 	}
 
@@ -5986,6 +6310,21 @@ enum GraphFuzzerToolOutcome: Equatable {
 			GraphFuzzerRenaming.reducingFixturePathsToFileNames(in: text)
 				.replacingOccurrences(of: #"(__safeDI_[A-Za-z0-9_]+_)[0-9A-F]{16}\b"#, with: "$1<hash>", options: .regularExpression)
 		}
+		// A run without a target graph writes one comment per combined output, above the first `public` declaration that
+		// names a type SafeDI counts as `public` because it reads no declaration of it. Which declaration is first follows
+		// the order of type names, so the comment can move to another of the module's files: each module's count of them is
+		// compared, and their places are not.
+		func isUnreadTypeComment(_ line: Substring) -> Bool {
+			line.trimmingCharacters(in: .whitespaces).hasPrefix(GraphFuzzerOracle.unreadTypeCommentPrefix)
+		}
+		func unreadTypeCommentCountsByModule(_ generatedFiles: [String: String]) -> [Substring: Int] {
+			generatedFiles.reduce(into: [:]) { counts, file in
+				counts[file.key.prefix { $0 != "/" }, default: 0] += file.value.split(separator: "\n").filter(isUnreadTypeComment).count
+			}
+		}
+		func withoutUnreadTypeComments(_ code: String) -> String {
+			code.split(separator: "\n", omittingEmptySubsequences: false).filter { !isUnreadTypeComment($0) }.joined(separator: "\n")
+		}
 		switch (outcome, otherOutcome) {
 		case let (.rejected(diagnostics), .rejected(otherDiagnostics)):
 			return diagnosticEntries(of: reduce(diagnostics)) == diagnosticEntries(of: reduce(otherDiagnostics)) ? nil : "its diagnostics"
@@ -5993,9 +6332,12 @@ enum GraphFuzzerToolOutcome: Equatable {
 			if Set(generatedFiles.keys) != Set(otherGeneratedFiles.keys) {
 				return "the names of its generated files"
 			}
+			if unreadTypeCommentCountsByModule(generatedFiles) != unreadTypeCommentCountsByModule(otherGeneratedFiles) {
+				return "the comments naming the types it counts as `public` because it reads no declaration of them"
+			}
 			for fileName in generatedFiles.keys.sorted() {
-				let code = reduce(generatedFiles[fileName, default: ""])
-				let otherCode = reduce(otherGeneratedFiles[fileName, default: ""])
+				let code = reduce(withoutUnreadTypeComments(generatedFiles[fileName, default: ""]))
+				let otherCode = reduce(withoutUnreadTypeComments(otherGeneratedFiles[fileName, default: ""]))
 				guard code != otherCode else { continue }
 				let kind = if fileName.hasSuffix("+SafeDIMock.swift") {
 					"its generated mock code"
@@ -6180,6 +6522,10 @@ struct GraphFuzzerFailure: Equatable {
 		/// A root's generated `mock()` takes a parameter: a root receives nothing and forwards nothing, so its mock takes
 		/// none but its overrides.
 		case rootMockTakesParameter = "a root's generated mock takes a parameter"
+		/// The graph names a type no declaration SafeDI reads declares, and its read twin (`GraphFuzzerFixture.readTwin`),
+		/// which declares that type `public` where SafeDI reads it, gets another verdict, other diagnostics, or other
+		/// generated code: SafeDI counts the type otherwise than as `public` (decision 54).
+		case readTwinDiffers = "the graph with each type SafeDI reads no declaration of declared public where SafeDI reads it gives other results"
 	}
 
 	let seed: UInt64
@@ -6220,6 +6566,7 @@ struct GraphFuzzerResult {
 		isInspectedByValueOracle: Bool = false,
 		isComparedByValueOracle: Bool = false,
 		isComparedAcrossIntegrations: Bool = false,
+		isComparedWithReadTwin: Bool = false,
 		valueOracle: GraphFuzzerValueOracleRun? = nil,
 	) {
 		self.fixture = fixture
@@ -6231,6 +6578,7 @@ struct GraphFuzzerResult {
 		self.isInspectedByValueOracle = isInspectedByValueOracle
 		self.isComparedByValueOracle = isComparedByValueOracle
 		self.isComparedAcrossIntegrations = isComparedAcrossIntegrations
+		self.isComparedWithReadTwin = isComparedWithReadTwin
 		self.valueOracle = valueOracle
 	}
 
@@ -6261,6 +6609,9 @@ struct GraphFuzzerResult {
 	/// (`GraphFuzzerToolRuns.integrationsDisagreeFailure`): the graph is split across modules, and no module of it is run
 	/// without its package's name.
 	let isComparedAcrossIntegrations: Bool
+	/// Whether the oracle ran the graph's read twin and compared it with the graph (`GraphFuzzerToolRuns.readTwinFailure`):
+	/// the graph names a type no declaration SafeDI reads declares.
+	let isComparedWithReadTwin: Bool
 	/// A base corpus graph's value-oracle run, whose pairs and skips the long run counts.
 	let valueOracle: GraphFuzzerValueOracleRun?
 
@@ -6563,6 +6914,10 @@ struct GraphFuzzerToolRuns {
 	///   - multiModuleRuns: What the two multi-module integrations produced for the graph split across modules.
 	///   - pluginOutcome: The outcome of a graph split across modules as the SwiftPM plugin runs the tool, when no module
 	///     of it is run without its package's name: `firstOutcome` is how Bazel runs it.
+	///   - readTwinOutcome: The outcome of the graph's read twin (`GraphFuzzerFixture.readTwin`) as `firstOutcome` was
+	///     run, with its rename undone, when the graph names a type no declaration SafeDI reads declares.
+	///   - readTwinPluginOutcome: The outcome of the read twin as `pluginOutcome` was run, with its rename undone, when the
+	///     graph has both.
 	///   - valueOracle: The value oracle's run of a base corpus graph the tool accepts.
 	init(
 		fixture: GraphFuzzerFixture,
@@ -6574,6 +6929,8 @@ struct GraphFuzzerToolRuns {
 		knownRightOutcome: GraphFuzzerToolOutcome? = nil,
 		multiModuleRuns: [GraphFuzzerMultiModuleRuns] = [],
 		pluginOutcome: GraphFuzzerToolOutcome? = nil,
+		readTwinOutcome: GraphFuzzerToolOutcome? = nil,
+		readTwinPluginOutcome: GraphFuzzerToolOutcome? = nil,
 		valueOracle: GraphFuzzerValueOracleRun? = nil,
 	) {
 		self.fixture = fixture
@@ -6585,6 +6942,8 @@ struct GraphFuzzerToolRuns {
 		self.knownRightOutcome = knownRightOutcome
 		self.multiModuleRuns = multiModuleRuns
 		self.pluginOutcome = pluginOutcome
+		self.readTwinOutcome = readTwinOutcome
+		self.readTwinPluginOutcome = readTwinPluginOutcome
 		self.valueOracle = valueOracle
 	}
 
@@ -6597,6 +6956,8 @@ struct GraphFuzzerToolRuns {
 	let knownRightOutcome: GraphFuzzerToolOutcome?
 	let multiModuleRuns: [GraphFuzzerMultiModuleRuns]
 	let pluginOutcome: GraphFuzzerToolOutcome?
+	let readTwinOutcome: GraphFuzzerToolOutcome?
+	let readTwinPluginOutcome: GraphFuzzerToolOutcome?
 	let valueOracle: GraphFuzzerValueOracleRun?
 
 	/// The failure of a base corpus graph's value oracle before anything is compiled, or `nil`: the mirror model
@@ -6647,6 +7008,29 @@ struct GraphFuzzerToolRuns {
 	/// The failure of each partitioned run whose two integrations give other results, in the order the runs were made.
 	var multiModuleFailures: [GraphFuzzerFailure] {
 		multiModuleRuns.compactMap(\.failure)
+	}
+
+	/// The failure of a graph that names a type no declaration SafeDI reads declares whose read twin
+	/// (`GraphFuzzerFixture.readTwin`), which declares that type `public` where SafeDI reads it, gets another outcome
+	/// than the graph under either flow the oracle runs both under, beyond what `GraphFuzzerReadTwin.difference(between:and:)`
+	/// allows, or `nil`.
+	var readTwinFailure: GraphFuzzerFailure? {
+		guard let readTwin = fixture.readTwin else { return nil }
+		let comparisons = [
+			(flow: "", outcome: firstOutcome, twinOutcome: readTwinOutcome),
+			(flow: ", as the SwiftPM plugin runs the tool", outcome: pluginOutcome, twinOutcome: readTwinPluginOutcome),
+		]
+		for comparison in comparisons {
+			guard let outcome = comparison.outcome, let twinOutcome = comparison.twinOutcome,
+			      let difference = readTwin.difference(between: outcome, and: twinOutcome)
+			else { continue }
+			return GraphFuzzerFailure(
+				seed: fixture.seed,
+				kind: .readTwinDiffers,
+				details: "Declaring \(readTwin.unreadTypeNames) `public` where SafeDI reads it changes \(difference)\(comparison.flow).\nThis graph:\n\(outcome.description)\nIts read twin, with its rename undone:\n\(twinOutcome.description)",
+			)
+		}
+		return nil
 	}
 
 	/// The failure of a graph whose seam takes a builder for a hole that the tool accepts while it rejects the graph's
@@ -7021,7 +7405,7 @@ enum GraphFuzzerOracle {
 		let valueComparisons = try valueComparisons(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil }, isolatingValueOracleGraphsOf: isolatedValueOracleSeeds)
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
-			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.uncreatedAliasRejectionFailure, runs.nilArgumentFailure, runs.uncreatedAliasReadFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.multiModuleFailures.first, renamedGraphFailures.first].compactMap(\.self)
+			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.uncreatedAliasRejectionFailure, runs.nilArgumentFailure, runs.uncreatedAliasReadFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.readTwinFailure, runs.multiModuleFailures.first, renamedGraphFailures.first].compactMap(\.self)
 			// A base corpus graph is compared once its value-oracle graph is.
 			let isValueOracleGraphCompared = runs.valueOracle == nil || valueComparisons.comparedValueOracleSeeds.contains(runs.fixture.seed)
 			return GraphFuzzerResult(
@@ -7034,6 +7418,7 @@ enum GraphFuzzerOracle {
 				isInspectedByValueOracle: runs.isInspectedByValueOracle,
 				isComparedByValueOracle: compileVerificationIsEnabled && runs.isInspectedByValueOracle && runs.runsDifferFailure == nil && compilationFailures[runs.fixture.seed] == nil && isValueOracleGraphCompared,
 				isComparedAcrossIntegrations: runs.pluginOutcome != nil,
+				isComparedWithReadTwin: runs.readTwinOutcome != nil,
 				valueOracle: runs.valueOracle,
 			)
 		}
@@ -7575,6 +7960,17 @@ enum GraphFuzzerOracle {
 		let pluginOutcome: GraphFuzzerToolOutcome? = fixture.modules != nil && fixture.modulesOmittingPackageName.isEmpty
 			? try await toolOutcome(of: fixture, integration: .swiftPackagePlugin)
 			: nil
+		// A graph that names a type no declaration SafeDI reads declares is run again as its read twin, which declares that
+		// type `public` where SafeDI reads it, under each flow the graph is run under: SafeDI counts the type as `public`, so
+		// the two must agree but for the comment naming it (`readTwinFailure`).
+		var readTwinOutcome: GraphFuzzerToolOutcome?
+		var readTwinPluginOutcome: GraphFuzzerToolOutcome?
+		if let readTwin = fixture.readTwin {
+			readTwinOutcome = try await readTwin.restoring(toolOutcome(of: readTwin.fixture))
+			if pluginOutcome != nil {
+				readTwinPluginOutcome = try await readTwin.restoring(toolOutcome(of: readTwin.fixture, integration: .swiftPackagePlugin))
+			}
+		}
 		// A base corpus graph the tool accepts is run again as its value-oracle fixture, whose root mocks and mirrors the
 		// value oracle compares with their production builds (`valueFailures`).
 		var valueOracle: GraphFuzzerValueOracleRun?
@@ -7595,6 +7991,8 @@ enum GraphFuzzerOracle {
 			knownRightOutcome: knownRightOutcome,
 			multiModuleRuns: multiModuleRuns,
 			pluginOutcome: pluginOutcome,
+			readTwinOutcome: readTwinOutcome,
+			readTwinPluginOutcome: readTwinPluginOutcome,
 			valueOracle: valueOracle,
 		)
 	}
@@ -7622,16 +8020,16 @@ enum GraphFuzzerOracle {
 				filesToDelete: &filesToDelete,
 				skipCompileVerification: true,
 			)
-			let normalize = normalizer(fixtureDirectory: fixtureDirectory(of: fileNames ?? fixture.fileNames, in: output.fixtures))
+			let normalize = try normalizer(fixtureDirectory: fixtureDirectory(of: fileNames ?? fixture.fileNames, in: output.fixtures, seed: fixture.seed).path)
 			return .accepted(
 				generatedFiles: addingSeamCallers(to: (output.generatedFiles ?? [:]).mapValues(normalize), seamTypeAccess: fixture.seamTypeAccess),
 				warnings: output.warnings.map { normalize("\($0)") },
 			)
 		} catch let error as SafeDIToolTestError {
-			let directory = fixtureDirectory(of: fileNames ?? fixture.fileNames, in: error.fixtures)
+			let directory = try fixtureDirectory(of: fileNames ?? fixture.fileNames, in: error.fixtures, seed: fixture.seed)
 			// `executeSafeDIToolTest` schedules the fixture directory for deletion only when `generate` succeeds.
-			filesToDelete.append(URL(fileURLWithPath: directory))
-			return .rejected(diagnostics: normalizer(fixtureDirectory: directory)("\(error.underlyingError)"))
+			filesToDelete.append(directory)
+			return .rejected(diagnostics: normalizer(fixtureDirectory: directory.path)("\(error.underlyingError)"))
 		} catch {
 			// `executeSafeDIToolTest` wraps every error `generate` throws, so this is the harness failing, such as a
 			// fixture it could not write: not the tool rejecting the graph.
@@ -7752,7 +8150,8 @@ enum GraphFuzzerOracle {
 	/// flow and the module-info flow must agree: every generated file but the oracle's own callers, in blocks that begin
 	/// where a line begins as `integrationComparedBlockStarts` say. What the flows spell differently is dropped first:
 	/// `#sourceLocation` directives, which only a flow that knows the compiler's spelling of a path emits, the header
-	/// lines every generated file opens with, and the comments of `integrationSpecificTrailingComments`. The blocks are
+	/// lines every generated file opens with, the lines `integrationSpecificCommentLines` begin, and the comments of
+	/// `integrationSpecificTrailingComments`. The blocks are
 	/// a set, since the plugin repeats a module's imports in every file it writes, where a combined output states them
 	/// once.
 	static func integrationComparedBlocks(of generatedFiles: [String: String]) -> [String: Set<String>] {
@@ -7769,7 +8168,10 @@ enum GraphFuzzerOracle {
 			}
 			for line in contents.split(separator: "\n", omittingEmptySubsequences: false) {
 				let trimmedLine = line.trimmingCharacters(in: .whitespaces)
-				guard !trimmedLine.hasPrefix("#sourceLocation"), !generatedFileHeaderLines.contains(trimmedLine) else { continue }
+				guard !trimmedLine.hasPrefix("#sourceLocation"),
+				      !generatedFileHeaderLines.contains(trimmedLine),
+				      !integrationSpecificCommentLines.contains(where: { trimmedLine.hasPrefix($0) })
+				else { continue }
 				let code = integrationSpecificTrailingComments.reduce(line) { code, comment in
 					code.range(of: comment).map { code[..<$0.lowerBound] } ?? code
 				}
@@ -7812,6 +8214,14 @@ enum GraphFuzzerOracle {
 		"// Any modifications made to this file will be overwritten on subsequent builds.",
 		"// Please refrain from editing this file directly.",
 	]
+
+	/// The comment lines generated code carries in one flow and not the other: the comment naming the types SafeDI counts
+	/// as `public` because it reads no declaration of them, which a run without a target graph writes, since it may not
+	/// read every first-party module, and the SwiftPM plugin's flow, which reads them all, does not.
+	static let integrationSpecificCommentLines = [unreadTypeCommentPrefix]
+
+	/// How the comment naming the types SafeDI counts as `public` because it reads no declaration of them begins.
+	static let unreadTypeCommentPrefix = "// SafeDI counts `"
 
 	/// The trailing comments generated code carries in one flow and not the other: `// Declared at …`, which refers to an
 	/// alias's declaration where a flow does not know the compiler's spelling of its path for a `#sourceLocation`
@@ -8045,8 +8455,22 @@ enum GraphFuzzerOracle {
 		return topLevelParameters
 	}
 
-	private static func fixtureDirectory(of fileNames: [String], in fixtures: FixturePaths) -> String {
-		(fixtures[fileNames[0]] as NSString).deletingLastPathComponent
+	/// The directory the harness wrote a single-module fixture's files into, a directory of its own under the temporary
+	/// directory: the directory of the first of `fileNames`, the names the fixture gives its files.
+	/// - Throws: `GraphFuzzerInfrastructureError` when the harness wrote no file of that name, or wrote it anywhere but
+	///   in a directory under the temporary directory. The oracle deletes a rejected graph's fixture directory, and the
+	///   directory of a file the harness did not write – the empty path – was the working directory.
+	private static func fixtureDirectory(of fileNames: [String], in fixtures: FixturePaths, seed: UInt64) throws -> URL {
+		guard let fileName = fileNames.first, let path = fixtures.writtenPath(of: fileName) else {
+			throw GraphFuzzerInfrastructureError(description: "The test harness wrote no fixture named \(fileNames.first ?? "(none)") for seed \(seed): the fixture names its files apart from the names the harness gives them.")
+		}
+		let directory = URL(fileURLWithPath: path).deletingLastPathComponent()
+		let temporaryDirectoryComponents = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().pathComponents
+		let directoryComponents = directory.resolvingSymlinksInPath().pathComponents
+		guard directoryComponents.count > temporaryDirectoryComponents.count, directoryComponents.starts(with: temporaryDirectoryComponents) else {
+			throw GraphFuzzerInfrastructureError(description: "The test harness wrote seed \(seed)'s fixture \(path) outside a directory of its own under the temporary directory.")
+		}
+		return directory
 	}
 
 	/// Replaces the fixture directory, whose last component is a fresh UUID each run, however the path is spelled.

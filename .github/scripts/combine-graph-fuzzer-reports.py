@@ -8,6 +8,7 @@ that ci.yml splits each corpus into. Each shard's long run ends its report with
     features <corpus> <feature>=<accepted graphs showing it>,… <feature>=<pinned count>,…
     inspected <graphs the value oracle inspected> <pinned count> <corpus>
     compared <graphs the value comparator compared> <corpus>
+    read-twins <graphs the oracle compared with their read twin> <pinned count> <corpus>
     omitted-values <graphs rejected because a caller holds a value its tier omits> <pinned count> <corpus>
     spellings <corpus> <spellings to draw, comma-separated> <spellings drawn in accepted graphs>
     outputs <corpus> <feature>=<accepted graphs showing it>,… <feature>=<pinned minimum percent>,…
@@ -19,13 +20,14 @@ feature's name. For each corpus the shards must cover 0..<seed count exactly
 once, and the accepted counts and seed-set sums (a wrapping sum of per-seed
 hashes, so parts add up) must add up to the pins, the accepted graphs that show each feature must add up to its
 pinned count wherever the corpus pins them (`features`), the graphs the value oracle
-inspected and the graphs rejected for an omitted value must add up to their pins, every spelling the corpus draws must be
+inspected, the graphs compared with their read twin, and the graphs rejected for an omitted value must add up to their
+pins, every spelling the corpus draws must be
 drawn in some accepted graph of some shard, each output feature with a pinned minimum must show in at least that
 percentage of the corpus's accepted graphs (the public mock corpus reports `outputs`), the graphs each public mock
 error rejects must add up to their pins (`public-mock-errors`), what the base corpus's value oracle compares and
 skips must add up to its pins (`value-oracle`: counts, and set sums whose keys end in `Sum`, which add up wrapping
 like the accepted seed-set sum), and no shard may report a failure,
-a stale known issue, or a problem. Every long run writes `features` and `inspected` for its corpus, and
+a stale known issue, or a problem. Every long run writes `features`, `inspected` and `read-twins` for its corpus, and
 `value-oracle` for the base corpus, so a complete report that names a corpus without one of them is a problem: a
 run that stopped writing the line would otherwise skip that line's check silently. Writes a Markdown summary to
 SUMMARY and the job summary, and exits non-zero when anything is missing or
@@ -44,6 +46,8 @@ pins_by_corpus = {}
 inspected_by_corpus = {}
 inspected_pins_by_corpus = {}
 compared_by_corpus = {}
+read_twins_by_corpus = {}
+read_twins_pins_by_corpus = {}
 omitted_values_by_corpus = {}
 omitted_values_pins_by_corpus = {}
 required_spellings_by_corpus = {}
@@ -76,6 +80,7 @@ for path in report_paths:
     reported_corpora = set()
     featured_corpora = set()
     inspected_corpora = set()
+    read_twin_corpora = set()
     value_oracle_corpora = set()
     with open(path) as report:
         for line in report:
@@ -95,6 +100,10 @@ for path in report_paths:
                 inspected_pins_by_corpus.setdefault(fields[3], set()).add(int(fields[2]))
             elif fields[0] == "compared" and len(fields) == 3:
                 compared_by_corpus[fields[2]] = compared_by_corpus.get(fields[2], 0) + int(fields[1])
+            elif fields[0] == "read-twins" and len(fields) == 4:
+                read_twin_corpora.add(fields[3])
+                read_twins_by_corpus[fields[3]] = read_twins_by_corpus.get(fields[3], 0) + int(fields[1])
+                read_twins_pins_by_corpus.setdefault(fields[3], set()).add(int(fields[2]))
             elif fields[0] == "omitted-values" and len(fields) == 4:
                 omitted_values_by_corpus[fields[3]] = omitted_values_by_corpus.get(fields[3], 0) + int(fields[1])
                 omitted_values_pins_by_corpus.setdefault(fields[3], set()).add(int(fields[2]))
@@ -138,6 +147,8 @@ for path in report_paths:
             problems.append(f"The {corpus} corpus reported no per-feature counts in {path}.")
         for corpus in sorted(reported_corpora - inspected_corpora):
             problems.append(f"The {corpus} corpus reported no count of the graphs the value oracle inspected in {path}.")
+        for corpus in sorted(reported_corpora - read_twin_corpora):
+            problems.append(f"The {corpus} corpus reported no count of the graphs compared with their read twin in {path}.")
         # Only the base corpus has a value oracle of its own, which every long run of it reports.
         if "base" in reported_corpora and "base" not in value_oracle_corpora:
             problems.append(f"The base corpus reported nothing its value oracle compared in {path}.")
@@ -176,6 +187,14 @@ if not problems:
             problems.append(
                 f"The value oracle inspected {inspected_by_corpus.get(corpus, 0)} graphs of the {corpus} corpus, but "
                 f"{next(iter(inspected_pins))} are pinned."
+            )
+        read_twins_pins = read_twins_pins_by_corpus.get(corpus, set())
+        if len(read_twins_pins) > 1:
+            problems.append(f"The shards of the {corpus} corpus disagree about how many graphs run as a read twin: {sorted(read_twins_pins)}.")
+        elif read_twins_pins and read_twins_by_corpus.get(corpus, 0) != next(iter(read_twins_pins)):
+            problems.append(
+                f"The oracle compared {read_twins_by_corpus.get(corpus, 0)} graphs of the {corpus} corpus with their read twin, "
+                f"but {next(iter(read_twins_pins))} are pinned."
             )
         omitted_values_pins = omitted_values_pins_by_corpus.get(corpus, set())
         if len(omitted_values_pins) > 1:
@@ -268,6 +287,8 @@ with open(summary_path, "w") as summary:
                     f"The value oracle inspected {inspected_by_corpus[corpus]} graphs of the {corpus} corpus and compared "
                     f"{compared_by_corpus.get(corpus, 0)} of them.\n"
                 )
+            if read_twins_by_corpus.get(corpus, 0) > 0:
+                summary.write(f"The oracle compared {read_twins_by_corpus[corpus]} graphs of the {corpus} corpus with their read twin.\n")
 step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
 if step_summary:
     with open(summary_path) as summary, open(step_summary, "a") as job_summary:

@@ -50,9 +50,10 @@ func inlineFixture(_ files: [String]) -> [String] {
 	files.map { $0.replacingOccurrences(of: "@Instantiable(generateDependencyTree: true)", with: "@Instantiable") }
 }
 
-/// `declaration`, of a type that is not `@Instantiable`, inside an `#if` block, where SafeDI records no declaration of
-/// the type (`PlainTypeDeclaration`): only the members that mention it then prove its access, as they prove the access
-/// of a type of a module SafeDI does not read, such as a framework's.
+/// `declaration`, of a type that is not `@Instantiable`, inside an `#if` block, from which SafeDI takes no access level
+/// (`PlainTypeDeclaration.isInsideConditionalBlock`): the type counts as `internal`, raised only by the members that
+/// mention it – the middle state of decision 54, between a type SafeDI reads the access of and one it reads no
+/// declaration of, which counts as `public`.
 func unrecordedTypeDeclaration(_ declaration: String) -> String {
 	"#if canImport(Foundation)\n\(declaration)\n#endif"
 }
