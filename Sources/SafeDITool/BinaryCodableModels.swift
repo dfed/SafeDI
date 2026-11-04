@@ -281,6 +281,8 @@ extension ImportStatement: BinarySchemaMember {
 				BinaryLayoutField("kind", \.kind),
 				BinaryLayoutField("moduleName", \.moduleName),
 				BinaryLayoutField("type", \.type),
+				BinaryLayoutField("accessLevel", \.accessLevel),
+				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
 			],
 			unwrittenProperties: [],
 		)
@@ -292,6 +294,8 @@ extension ImportStatement: BinarySchemaMember {
 			kind: reader.read(),
 			moduleName: reader.read(),
 			type: reader.read(),
+			accessLevel: reader.read(),
+			sourceFilePath: reader.read(),
 		)
 	}
 
@@ -300,6 +304,8 @@ extension ImportStatement: BinarySchemaMember {
 		writer.write(kind)
 		writer.write(moduleName)
 		writer.write(type)
+		writer.write(accessLevel)
+		writer.write(sourceFilePath)
 	}
 }
 

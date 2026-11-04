@@ -99,6 +99,27 @@ A module whose build reads another module's files, as the `SafeDIGenerator` pack
 
 [Access of generated parameters](#access-of-generated-parameters) says how visible the parameters of the initializers and mocks SafeDI generates for other modules are.
 
+The files SafeDI generates import the modules that your files declaring `@Instantiable` types or a `#SafeDIConfiguration` import. When one of your module's own files gives an import an access level (`internal import Foundation`), every generated file gives each of its imports the level its own declarations need, and the result compiles with or without the `InternalImportsByDefault` upcoming feature:
+
+- `public` when a `public` declaration of the file, such as a seam's initializer or a public mock, names one of the module's types, or when the import is `@_exported`;
+- `package` when a `package` declaration names one. When your files import that module at no level below `public`, the import is `package` only where `InternalImportsByDefault` is on, and has no level otherwise;
+- `internal` when one of your module's files imports that module with a level below `public`, since without `InternalImportsByDefault` every import of such a module must spell a level;
+- no level otherwise.
+
+Generated mocks compile only under the module's [`mockConditionalCompilation`](#safediconfiguration), and so do the configurations of public mocks. A level that only they need is spelled under that condition, with the level the rest of the file needs elsewhere, so that a build without the condition, such as a Release build, draws no warning that the import is unused:
+
+```swift
+#if canImport(Foundation)
+#if DEBUG
+public import Foundation
+#else
+internal import Foundation
+#endif
+#endif
+```
+
+A module whose files give no import a level gets imports with no level, as before. SafeDI attributes a type to the module that declares it when it reads the declaration, and to SafeDI for its own types. It attributes a type it reads no declaration of, such as one of Foundation's, to Foundation for Foundation's common types and to every module your files import at that declaration's level or wider. A seam or public mock also names the types its tree receives from other modules, so SafeDI attributes a type that a dependency's `@Instantiable` names, in a dependency or an initializer parameter, to every module that declaration's file imports `package` or wider, unless it is one of Foundation's common types. An import that spells no level tells SafeDI nothing: if the dependency's file imports the type's module with no level, spell that import in the dependency's file at the level of the declaration that names the type, `package` or wider; that declaration then uses the import. A file whose `public` declaration names a type SafeDI reads no declaration of therefore imports each module it attributes the type to `public`, and the compiler warns at one whose types it does not name; import that module below `public` in your files that declare SafeDI content if none of their `public` declarations needs it.
+
 #### Making protocols `@Instantiable`
 
 While it is not necessary to utilize protocols with SafeDI, protocol-driven development aids both testability and dependency inversion. The `@Instantiable` macro has a parameter `fulfillingAdditionalTypes` that enables any concrete `@Instantiable` type to fulfill properties that are declared as conforming to a protocol (or superclass) type.

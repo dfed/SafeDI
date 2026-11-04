@@ -332,6 +332,11 @@ struct Generate: AsyncParsableCommand {
 			dependentModuleInfo: dependentModuleInfo,
 			membership: membership,
 		)
+		let isOwnFile = Self.isOwnFile(
+			manifest: manifest,
+			inputFilePaths: inputFilePaths,
+			comparisonFilePaths: comparisonFilePaths,
+		)
 		let generator = DependencyTreeGenerator(
 			importStatements: importingOtherModules(dependentModuleInfo.flatMap(\.imports) + additionalImportStatements + module.imports),
 			// A dependent module's mock-only declarations reach this module's mocks, so its mock imports do too.
@@ -356,11 +361,7 @@ struct Generate: AsyncParsableCommand {
 			),
 			emittingModule: DependencyTreeGenerator.EmittingModule(
 				identity: ModuleIdentity(moduleName: module.moduleName, packageName: module.packageName),
-				isOwnFile: Self.isOwnFile(
-					manifest: manifest,
-					inputFilePaths: inputFilePaths,
-					comparisonFilePaths: comparisonFilePaths,
-				),
+				isOwnFile: isOwnFile,
 				// A declaration records its file as this run named it: relative to the project root, or else to the
 				// working directory, or absolute.
 				isReadableFile: { filePath in
@@ -374,6 +375,13 @@ struct Generate: AsyncParsableCommand {
 			),
 			seams: seamResolution,
 			plainTypeDeclarations: dependentModuleInfo.flatMap(\.plainTypeDeclarations) + module.plainTypeDeclarations,
+			// The levels the module's own files spell apart from those of its dependencies' files: under the SwiftPM plugin,
+			// the module's files include those of the modules it depends on, whose levels say nothing of its own imports.
+			writtenImportAccessLevels: GeneratedImportAccess.WrittenLevels(
+				ownImportStatements: module.imports + module.mockImports,
+				importStatements: dependentModuleInfo.flatMap { $0.imports + $0.mockImports } + module.imports + module.mockImports,
+				isOwnFile: isOwnFile,
+			),
 		)
 		if let moduleInfoOutput {
 			try module.moduleInfoData.write(toPath: moduleInfoOutput)
@@ -408,10 +416,6 @@ struct Generate: AsyncParsableCommand {
 				// Every generated file asserts how `#if` conditions were evaluated, so a build
 				// whose compiler disagrees fails here with a message naming the condition.
 				let compileTimeAssertions = ConditionalCompilationDecision.compileTimeAssertions(for: module.conditionalCompilationDecisions)
-				let fileHeader = await generator.fileHeader + compileTimeAssertions
-				// Generated mocks compile only where the mock condition is active, so they import
-				// what the module's `#if` blocks select there.
-				let mockFileHeader = await generator.mockFileHeader + compileTimeAssertions
 
 				// Build a map from source file path → extension code(s).
 				var sourceFileToExtensions = [String: [String]]()
@@ -521,13 +525,18 @@ struct Generate: AsyncParsableCommand {
 					},
 				)
 
-				// Accumulate every emission as a `(destination, header, body)`
+				// Accumulate every emission as a `(destination, holdsMockCode, body)`
 				// triple. `destination == nil` means the write is combined-
 				// only (no standalone file). A manifest-driven run
 				// populates destinations from the manifest; a
 				// combined-output run leaves them all nil and lets the
 				// concat step below do the emission under one header.
-				var writes: [(destination: URL?, header: String, body: String)] = []
+				// Each file's header imports what its content needs, at the
+				// levels its declarations need where they compile, so it is
+				// made from its body. Generated mocks compile only where the
+				// mock condition is active, so they import what the module's
+				// `#if` blocks select there.
+				var writes: [(destination: URL?, holdsMockCode: Bool, body: String)] = []
 
 				// ---- Dependency tree ----
 				let dependencyTreeDestinationsBySource: [String: URL]
@@ -556,7 +565,7 @@ struct Generate: AsyncParsableCommand {
 				for sourceFile in dependencyTreeSourcesInOrder {
 					writes.append((
 						destination: dependencyTreeDestinationsBySource[sourceFile],
-						header: fileHeader,
+						holdsMockCode: false,
 						body: sourceFileToExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? "",
 					))
 				}
@@ -576,15 +585,15 @@ struct Generate: AsyncParsableCommand {
 				}
 				let hasAnyMockGeneration = !currentModuleMockSourceFiles.isEmpty
 					|| !listedAdditionalMocksToGenerate.isEmpty
+				// Use the config's mockConditionalCompilation if a config exists;
+				// default to "DEBUG" when no config exists (per-type opt-in without config).
+				let mockConditionalCompilation: String? = if let sourceConfiguration {
+					sourceConfiguration.mockConditionalCompilation
+				} else {
+					"DEBUG"
+				}
 
 				if hasAnyMockGeneration {
-					// Use the config's mockConditionalCompilation if a config exists;
-					// default to "DEBUG" when no config exists (per-type opt-in without config).
-					let mockConditionalCompilation: String? = if let sourceConfiguration {
-						sourceConfiguration.mockConditionalCompilation
-					} else {
-						"DEBUG"
-					}
 					let currentModuleSourceFilePaths: Set<String> = if let manifest {
 						Set(manifest.mockGeneration.map(\.inputFilePath))
 					} else {
@@ -624,7 +633,7 @@ struct Generate: AsyncParsableCommand {
 							}
 							writes.append((
 								destination: URL(fileURLWithPath: entry.outputFilePath),
-								header: mockFileHeader,
+								holdsMockCode: true,
 								body: extensions?.sorted().joined(separator: "\n\n") ?? "",
 							))
 						}
@@ -634,7 +643,7 @@ struct Generate: AsyncParsableCommand {
 						if let mockConfigurationOutputFilePath = manifest.mockConfigurationOutputFilePath {
 							writes.append((
 								destination: URL(fileURLWithPath: mockConfigurationOutputFilePath),
-								header: mockFileHeader,
+								holdsMockCode: true,
 								body: mockResult.mockConfigurationCode ?? "",
 							))
 						}
@@ -644,7 +653,7 @@ struct Generate: AsyncParsableCommand {
 						for sourceFile in currentModuleMockSourceFiles {
 							writes.append((
 								destination: nil,
-								header: mockFileHeader,
+								holdsMockCode: true,
 								body: sourceFileToMockExtensions[sourceFile]?.sorted().joined(separator: "\n\n") ?? "",
 							))
 						}
@@ -654,14 +663,14 @@ struct Generate: AsyncParsableCommand {
 						{
 							writes.append((
 								destination: nil,
-								header: mockFileHeader,
+								holdsMockCode: true,
 								body: typeNameToMockExtensions[typeName]?.sorted().joined(separator: "\n\n") ?? "",
 							))
 						}
 						if let mockConfigurationCode = mockResult.mockConfigurationCode,
 						   !mockConfigurationCode.isEmpty
 						{
-							writes.append((destination: nil, header: mockFileHeader, body: mockConfigurationCode))
+							writes.append((destination: nil, holdsMockCode: true, body: mockConfigurationCode))
 						}
 					}
 				}
@@ -674,18 +683,32 @@ struct Generate: AsyncParsableCommand {
 					// header-only file so the build system's declared
 					// output is populated. A file that holds mocks imports
 					// what both the dependency tree and the mocks need.
-					let combinedFileHeader = hasAnyMockGeneration
-						? await generator.dependencyTreeAndMockFileHeader + compileTimeAssertions
-						: fileHeader
 					let bodies = writes.map(\.body).filter { !$0.isEmpty }
 					// One comment names the types the file's `public` declarations name that SafeDI reads no declaration of.
-					let code = combinedFileHeader + UnreadTypeComment.resolvingMarkers(in: bodies.joined(separator: "\n\n"))
+					let combinedBody = UnreadTypeComment.resolvingMarkers(in: bodies.joined(separator: "\n\n"))
+					// The header reads the dependency-tree code apart from the mock code, which compiles only under the mock
+					// condition.
+					let combinedContent: DependencyTreeGenerator.GeneratedFileContent = if hasAnyMockGeneration {
+						.dependencyTreeAndMock(
+							dependencyTreeCode: UnreadTypeComment.resolvingMarkers(in: writes.filter { !$0.holdsMockCode }.map(\.body).joined(separator: "\n\n")),
+							mockCode: UnreadTypeComment.resolvingMarkers(in: writes.filter(\.holdsMockCode).map(\.body).joined(separator: "\n\n")),
+							mockConditionalCompilation: mockConditionalCompilation,
+						)
+					} else {
+						.dependencyTree(code: combinedBody)
+					}
+					let code = await generator.fileHeader(for: combinedContent) + compileTimeAssertions + combinedBody
 					// Always write — this flag is used to support Bazel and Buck2, which content-hash their inputs, so a stat-identical re-write costs them nothing. Moreover, these tools require that genrules write the outputs that are expected.
 					try code.write(toPath: combinedOutput)
 				} else {
 					for write in writes {
 						guard let destination = write.destination else { continue }
-						let content = write.header + write.body
+						let fileContent: DependencyTreeGenerator.GeneratedFileContent = if write.holdsMockCode {
+							.mock(code: write.body, mockConditionalCompilation: mockConditionalCompilation)
+						} else {
+							.dependencyTree(code: write.body)
+						}
+						let content = await generator.fileHeader(for: fileContent) + compileTimeAssertions + write.body
 						let existingContent = try? String(contentsOf: destination, encoding: .utf8)
 						if existingContent != content {
 							try content.write(to: destination, atomically: true, encoding: .utf8)

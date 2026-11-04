@@ -32,6 +32,7 @@ extension ImportDeclSyntax {
 				.map(\.name.text)
 				.dropFirst()
 				.joined(separator: "."),
+			accessLevel: modifiers.accessLevel,
 		)
 	}
 

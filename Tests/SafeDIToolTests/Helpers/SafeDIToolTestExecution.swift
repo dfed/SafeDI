@@ -59,6 +59,7 @@ func executeSafeDIToolTest(
 	moduleMembershipArguments: [String] = [],
 	pluginTargetGraph: ((_ inputSwiftFilePaths: [String]) -> PluginTargetGraph)? = nil,
 	verificationCompilationConditions: [String]? = nil,
+	verificationCompilerSettings: VerificationCompilerSettings = VerificationCompilerSettings(),
 	swiftFileContentAfterScan: [String]? = nil,
 ) async throws -> TestOutput {
 	// Create additional directory first so its path can be substituted into target file content.
@@ -345,6 +346,7 @@ func executeSafeDIToolTest(
 				activeCompilationConditions: verificationCompilationConditions ?? activeCompilationConditions,
 				// Without a configuration, mocks are wrapped in `#if DEBUG`, which the verifier always defines.
 				mockConditionalCompilation: moduleInfo.configurations.first?.mockConditionalCompilation,
+				compilerSettings: verificationCompilerSettings,
 				filesToDelete: &filesToDelete,
 			)
 		}

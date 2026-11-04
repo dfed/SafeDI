@@ -26,11 +26,15 @@ public struct ImportStatement: Codable, Hashable, Sendable {
 		kind: String = "",
 		moduleName: String,
 		type: String = "",
+		accessLevel: AccessLevel? = nil,
+		sourceFilePath: String? = nil,
 	) {
 		self.attribute = attribute
 		self.kind = kind
 		self.moduleName = moduleName
 		self.type = type
+		self.accessLevel = accessLevel
+		self.sourceFilePath = sourceFilePath
 	}
 
 	// MARK: Public
@@ -43,23 +47,53 @@ public struct ImportStatement: Codable, Hashable, Sendable {
 	public let moduleName: String
 	/// The type imported from the module.
 	public let type: String
+	/// The access level the import spells (`internal import Foundation`), or `nil` when it spells none.
+	public let accessLevel: AccessLevel?
+	/// The file whose import spells `accessLevel`: `generate` keeps the levels the module's own files spell apart from
+	/// those a dependency's file spells, which say nothing of the module's own imports. `nil` when the import spells no
+	/// level, so that such imports of one module in many files stay one import (`spelled(in:)`), or when the file is not
+	/// yet known.
+	public let sourceFilePath: String?
 
-	/// A canonical representation of this import that can be used in source code.
-	public var asSource: String {
-		"""
-		\(attributeStatement)import \(kind.isEmpty ? "" : kind + " ")\(moduleName)\(type.isEmpty ? "" : "." + type)
-		"""
+	/// This import as the file at `sourceFilePath` spells it, which it records when the import spells an access level.
+	public func spelled(in sourceFilePath: String) -> ImportStatement {
+		ImportStatement(
+			attribute: attribute,
+			kind: kind,
+			moduleName: moduleName,
+			type: type,
+			accessLevel: accessLevel,
+			sourceFilePath: accessLevel == nil ? nil : sourceFilePath,
+		)
+	}
+
+	/// This import as source code, spelling the access level `accessLevel`, or none when it is `nil`. A generated file
+	/// decides the level of each of its imports itself (`GeneratedImportAccess`).
+	public func asSource(spelling accessLevel: AccessLevel?) -> String {
+		let accessModifier = accessLevel.map { "\($0.spelling) " } ?? ""
+		return "\(attributeStatement)\(accessModifier)import \(kind.isEmpty ? "" : kind + " ")\(moduleName)\(type.isEmpty ? "" : "." + type)"
 	}
 
 	// MARK: Internal
 
-	/// The attributes `asSource` writes.
+	/// The attributes `asSource(spelling:)` writes.
 	var attributeToGenerate: String {
 		if Self.attributesToFilterOut.contains(attribute) {
 			""
 		} else {
 			attribute
 		}
+	}
+
+	/// Whether the import re-exports its module, which only a `public` import can.
+	var isExported: Bool {
+		attributeToGenerate.contains("@_exported")
+	}
+
+	/// This import without its access level and the file that spells it: what a generated file's import of the module is
+	/// written from, with the level the generated file decides.
+	var withoutAccessLevel: ImportStatement {
+		ImportStatement(attribute: attribute, kind: kind, moduleName: moduleName, type: type)
 	}
 
 	// MARK: Private
