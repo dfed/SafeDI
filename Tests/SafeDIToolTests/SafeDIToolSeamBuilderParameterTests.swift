@@ -662,6 +662,44 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesNilToReceiveInsideFill_whenRootBuildsLabelAfterSeamCall() async throws {
+		// `Root` declares `filter` after `service`, and `AppFilter`, which builds `filter`, requires `service`, so the seam is
+		// called first. `DefaultUserService` in the fill receives `filter` only if available, so it is passed `nil`, as it is
+		// when the seam's tree is built inline: the fill is generated with the properties its caller generates later, as a
+		// mock's fill of a public mock's builder is.
+		let feature = Self.canonicalFeature + ["public protocol FilterProtocol {}"]
+		let fulfillers = [
+			Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: ["@Received let analytics: Analytics", "@Received(onlyIfAvailable: true) let filter: (any FilterProtocol)?"]),
+			Self.fulfillingType(named: "AppFilter", fulfilling: "FilterProtocol", declarations: ["@Received let service: Service"]),
+		]
+		let root = seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let service: Service", "@Instantiated let filter: any FilterProtocol"])
+		let modules = Self.modules(feature: feature, app: fulfillers + [root])
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		expectGeneratedFiles(output.modules["Feature"]?.generatedFiles, ["Feature.swift": generatedFileHeader + Self.canonicalServiceCode])
+		expectGeneratedFiles(output.modules["App"]?.generatedFiles, Self.generatedFiles(module: "App", integration: .moduleInfo, imports: ["Feature"], rootFiles: ["Root": """
+		extension Root {
+		    public init() {
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_80890FC499DC6112.self
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+		                let analytics = scope.analytics
+		                let userService: any UserService = DefaultUserService(analytics: analytics, filter: nil)
+		                return userService
+		            }
+		            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let service: Service = __safeDI_service()
+		        let filter: any FilterProtocol = AppFilter(service: service)
+		        self.init(service: service, filter: filter)
+		    }
+		}
+		"""]))
+		try expectEveryModuleCompiled(output)
+		try await expectValuesEqualVisibleBuild(output, modules: modules, visibleModules: Self.modules(feature: feature + fulfillers, app: [root]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesEnclosingFillToSeamReenteredInsideIt_whenFulfillerInstantiatesSeam() async throws {
 		// C1.16b, H7 (3): `DefaultRouter`, which fills `Profile`'s `router`, instantiates `Flow` again. The call inside the
 		// fill passes the fill by name, so every `Flow` calls it with its own scope, as inline builds a fresh tree for each.
