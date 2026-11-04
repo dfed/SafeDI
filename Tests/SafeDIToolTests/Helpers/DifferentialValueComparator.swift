@@ -185,12 +185,27 @@ struct DifferentialValueProbe: Equatable {
 	let expression: String
 }
 
+/// Two Swift expressions that build one value in one path, by two ways the path holds side by side, such as a type's
+/// generated `mock()` and the production build of the same tree: the feature's expression and the known-right one,
+/// described under one name, `name`. The two must build disjoint objects, so that no `(seen in probe …)` mark crosses
+/// them.
+struct DifferentialValueProbePair: Equatable {
+	let name: String
+	let featureExpression: String
+	let knownRightExpression: String
+}
+
 /// One graph of a batch: its two paths, the probes that describe what each builds, and the differences between them
 /// that the comparison exempts. A batch compiles the graphs whose paths have one layout into one executable per path,
 /// so their declarations must not clash, as the graph fuzzer's per-seed type-name prefixes keep them apart; their
 /// files may share names. A module that every graph of the batch holds alike, with the same files, is compiled once,
 /// so the graphs share its declarations and the instances its static properties hold, as they would share an
 /// instance from a module outside the path.
+///
+/// A graph of probe pairs (`init(name:path:probePairs:exemptions:)`) holds both ways in one path: its batch compiles
+/// that path once and links one executable, which describes each pair's two expressions one after the other, and each
+/// feature expression is compared with its known-right expression as two paths' probes are. Paired graphs batch only
+/// with paired graphs.
 struct DifferentialValueGraph {
 	init(
 		name: String,
@@ -203,14 +218,38 @@ struct DifferentialValueGraph {
 		self.feature = feature
 		self.knownRight = knownRight
 		self.probes = probes
+		knownRightProbes = nil
+		self.exemptions = exemptions
+	}
+
+	/// A graph whose one path builds each pair's two expressions.
+	init(
+		name: String,
+		path: DifferentialValuePath,
+		probePairs: [DifferentialValueProbePair],
+		exemptions: [DifferentialValueDifference] = [],
+	) {
+		self.name = name
+		feature = path
+		knownRight = path
+		probes = probePairs.map { DifferentialValueProbe(name: $0.name, expression: $0.featureExpression) }
+		knownRightProbes = probePairs.map { DifferentialValueProbe(name: $0.name, expression: $0.knownRightExpression) }
 		self.exemptions = exemptions
 	}
 
 	let name: String
 	let feature: DifferentialValuePath
 	let knownRight: DifferentialValuePath
+	/// The feature path's probes, which a graph of two paths describes in the known-right path too.
 	let probes: [DifferentialValueProbe]
+	/// The known-right expression of each of `probes`, in a graph of probe pairs, or `nil` in a graph of two paths.
+	let knownRightProbes: [DifferentialValueProbe]?
 	let exemptions: [DifferentialValueDifference]
+
+	/// Whether the graph holds probe pairs in one path.
+	var isPaired: Bool {
+		knownRightProbes != nil
+	}
 }
 
 /// How far the comparator lets each probe run.
@@ -434,10 +473,12 @@ enum DifferentialValueOracle {
 		let macrosToolPath: URL
 	}
 
-	/// The modules of two graphs' paths, by layout: graphs with the same compile in one batch.
+	/// The modules of two graphs' paths, by layout, and whether the graphs hold probe pairs in one path: graphs with
+	/// the same compile in one batch.
 	private struct GraphLayout: Hashable {
 		let feature: [DifferentialValueModule.Layout]
 		let knownRight: [DifferentialValueModule.Layout]
+		let isPaired: Bool
 	}
 
 	/// The module that holds the describer, which every probe executable imports.
@@ -508,7 +549,7 @@ enum DifferentialValueOracle {
 		var batches = [[Int]]()
 		var batchIndexByLayout = [GraphLayout: Int]()
 		for (index, graph) in graphs.enumerated() {
-			let layout = GraphLayout(feature: graph.feature.modules.map(\.layout), knownRight: graph.knownRight.modules.map(\.layout))
+			let layout = GraphLayout(feature: graph.feature.modules.map(\.layout), knownRight: graph.knownRight.modules.map(\.layout), isPaired: graph.isPaired)
 			if let batchIndex = batchIndexByLayout[layout] {
 				batches[batchIndex].append(index)
 			} else {
@@ -519,17 +560,30 @@ enum DifferentialValueOracle {
 		return batches
 	}
 
-	/// Compares `graphs`, whose paths have one layout, in one executable per path, or, when that fails to compile
-	/// or run, each graph on its own.
+	/// Compares `graphs`, whose paths have one layout, in one executable per path – one in all for graphs of probe
+	/// pairs – or, when that fails to compile or run, each graph on its own.
 	private static func results(
 		of graphs: [DifferentialValueGraph],
 		limits: DifferentialValueLimits,
 		filesToDelete: inout [URL],
 	) throws -> [Result<DifferentialValueComparison, DifferentialValueOracleError>] {
 		do {
-			let probeGroups = graphs.map(\.probes)
-			let featureProbes = try describedProbes(of: merging(graphs.map(\.feature)), role: .feature, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
-			let knownRightProbes = try describedProbes(of: merging(graphs.map(\.knownRight)), role: .knownRight, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
+			let featureProbes: [DescribedProbe]
+			let knownRightProbes: [DescribedProbe]
+			if graphs.allSatisfy(\.isPaired) {
+				// One path, which describes each pair's feature expression and then its known-right expression. A failure to
+				// compile or run it is the feature path's, so that the batch falls back to each graph on its own.
+				let probeGroups = graphs.map { graph in
+					zip(graph.probes, graph.knownRightProbes ?? []).flatMap { [$0, $1] }
+				}
+				let pairedProbes = try describedProbes(of: merging(graphs.map(\.feature)), role: .feature, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
+				featureProbes = pairedProbes.enumerated().filter { $0.offset.isMultiple(of: 2) }.map(\.element)
+				knownRightProbes = pairedProbes.enumerated().filter { !$0.offset.isMultiple(of: 2) }.map(\.element)
+			} else {
+				let probeGroups = graphs.map(\.probes)
+				featureProbes = try describedProbes(of: merging(graphs.map(\.feature)), role: .feature, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
+				knownRightProbes = try describedProbes(of: merging(graphs.map(\.knownRight)), role: .knownRight, probeGroups: probeGroups, limits: limits, filesToDelete: &filesToDelete)
+			}
 			var start = 0
 			return graphs.map { graph in
 				let range = start..<(start + graph.probes.count)
@@ -1736,7 +1790,7 @@ extension GraphFuzzerFixture {
 			}
 		}
 		let mockFileSuffix = "+SafeDIMock.swift"
-		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName.hasSuffix(mockFileSuffix) && Self.mockTakesNoRequiredParameter(contents) {
+		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName.hasSuffix(mockFileSuffix) && GraphFuzzerMockOverrides.takesNoRequiredParameter(contents) {
 			// A split graph's generated files are keyed by their module's name.
 			let mockedType = fileName.dropLast(mockFileSuffix.count).split(separator: "/").last ?? ""
 			probes.append(DifferentialValueProbe("\(mockedType).mock()"))
@@ -1778,16 +1832,5 @@ extension GraphFuzzerFixture {
 			}
 		}
 		return properties
-	}
-
-	/// Whether the generated `mock()` in `contents` takes no parameter without a default value. A mock without
-	/// parameters is declared on one line, `static func mock() -> T {`; one with parameters lists them a line each.
-	private static func mockTakesNoRequiredParameter(_ contents: String) -> Bool {
-		let lines = contents.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
-		let signature = lines.drop { !$0.contains("static func mock(") }
-		let parameters = signature.first?.hasSuffix("static func mock(") == true
-			? signature.dropFirst().prefix { !$0.hasPrefix(")") }
-			: []
-		return parameters.allSatisfy { $0.contains(" = ") }
 	}
 }
