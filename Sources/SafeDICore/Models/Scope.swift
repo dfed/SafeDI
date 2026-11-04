@@ -358,6 +358,10 @@ final class Scope: Hashable {
 	///   - boundProperties: The received properties a mock root binds, which enclose its whole tree. Kept apart
 	///     from `receivableProperties`, which grows at every scope, so that the scopes of a mock tree do not each
 	///     copy them.
+	///   - onlyIfAvailableOverrideProperties: Those of `boundProperties` the mock root binds only to the override of an
+	///     `onlyIfAvailable` receive, which defaults to `nil`. Such an override provides its property as every bound
+	///     property does, but it alone does not keep an `onlyIfAvailable` alias of its label from being created (see
+	///     `isProvidedOnlyByOnlyIfAvailableOverride`).
 	///   - alwaysAvailableProperties: The properties in scope wherever the tree is built: those a mock is passed.
 	///     The properties each scope forwards are added for the scopes beneath it.
 	///   - runtimeOptionalProperties: The forms of a seam's optional parameters that are in scope wherever the tree
@@ -386,6 +390,7 @@ final class Scope: Hashable {
 		receivableProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		boundProperties: Set<Property> = [],
+		onlyIfAvailableOverrideProperties: Set<Property> = [],
 		alwaysAvailableProperties: Set<Property> = [],
 		runtimeOptionalProperties: Set<Property> = [],
 		seamRoot: ScopeGenerator.SeamRoot? = nil,
@@ -403,6 +408,7 @@ final class Scope: Hashable {
 				receivableProperties: receivableProperties,
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 				boundProperties: boundProperties,
+				onlyIfAvailableOverrideProperties: onlyIfAvailableOverrideProperties,
 				alwaysAvailableProperties: alwaysAvailableProperties,
 				runtimeOptionalProperties: runtimeOptionalProperties,
 				seamRoot: seamRoot,
@@ -425,6 +431,7 @@ final class Scope: Hashable {
 		receivableProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		boundProperties: Set<Property>,
+		onlyIfAvailableOverrideProperties: Set<Property>,
 		alwaysAvailableProperties: Set<Property>,
 		runtimeOptionalProperties: Set<Property>,
 		seamRoot: ScopeGenerator.SeamRoot?,
@@ -442,6 +449,7 @@ final class Scope: Hashable {
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			alwaysAvailableProperties: alwaysAvailableProperties,
 			boundProperties: boundProperties,
+			onlyIfAvailableOverrideProperties: onlyIfAvailableOverrideProperties,
 			runtimeOptionalProperties: runtimeOptionalProperties,
 			seamRoot: seamRoot,
 			seamHoles: seamRoot.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.signature.holes) }
@@ -506,6 +514,7 @@ private struct ScopeGeneratorUnderConstruction {
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		alwaysAvailableProperties: Set<Property>,
 		boundProperties: Set<Property>,
+		onlyIfAvailableOverrideProperties: Set<Property>,
 		runtimeOptionalProperties: Set<Property>,
 		seamRoot: ScopeGenerator.SeamRoot?,
 		seamHoles: SeamHoles,
@@ -721,6 +730,7 @@ private struct ScopeGeneratorUnderConstruction {
 			? alwaysAvailableProperties
 			: alwaysAvailableProperties.union(forwardedProperties)
 		self.boundProperties = boundProperties
+		self.onlyIfAvailableOverrideProperties = onlyIfAvailableOverrideProperties
 		self.runtimeOptionalProperties = runtimeOptionalProperties.isEmpty
 			? runtimeOptionalProperties
 			: Self.runtimeOptionalProperties(declaredBy: scope, enclosedBy: runtimeOptionalProperties)
@@ -810,6 +820,7 @@ private struct ScopeGeneratorUnderConstruction {
 			lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties.filter { !fieldLabels.contains($0.label) }.union(fieldInstanceProperties),
 			alwaysAvailableProperties: alwaysAvailableProperties.union(fieldForms),
 			boundProperties: boundProperties,
+			onlyIfAvailableOverrideProperties: onlyIfAvailableOverrideProperties,
 			runtimeOptionalProperties: runtimeOptionalProperties.filter { !fieldLabels.contains($0.label) },
 			seamRoot: nil,
 			seamHoles: seamHoles,
@@ -863,6 +874,7 @@ private struct ScopeGeneratorUnderConstruction {
 				lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 				alwaysAvailableProperties: alwaysAvailableProperties,
 				boundProperties: boundProperties,
+				onlyIfAvailableOverrideProperties: onlyIfAvailableOverrideProperties,
 				runtimeOptionalProperties: runtimeOptionalProperties,
 				seamRoot: nil,
 				seamHoles: seamHoles,
@@ -918,6 +930,7 @@ private struct ScopeGeneratorUnderConstruction {
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			onlyIfAvailable: onlyIfAvailable,
 			isProvidedByEnclosingScope: isProvidedByEnclosingScope(property),
+			isProvidedOnlyByOnlyIfAvailableOverride: isProvidedOnlyByOnlyIfAvailableOverride(property),
 			// A forwarded or bound fulfilling property is in scope wherever the alias is built, so the alias is
 			// always created from it. Any other is built by a scope, which can build it after the alias.
 			fulfillingPropertyIsAlwaysAvailable: alwaysAvailableProperties.contains(fulfillingProperty)
@@ -1046,6 +1059,8 @@ private struct ScopeGeneratorUnderConstruction {
 	/// forward, and those a mock is passed.
 	private let alwaysAvailableProperties: Set<Property>
 	private let boundProperties: Set<Property>
+	/// See `createScopeGenerator`.
+	private let onlyIfAvailableOverrideProperties: Set<Property>
 	/// The properties that may be `nil` where this scope's aliases and the scopes it builds read them, each by its
 	/// exact form: both forms of a seam parameter the seam's callers may pass `nil` for, the unwrapped form of a required
 	/// optional parameter, and both forms of an `onlyIfAvailable` alias of one, which no declaration on the path from
@@ -1131,9 +1146,26 @@ private struct ScopeGeneratorUnderConstruction {
 	/// ancestor still being built. The instance of a lazily instantiated property does
 	/// not count: it is read from that property, which a declaration with its label hides.
 	private func isProvidedByEnclosingScope(_ property: Property) -> Bool {
+		isProvidedByEnclosingScope(property, countingOnlyIfAvailableOverrides: true)
+	}
+
+	/// Whether the only enclosing provider of `property` is the override a mock root binds a property its tree receives
+	/// only if available to, which defaults to `nil`: no enclosing scope creates the property, and the mock binds it to
+	/// no node it builds and no parameter of `mock()`. A receiver of an `onlyIfAvailable` alias of that property reads
+	/// the override where the alias is not created, but the alias is still created from its fulfilling property where
+	/// that closes no cycle, so the type declaring it is handed what production hands it where no ancestor provides
+	/// the property.
+	private func isProvidedOnlyByOnlyIfAvailableOverride(_ property: Property) -> Bool {
+		isProvidedByEnclosingScope(property)
+			&& !isProvidedByEnclosingScope(property, countingOnlyIfAvailableOverrides: false)
+	}
+
+	private func isProvidedByEnclosingScope(_ property: Property, countingOnlyIfAvailableOverrides: Bool) -> Bool {
 		func isReceivable(_ property: Property) -> Bool {
-			(enclosingScopeReceivableProperties.contains(property) || boundProperties.contains(property))
-				&& !lazilyInstantiatedInstanceProperties.contains(property)
+			(
+				enclosingScopeReceivableProperties.contains(property)
+					|| (boundProperties.contains(property) && (countingOnlyIfAvailableOverrides || !onlyIfAvailableOverrideProperties.contains(property))),
+			) && !lazilyInstantiatedInstanceProperties.contains(property)
 		}
 		return (isReceivable(property) && !childPropertyStack.contains(property))
 			|| (isReceivable(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty))

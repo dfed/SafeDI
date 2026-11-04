@@ -207,6 +207,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				: OnlyIfAvailableDependency(unwrappedFulfillingProperty: parameter.property.asUnwrappedProperty, unavailableProperties: [parameter.property])
 		}
 		aliasPropertyIsProvidedByEnclosingScope = false
+		aliasPropertyIsProvidedOnlyByOnlyIfAvailableOverride = false
 		// A forwarded lazily instantiated property is also received by value, as the instance it creates.
 		let forwardedProperties = if forwardedLazilyInstantiatedInstanceProperties.isEmpty {
 			scopeData.forwardedProperties
@@ -337,11 +338,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var requiredOnlyIfAvailableAliasFulfillingProperties = Set<Property>()
 		// An `onlyIfAvailable` alias of another `onlyIfAvailable` alias this scope declares is created from it, so
 		// one that is required requires the alias it renames in turn, which its own generator does not say: an
-		// `onlyIfAvailable` alias's generator requires nothing. The aliases are found until a pass finds no more.
+		// `onlyIfAvailable` alias's generator requires nothing. The aliases are found until a pass finds no more. An alias
+		// whose property only a mock's override of an `onlyIfAvailable` receive provides is never required: a receiver
+		// that requires it is handed the override where it is not created.
 		var foundRequiredAlias = true
 		while foundRequiredAlias {
 			foundRequiredAlias = false
-			for case let (aliasProperty?, fulfillingProperty?) in propertiesToGenerate.lazy.map({ ($0.property, $0.onlyIfAvailableAliasFulfillingProperty) })
+			for case let (aliasProperty?, fulfillingProperty?) in propertiesToGenerate.lazy
+				.filter({ !$0.aliasPropertyIsProvidedOnlyByOnlyIfAvailableOverride })
+				.map({ ($0.property, $0.onlyIfAvailableAliasFulfillingProperty) })
 				where !requiredOnlyIfAvailableAliasProperties.contains(aliasProperty)
 				&& (isRequiredByChild(aliasProperty) || requiredOnlyIfAvailableAliasFulfillingProperties.contains(aliasProperty))
 			{
@@ -474,6 +479,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		erasedToConcreteExistential: Bool,
 		onlyIfAvailable: Bool,
 		isProvidedByEnclosingScope: Bool,
+		isProvidedOnlyByOnlyIfAvailableOverride: Bool,
 		fulfillingPropertyIsAlwaysAvailable: Bool,
 		fulfillingPropertyIsRuntimeOptional: Bool,
 		declarationReference: AliasDeclarationReferences.Reference?,
@@ -499,7 +505,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			onlyIfAvailableUnwrappedReceivedProperties = []
 			onlyIfAvailableDependencies = []
 		}
-		onlyIfAvailableAliasFulfillingProperty = onlyIfAvailable && !isProvidedByEnclosingScope ? fulfillingProperty : nil
+		// An alias whose property only a mock's override of an `onlyIfAvailable` receive provides is still ordered after
+		// its fulfilling sibling and created from it where that closes no cycle, as production creates it where no
+		// ancestor provides its property.
+		onlyIfAvailableAliasFulfillingProperty = onlyIfAvailable && (!isProvidedByEnclosingScope || isProvidedOnlyByOnlyIfAvailableOverride) ? fulfillingProperty : nil
 		onlyIfAvailableAliasPropertyProvidedByEnclosingScope = onlyIfAvailable
 			&& isProvidedByEnclosingScope
 			&& !fulfillingPropertyIsAlwaysAvailable
@@ -530,6 +539,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		declaredLazilyInstantiatedInstanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding
 		self.property = property
 		aliasPropertyIsProvidedByEnclosingScope = isProvidedByEnclosingScope
+		aliasPropertyIsProvidedOnlyByOnlyIfAvailableOverride = isProvidedOnlyByOnlyIfAvailableOverride
 		// An alias constructs nothing.
 		constructionComments = Scope.ConstructionComments()
 		publicMockCall = nil
@@ -593,6 +603,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		declaredLazilyInstantiatedInstanceProperty = holeProperty.asLazilyInstantiatedInstanceProperty
 		property = holeProperty
 		aliasPropertyIsProvidedByEnclosingScope = false
+		aliasPropertyIsProvidedOnlyByOnlyIfAvailableOverride = false
 		constructionComments = Scope.ConstructionComments()
 		publicMockCall = nil
 		holeCallArguments = []
@@ -2005,8 +2016,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// optional mock parameters (no guaranteed default).
 	let onlyIfAvailableUnwrappedReceivedProperties: Set<Property>
 	/// For an `@Received(onlyIfAvailable: true)` alias whose property no enclosing scope provides,
-	/// the alias's fulfilling property; `nil` for every other scope. A receiver that requires such
-	/// an alias can be handed it only if the alias is created.
+	/// or only a mock's override of an `onlyIfAvailable` receive does, the alias's fulfilling
+	/// property; `nil` for every other scope. The alias is ordered after its fulfilling sibling. A
+	/// receiver that requires such an alias can be handed it only if the alias is created, unless
+	/// the override is handed to it in the alias's place.
 	private let onlyIfAvailableAliasFulfillingProperty: Property?
 	/// For an `@Received(onlyIfAvailable: true)` alias whose property an enclosing scope provides, and
 	/// whose fulfilling property can be unavailable where the alias is built – it is not forwarded by the
@@ -2144,6 +2157,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// it then resolves to that enclosing property, so the alias does not make the
 	/// property unavailable. `false` for every other scope.
 	let aliasPropertyIsProvidedByEnclosingScope: Bool
+	/// For an alias, whether the only enclosing provider of the alias's property is the override a
+	/// mock root binds a property its tree receives only if available to, which defaults to `nil`
+	/// (see `Scope.createScopeGenerator`). Such an alias is created where its fulfilling property is
+	/// built first, but no receiver requires it to be. `false` for every other scope.
+	private let aliasPropertyIsProvidedOnlyByOnlyIfAvailableOverride: Bool
 	let property: Property?
 	/// The comments the generated code ends the lines that construct this scope's type with.
 	private let constructionComments: Scope.ConstructionComments

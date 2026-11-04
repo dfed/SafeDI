@@ -5264,6 +5264,11 @@ public actor DependencyTreeGenerator {
 				worklist.append(property)
 			}
 		} while !worklist.isEmpty
+		// The properties the mock binds only to the override of an `onlyIfAvailable` receive, which defaults to `nil`. A
+		// property some receiver requires is bound to a node the mock builds or to a parameter of `mock()` instead. Such an
+		// override provides its property to receivers and requirements, as an ancestor of the mocked type may, but it alone
+		// does not keep an `onlyIfAvailable` alias of its label from being created (see `Scope.createScopeGenerator`).
+		let onlyIfAvailableOverrideProperties = allOnlyIfAvailable.subtracting(allRequired)
 		// A public mock takes what the calls of other modules' public mocks in its tree pass and nothing else in its tree
 		// receives, as a parameter that defaults to `nil`, which it passes on.
 		if instantiable.generateMock == .public {
@@ -5543,6 +5548,7 @@ public actor DependencyTreeGenerator {
 				receivableProperties: [],
 				lazilyInstantiatedInstanceProperties: [],
 				boundProperties: allReceived,
+				onlyIfAvailableOverrideProperties: onlyIfAvailableOverrideProperties,
 				alwaysAvailableProperties: mockParameters,
 				mockHoles: holes,
 				erasedToConcreteExistential: false,
