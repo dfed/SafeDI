@@ -769,6 +769,8 @@ Where the parameters differ in access, SafeDI generates one declaration for each
 
 A narrower declaration of a standard type’s name in scope (a module’s own `Result`, which SafeDI takes for the standard one), an access-level import, and an `@_spi` type each read as `public`, so they make a tier wider than the compiler accepts, which the compiler reports in the generated file.
 
+The construction check described in [Access levels](#access-levels) reads more than this proof does. Code that constructs a type an extension declares – a type declared inside the extension, or the type of an `@Instantiable` extension – names the extended type, so `SafeDITool` checks the extended type’s declaration in the extension’s module, even a plain `enum`, `struct`, `class` or `actor` used as a namespace, and reports a namespace narrower than the constructing module can see at the namespace’s declaration, as it reports any type a constructed type is nested in. It does not check a namespace declared inside an `#if` block, inside an extension, or in another module than the extension. It also does not check a namespace in a file that mentions neither `@Instantiable` nor `#SafeDIConfiguration` when a text search for its keyword followed by its name misses the declaration, as it misses a name in backticks. The compiler reports each of these in the generated file.
+
 ### Where a seam differs from building its tree inline
 
 The generated initializer passes each dependency to its receivers by label, as a root’s `init()` does, and is generated without knowing what its callers pass, so SafeDI reports an error at the seam, with what to change, wherever one parameter per label cannot reproduce what the tree reads, or the initializer cannot be declared:

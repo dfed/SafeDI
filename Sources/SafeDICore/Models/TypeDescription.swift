@@ -656,6 +656,18 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// The name of the outermost type enclosing this nested type, or of this type when it is not nested: the name the
+	/// declaration that encloses it in its file spells at the file's top level. `nil` when that type is not spelled by a
+	/// name alone.
+	public var outermostTypeName: String? {
+		var outermostType = self
+		while let enclosingType = outermostType.popNested {
+			outermostType = enclosingType
+		}
+		guard case let .simple(name, _) = outermostType else { return nil }
+		return name
+	}
+
 	public var popNested: TypeDescription? {
 		switch self {
 		case let .nested(_, parentType, _):

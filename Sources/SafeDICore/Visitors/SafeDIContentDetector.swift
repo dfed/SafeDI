@@ -130,20 +130,25 @@ extension IfConfigDeclSyntax {
 
 	/// What SafeDI would learn from this block among type declarations, and the declarations in every
 	/// one of its clauses that decide which files SafeDI generates. Both come from one walk of the block.
-	/// - Parameter enclosingType: The type whose members the block is among, if any, which encloses the types
-	///   the block declares.
-	func safeDIContentAmongDeclarations(enclosedBy enclosingType: TypeDescription?) -> (content: SafeDIContent, outputFileDeclarations: OutputFileDeclarations) {
-		let detector = SafeDIContentDetector(context: .declarations, enclosingType: enclosingType)
+	/// - Parameters:
+	///   - enclosingType: The type whose members the block is among, if any, which encloses the types the block
+	///     declares.
+	///   - extendedType: The type the extension the block is in extends, if it is in one.
+	func safeDIContentAmongDeclarations(enclosedBy enclosingType: TypeDescription?, inExtensionOf extendedType: TypeDescription?) -> (content: SafeDIContent, outputFileDeclarations: OutputFileDeclarations) {
+		let detector = SafeDIContentDetector(context: .declarations, enclosingType: enclosingType, extendedType: extendedType)
 		detector.walk(self)
 		return (detector.content, detector.outputFileDeclarations)
 	}
 }
 
 private final class SafeDIContentDetector: SyntaxVisitor {
-	/// - Parameter enclosingType: The type whose members the walked block is among, if any.
-	init(context: SafeDIContentContext, enclosingType: TypeDescription? = nil) {
+	/// - Parameters:
+	///   - enclosingType: The type whose members the walked block is among, if any.
+	///   - extendedType: The type the extension the walked block is in extends, if it is in one.
+	init(context: SafeDIContentContext, enclosingType: TypeDescription? = nil, extendedType: TypeDescription? = nil) {
 		self.context = context
 		self.enclosingType = enclosingType
+		self.extendedType = extendedType
 		super.init(viewMode: .sourceAccurate)
 	}
 
@@ -176,10 +181,13 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	}
 
 	override func visit(_ node: ExtensionDeclSyntax) -> SyntaxVisitorContinueKind {
-		visitTypeDeclaration(node.attributes, declaring: node.extendedType.typeDescription, isTypeDefinition: false)
+		// Extensions are always top-level, so a block that declares one is in none.
+		extendedType = node.extendedType.typeDescription
+		return visitTypeDeclaration(node.attributes, declaring: node.extendedType.typeDescription, isTypeDefinition: false)
 	}
 
 	override func visitPost(_: ExtensionDeclSyntax) {
+		extendedType = nil
 		exitType()
 	}
 
@@ -246,6 +254,8 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 	private var enclosingType: TypeDescription?
 	/// The enclosing type of each type declaration the walk is inside, innermost last.
 	private var outerEnclosingTypes = [TypeDescription?]()
+	/// The type the extension the walk is inside extends, if it is inside one.
+	private var extendedType: TypeDescription?
 
 	/// - Parameters:
 	///   - declaredType: The type the declaration declares, which encloses the types among its members.
@@ -260,6 +270,7 @@ private final class SafeDIContentDetector: SyntaxVisitor {
 				record(instantiableMacro.mockOnlyValue ? .mockOnly : .production)
 				outputFileDeclarations.recordInstantiable(
 					named: declaredType.asSource,
+					inExtensionOf: extendedType,
 					isRoot: isTypeDefinition && instantiableMacro.isRootValue,
 					generatesDependencyTree: isTypeDefinition && instantiableMacro.generatesDependencyTreeValue,
 					generatesMock: instantiableMacro.generateMockValue,

@@ -76,7 +76,8 @@ public final class FileVisitor: SyntaxVisitor {
 	public override func visit(_ node: IfConfigDeclSyntax) -> SyntaxVisitorContinueKind {
 		// The block's declarations in every clause, including those of nested blocks, which this visitor
 		// reaches again only in the clauses it scans.
-		let (content, blockOutputFileDeclarations) = node.safeDIContentAmongDeclarations(enclosedBy: parentType)
+		ifConfigBlockDepth += 1
+		let (content, blockOutputFileDeclarations) = node.safeDIContentAmongDeclarations(enclosedBy: parentType, inExtensionOf: enclosingExtendedType)
 		outputFileDeclarations.formUnion(blockOutputFileDeclarations)
 		let scannable = conditionalCompilationEvaluator.scannableClauses(in: node, guarding: content)
 		activeIfConfigClauses.formUnion(scannable.clauses.map(\.id))
@@ -110,6 +111,7 @@ public final class FileVisitor: SyntaxVisitor {
 	}
 
 	public override func visitPost(_: IfConfigDeclSyntax) {
+		ifConfigBlockDepth -= 1
 		if importOnlyBlockDepth > 0 {
 			importOnlyBlockDepth -= 1
 		}
@@ -156,8 +158,11 @@ public final class FileVisitor: SyntaxVisitor {
 	public override func visit(_ node: EnumDeclSyntax) -> SyntaxVisitorContinueKind {
 		// Enums can't be instantiable because they can't have `let` properties.
 		// However, they can have nested types within them that are instantiable.
-		parentType = typeDefined(named: node.name.text)
-		enclosingTypeAccess.append(node.modifiers.access(introducedBy: node.enumKeyword, sourceLocationConverter: sourceLocationConverter))
+		enterType(
+			typeDefined(named: node.name.text),
+			access: node.modifiers.access(introducedBy: node.enumKeyword, sourceLocationConverter: sourceLocationConverter),
+			isInstantiable: node.attributes.instantiableMacro != nil,
+		)
 		return .visitChildren
 	}
 
@@ -184,6 +189,7 @@ public final class FileVisitor: SyntaxVisitor {
 		if node.attributes.instantiableMacro != nil {
 			outputFileDeclarations.recordInstantiable(
 				named: node.extendedType.typeDescription.asSource,
+				inExtensionOf: node.extendedType.typeDescription,
 				isRoot: false,
 				generatesDependencyTree: false,
 				generatesMock: instantiableVisitor.generateMock.generatesMock,
@@ -192,6 +198,7 @@ public final class FileVisitor: SyntaxVisitor {
 
 		// Extensions are always top-level.
 		parentType = node.extendedType.typeDescription
+		enclosingExtendedType = node.extendedType.typeDescription
 		enclosingExtensionAccess = node.modifiers.access(introducedBy: node.extensionKeyword, sourceLocationConverter: sourceLocationConverter)
 
 		// Continue to find child types.
@@ -201,6 +208,7 @@ public final class FileVisitor: SyntaxVisitor {
 	public override func visitPost(_: ExtensionDeclSyntax) {
 		// Extensions are always top-level.
 		parentType = nil
+		enclosingExtendedType = nil
 		enclosingExtensionAccess = nil
 	}
 
@@ -240,6 +248,10 @@ public final class FileVisitor: SyntaxVisitor {
 	/// The declarations that decide which files SafeDI generates, found in every clause of every `#if`
 	/// block. They depend on no condition, so walking the file with any evaluator finds the same.
 	public private(set) var outputFileDeclarations = OutputFileDeclarations()
+	/// Every `struct`, `class`, `actor`, and `enum` declaration that is not `@Instantiable`, outside every `#if` block
+	/// and every extension, in source order. They depend on no condition, so walking the file with any evaluator finds
+	/// the same.
+	public private(set) var plainTypeDeclarations = [PlainTypeDeclaration]()
 
 	/// A run of a file's imports.
 	public enum ImportSegment: Codable, Hashable, Sendable {
@@ -256,6 +268,10 @@ public final class FileVisitor: SyntaxVisitor {
 	private var enclosingTypeAccess = [AccessDeclaration]()
 	/// The access of the extension enclosing the walk's position, if one does.
 	private var enclosingExtensionAccess: AccessDeclaration?
+	/// The type the extension enclosing the walk's position extends, if one does.
+	private var enclosingExtendedType: TypeDescription?
+	/// How many `#if` blocks enclose the walk's position.
+	private var ifConfigBlockDepth = 0
 	private let conditionalCompilationEvaluator: ConditionalCompilationEvaluator
 	private let sourceLocationConverter: SourceLocationConverter?
 	/// The `#if` clauses the evaluator selected for scanning.
@@ -282,6 +298,7 @@ public final class FileVisitor: SyntaxVisitor {
 		if node.attributes.instantiableMacro != nil {
 			outputFileDeclarations.recordInstantiable(
 				named: definedType.asSource,
+				inExtensionOf: enclosingExtendedType,
 				isRoot: instantiableVisitor.isRoot,
 				generatesDependencyTree: instantiableVisitor.generatesDependencyTree,
 				generatesMock: instantiableVisitor.generateMock.generatesMock,
@@ -289,11 +306,25 @@ public final class FileVisitor: SyntaxVisitor {
 		}
 
 		// Keep track of how nested we are.
-		parentType = definedType
-		enclosingTypeAccess.append(node.modifiers.access(introducedBy: node.keyword, sourceLocationConverter: sourceLocationConverter))
+		enterType(
+			definedType,
+			access: node.modifiers.access(introducedBy: node.keyword, sourceLocationConverter: sourceLocationConverter),
+			isInstantiable: node.attributes.instantiableMacro != nil,
+		)
 
 		// Continue to find child types.
 		return .visitChildren
+	}
+
+	/// Makes `type`, which a type definition with `access` defines, the type whose members the walk visits, and
+	/// records it among `plainTypeDeclarations` when it is not `@Instantiable` and neither an `#if` block nor an
+	/// extension encloses it.
+	private func enterType(_ type: TypeDescription, access: AccessDeclaration, isInstantiable: Bool) {
+		if !isInstantiable, ifConfigBlockDepth == 0, enclosingExtensionAccess == nil {
+			plainTypeDeclarations.append(PlainTypeDeclaration(typeDescription: type, access: access, enclosingTypeAccess: enclosingTypeAccess))
+		}
+		parentType = type
+		enclosingTypeAccess.append(access)
 	}
 
 	/// The type a type definition named `name` defines among the members of `parentType`.

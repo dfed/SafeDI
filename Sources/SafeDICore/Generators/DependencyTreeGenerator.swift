@@ -30,6 +30,9 @@ public actor DependencyTreeGenerator {
 	///     generated initializers this module generates or calls. Validation inlines every seam's tree; generation
 	///     builds each generated seam's tree in its own initializer and calls the initializer wherever a tree
 	///     reaches the seam.
+	///   - plainTypeDeclarations: The declarations of types that are not `@Instantiable` in the modules whose
+	///     declarations SafeDITool read, each with the module that declares it, among which the declaration of a type
+	///     an extension extends bounds the types declared in or by that extension.
 	public init(
 		importStatements: [ImportStatement],
 		mockImportStatements: [ImportStatement],
@@ -37,6 +40,7 @@ public actor DependencyTreeGenerator {
 		aliasDeclarationReferences: AliasDeclarationReferences,
 		emittingModule: EmittingModule? = nil,
 		seams: SeamResolution = .none,
+		plainTypeDeclarations: [PlainTypeDeclaration] = [],
 	) {
 		self.importStatements = importStatements
 		self.mockImportStatements = mockImportStatements
@@ -44,6 +48,11 @@ public actor DependencyTreeGenerator {
 		self.aliasDeclarationReferences = aliasDeclarationReferences
 		self.emittingModule = emittingModule
 		self.seams = seams
+		self.plainTypeDeclarations = plainTypeDeclarations
+		extendedTypeDeclarations = ExtendedTypeDeclarations(
+			instantiables: typeDescriptionToFulfillingInstantiableMap,
+			plainTypeDeclarations: plainTypeDeclarations,
+		)
 	}
 
 	// MARK: Public
@@ -2439,6 +2448,12 @@ public actor DependencyTreeGenerator {
 	private let aliasDeclarationReferences: AliasDeclarationReferences
 	private let emittingModule: EmittingModule?
 	private let seams: SeamResolution
+	/// The declarations of types that are not `@Instantiable` this generator was given, which a generator computing
+	/// another module's view is given too.
+	private let plainTypeDeclarations: [PlainTypeDeclaration]
+	/// The declarations among which the declaration of a type an extension extends bounds the types declared in or by
+	/// that extension.
+	private let extendedTypeDeclarations: ExtendedTypeDeclarations
 	private struct RootScopeInfo {
 		let typeDescription: TypeDescription
 		let instantiable: Instantiable
@@ -2522,8 +2537,8 @@ public actor DependencyTreeGenerator {
 	/// `public` or `open` where it is declared, which code in every module can use. No construction then needs to be
 	/// checked, which is the case for a project whose types are all `public`.
 	private lazy var constructsOnlyPublicDeclarations: Bool = typeDescriptionToFulfillingInstantiableMap.values.allSatisfy { instantiable in
-		Self.isPubliclyConstructible(instantiable, withMockMethod: false)
-			&& (instantiable.mockInitializer == nil || Self.isPubliclyConstructible(instantiable, withMockMethod: true))
+		Self.isPubliclyConstructible(instantiable, withMockMethod: false, extendedTypes: extendedTypeDeclarations)
+			&& (instantiable.mockInitializer == nil || Self.isPubliclyConstructible(instantiable, withMockMethod: true, extendedTypes: extendedTypeDeclarations))
 	}
 
 	/// The emitting module whose constructions need checking, or `nil` when none do: no module was given, or every
@@ -2565,7 +2580,7 @@ public actor DependencyTreeGenerator {
 					rootReferenceLocation: seamTree.instantiable.declarationLocation,
 					isMock: false,
 					emittingModule: emittingModule,
-					instantiables: typeDescriptionToFulfillingInstantiableMap,
+					extendedTypes: extendedTypeDeclarations,
 				),
 				from: emittingModule,
 			)
@@ -2581,7 +2596,7 @@ public actor DependencyTreeGenerator {
 							rootReferenceLocation: rootInstantiable.declarationLocation,
 							isMock: false,
 							emittingModule: emittingModule,
-							instantiables: typeDescriptionToFulfillingInstantiableMap,
+							extendedTypes: extendedTypeDeclarations,
 						),
 						from: emittingModule,
 					)
@@ -2593,7 +2608,7 @@ public actor DependencyTreeGenerator {
 				rootReferenceLocation: nil,
 				isMock: false,
 				emittingModule: emittingModule,
-				instantiables: typeDescriptionToFulfillingInstantiableMap,
+				extendedTypes: extendedTypeDeclarations,
 			).allSatisfy(Self.isPubliclyConstructible) {
 				withheldRoots.append(WithheldRoot(typeDescription: rootScope.typeDescription, reason: .constructsNonPublicDeclaration))
 			} else if !seams.isEmpty, let seam = Self.firstSeamCalled(inTreeRootedAt: rootScope.scope) {
@@ -2656,9 +2671,11 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// Whether code in every module can construct `instantiable` with its hand-written mock method when
-	/// `withMockMethod` is set, and otherwise with its initializer or `instantiate()` method.
-	private static func isPubliclyConstructible(_ instantiable: Instantiable, withMockMethod: Bool) -> Bool {
-		instantiable.accessNeeds(constructingWithMockMethod: withMockMethod).allSatisfy { $0.level.satisfies(.public) }
+	/// `withMockMethod` is set, and otherwise with its initializer or `instantiate()` method, among `extendedTypes`,
+	/// which bound a type declared in or by an extension.
+	private static func isPubliclyConstructible(_ instantiable: Instantiable, withMockMethod: Bool, extendedTypes: ExtendedTypeDeclarations) -> Bool {
+		(instantiable.accessNeeds(constructingWithMockMethod: withMockMethod) + extendedTypeAccessNeeds(of: instantiable, in: extendedTypes))
+			.allSatisfy { $0.level.satisfies(.public) }
 	}
 
 	/// A type the generated code constructs, with how it constructs it.
@@ -2673,15 +2690,15 @@ public actor DependencyTreeGenerator {
 	}
 
 	private struct Construction {
-		/// - Parameter instantiables: The declarations the module reads, among which the own declaration of a type an
-		///   extension extends bounds the types declared inside that extension.
-		init(instantiable: Instantiable, usesMockMethod: Bool, referenceLocation: Dependency.DeclarationLocation?, isSeamLeaf: Bool, instantiables: [TypeDescription: Instantiable], publicMockCandidate: PublicMockCandidate? = nil) {
+		/// - Parameter extendedTypes: The declarations the module reads, among which the declaration of a type an
+		///   extension extends bounds the types declared in or by that extension.
+		init(instantiable: Instantiable, usesMockMethod: Bool, referenceLocation: Dependency.DeclarationLocation?, isSeamLeaf: Bool, extendedTypes: ExtendedTypeDeclarations, publicMockCandidate: PublicMockCandidate? = nil) {
 			self.instantiable = instantiable
 			self.usesMockMethod = usesMockMethod
 			self.referenceLocation = referenceLocation
 			self.isSeamLeaf = isSeamLeaf
 			self.publicMockCandidate = publicMockCandidate
-			extendedTypeAccessNeeds = DependencyTreeGenerator.extendedTypeAccessNeeds(of: instantiable, in: instantiables)
+			extendedTypeAccessNeeds = DependencyTreeGenerator.extendedTypeAccessNeeds(of: instantiable, in: extendedTypes)
 		}
 
 		/// In a mock's tree, what the outermost type on the path to the construction that another module declares
@@ -2699,8 +2716,8 @@ public actor DependencyTreeGenerator {
 		/// Whether the construction calls an initializer SafeDI generates for a seam, which is at most as visible as the
 		/// seam's type: only the type's declaration, and those enclosing it, can keep it from compiling.
 		let isSeamLeaf: Bool
-		/// The declarations of the type an extension extends that bound the constructed type, when it is declared inside
-		/// that extension (`extendedTypeAccessNeeds(of:in:)`): code that names the type names the extended type too.
+		/// The declarations of the type an extension extends that bound the constructed type, when it is declared in or
+		/// by that extension (`extendedTypeAccessNeeds(of:in:)`): code that names the type names the extended type too.
 		let extendedTypeAccessNeeds: [AccessNeed]
 
 		/// The declarations whose access decides whether the construction compiles, which both the check of every
@@ -2712,32 +2729,41 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
-	/// The declarations of the type an extension extends that bound a type declared inside that extension, when that
-	/// type's own `@Instantiable` declaration outside every extension is in the same module: the code that names the
-	/// nested type names the extended type too, so the extended type's declaration, and those enclosing it, must be
-	/// as visible as the construction needs. Empty for any other declaration, whose extended type SafeDI does not
-	/// record, which the compiler reports.
-	fileprivate static func extendedTypeAccessNeeds(of instantiable: Instantiable, in instantiables: [TypeDescription: Instantiable]) -> [AccessNeed] {
-		guard instantiable.enclosingExtensionAccess != nil, !instantiable.declarationType.isExtension else { return [] }
+	/// The declarations of the type an extension extends that bound a type the extension declares – a type declared
+	/// inside the extension, or the type an `@Instantiable` extension declares – when the extended type is declared in
+	/// the same module, outside every extension: the code that names the declared type names the extended type too, so
+	/// the extended type's declaration, and those enclosing it in its file, must be as visible as the construction
+	/// needs. The extended type's own `@Instantiable` declaration is read when it has one, and otherwise its plain
+	/// declaration, which `scan` records outside every `#if` block and extension (`PlainTypeDeclaration`), is looked up
+	/// among the declarations of the module that declares the extension: an extension in another module of a type
+	/// narrower than that module cannot be written. Empty for any other declaration, and for an extended type SafeDI
+	/// does not record, which the compiler reports.
+	fileprivate static func extendedTypeAccessNeeds(of instantiable: Instantiable, in extendedTypes: ExtendedTypeDeclarations) -> [AccessNeed] {
 		var extendedType: TypeDescription? = instantiable.concreteInstantiable
-		for _ in 0...instantiable.enclosingTypeAccess.count {
-			extendedType = extendedType?.popNested
-		}
-		guard let extendedType,
-		      let extended = instantiables[extendedType],
-		      extended.concreteInstantiable == extendedType,
-		      !extended.declarationType.isExtension,
-		      extended.enclosingExtensionAccess == nil,
-		      let moduleName = instantiable.moduleName,
-		      extended.moduleName == moduleName
-		else { return [] }
-		return extended.accessNeeds(constructingWithMockMethod: false).filter { accessNeed in
-			switch accessNeed.declaration {
-			case .type, .extensionDeclaringType:
-				true
-			case .member, .extensionDeclaringMember:
-				false
+		if instantiable.enclosingExtensionAccess != nil {
+			// A type declared inside an extension: the outermost type enclosing it in its file is directly inside it.
+			for _ in 0...instantiable.enclosingTypeAccess.count {
+				extendedType = extendedType?.popNested
 			}
+		} else if !instantiable.declarationType.isExtension {
+			return []
+		}
+		guard let extendedType, let moduleName = instantiable.moduleName else { return [] }
+		if let extended = extendedTypes.instantiables[extendedType],
+		   extended.concreteInstantiable == extendedType,
+		   !extended.declarationType.isExtension
+		{
+			guard extended.enclosingExtensionAccess == nil, extended.moduleName == moduleName else { return [] }
+			return extended.accessNeeds(constructingWithMockMethod: false).filter { accessNeed in
+				switch accessNeed.declaration {
+				case .type, .extensionDeclaringType:
+					true
+				case .member, .extensionDeclaringMember:
+					false
+				}
+			}
+		} else {
+			return extendedTypes.plainTypeDeclaration(of: extendedType, inModuleNamed: moduleName, preferringFileAt: instantiable.sourceFilePath)?.accessNeeds ?? []
 		}
 	}
 
@@ -2770,15 +2796,15 @@ public actor DependencyTreeGenerator {
 	///     where that method returns a type the property accepts, as `ScopeGenerator` builds it.
 	///   - emittingModule: The module the generated code compiles in, whose own files hold the dependencies that refer
 	///     to a construction.
-	///   - instantiables: The declarations the module reads, among which the own declaration of a type an extension
-	///     extends bounds the types declared inside that extension.
+	///   - extendedTypes: The declarations the module reads, among which the declaration of a type an extension
+	///     extends bounds the types declared in or by that extension.
 	private static func constructions(
 		inTreeRootedAt rootScope: Scope,
 		rootIsConstructedWithMockMethod: Bool,
 		rootReferenceLocation: Dependency.DeclarationLocation?,
 		isMock: Bool,
 		emittingModule: EmittingModule,
-		instantiables: [TypeDescription: Instantiable],
+		extendedTypes: ExtendedTypeDeclarations,
 		leavingOut typesLeftOut: Set<TypeDescription> = [],
 	) -> [Construction] {
 		var constructionsByKey = [ConstructionKey: Construction]()
@@ -2811,7 +2837,7 @@ public actor DependencyTreeGenerator {
 			guard constructionsByKey[key].map({ Dependency.DeclarationLocation.precedesInSourceOrder(referenceLocation, $0.referenceLocation) }) ?? true else {
 				continue
 			}
-			constructionsByKey[key] = Construction(instantiable: scope.instantiable, usesMockMethod: usesMockMethod, referenceLocation: referenceLocation, isSeamLeaf: scope.seamCall != nil, instantiables: instantiables, publicMockCandidate: publicMockCandidate)
+			constructionsByKey[key] = Construction(instantiable: scope.instantiable, usesMockMethod: usesMockMethod, referenceLocation: referenceLocation, isSeamLeaf: scope.seamCall != nil, extendedTypes: extendedTypes, publicMockCandidate: publicMockCandidate)
 			let isDeclaredInOwnFile = scope.instantiable.sourceFilePath.map(emittingModule.isOwnFile) ?? false
 			for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate
 				where !typesLeftOut.contains(childScope.instantiable.concreteInstantiable)
@@ -2858,7 +2884,7 @@ public actor DependencyTreeGenerator {
 				rootReferenceLocation: nil,
 				isMock: true,
 				emittingModule: emittingModule,
-				instantiables: typeDescriptionToFulfillingInstantiableMap,
+				extendedTypes: extendedTypeDeclarations,
 				leavingOut: typesLeftOut,
 			)
 			let receivedProperties = Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache)
@@ -2873,7 +2899,7 @@ public actor DependencyTreeGenerator {
 					rootReferenceLocation: nil,
 					isMock: true,
 					emittingModule: emittingModule,
-					instantiables: typeDescriptionToFulfillingInstantiableMap,
+					extendedTypes: extendedTypeDeclarations,
 					leavingOut: typesLeftOut,
 				)
 			}
@@ -2969,6 +2995,7 @@ public actor DependencyTreeGenerator {
 						entry.value.declaringModule.moduleName != moduleName && foreignPublicMock.visibleInstantiables[entry.key] != nil
 					},
 				),
+				plainTypeDeclarations: plainTypeDeclarations,
 			)
 			publicMockGeneratorsByModuleName[moduleName] = generator
 		}
@@ -2994,6 +3021,7 @@ public actor DependencyTreeGenerator {
 			aliasDeclarationReferences: aliasDeclarationReferences,
 			emittingModule: emittingModule,
 			seams: seams,
+			plainTypeDeclarations: plainTypeDeclarations,
 		)
 		// A computation over the callers' view that fails reports its own error, as the callers' generation would.
 		let callersPlan = try await callersGenerator.publicMockPlan(ofOwnType: type)
@@ -3168,7 +3196,7 @@ public actor DependencyTreeGenerator {
 	private func constructionComments(for instantiable: Instantiable) -> Scope.ConstructionComments {
 		guard let emittingModule = emittingModuleToCheck else { return Scope.ConstructionComments() }
 		func assumedPackageAccessComment(withMockMethod: Bool) -> String? {
-			let accessNeeds = instantiable.accessNeeds(constructingWithMockMethod: withMockMethod)
+			let accessNeeds = instantiable.accessNeeds(constructingWithMockMethod: withMockMethod) + Self.extendedTypeAccessNeeds(of: instantiable, in: extendedTypeDeclarations)
 			// Only a `package` declaration relies on the assumption.
 			guard accessNeeds.contains(where: { $0.level == .package }) else { return nil }
 			let requirements = accessNeeds.map { emittingModule.requirement(of: $0, constructing: instantiable) }
@@ -4812,7 +4840,7 @@ public actor DependencyTreeGenerator {
 						rootReferenceLocation: nil,
 						isMock: true,
 						emittingModule: accessCheck.emittingModule,
-						instantiables: typeDescriptionToFulfillingInstantiableMap,
+						extendedTypes: extendedTypeDeclarations,
 					)
 					guard Self.inaccessibleConstructions(constructions, from: accessCheck.emittingModule).isEmpty else { continue }
 				}
@@ -5062,7 +5090,7 @@ public actor DependencyTreeGenerator {
 				rootReferenceLocation: rootReferenceLocation,
 				isMock: true,
 				emittingModule: emittingModule,
-				instantiables: typeDescriptionToFulfillingInstantiableMap,
+				extendedTypes: extendedTypeDeclarations,
 			)
 			// `mock()` defaults a forwarded parameter that the root's construction gives no default to the type's
 			// hand-written mock that takes no arguments, when it has one, as `ScopeGenerator.generateMockRootCode` does.
@@ -5075,7 +5103,7 @@ public actor DependencyTreeGenerator {
 				}
 				.compactMap { dependency in
 					typeDescriptionToFulfillingInstantiableMap[dependency.property.typeDescription].map { forwardedInstantiable in
-						Construction(instantiable: forwardedInstantiable, usesMockMethod: true, referenceLocation: dependency.declarationLocation, isSeamLeaf: false, instantiables: typeDescriptionToFulfillingInstantiableMap)
+						Construction(instantiable: forwardedInstantiable, usesMockMethod: true, referenceLocation: dependency.declarationLocation, isSeamLeaf: false, extendedTypes: extendedTypeDeclarations)
 					}
 				}
 			let inaccessibleConstructions = Self.inaccessibleConstructions(constructions, from: emittingModule)
@@ -6959,7 +6987,7 @@ public actor DependencyTreeGenerator {
 				      		rootReferenceLocation: nil,
 				      		isMock: false,
 				      		emittingModule: emittingModule,
-				      		instantiables: typeDescriptionToFulfillingInstantiableMap,
+				      		extendedTypes: extendedTypeDeclarations,
 				      		leavingOut: Set(publicMockCalls.keys),
 				      	),
 				      	from: emittingModule,
@@ -8715,6 +8743,49 @@ public actor DependencyTreeGenerator {
 				fulfilledByMockOnlyDeclaration: typeDescriptionToFulfillingInstantiableMap[unbuildableTypeDescription] != nil,
 			)
 		})
+	}
+}
+
+// MARK: - DependencyTreeGenerator.ExtendedTypeDeclarations
+
+extension DependencyTreeGenerator {
+	/// The declarations among which the declaration of a type an extension extends bounds the types declared in or by
+	/// that extension: the `@Instantiable` declarations the module reads, and the plain type declarations of each
+	/// module that declares them.
+	fileprivate struct ExtendedTypeDeclarations: Sendable {
+		/// - Parameters:
+		///   - instantiables: Every type the `@Instantiable` declarations the module reads fulfill, mapped to the
+		///     declaration that fulfills it.
+		///   - plainTypeDeclarations: The plain type declarations of the modules whose declarations the module reads,
+		///     each module's in the order of its files and, within a file, in source order.
+		init(instantiables: [TypeDescription: Instantiable], plainTypeDeclarations: [PlainTypeDeclaration]) {
+			self.instantiables = instantiables
+			var plainTypeDeclarationsByModuleAndType = [ModuleAndType: [PlainTypeDeclaration]]()
+			for plainTypeDeclaration in plainTypeDeclarations {
+				// A declaration whose module SafeDITool does not know bounds no extension's types, as an `@Instantiable`
+				// declaration of the extended type does not.
+				guard let moduleName = plainTypeDeclaration.moduleName else { continue }
+				plainTypeDeclarationsByModuleAndType[ModuleAndType(moduleName: moduleName, typeDescription: plainTypeDeclaration.typeDescription), default: []].append(plainTypeDeclaration)
+			}
+			self.plainTypeDeclarationsByModuleAndType = plainTypeDeclarationsByModuleAndType
+		}
+
+		let instantiables: [TypeDescription: Instantiable]
+
+		/// The plain declaration of `type` in the module named `moduleName`: the one in the file at `sourceFilePath`
+		/// when that file declares one, as a `private` type of one file can share its name with a type of another,
+		/// and otherwise the first in the order of the module's files.
+		func plainTypeDeclaration(of type: TypeDescription, inModuleNamed moduleName: String, preferringFileAt sourceFilePath: String?) -> PlainTypeDeclaration? {
+			let candidates = plainTypeDeclarationsByModuleAndType[ModuleAndType(moduleName: moduleName, typeDescription: type)] ?? []
+			return candidates.first { $0.sourceFilePath == sourceFilePath } ?? candidates.first
+		}
+
+		private struct ModuleAndType: Hashable {
+			let moduleName: String
+			let typeDescription: TypeDescription
+		}
+
+		private let plainTypeDeclarationsByModuleAndType: [ModuleAndType: [PlainTypeDeclaration]]
 	}
 }
 

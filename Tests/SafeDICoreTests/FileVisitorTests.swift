@@ -2070,4 +2070,109 @@ struct FileVisitorTests {
 			],
 		])
 	}
+
+	@Test
+	func walk_recordsPlainTypeDeclarationsWithEnclosingTypeAccess_whenNoIfBlockOrExtensionEnclosesThem() {
+		// `os()` blocks are scanned in every clause, so only the rule keeps their types out, as it keeps out a type whose
+		// level an extension would give it.
+		let syntaxTree = Parser.parse(source: """
+		public enum Outer {
+		    struct Middle {}
+		    @Instantiable
+		    public struct Inner: Instantiable {
+		        public init() {}
+		        package enum Deep {}
+		    }
+		    #if os(macOS)
+		    enum Platform {}
+		    #else
+		    enum Platform {}
+		    #endif
+		}
+		public extension Outer {
+		    enum Extended {}
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		let outerAccess = AccessDeclaration(
+			level: .public,
+			modifierRange: Dependency.SourceRange(startLine: 1, startColumn: 1, endLine: 1, endColumn: 7),
+			declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+		)
+		#expect(fileVisitor.plainTypeDeclarations == [
+			PlainTypeDeclaration(typeDescription: .simple(name: "Outer"), access: outerAccess, enclosingTypeAccess: []),
+			PlainTypeDeclaration(
+				typeDescription: .nested(name: "Middle", parentType: .simple(name: "Outer")),
+				access: AccessDeclaration(
+					level: .internal,
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 5),
+				),
+				enclosingTypeAccess: [outerAccess],
+			),
+			PlainTypeDeclaration(
+				typeDescription: .nested(name: "Deep", parentType: .nested(name: "Inner", parentType: .simple(name: "Outer"))),
+				access: AccessDeclaration(
+					level: .package,
+					modifierRange: Dependency.SourceRange(startLine: 6, startColumn: 9, endLine: 6, endColumn: 16),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 6, column: 9),
+				),
+				enclosingTypeAccess: [
+					outerAccess,
+					AccessDeclaration(
+						level: .public,
+						modifierRange: Dependency.SourceRange(startLine: 4, startColumn: 5, endLine: 4, endColumn: 11),
+						declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 4, column: 5),
+					),
+				],
+			),
+		])
+	}
+
+	@Test
+	func walk_recordsOutermostNameOfEachTypeExtendedByExtensionThatIsOrHoldsInstantiable_inEveryClause() {
+		let syntaxTree = Parser.parse(source: """
+		@Instantiable
+		extension Rack: Instantiable {
+		    public static func instantiate() -> Rack { Rack() }
+		}
+		extension Outer.Space {
+		    @Instantiable
+		    public final class Shelf: Instantiable {
+		        public init() {}
+		    }
+		}
+		extension Cabinet {
+		    #if DEBUG
+		    @Instantiable
+		    public final class Drawer: Instantiable {
+		        public init() {}
+		    }
+		    #endif
+		}
+		#if DEBUG
+		extension Closet {
+		    @Instantiable
+		    public final class Hanger: Instantiable {
+		        public init() {}
+		    }
+		}
+		@Instantiable
+		extension Crate: Instantiable {
+		    public static func instantiate() -> Crate { Crate() }
+		}
+		#endif
+		extension Unrelated {
+		    func describe() {}
+		}
+		@Instantiable
+		extension [Pallet]: Instantiable {
+		    public static func instantiate() -> [Pallet] { [] }
+		}
+		""")
+		let fileVisitor = FileVisitor()
+		fileVisitor.walk(syntaxTree)
+		// A type spelled with sugar, such as `[Pallet]`, is declared nowhere SafeDI reads, and records no name.
+		#expect(fileVisitor.outputFileDeclarations.extendedTypeNames == ["Rack", "Outer", "Cabinet", "Closet", "Crate"])
+	}
 }

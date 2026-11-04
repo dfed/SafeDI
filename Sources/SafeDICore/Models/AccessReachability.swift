@@ -320,3 +320,27 @@ extension Instantiable {
 		return accessNeeds
 	}
 }
+
+extension PlainTypeDeclaration {
+	/// The declarations whose access decides whether code can name this type: the type declarations that enclose it in
+	/// its file, outermost first, and its own declaration, each with the level it spells, or `internal` when it spells
+	/// none, since a recorded declaration is in no extension.
+	var accessNeeds: [AccessNeed] {
+		// The types enclosing this one, outermost first. Those declared in this file are the innermost, one for each
+		// recorded access.
+		var enclosingTypes = [TypeDescription]()
+		var enclosingType = typeDescription.popNested
+		while let type = enclosingType {
+			enclosingTypes.insert(type, at: 0)
+			enclosingType = type.popNested
+		}
+		return zip(enclosingTypes.suffix(enclosingTypeAccess.count) + [typeDescription], enclosingTypeAccess + [access]).map { type, access in
+			AccessNeed(
+				declaration: .type(type),
+				access: access,
+				level: AccessLevel.ownLevel(of: access, directlyInside: nil),
+				isDeclaredWithMockMethod: false,
+			)
+		}
+	}
+}

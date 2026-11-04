@@ -541,6 +541,34 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func moduleInfoData_throwsErrorNamingOutermostTypeOfPlainTypeDeclaration_whenItsTypeNestsMoreDeeplyThanDependentModulesRead() {
+		// A type declaration nests one type description for each type that encloses it. A debug build's parser reads no
+		// declaration nested this deeply, so the declaration is made here rather than parsed.
+		let typeNames = (0...BinaryReader.maximumNestingDepth).map { "Level\($0)" }
+		let deeplyNestedType = typeNames.dropFirst().reduce(TypeDescription.simple(name: typeNames[0])) { enclosingType, typeName in
+			.nested(name: typeName, parentType: enclosingType)
+		}
+		let moduleInfo = ModuleInfo(
+			imports: [],
+			mockImports: [],
+			instantiables: [],
+			configurations: [],
+			filesWithUnexpectedNodes: nil,
+			conditionalCompilationDecisions: [],
+			instantiableTypeNamesInAnyClause: [],
+			plainTypeDeclarations: [PlainTypeDeclaration(typeDescription: deeplyNestedType, access: AccessDeclaration(level: .internal), enclosingTypeAccess: [])],
+		)
+
+		#expect {
+			try moduleInfo.moduleInfoData
+		} throws: { error in
+			// Named by its outermost type: spelling the nested type recurses as deeply as it nests.
+			"\(error)" == "SafeDI cannot write `Level0` to a module info file: a type its declaration names nests more than 128 types deep, which is more than SafeDI reads back. To fix this, declare a typealias for part of that type, so that no type in the declaration nests more than 128 types deep."
+		}
+	}
+
 	// MARK: Module info
 
 	@Test
@@ -1232,6 +1260,7 @@ extension ConditionalCompilationDecision: BinarySample {}
 extension SafeDIConfiguration: BinarySample {}
 extension Instantiable: BinarySample {}
 extension Instantiable.DeclarationType: BinarySample {}
+extension PlainTypeDeclaration: BinarySample {}
 extension MockGeneration: BinarySample {}
 extension AccessDeclaration: BinarySample {}
 extension AccessLevel: BinarySample {}

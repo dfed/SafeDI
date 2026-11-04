@@ -1696,7 +1696,7 @@ struct SafeDIToolGraphFuzzerTests {
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xD0EC42E39AD4EF47
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
 	/// oracle compares.
-	static let seamCorpusValueOracleInspectedGraphCount = 207
+	static let seamCorpusValueOracleInspectedGraphCount = 204
 	/// How many of the seam corpus's graphs the tool rejects because a caller holds a value the tier it calls omits.
 	static let seamCorpusOmittedValueGraphCount = 18
 
@@ -1711,7 +1711,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` checks. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 31, 92, 98, 196, 277, 609]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x6F5E41210DC3503A
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x78529BE9E3EAD44B
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -1897,13 +1897,6 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "SafeDIMockConfiguration.swift declares its extensions in the order of the roots that reach them, in a graph the base corpus lists under another shape",
 			signatures: [.renamedGraphDiffers(containing: "changes its generated mock configuration code")],
 			seeds: [311],
-		),
-		// The access-proof draw's graphs whose inline build, the comparator's reference, constructs a type a caller in
-		// another package cannot name.
-		GraphFuzzerKnownIssue(
-			reason: "A type declared in an extension of a plain namespace type, which SafeDI records no access for because it is not @Instantiable, is constructed inline from a module in another package, and the compiler rejects the construction; the follow-up pull request before the release, in which scan records plain type declarations' access and the construction check caps by them, removes these seeds",
-			signatures: [.valueComparatorCouldNotDescribeGraph(containing: "error: cannot find '")],
-			seeds: [532, 878, 905],
 		),
 	]
 

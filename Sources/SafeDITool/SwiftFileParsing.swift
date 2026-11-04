@@ -48,6 +48,7 @@ struct ModuleInfo: Codable {
 		moduleName: String? = nil,
 		packageName: String? = nil,
 		dependencyModuleNames: [String] = [],
+		plainTypeDeclarations: [PlainTypeDeclaration],
 	) {
 		self.imports = imports.sortedWithoutDuplicates()
 		self.mockImports = mockImports.sortedWithoutDuplicates()
@@ -59,6 +60,7 @@ struct ModuleInfo: Codable {
 		self.moduleName = moduleName
 		self.packageName = packageName
 		self.dependencyModuleNames = Set(dependencyModuleNames).sorted()
+		self.plainTypeDeclarations = plainTypeDeclarations
 	}
 
 	/// The imports generated dependency-tree code needs, from every file that declares SafeDI content,
@@ -94,6 +96,10 @@ struct ModuleInfo: Codable {
 	/// The names of the modules the module `generate` generated code for depends on directly, as the build system
 	/// lists them, sorted and without duplicates. Empty when the build system did not say.
 	let dependencyModuleNames: [String]
+	/// The declarations of types that are not `@Instantiable`, outside every `#if` block and every extension, in the
+	/// files SafeDI parses and in each file it would otherwise skip that may declare a type an extension holding SafeDI
+	/// content extends (`parseModule`), ordered as `instantiables` is. Each records the module that declares it.
+	let plainTypeDeclarations: [PlainTypeDeclaration]
 }
 
 /// A module's parsed input files together with the configuration that governed the parse.
@@ -302,8 +308,11 @@ func parseModule(
 	let conventionalConfigurationFilePaths = filePaths.filter { filePath in
 		configurationFilePaths.contains(filePath) && SafeDIConfiguration.isInConventionalFile(atPath: filePath)
 	}
-	let conventionalConfigurationFiles = try conventionalConfigurationFilePaths.sorted().compactMap { filePath in
-		try parseFileDeclaringSafeDIContent(atPath: filePath).map { (path: filePath, syntaxTree: $0) }
+	let conventionalConfigurationFileReads = try conventionalConfigurationFilePaths.sorted().map { filePath in
+		try (path: filePath, read: readSwiftFile(atPath: filePath))
+	}
+	let conventionalConfigurationFiles = conventionalConfigurationFileReads.compactMap { file in
+		file.read.syntaxTree.map { (path: file.path, syntaxTree: $0) }
 	}
 	let conventionalConfigurationFileScans = conventionalConfigurationFiles.map { file in
 		walk(file.syntaxTree, at: file.path, conditionalCompilation: defaultEvaluator)
@@ -315,12 +324,13 @@ func parseModule(
 		activeCompilationConditions: activeCompilationConditions,
 		configuration: conventionalConfigurations.count == 1 ? conventionalConfigurations.first : nil,
 	)
-	let fileScans = try await (firstPassEvaluator == defaultEvaluator
+	let walkedFiles = try await walkFiles(named: filePaths.subtracting(conventionalConfigurationFilePaths), conditionalCompilation: firstPassEvaluator)
+	let fileScans = (firstPassEvaluator == defaultEvaluator
 		? conventionalConfigurationFileScans
 		: conventionalConfigurationFiles.map { file in
 			walk(file.syntaxTree, at: file.path, conditionalCompilation: firstPassEvaluator)
 		})
-		+ walkFiles(named: filePaths.subtracting(conventionalConfigurationFilePaths), conditionalCompilation: firstPassEvaluator)
+		+ walkedFiles.fileScans
 
 	let configurations = fileScans
 		.filter { configurationFilePaths.contains($0.path) }
@@ -337,15 +347,33 @@ func parseModule(
 	let finalFileScans = try await evaluator == firstPassEvaluator
 		? fileScans
 		// Only a configuration outside `SafeDIConfiguration.swift` that changes the mock condition gets here.
-		: walkFiles(named: Set(fileScans.map(\.path)), conditionalCompilation: evaluator)
+		: walkFiles(named: Set(fileScans.map(\.path)), conditionalCompilation: evaluator).fileScans
+	// A file whose text mentions no SafeDI marker is not parsed, but it can declare a type an extension holding SafeDI
+	// content extends, whose access bounds the types that extension declares: a namespace enum in a file of its own.
+	// The names come from every clause of every `#if` block, so the files found, and the declarations kept, are the
+	// same whatever the conditions. Only the declarations of those types, and of the types nested in them, are kept:
+	// no other plain declaration bounds anything.
+	let extendedTypeNames = Set(finalFileScans.flatMap(\.outputFileDeclarations.extendedTypeNames))
+	var mayDeclareTypesNamedBySkippedFilePath = walkedFiles.mayDeclareTypesNamedBySkippedFilePath
+	for file in conventionalConfigurationFileReads {
+		// A file that was parsed may declare no type of a name, and is not parsed again.
+		mayDeclareTypesNamedBySkippedFilePath[file.path] = file.read.mayDeclareTypesNamed
+	}
+	let moduleFileScans = try await (finalFileScans + walkFilesDeclaringTypes(
+		among: mayDeclareTypesNamedBySkippedFilePath
+			.filter { !$0.value.isDisjoint(with: extendedTypeNames) }
+			.map(\.key),
+		conditionalCompilation: evaluator,
+	))
+	.map { $0.keepingPlainTypeDeclarations(ofTypesWithin: extendedTypeNames) }
 	return (
 		ParsedModule(
-			moduleInfo: ModuleInfo(finalFileScans),
+			moduleInfo: ModuleInfo(moduleFileScans),
 			configuration: configuration,
 			conditionalCompilationEvaluator: evaluator,
 			additionalDirectories: configuration?.additionalDirectoriesToInclude.map(AdditionalDirectory.init(entry:)) ?? [],
 		),
-		finalFileScans,
+		moduleFileScans,
 	)
 }
 
@@ -357,7 +385,7 @@ func parseSwiftFiles(
 	_ filePaths: Set<String>,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
 ) async throws -> [FileScan] {
-	try await walkFiles(named: filePaths, conditionalCompilation: evaluator)
+	try await walkFiles(named: filePaths, conditionalCompilation: evaluator).fileScans
 }
 
 // MARK: - Private
@@ -383,6 +411,9 @@ struct FileScan: Codable, Sendable {
 	/// The declarations in every clause of the file's `#if` blocks that decide which files SafeDI generates,
 	/// which are the same whatever the conditions.
 	let outputFileDeclarations: OutputFileDeclarations
+	/// The file's declarations of types that are not `@Instantiable`, outside every `#if` block and every extension,
+	/// in source order, which are the same whatever the conditions.
+	let plainTypeDeclarations: [PlainTypeDeclaration]
 
 	/// Whether any compilation condition decided what the file contributed. A file whose scan consults
 	/// none contributes the same whatever conditions are supplied.
@@ -408,6 +439,32 @@ struct FileScan: Codable, Sendable {
 		)
 	}
 
+	/// This scan, keeping the declarations of `plainTypeDeclarations` whose outermost type is named one of
+	/// `outermostTypeNames`.
+	fileprivate func keepingPlainTypeDeclarations(ofTypesWithin outermostTypeNames: Set<String>) -> FileScan {
+		replacingPlainTypeDeclarations(with: plainTypeDeclarations.filter { plainTypeDeclaration in
+			plainTypeDeclaration.typeDescription.outermostTypeName.map(outermostTypeNames.contains) == true
+		})
+	}
+
+	/// This scan, contributing `plainTypeDeclarations`.
+	func replacingPlainTypeDeclarations(with plainTypeDeclarations: [PlainTypeDeclaration]) -> FileScan {
+		FileScan(
+			path: path,
+			imports: imports,
+			mockImports: mockImports,
+			instantiables: instantiables,
+			configurations: configurations,
+			encounteredUnexpectedNodes: encounteredUnexpectedNodes,
+			conditionalCompilationDecisions: conditionalCompilationDecisions,
+			consultedCompilationConditions: consultedCompilationConditions,
+			importSegments: importSegments,
+			importOnlyConsultedCompilationConditions: importOnlyConsultedCompilationConditions,
+			outputFileDeclarations: outputFileDeclarations,
+			plainTypeDeclarations: plainTypeDeclarations,
+		)
+	}
+
 	/// This scan, contributing `imports` and `mockImports`.
 	fileprivate func replacingImports(with imports: [ImportStatement], mockImports: [ImportStatement]) -> FileScan {
 		FileScan(
@@ -422,6 +479,7 @@ struct FileScan: Codable, Sendable {
 			importSegments: importSegments,
 			importOnlyConsultedCompilationConditions: importOnlyConsultedCompilationConditions,
 			outputFileDeclarations: outputFileDeclarations,
+			plainTypeDeclarations: plainTypeDeclarations,
 		)
 	}
 
@@ -447,6 +505,11 @@ struct FileScan: Codable, Sendable {
 			importSegments: importSegments,
 			importOnlyConsultedCompilationConditions: importOnlyConsultedCompilationConditions,
 			outputFileDeclarations: outputFileDeclarations,
+			plainTypeDeclarations: plainTypeDeclarations.map {
+				var plainTypeDeclaration = $0
+				plainTypeDeclaration.sourceFilePath = path
+				return plainTypeDeclaration
+			},
 		)
 	}
 }
@@ -480,6 +543,7 @@ extension ModuleInfo {
 			moduleName: moduleName,
 			packageName: packageName,
 			dependencyModuleNames: dependencyModuleNames,
+			plainTypeDeclarations: plainTypeDeclarations + additionalModuleInfo.plainTypeDeclarations,
 		)
 	}
 
@@ -499,6 +563,7 @@ extension ModuleInfo {
 			moduleName: moduleName,
 			packageName: packageName,
 			dependencyModuleNames: dependencyModuleNames,
+			plainTypeDeclarations: (plainTypeDeclarations + addedModuleInfo.plainTypeDeclarations).sortedByDeclaration(),
 		)
 	}
 
@@ -515,6 +580,7 @@ extension ModuleInfo {
 			filesWithUnexpectedNodes: filesWithUnexpectedNodes.isEmpty ? nil : filesWithUnexpectedNodes,
 			conditionalCompilationDecisions: fileScans.flatMap(\.conditionalCompilationDecisions),
 			instantiableTypeNamesInAnyClause: fileScans.flatMap(\.outputFileDeclarations.instantiableTypeNames),
+			plainTypeDeclarations: fileScans.flatMap(\.plainTypeDeclarations),
 		)
 	}
 }
@@ -539,38 +605,121 @@ extension [SafeDIConfiguration] {
 	}
 }
 
+/// What `walkFiles(named:conditionalCompilation:)` found.
+private struct WalkedFiles {
+	/// What each file that mentions SafeDI contributes.
+	var fileScans = [FileScan]()
+	/// The names each file that mentions no SafeDI marker may declare a type of (`ReadSwiftFile.mentionsNoSafeDI`), for
+	/// each such file that may declare one.
+	var mayDeclareTypesNamedBySkippedFilePath = [String: Set<String>]()
+}
+
 /// Reads, parses, and walks every file in parallel under its path, keeping what each file that mentions SafeDI
-/// contributes.
+/// contributes, and the names of the types each other file may declare.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 private func walkFiles(
 	named filePaths: Set<String>,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
-) async throws -> [FileScan] {
+) async throws -> WalkedFiles {
 	try await withThrowingTaskGroup(
-		of: FileScan?.self,
-		returning: [FileScan].self,
+		of: (path: String, read: WalkedSwiftFile).self,
+		returning: WalkedFiles.self,
 	) { taskGroup in
 		for filePath in filePaths where !filePath.isEmpty {
 			taskGroup.addTask {
-				try parseFileDeclaringSafeDIContent(atPath: filePath).map { syntaxTree in
-					walk(syntaxTree, at: filePath, conditionalCompilation: evaluator)
+				let read = try readSwiftFile(atPath: filePath)
+				return if let syntaxTree = read.syntaxTree {
+					(filePath, .scanned(walk(syntaxTree, at: filePath, conditionalCompilation: evaluator)))
+				} else {
+					(filePath, .skipped(mayDeclareTypesNamed: read.mayDeclareTypesNamed))
 				}
+			}
+		}
+
+		var walkedFiles = WalkedFiles()
+		for try await file in taskGroup {
+			switch file.read {
+			case let .scanned(fileScan):
+				walkedFiles.fileScans.append(fileScan)
+			case let .skipped(mayDeclareTypesNamed):
+				if !mayDeclareTypesNamed.isEmpty {
+					walkedFiles.mayDeclareTypesNamedBySkippedFilePath[file.path] = mayDeclareTypesNamed
+				}
+			}
+		}
+		return walkedFiles
+	}
+}
+
+/// What `walkFiles(named:conditionalCompilation:)` found in one file.
+private enum WalkedSwiftFile: Sendable {
+	/// The file mentions SafeDI, and contributes this.
+	case scanned(FileScan)
+	/// The file mentions no SafeDI marker, and may declare types of these names.
+	case skipped(mayDeclareTypesNamed: Set<String>)
+}
+
+/// What each file at `filePaths` contributes: files `walkFiles(named:conditionalCompilation:)` did not parse, since
+/// their text mentions no SafeDI marker, but whose text may declare a type an extension holding SafeDI content extends.
+/// Each contributes its declarations of types that are not `@Instantiable`, outside every `#if` block and every
+/// extension, which depend on no condition. Nothing else is taken from such a file, not even its syntax errors, as
+/// SafeDI otherwise reads nothing of it.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+private func walkFilesDeclaringTypes(
+	among filePaths: [String],
+	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+) async throws -> [FileScan] {
+	try await withThrowingTaskGroup(
+		of: FileScan.self,
+		returning: [FileScan].self,
+	) { taskGroup in
+		for filePath in filePaths {
+			taskGroup.addTask {
+				let syntaxTree = try Parser.parse(source: String(contentsOfFile: filePath, encoding: .utf8))
+				let fileVisitor = FileVisitor(
+					conditionalCompilationEvaluator: evaluator,
+					sourceLocationConverter: SourceLocationConverter(fileName: filePath, tree: syntaxTree),
+				)
+				fileVisitor.walk(syntaxTree)
+				return FileScan(
+					path: filePath,
+					imports: [],
+					mockImports: [],
+					instantiables: [],
+					configurations: [],
+					encounteredUnexpectedNodes: false,
+					conditionalCompilationDecisions: [],
+					consultedCompilationConditions: [],
+					importSegments: [],
+					importOnlyConsultedCompilationConditions: [],
+					outputFileDeclarations: OutputFileDeclarations(),
+					plainTypeDeclarations: fileVisitor.plainTypeDeclarations,
+				)
+				.relocated(to: filePath)
 			}
 		}
 
 		var fileScans = [FileScan]()
 		for try await fileScan in taskGroup {
-			if let fileScan {
-				fileScans.append(fileScan)
-			}
+			fileScans.append(fileScan)
 		}
 		return fileScans
 	}
 }
 
-/// Reads and parses the file at `filePath`, or returns `nil` without parsing when its text shows it
-/// declares nothing SafeDI scans for.
-private func parseFileDeclaringSafeDIContent(atPath filePath: String) throws -> SourceFileSyntax? {
+/// What reading a Swift file found.
+private struct ReadSwiftFile {
+	/// The file's syntax tree, when its text mentions a SafeDI marker, so it was parsed.
+	let syntaxTree: SourceFileSyntax?
+	/// When its text mentions no SafeDI marker, so it was not parsed, the names of the types it may declare: each word
+	/// that follows `enum`, `struct`, `class`, or `actor` and whitespace in it (`wordsFollowingTypeDeclarationKeywords`),
+	/// a superset of the names of the types it declares, which a parse decides exactly. A declaration spelled otherwise
+	/// – a name in backticks, or a comment between the keyword and the name – is not found. Empty for a parsed file.
+	let mayDeclareTypesNamed: Set<String>
+}
+
+/// Reads the file at `filePath`, and parses it when its text shows it can declare something SafeDI scans for.
+private func readSwiftFile(atPath filePath: String) throws -> ReadSwiftFile {
 	var content = try String(contentsOfFile: filePath, encoding: .utf8)
 	// Searching the bytes rather than the characters is many times faster, and finds the markers wherever a
 	// character search does: no other sequence of characters is equivalent to these ASCII ones. It also finds a
@@ -579,9 +728,32 @@ private func parseFileDeclaringSafeDIContent(atPath filePath: String) throws -> 
 		safeDIMarkers.contains(where: source.containsBytes(of:))
 	}
 	return if mentionsSafeDI {
-		Parser.parse(source: content)
+		ReadSwiftFile(syntaxTree: Parser.parse(source: content), mayDeclareTypesNamed: [])
 	} else {
-		nil
+		// A closure rather than a key path: SwiftFormat's `redundantFileprivate` rule does not see a key path's use, and
+		// would make the property `private`.
+		ReadSwiftFile(syntaxTree: nil, mayDeclareTypesNamed: content.withUTF8 { source in source.wordsFollowingTypeDeclarationKeywords })
+	}
+}
+
+/// The keywords that introduce a declaration of a type an extension can extend.
+private let typeDeclarationKeywords = ["enum", "struct", "class", "actor"].map { Array($0.utf8) }
+
+extension UInt8 {
+	/// Whether this byte can be part of an identifier: an ASCII letter, digit, or underscore, or a byte of a non-ASCII
+	/// character.
+	fileprivate var isIdentifierByte: Bool {
+		switch self {
+		case UInt8(ascii: "a")...UInt8(ascii: "z"), UInt8(ascii: "A")...UInt8(ascii: "Z"), UInt8(ascii: "0")...UInt8(ascii: "9"), UInt8(ascii: "_"), 0x80...:
+			true
+		default:
+			false
+		}
+	}
+
+	/// Whether this byte is ASCII whitespace.
+	fileprivate var isWhitespaceByte: Bool {
+		self == UInt8(ascii: " ") || self == UInt8(ascii: "\t") || self == UInt8(ascii: "\n") || self == UInt8(ascii: "\r")
 	}
 }
 
@@ -592,6 +764,35 @@ private let safeDIMarkers = [
 ].map { Array($0.utf8) }
 
 extension UnsafeBufferPointer<UInt8> {
+	/// Each word of these bytes, Swift source, that follows `enum`, `struct`, `class`, or `actor` and whitespace, the
+	/// keyword a whole word too: a word is a run of ASCII letters, digits, and underscores, and bytes of non-ASCII
+	/// characters, the bytes an identifier is spelled with. A comment or a string literal can hold such words too, so
+	/// these are a superset of the names of the types the source declares.
+	fileprivate var wordsFollowingTypeDeclarationKeywords: Set<String> {
+		var words = Set<String>()
+		var index = startIndex
+		// Whether the last word introduces a type declaration, and only whitespace followed it since.
+		var followsTypeKeyword = false
+		while index < endIndex {
+			if self[index].isIdentifierByte {
+				let wordStart = index
+				repeat {
+					index += 1
+				} while index < endIndex && self[index].isIdentifierByte
+				let word = UnsafeBufferPointer(rebasing: self[wordStart..<index])
+				if followsTypeKeyword {
+					words.insert(String(decoding: word, as: UTF8.self))
+				}
+				// Most words are not four to six bytes long, which the comparisons need not see.
+				followsTypeKeyword = (4...6).contains(word.count) && typeDeclarationKeywords.contains { $0.elementsEqual(word) }
+			} else {
+				followsTypeKeyword = followsTypeKeyword && self[index].isWhitespaceByte
+				index += 1
+			}
+		}
+		return words
+	}
+
 	/// Whether these bytes contain `bytes`, which must not be empty, in a row.
 	fileprivate func containsBytes(of bytes: [UInt8]) -> Bool {
 		guard var position = baseAddress else { return false }
@@ -635,6 +836,7 @@ private func walk(
 		importSegments: fileVisitor.importOnlyConsultedCompilationConditions.isEmpty ? [] : fileVisitor.importSegments,
 		importOnlyConsultedCompilationConditions: fileVisitor.importOnlyConsultedCompilationConditions,
 		outputFileDeclarations: fileVisitor.outputFileDeclarations,
+		plainTypeDeclarations: fileVisitor.plainTypeDeclarations,
 	)
 	.relocated(to: filePath)
 	return fileScan.declaresSafeDIContent ? fileScan : fileScan.replacingImports(with: [], mockImports: [])

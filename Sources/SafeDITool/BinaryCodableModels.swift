@@ -139,6 +139,7 @@ extension FileScan: BinarySchemaMember {
 				BinaryLayoutField("importSegments", \.importSegments),
 				BinaryLayoutField("importOnlyConsultedCompilationConditions", \.importOnlyConsultedCompilationConditions),
 				BinaryLayoutField("outputFileDeclarations", \.outputFileDeclarations),
+				BinaryLayoutField("plainTypeDeclarations", \.plainTypeDeclarations),
 			],
 			unwrittenProperties: [],
 		)
@@ -157,6 +158,7 @@ extension FileScan: BinarySchemaMember {
 			importSegments: reader.read(),
 			importOnlyConsultedCompilationConditions: reader.read(),
 			outputFileDeclarations: reader.read(),
+			plainTypeDeclarations: reader.read(),
 		)
 	}
 
@@ -172,6 +174,7 @@ extension FileScan: BinarySchemaMember {
 		writer.write(importSegments)
 		writer.write(importOnlyConsultedCompilationConditions)
 		writer.write(outputFileDeclarations)
+		writer.write(plainTypeDeclarations)
 	}
 }
 
@@ -184,6 +187,7 @@ extension OutputFileDeclarations: BinarySchemaMember {
 				BinaryLayoutField("declaresMockGeneratingType", \.declaresMockGeneratingType),
 				BinaryLayoutField("declaresConfiguration", \.declaresConfiguration),
 				BinaryLayoutField("instantiableTypeNames", \.instantiableTypeNames),
+				BinaryLayoutField("extendedTypeNames", \.extendedTypeNames),
 				BinaryLayoutField("additionalMocksToGenerate", \.additionalMocksToGenerate),
 				BinaryLayoutField("additionalDirectoriesToInclude", \.additionalDirectoriesToInclude),
 			],
@@ -198,6 +202,7 @@ extension OutputFileDeclarations: BinarySchemaMember {
 			declaresMockGeneratingType: reader.read(),
 			declaresConfiguration: reader.read(),
 			instantiableTypeNames: reader.read(),
+			extendedTypeNames: reader.read(),
 			additionalMocksToGenerate: reader.read(),
 			additionalDirectoriesToInclude: reader.read(),
 		)
@@ -209,6 +214,7 @@ extension OutputFileDeclarations: BinarySchemaMember {
 		writer.write(declaresMockGeneratingType)
 		writer.write(declaresConfiguration)
 		writer.write(instantiableTypeNames)
+		writer.write(extendedTypeNames)
 		writer.write(additionalMocksToGenerate)
 		writer.write(additionalDirectoriesToInclude)
 	}
@@ -228,6 +234,7 @@ extension ModuleInfo: BinarySchemaMember {
 				BinaryLayoutField("moduleName", \.moduleName),
 				BinaryLayoutField("packageName", \.packageName),
 				BinaryLayoutField("dependencyModuleNames", \.dependencyModuleNames),
+				BinaryLayoutField("plainTypeDeclarations", \.plainTypeDeclarations),
 			],
 			unwrittenProperties: [],
 		)
@@ -245,6 +252,7 @@ extension ModuleInfo: BinarySchemaMember {
 			moduleName: reader.read() as String?,
 			packageName: reader.read() as String?,
 			dependencyModuleNames: reader.read(),
+			plainTypeDeclarations: reader.read(),
 		)
 	}
 
@@ -259,6 +267,7 @@ extension ModuleInfo: BinarySchemaMember {
 		writer.write(moduleName)
 		writer.write(packageName)
 		writer.write(dependencyModuleNames)
+		writer.write(plainTypeDeclarations)
 	}
 }
 
@@ -529,6 +538,50 @@ extension Instantiable.DeclarationType: BinarySchemaMember {
 		case actorType
 		case structType
 		case extensionType
+	}
+}
+
+extension PlainTypeDeclaration: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("typeDescription", \.typeDescription),
+				BinaryLayoutField("access", \.access),
+				BinaryLayoutField("enclosingTypeAccess", \.enclosingTypeAccess),
+				BinaryLayoutField("moduleName", \.moduleName),
+				BinaryLayoutField("packageName", \.packageName),
+				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(
+			typeDescription: reader.read(),
+			access: reader.read(),
+			enclosingTypeAccess: reader.read(),
+			moduleName: reader.read() as String?,
+			packageName: reader.read() as String?,
+			sourceFilePath: reader.read() as String?,
+		)
+	}
+
+	/// A declaration's type nests one level for each type that encloses it. When that is too deep, the outermost type
+	/// enclosing it names it: spelling the declared type recurses as deeply as it nests.
+	func write(to writer: inout BinaryWriter) {
+		var outermostType = typeDescription
+		while let enclosingType = outermostType.popNested {
+			outermostType = enclosingType
+		}
+		writer.writeDescribed(as: outermostType.asSource) { writer in
+			writer.write(typeDescription)
+			writer.write(access)
+			writer.write(enclosingTypeAccess)
+			writer.write(moduleName)
+			writer.write(packageName)
+			writer.write(sourceFilePath)
+		}
 	}
 }
 
