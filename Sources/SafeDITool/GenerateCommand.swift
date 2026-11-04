@@ -319,6 +319,11 @@ struct Generate: AsyncParsableCommand {
 		} else {
 			[]
 		}
+		// The modules each module of the module info this run reads depends on directly, which that module's run read.
+		let dependencyModuleNamesByModuleName = Dictionary(
+			dependentModuleInfo.compactMap { dependentModule in dependentModule.moduleName.map { ($0, dependentModule.dependencyModuleNames) } },
+			uniquingKeysWith: { first, _ in first },
+		)
 		let seamResolution = try seamResolution(
 			normalizedInstantiables: normalizedInstantiables,
 			ownFilePaths: ownFilePaths,
@@ -363,6 +368,9 @@ struct Generate: AsyncParsableCommand {
 				},
 				additionalMocksToGenerateLocation: sourceConfiguration?.declarationLocation,
 				unnamedReason: unnamedReason,
+				moduleNamesReadByRunOfModule: { [membership] moduleName in
+					Self.moduleNamesRead(byRunOfModuleNamed: moduleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership)
+				},
 			),
 			seams: seamResolution,
 			plainTypeDeclarations: dependentModuleInfo.flatMap(\.plainTypeDeclarations) + module.plainTypeDeclarations,
@@ -917,7 +925,7 @@ struct Generate: AsyncParsableCommand {
 			} else {
 				// The module is in the target graph: a declaration's module is named only by the graph, or by the
 				// options, which name this run's own module.
-				let visibleModuleNames = visibleModuleNames(from: moduleName, in: membership)
+				let visibleModuleNames = Self.visibleModuleNames(from: moduleName, in: membership)
 				let instantiables = unnormalizedInstantiables.filter { $0.moduleName.map(visibleModuleNames.contains) == true }
 				// This run read the module's files under its own mock condition, while the module reads them under
 				// the one its own configuration names: of the configurations this run read, the one in a file the
@@ -979,7 +987,7 @@ struct Generate: AsyncParsableCommand {
 			if callersComputeFromTargetGraph {
 				// A declaration the graph places in no module is in a directory the configuration adds.
 				if unnormalizedInstantiables.contains(where: { $0.moduleName == nil }) || plainTypeDeclarations.contains(where: { $0.moduleName == nil }) {
-					let callersVisibleModuleNames = visibleModuleNames(from: moduleName, in: membership)
+					let callersVisibleModuleNames = Self.visibleModuleNames(from: moduleName, in: membership)
 					callersVisibleInstantiables = try resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: unnormalizedInstantiables.filter { $0.moduleName.map(callersVisibleModuleNames.contains) == true }))
 					callersVisiblePlainTypeDeclarations = plainTypeDeclarations.filter { $0.moduleName.map(callersVisibleModuleNames.contains) == true }
 				} else {
@@ -1028,10 +1036,28 @@ struct Generate: AsyncParsableCommand {
 		MockCondition(configuration.map(\.mockConditionalCompilation) ?? "DEBUG")
 	}
 
+	/// The modules whose declarations the run of `generate` for the module named `moduleName` reads, itself included, as
+	/// this run knows them: the modules whose module info that run read, which the module info this run reads for the
+	/// module names (`dependencyModuleNamesByModuleName`), or else, under the target graph, every module the module
+	/// depends on, directly or not, whose files that run's input CSV lists (`visibleModuleNames(from:in:)`). These are
+	/// the modules whose declarations `seamResolution` computes the signature of a seam the module declares from
+	/// (`visibleDeclarations(ofModuleNamed:)`).
+	private static func moduleNamesRead(
+		byRunOfModuleNamed moduleName: String,
+		dependencyModuleNamesByModuleName: [String: [String]],
+		membership: ModuleMembership?,
+	) -> Set<String> {
+		if let dependencyModuleNames = dependencyModuleNamesByModuleName[moduleName] {
+			Set([moduleName] + dependencyModuleNames)
+		} else {
+			visibleModuleNames(from: moduleName, in: membership)
+		}
+	}
+
 	/// The modules whose declarations a module named `moduleName` sees under the target graph `membership` describes:
 	/// itself and, transitively, the modules it depends on. The graph lists every module whose files it names
 	/// (`ModuleMembership.dependencyModuleNames(ofModuleNamed:)`).
-	private func visibleModuleNames(from moduleName: String, in membership: ModuleMembership?) -> Set<String> {
+	private static func visibleModuleNames(from moduleName: String, in membership: ModuleMembership?) -> Set<String> {
 		var visibleModuleNames: Set<String> = [moduleName]
 		var moduleNamesToVisit = [moduleName]
 		while let visitedModuleName = moduleNamesToVisit.popLast() {
