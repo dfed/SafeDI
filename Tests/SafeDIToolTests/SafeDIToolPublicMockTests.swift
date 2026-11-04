@@ -5310,6 +5310,359 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesNilToPublicMockCallInsideFill_whenInternalMockBuildsLabelAfterFillsCaller() async throws {
+		// `Screen` declares `filter` after `service`, and `AppFilter`, which builds `filter`, requires `service`, so `service`
+		// is built first. The call of `Cache`'s public mock inside `service`'s fill receives `filter` only if available, so it
+		// is passed `nil`, as the inline mock's `TokenCache` is, never the `filter` declared after it.
+		let modules = Self.fillReceivingLabelModules(app: Self.screenBuildingServiceBeforeFilter(generateMock: "true") + "\n\n" + Self.userServiceBuildingCache)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init(),
+		            filter: ((Service) -> FilterProtocol)? = nil
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		            self.filter = filter
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let filter: ((Service) -> FilterProtocol)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_service() -> Service {
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIMockScope_Service_userService) -> AnyUserService {
+		                let analytics = scope.analytics
+		                func __safeDI_userService() -> DefaultUserService {
+		                    let cache = Cache.mock(filter: nil)
+		                    return DefaultUserService(analytics: analytics, cache: cache)
+		                }
+		                let userService = AnyUserService(__safeDI_userService())
+		                return userService
+		            }
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        }
+		        let service: Service = __safeDI_service()
+		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        return Screen(analytics: analytics, service: service, filter: filter)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesNilToPublicMockCallInsideFill_whenPublicMockBuildsLabelAfterFillsCaller() async throws {
+		// The public mock of the cell above passes the call inside `service`'s fill `nil` too.
+		let modules = Self.fillReceivingLabelModules(app: Self.screenBuildingServiceBeforeFilter(generateMock: ".public") + "\n\n" + Self.userServiceBuildingCache)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    public struct SafeDIOverrides {
+		        public init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init(),
+		            filter: ((Service) -> FilterProtocol)? = nil
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		            self.filter = filter
+		        }
+
+		        public let analytics: (() -> Analytics)?
+		        public let service: Service.SafeDIOverrides
+		        public let filter: ((Service) -> FilterProtocol)?
+		    }
+
+		    public static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_service() -> Service {
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIMockScope_Service_userService) -> AnyUserService {
+		                let analytics = scope.analytics
+		                func __safeDI_userService() -> DefaultUserService {
+		                    let cache = Cache.mock(filter: nil)
+		                    return DefaultUserService(analytics: analytics, cache: cache)
+		                }
+		                let userService = AnyUserService(__safeDI_userService())
+		                return userService
+		            }
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        }
+		        let service: Service = __safeDI_service()
+		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        return Screen(analytics: analytics, service: service, filter: filter)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_mock_51799E6AA5E7B634 {}
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesLabelToPublicMockCallInsideFill_whenBuilderOfLabelReceivesFillsCallerOnlyIfAvailable() async throws {
+		// `AppFilter` receives `service` only if available, so `filter` is built first, passed `nil` for `service`, and the
+		// call inside `service`'s fill is passed `filter`, as the inline mock's `TokenCache` is.
+		let modules = Self.fillReceivingLabelModules(app: Self.screenBuildingServiceBeforeFilter(generateMock: "true", appFilterReceivesServiceOnlyIfAvailable: true) + "\n\n" + Self.userServiceBuildingCache)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            filter: ((Service?) -> FilterProtocol)? = nil,
+		            service: Service.SafeDIOverrides = .init()
+		        ) {
+		            self.analytics = analytics
+		            self.filter = filter
+		            self.service = service
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let filter: ((Service?) -> FilterProtocol)?
+		        let service: Service.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(nil) } else { AppFilter(service: nil) }
+		        func __safeDI_service() -> Service {
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIMockScope_Service_userService) -> AnyUserService {
+		                let analytics = scope.analytics
+		                func __safeDI_userService() -> DefaultUserService {
+		                    let cache = Cache.mock(filter: filter)
+		                    return DefaultUserService(analytics: analytics, cache: cache)
+		                }
+		                let userService = AnyUserService(__safeDI_userService())
+		                return userService
+		            }
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        }
+		        let service: Service = __safeDI_service()
+		        return Screen(analytics: analytics, service: service, filter: filter)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesEachPublicMockCallInsideFillsWhatItsCallerHolds_whenOneCallerIsBuiltBeforeLabelAndAnotherAfter() async throws {
+		// `Screen` builds `service` before `filter` and `laterService` after it, each with `Service`'s public mock, whose
+		// builder it fills with `DefaultUserService`. The call of `Cache`'s public mock in `service`'s fill is passed `nil`,
+		// and the one in `laterService`'s fill `filter`, as the inline mock's two `TokenCache`s are.
+		let modules = Self.fillReceivingLabelModules(app: Self.screenBuildingServiceBeforeFilter(generateMock: ".public", instantiatesLaterService: true) + "\n\n" + Self.userServiceBuildingCache)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    public struct SafeDIOverrides {
+		        public init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init(),
+		            filter: ((Service) -> FilterProtocol)? = nil,
+		            laterService: Service.SafeDIOverrides = .init()
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		            self.filter = filter
+		            self.laterService = laterService
+		        }
+
+		        public let analytics: (() -> Analytics)?
+		        public let service: Service.SafeDIOverrides
+		        public let filter: ((Service) -> FilterProtocol)?
+		        public let laterService: Service.SafeDIOverrides
+		    }
+
+		    public static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_service() -> Service {
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIMockScope_Service_userService) -> AnyUserService {
+		                let analytics = scope.analytics
+		                func __safeDI_userService() -> DefaultUserService {
+		                    let cache = Cache.mock(filter: nil)
+		                    return DefaultUserService(analytics: analytics, cache: cache)
+		                }
+		                let userService = AnyUserService(__safeDI_userService())
+		                return userService
+		            }
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        }
+		        let service: Service = __safeDI_service()
+		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        func __safeDI_laterService() -> Service {
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIMockScope_Service_userService) -> AnyUserService {
+		                let analytics = scope.analytics
+		                func __safeDI_userService() -> DefaultUserService {
+		                    let cache = Cache.mock(filter: filter)
+		                    return DefaultUserService(analytics: analytics, cache: cache)
+		                }
+		                let userService = AnyUserService(__safeDI_userService())
+		                return userService
+		            }
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.laterService)
+		        }
+		        let laterService: Service = __safeDI_laterService()
+		        return Screen(analytics: analytics, service: service, filter: filter, laterService: laterService)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_mock_51799E6AA5E7B634 {}
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesNilToPublicMockCallInsideNestedFill_whenMockBuildsLabelAfterOuterFillsCaller() async throws {
+		// `service`'s fill builds `DefaultUserService`, which builds `Board` with its public mock, whose builder `App` fills
+		// with `DefaultWidget`, which builds `cache` with `Cache`'s public mock: a fill inside a fill. `service` is built
+		// before `filter`, so the call two fills deep is passed `nil`, as the inline mock's `TokenCache` is.
+		let modules = Self.fillReceivingLabelModules(app: Self.screenBuildingServiceBeforeFilter(generateMock: "true") + "\n\n" + """
+		@Instantiable
+		public final class DefaultUserService: UserService, Instantiable {
+		    public init(analytics: Analytics, board: Board) {
+		        self.analytics = analytics
+		        self.board = board
+		    }
+
+		    @Received let analytics: Analytics
+		    @Instantiated let board: Board
+		}
+
+		@Instantiable
+		public final class DefaultWidget: Widget, Instantiable {
+		    public init(cache: Cache) {
+		        self.cache = cache
+		    }
+
+		    @Instantiated let cache: Cache
+		}
+		""")
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init(),
+		            filter: ((Service) -> FilterProtocol)? = nil
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		            self.filter = filter
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let filter: ((Service) -> FilterProtocol)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_service() -> Service {
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIMockScope_Service_userService) -> AnyUserService {
+		                let analytics = scope.analytics
+		                func __safeDI_userService() -> DefaultUserService {
+		                    func __safeDI_board() -> Board {
+		                        func __safeDI_widgetBuilder(_ scope: Board.SafeDIMockScope_Board_widget) -> AnyWidget {
+		                            func __safeDI_widget() -> DefaultWidget {
+		                                let cache = Cache.mock(filter: nil)
+		                                return DefaultWidget(cache: cache)
+		                            }
+		                            let widget = AnyWidget(__safeDI_widget())
+		                            return widget
+		                        }
+		                        return Board.mock(widgetBuilder: __safeDI_widgetBuilder)
+		                    }
+		                    let board: Board = __safeDI_board()
+		                    return DefaultUserService(analytics: analytics, board: board)
+		                }
+		                let userService = AnyUserService(__safeDI_userService())
+		                return userService
+		            }
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        }
+		        let service: Service = __safeDI_service()
+		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        return Screen(analytics: analytics, service: service, filter: filter)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesInstanceToPublicMockCallInsideFill_whenMockTreeDeclaresLabelAsLazilyInstantiated() async throws {
 		// `Screen` instantiates `filter` as `LazilyInstantiated<any FilterProtocol>`, so the call of `Cache`'s public mock
 		// inside the fill, which takes `filter` by value, is passed its instance, as a call outside a fill is and as the
@@ -8653,6 +9006,55 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 		"""
 	}
+
+	/// `Screen`, with a mock as `generateMock` says, which instantiates `analytics`, `service`, then `filter: any
+	/// FilterProtocol` and, when `instantiatesLaterService`, `laterService: Service`; and `AppFilter`, which fulfills
+	/// `FilterProtocol` and receives `service`, only if available when `appFilterReceivesServiceOnlyIfAvailable` and
+	/// otherwise required, so that `service` is built before `filter`.
+	private static func screenBuildingServiceBeforeFilter(generateMock: String, appFilterReceivesServiceOnlyIfAvailable: Bool = false, instantiatesLaterService: Bool = false) -> String {
+		var properties = [(label: "analytics", type: "Analytics"), (label: "service", type: "Service"), (label: "filter", type: "any FilterProtocol")]
+		if instantiatesLaterService {
+			properties.append((label: "laterService", type: "Service"))
+		}
+		let serviceType = appFilterReceivesServiceOnlyIfAvailable ? "Service?" : "Service"
+		let serviceDecorator = appFilterReceivesServiceOnlyIfAvailable ? "@Received(onlyIfAvailable: true)" : "@Received"
+		return """
+		import Core
+
+		@Instantiable(generateMock: \(generateMock))
+		public final class Screen: Instantiable {
+		    public init(\(properties.map { "\($0.label): \($0.type)" }.joined(separator: ", "))) {
+		\(properties.map { "        self.\($0.label) = \($0.label)" }.joined(separator: "\n"))
+		    }
+
+		\(properties.map { "    @Instantiated let \($0.label): \($0.type)" }.joined(separator: "\n"))
+		}
+
+		@Instantiable(fulfillingAdditionalTypes: [FilterProtocol.self])
+		public final class AppFilter: Instantiable, FilterProtocol {
+		    public init(service: \(serviceType)) {
+		        self.service = service
+		    }
+
+		    \(serviceDecorator) let service: \(serviceType)
+		}
+		"""
+	}
+
+	/// `DefaultUserService`, which fulfills `Service`'s hole, receives `analytics` and builds `cache` with `Cache`'s public
+	/// mock.
+	private static let userServiceBuildingCache = """
+	@Instantiable
+	public final class DefaultUserService: UserService, Instantiable {
+	    public init(analytics: Analytics, cache: Cache) {
+	        self.analytics = analytics
+	        self.cache = cache
+	    }
+
+	    @Received let analytics: Analytics
+	    @Instantiated let cache: Cache
+	}
+	"""
 
 	/// A `FilterProtocol` no `@Instantiable` declares, which the value comparison passes as `filter`.
 	private static let fillReceivingLabelProbeFilter = """

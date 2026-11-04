@@ -2191,17 +2191,27 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	}
 
 	/// For a scope that calls another module's public mock and fills its builders, the code of the fills, which a mock
-	/// declares before the call: each builds the hole's property as the module that declares the fulfilling type builds
-	/// it. Empty until `prepareFillCode()` returns.
-	private(set) var fillCode = [String]()
+	/// declares before the call, by the `propertiesGeneratedLater` the fills are generated with: each builds the hole's
+	/// property as the module that declares the fulfilling type builds it. Empty until
+	/// `prepareFillCode(propertiesGeneratedLater:)` returns.
+	private var fillCodeByPropertiesGeneratedLater = [Set<Property>: [String]]()
 
-	/// Generates `fillCode`, which a mock's emission reads and cannot throw.
-	func prepareFillCode() async throws {
-		fillCode = try await generateProperties(
-			propertiesGeneratedLater: [],
+	/// Generates the code of the fills with `propertiesGeneratedLater`, those of the body of the builder function of the
+	/// node that makes the call (see `MockParameterNode.fillPropertiesGeneratedLater`), which a mock's emission reads
+	/// (`fillCode(propertiesGeneratedLater:)`) and cannot throw. A receive inside a fill of a property the scopes
+	/// enclosing the call generate after it is then passed `nil`, as it is outside a fill, rather than a binding declared
+	/// after the fill.
+	func prepareFillCode(propertiesGeneratedLater: Set<Property>) async throws {
+		fillCodeByPropertiesGeneratedLater[propertiesGeneratedLater] = try await generateProperties(
+			propertiesGeneratedLater: propertiesGeneratedLater,
 			enclosingFunctionNames: [:],
 			leadingMemberWhitespace: "",
 		)
+	}
+
+	/// The code of the fills `prepareFillCode(propertiesGeneratedLater:)` generated with `propertiesGeneratedLater`.
+	func fillCode(propertiesGeneratedLater: Set<Property>) -> [String] {
+		fillCodeByPropertiesGeneratedLater[propertiesGeneratedLater, default: []]
 	}
 
 	private struct UnavailablePropertiesCacheKey: Hashable {
@@ -4368,8 +4378,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 			lines.append(contentsOf: lazilyInstantiatedBindings)
 			lines.append(contentsOf: rootReceiverBindings)
-			for fillingGenerator in rootItems.fillingGenerators {
-				try await fillingGenerator.prepareFillCode()
+			for (fillingGenerator, propertiesGeneratedLater) in rootItems.fillingGenerators {
+				try await fillingGenerator.prepareFillCode(propertiesGeneratedLater: propertiesGeneratedLater)
 			}
 			let bodyBindings = await Self.generateMockBodyBindings(
 				items: rootItems,
@@ -4693,10 +4703,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// `@Sendable` builder function, made before the function is declared (`SeamHoles.stageCalls(at:)`).
 		let stageCalls: [String]
 		/// For a node that calls another module's public mock and fills some of its builders, the generator of the call,
-		/// which holds the fills' code (`ScopeGenerator.fillCode`), and what the call passes each builder it fills, by
-		/// label.
+		/// which holds the fills' code (`ScopeGenerator.fillCode(propertiesGeneratedLater:)`), and what the call passes
+		/// each builder it fills, by label.
 		let fillingGenerator: ScopeGenerator?
 		let holeArgumentValuesByLabel: [String: String]
+		/// The `propertiesGeneratedLater` of the body of this node's builder function, which declares the fills of
+		/// `fillingGenerator` beside the node's children: the fills are generated with them, as production generates a
+		/// seam call's fills, so a receive inside one of a property generated after the call is passed `nil`. Read only
+		/// for a node with a `fillingGenerator`.
+		let fillPropertiesGeneratedLater: Set<Property>
 		/// The names of the fills of enclosing calls that calls in this node's subtree refer to (see
 		/// `ScopeGenerator.referencedFillNamesByKey`), which no builder function declared around them may share.
 		let referencedFillNames: Set<String>
@@ -5427,6 +5442,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					stageCalls: childGenerator.stageCallsBeforeBuilderFunction,
 					fillingGenerator: childGenerator.holeArgumentValuesByLabel.isEmpty ? nil : childGenerator,
 					holeArgumentValuesByLabel: childGenerator.holeArgumentValuesByLabel,
+					fillPropertiesGeneratedLater: childBodyPropertiesGeneratedLater,
 					referencedFillNames: Set(childGenerator.referencedFillNamesByKey.values),
 					forwardedProperties: forwardedProperties,
 					isPropertyCycle: isPropertyCycle,
@@ -6679,7 +6695,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	private static func callPreamble(of node: MockParameterNode, indent: String) async -> [String] {
 		guard let fillingGenerator = node.fillingGenerator, let publicMockCall = node.publicMockCall else { return [] }
 		var lines = [String]()
-		for line in await fillingGenerator.fillCode.joined(separator: "\n").split(separator: "\n", omittingEmptySubsequences: false) {
+		for line in await fillingGenerator.fillCode(propertiesGeneratedLater: node.fillPropertiesGeneratedLater).joined(separator: "\n").split(separator: "\n", omittingEmptySubsequences: false) {
 			lines.append(line.isEmpty ? "" : "\(indent)\(line)")
 		}
 		lines.append("\(indent)\(publicMockCall.guardLine(for: node.concreteType))")
@@ -7060,14 +7076,15 @@ extension [ScopeGenerator.MockTreeItem] {
 	}
 
 	/// The generators of the calls of other modules' public mocks in the tree of these items that fill builders
-	/// (`ScopeGenerator.MockParameterNode.fillingGenerator`).
-	var fillingGenerators: [ScopeGenerator] {
-		var fillingGenerators = [ScopeGenerator]()
+	/// (`ScopeGenerator.MockParameterNode.fillingGenerator`), each with the `propertiesGeneratedLater` its node generates
+	/// the fills with (`ScopeGenerator.MockParameterNode.fillPropertiesGeneratedLater`).
+	var fillingGenerators: [(generator: ScopeGenerator, propertiesGeneratedLater: Set<Property>)] {
+		var fillingGenerators = [(generator: ScopeGenerator, propertiesGeneratedLater: Set<Property>)]()
 		// A stack of its own, since a mock tree can be as deep as the module has types.
 		var nodesToVisit = propertyNodes
 		while let node = nodesToVisit.popLast() {
 			if let fillingGenerator = node.fillingGenerator {
-				fillingGenerators.append(fillingGenerator)
+				fillingGenerators.append((fillingGenerator, node.fillPropertiesGeneratedLater))
 			}
 			nodesToVisit.append(contentsOf: node.propertyChildren)
 		}
