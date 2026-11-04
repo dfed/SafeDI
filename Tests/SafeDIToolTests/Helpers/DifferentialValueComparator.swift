@@ -176,13 +176,28 @@ struct DifferentialValueProbe: Equatable {
 		self.init(name: expression, expression: expression)
 	}
 
-	init(name: String, expression: String) {
+	/// - Parameter knownRightExpression: The expression the known-right path evaluates instead, where the two paths
+	///   take the same value through different declarations, such as a public mock's parameter and an internal mock's
+	///   override; `nil` when both evaluate `expression`.
+	init(name: String, expression: String, knownRightExpression: String? = nil) {
 		self.name = name
 		self.expression = expression
+		self.knownRightExpression = knownRightExpression
 	}
 
 	let name: String
 	let expression: String
+	let knownRightExpression: String?
+
+	/// The expression the path in `role` evaluates.
+	func expression(in role: DifferentialValuePathRole?) -> String {
+		switch role {
+		case .knownRight:
+			knownRightExpression ?? expression
+		case .feature, nil:
+			expression
+		}
+	}
 }
 
 /// Two Swift expressions that build one value in one path, by two ways the path holds side by side, such as a type's
@@ -744,7 +759,7 @@ enum DifferentialValueOracle {
 		}
 
 		let probesFile = directory.appendingPathComponent("main.swift")
-		try probesSource(moduleNames: path.modules.map(\.name), probeGroups: probeGroups, limits: limits).write(to: probesFile, atomically: true, encoding: .utf8)
+		try probesSource(moduleNames: path.modules.map(\.name), role: role, probeGroups: probeGroups, limits: limits).write(to: probesFile, atomically: true, encoding: .utf8)
 		let executable = directory.appendingPathComponent("probes")
 		var linkArguments = swiftCompilerCommand.arguments + [
 			"-o", executable.path,
@@ -795,14 +810,14 @@ enum DifferentialValueOracle {
 			: output
 	}
 
-	/// The `main.swift` of a path's probe executable: a call describing each probe, each graph's probes after a call
-	/// that begins the graph.
-	private static func probesSource(moduleNames: [String], probeGroups: [[DifferentialValueProbe]], limits: DifferentialValueLimits) -> String {
+	/// The `main.swift` of a path's probe executable: a call describing each probe, with the expression the path in
+	/// `role` evaluates, each graph's probes after a call that begins the graph.
+	private static func probesSource(moduleNames: [String], role: DifferentialValuePathRole?, probeGroups: [[DifferentialValueProbe]], limits: DifferentialValueLimits) -> String {
 		let imports = moduleNames.map { "@testable import \($0)" }.joined(separator: "\n")
 		let moduleNameLiterals = moduleNames.map(swiftStringLiteral(of:)).joined(separator: ", ")
 		let probeCalls = probeGroups.map { probes in
 			(["describer.beginGraph()"] + probes.map { probe in
-				"describer.describe(probe: \(swiftStringLiteral(of: probe.name))) { (\(probe.expression)) as Any }"
+				"describer.describe(probe: \(swiftStringLiteral(of: probe.name))) { (\(probe.expression(in: role))) as Any }"
 			}).joined(separator: "\n")
 		}.joined(separator: "\n")
 		return """
