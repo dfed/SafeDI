@@ -71,18 +71,24 @@ public actor DependencyTreeGenerator {
 		///     generated mock is reported when the declaration that must change cannot be read.
 		///   - unnamedReason: Why SafeDITool does not know the module's name, exactly when `identity` names no module,
 		///     or `nil` when it knows the name.
+		///   - moduleNamesReadByRunOfModule: The modules whose declarations the run of `generate` for the named module
+		///     reads, itself included, from which it would build the tree of a seam it declares: a seam candidate's
+		///     module keeps a construction out of this module only when it reads the declaration of every type on the
+		///     path from the candidate to it (`SeamCandidateOnPaths`).
 		public init(
 			identity: ModuleIdentity,
 			isOwnFile: @escaping @Sendable (String) -> Bool,
 			isReadableFile: @escaping @Sendable (String) -> Bool,
 			additionalMocksToGenerateLocation: Dependency.DeclarationLocation?,
 			unnamedReason: UnnamedReason?,
+			moduleNamesReadByRunOfModule: @escaping @Sendable (_ moduleName: String) -> Set<String>,
 		) {
 			self.identity = identity
 			self.isOwnFile = isOwnFile
 			self.isReadableFile = isReadableFile
 			self.additionalMocksToGenerateLocation = additionalMocksToGenerateLocation
 			self.unnamedReason = unnamedReason
+			self.moduleNamesReadByRunOfModule = moduleNamesReadByRunOfModule
 		}
 
 		/// Why SafeDITool does not know the name of the module the generated code compiles in, which decides the remedy
@@ -103,6 +109,7 @@ public actor DependencyTreeGenerator {
 		let isReadableFile: @Sendable (String) -> Bool
 		let additionalMocksToGenerateLocation: Dependency.DeclarationLocation?
 		let unnamedReason: UnnamedReason?
+		let moduleNamesReadByRunOfModule: @Sendable (_ moduleName: String) -> Set<String>
 	}
 
 	public struct GeneratedRoot: Sendable {
@@ -2984,7 +2991,11 @@ public actor DependencyTreeGenerator {
 	/// the outermost type – the first met from the root, the construction's own type included – that a module SafeDI
 	/// knows, other than this one, declares. Declaring that type with `generateDependencyTree: true` has its module
 	/// build the type's tree, and this module call the initializer generated for it, so it keeps the construction out
-	/// of this module only when every path passes through it. That initializer's widest tier is at the candidate type's
+	/// of this module only when every path passes through it, and only when that module's own run of `generate` reads
+	/// the declaration of every type on each path from the candidate to the construction, the construction's own type
+	/// included (`EmittingModule.moduleNamesReadByRunOfModule`): it builds the tree from those declarations, as this
+	/// run computes the seam's signature from them, and takes a builder for a type it does not see, which this module
+	/// fills, building that type and its tree itself. That initializer's widest tier is at the candidate type's
 	/// access, and it builds the tree, calls the candidate's own initializer, and takes each property the tree receives
 	/// from above the candidate as a parameter as visible as the types it names, capped at the candidate's type, so
 	/// every initializer of the tree, the one of a type that receives such a property included, is called inside the
@@ -2997,9 +3008,11 @@ public actor DependencyTreeGenerator {
 	/// construction's errors offer no remedy. A `mockOnly` declaration is in no production tree. Mocks build every tree
 	/// inline, so a mock's constructions have no candidate.
 	private enum SeamCandidateOnPaths: Equatable {
-		/// Every path walked so far has this candidate, or none has one (`nil`).
+		/// Every path walked so far has this candidate, whose module reads every type on the path from it, or none has
+		/// one (`nil`).
 		case agreed(Instantiable?)
-		/// Two paths have different candidates, or one has a candidate and another none.
+		/// Two paths have different candidates, one has a candidate and another none, or a path from its candidate builds
+		/// a type whose declaration the candidate's module does not read.
 		case disagreed
 
 		/// The candidate every path has, if any.
@@ -3013,11 +3026,16 @@ public actor DependencyTreeGenerator {
 		}
 
 		/// What the paths through a scope decide for its child `child`, which is a candidate on a path that has none
-		/// above it when `childIsCandidate` is set.
-		func extended(to child: Instantiable, childIsCandidate: Bool) -> SeamCandidateOnPaths {
+		/// above it when `childIsCandidate` is set, and whose declaration a candidate's module reads when
+		/// `candidatesModuleReads` says so.
+		func extended(
+			to child: Instantiable,
+			childIsCandidate: Bool,
+			candidatesModuleReads: (_ child: Instantiable, _ candidate: Instantiable) -> Bool,
+		) -> SeamCandidateOnPaths {
 			switch self {
-			case .agreed(.some):
-				self
+			case let .agreed(.some(candidate)):
+				candidatesModuleReads(child, candidate) ? self : .disagreed
 			case .agreed(.none):
 				.agreed(childIsCandidate ? child : nil)
 			case .disagreed:
@@ -3045,12 +3063,12 @@ public actor DependencyTreeGenerator {
 	/// candidate extends, of which the generated initializer is no more visible. It is so for any declaration when the
 	/// candidate builds no tree (`buildsTree(_:)`): SafeDI then generates no initializer for it, and its callers call its
 	/// own; such a candidate, a leaf or a type an extension declares, is the candidate of its own construction alone. And
-	/// it is so for a declaration outside the candidate's module, or one the candidate's module cannot reach: SafeDI does
-	/// not know which modules the candidate's module sees, and a type of a module it does not see, such as an
-	/// implementation of a protocol that a module depending on it provides, is still built in this module, which fills
-	/// the builder the seam would take for it. Any other
-	/// declaration – the candidate's own initializer, or one of a type in its tree, including one that receives a
-	/// property from above the candidate – is called only inside the candidate's module. A required parameter whose type
+	/// it is so for a declaration the candidate's module cannot reach. A path from the candidate through a type whose
+	/// declaration the candidate's module does not read, such as an implementation of a protocol that a module depending
+	/// on it provides, decides no candidate (`SeamCandidateOnPaths`): the seam would take a builder for that type, which
+	/// this module fills. Any other declaration – the candidate's own initializer, or one of a type in its tree, in the
+	/// candidate's module or another it reads, including one that receives a property from above the candidate – is
+	/// called only inside the candidate's module. A required parameter whose type
 	/// is narrower than the candidate's type makes the declared seam an error in its own module
 	/// (`tierOmitsRequiredParameter`), which says what to narrow or widen, never at this declaration.
 	/// - Parameter extendedTypes: The declarations the module reads, among which the declaration of a type an extension
@@ -3063,7 +3081,6 @@ public actor DependencyTreeGenerator {
 	) -> DependencyTreeGeneratorError.InaccessibleConstruction.SeamRemedy? {
 		guard buildsTree(candidate),
 		      let moduleName = candidate.moduleName,
-		      declaringModule.moduleName == moduleName,
 		      !(seamLeafAccessNeeds(of: candidate) + extendedTypeAccessNeeds(of: candidate, in: extendedTypes)).contains(where: { $0.access == accessNeed.access }),
 		      accessNeed.level.satisfies(AccessLevel.required(
 		      	toConstructFrom: ModuleIdentity(moduleName: moduleName, packageName: candidate.packageName),
@@ -3111,6 +3128,15 @@ public actor DependencyTreeGenerator {
 		func isSeamCandidate(_ instantiable: Instantiable) -> Bool {
 			guard !isMock, let moduleName = instantiable.moduleName else { return false }
 			return moduleName != emittingModule.identity.moduleName
+		}
+		var moduleNamesReadByModuleName = [String: Set<String>]()
+		/// Whether the run of `generate` for `candidate`'s module reads the declaration of `child`, a type on a path from
+		/// `candidate`: see `SeamCandidateOnPaths`. A type whose module SafeDI does not know is read by no other module.
+		func candidatesModuleReads(_ child: Instantiable, _ candidate: Instantiable) -> Bool {
+			guard let childModuleName = child.moduleName, let candidateModuleName = candidate.moduleName else { return false }
+			let moduleNamesRead = moduleNamesReadByModuleName[candidateModuleName] ?? emittingModule.moduleNamesReadByRunOfModule(candidateModuleName)
+			moduleNamesReadByModuleName[candidateModuleName] = moduleNamesRead
+			return moduleNamesRead.contains(childModuleName)
 		}
 		/// The seam that `scope` builds inline, referred to at `referenceLocation`, when the tree is a production tree of a
 		/// module SafeDI cannot name and another module declares the seam: see `Construction.inlineSeam`.
@@ -3185,7 +3211,7 @@ public actor DependencyTreeGenerator {
 					usesMockMethod: isMock && childScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType),
 					referenceLocation: childReferenceLocation,
 					// Every path to the child through this scope extends a path to this scope.
-					seamCandidateOnPaths: mergedSeamCandidateOnPaths.extended(to: childScope.instantiable, childIsCandidate: isSeamCandidate(childScope.instantiable)),
+					seamCandidateOnPaths: mergedSeamCandidateOnPaths.extended(to: childScope.instantiable, childIsCandidate: isSeamCandidate(childScope.instantiable), candidatesModuleReads: candidatesModuleReads),
 					inlineSeamOnPath: inlineSeamOnPath ?? inlineSeam(builtBy: childScope, referencedAt: childReferenceLocation),
 					publicMockCandidate: publicMockCandidate ?? candidate(of: childScope.instantiable),
 				))
@@ -3205,7 +3231,7 @@ public actor DependencyTreeGenerator {
 						scope: fillScope,
 						usesMockMethod: false,
 						referenceLocation: referenceLocation,
-						seamCandidateOnPaths: SeamCandidateOnPaths.agreed(nil).extended(to: fillScope.instantiable, childIsCandidate: isSeamCandidate(fillScope.instantiable)),
+						seamCandidateOnPaths: SeamCandidateOnPaths.agreed(nil).extended(to: fillScope.instantiable, childIsCandidate: isSeamCandidate(fillScope.instantiable), candidatesModuleReads: candidatesModuleReads),
 						inlineSeamOnPath: inlineSeamOnPath ?? inlineSeam(builtBy: fillScope, referencedAt: referenceLocation),
 						publicMockCandidate: nil,
 					))
@@ -3274,7 +3300,7 @@ public actor DependencyTreeGenerator {
 				moduleInfoMissingErrors.append(.publicMockModuleInfoMissing(type: type, moduleName: moduleName, missingModuleName: missingModuleName, referenceLocation: referenceLocation))
 				continue
 			}
-			guard let ownPlan = try await foreignPublicMockPlan(of: type, declaredBy: foreignPublicMock) else { continue }
+			guard let ownPlan = try await foreignPublicMockPlan(of: type, declaredBy: foreignPublicMock, moduleNamesReadByRunOfModule: emittingModule.moduleNamesReadByRunOfModule) else { continue }
 			let requirement = AccessLevel.required(toConstructFrom: emittingModule.identity, declaredIn: foreignPublicMock.declaringModule, isOwnFile: false)
 			// The narrowest tier the module reaches: every module reaches the `public` one.
 			let tier = ownPlan.plan.tiers.last { $0.satisfies(requirement) } ?? .public
@@ -3338,7 +3364,12 @@ public actor DependencyTreeGenerator {
 	/// The plan of the public mock that `foreignPublicMock`'s module generated for `type`, computed as that module
 	/// computed it, from the declarations it sees; `nil` when that module could not generate it, which its own run
 	/// reports, or when a module it depends on was not given to this run.
-	private func foreignPublicMockPlan(of type: TypeDescription, declaredBy foreignPublicMock: SeamResolution.ForeignPublicMock) async throws -> OwnPublicMockPlan? {
+	/// - Parameter moduleNamesReadByRunOfModule: See `EmittingModule.init`.
+	private func foreignPublicMockPlan(
+		of type: TypeDescription,
+		declaredBy foreignPublicMock: SeamResolution.ForeignPublicMock,
+		moduleNamesReadByRunOfModule: @escaping @Sendable (_ moduleName: String) -> Set<String>,
+	) async throws -> OwnPublicMockPlan? {
 		guard let moduleName = foreignPublicMock.declaringModule.moduleName,
 		      foreignPublicMock.missingDependencyModuleName == nil
 		else { return nil }
@@ -3359,6 +3390,7 @@ public actor DependencyTreeGenerator {
 					additionalMocksToGenerateLocation: nil,
 					// The guard above found the declaring module's name.
 					unnamedReason: nil,
+					moduleNamesReadByRunOfModule: moduleNamesReadByRunOfModule,
 				),
 				// The public mocks of the modules the declaring module sees, which its mock trees call in turn.
 				seams: SeamResolution(

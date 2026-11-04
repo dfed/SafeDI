@@ -793,6 +793,324 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: ThirdModuleReach.cellsWhereCoreReadsBase)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_offersSeamForDeclarationOfThirdModule_whenCandidatesModuleReadsThatModule(reach: ThirdModuleReach, integration: MultiModuleIntegration) async {
+		// `Core`'s own run reads `Base`'s declarations, so declared a seam, `Service` has `Core` build `Formatter`, whose
+		// `package` initializer `Core`, in `Base`'s package, can call, and `App` calls the initializer `Core` generates
+		// (`generate_callsSeamBuildingDeclarationOfThirdModule_whenOfferedSeamIsDeclared`).
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let formatterPath = Self.declarationPath(of: "Formatter.swift", in: "Base", fixtures: fixtures, under: integration)
+			return """
+			\(formatterPath):3:5: error: `Formatter`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix\(Self.seamRemedy(declaring: "Service", in: "Core")).
+			\(formatterPath):3:5-3:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesBuildingFormatterThroughService(reach: reach, serviceAttribute: "@Instantiable"),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: ThirdModuleReach.cellsWhereCoreReadsBase)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsSeamBuildingDeclarationOfThirdModule_whenOfferedSeamIsDeclared(reach: ThirdModuleReach, integration: MultiModuleIntegration) async throws {
+		// The remedy `generate_offersSeamForDeclarationOfThirdModule_whenCandidatesModuleReadsThatModule` offers, applied
+		// with nothing else changed: `Core` builds `Formatter` in the initializer it generates for `Service`, which `App`
+		// calls, and every module compiles.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesBuildingFormatterThroughService(reach: reach, serviceAttribute: "@Instantiable(generateDependencyTree: true)"),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		let seamCode = """
+		extension Service {
+		    public convenience init() {
+		        let formatter = Formatter()
+		        self.init(formatter: formatter)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_CBF29CE484222325 {}
+		}
+		"""
+		let pluginComment = integration == .swiftPackagePlugin ? " // If this line does not compile, add the SafeDI plugin to the target that declares Service." : ""
+		let rootCode = """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_CBF29CE484222325.self\(pluginComment)
+		            return Service()
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(service: service)
+		    }
+		}
+		"""
+		let coreFile = generatedFileHeader + reach.importBlocksOfCoresGeneratedFile + "\n\n" + seamCode
+		let appFile = generatedFileHeader + reach.importBlocksOfAppsGeneratedFile + "\n\n" + rootCode
+		switch integration {
+		case .moduleInfo:
+			#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": coreFile])
+			#expect(output.modules["App"]?.generatedFiles == ["App.swift": appFile])
+		case .swiftPackagePlugin:
+			#expect(output.modules["Core"]?.generatedFiles == ["Service+SafeDI.swift": coreFile])
+			#expect(output.modules["App"]?.generatedFiles == ["Root+SafeDI.swift": appFile])
+		}
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: ThirdModuleReach.cellsWhereCoreDoesNotReadBase)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_offersNoSeamForDeclarationOfThirdModule_whenCandidatesModuleDoesNotReadThatModule(reach: ThirdModuleReach, integration: MultiModuleIntegration) async {
+		// `Core` imports `Base`, or a module that re-exports it, but its own run is given only the module info of the
+		// modules it depends on directly, which `Base` is not, so declared a seam, `Service` would take a builder for
+		// `Formatter`, which `App` would still fill
+		// (`generate_throwsErrorAtDeclarationOfThirdModule_whenSeamWhoseModuleDoesNotReadThatModuleIsDeclared`).
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let formatterPath = Self.declarationPath(of: "Formatter.swift", in: "Base", fixtures: fixtures, under: integration)
+			return """
+			\(formatterPath):3:5: error: `Formatter`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(formatterPath):3:5-3:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesBuildingFormatterThroughService(reach: reach, serviceAttribute: "@Instantiable"),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: ThirdModuleReach.cellsWhereCoreDoesNotReadBase)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtDeclarationOfThirdModule_whenSeamWhoseModuleDoesNotReadThatModuleIsDeclared(reach: ThirdModuleReach, integration: MultiModuleIntegration) async {
+		// The seam `generate_offersNoSeamForDeclarationOfThirdModule_whenCandidatesModuleDoesNotReadThatModule` withholds,
+		// declared anyway: `Core` sees no `@Instantiable` declaration of `Formatter`, so `App` fills the builder the seam
+		// takes for it and still calls `Formatter`'s initializer. `Formatter` builds no tree, so no seam is offered.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let formatterPath = Self.declarationPath(of: "Formatter.swift", in: "Base", fixtures: fixtures, under: integration)
+			return """
+			\(formatterPath):3:5: error: `Formatter`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(formatterPath):3:5-3:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesBuildingFormatterThroughService(reach: reach, serviceAttribute: "@Instantiable(generateDependencyTree: true)"),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: FormatterConstruction.neighborsOfConstant, MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_offersSeamForDeclarationOfThirdModule_whenCandidatesTreeBuildsItThroughWrapperExistentialNestingOrTypeOfCandidatesModule(construction: FormatterConstruction, integration: MultiModuleIntegration) async {
+		// However `Service`'s tree builds `Formatter`, `Core`'s own run reads `Base`, which it depends on and imports.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let formatterPath = Self.declarationPath(of: "Formatter.swift", in: "Base", fixtures: fixtures, under: integration)
+			let (line, column) = construction.initializerLocation
+			return """
+			\(formatterPath):\(line):\(column): error: `\(construction.formatterType)`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix\(Self.seamRemedy(declaring: "Service", in: "Core")).
+			\(formatterPath):\(line):\(column)-\(line):\(column + 7): fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesBuildingFormatterThroughService(reach: .importsDependency, construction: construction, serviceAttribute: "@Instantiable"),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_offersNoSeamForDeclarationOfThirdModule_whenAnotherPathConstructsItWithoutPassingThroughCandidate(integration: MultiModuleIntegration) async {
+		// `Root` instantiates `Formatter` beside `Service`, so declaring `Service` a seam would leave a construction of
+		// `Formatter` in `App`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let formatterPath = Self.declarationPath(of: "Formatter.swift", in: "Base", fixtures: fixtures, under: integration)
+			return """
+			\(formatterPath):3:5: error: `Formatter`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(formatterPath):3:5-3:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Array(Self.modulesBuildingFormatterThroughService(reach: .importsDependency, serviceAttribute: "@Instantiable").dropLast()) + [
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContentByFilePath: [
+							"Root.swift": TokenCacheConstruction.type(declaredAs: "import Base\n\n@Instantiable(isRoot: true)\nfinal class Root", initializerModifier: "", instantiating: ["service: Service", "formatter: Formatter"], importing: "Core"),
+						],
+						dependencies: ["Base", "Core"],
+					),
+				],
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_offersNoSeamForPackageDeclarationOfThirdModule_whenThatModuleIsInAnotherPackageThanCandidatesModule(integration: MultiModuleIntegration) async {
+		// `Core` reads `Base`, but `Base` is in a package of its own, so `Core` can no more call `Formatter`'s `package`
+		// initializer than `App` can.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let formatterPath = Self.declarationPath(of: "Formatter.swift", in: "Base", fixtures: fixtures, under: integration)
+			return """
+			\(formatterPath):3:5: error: `Formatter`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(formatterPath):3:5-3:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesBuildingFormatterThroughService(reach: .importsDependency, basePackageName: "Formats", serviceAttribute: "@Instantiable"),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_offersNoSeam_whenPathFromCandidatePassesThroughTypeOfModuleCandidatesModuleDoesNotRead(integration: MultiModuleIntegration) async {
+		// `Service`'s tree reaches `Feature`'s own `Cache` through `DefaultUserService`, which fulfills `UserService` in
+		// `FeatureImpl`, a module that depends on `Feature`. Declared a seam, `Service` would take a builder for
+		// `UserService`, which `App` would fill, building `Cache` itself
+		// (`generate_offersFillsTypeAsSeam_whenFillsTreeBuildsDeclarationOfModuleFillsModuleReads`).
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let servicePath = Self.declarationPath(of: "Service.swift", in: "Feature", fixtures: fixtures, under: integration)
+			return """
+			\(servicePath):5:5: error: `Cache`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(servicePath):5:5-5:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesFillingServiceWithImplementationBuildingCache(seams: []),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_offersNoSeam_whenPathFromCandidatePassesThroughTypeOfModuleSafeDIDoesNotKnow(integration: MultiModuleIntegration) async {
+		// `App` reads `DefaultUserService`, which fulfills `UserService` and builds `Feature`'s own `Cache`, through
+		// `additionalDirectoriesToInclude`, so SafeDI knows no module that declares it, and no other module's run reads it.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let servicePath = Self.declarationPath(of: "Service.swift", in: "Feature", fixtures: fixtures, under: integration)
+			return """
+			\(servicePath):5:5: error: `Cache`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(servicePath):5:5-5:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesFillingServiceWithImplementationBuildingCache(seams: [], appReadsImplementationThroughAdditionalDirectory: true),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_offersFillsTypeAsSeam_whenFillsTreeBuildsDeclarationOfModuleFillsModuleReads(integration: MultiModuleIntegration) async {
+		// `Service` is a seam, and `App` fills its builder with `DefaultUserService`, whose tree builds `Feature`'s `Cache`.
+		// `FeatureImpl` depends on `Feature`, so declared a seam, `DefaultUserService` has `FeatureImpl`, in `Feature`'s
+		// package, build `Cache` (`generate_callsFillsSeam_whenFillsTreeBuildsDeclarationOfModuleFillsModuleReads`).
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let servicePath = Self.declarationPath(of: "Service.swift", in: "Feature", fixtures: fixtures, under: integration)
+			return """
+			\(servicePath):5:5: error: `Cache`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix\(Self.seamRemedy(declaring: "DefaultUserService", in: "FeatureImpl")).
+			\(servicePath):5:5-5:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesFillingServiceWithImplementationBuildingCache(seams: ["Service"]),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsFillsSeam_whenFillsTreeBuildsDeclarationOfModuleFillsModuleReads(integration: MultiModuleIntegration) async throws {
+		// The remedy `generate_offersFillsTypeAsSeam_whenFillsTreeBuildsDeclarationOfModuleFillsModuleReads` offers,
+		// applied with nothing else changed: `FeatureImpl` builds `Cache` in the initializer it generates for
+		// `DefaultUserService`, which `App`'s fill of `Service`'s builder calls, and every module compiles.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesFillingServiceWithImplementationBuildingCache(seams: ["Service", "DefaultUserService"]),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		let pluginComment = { (type: String) in
+			integration == .swiftPackagePlugin ? " // If this line does not compile, add the SafeDI plugin to the target that declares \(type)." : ""
+		}
+		let featureCode = """
+		extension Service {
+		    public struct SafeDIScope_Service_userService {}
+
+		    public convenience init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Service_userService) -> any UserService) {
+		        let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Service_userService())
+		        self.init(userService: userService)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_2567811726D4AD5E {}
+		}
+		"""
+		let featureImplCode = """
+		extension DefaultUserService {
+		    public convenience init() {
+		        let cache = Cache()
+		        self.init(cache: cache)
+		    }
+		}
+
+		extension DefaultUserService {
+		    public enum __safeDI_DefaultUserService_CBF29CE484222325 {}
+		}
+		"""
+		let rootCode = """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_2567811726D4AD5E.self\(pluginComment("Service"))
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Service_userService) -> any UserService {
+		                func __safeDI_userService() -> DefaultUserService {
+		                    _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self\(pluginComment("DefaultUserService"))
+		                    return DefaultUserService()
+		                }
+		                let userService: any UserService = __safeDI_userService()
+		                return userService
+		            }
+		            return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+		        }
+		        let service: Service = __safeDI_service()
+		        self.init(service: service)
+		    }
+		}
+		"""
+		switch integration {
+		case .moduleInfo:
+			#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + featureCode])
+			#expect(output.modules["FeatureImpl"]?.generatedFiles == ["FeatureImpl.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n" + featureImplCode])
+			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.importBlock("Feature") + "\n" + Self.importBlock("FeatureImpl") + "\n\n" + rootCode])
+		case .swiftPackagePlugin:
+			#expect(output.modules["Feature"]?.generatedFiles == ["Service+SafeDI.swift": generatedFileHeader + featureCode])
+			#expect(output.modules["FeatureImpl"]?.generatedFiles == ["DefaultUserService+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n" + featureImplCode])
+			#expect(output.modules["App"]?.generatedFiles == ["Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n" + Self.importBlock("FeatureImpl") + "\n\n" + rootCode])
+		}
+		try expectEveryModuleCompiled(output)
+	}
+
 	@Test(arguments: TokenCacheConstruction.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorOfferingNoSeam_whenAnotherPathConstructsTypeWithoutPassingThroughCandidate(construction: TokenCacheConstruction) async {
@@ -969,10 +1287,10 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_offersNoSeam_whenDeclarationIsInModuleOtherThanCandidates() async {
+	mutating func generate_offersNoSeam_whenDeclarationIsInModuleCandidatesModuleDoesNotRead() async {
 		// `Service`'s tree builds `DefaultUserService`, which fulfills `UserService` in `FeatureImpl`, a module that depends
-		// on `Feature`. Declared a seam, `Service` could not build it in `Feature`, which does not see it, so `App` would
-		// still construct it; SafeDI does not know which modules `Feature` sees, so the error offers no seam.
+		// on `Feature`. Declared a seam, `Service` could not build it in `Feature`, whose own run does not read it, so `App`
+		// would still construct it, and the error offers no seam.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
 			\(fixtures["FeatureImpl"]!["DefaultUserService.swift"]):5:5: error: `DefaultUserService`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
@@ -1108,6 +1426,203 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			\(properties.map { "    @Instantiated let \($0)" }.joined(separator: "\n"))
 			}
 			"""
+		}
+	}
+
+	/// How `Core`, which declares `Service`, reaches `Base`, which declares the `Formatter` that `Service` instantiates.
+	enum ThirdModuleReach: CaseIterable {
+		/// `Core` depends on `Base` and imports it.
+		case importsDependency
+		/// `Core` depends on `Base` and imports it with `@_exported`.
+		case reexportsDependency
+		/// `Core` depends on `Base` and imports it inside `#if canImport(Base)`.
+		case importsDependencyConditionally
+		/// `Core` depends only on `Umbrella`, which depends on `Base` and re-exports it, and imports `Umbrella`.
+		case importsModuleReexportingIt
+		/// `Core` depends only on `Mid`, which depends on `Base`, and imports `Base`.
+		case importsDependencyOfDependency
+
+		/// Each reach with each integration under which `Core`'s own run reads `Base`'s declarations.
+		static let cellsWhereCoreReadsBase = allCases.flatMap { reach in
+			MultiModuleIntegration.allCases.filter(reach.coreReadsBase(under:)).map { (reach, $0) }
+		}
+
+		/// Each reach with each integration under which `Core`'s own run does not read `Base`'s declarations.
+		static let cellsWhereCoreDoesNotReadBase = allCases.flatMap { reach in
+			MultiModuleIntegration.allCases.filter { !reach.coreReadsBase(under: $0) }.map { (reach, $0) }
+		}
+
+		/// Whether `Core`'s own run reads `Base`'s declarations under `integration`: the plugin hands a run the files of
+		/// every module its module depends on, directly or not, and Bazel's invocation the module info of the modules it
+		/// depends on directly.
+		func coreReadsBase(under integration: MultiModuleIntegration) -> Bool {
+			switch integration {
+			case .moduleInfo:
+				coreDependencies.contains("Base")
+			case .swiftPackagePlugin:
+				true
+			}
+		}
+
+		/// The lines `Service.swift` starts with.
+		var coreImports: String {
+			switch self {
+			case .importsDependency, .importsDependencyOfDependency:
+				"import Base"
+			case .reexportsDependency:
+				"@_exported import Base"
+			case .importsDependencyConditionally:
+				"#if canImport(Base)\nimport Base\n#endif"
+			case .importsModuleReexportingIt:
+				"import Umbrella"
+			}
+		}
+
+		/// The modules `Core` depends on directly.
+		var coreDependencies: [String] {
+			switch self {
+			case .importsDependency, .reexportsDependency, .importsDependencyConditionally:
+				["Base"]
+			case .importsModuleReexportingIt:
+				["Umbrella"]
+			case .importsDependencyOfDependency:
+				["Mid"]
+			}
+		}
+
+		/// The modules between `Base` and `Core`, which declare nothing SafeDI reads.
+		var intermediateModules: [ModuleFixture] {
+			switch self {
+			case .importsDependency, .reexportsDependency, .importsDependencyConditionally:
+				[]
+			case .importsModuleReexportingIt:
+				[ModuleFixture(name: "Umbrella", packageName: "Toolkit", swiftFileContentByFilePath: ["Umbrella.swift": "@_exported import Base\n"], dependencies: ["Base"])]
+			case .importsDependencyOfDependency:
+				[ModuleFixture(name: "Mid", packageName: "Toolkit", swiftFileContentByFilePath: ["Mid.swift": "import Base\n\npublic enum Toolbox {}\n"], dependencies: ["Base"])]
+			}
+		}
+
+		/// The imports the file `Core` generates for `Service` starts with: those of `Service.swift`.
+		var importBlocksOfCoresGeneratedFile: String {
+			switch self {
+			case .importsDependency, .importsDependencyConditionally, .importsDependencyOfDependency:
+				SafeDIToolAccessEnforcementTests.importBlock("Base")
+			case .reexportsDependency:
+				"#if canImport(Base)\n@_exported import Base\n#endif"
+			case .importsModuleReexportingIt:
+				SafeDIToolAccessEnforcementTests.importBlock("Umbrella")
+			}
+		}
+
+		/// The imports the file `App` generates for its root starts with: those of `Service.swift` and of `Root.swift`,
+		/// sorted by module.
+		var importBlocksOfAppsGeneratedFile: String {
+			switch self {
+			case .importsDependency, .reexportsDependency, .importsDependencyConditionally, .importsDependencyOfDependency:
+				importBlocksOfCoresGeneratedFile + "\n" + SafeDIToolAccessEnforcementTests.importBlock("Core")
+			case .importsModuleReexportingIt:
+				SafeDIToolAccessEnforcementTests.importBlock("Core") + "\n" + importBlocksOfCoresGeneratedFile
+			}
+		}
+	}
+
+	/// How `Service`'s tree builds `Base`'s `Formatter`, whose initializer is `package`.
+	enum FormatterConstruction: CaseIterable {
+		/// `Service` instantiates a `Formatter`.
+		case constant
+		/// `Service` instantiates an `Instantiator<Formatter>`.
+		case instantiator
+		/// `Service` instantiates a `LazilyInstantiated<Formatter>`.
+		case lazilyInstantiated
+		/// `Service` instantiates an `any Formatting`, which `Formatter` fulfills.
+		case existential
+		/// `Service` instantiates a `Formats.Formatter`, which `Base`'s `Formats` encloses.
+		case nested
+		/// `Service` instantiates `Core`'s `Cache`, which instantiates a `Formatter`.
+		case beneathTypeOfCandidatesModule
+
+		/// Every construction but `constant`.
+		static let neighborsOfConstant = allCases.filter { $0 != .constant }
+
+		/// `Formatter.swift`, in `Base`.
+		var baseFile: String {
+			switch self {
+			case .constant, .instantiator, .lazilyInstantiated, .beneathTypeOfCandidatesModule:
+				"""
+				@Instantiable
+				public final class Formatter: Instantiable {
+				    package init() {}
+				}
+				"""
+			case .existential:
+				"""
+				public protocol Formatting {}
+
+				@Instantiable(fulfillingAdditionalTypes: [Formatting.self])
+				public final class Formatter: Formatting, Instantiable {
+				    package init() {}
+				}
+				"""
+			case .nested:
+				"""
+				public enum Formats {
+				    @Instantiable
+				    public final class Formatter: Instantiable {
+				        package init() {}
+				    }
+				}
+				"""
+			}
+		}
+
+		/// The type the error names.
+		var formatterType: String {
+			switch self {
+			case .constant, .instantiator, .lazilyInstantiated, .existential, .beneathTypeOfCandidatesModule:
+				"Formatter"
+			case .nested:
+				"Formats.Formatter"
+			}
+		}
+
+		/// Where `Formatter`'s initializer starts in `baseFile`.
+		var initializerLocation: (line: Int, column: Int) {
+			switch self {
+			case .constant, .instantiator, .lazilyInstantiated, .beneathTypeOfCandidatesModule:
+				(3, 5)
+			case .existential:
+				(5, 5)
+			case .nested:
+				(4, 9)
+			}
+		}
+
+		/// The property `Service` instantiates, and the declarations `Service.swift` holds after `Service`.
+		var serviceProperty: String {
+			switch self {
+			case .constant:
+				"formatter: Formatter"
+			case .instantiator:
+				"formatterBuilder: Instantiator<Formatter>"
+			case .lazilyInstantiated:
+				"formatter: LazilyInstantiated<Formatter>"
+			case .existential:
+				"formatter: any Formatting"
+			case .nested:
+				"formatter: Formats.Formatter"
+			case .beneathTypeOfCandidatesModule:
+				"cache: Cache"
+			}
+		}
+
+		/// The declarations `Service.swift` holds after `Service`.
+		var otherCoreDeclarations: String? {
+			switch self {
+			case .constant, .instantiator, .lazilyInstantiated, .existential, .nested:
+				nil
+			case .beneathTypeOfCandidatesModule:
+				TokenCacheConstruction.type(declaredAs: "@Instantiable\npublic final class Cache", initializerModifier: "public ", instantiating: ["formatter: Formatter"], importing: nil)
+			}
 		}
 	}
 
@@ -3042,6 +3557,108 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			],
 			dependencies: ["Core"],
 		)
+	}
+
+	/// `Base`, in package `basePackageName`, whose `Formatter.swift` declares `Formatter` with a `package` initializer as
+	/// `construction` says; the modules `reach` puts between `Base` and `Core`; `Core`, in package `Toolkit`, whose
+	/// `Service.swift` declares, with `serviceAttribute`, the `public` `Service`, which builds `Formatter` as
+	/// `construction` says and reaches `Base` as `reach` says; and `App`, in package `Shop`, which depends on each of them
+	/// and whose root instantiates `Service`.
+	private static func modulesBuildingFormatterThroughService(
+		reach: ThirdModuleReach,
+		construction: FormatterConstruction = .constant,
+		basePackageName: String = "Toolkit",
+		serviceAttribute: String,
+	) -> [ModuleFixture] {
+		let base = ModuleFixture(name: "Base", packageName: basePackageName, swiftFileContentByFilePath: ["Formatter.swift": construction.baseFile])
+		let service = TokenCacheConstruction.type(declaredAs: "\(serviceAttribute)\npublic final class Service", initializerModifier: "public ", instantiating: [construction.serviceProperty], importing: nil)
+		let core = ModuleFixture(
+			name: "Core",
+			packageName: "Toolkit",
+			swiftFileContentByFilePath: ["Service.swift": ([reach.coreImports, service] + [construction.otherCoreDeclarations].compactMap(\.self)).joined(separator: "\n\n")],
+			dependencies: reach.coreDependencies,
+		)
+		let modules = [base] + reach.intermediateModules + [core]
+		return modules + [rootInstantiatingService(dependencies: modules.map(\.name))]
+	}
+
+	/// `Feature`, in package `Kit`, whose `Service.swift` declares `UserService`, `Cache`, with a `package` initializer at
+	/// line 5, and `Service`, which instantiates an `any UserService`; `FeatureImpl`, in `Kit` too and depending on
+	/// `Feature`, whose `DefaultUserService` fulfills `UserService` and instantiates `Cache`; and `App`, in package
+	/// `Shop`, whose root instantiates `Service`. Each type `seams` names is declared with
+	/// `generateDependencyTree: true`. `App` depends on `FeatureImpl`, or, when
+	/// `appReadsImplementationThroughAdditionalDirectory` is set, reads its directory through
+	/// `additionalDirectoriesToInclude`, which leaves the module that declares `DefaultUserService` unknown.
+	private static func modulesFillingServiceWithImplementationBuildingCache(seams: Set<String>, appReadsImplementationThroughAdditionalDirectory: Bool = false) -> [ModuleFixture] {
+		func attribute(of typeName: String, arguments: [String] = []) -> String {
+			// Appended rather than joined with `+` around a ternary: Swift 6.2 on Linux can time out type-checking a `+`
+			// of arrays with a ternary; later Swift does not.
+			var allArguments = [String]()
+			if seams.contains(typeName) {
+				allArguments.append("generateDependencyTree: true")
+			}
+			allArguments += arguments
+			return allArguments.isEmpty ? "@Instantiable" : "@Instantiable(\(allArguments.joined(separator: ", ")))"
+		}
+		// Chosen in statements of their own rather than by ternaries around `+` chains in the fixtures below: Swift 6.2
+		// on Linux can time out type-checking such an expression; later Swift does not.
+		let appFiles: [String: String]
+		let appDependencies: [String]
+		if appReadsImplementationThroughAdditionalDirectory {
+			appFiles = [
+				"Root.swift": TokenCacheConstruction.type(declaredAs: "@Instantiable(isRoot: true)\nfinal class Root", initializerModifier: "", instantiating: ["service: Service"], importing: "Feature"),
+				"SafeDIConfiguration.swift": "#SafeDIConfiguration(additionalDirectoriesToInclude: [\"$FIXTURE_ROOT/Kit/Sources/FeatureImpl\"])\n",
+			]
+			appDependencies = ["Feature"]
+		} else {
+			appFiles = [
+				"Root.swift": "import Feature\n" + TokenCacheConstruction.type(declaredAs: "@Instantiable(isRoot: true)\nfinal class Root", initializerModifier: "", instantiating: ["service: Service"], importing: "FeatureImpl"),
+			]
+			appDependencies = ["Feature", "FeatureImpl"]
+		}
+		return [
+			ModuleFixture(
+				name: "Feature",
+				packageName: "Kit",
+				swiftFileContentByFilePath: [
+					"Service.swift": """
+					public protocol UserService: AnyObject {}
+
+					@Instantiable
+					public final class Cache: Instantiable {
+					    package init() {}
+					}
+
+
+					""" + TokenCacheConstruction.type(declaredAs: "\(attribute(of: "Service"))\npublic final class Service", initializerModifier: "public ", instantiating: ["userService: any UserService"], importing: nil),
+				],
+			),
+			ModuleFixture(
+				name: "FeatureImpl",
+				packageName: "Kit",
+				swiftFileContentByFilePath: [
+					"DefaultUserService.swift": """
+					import Feature
+
+					\(attribute(of: "DefaultUserService", arguments: ["fulfillingAdditionalTypes: [UserService.self]"]))
+					public final class DefaultUserService: UserService, Instantiable {
+					    public init(cache: Cache) {
+					        self.cache = cache
+					    }
+
+					    @Instantiated let cache: Cache
+					}
+					""",
+				],
+				dependencies: ["Feature"],
+			),
+			ModuleFixture(
+				name: "App",
+				packageName: "Shop",
+				swiftFileContentByFilePath: appFiles,
+				dependencies: appDependencies,
+			),
+		]
 	}
 
 	/// An `App` module of package `Shop` depending on `dependencies`, whose root instantiates `Service`.
