@@ -1707,6 +1707,964 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		)
 	}
 
+	// MARK: Tests – An onlyIfAvailable alias of a parameter's label
+
+	// `A` receives `renamed` only if available, and `Mid`, between `A`'s builder function and the scope that builds `A`
+	// again, declares an `onlyIfAvailable` alias `renamed` of its `x`, whose `X` receives `renamed` only if available: the
+	// function takes `renamed`. Where nothing above the function provides `renamed`, the parameter does not keep the alias
+	// from being created, as nothing does where the function takes no parameter: `Mid` builds `x` first, passing `X` `nil`,
+	// creates the alias from it, and passes the alias to the `A` it builds again.
+
+	@Test(arguments: CycleClosingWrapper.allCases, AliasPosition.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_createsAliasOfParameterLabelAfterItsFulfillingSibling_whenNothingAboveClosedOnFunctionProvidesLabel(wrapper: CycleClosingWrapper, aliasPosition: AliasPosition) async throws {
+		try await expectGeneratedTree(
+			of: Self.aliasOfParameterLabelFixture(wrapper: wrapper, aliasPosition: aliasPosition),
+			root: "Root",
+			equals: { Self.expectedAliasOfParameterLabelTree(wrapper: wrapper, aliasPosition: aliasPosition, fixtures: $0) },
+			mock: { Self.expectedAliasOfParameterLabelMock(wrapper: wrapper, aliasPosition: aliasPosition, fixtures: $0) },
+			buildsTheSameValuesAs: Self.handBuiltAliasOfParameterLabelTree(wrapper: wrapper, aliasPosition: aliasPosition),
+			probes: wrapper.isErased ? ["Root()", "Root.mock()"].map { root in
+				// An `ErasedInstantiator` is not traversed, so each probe holds the `A` built first, its `Mid`, and the `A` that
+				// `Mid` builds again.
+				let mid = "(\(root).aBuilder.instantiate().a as! A).midBuilder.instantiate()"
+				let aBuiltAgain = aliasPosition == .aboveCycleClosingScopesType ? "mid.innerBuilder.instantiate().aBuilder" : "mid.aBuilder"
+				return DifferentialValueProbe(#"{ () -> (Mid, A) in let mid = \#(mid); return (mid, \#(aBuiltAgain).instantiate().a as! A) }()"#)
+			} : nil,
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_createsAliasOfParameterLabelAfterItsFulfillingSibling_whenScopeAboveClosedOnFunctionProvidesLabelOnlyAsLazilyInstantiatedInstance() async throws {
+		// The instance of `Root`'s `renamed` does not keep an alias of `renamed` from being created, as a declaration whose label
+		// hides the wrapper it is read from, so `Mid` creates its alias, though `Root` passes the function `renamed.instance`.
+		let fixture = Self.aliasOfParameterLabelFixture(rootDeclares: ["@Instantiated let renamed: LazilyInstantiated<X>"])
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_renamed() -> X {
+		            X(renamed: nil)
+		        }
+		        let renamed = LazilyInstantiated<X>(__safeDI_renamed)
+		        func __safeDI_aBuilder(renamed: X?) -> A {
+		            func __safeDI_midBuilder() -> Mid {
+		                let x = X(renamed: nil)
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		                let renamed: X? = x
+		                #sourceLocation()
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: renamed.instance)
+		        }
+		        self.init(renamed: renamed, aBuilder: aBuilder)
+		    }
+		}
+		""" }, mock: { fixtures in """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            renamed: ((X?) -> X)? = nil,
+		            aBuilder: A.SafeDIMockConfiguration = .init()
+		        ) {
+		            self.renamed = renamed
+		            self.aBuilder = aBuilder
+		        }
+
+		        let renamed: ((X?) -> X)?
+		        let aBuilder: A.SafeDIMockConfiguration
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_renamed() -> X {
+		            if let safeDIBuilder = safeDIOverrides.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
+		        }
+		        let renamed = LazilyInstantiated<X>(__safeDI_renamed)
+		        func __safeDI_aBuilder(renamed: X?) -> A {
+		            func __safeDI_midBuilder() -> Mid {
+		                let x = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(nil) } else { X(renamed: nil) }
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		                let renamed: X? = x
+		                #sourceLocation()
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(x, renamed, aBuilder) } else { Mid(x: x, renamed: renamed, aBuilder: aBuilder) }
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: renamed.instance)
+		        }
+		        return Root(renamed: renamed, aBuilder: aBuilder)
+		    }
+		}
+		#endif
+		""" }, buildsTheSameValuesAs: """
+		extension Root {
+		    public convenience init() {
+		        func a(renamed: X?) -> A {
+		            A(renamed: renamed, midBuilder: Instantiator<Mid> {
+		                let x = X(renamed: nil)
+		                return Mid(x: x, renamed: x, aBuilder: Instantiator<A> { a(renamed: x) })
+		            })
+		        }
+		        let renamed = LazilyInstantiated<X> { X(renamed: nil) }
+		        self.init(renamed: renamed, aBuilder: Instantiator<A> { a(renamed: renamed.instance) })
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesParameterInPlaceOfUncreatedAlias_whenScopeAboveClosedOnFunctionInstantiatesLabel() async throws {
+		// `Root`'s `renamed` provides the alias's label above the function, so `Mid` creates no alias, as where the function
+		// takes no parameter, and `X`, `Mid` and the `A` built again are each handed `Root`'s `renamed` through the parameter.
+		let fixture = Self.aliasOfParameterLabelFixture(rootDeclares: ["@Instantiated let renamed: X"])
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: """
+		extension Root {
+		    public convenience init() {
+		        let renamed = X(renamed: nil)
+		        func __safeDI_aBuilder(renamed: X?) -> A {
+		            func __safeDI_midBuilder() -> Mid {
+		                // Did not create `renamed: X?` because `x: X` is unavailable.
+		                let x = X(renamed: renamed)
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: renamed)
+		        }
+		        self.init(renamed: renamed, aBuilder: aBuilder)
+		    }
+		}
+		""", mock: """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            renamed: ((X?) -> X)? = nil,
+		            aBuilder: A.SafeDIMockConfiguration = .init()
+		        ) {
+		            self.renamed = renamed
+		            self.aBuilder = aBuilder
+		        }
+
+		        let renamed: ((X?) -> X)?
+		        let aBuilder: A.SafeDIMockConfiguration
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let renamed = if let safeDIBuilder = safeDIOverrides.renamed { safeDIBuilder(nil) } else { X(renamed: nil) }
+		        func __safeDI_aBuilder(renamed: X?) -> A {
+		            func __safeDI_midBuilder() -> Mid {
+		                let x = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(renamed) } else { X(renamed: renamed) }
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(x, renamed, aBuilder) } else { Mid(x: x, renamed: renamed, aBuilder: aBuilder) }
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: renamed)
+		        }
+		        return Root(renamed: renamed, aBuilder: aBuilder)
+		    }
+		}
+		#endif
+		""", buildsTheSameValuesAs: """
+		extension Root {
+		    public convenience init() {
+		        let renamed = X(renamed: nil)
+		        func a(renamed: X?) -> A {
+		            A(renamed: renamed, midBuilder: Instantiator<Mid> {
+		                Mid(x: X(renamed: renamed), renamed: renamed, aBuilder: Instantiator<A> { a(renamed: renamed) })
+		            })
+		        }
+		        self.init(renamed: renamed, aBuilder: Instantiator<A> { a(renamed: renamed) })
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesRequiredParameterInPlaceOfUncreatedAlias_whenScopeAboveClosedOnFunctionAliasesLabel() async throws {
+		// `A` requires `renamed`, which `Root`'s alias provides above the function, so the parameter is required, and `Mid`
+		// creates no alias, as where the function takes no parameter.
+		let fixture = Self.aliasOfParameterLabelFixture(
+			rootDeclares: ["@Instantiated let x0: X", #"@Received(fulfilledByDependencyNamed: "x0", ofType: X.self, onlyIfAvailable: true) let renamed: X?"#],
+			aReceives: "@Received let renamed: X?",
+		)
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		extension Root {
+		    public convenience init() {
+		        let x0 = X(renamed: nil)
+		        #sourceLocation(file: "\(fixtures["Root.swift"])", line: 10)
+		        let renamed: X? = x0
+		        #sourceLocation()
+		        func __safeDI_aBuilder(renamed: X?) -> A {
+		            func __safeDI_midBuilder() -> Mid {
+		                // Did not create `renamed: X?` because `x: X` is unavailable.
+		                let x = X(renamed: renamed)
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: renamed)
+		        }
+		        self.init(x0: x0, renamed: renamed, aBuilder: aBuilder)
+		    }
+		}
+		""" }, mock: { fixtures in """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            x0: ((X?) -> X)? = nil,
+		            aBuilder: A.SafeDIMockConfiguration = .init()
+		        ) {
+		            self.x0 = x0
+		            self.aBuilder = aBuilder
+		        }
+
+		        let x0: ((X?) -> X)?
+		        let aBuilder: A.SafeDIMockConfiguration
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let x0 = if let safeDIBuilder = safeDIOverrides.x0 { safeDIBuilder(nil) } else { X(renamed: nil) }
+		        #sourceLocation(file: "\(fixtures["Root.swift"])", line: 10)
+		        let renamed: X? = x0
+		        #sourceLocation()
+		        func __safeDI_aBuilder(renamed: X?) -> A {
+		            func __safeDI_midBuilder() -> Mid {
+		                let x = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(renamed) } else { X(renamed: renamed) }
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(x, renamed, aBuilder) } else { Mid(x: x, renamed: renamed, aBuilder: aBuilder) }
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: renamed)
+		        }
+		        return Root(x0: x0, renamed: renamed, aBuilder: aBuilder)
+		    }
+		}
+		#endif
+		""" }, buildsTheSameValuesAs: """
+		extension Root {
+		    public convenience init() {
+		        let x0 = X(renamed: nil)
+		        func a(renamed: X?) -> A {
+		            A(renamed: renamed, midBuilder: Instantiator<Mid> {
+		                Mid(x: X(renamed: renamed), renamed: renamed, aBuilder: Instantiator<A> { a(renamed: renamed) })
+		            })
+		        }
+		        self.init(x0: x0, renamed: x0, aBuilder: Instantiator<A> { a(renamed: x0) })
+		    }
+		}
+		""")
+	}
+
+	@Test(arguments: [true, false])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsCreatedAliasToSiblingBuiltAfterIt_whenNothingAboveClosedOnFunctionProvidesParameterLabel(siblingRequiresAlias: Bool) async throws {
+		// `Mid`'s `y` receives the alias, required or only if available, so it is built after the alias, which it is handed.
+		// A requirement of the alias does not make the parameter required: `Root` passes `nil`.
+		let fixture = Self.aliasOfParameterLabelFixture(
+			midDeclaresBesideAlias: ["@Instantiated let y: Y"],
+			otherTypes: [seamFixtureType(named: "Y", isFinalClass: true, declarations: [siblingRequiresAlias ? "@Received let renamed: X?" : "@Received(onlyIfAvailable: true) let renamed: X?"])],
+		)
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_aBuilder(renamed: X?) -> A {
+		            func __safeDI_midBuilder() -> Mid {
+		                let x = X(renamed: nil)
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
+		                let renamed: X? = x
+		                #sourceLocation()
+		                let y = Y(renamed: renamed)
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return Mid(x: x, renamed: renamed, y: y, aBuilder: aBuilder)
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: nil)
+		        }
+		        self.init(aBuilder: aBuilder)
+		    }
+		}
+		""" }, mock: { fixtures in """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            aBuilder: A.SafeDIMockConfiguration = .init(),
+		            renamed: X? = nil
+		        ) {
+		            self.aBuilder = aBuilder
+		            self.renamed = renamed
+		        }
+
+		        let aBuilder: A.SafeDIMockConfiguration
+		        let renamed: X?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let renamed: X? = safeDIOverrides.renamed
+		        func __safeDI_aBuilder(renamed: X?) -> A {
+		            func __safeDI_midBuilder() -> Mid {
+		                let x = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(nil) } else { X(renamed: nil) }
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
+		                let renamed: X? = x
+		                #sourceLocation()
+		                let y = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.y { safeDIBuilder(renamed) } else { Y(renamed: renamed) }
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(x, renamed, y, aBuilder) } else { Mid(x: x, renamed: renamed, y: y, aBuilder: aBuilder) }
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: renamed)
+		        }
+		        return Root(aBuilder: aBuilder)
+		    }
+		}
+		#endif
+		""" }, buildsTheSameValuesAs: """
+		extension Root {
+		    public convenience init() {
+		        func a(renamed: X?) -> A {
+		            A(renamed: renamed, midBuilder: Instantiator<Mid> {
+		                let x = X(renamed: nil)
+		                return Mid(x: x, renamed: x, y: Y(renamed: x), aBuilder: Instantiator<A> { a(renamed: x) })
+		            })
+		        }
+		        self.init(aBuilder: Instantiator<A> { a(renamed: nil) })
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_createsAliasOfParameterLabelAfterItsFulfillingInstantiator_whenNothingAboveClosedOnFunctionProvidesLabel() async throws {
+		let fixture = Self.aliasOfParameterLabelFixture(
+			labelType: "Instantiator<X>",
+			midFulfillingDeclaration: "@Instantiated let xBuilder: Instantiator<X>",
+		)
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_aBuilder(renamed: Instantiator<X>?) -> A {
+		            func __safeDI_midBuilder() -> Mid {
+		                func __safeDI_xBuilder() -> X {
+		                    X(renamed: nil)
+		                }
+		                let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		                let renamed: Instantiator<X>? = xBuilder
+		                #sourceLocation()
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return Mid(xBuilder: xBuilder, renamed: renamed, aBuilder: aBuilder)
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: nil)
+		        }
+		        self.init(aBuilder: aBuilder)
+		    }
+		}
+		""" }, mock: { fixtures in """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            aBuilder: A.SafeDIMockConfiguration = .init(),
+		            renamed: Instantiator<X>? = nil
+		        ) {
+		            self.aBuilder = aBuilder
+		            self.renamed = renamed
+		        }
+
+		        let aBuilder: A.SafeDIMockConfiguration
+		        let renamed: Instantiator<X>?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let renamed: Instantiator<X>? = safeDIOverrides.renamed
+		        func __safeDI_aBuilder(renamed: Instantiator<X>?) -> A {
+		            func __safeDI_midBuilder() -> Mid {
+		                func __safeDI_xBuilder() -> X {
+		                    if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.xBuilder { safeDIBuilder(nil) } else { X(renamed: nil) }
+		                }
+		                let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		                let renamed: Instantiator<X>? = xBuilder
+		                #sourceLocation()
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(xBuilder, renamed, aBuilder) } else { Mid(xBuilder: xBuilder, renamed: renamed, aBuilder: aBuilder) }
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: renamed)
+		        }
+		        return Root(aBuilder: aBuilder)
+		    }
+		}
+		#endif
+		""" }, buildsTheSameValuesAs: """
+		extension Root {
+		    public convenience init() {
+		        func a(renamed: Instantiator<X>?) -> A {
+		            A(renamed: renamed, midBuilder: Instantiator<Mid> {
+		                let xBuilder = Instantiator<X> { X(renamed: nil) }
+		                return Mid(xBuilder: xBuilder, renamed: xBuilder, aBuilder: Instantiator<A> { a(renamed: xBuilder) })
+		            })
+		        }
+		        self.init(aBuilder: Instantiator<A> { a(renamed: nil) })
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_createsAliasOfExistentialParameterLabelAfterItsFulfillingSibling_whenNothingAboveClosedOnFunctionProvidesLabel() async throws {
+		let fixture = Self.aliasOfParameterLabelFixture(
+			labelType: "any XProtocol",
+			midFulfillingDeclaration: #"@Instantiated(fulfilledByType: "X") let x: any XProtocol"#,
+		)
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_aBuilder(renamed: (any XProtocol)?) -> A {
+		            func __safeDI_midBuilder() -> Mid {
+		                let x: any XProtocol = X(renamed: nil)
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		                let renamed: (any XProtocol)? = x
+		                #sourceLocation()
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: nil)
+		        }
+		        self.init(aBuilder: aBuilder)
+		    }
+		}
+		""" }, mock: { fixtures in """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            aBuilder: A.SafeDIMockConfiguration = .init(),
+		            renamed: (any XProtocol)? = nil
+		        ) {
+		            self.aBuilder = aBuilder
+		            self.renamed = renamed
+		        }
+
+		        let aBuilder: A.SafeDIMockConfiguration
+		        let renamed: (any XProtocol)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let renamed: (any XProtocol)? = safeDIOverrides.renamed
+		        func __safeDI_aBuilder(renamed: (any XProtocol)?) -> A {
+		            func __safeDI_midBuilder() -> Mid {
+		                let x: XProtocol = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(nil) } else { X(renamed: nil) }
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		                let renamed: (any XProtocol)? = x
+		                #sourceLocation()
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(x, renamed, aBuilder) } else { Mid(x: x, renamed: renamed, aBuilder: aBuilder) }
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: renamed)
+		        }
+		        return Root(aBuilder: aBuilder)
+		    }
+		}
+		#endif
+		""" }, buildsTheSameValuesAs: """
+		extension Root {
+		    public convenience init() {
+		        func a(renamed: (any XProtocol)?) -> A {
+		            A(renamed: renamed, midBuilder: Instantiator<Mid> {
+		                let x: any XProtocol = X(renamed: nil)
+		                return Mid(x: x, renamed: x, aBuilder: Instantiator<A> { a(renamed: x) })
+		            })
+		        }
+		        self.init(aBuilder: Instantiator<A> { a(renamed: nil) })
+		    }
+		}
+		""")
+	}
+
+	@Test(arguments: LabelSpelling.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_createsAliasOfParameterLabelAfterItsFulfillingSibling_whenNothingAboveClosedOnFunctionProvidesLabelSpelledThroughAnotherName(spelling: LabelSpelling) async throws {
+		// `renamed` is a nested type, `Feature.X`, or a typealias of `X`, spelled so wherever it is declared or received.
+		let fixture = Self.aliasOfParameterLabelFixture(
+			labelType: spelling.labelType,
+			midFulfillingDeclaration: spelling.fulfillingDeclaration,
+			xEnclosingType: spelling == .nestedType ? "Feature" : nil,
+			otherTypes: [spelling.declaration],
+		)
+		try await expectGeneratedTree(
+			of: fixture,
+			root: "Root",
+			equals: { Self.expectedSpelledAliasOfParameterLabelTree(spelling: spelling, fixtures: $0) },
+			mock: { Self.expectedSpelledAliasOfParameterLabelMock(spelling: spelling, fixtures: $0) },
+			buildsTheSameValuesAs: """
+			extension Root {
+			    public convenience init() {
+			        func a(renamed: \(spelling.labelType)?) -> A {
+			            A(renamed: renamed, midBuilder: Instantiator<Mid> {
+			                let x: \(spelling.labelType) = \(spelling.constructedType)(renamed: nil)
+			                return Mid(x: x, renamed: x, aBuilder: Instantiator<A> { a(renamed: x) })
+			            })
+			        }
+			        self.init(aBuilder: Instantiator<A> { a(renamed: nil) })
+			    }
+			}
+			""",
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_createsAliasOfLabelNestedClosedOnFunctionsTake_whenNothingAboveOuterFunctionProvidesLabel() async throws {
+		// `B`'s builder function, inside `A`'s, takes `renamed` too, which `A`'s function passes its own parameter: that
+		// parameter provides nothing above `B`'s function either, so `Mid`, beneath both, creates its alias.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"])
+				.replacingOccurrences(of: "@Instantiable(isRoot: true)", with: "@Instantiable(isRoot: true, generateMock: true)"),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let renamed: X?", "@Instantiated let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let renamed: X?", "@Instantiated let midBuilder: Instantiator<Mid>"]),
+			seamFixtureType(named: "Mid", isFinalClass: true, declarations: [
+				"@Instantiated let x: X",
+				#"@Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let renamed: X?"#,
+				"@Instantiated let bBuilder: Instantiator<B>",
+				"@Instantiated let aBuilder: Instantiator<A>",
+			]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let renamed: X?"]),
+		]
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_aBuilder(renamed: X?) -> A {
+		            func __safeDI_bBuilder(renamed: X?) -> B {
+		                func __safeDI_midBuilder() -> Mid {
+		                    let x = X(renamed: nil)
+		                    #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
+		                    let renamed: X? = x
+		                    #sourceLocation()
+		                    let bBuilder = Instantiator<B> {
+		                        __safeDI_bBuilder(renamed: renamed)
+		                    }
+		                    let aBuilder = Instantiator<A> {
+		                        __safeDI_aBuilder(renamed: renamed)
+		                    }
+		                    return Mid(x: x, renamed: renamed, bBuilder: bBuilder, aBuilder: aBuilder)
+		                }
+		                let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		                return B(renamed: renamed, midBuilder: midBuilder)
+		            }
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_bBuilder(renamed: renamed)
+		            }
+		            return A(renamed: renamed, bBuilder: bBuilder)
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: nil)
+		        }
+		        self.init(aBuilder: aBuilder)
+		    }
+		}
+		""" }, mock: { fixtures in """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            aBuilder: A.SafeDIMockConfiguration = .init(),
+		            renamed: X? = nil
+		        ) {
+		            self.aBuilder = aBuilder
+		            self.renamed = renamed
+		        }
+
+		        let aBuilder: A.SafeDIMockConfiguration
+		        let renamed: X?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let renamed: X? = safeDIOverrides.renamed
+		        func __safeDI_aBuilder(renamed: X?) -> A {
+		            func __safeDI_bBuilder(renamed: X?) -> B {
+		                func __safeDI_midBuilder() -> Mid {
+		                    let x = if let safeDIBuilder = safeDIOverrides.aBuilder.bBuilder.midBuilder.x { safeDIBuilder(nil) } else { X(renamed: nil) }
+		                    #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
+		                    let renamed: X? = x
+		                    #sourceLocation()
+		                    let bBuilder = Instantiator<B> {
+		                        __safeDI_bBuilder(renamed: renamed)
+		                    }
+		                    let aBuilder = Instantiator<A> {
+		                        __safeDI_aBuilder(renamed: renamed)
+		                    }
+		                    return if let safeDIBuilder = safeDIOverrides.aBuilder.bBuilder.midBuilder.safeDIBuilder { safeDIBuilder(x, renamed, bBuilder, aBuilder) } else { Mid(x: x, renamed: renamed, bBuilder: bBuilder, aBuilder: aBuilder) }
+		                }
+		                let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		                return if let safeDIBuilder = safeDIOverrides.aBuilder.bBuilder.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { B(renamed: renamed, midBuilder: midBuilder) }
+		            }
+		            let bBuilder = Instantiator<B> {
+		                __safeDI_bBuilder(renamed: renamed)
+		            }
+		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(renamed, bBuilder) } else { A(renamed: renamed, bBuilder: bBuilder) }
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: renamed)
+		        }
+		        return Root(aBuilder: aBuilder)
+		    }
+		}
+		#endif
+		""" }, buildsTheSameValuesAs: """
+		extension Root {
+		    public convenience init() {
+		        func a(renamed: X?) -> A {
+		            func b(renamed: X?) -> B {
+		                B(renamed: renamed, midBuilder: Instantiator<Mid> {
+		                    let x = X(renamed: nil)
+		                    return Mid(x: x, renamed: x, bBuilder: Instantiator<B> { b(renamed: x) }, aBuilder: Instantiator<A> { a(renamed: x) })
+		                })
+		            }
+		            return A(renamed: renamed, bBuilder: Instantiator<B> { b(renamed: renamed) })
+		        }
+		        self.init(aBuilder: Instantiator<A> { a(renamed: nil) })
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_createsAliasOfParameterLabel_whenDeclaringScopeIsBuiltAsLabel() async throws {
+		// `Root` instantiates `renamed: X`, whose `X` declares the `aBuilder` the cycle closes on, so `X` passes the function
+		// `nil`: `renamed` is still being built around it. Like the declaration still being built where the function takes no
+		// parameter, that `nil` keeps no alias of `renamed` from being created: `Mid` builds `x` first, whose cycle-closing
+		// scope passes `nil`, since the alias is generated after it, then creates its alias and hands it to `Mid`.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let renamed: X"])
+				.replacingOccurrences(of: "@Instantiable(isRoot: true)", with: "@Instantiable(isRoot: true, generateMock: true)"),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let renamed: X?", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let renamed: X?", "@Instantiated let midBuilder: Instantiator<Mid>"]),
+			seamFixtureType(named: "Mid", isFinalClass: true, declarations: [
+				"@Instantiated let x: X",
+				#"@Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let renamed: X?"#,
+			]),
+		]
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_renamed() -> X {
+		            func __safeDI_aBuilder(renamed: X?) -> A {
+		                func __safeDI_midBuilder() -> Mid {
+		                    func __safeDI_x() -> X {
+		                        let aBuilder = Instantiator<A> {
+		                            __safeDI_aBuilder(renamed: nil)
+		                        }
+		                        return X(renamed: nil, aBuilder: aBuilder)
+		                    }
+		                    let x: X = __safeDI_x()
+		                    #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 9)
+		                    let renamed: X? = x
+		                    #sourceLocation()
+		                    return Mid(x: x, renamed: renamed)
+		                }
+		                let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		                return A(renamed: renamed, midBuilder: midBuilder)
+		            }
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: nil)
+		            }
+		            return X(renamed: nil, aBuilder: aBuilder)
+		        }
+		        let renamed: X = __safeDI_renamed()
+		        self.init(renamed: renamed)
+		    }
+		}
+		""" }, mock: { fixtures in """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            renamed: X.SafeDIMockConfiguration = .init()
+		        ) {
+		            self.renamed = renamed
+		        }
+
+		        let renamed: X.SafeDIMockConfiguration
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_renamed() -> X {
+		            func __safeDI_aBuilder(renamed: X?) -> A {
+		                func __safeDI_midBuilder() -> Mid {
+		                    func __safeDI_x() -> X {
+		                        let aBuilder = Instantiator<A> {
+		                            __safeDI_aBuilder(renamed: nil)
+		                        }
+		                        return X(renamed: nil, aBuilder: aBuilder)
+		                    }
+		                    let x: X = __safeDI_x()
+		                    #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 9)
+		                    let renamed: X? = x
+		                    #sourceLocation()
+		                    return Mid(x: x, renamed: renamed)
+		                }
+		                let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		                return A(renamed: renamed, midBuilder: midBuilder)
+		            }
+		            let aBuilder = Instantiator<A> {
+		                __safeDI_aBuilder(renamed: nil)
+		            }
+		            return if let safeDIBuilder = safeDIOverrides.renamed.safeDIBuilder { safeDIBuilder(nil, aBuilder) } else { X(renamed: nil, aBuilder: aBuilder) }
+		        }
+		        let renamed: X = __safeDI_renamed()
+		        return Root(renamed: renamed)
+		    }
+		}
+		#endif
+		""" }, buildsTheSameValuesAs: """
+		extension Root {
+		    public convenience init() {
+		        func a(renamed: X?) -> A {
+		            A(renamed: renamed, midBuilder: Instantiator<Mid> {
+		                let x = X(renamed: nil, aBuilder: Instantiator<A> { a(renamed: nil) })
+		                return Mid(x: x, renamed: x)
+		            })
+		        }
+		        self.init(renamed: X(renamed: nil, aBuilder: Instantiator<A> { a(renamed: nil) }))
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_createsEachAliasOfChainFromParameterLabelAfterItsFulfillingSibling_whenNothingAboveClosedOnFunctionProvidesLabel() async throws {
+		// `Mid` declares `renamedAgain`, an `onlyIfAvailable` alias of its alias `renamed`, and `X` receives both only if
+		// available. The parameter `renamed` keeps neither from being created: `Mid` builds `x` first, passing `X` `nil` for
+		// both, creates `renamed` from it and `renamedAgain` from `renamed`, and passes `renamed` to the `A` it builds again.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"])
+				.replacingOccurrences(of: "@Instantiable(isRoot: true)", with: "@Instantiable(isRoot: true, generateMock: true)"),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let renamed: X?", "@Instantiated let midBuilder: Instantiator<Mid>"]),
+			seamFixtureType(named: "Mid", isFinalClass: true, declarations: [
+				"@Instantiated let x: X",
+				#"@Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let renamed: X?"#,
+				#"@Received(fulfilledByDependencyNamed: "renamed", ofType: X?.self, onlyIfAvailable: true) let renamedAgain: X?"#,
+				"@Instantiated let aBuilder: Instantiator<A>",
+			]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let renamed: X?", "@Received(onlyIfAvailable: true) let renamedAgain: X?"]),
+		]
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: { fixtures in """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_aBuilder(renamed: X?) -> A {
+		            func __safeDI_midBuilder() -> Mid {
+		                let x = X(renamed: nil, renamedAgain: nil)
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
+		                let renamed: X? = x
+		                #sourceLocation()
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 12)
+		                let renamedAgain: X? = renamed
+		                #sourceLocation()
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return Mid(x: x, renamed: renamed, renamedAgain: renamedAgain, aBuilder: aBuilder)
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: nil)
+		        }
+		        self.init(aBuilder: aBuilder)
+		    }
+		}
+		""" }, mock: { fixtures in """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            aBuilder: A.SafeDIMockConfiguration = .init(),
+		            renamed: X? = nil
+		        ) {
+		            self.aBuilder = aBuilder
+		            self.renamed = renamed
+		        }
+
+		        let aBuilder: A.SafeDIMockConfiguration
+		        let renamed: X?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let renamed: X? = safeDIOverrides.renamed
+		        func __safeDI_aBuilder(renamed: X?) -> A {
+		            func __safeDI_midBuilder() -> Mid {
+		                let x = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(nil, nil) } else { X(renamed: nil, renamedAgain: nil) }
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 11)
+		                let renamed: X? = x
+		                #sourceLocation()
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 12)
+		                let renamedAgain: X? = renamed
+		                #sourceLocation()
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(x, renamed, renamedAgain, aBuilder) } else { Mid(x: x, renamed: renamed, renamedAgain: renamedAgain, aBuilder: aBuilder) }
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: renamed)
+		        }
+		        return Root(aBuilder: aBuilder)
+		    }
+		}
+		#endif
+		""" }, buildsTheSameValuesAs: """
+		extension Root {
+		    public convenience init() {
+		        func a(renamed: X?) -> A {
+		            A(renamed: renamed, midBuilder: Instantiator<Mid> {
+		                let x = X(renamed: nil, renamedAgain: nil)
+		                return Mid(x: x, renamed: x, renamedAgain: x, aBuilder: Instantiator<A> { a(renamed: x) })
+		            })
+		        }
+		        self.init(aBuilder: Instantiator<A> { a(renamed: nil) })
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsDependencyCycleError_whenFulfillingTypeRequiresAliasOfParameterLabel() async {
+		// `X` requires the alias, which is created only after `x`, the property `X` is built for: the parameter does not
+		// stand in for the alias, as nothing above the function provides `renamed`.
+		let fixture = Self.aliasOfParameterLabelFixture(xReceives: "@Received let renamed: X?")
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["X.swift"]):7:5: error: Dependency cycle: @Instantiated `x: X` -> @Received `renamed: X?` -> @Received `x: X`. `x: X` is received while it is still being instantiated. `renamed: X?` renames `x: X` only if available, so a type that receives `renamed` without `onlyIfAvailable` must be built after `x: X`. Receive `renamed` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `x: X` cannot be built first.
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsHiddenError_whenClosedOnTypeRequiresParameterLabelThatScopeAboveFunctionProvidesOnlyAsLazilyInstantiatedInstance() async {
+		// `A` requires `renamed: X`, so the function takes it as a required parameter, which `Root` passes the instance of its
+		// lazily instantiated `renamed`: a binding that keeps no alias of the label from being created. `Mid`'s alias then hides
+		// the label from the `A` it builds again, as it would outside a cycle.
+		let fixture = Self.aliasOfParameterLabelFixture(rootDeclares: ["@Instantiated let renamed: LazilyInstantiated<X>"], aReceives: "@Received let renamed: X")
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["A.swift"]):8:5: error: @Received property `renamed: X` is hidden in chain: Root -> Instantiator<A> -> Instantiator<Mid> -> A. `Mid` declares `renamed: X?` with the same label, so the types below `Mid` receive `renamed: X?` instead. Give `renamed: X?` on `Mid` a different label to fix.
+			\(fixtures["Mid.swift"]):10:5: note: `renamed: X?` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
 	// MARK: Tests – Declarations that cannot be passed
 
 	@Test
@@ -1823,6 +2781,27 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			"""
 			\(fixtures["T3.swift"]):8:5: error: @Received property `yBuilder: Instantiator<Y>?` cannot be received inside a `@Sendable` function in chain: Root -> T3 -> T0 -> Z -> T3. SafeDI builds `zBuilder: SendableInstantiator<Z>` on `T0` in a `@Sendable` function, which cannot capture `yBuilder: Instantiator<Y>` on `T0`, because `Instantiator<Y>` is not `Sendable`. Declare `yBuilder` on `T0`, and this property, as `SendableInstantiator<Y>` to fix. `SendableInstantiator<Y>` builds `Y` in a `@Sendable` function, so what the tree of `Y` receives from outside that function must be `Sendable` too.
 			\(fixtures["T0.swift"]):8:5: note: `yBuilder: Instantiator<Y>` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCaptureError_whenSendableCycleClosingScopePassesInstantiatorAliasOfParameterLabelCreatedInClosedOnFunctionsBody() async {
+		// Nothing above `A`'s builder function provides `renamed`, so `Mid` creates its `onlyIfAvailable` alias of `xBuilder`,
+		// an `Instantiator`, and the cycle-closing scope's `SendableInstantiator` closure passes it: the capture error, at the
+		// alias the closure captures.
+		let fixture = Self.aliasOfParameterLabelFixture(
+			wrapper: .sendableInstantiator,
+			labelType: "Instantiator<X>",
+			midFulfillingDeclaration: "@Instantiated let xBuilder: Instantiator<X>",
+		)
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["A.swift"]):8:5: error: @Received property `renamed: Instantiator<X>?` cannot be received inside a `@Sendable` function in chain: Root -> A -> Mid -> A. SafeDI builds `aBuilder: SendableInstantiator<A>` on `Mid` in a `@Sendable` function, which cannot capture `renamed: Instantiator<X>?` on `Mid`, because `Instantiator<X>` is not `Sendable`. Declare `renamed` on `Mid`, and this property, as `SendableInstantiator<X>` to fix. `SendableInstantiator<X>` builds `X` in a `@Sendable` function, so what the tree of `X` receives from outside that function must be `Sendable` too.
+			\(fixtures["Mid.swift"]):10:5: note: `renamed: Instantiator<X>?` is declared here
 			"""
 		}) {
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
@@ -1948,6 +2927,452 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// The wrapper of the property that closes the lazy cycle of `aliasOfParameterLabelFixture`.
+	enum CycleClosingWrapper: CaseIterable, Sendable {
+		case instantiator
+		case sendableInstantiator
+		case erasedInstantiator
+		case sendableErasedInstantiator
+
+		/// The declaration of `aBuilder`, which builds `A`.
+		var aBuilderDeclaration: String {
+			switch self {
+			case .instantiator:
+				"@Instantiated let aBuilder: Instantiator<A>"
+			case .sendableInstantiator:
+				"@Instantiated let aBuilder: SendableInstantiator<A>"
+			case .erasedInstantiator:
+				#"@Instantiated(fulfilledByType: "A", erasedToConcreteExistential: true) let aBuilder: ErasedInstantiator<(), AnyA>"#
+			case .sendableErasedInstantiator:
+				#"@Instantiated(fulfilledByType: "A", erasedToConcreteExistential: true) let aBuilder: SendableErasedInstantiator<(), AnyA>"#
+			}
+		}
+
+		/// Whether the wrapper builds `A` in a `@Sendable` function, so that the cycle's other hops do too.
+		var isSendable: Bool {
+			switch self {
+			case .instantiator, .erasedInstantiator:
+				false
+			case .sendableInstantiator, .sendableErasedInstantiator:
+				true
+			}
+		}
+
+		/// Whether the wrapper hands out `A` erased to `AnyA`.
+		var isErased: Bool {
+			switch self {
+			case .instantiator, .sendableInstantiator:
+				false
+			case .erasedInstantiator, .sendableErasedInstantiator:
+				true
+			}
+		}
+
+		/// The type of `aBuilder`.
+		var generatedType: String {
+			switch self {
+			case .instantiator:
+				"Instantiator<A>"
+			case .sendableInstantiator:
+				"SendableInstantiator<A>"
+			case .erasedInstantiator:
+				"ErasedInstantiator<(), AnyA>"
+			case .sendableErasedInstantiator:
+				"SendableErasedInstantiator<(), AnyA>"
+			}
+		}
+
+		/// The wrapper of the cycle's other hops.
+		var hopWrapper: String {
+			isSendable ? "SendableInstantiator" : "Instantiator"
+		}
+
+		/// A hand-built `aBuilder` that builds `A` with `call`.
+		func handBuiltABuilder(calling call: String) -> String {
+			switch self {
+			case .instantiator:
+				"Instantiator<A> { \(call) }"
+			case .sendableInstantiator:
+				"SendableInstantiator<A> { \(call) }"
+			case .erasedInstantiator:
+				"ErasedInstantiator<(), AnyA> { AnyA(\(call)) }"
+			case .sendableErasedInstantiator:
+				"SendableErasedInstantiator<(), AnyA> { AnyA(\(call)) }"
+			}
+		}
+	}
+
+	/// Where `aliasOfParameterLabelFixture` declares the alias, relative to the scope that closes its lazy cycle.
+	enum AliasPosition: CaseIterable, Sendable {
+		/// On `Mid`, which holds the scope that closes the cycle.
+		case besideCycleClosingScope
+		/// On `Mid`, which builds the `Inner` that holds the scope that closes the cycle.
+		case aboveCycleClosingScopesType
+	}
+
+	/// A spelling of the type of `aliasOfParameterLabelFixture`'s label through a name other than the type's own.
+	enum LabelSpelling: CaseIterable, Sendable {
+		/// `Feature.X`: `X` nested in `Feature`.
+		case nestedType
+		/// `XAlias`, a typealias of `X`.
+		case typeAlias
+
+		/// The label's type.
+		var labelType: String {
+			switch self {
+			case .nestedType:
+				"Feature.X"
+			case .typeAlias:
+				"XAlias"
+			}
+		}
+
+		/// The type an initializer call builds the label's type with.
+		var constructedType: String {
+			switch self {
+			case .nestedType:
+				"Feature.X"
+			case .typeAlias:
+				"X"
+			}
+		}
+
+		/// `Mid`'s declaration of `x`, the alias's fulfilling property.
+		var fulfillingDeclaration: String {
+			switch self {
+			case .nestedType:
+				"@Instantiated let x: Feature.X"
+			case .typeAlias:
+				#"@Instantiated(fulfilledByType: "X") let x: XAlias"#
+			}
+		}
+
+		/// The declaration that gives the label's type its name.
+		var declaration: String {
+			switch self {
+			case .nestedType:
+				"public enum Feature {}"
+			case .typeAlias:
+				"public typealias XAlias = X"
+			}
+		}
+	}
+
+	/// `Root`, which generates its mock, declares `rootDeclares` and instantiates `aBuilder`, which builds `A`; `A` declares
+	/// `aReceives`, a receive of `renamed`, and instantiates `midBuilder`; `Mid` declares `midFulfillingDeclaration`, an
+	/// `onlyIfAvailable` alias `renamed` of it, `midDeclaresBesideAlias`, and the `aBuilder` that builds `A` again, or, above
+	/// the cycle-closing scope, `innerBuilder`, whose `Inner` declares that `aBuilder`; `X` declares `xReceives`, a receive of
+	/// `renamed`, declared in an extension of `xEnclosingType` where it is not `nil`. `renamed` is a `labelType`, which
+	/// `midFulfillingDeclaration` declares, made optional. Each type is `@unchecked Sendable` where `wrapper` is `Sendable`.
+	private static func aliasOfParameterLabelFixture(
+		wrapper: CycleClosingWrapper = .instantiator,
+		aliasPosition: AliasPosition = .besideCycleClosingScope,
+		rootDeclares: [String] = [],
+		labelType: String = "X",
+		aReceives: String? = nil,
+		midFulfillingDeclaration: String = "@Instantiated let x: X",
+		midDeclaresBesideAlias: [String] = [],
+		xReceives: String? = nil,
+		xEnclosingType: String? = nil,
+		otherTypes: [String] = [],
+	) -> [String] {
+		let isExistential = labelType.hasPrefix("any ")
+		let optionalLabelType = isExistential ? "(\(labelType))?" : "\(labelType)?"
+		let labelMetatype = isExistential ? "(\(labelType)).self" : "\(labelType).self"
+		let fulfillingLabel = midFulfillingDeclaration[midFulfillingDeclaration.range(of: " let ")!.upperBound...].prefix { $0 != ":" }
+		let conformances = wrapper.isSendable ? ", @unchecked Sendable" : ""
+		let cycleClosingDeclaration = switch aliasPosition {
+		case .besideCycleClosingScope:
+			wrapper.aBuilderDeclaration
+		case .aboveCycleClosingScopesType:
+			"@Instantiated let innerBuilder: \(wrapper.hopWrapper)<Inner>"
+		}
+		// Appended rather than joined with `+` around a ternary: Swift 6.2 on Linux can time out type-checking a `+` with a
+		// ternary inside a larger expression; later Swift does not.
+		var xConformances = conformances
+		if isExistential {
+			xConformances += ", XProtocol"
+		}
+		let x = seamFixtureType(named: "X", isFinalClass: true, declarations: [xReceives ?? "@Received(onlyIfAvailable: true) let renamed: \(optionalLabelType)"], conformances: xConformances)
+			.replacingOccurrences(of: "@Instantiable\n", with: isExistential ? "@Instantiable(fulfillingAdditionalTypes: [XProtocol.self])\n" : "@Instantiable\n")
+		var fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: rootDeclares + [wrapper.aBuilderDeclaration], conformances: conformances)
+				.replacingOccurrences(of: "@Instantiable(isRoot: true)", with: "@Instantiable(isRoot: true, generateMock: true)"),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: [aReceives ?? "@Received(onlyIfAvailable: true) let renamed: \(optionalLabelType)", "@Instantiated let midBuilder: \(wrapper.hopWrapper)<Mid>"], conformances: conformances),
+			seamFixtureType(named: "Mid", isFinalClass: true, declarations: [
+				midFulfillingDeclaration,
+				#"@Received(fulfilledByDependencyNamed: "\#(fulfillingLabel)", ofType: \#(labelMetatype), onlyIfAvailable: true) let renamed: \#(optionalLabelType)"#,
+			] + midDeclaresBesideAlias + [cycleClosingDeclaration], conformances: conformances),
+			xEnclosingType.map { "extension \($0) {\n\(x)\n}" } ?? x,
+		]
+		switch aliasPosition {
+		case .besideCycleClosingScope:
+			break
+		case .aboveCycleClosingScopesType:
+			fixture.append(seamFixtureType(named: "Inner", isFinalClass: true, declarations: [wrapper.aBuilderDeclaration], conformances: conformances))
+		}
+		if isExistential {
+			fixture.append("public protocol XProtocol: AnyObject {}")
+		}
+		if wrapper.isErased {
+			fixture.append("""
+			public protocol AProtocol: AnyObject {}
+			public final class AnyA\(wrapper.isSendable ? ": @unchecked Sendable" : "") {
+			    public init(_ a: some AProtocol) {
+			        self.a = a
+			    }
+
+			    public let a: any AProtocol
+			}
+			extension A: AProtocol {}
+			""")
+		}
+		return fixture + otherTypes
+	}
+
+	/// The tree `Root` of `aliasOfParameterLabelFixture`, with nothing else declared, builds by hand: `Mid` creates its alias
+	/// from `x`, built first and passed `nil`, and builds `A` again with it.
+	private static func handBuiltAliasOfParameterLabelTree(wrapper: CycleClosingWrapper, aliasPosition: AliasPosition) -> String {
+		let aBuiltAgain = wrapper.handBuiltABuilder(calling: "a(renamed: x)")
+		let mid = switch aliasPosition {
+		case .besideCycleClosingScope:
+			"Mid(x: x, renamed: x, aBuilder: \(aBuiltAgain))"
+		case .aboveCycleClosingScopesType:
+			"Mid(x: x, renamed: x, innerBuilder: \(wrapper.hopWrapper)<Inner> { Inner(aBuilder: \(aBuiltAgain)) })"
+		}
+		return """
+		extension Root {
+		    public convenience init() {
+		        \(wrapper.isSendable ? "@Sendable " : "")func a(renamed: X?) -> A {
+		            A(renamed: renamed, midBuilder: \(wrapper.hopWrapper)<Mid> {
+		                let x = X(renamed: nil)
+		                return \(mid)
+		            })
+		        }
+		        self.init(aBuilder: \(wrapper.handBuiltABuilder(calling: "a(renamed: nil)")))
+		    }
+		}
+		"""
+	}
+
+	/// The tree SafeDI generates for `Root` of `aliasOfParameterLabelFixture` with the label spelled as `spelling` spells it.
+	private static func expectedSpelledAliasOfParameterLabelTree(spelling: LabelSpelling, fixtures: FixturePaths) -> String {
+		let type = spelling.labelType
+		// `x` is annotated with its declared type where that is not the type built.
+		let xAnnotation = type == spelling.constructedType ? "" : ": \(type)"
+		return """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_aBuilder(renamed: \(type)?) -> A {
+		            func __safeDI_midBuilder() -> Mid {
+		                let x\(xAnnotation) = \(spelling.constructedType)(renamed: nil)
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		                let renamed: \(type)? = x
+		                #sourceLocation()
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: nil)
+		        }
+		        self.init(aBuilder: aBuilder)
+		    }
+		}
+		"""
+	}
+
+	/// The mock SafeDI generates for `Root` of `aliasOfParameterLabelFixture` with the label spelled as `spelling` spells it.
+	private static func expectedSpelledAliasOfParameterLabelMock(spelling: LabelSpelling, fixtures: FixturePaths) -> String {
+		let type = spelling.labelType
+		// `x` is annotated with its declared type where that is not the type built.
+		let xAnnotation = type == spelling.constructedType ? "" : ": \(type)"
+		return """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            aBuilder: A.SafeDIMockConfiguration = .init(),
+		            renamed: \(type)? = nil
+		        ) {
+		            self.aBuilder = aBuilder
+		            self.renamed = renamed
+		        }
+
+		        let aBuilder: A.SafeDIMockConfiguration
+		        let renamed: \(type)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let renamed: \(type)? = safeDIOverrides.renamed
+		        func __safeDI_aBuilder(renamed: \(type)?) -> A {
+		            func __safeDI_midBuilder() -> Mid {
+		                let x\(xAnnotation) = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.x { safeDIBuilder(nil) } else { \(spelling.constructedType)(renamed: nil) }
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		                let renamed: \(type)? = x
+		                #sourceLocation()
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(x, renamed, aBuilder) } else { Mid(x: x, renamed: renamed, aBuilder: aBuilder) }
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(renamed, midBuilder) } else { A(renamed: renamed, midBuilder: midBuilder) }
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: renamed)
+		        }
+		        return Root(aBuilder: aBuilder)
+		    }
+		}
+		#endif
+		"""
+	}
+
+	/// The tree SafeDI generates for `Root` of `aliasOfParameterLabelFixture`, with nothing else declared.
+	private static func expectedAliasOfParameterLabelTree(wrapper: CycleClosingWrapper, aliasPosition: AliasPosition, fixtures: FixturePaths) -> String {
+		let sendable = wrapper.isSendable ? "@Sendable " : ""
+		let aBuiltWith = { (argument: String) in
+			wrapper.isErased ? "AnyA(__safeDI_aBuilder(renamed: \(argument)))" : "__safeDI_aBuilder(renamed: \(argument))"
+		}
+		let midConstruction = switch aliasPosition {
+		case .besideCycleClosingScope:
+			"""
+			                let aBuilder = \(wrapper.generatedType) {
+			                    \(aBuiltWith("renamed"))
+			                }
+			                return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
+			"""
+		case .aboveCycleClosingScopesType:
+			"""
+			                \(sendable)func __safeDI_innerBuilder() -> Inner {
+			                    let aBuilder = \(wrapper.generatedType) {
+			                        \(aBuiltWith("renamed"))
+			                    }
+			                    return Inner(aBuilder: aBuilder)
+			                }
+			                let innerBuilder = \(wrapper.hopWrapper)<Inner>(__safeDI_innerBuilder)
+			                return Mid(x: x, renamed: renamed, innerBuilder: innerBuilder)
+			"""
+		}
+		return """
+		extension Root {
+		    public convenience init() {
+		        \(sendable)func __safeDI_aBuilder(renamed: X?) -> A {
+		            \(sendable)func __safeDI_midBuilder() -> Mid {
+		                let x = X(renamed: nil)
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		                let renamed: X? = x
+		                #sourceLocation()
+		\(midConstruction)
+		            }
+		            let midBuilder = \(wrapper.hopWrapper)<Mid>(__safeDI_midBuilder)
+		            return A(renamed: renamed, midBuilder: midBuilder)
+		        }
+		        let aBuilder = \(wrapper.generatedType) {
+		            \(aBuiltWith("nil"))
+		        }
+		        self.init(aBuilder: aBuilder)
+		    }
+		}
+		"""
+	}
+
+	/// The mock SafeDI generates for `Root` of `aliasOfParameterLabelFixture`, with nothing else declared. `Root` binds
+	/// `renamed` to an override, which `A`'s builder function is passed where it is declared.
+	private static func expectedAliasOfParameterLabelMock(wrapper: CycleClosingWrapper, aliasPosition: AliasPosition, fixtures: FixturePaths) -> String {
+		let sendable = wrapper.isSendable ? "@Sendable " : ""
+		// A `@Sendable` builder function reads each override of `safeDIOverrides.aBuilder` from a local bound before it,
+		// named after the override's path and ending in `safeDIBuilder`.
+		let override = { (path: String) in
+			if !wrapper.isSendable {
+				"safeDIOverrides.aBuilder.\(path)"
+			} else if path == "safeDIBuilder" {
+				"__safeDI_aBuilder__safeDIBuilder"
+			} else {
+				"__safeDI_aBuilder__aBuilder_\(path.replacingOccurrences(of: ".", with: "_"))\(path.hasSuffix("safeDIBuilder") ? "" : "_safeDIBuilder")"
+			}
+		}
+		// Appended rather than joined with `+` around ternaries: Swift 6.2 on Linux can time out type-checking a `+` chain
+		// of arrays with ternaries; later Swift does not.
+		var overrideLocals = [String]()
+		if wrapper.isSendable {
+			overrideLocals.append(contentsOf: ["midBuilder.safeDIBuilder", "midBuilder.x"])
+			if aliasPosition == .aboveCycleClosingScopesType {
+				overrideLocals.append("midBuilder.innerBuilder.safeDIBuilder")
+			}
+			overrideLocals.append("safeDIBuilder")
+		}
+		let midConstruction = switch aliasPosition {
+		case .besideCycleClosingScope:
+			"""
+			                let aBuilder = \(wrapper.generatedType) {
+			                    __safeDI_aBuilder(renamed: renamed)
+			                }
+			                return if let safeDIBuilder = \(override("midBuilder.safeDIBuilder")) { safeDIBuilder(x, renamed, aBuilder) } else { Mid(x: x, renamed: renamed, aBuilder: aBuilder) }
+			"""
+		case .aboveCycleClosingScopesType:
+			"""
+			                \(sendable)func __safeDI_innerBuilder() -> Inner {
+			                    let aBuilder = \(wrapper.generatedType) {
+			                        __safeDI_aBuilder(renamed: renamed)
+			                    }
+			                    return if let safeDIBuilder = \(override("midBuilder.innerBuilder.safeDIBuilder")) { safeDIBuilder(aBuilder) } else { Inner(aBuilder: aBuilder) }
+			                }
+			                let innerBuilder = \(wrapper.hopWrapper)<Inner>(__safeDI_innerBuilder)
+			                return if let safeDIBuilder = \(override("midBuilder.safeDIBuilder")) { safeDIBuilder(x, renamed, innerBuilder) } else { Mid(x: x, renamed: renamed, innerBuilder: innerBuilder) }
+			"""
+		}
+		let aConstruction = { (construction: String) in wrapper.isErased ? "AnyA(\(construction))" : construction }
+		return """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            aBuilder: A.SafeDIMockConfiguration = .init(),
+		            renamed: X? = nil
+		        ) {
+		            self.aBuilder = aBuilder
+		            self.renamed = renamed
+		        }
+
+		        let aBuilder: A.SafeDIMockConfiguration
+		        let renamed: X?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let renamed: X? = safeDIOverrides.renamed
+		\(overrideLocals.map { "        let \(override($0)) = safeDIOverrides.aBuilder.\($0)\n" }.joined())        \(sendable)func __safeDI_aBuilder(renamed: X?) -> \(wrapper.isErased ? "AnyA" : "A") {
+		            \(sendable)func __safeDI_midBuilder() -> Mid {
+		                let x = if let safeDIBuilder = \(override("midBuilder.x")) { safeDIBuilder(nil) } else { X(renamed: nil) }
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: 10)
+		                let renamed: X? = x
+		                #sourceLocation()
+		\(midConstruction)
+		            }
+		            let midBuilder = \(wrapper.hopWrapper)<Mid>(__safeDI_midBuilder)
+		            return if let safeDIBuilder = \(override("safeDIBuilder")) { \(aConstruction("safeDIBuilder(renamed, midBuilder)")) } else { \(aConstruction("A(renamed: renamed, midBuilder: midBuilder)")) }
+		        }
+		        let aBuilder = \(wrapper.generatedType) {
+		            __safeDI_aBuilder(renamed: renamed)
+		        }
+		        return Root(aBuilder: aBuilder)
+		    }
+		}
+		#endif
+		"""
+	}
 
 	/// `Root` instantiates `t1Builder: Instantiator<T1>` and `t3Builder: Instantiator<T3>`; `T3` instantiates `t0Builder` and
 	/// receives `t1Builder`; `T0` declares `t0Declares` and instantiates `T3` again.

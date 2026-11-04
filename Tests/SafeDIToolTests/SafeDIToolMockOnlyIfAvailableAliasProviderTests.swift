@@ -949,12 +949,324 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 		], "Unexpected output \(output.mockFiles)")
 	}
 
+	// MARK: Tests – The alias inside a lazy cycle whose closed-on function takes its label
+
+	// The mocked type builds `A`, which receives the alias's label only if available, through `aBuilder`; `A` builds `Mid`,
+	// which builds the fulfilling property, declares the alias, and builds `A` again, so `A`'s builder function takes the
+	// alias's label, which the mocked type passes. A label the mock binds only to the override passes the override, which
+	// keeps the alias from being created no more than it does beside no lazy cycle.
+
+	@Test(arguments: FulfillingProperty.allCases, [OutsideReceiver.sibling, nil])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_createsTypesOwnAliasOfParameterLabel_whenNonRootMockedTypesLazyCycleClosesBesideIt(fulfillingProperty: FulfillingProperty, outsideReceiver: OutsideReceiver?) async throws {
+		let fixture = [Self.top] + Self.lazyCycleAroundAlias(mockedType: "Holder", fulfillingProperty: fulfillingProperty, withSibling: outsideReceiver == .sibling)
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+
+		#expect(output.mockFiles == [
+			"Holder+SafeDIMock.swift": generatedFileHeader + Self.expectedLazyCycleAroundAliasMock(fulfillingProperty: fulfillingProperty, withSibling: outsideReceiver == .sibling, fixtures: output.fixtures),
+		], "Unexpected output \(output.mockFiles)")
+		try expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_handsOverrideToTypeRequiringAliasOfParameterLabel_whenTypeBuiltAsFulfillingConstantInsideLazyCycleRequiresIt() async throws {
+		// As beside no lazy cycle, `Service` reads the override in place of `Mid`'s alias, which is not created, through `A`'s
+		// builder function's parameter, which the `Mid` that builds `A` again passes its own alias. No root is declared, so no
+		// values are compared.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.lazyCycleAroundAlias(mockedType: "Holder", fulfillingProperty: .constant, withSibling: true, fulfillingTypeRequiresAlias: true),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.mockFiles == [
+			"Holder+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Holder {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            aBuilder: A.SafeDIMockConfiguration = .init(),
+			            serviceAlias: Service? = nil
+			        ) {
+			            self.aBuilder = aBuilder
+			            self.serviceAlias = serviceAlias
+			        }
+
+			        let aBuilder: A.SafeDIMockConfiguration
+			        let serviceAlias: Service?
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Holder {
+			        let serviceAlias: Service? = safeDIOverrides.serviceAlias
+			        func __safeDI_aBuilder(serviceAlias: Service?) -> A {
+			            func __safeDI_midBuilder() -> Mid {
+			                let service = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.service { safeDIBuilder(serviceAlias) } else { Service(serviceAlias: serviceAlias) }
+			                let sibling = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.sibling { safeDIBuilder(serviceAlias) } else { Sibling(serviceAlias: serviceAlias) }
+			                let aBuilder = Instantiator<A> {
+			                    __safeDI_aBuilder(serviceAlias: serviceAlias)
+			                }
+			                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(service, serviceAlias, sibling, aBuilder) } else { Mid(service: service, serviceAlias: serviceAlias, sibling: sibling, aBuilder: aBuilder) }
+			            }
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(serviceAlias, midBuilder) } else { A(serviceAlias: serviceAlias, midBuilder: midBuilder) }
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(serviceAlias: serviceAlias)
+			        }
+			        return Holder(aBuilder: aBuilder)
+			    }
+			}
+			#endif
+			""",
+		], "Unexpected output \(output.mockFiles)")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesPromotedDependencyInPlaceOfUncreatedAlias_whenTypeBesideLazyCycleRequiresAliasesLabel() async throws {
+		// `Other` requires `serviceAlias: Service`, which `Top` provides above `Holder` and `Holder`'s mock builds: a provider
+		// above `A`'s builder function, so `Mid` creates no alias, in production and in the mock alike.
+		let fixture = [
+			seamFixtureType(named: "Top", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let serviceAlias: Service", "@Instantiated let holder: Holder"]),
+			seamFixtureType(named: "Other", isFinalClass: true, declarations: ["@Received let serviceAlias: Service"]),
+		] + Self.lazyCycleAroundAlias(mockedType: "Holder", fulfillingProperty: .constant, withSibling: false, mockedTypeDeclares: ["@Instantiated let other: Other"])
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+
+		#expect(output.mockFiles == [
+			"Holder+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Holder {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            serviceAlias: ((Service?) -> Service)? = nil,
+			            other: ((Service) -> Other)? = nil,
+			            aBuilder: A.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.serviceAlias = serviceAlias
+			            self.other = other
+			            self.aBuilder = aBuilder
+			        }
+
+			        let serviceAlias: ((Service?) -> Service)?
+			        let other: ((Service) -> Other)?
+			        let aBuilder: A.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Holder {
+			        let serviceAlias = if let safeDIBuilder = safeDIOverrides.serviceAlias { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
+			        let other = if let safeDIBuilder = safeDIOverrides.other { safeDIBuilder(serviceAlias) } else { Other(serviceAlias: serviceAlias) }
+			        func __safeDI_aBuilder(serviceAlias: Service?) -> A {
+			            func __safeDI_midBuilder() -> Mid {
+			                let service = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.service { safeDIBuilder(serviceAlias) } else { Service(serviceAlias: serviceAlias) }
+			                let aBuilder = Instantiator<A> {
+			                    __safeDI_aBuilder(serviceAlias: serviceAlias)
+			                }
+			                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(service, serviceAlias, aBuilder) } else { Mid(service: service, serviceAlias: serviceAlias, aBuilder: aBuilder) }
+			            }
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(serviceAlias, midBuilder) } else { A(serviceAlias: serviceAlias, midBuilder: midBuilder) }
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(serviceAlias: serviceAlias)
+			        }
+			        return Holder(other: other, aBuilder: aBuilder)
+			    }
+			}
+			#endif
+			""",
+		], "Unexpected output \(output.mockFiles)")
+		try expectMockBuildsWhatProductionBuilds(fixture: fixture, output: output, mockedType: "Holder", productionExpression: "Top().holder")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesForwardedPropertyInPlaceOfUncreatedAlias_whenMockedTypeForwardsAliasesLabelAboveLazyCycle() async throws {
+		// `Holder` forwards `serviceAlias`, a provider above `A`'s builder function, so `Mid` creates no alias, in production
+		// and in the mock alike.
+		let fixture = [
+			seamFixtureType(named: "Top", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let holderBuilder: Instantiator<Holder>"]),
+		] + Self.lazyCycleAroundAlias(mockedType: "Holder", fulfillingProperty: .constant, withSibling: false, mockedTypeDeclares: ["@Forwarded let serviceAlias: Service"])
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+
+		#expect(output.mockFiles == [
+			"Holder+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Holder {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            aBuilder: A.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.aBuilder = aBuilder
+			        }
+
+			        let aBuilder: A.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        serviceAlias: Service,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Holder {
+			        func __safeDI_aBuilder(serviceAlias: Service?) -> A {
+			            func __safeDI_midBuilder() -> Mid {
+			                let service = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.service { safeDIBuilder(serviceAlias) } else { Service(serviceAlias: serviceAlias) }
+			                let aBuilder = Instantiator<A> {
+			                    __safeDI_aBuilder(serviceAlias: serviceAlias)
+			                }
+			                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(service, serviceAlias, aBuilder) } else { Mid(service: service, serviceAlias: serviceAlias, aBuilder: aBuilder) }
+			            }
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(serviceAlias, midBuilder) } else { A(serviceAlias: serviceAlias, midBuilder: midBuilder) }
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(serviceAlias: serviceAlias)
+			        }
+			        return Holder(serviceAlias: serviceAlias, aBuilder: aBuilder)
+			    }
+			}
+			#endif
+			""",
+		], "Unexpected output \(output.mockFiles)")
+		let fixtureFiles = Dictionary(uniqueKeysWithValues: fixture.enumerated().map { ("File\($0.offset).swift", $0.element) })
+		try expectDifferentialValuesAgree(
+			feature: DifferentialValuePath(fixtureFiles: fixtureFiles, generatedFiles: #require(output.generatedFiles)),
+			knownRight: DifferentialValuePath(
+				fixtureFiles: fixtureFiles,
+				generatedFiles: output.dependencyTreeFiles.merging(["Holder+ProductionMock.swift": "extension Holder {\n    static func mock(serviceAlias: Service) -> Holder {\n        Top().holderBuilder.instantiate(serviceAlias)\n    }\n}\n"]) { first, _ in first },
+			),
+			probes: [DifferentialValueProbe("Holder.mock(serviceAlias: Service(serviceAlias: nil))")],
+			filesToDelete: &filesToDelete,
+		)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
 
+	/// The mock SafeDI generates for `Holder` of `lazyCycleAroundAlias` with nothing else declared: `Mid` builds the
+	/// fulfilling property first, passing its type `nil`, creates the alias from it, and builds `A` again with the alias,
+	/// while `Holder` passes `A`'s builder function the override.
+	private static func expectedLazyCycleAroundAliasMock(fulfillingProperty: FulfillingProperty, withSibling: Bool, fixtures: FixturePaths) -> String {
+		let label = fulfillingProperty.label
+		let type = fulfillingProperty.typeName
+		let fulfillingPropertyConstruction = switch fulfillingProperty {
+		case .constant:
+			"""
+			                let service = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.service { safeDIBuilder(nil) } else { Service(serviceAlias: nil) }
+			"""
+		case .instantiator:
+			"""
+			                func __safeDI_leafBuilder() -> Leaf {
+			                    if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.leafBuilder { safeDIBuilder(nil) } else { Leaf(leafBuilderAlias: nil) }
+			                }
+			                let leafBuilder = Instantiator<Leaf>(__safeDI_leafBuilder)
+			"""
+		}
+		let siblingConstruction = withSibling
+			? "                let sibling = if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.sibling { safeDIBuilder(\(label)Alias) } else { Sibling(\(label)Alias: \(label)Alias) }\n"
+			: ""
+		// Appended rather than joined with `+` around a ternary: Swift 6.2 on Linux can time out type-checking a `+` chain
+		// of arrays with a ternary; later Swift does not.
+		var midArguments = [label, "\(label)Alias"]
+		if withSibling {
+			midArguments.append("sibling")
+		}
+		midArguments.append("aBuilder")
+		return """
+		#if DEBUG
+		extension Holder {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            aBuilder: A.SafeDIMockConfiguration = .init(),
+		            \(label)Alias: \(type)? = nil
+		        ) {
+		            self.aBuilder = aBuilder
+		            self.\(label)Alias = \(label)Alias
+		        }
+
+		        let aBuilder: A.SafeDIMockConfiguration
+		        let \(label)Alias: \(type)?
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Holder {
+		        let \(label)Alias: \(type)? = safeDIOverrides.\(label)Alias
+		        func __safeDI_aBuilder(\(label)Alias: \(type)?) -> A {
+		            func __safeDI_midBuilder() -> Mid {
+		\(fulfillingPropertyConstruction)
+		                #sourceLocation(file: "\(fixtures["Mid.swift"])", line: \(withSibling ? 11 : 10))
+		                let \(label)Alias: \(type)? = \(label)
+		                #sourceLocation()
+		\(siblingConstruction)                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(\(label)Alias: \(label)Alias)
+		                }
+		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(\(midArguments.joined(separator: ", "))) } else { Mid(\(midArguments.map { "\($0): \($0)" }.joined(separator: ", "))) }
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return if let safeDIBuilder = safeDIOverrides.aBuilder.safeDIBuilder { safeDIBuilder(\(label)Alias, midBuilder) } else { A(\(label)Alias: \(label)Alias, midBuilder: midBuilder) }
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(\(label)Alias: \(label)Alias)
+		        }
+		        return Holder(aBuilder: aBuilder)
+		    }
+		}
+		#endif
+		"""
+	}
+
+	/// The mocked type `name`, which declares `mockedTypeDeclares` and instantiates `aBuilder: Instantiator<A>`; `A`, which
+	/// receives the label of `Mid`'s alias only if available and instantiates `midBuilder: Instantiator<Mid>`; `Mid`, which
+	/// builds `fulfillingProperty`, declares the `onlyIfAvailable` alias of it, builds a `Sibling` that receives the alias's
+	/// label only if available where `withSibling` holds, and instantiates `aBuilder` again; and the type
+	/// `fulfillingProperty` builds, which receives the alias's label, only if available unless `fulfillingTypeRequiresAlias`.
+	private static func lazyCycleAroundAlias(
+		mockedType name: String,
+		fulfillingProperty: FulfillingProperty,
+		withSibling: Bool,
+		fulfillingTypeRequiresAlias: Bool = false,
+		mockedTypeDeclares: [String] = [],
+	) -> [String] {
+		let label = fulfillingProperty.label
+		let type = fulfillingProperty.typeName
+		let fulfillingTypeName = switch fulfillingProperty {
+		case .constant: "Service"
+		case .instantiator: "Leaf"
+		}
+		// Appended rather than joined with `+` around ternaries: Swift 6.2 on Linux can time out type-checking a `+` chain
+		// of arrays with ternaries; later Swift does not.
+		var midDeclarations = [
+			"@Instantiated let \(label): \(type)",
+			#"@Received(fulfilledByDependencyNamed: "\#(label)", ofType: \#(type).self, onlyIfAvailable: true) let \#(label)Alias: \#(type)?"#,
+		]
+		if withSibling {
+			midDeclarations.append("@Instantiated let sibling: Sibling")
+		}
+		midDeclarations.append("@Instantiated let aBuilder: Instantiator<A>")
+		var fixture = [
+			seamFixtureType(named: name, isFinalClass: true, declarations: mockedTypeDeclares + ["@Instantiated let aBuilder: Instantiator<A>"])
+				.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n"),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let \(label)Alias: \(type)?", "@Instantiated let midBuilder: Instantiator<Mid>"]),
+			seamFixtureType(named: "Mid", isFinalClass: true, declarations: midDeclarations),
+			receiver(named: fulfillingTypeName, fulfillingProperty: fulfillingProperty, receivesAliasOnlyIfAvailable: !fulfillingTypeRequiresAlias),
+		]
+		if withSibling {
+			fixture.append(receiver(named: "Sibling", fulfillingProperty: fulfillingProperty, receivesAliasOnlyIfAvailable: true))
+		}
+		return fixture
+	}
+
 	/// The property `Child` builds and declares an `onlyIfAvailable` alias of.
-	private enum FulfillingProperty {
+	enum FulfillingProperty: CaseIterable, Sendable {
 		/// `service: Service`, aliased as `serviceAlias: Service?`.
 		case constant
 		/// `leafBuilder: Instantiator<Leaf>`, aliased as `leafBuilderAlias: Instantiator<Leaf>?`.
@@ -976,7 +1288,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 	}
 
 	/// What the mocked type builds beside `Child` that receives the label of `Child`'s alias outside the alias's tree.
-	private enum OutsideReceiver {
+	enum OutsideReceiver: Sendable {
 		/// A `Sibling` that receives the alias's label only if available.
 		case sibling
 		/// The `leafBuilder: Instantiator<Leaf>` that `Child` builds too, declared before `child`, whose `Leaf` receives
