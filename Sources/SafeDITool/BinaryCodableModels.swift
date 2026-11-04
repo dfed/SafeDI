@@ -521,6 +521,7 @@ extension AccessDeclaration: BinarySchemaMember {
 				BinaryLayoutField("level", \.level),
 				BinaryLayoutField("modifierRange", \.modifierRange),
 				BinaryLayoutField("declarationStartLocation", \.declarationStartLocation),
+				BinaryLayoutField("isExtension", \.isExtension),
 			],
 			unwrittenProperties: [],
 		)
@@ -531,6 +532,7 @@ extension AccessDeclaration: BinarySchemaMember {
 			level: reader.read(),
 			modifierRange: reader.read() as Dependency.SourceRange?,
 			declarationStartLocation: reader.read() as Dependency.DeclarationLocation?,
+			isExtension: reader.read(),
 		)
 	}
 
@@ -538,6 +540,7 @@ extension AccessDeclaration: BinarySchemaMember {
 		writer.write(level)
 		writer.write(modifierRange)
 		writer.write(declarationStartLocation)
+		writer.write(isExtension)
 	}
 }
 

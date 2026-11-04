@@ -24,10 +24,12 @@ public struct AccessDeclaration: Codable, Hashable, Sendable {
 		level: AccessLevel,
 		modifierRange: Dependency.SourceRange? = nil,
 		declarationStartLocation: Dependency.DeclarationLocation? = nil,
+		isExtension: Bool = false,
 	) {
 		self.level = level
 		self.modifierRange = modifierRange
 		self.declarationStartLocation = declarationStartLocation
+		self.isExtension = isExtension
 	}
 
 	/// The access level the declaration's modifiers spell: `internal` when none of them sets one.
@@ -40,4 +42,16 @@ public struct AccessDeclaration: Codable, Hashable, Sendable {
 	/// it has none – which is where a fix-it inserts an access modifier. `nil` when the declaration was parsed without
 	/// a file context – macro expansion walks a detached declaration.
 	public let declarationStartLocation: Dependency.DeclarationLocation?
+	/// Whether the declaration is an extension. A member of an extension that spells no access modifier defaults to
+	/// the extension's level (`fileprivate` for a `private` extension), and a member of a type declaration to
+	/// `internal`, whatever the type's level. Always `false` in `Instantiable.enclosingTypeAccess`, and always `true` in
+	/// `Instantiable.enclosingExtensionAccess`.
+	public let isExtension: Bool
+
+	/// Whether the declaration spells an access modifier. A declaration that spells none has the `internal` level, and
+	/// one parsed without a file context records no modifier range, so only an `internal` level without a range is
+	/// taken to be unspelled.
+	public var spellsAccessModifier: Bool {
+		modifierRange != nil || level != .internal
+	}
 }

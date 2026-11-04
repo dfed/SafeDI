@@ -272,10 +272,12 @@ public struct Initializer: Codable, Hashable, Sendable {
 
 	// MARK: - Private
 
-	/// The reasons this initializer cannot construct its type, whatever dependencies the type has.
+	/// The reasons this initializer cannot construct its type, whatever dependencies the type has. Generated code is
+	/// always in a file of its own, so it cannot call a `private` or `fileprivate` initializer. Any other access can
+	/// suit the code that constructs the type, which SafeDITool checks when it generates that code.
 	private var dependencyIndependentErrors: [GenerationError] {
 		[
-			access.level.isPublicOrOpen ? nil : .inaccessibleInitializer,
+			access.level.isPrivateOrFilePrivate ? .inaccessibleInitializer(access.level) : nil,
 			isOptional ? .optionalInitializer : nil,
 			isAsync ? .asyncInitializer : nil,
 			doesThrow ? .throwingInitializer : nil,
@@ -287,7 +289,8 @@ public struct Initializer: Codable, Hashable, Sendable {
 	// MARK: - GenerationError
 
 	public enum GenerationError: Error, Equatable {
-		case inaccessibleInitializer
+		/// The initializer is `private` or `fileprivate`, the level it carries.
+		case inaccessibleInitializer(AccessLevel)
 		case asyncInitializer
 		case throwingInitializer
 		case optionalInitializer

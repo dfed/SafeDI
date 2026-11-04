@@ -401,6 +401,7 @@ struct FileVisitorTests {
 				access: AccessDeclaration(
 					level: .internal,
 					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+					isExtension: true,
 				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
@@ -426,6 +427,7 @@ struct FileVisitorTests {
 				enclosingExtensionAccess: AccessDeclaration(
 					level: .internal,
 					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+					isExtension: true,
 				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 4, column: 5),
 			),
@@ -475,6 +477,7 @@ struct FileVisitorTests {
 				access: AccessDeclaration(
 					level: .internal,
 					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+					isExtension: true,
 				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
@@ -500,6 +503,7 @@ struct FileVisitorTests {
 				enclosingExtensionAccess: AccessDeclaration(
 					level: .internal,
 					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+					isExtension: true,
 				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 4, column: 5),
 			),
@@ -525,6 +529,7 @@ struct FileVisitorTests {
 				enclosingExtensionAccess: AccessDeclaration(
 					level: .internal,
 					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+					isExtension: true,
 				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 8, column: 5),
 			),
@@ -550,6 +555,7 @@ struct FileVisitorTests {
 				enclosingExtensionAccess: AccessDeclaration(
 					level: .internal,
 					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+					isExtension: true,
 				),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 12, column: 5),
 			),
@@ -1865,6 +1871,7 @@ struct FileVisitorTests {
 				level: .public,
 				modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 7),
 				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+				isExtension: true,
 			),
 		])
 		#expect(fileVisitor.instantiables.map(\.mockInitializer?.access.level) == [.internal])
@@ -1891,6 +1898,7 @@ struct FileVisitorTests {
 				level: .package,
 				modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 8),
 				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+				isExtension: true,
 			),
 		])
 		#expect(fileVisitor.instantiables.map(\.mockInitializer?.access.level) == [.internal])
@@ -1917,6 +1925,7 @@ struct FileVisitorTests {
 				level: .package,
 				modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 8),
 				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+				isExtension: true,
 			),
 		])
 		#expect(fileVisitor.instantiables.map(\.mockInitializer?.access.level) == [.internal])
@@ -1962,6 +1971,7 @@ struct FileVisitorTests {
 				level: .public,
 				modifierRange: Dependency.SourceRange(startLine: 1, startColumn: 1, endLine: 1, endColumn: 7),
 				declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+				isExtension: true,
 			),
 		])
 		#expect(fileVisitor.instantiables.map(\.enclosingTypeAccess) == [[]])
