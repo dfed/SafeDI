@@ -498,6 +498,30 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		}
 	}
 
+	/// Whether this type is attributed `@escaping`, which Swift accepts only on a function type, so that a parameter
+	/// declared `@escaping` is of a function type even when it is spelled as a typealias SafeDI cannot see through.
+	public var isEscaping: Bool {
+		switch self {
+		case let .attributed(_, _, attributes):
+			attributes.contains("escaping")
+		case .any,
+		     .array,
+		     .closure,
+		     .composition,
+		     .dictionary,
+		     .implicitlyUnwrappedOptional,
+		     .metatype,
+		     .nested,
+		     .optional,
+		     .simple,
+		     .some,
+		     .tuple,
+		     .unknown,
+		     .void:
+			false
+		}
+	}
+
 	/// Recursively strips wrappers that are irrelevant for disambiguation:
 	/// attributes (`@Sendable`, `@escaping`), optionality (`?`, `!`),
 	/// existential wrappers (`some`, `any`), and metatype (`.Type`, `.Protocol`).

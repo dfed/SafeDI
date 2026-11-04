@@ -5060,8 +5060,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let typeDescription: TypeDescription
 			/// The default value expression (e.g., ".light", "false").
 			let defaultExpression: String
-			/// Whether the parameter type is a closure/function type.
+			/// Whether the parameter type is spelled as a closure/function type, which a configuration can mark `@Sendable`.
 			let isClosureType: Bool
+			/// Whether the parameter is declared `@escaping`, so that its type is a function type even when it is a
+			/// typealias, which `isClosureType` cannot see through.
+			let isDeclaredEscaping: Bool
 
 			/// Whether this is the default of a parameter with `label` and `typeDescription`. The type check is
 			/// load-bearing: a hand-written mock's `count: Double = 0.5` is no default for `init`'s `count: Int`.
@@ -5083,6 +5086,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 						typeDescription: argument.typeDescription.strippingEscaping,
 						defaultExpression: defaultExpression,
 						isClosureType: argument.typeDescription.strippingEscaping.isClosure,
+						isDeclaredEscaping: argument.typeDescription.isEscaping,
 					)
 				}
 			}
@@ -5996,11 +6000,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// SafeDI cannot tell whether it is, so the struct stores a `@Sendable` closure that returns the
 				// value and the mock calls it where it builds the type, which evaluates the default once per
 				// construction, as production does. The initializer takes the value as an autoclosure, so a
-				// caller still passes a value.
+				// caller still passes a value. Swift rejects `@Sendable` on a typealias, so a typealiased function
+				// type is stored this way too, even when the parameter is declared `@escaping`.
 				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): @autoclosure @escaping @Sendable () -> \(typeSource) = \(autoclosureDefault(defaultExpression(defaultParameter)))")
 				storedProperties.append("\(innerIndent)let \(defaultParameter.label): @Sendable () -> \(typeSource)")
 			} else {
-				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(typeSource) = \(defaultExpression(defaultParameter))")
+				// A parameter declared `@escaping` is of a function type, which the initializer stores, so it takes the
+				// value `@escaping` too, also when the type is a typealias of a function type.
+				let escaping = defaultParameter.isDeclaredEscaping ? "@escaping " : ""
+				initParameters.append("\(innerIndent)\(standardIndent)\(defaultParameter.label): \(escaping)\(typeSource) = \(defaultExpression(defaultParameter))")
 				storedProperties.append("\(innerIndent)let \(defaultParameter.label): \(typeSource)")
 			}
 			assignments.append("\(innerIndent)\(standardIndent)self.\(defaultParameter.label) = \(defaultParameter.label)")
