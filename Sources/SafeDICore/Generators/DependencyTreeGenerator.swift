@@ -108,6 +108,11 @@ public actor DependencyTreeGenerator {
 	public func generatePerRootCodeTrees() async throws -> [GeneratedRoot] {
 		let rootScopeGenerators = try rootScopeGenerators
 		try await validateNoUncreatedAliasIsRead(inTreesRootedAt: rootScopeGenerators)
+		try Self.validateFills(
+			inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator),
+			callerModule: seams.currentModule,
+			seamModule: { [seams] seamType in seams.foreignSeams[seamType]?.declaringModule ?? seams.currentModule },
+		)
 		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: rootScopeGenerators.map { ($0.instantiable, $0.scopeGenerator) })
 		try await validateNoSeamTierOmitsProvidedValue(inTreesRootedAt: rootScopeGenerators)
 
@@ -993,10 +998,19 @@ public actor DependencyTreeGenerator {
 
 	// MARK: - DependencyTreeGeneratorError
 
-	private enum DependencyTreeGeneratorError: SourceLocatedError {
+	enum DependencyTreeGeneratorError: SourceLocatedError {
 		/// `fulfilledByMockOnlyDeclaration` is set when only a `mockOnly` declaration fulfills the type.
 		case noInstantiableFound(TypeDescription, referencedBy: [LocatedProperty], fulfilledByMockOnlyDeclaration: Bool)
 		case unfulfillableProperties([UnfulfillableProperty])
+		/// Reported at the dependency of a root through which its tree calls a seam whose builder for a hole it cannot
+		/// fill, with a note at the hole's declaration where its file can be read. See `UnfilledHole`.
+		case unfilledHoles([UnfilledHole])
+		/// Reported at each receive in a fill's tree, or each repeat of a property on a seam's path in it, that the fill
+		/// cannot give inline's value, with a note at the declaration inline would read. See `FillFinding`.
+		case fillFindings([FillFinding])
+		/// Reported at each `@Instantiated` declaration in the tree of a seam whose module SafeDI does not know that no
+		/// production declaration fulfills. See `HoleInSeamOfUnnamedModule`.
+		case holesInSeamsOfUnnamedModule([HoleInSeamOfUnnamedModule])
 		/// Reported at each `@Received` declaration whose dependency a closer ancestor hides, with a note at the
 		/// hiding declaration. See `HiddenReceivedProperty`.
 		case hiddenReceivedProperties([HiddenReceivedProperty])
@@ -1186,6 +1200,20 @@ public actor DependencyTreeGenerator {
 					)
 				}
 				.sorted(by: SourceDiagnostic.precedesInSourceOrder)
+			case let .holesInSeamsOfUnnamedModule(holes):
+				holes
+					.map(\.sourceDiagnostic)
+					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
+			case let .fillFindings(fillFindings):
+				fillFindings
+					.map(\.sourceDiagnostics)
+					.sorted { SourceDiagnostic.precedesInSourceOrder($0[0], $1[0]) }
+					.flatMap(\.self)
+			case let .unfilledHoles(unfilledHoles):
+				unfilledHoles
+					.map(\.sourceDiagnostics)
+					.sorted { SourceDiagnostic.precedesInSourceOrder($0[0], $1[0]) }
+					.flatMap(\.self)
 			case let .unfulfillableProperties(unfulfillableProperties):
 				unfulfillableProperties
 					.map(\.sourceDiagnostics)
@@ -1658,6 +1686,10 @@ public actor DependencyTreeGenerator {
 				/// depends on what encloses the seam. Reported at the reading declaration, or at the alias. See
 				/// `ScopeGenerator.uncreatedAliasReads(ofTreeRootedAt:)`.
 				case uncreatedAliasRead(ScopeGenerator.UncreatedAliasRead)
+				/// A tier of the generated initializer is wider than `hole`'s builder, which every tier takes, as far as the
+				/// proof of the builder's type (`Hole.accessCause`) goes. Not a `ParameterKind`: a builder is no member of
+				/// `SeamSignature.parameters`, whose labels are what `parameterLabels(namedBy:about:)` names.
+				case tierOmitsBuilder(hole: SeamSignature.Hole, tier: AccessLevel)
 			}
 
 			let seam: Instantiable
@@ -1782,6 +1814,23 @@ public actor DependencyTreeGenerator {
 					receivers = []
 					location = read.declarationLocation
 					message = "SafeDI cannot generate the dependency tree of \(seamName): \(Self.message(for: read))"
+				case let .tierOmitsBuilder(hole, tier):
+					// Explained as a required parameter's omission is, by the shared formatter, with the builder's remedy in
+					// the place of a pass-through's.
+					receivers = []
+					let module = seam.moduleName.map { "module `\($0)`" } ?? "this module"
+					let requiredBy = tier == hole.tierAccess ? "" : ", which \(seamName)'s `\(tier.spelledOnGeneratedDeclaration)` access requires,"
+					let causeText = hole.accessCause.map { " " + SeamAccessExplanation.causeSentence($0, receivers: []) } ?? ""
+					let remedies = SeamAccessExplanation.tierRemedies(
+						cause: hole.accessCause,
+						neededLevel: tier,
+						parameterLevel: hole.tierAccess,
+						seam: seam.concreteInstantiable,
+						parameter: Property(label: hole.builderLabel, typeDescription: hole.builderType(qualifiedBy: hole.scopeSeamType)),
+						receivers: [],
+						parameterKind: .builder(fulfilledType: hole.instantiatedType, seamModuleName: seam.moduleName, isPassedUp: hole.innerSeamType != nil),
+					)
+					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(hole.builderLabel): \(hole.builderType(qualifiedBy: hole.scopeSeamType).asSource)`, the builder for `\(hole.ownerType.asSource)`'s `\(hole.property.asSource)`, which no @Instantiable declaration \(module) can see fulfills.\(causeText) \(remedies)"
 				case let .parameters(.initializerRedeclared(parameters, handWrittenInitializer)):
 					receivers = []
 					let signature = "init(\(parameters.map(\.asSource).joined(separator: ", ")))"
@@ -2224,6 +2273,7 @@ public actor DependencyTreeGenerator {
 					cache: &receivedPropertiesCache,
 					validation: &childrenRequiringEachOtherValidation,
 				)
+				try validateCyclesFromRootsOfForeignSeamsWithHoles(in: typeDescriptionToScopeMap, receivedPropertiesCache: &receivedPropertiesCache)
 				self.validatedScopes = Set(typeDescriptionToScopeMap.values)
 				// A module whose declarations hold no seam generates from the validated scopes, as it always has.
 				// One that holds a seam generates from a second map, in which every reach of a seam is a call to
@@ -2944,6 +2994,13 @@ public actor DependencyTreeGenerator {
 			checkingModule: emittingModuleToCheck,
 			constructionComments: { self.constructionComments(for: $0) },
 		)
+		// A root that calls a seam whose builder it cannot fill is reported before any tree is generated.
+		try Self.validateRootsFillEveryHole(
+			roots: rootInstantiables.sorted().compactMap { seamScopeMap[$0] },
+			callerModuleName: seams.currentModule.moduleName,
+			instantiables: typeDescriptionToFulfillingInstantiableMap,
+			isReadableFile: emittingModule?.isReadableFile,
+		)
 		// A seam whose signature equals its own initializer's generates no code: its file holds the header alone.
 		var generatedSeams = [(seam: Instantiable, seamRoot: ScopeGenerator.SeamRoot, rootScope: Scope)]()
 		for seamType in generatedSeamTypes.sorted() {
@@ -3338,7 +3395,7 @@ public actor DependencyTreeGenerator {
 	/// does a `fileprivate` or `private` initializer, or a seam's type at one of those levels, since generated code
 	/// in another file cannot construct such a declaration, which the check of every construction reports at it, so
 	/// no tier at those levels is ever generated.
-	private static func parameterAccess(_ initializerAccess: AccessLevel?) -> AccessLevel {
+	static func parameterAccess(_ initializerAccess: AccessLevel?) -> AccessLevel {
 		switch initializerAccess {
 		case .open, .public:
 			.public
@@ -3431,6 +3488,7 @@ public actor DependencyTreeGenerator {
 					constructionComments: constructionComments(leafInstantiable),
 					seamCall: SeamCall(
 						parameters: signature.parameters(ofTierAt: tier),
+						holes: signature.holes,
 						guardTypeName: signature.guardTypeName,
 						carriesPluginComment: seams.foreignSeams[instantiable.concreteInstantiable]?.callCarriesPluginComment ?? false,
 						unreachableTierIsReported: unreachableTierIsReported,
@@ -3451,8 +3509,22 @@ public actor DependencyTreeGenerator {
 			}
 		}
 		// Each scope once: the map holds a scope under every type it fulfills.
-		for scope in scopes where scope.seamCall == nil {
-			Self.populatePropertiesToGenerate(of: scope, from: typeDescriptionToScopeMap, instantiables: instantiables, aliasDeclarationReferences: aliasDeclarationReferences)
+		for scope in scopes {
+			if let seamCall = scope.seamCall {
+				// A call fills each builder with the type that fulfills the hole in these declarations, or, when none does,
+				// passes up the builder of the seam whose tree makes the call (a root's tree cannot: an error).
+				scope.holeArguments = seamCall.holes.map { hole in
+					if let fulfillingInstantiable = Self.fulfillingInstantiable(of: hole, in: instantiables),
+					   let fulfillingScope = typeDescriptionToScopeMap[fulfillingInstantiable.concreteInstantiable]
+					{
+						.fill(hole, fulfillingScope)
+					} else {
+						.passUp(hole)
+					}
+				}
+			} else {
+				Self.populatePropertiesToGenerate(of: scope, from: typeDescriptionToScopeMap, instantiables: instantiables, aliasDeclarationReferences: aliasDeclarationReferences)
+			}
 		}
 		return typeDescriptionToScopeMap
 	}
@@ -3469,11 +3541,19 @@ public actor DependencyTreeGenerator {
 			switch dependency.source {
 			case let .instantiated(_, erasedToConcreteExistential):
 				let instantiatedType = dependency.asInstantiatedType
-				if instantiables[instantiatedType] != nil, let instantiatedScope = typeDescriptionToScopeMap[instantiatedType] {
+				if let instantiable = instantiables[instantiatedType], !instantiable.mockOnly, let instantiatedScope = typeDescriptionToScopeMap[instantiatedType] {
 					scope.propertiesToGenerate.append(.instantiated(
 						dependency.property,
 						instantiatedScope,
 						erasedToConcreteExistential: erasedToConcreteExistential,
+					))
+				} else if Self.canBeHole(dependency) {
+					// No production declaration these declarations hold fulfills the type, which validation accepts only
+					// in a seam's tree: the seam's generated initializer takes a builder for it.
+					scope.propertiesToGenerate.append(.hole(
+						dependency.property,
+						erasedToConcreteExistential: erasedToConcreteExistential,
+						declarationLocation: dependency.declarationLocation,
 					))
 				}
 			case let .aliased(fulfillingProperty, erasedToConcreteExistential, onlyIfAvailable):
@@ -3851,6 +3931,7 @@ public actor DependencyTreeGenerator {
 		let parameters = (ownParameters + passThroughs).map { parameter in
 			SeamSignature.Parameter(property: parameter.property, isPassThrough: parameter.isPassThrough, access: parameter.access, tierAccess: min(parameter.access, seamTypeAccess), defaultsToNil: parameter.defaultsToNil, receivers: parameter.receivers, accessCause: parameter.accessCause, otherInitializerArgumentsAccess: parameter.otherInitializerArgumentsAccess)
 		}
+		let holes = Self.holes(of: seam, generator: generator, parameters: parameters, proof: proof, instantiables: instantiables)
 		let tiers = Self.tiers(of: seam, parameters: parameters)
 		for omitted in parameters where omitted.tierAccess < seamTypeAccess && !omitted.defaultsToNil {
 			// A pass-through that reaches this seam only through a nested seam call the module reaches no tier of,
@@ -3882,6 +3963,15 @@ public actor DependencyTreeGenerator {
 				)),
 			)))
 		}
+		// Every tier takes every builder, since a hole is required: a hole narrower than a tier is reported once per
+		// declaration of its property, however many sites the tree builds it at, at the widest tier that omits it.
+		var reportedHoleDeclarations = Set<OwnedHoleDeclaration>()
+		for hole in holes {
+			guard let tier = tiers.first(where: { $0 > hole.tierAccess }),
+			      reportedHoleDeclarations.insert(OwnedHoleDeclaration(owner: hole.ownerType, property: hole.property)).inserted
+			else { continue }
+			errors.append(.seam(.init(seam: seam, kind: .tierOmitsBuilder(hole: hole, tier: tier))))
+		}
 		// Swift tells initializers apart by their parameters' labels and types, not by their default values, so a
 		// generated tier would redeclare a hand-written initializer with the same parameters.
 		for tier in tiers {
@@ -3901,7 +3991,13 @@ public actor DependencyTreeGenerator {
 		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
 			throw error
 		}
-		return ScopeGenerator.SeamRoot(signature: SeamSignature(seamType: seam.concreteInstantiable, parameters: parameters, tiers: tiers, noTierParameters: noTierParameters))
+		return ScopeGenerator.SeamRoot(signature: SeamSignature(seamType: seam.concreteInstantiable, parameters: parameters, tiers: tiers, noTierParameters: noTierParameters, holes: holes))
+	}
+
+	/// The declaration of a hole's property, by which a hole's errors are reported once however many sites it has.
+	private struct OwnedHoleDeclaration: Hashable {
+		let owner: TypeDescription
+		let property: Property
 	}
 
 	/// What a collision of `forms`, the properties the receivers of one label declare, says to do. Forms of one
@@ -4704,7 +4800,8 @@ public actor DependencyTreeGenerator {
 						propertyStack: [childProperty] + propertyStack,
 						lazilyInstantiatedDeclarations: scopeToWalk.lazilyInstantiatedDeclarations.recordingLazilyInstantiated(declaredChildProperty),
 					))
-				case .aliased:
+				case .aliased, .hole:
+					// A hole's tree is a fill's, which a mock never builds: a mock's scopes hold no hole.
 					break
 				}
 			}
@@ -5597,10 +5694,9 @@ public actor DependencyTreeGenerator {
 	/// - Non-constant entry point that originated from a receive (`closingReceive` is not `nil`) → `.receivedInstantiatorDependencyCycleDetected`.
 	///
 	/// Accepted (returns without throwing):
-	/// - Fully-lazy cycles entered via an `Instantiator` that is NOT received.
-	///   The cycle compiles because each hop defers construction; pruning via
-	///   `cycleEdges` is what breaks the self-referencing config-struct shape
-	///   so the generated code typechecks.
+	/// - Cycles closed by an `Instantiator` that is NOT received, whatever the hops before the closing property are:
+	///   only the closing property is judged. The cycle compiles because the closing hop defers construction; pruning
+	///   via `cycleEdges` is what breaks the self-referencing config-struct shape so the generated code typechecks.
 	///
 	/// Key implication for downstream code: any mock tree node reached
 	/// through a constant-typed property CANNOT be on a pruned back-edge —
@@ -6174,18 +6270,81 @@ public actor DependencyTreeGenerator {
 	/// A collection of `@Instantiable`-decorated types that are instantiated by at least one other
 	/// `@Instantiable`-decorated type or do not explicitly receive dependencies, including those reached only beneath
 	/// a seam another module declares.
-	private lazy var reachableTypeDescriptions: Set<TypeDescription> = typesReachable(fromRoots: validatedRootInstantiables, enteringForeignSeams: true)
+	private lazy var reachableTypeDescriptions: Set<TypeDescription> = typesReachable(fromRoots: validatedRootInstantiables)
 
-	/// The reachable types a tree reaches without entering a seam another module declares. A type reached only beneath
-	/// such a seam may be one this module cannot see, which the seam's module could: it is left to that module to
-	/// report, and the generated call fails to compile where the two disagree.
-	private lazy var typesReachableWithoutEnteringForeignSeams: Set<TypeDescription> = seams.foreignSeams.isEmpty
-		? reachableTypeDescriptions
-		: typesReachable(fromRoots: validatedRootInstantiables, enteringForeignSeams: false)
+	/// The types whose lack of a production `@Instantiable` declaration is an error in a module that holds or calls a
+	/// seam: those the roots' trees reach outside every seam's tree, the fills this module generates for the holes of the
+	/// foreign seams they call included, and those a seam's tree reaches through a dependency that cannot be a hole
+	/// (`canBeHole`), since only hand-written code could build its type.
+	private func typesReachableOutsideSeamTrees() throws -> Set<TypeDescription> {
+		let foreignSeamRoots = try foreignSeamRoots.get()
+		/// The seam `typeDescription` is, when its tree is another tree's leaf: one with a signature, generated here or
+		/// in another module.
+		func isSeamWithTree(_ instantiable: Instantiable) -> Bool {
+			guard instantiable.generatesDependencyTree else { return false }
+			return generatedSeamTypes.contains(instantiable.concreteInstantiable)
+				|| (foreignSeamRoots[instantiable.concreteInstantiable] ?? nil) != nil
+		}
+		/// The types a walk from `roots` reaches without entering a seam with a tree other than the roots, entering the
+		/// fills this module generates for the holes of each foreign seam it reaches.
+		func typesReached(from roots: Set<TypeDescription>) -> Set<TypeDescription> {
+			var reached = Set<TypeDescription>()
+			var typesToVisit = Array(roots)
+			while let typeDescription = typesToVisit.popLast() {
+				guard reached.insert(typeDescription).inserted,
+				      let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription]
+				else { continue }
+				if !roots.contains(typeDescription), isSeamWithTree(instantiable) {
+					for hole in (foreignSeamRoots[instantiable.concreteInstantiable] ?? nil)?.signature.holes ?? [] {
+						if let fulfillingInstantiable = Self.fulfillingInstantiable(of: hole, in: typeDescriptionToFulfillingInstantiableMap) {
+							typesToVisit.append(fulfillingInstantiable.concreteInstantiable)
+						}
+					}
+					continue
+				}
+				for dependency in instantiable.dependencies where dependency.isInstantiated {
+					typesToVisit.append(dependency.asInstantiatedType)
+				}
+			}
+			return reached
+		}
+		var typesToReport = typesReached(from: rootInstantiables)
+		// A seam whose module SafeDI does not know cannot take a builder: what its callers see is unknown.
+		if seams.currentModule.moduleName == nil {
+			var holes = [DependencyTreeGeneratorError.HoleInSeamOfUnnamedModule]()
+			var reportedLocations = Set<String>()
+			for seamType in generatedSeamTypes.sorted() {
+				guard let seam = typeDescriptionToFulfillingInstantiableMap[seamType] else { continue }
+				for typeDescription in typesReached(from: [seamType]).sorted() {
+					guard let instantiable = typeDescriptionToFulfillingInstantiableMap[typeDescription] else { continue }
+					for dependency in instantiable.dependencies where dependency.isInstantiated
+						&& Self.canBeHole(dependency)
+						&& typeDescriptionToFulfillingInstantiableMap[dependency.asInstantiatedType]?.mockOnly != false
+						&& reportedLocations.insert(dependency.declarationLocation.map { "\($0.filePath):\($0.line):\($0.column)" } ?? "\(typeDescription.asSource).\(dependency.property.label)").inserted
+					{
+						holes.append(.init(seam: seam.concreteInstantiable, owner: instantiable.concreteInstantiable, dependency: dependency))
+					}
+				}
+			}
+			if !holes.isEmpty {
+				throw DependencyTreeGeneratorError.holesInSeamsOfUnnamedModule(holes)
+			}
+		}
+		for seamType in generatedSeamTypes {
+			for typeDescription in typesReached(from: [seamType]) where typeDescriptionToFulfillingInstantiableMap[typeDescription]?.mockOnly != false {
+				// Only hand-written code could build a type that cannot be a hole.
+				if typeDescriptionToFulfillingInstantiableMap.values.contains(where: { instantiable in
+					instantiable.dependencies.contains { $0.isInstantiated && $0.asInstantiatedType == typeDescription && !Self.canBeHole($0) }
+				}) {
+					typesToReport.insert(typeDescription)
+				}
+			}
+		}
+		return typesToReport
+	}
 
-	/// The types the trees rooted at `roots` reach.
-	/// - Parameter enteringForeignSeams: Whether to reach the types beneath a seam another module declares.
-	private func typesReachable(fromRoots roots: Set<TypeDescription>, enteringForeignSeams: Bool) -> Set<TypeDescription> {
+	/// The types the trees rooted at `roots` reach, beneath the seams other modules declare included.
+	private func typesReachable(fromRoots roots: Set<TypeDescription>) -> Set<TypeDescription> {
 		var reachableTypeDescriptions = Set<TypeDescription>()
 		// The types reached whose instantiated types are not yet recorded. A worklist rather than recursion,
 		// since a chain of types can be as long as the module has types.
@@ -6198,9 +6357,6 @@ public actor DependencyTreeGenerator {
 			guard let instantiable = typeDescriptionToFulfillingInstantiableMap[reachableTypeDescription] else {
 				// We can't find an instantiable for this type.
 				// This is bad, but we'll handle this error in `validateReachableTypeDescriptions()`.
-				continue
-			}
-			guard enteringForeignSeams || !instantiable.generatesDependencyTree || seams.foreignSeams[instantiable.concreteInstantiable] == nil else {
 				continue
 			}
 			for dependency in instantiable.dependencies where dependency.isInstantiated {
@@ -6628,6 +6784,36 @@ public actor DependencyTreeGenerator {
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 			cyclesOnly: cyclesOnly,
 		)
+	}
+
+	/// Walks, for cycles only, the tree of each foreign seam whose initializer takes a builder, from the seam's root, as
+	/// the seam's own module validates it where it sees the fulfilling declarations: this module's validated scopes
+	/// build the seam inline, with the fills this module generates, but a tree rooted elsewhere reaches a fill with
+	/// another stack, and can close a cycle earlier, on a lazy property above the seam, than the seam's own validation
+	/// does. A fill is generated with the seam's stack, so a constant repeat the seam's walk rejects is rejected here,
+	/// with the diagnostic that walk reports. A seam's tree is walked whether or not this module fills each of its holes:
+	/// a hole this module does not fill has no scope, and the walk stops there. A seam whose builder another seam passes
+	/// up is walked too, so every seam on the chain from the outermost one this module fills down to the one whose tree
+	/// holds the hole is walked from its own root.
+	private func validateCyclesFromRootsOfForeignSeamsWithHoles(
+		in typeDescriptionToScopeMap: [TypeDescription: Scope],
+		receivedPropertiesCache: inout ReceivedPropertiesCache,
+	) throws {
+		guard !seams.foreignSeams.isEmpty else { return }
+		let foreignSeamRoots = try foreignSeamRoots.get()
+		let seamTypesWithHoles = foreignSeamRoots.keys.filter { (foreignSeamRoots[$0] ?? nil)?.signature.holes.isEmpty == false }.sorted()
+		guard !seamTypesWithHoles.isEmpty else { return }
+		let rootScopes = seamTypesWithHoles.compactMap { typeDescriptionToScopeMap[$0] }.map { scope in
+			var receivedFromOutside = Set<Property>()
+			for property in Self.collectReceivedProperties(from: scope, cache: &receivedPropertiesCache).received {
+				receivedFromOutside.insert(property)
+				if let instanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
+					receivedFromOutside.insert(instanceProperty)
+				}
+			}
+			return ValidatedRootScope(scope: scope, boundProperties: [], isMock: false, receivedFromOutside: receivedFromOutside)
+		}
+		try validatePropertiesAreFulfillable(onRootScopes: rootScopes, typeDescriptionToScopeMap: typeDescriptionToScopeMap, cyclesOnly: true)
 	}
 
 	/// An alias that a receive of its property resolves to: the nearest scope above the receiver that provides the
@@ -7411,7 +7597,9 @@ public actor DependencyTreeGenerator {
 						parentTypeStack: childParentTypeStack,
 						lazilyInstantiatedDeclarations: lazilyInstantiatedDeclarations.recordingLazilyInstantiated(declaredChildProperty),
 					))
-				case .aliased:
+				case .aliased, .hole:
+					// A hole's tree is a fill's, which the module that fills it validates: the validated scopes hold no
+					// hole, since they leave out a dependency no scope builds.
 					break
 				}
 			}
@@ -7609,9 +7797,14 @@ public actor DependencyTreeGenerator {
 	}
 
 	private func validateReachableTypeDescriptions() throws {
-		// A type reached only beneath a seam another module declares is that module's to report: see
-		// `typesReachableWithoutEnteringForeignSeams`.
-		let unbuildableTypeDescriptions = typesReachableWithoutEnteringForeignSeams
+		// In a module that holds or calls a seam, only the types reached outside every seam's tree are reported
+		// (`typesReachableOutsideSeamTrees`). A type reached only beneath a seam another module declares may be one
+		// this module cannot see, which the seam's module could: it is left to that module to report, and the
+		// generated call fails to compile where the two disagree. A type a seam's tree reaches that no production
+		// declaration fulfills is a hole, whose builder the seam's generated initializer takes, unless only
+		// hand-written code could build it; a root that calls the seam and cannot fill the builder is reported where
+		// its tree is generated.
+		let unbuildableTypeDescriptions = (seams.isEmpty ? reachableTypeDescriptions : try typesReachableOutsideSeamTrees())
 			.filter { typeDescriptionToFulfillingInstantiableMap[$0]?.mockOnly != false }
 		guard !unbuildableTypeDescriptions.isEmpty else { return }
 		// The map's values can hold the same instantiable under several keys, so collect into sets.

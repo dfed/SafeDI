@@ -138,6 +138,24 @@ struct GraphFuzzerFixture: Equatable {
 		swiftFileContent.contains { $0.contains("generateDependencyTree: true") }
 	}
 
+	/// Whether the graph declares a type that fills a hole of a seam whose module cannot see it (`addingHoleShapes`).
+	var drawsHole: Bool {
+		swiftFileContent.contains(where: GraphFuzzerModule.fillsHole(declaredIn:))
+	}
+
+	/// The visible build of a graph with a hole: every file whose first line says it fills a hole declared in the seam's
+	/// module instead, which can then see the fulfilling type and builds it inline, so the seam takes no builder.
+	var withoutHoles: GraphFuzzerFixture {
+		let seamModuleHeader = GraphFuzzerModule.seamModule.fileHeader(omitsPackageName: modulesOmittingPackageName.contains(.seamModule))
+		return GraphFuzzerFixture(
+			seed: seed,
+			swiftFileContent: swiftFileContent.map { content in
+				guard GraphFuzzerModule.fillsHole(declaredIn: content), let headerEnd = content.range(of: "\n\n") else { return content }
+				return seamModuleHeader + content[headerEnd.upperBound...]
+			},
+		)
+	}
+
 	/// The same graph with no type declared as a seam, so every tree is built inline: what SafeDI accepted before
 	/// seams existed, which a seam's own errors may reject.
 	var withoutSeams: GraphFuzzerFixture {
@@ -182,7 +200,17 @@ enum GraphFuzzerModule: String, CaseIterable, Comparable {
 
 	/// Whether `content`'s first line names its module and says the tool runs over it without its package's name.
 	static func omitsPackageName(declaredIn content: String) -> Bool {
-		content.hasPrefix(marker) && content.prefix { $0 != "\n" }.hasSuffix(packageNameOmittedMarker)
+		content.hasPrefix(marker) && content.prefix { $0 != "\n" }.contains(packageNameOmittedMarker)
+	}
+
+	/// What follows the module's name, and any `packageNameOmittedMarker`, on the first line of a file declaring a type
+	/// that fills a hole of a seam whose module cannot see it, or that such a type instantiates, which the visible build
+	/// (`GraphFuzzerFixture.withoutHoles`) declares in the seam's module.
+	static let holeFulfillerMarker = ", fills a hole"
+
+	/// Whether `content`'s first line says its file declares a type that fills a hole.
+	static func fillsHole(declaredIn content: String) -> Bool {
+		content.hasPrefix(marker) && content.prefix { $0 != "\n" }.hasSuffix(holeFulfillerMarker)
 	}
 
 	var name: String {
@@ -225,8 +253,8 @@ enum GraphFuzzerModule: String, CaseIterable, Comparable {
 	}
 
 	/// The first lines of a file of this module: the marker, and the import of each module it depends on.
-	func fileHeader(omitsPackageName: Bool) -> String {
-		([Self.marker + name + (omitsPackageName ? Self.packageNameOmittedMarker : "")] + dependencies.map { "import \($0.name)" }).joined(separator: "\n") + "\n\n"
+	func fileHeader(omitsPackageName: Bool, fillsHole: Bool = false) -> String {
+		([Self.marker + name + (omitsPackageName ? Self.packageNameOmittedMarker : "") + (fillsHole ? Self.holeFulfillerMarker : "")] + dependencies.map { "import \($0.name)" }).joined(separator: "\n") + "\n\n"
 	}
 }
 
@@ -442,6 +470,29 @@ enum GraphFuzzerSeamOutputFeature: String, CaseIterable, Comparable {
 	}
 }
 
+/// What the code generated for a graph with a hole shows, read from an accepted graph's generated files, every one of
+/// which the seam smoke batch must show (`seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts`).
+enum GraphFuzzerHoleOutputFeature: String, CaseIterable, Comparable {
+	/// A seam's generated initializer takes a builder for a hole, under an internal name.
+	case builderParameter
+	/// A builder that takes a `@Sendable` builder function's values in a later stage.
+	case stagedBuilder
+	/// A seam's builder of another seam's scope struct, which it passes up.
+	case passedUpBuilder
+	/// A function a caller generates to fill a builder.
+	case fill
+	/// A fill declared `@Sendable`.
+	case sendableFill
+	/// A call inside a fill of the seam whose builder it fills, which passes the fill itself.
+	case fillPassedToItsSeam
+	/// A call inside the fill of a passed-up builder of the inner seam the builder is of, which passes the fill (C1.23).
+	case fillOfPassedUpBuilderPassedToItsSeam
+
+	static func < (lhs: GraphFuzzerHoleOutputFeature, rhs: GraphFuzzerHoleOutputFeature) -> Bool {
+		lhs.rawValue < rhs.rawValue
+	}
+}
+
 /// The shapes `addingSeam` draws, read from a fixture's source, so that a draw that stops landing fails
 /// `seamCorpus_drawsEachShapeInAtLeastThePinnedShareOfGraphs` rather than a review.
 enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
@@ -633,6 +684,41 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case samePackageCallerRunWithoutPackageName
 	/// The seam's module run over without its package's name, which no caller can then tell it shares.
 	case seamModuleRunWithoutPackageName
+	/// A seam, `HoleSeam`, whose module cannot see `HoleImpl`, the type that fulfills `HoleService`, which a property of
+	/// its tree instantiates: the seam takes a builder for it, which the roots' module fills.
+	case hole
+	/// The hole's property is the seam's own.
+	case holeOwnedBySeam
+	/// The hole's owner, `HoleOwner`, which the seam instantiates by value.
+	case holeBeneathConstant
+	/// The hole's owner, which the seam instantiates through an `Instantiator`.
+	case holeBeneathInstantiator
+	/// The hole's owner, which the seam instantiates through a `SendableInstantiator`: a staged builder.
+	case holeBeneathSendableInstantiator
+	/// The hole's owner, which the seam instantiates through a `LazilyInstantiated`.
+	case holeBeneathLazilyInstantiated
+	/// The hole's owner, which the seam instantiates through a `SendableLazilyInstantiated`: a staged builder.
+	case holeBeneathSendableLazilyInstantiated
+	/// The seam instantiates the hole's owner a second time, a second site with a builder of its own.
+	case holeOwnerReachedAtTwoSites
+	/// `HoleImpl` reads a field of the scope struct, `holeAnalytics`.
+	case holeReadsField
+	/// `HoleImpl` reads `holeLogger`, which only the root holds.
+	case holeReadsCallerValue
+	/// `HoleOuter`, a second seam of the seam's module, calls `HoleSeam` and passes its builder up.
+	case holePassedUp
+	/// `HoleImpl` instantiates `HoleSeam` again, so its fill passes itself to the re-entering call.
+	case holeReentersSeam
+	/// `HoleImpl` instantiates `HoleSeam` again through `HoleMiddle`, which declares `holeLogger` above the call while
+	/// `HoleImpl` reads the root's: rejected, since the fill reads the outer call's value (C1.27).
+	case holeReentersSeamBeneathRedeclaredLabel
+	/// A re-entry of `HoleSeam` inside the fill of `HoleOuter`'s passed-up builder, which passes that fill (C1.23).
+	case holeReentersInnerSeamOfPassedUpBuilder
+	/// The seam's own tree reaches the seam again through `HoleLoop`, so the re-entering call is handed the seam's own
+	/// builder (G4).
+	case holeSeamReentersItself
+	/// `HoleLoop` binds `holeLogger` on the re-entry path while `HoleImpl` reads the root's: rejected (C8.14).
+	case holeSeamReentersItselfBeneathBoundLabel
 
 	static func < (lhs: GraphFuzzerSeamDrawFeature, rhs: GraphFuzzerSeamDrawFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -898,6 +984,9 @@ enum GraphFuzzerGenerator {
 		/// The module the type belongs to in a graph split across modules, which its file's first lines name, or `nil`
 		/// for the module of the graph's roots, `GraphFuzzerModule.samePackageCaller` when the graph is split.
 		var module: GraphFuzzerModule?
+		/// Whether the type is one `addingHoleShapes` declares beside the roots that fills a hole, or that such a type
+		/// instantiates, which `GraphFuzzerFixture.withoutHoles` moves into the seam's module.
+		var fillsHole = false
 		/// The extension the type is declared in, such as `extension S1_ProofSpace` or `package extension S1_ProofSpace`,
 		/// or `nil` for a type declared at top level.
 		var enclosingExtension: String?
@@ -1053,6 +1142,10 @@ enum GraphFuzzerGenerator {
 			aliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.aliasChainRandomSeedMask)
 			siblingAliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.siblingAliasChainRandomSeedMask)
 			proofRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.proofRandomSeedMask)
+			holeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holeRandomSeedMask)
+			holePassUpRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holePassUpRandomSeedMask)
+			holeReentryRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holeReentryRandomSeedMask)
+			holeSelfReentryRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holeSelfReentryRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
 			let sendabilityRoll = random.integer(in: 0...99)
@@ -1113,11 +1206,11 @@ enum GraphFuzzerGenerator {
 			appendMotif(to: &declarations)
 			// Decided last, so that the rest of a seed's graph does not depend on whether it has the extension.
 			let extensionSource = random.percentChance(25) ? extensionDeclarationSource(addingPropertyToOneOf: &declarations) : nil
-			var finalDeclarations = addingAccessProofShapes(to: addingUncreatedAliasShapes(to: addingSpelledProperties(to: addingSeam(
+			var finalDeclarations = addingHoleShapes(to: addingAccessProofShapes(to: addingUncreatedAliasShapes(to: addingSpelledProperties(to: addingSeam(
 				to: addingReceiversOfDependenciesMocksCannotBuild(
 					to: addingSiblingAliasChains(to: addingAliasChains(to: addingDependenciesMocksCannotBuild(to: addingPropertiesLabeledAsGeneratedNames(to: declarations)))),
 				),
-			))))
+			)))))
 			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
 			// caller can name what the seam's module declares, such as the creation stamps' counter.
 			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
@@ -1264,6 +1357,13 @@ enum GraphFuzzerGenerator {
 		/// Draws only the choices of `addingAccessProofShapes`, which draws only with the `generateDependencyTree` feature
 		/// on, after every other pass, so a seam graph it leaves plain is drawn as it was before the pass existed.
 		private var proofRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only the choices of `addingHoleShapes`, which draws only with the `generateDependencyTree` feature on,
+		/// after every other pass, so a seam graph it leaves plain is drawn as it was before the pass existed; each of
+		/// its three further draws has a generator of its own.
+		private var holeRandom: GraphFuzzerRandomNumberGenerator
+		private var holePassUpRandom: GraphFuzzerRandomNumberGenerator
+		private var holeReentryRandom: GraphFuzzerRandomNumberGenerator
+		private var holeSelfReentryRandom: GraphFuzzerRandomNumberGenerator
 		/// The access of each type `addingAccessProofShapes` declares narrower than `public`, by the name the fixture
 		/// spells it with (`S1_ProofSpace.S1_ProofShelf` for a nested type), which caps every initializer naming it.
 		private var proofTypeAccess = [String: AccessLevel]()
@@ -3270,6 +3370,148 @@ enum GraphFuzzerGenerator {
 
 		private static let proofRandomSeedMask: UInt64 = 0x70726F6F665F6163
 
+		// MARK: Holes
+
+		/// With the `generateDependencyTree` feature on, a third of the graphs gain a seam, `HoleSeam`, whose module
+		/// cannot see the type that fulfills a property its tree instantiates – a hole – which the roots' module fills:
+		/// the graph is split across modules (`GraphFuzzerModule`), the seam's tree and `HoleService`, a protocol, in the
+		/// seam's module, and `HoleImpl`, which fulfills `HoleService`, beside the roots. The first root instantiates the
+		/// seam. The property's owner is the seam itself, or `HoleOwner`, which the seam reaches by value or through a
+		/// wrapper the graph's sendability allows (a `Sendable` one stages the builder), now and then at a second site.
+		/// `HoleImpl` reads a field of the scope struct (`holeAnalytics`, which the seam builds before the owner) and now
+		/// and then a value only the root holds (`holeLogger`). Three further draws, each with a generator of its own,
+		/// so that each draws as it did whatever the others draw: a second seam of the seam's module, `HoleOuter`,
+		/// calls `HoleSeam` and passes its builder up, and the root fills `HoleOuter`'s (`holePassUpRandom`); where the seam
+		/// builds the owner, at its one site, through an instantiator, at which the cycle a re-entry makes then closes, `HoleImpl`
+		/// instantiates `HoleSeam` again, so its fill passes itself to the re-entering call, a quarter of those through
+		/// `HoleMiddle`, which declares `holeLogger` above the call while `HoleImpl` reads the root's, which the tool
+		/// rejects (`holeReentryRandom`); and the seam's own tree reaches the seam again through `HoleLoop`, a tenth of
+		/// those binding `holeLogger` on the way while `HoleImpl` reads the root's, which the tool rejects
+		/// (`holeSelfReentryRandom`). The files declaring `HoleImpl` and `HoleMiddle` say on their first line that they
+		/// fill a hole, so that `GraphFuzzerFixture.withoutHoles` can declare them in the seam's module instead: the
+		/// visible build the value oracle compares with. `holeRandom` draws only for this pass, which runs last.
+		private mutating func addingHoleShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.contains(.generateDependencyTree), holeRandom.percentChance(33) else { return declarations }
+			var declarations = declarations
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func name(_ suffix: String) -> String {
+				"\(prefix)\(suffix)"
+			}
+			func instantiable(_ suffix: String, module: GraphFuzzerModule, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: name(suffix), instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.module = module
+				return declaration
+			}
+			/// The wrappers a type of the graph can hold, as its sendability allows.
+			let instantiators = switch sendability {
+			case .nonSendable:
+				["Instantiator"]
+			case .sendable:
+				["SendableInstantiator"]
+			case .mixed:
+				["Instantiator", "SendableInstantiator"]
+			}
+			let lazyWrappers = switch sendability {
+			case .nonSendable:
+				["LazilyInstantiated"]
+			case .sendable:
+				["SendableLazilyInstantiated"]
+			case .mixed:
+				["LazilyInstantiated", "SendableLazilyInstantiated"]
+			}
+			let serviceName = name("HoleService")
+			let analyticsName = name("HoleAnalytics")
+			let loggerName = name("HoleLogger")
+			let seamName = name("HoleSeam")
+			var seam = instantiable("HoleSeam", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeAnalytics", type: analyticsName)])
+			seam.instantiableArguments = ["generateDependencyTree: true"]
+			seam.additionalDeclarations.append("public protocol \(serviceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+			var seamModuleDeclarations = [instantiable("HoleAnalytics", module: .seamModule), instantiable("HoleLogger", module: .seamModule)]
+			let holeProperty = PropertyDeclaration(attribute: "@Instantiated", label: "holeService", type: "any \(serviceName)")
+			// The owner: the seam itself, or `HoleOwner`, reached by value or through a wrapper, now and then at two sites.
+			// A tree that reaches the seam again closes the cycle at the first property it repeats, which must be an
+			// instantiator, so a re-entry is drawn only where the seam builds the owner through one.
+			var ownerIsBuiltByInstantiator = false
+			if holeRandom.percentChance(25) {
+				seam.properties.append(holeProperty)
+			} else {
+				let owner = instantiable("HoleOwner", module: .seamModule, properties: [holeProperty, PropertyDeclaration(attribute: "@Received", label: "holeAnalytics", type: analyticsName)])
+				seamModuleDeclarations.append(owner)
+				let wrapperRoll = holeRandom.integer(in: 0...3)
+				ownerIsBuiltByInstantiator = wrapperRoll == 1 || wrapperRoll == 2
+				let ownerProperty = switch wrapperRoll {
+				case 0:
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeOwner", type: owner.name)
+				case 1, 2:
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeOwnerBuilder", type: "\(holeRandom.element(of: instantiators))<\(owner.name)>")
+				default:
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeOwner", type: "\(holeRandom.element(of: lazyWrappers))<\(owner.name)>")
+				}
+				seam.properties.append(ownerProperty)
+				if holeRandom.percentChance(20) {
+					// A second site, built by value, at which a re-entry from its fill would close a constant cycle.
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeSecondOwner", type: owner.name))
+					ownerIsBuiltByInstantiator = false
+				}
+			}
+			var impl = instantiable("HoleImpl", module: .samePackageCaller)
+			impl.instantiableArguments = ["fulfillingAdditionalTypes: [\(serviceName).self]"]
+			impl.additionalConformances.append(serviceName)
+			impl.fillsHole = true
+			if holeRandom.percentChance(50) {
+				impl.properties.append(PropertyDeclaration(attribute: "@Received", label: "holeAnalytics", type: analyticsName))
+			}
+			var readsRootLogger = holeRandom.percentChance(25)
+			var callerDeclarations = [TypeDeclaration]()
+
+			// A second seam of the seam's module that calls `HoleSeam`, whose builder it passes up.
+			var calledSeamName = seamName
+			if holePassUpRandom.percentChance(25) {
+				var outer = instantiable("HoleOuter", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeSeam", type: seamName)])
+				outer.instantiableArguments = ["generateDependencyTree: true"]
+				seamModuleDeclarations.append(outer)
+				calledSeamName = outer.name
+			}
+			// `HoleImpl` instantiates `HoleSeam` again, directly or, a quarter of the time, through `HoleMiddle`, which
+			// declares `holeLogger` above the call while `HoleImpl` reads the root's. Every roll is made whatever the base
+			// draw, so the draw's generator is consumed the same way in every graph.
+			let drawsReentry = holeReentryRandom.percentChance(40)
+			let reentry = PropertyDeclaration(attribute: "@Instantiated", label: "holeSeamBuilder", type: "\(holeReentryRandom.element(of: instantiators))<\(seamName)>")
+			let reentersThroughMiddle = holeReentryRandom.percentChance(25)
+			if drawsReentry, ownerIsBuiltByInstantiator {
+				if reentersThroughMiddle {
+					var middle = instantiable("HoleMiddle", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeLogger", type: loggerName), reentry])
+					middle.fillsHole = true
+					callerDeclarations.append(middle)
+					impl.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeMiddle", type: middle.name))
+					readsRootLogger = true
+				} else {
+					impl.properties.append(reentry)
+				}
+			}
+			// The seam's own tree reaches the seam again through `HoleLoop`, a tenth of the time binding `holeLogger`.
+			if holeSelfReentryRandom.percentChance(5) {
+				var loop = instantiable("HoleLoop", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeSeamBuilder", type: "\(holeSelfReentryRandom.element(of: instantiators))<\(seamName)>")])
+				if holeSelfReentryRandom.percentChance(10) {
+					loop.properties.insert(PropertyDeclaration(attribute: "@Instantiated", label: "holeLogger", type: loggerName), at: 0)
+					readsRootLogger = true
+				}
+				seamModuleDeclarations.append(loop)
+				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeLoopBuilder", type: "\(holeSelfReentryRandom.element(of: instantiators))<\(loop.name)>"))
+			}
+			if readsRootLogger {
+				impl.properties.append(PropertyDeclaration(attribute: "@Received", label: "holeLogger", type: loggerName))
+				declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeLogger", type: loggerName))
+			}
+			declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: calledSeamName == seamName ? "holeSeam" : "holeOuter", type: calledSeamName))
+			return declarations + [seam] + seamModuleDeclarations + [impl] + callerDeclarations
+		}
+
+		private static let holeRandomSeedMask: UInt64 = 0x686F6C655F726E64
+		private static let holePassUpRandomSeedMask: UInt64 = 0x686F6C6550617373
+		private static let holeReentryRandomSeedMask: UInt64 = 0x686F6C6552656E74
+		private static let holeSelfReentryRandomSeedMask: UInt64 = 0x686F6C6553656C66
+
 		// MARK: Extension
 
 		/// An `@Instantiable` extension of a type that is not itself `@Instantiable`, whose `instantiate(…)` has
@@ -3481,7 +3723,7 @@ enum GraphFuzzerGenerator {
 			for additionalDeclaration in declaration.additionalDeclarations {
 				lines += ["", additionalDeclaration]
 			}
-			return (declaration.module.map { $0.fileHeader(omitsPackageName: modulesOmittingPackageName.contains($0)) } ?? "") + lines.joined(separator: "\n") + "\n"
+			return (declaration.module.map { $0.fileHeader(omitsPackageName: modulesOmittingPackageName.contains($0), fillsHole: declaration.fillsHole) } ?? "") + lines.joined(separator: "\n") + "\n"
 		}
 
 		/// The narrowest access of the types `addingAccessProofShapes` declares narrower than `public` that `type` names,
@@ -4068,7 +4310,82 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				}
 			}
 		}
-		return features.union(accessProofDrawFeatures(of: fixture))
+		return features.union(accessProofDrawFeatures(of: fixture)).union(holeDrawFeatures(of: fixture))
+	}
+
+	/// The shapes `addingHoleShapes` draws, read from the properties the fixture declares on the `Hole` types.
+	private static func holeDrawFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerSeamDrawFeature> {
+		guard fixture.drawsHole else { return [] }
+		let prefix = fixture.typeNamePrefix
+		var propertiesByType = [String: [(attribute: String, label: String, type: String)]]()
+		for content in fixture.swiftFileContent {
+			var currentType: String?
+			for line in GraphFuzzerSourceLine.lines(of: content) {
+				switch line {
+				case let .typeDeclaration(name):
+					currentType = name
+					propertiesByType[name, default: []] += []
+				case let .property(attribute, label, type):
+					if let currentType {
+						propertiesByType[currentType, default: []].append((attribute, label, type))
+					}
+				case .instantiableAttribute, .instantiateMethod, .other:
+					break
+				}
+			}
+		}
+		func properties(of suffix: String) -> [(attribute: String, label: String, type: String)] {
+			propertiesByType[prefix + suffix] ?? []
+		}
+		func declares(_ suffix: String) -> Bool {
+			propertiesByType[prefix + suffix] != nil
+		}
+		var features: Set<GraphFuzzerSeamDrawFeature> = [.hole]
+		let seamProperties = properties(of: "HoleSeam")
+		if seamProperties.contains(where: { $0.label == "holeService" }) {
+			features.insert(.holeOwnedBySeam)
+		}
+		for property in seamProperties where property.type.hasSuffix("<\(prefix)HoleOwner>") || property.type == "\(prefix)HoleOwner" {
+			if property.label == "holeSecondOwner" {
+				features.insert(.holeOwnerReachedAtTwoSites)
+			} else if property.type.hasPrefix("Instantiator<") {
+				features.insert(.holeBeneathInstantiator)
+			} else if property.type.hasPrefix("SendableInstantiator<") {
+				features.insert(.holeBeneathSendableInstantiator)
+			} else if property.type.hasPrefix("LazilyInstantiated<") {
+				features.insert(.holeBeneathLazilyInstantiated)
+			} else if property.type.hasPrefix("SendableLazilyInstantiated<") {
+				features.insert(.holeBeneathSendableLazilyInstantiated)
+			} else {
+				features.insert(.holeBeneathConstant)
+			}
+		}
+		let implProperties = properties(of: "HoleImpl")
+		if implProperties.contains(where: { $0.label == "holeAnalytics" }) {
+			features.insert(.holeReadsField)
+		}
+		if implProperties.contains(where: { $0.label == "holeLogger" }) {
+			features.insert(.holeReadsCallerValue)
+		}
+		if declares("HoleOuter") {
+			features.insert(.holePassedUp)
+		}
+		if implProperties.contains(where: { $0.label == "holeSeamBuilder" }) || declares("HoleMiddle") {
+			features.insert(.holeReentersSeam)
+			if declares("HoleOuter") {
+				features.insert(.holeReentersInnerSeamOfPassedUpBuilder)
+			}
+		}
+		if declares("HoleMiddle") {
+			features.insert(.holeReentersSeamBeneathRedeclaredLabel)
+		}
+		if declares("HoleLoop") {
+			features.insert(.holeSeamReentersItself)
+			if properties(of: "HoleLoop").contains(where: { $0.label == "holeLogger" }) {
+				features.insert(.holeSeamReentersItselfBeneathBoundLabel)
+			}
+		}
+		return features
 	}
 
 	/// The shapes `addingAccessProofShapes` draws, read from the access levels the fixture spells on the `Proof` types'
@@ -4267,7 +4584,8 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 		}
 		for (seamTypeName, parameters) in widestTiers {
-			for parameter in parameters {
+			// A builder for a hole is no pass-through: `holeOutputFeatures` reads it.
+			for parameter in parameters where !parameter.contains("SafeDIScope_") {
 				let label = parameter.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces)
 				if parameter.contains("= nil") {
 					features.insert(.optionalPassThrough)
@@ -4289,6 +4607,62 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			let lines = contents.split(separator: "\n", omittingEmptySubsequences: false)
 			for (line, nextLine) in zip(lines, lines.dropFirst()) where line.contains(".__safeDI_") && nextLine.contains(".instance") {
 				features.insert(.instanceReadAtCall)
+			}
+		}
+		return features
+	}
+
+	/// What the code generated for a graph with a hole shows (`GraphFuzzerHoleOutputFeature`), read from
+	/// `generatedFiles`, an accepted graph's output.
+	static func holeOutputFeatures(generatedFiles: [String: String]) -> Set<GraphFuzzerHoleOutputFeature> {
+		var features = Set<GraphFuzzerHoleOutputFeature>()
+		let builderParameter = try! NSRegularExpression(pattern: #"\b\w+Builder\w* __safeDI_\w+: @escaping (@Sendable )?\((\w+\.)?SafeDIScope_"#)
+		let otherSeamsStruct = try! NSRegularExpression(pattern: #"@escaping (?:@Sendable )?\((\w+)\.SafeDIScope_"#)
+		let fillDeclaration = try! NSRegularExpression(pattern: #"^( *)(@Sendable )?func (__safeDI_\w+)\(_ scope: (\w+)\.SafeDIScope_"#)
+		func firstMatch(_ expression: NSRegularExpression, in line: String) -> [String]? {
+			let range = NSRange(line.startIndex..., in: line)
+			guard let match = expression.firstMatch(in: line, range: range) else { return nil }
+			return (0..<match.numberOfRanges).map { index in
+				Range(match.range(at: index), in: line).map { String(line[$0]) } ?? ""
+			}
+		}
+		for (_, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where !contents.isEmpty {
+			let lines = contents.components(separatedBy: "\n")
+			var extendedType: String?
+			for (index, line) in lines.enumerated() {
+				if line.hasPrefix("extension "), line.hasSuffix(" {") {
+					extendedType = String(line.dropFirst("extension ".count).dropLast(2))
+				} else if line.hasPrefix("}") {
+					extendedType = nil
+				}
+				if line.contains("init("), firstMatch(builderParameter, in: line) != nil {
+					features.insert(.builderParameter)
+					if line.contains(") -> @Sendable (") {
+						features.insert(.stagedBuilder)
+					}
+					if let extendedType, let match = firstMatch(otherSeamsStruct, in: line), match[1] != extendedType {
+						features.insert(.passedUpBuilder)
+					}
+				}
+				guard let fill = firstMatch(fillDeclaration, in: line) else { continue }
+				features.insert(.fill)
+				if !fill[2].isEmpty {
+					features.insert(.sendableFill)
+				}
+				// The fill's body, up to the line closing it at its indentation, and the call that passes it after it.
+				let indentation = fill[1]
+				let fillName = fill[3]
+				let scopeSeam = fill[4]
+				guard let end = lines[(index + 1)...].firstIndex(of: indentation + "}") else { continue }
+				let passesFill = { (body: String) in body.contains(": \(fillName))") || body.contains(": \(fillName),") }
+				let callsInside = lines[(index + 1)..<end].filter { $0.contains("return ") && passesFill($0) }
+				guard !callsInside.isEmpty else { continue }
+				features.insert(.fillPassedToItsSeam)
+				let calledInside = callsInside.compactMap { call in call.range(of: "return ").map { String(call[$0.upperBound...].prefix { $0 != "(" }) } }
+				let callAfter = lines[(end + 1)...].first { $0.contains("return ") && passesFill($0) }
+				if let callAfter, calledInside.contains(scopeSeam), !callAfter.contains("return \(scopeSeam)(") {
+					features.insert(.fillOfPassedUpBuilderPassedToItsSeam)
+				}
 			}
 		}
 		return features
@@ -4618,6 +4992,13 @@ struct GraphFuzzerFailure: Equatable {
 		/// The tool reports that a caller holds a value its tier omits, where the caller's module's inline build passes
 		/// every receiver of that parameter `nil`.
 		case seamTierOmitsProvidedValueReportedWhereInlinePassesNil = "the tool reports a value a caller's tier omits where its inline build passes every receiver nil"
+		/// The differential value comparator describes other values for a probe of a graph whose seam takes a builder
+		/// for a hole than for the same probe of its visible build (`GraphFuzzerFixture.withoutHoles`), in which the
+		/// seam's module sees the fulfilling type and builds it inline.
+		case holeBuildsOtherValuesThanVisibleBuild = "the build that fills a hole constructs other values than the visible build"
+		/// The tool accepts a graph whose seam takes a builder for a hole and rejects its visible build: the fill
+		/// accepts what the seam's module, building the fulfilling type inline, rejects.
+		case holeAcceptedWhereVisibleBuildRejects = "the tool accepts a graph with a hole and rejects its visible build"
 	}
 
 	let seed: UInt64
@@ -4863,18 +5244,22 @@ struct GraphFuzzerToolRuns {
 	/// - Parameters:
 	///   - renamedOutcomes: The outcome of the graph renamed by each renaming, with the renaming undone.
 	///   - inlineOutcome: The outcome of the graph with no seam, when the graph declares one and the tool rejected it.
+	///   - visibleOutcome: The outcome of the graph's visible build (`GraphFuzzerFixture.withoutHoles`), when the graph
+	///     draws a hole.
 	init(
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,
 		secondOutcome: GraphFuzzerToolOutcome,
 		renamedOutcomes: [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)] = [],
 		inlineOutcome: GraphFuzzerToolOutcome? = nil,
+		visibleOutcome: GraphFuzzerToolOutcome? = nil,
 	) {
 		self.fixture = fixture
 		self.firstOutcome = firstOutcome
 		self.secondOutcome = secondOutcome
 		self.renamedOutcomes = renamedOutcomes
 		self.inlineOutcome = inlineOutcome
+		self.visibleOutcome = visibleOutcome
 	}
 
 	let fixture: GraphFuzzerFixture
@@ -4882,6 +5267,19 @@ struct GraphFuzzerToolRuns {
 	let secondOutcome: GraphFuzzerToolOutcome
 	let renamedOutcomes: [(renaming: GraphFuzzerRenaming, outcome: GraphFuzzerToolOutcome)]
 	let inlineOutcome: GraphFuzzerToolOutcome?
+	let visibleOutcome: GraphFuzzerToolOutcome?
+
+	/// The failure of a graph whose seam takes a builder for a hole that the tool accepts while it rejects the graph's
+	/// visible build, or `nil`: a fill may be rejected where inline would read another value, but what the seam's module
+	/// rejects building inline, a fill must reject too.
+	var visibleBuildFailure: GraphFuzzerFailure? {
+		guard case .accepted = firstOutcome, case let .rejected(diagnostics) = visibleOutcome else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .holeAcceptedWhereVisibleBuildRejects,
+			details: "With the hole:\n\(firstOutcome.description)\nThe visible build:\n\(diagnostics)",
+		)
+	}
 
 	/// The failure of a graph the tool rejects with the seam declared and accepts without it, where the rejection
 	/// is not one of a seam's own errors (`GraphFuzzerOracle.isSeamOnlyRejection`) but an error of the inlined
@@ -5192,7 +5590,7 @@ enum GraphFuzzerOracle {
 		let valueFailures = try valueFailures(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil })
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
-			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.uncreatedAliasRejectionFailure, runs.nilArgumentFailure, runs.uncreatedAliasReadFailure, runs.tierAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], valueFailures[runs.fixture.seed], runs.wrapperParameterFailure, renamedGraphFailures.first].compactMap(\.self)
+			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.visibleBuildFailure, runs.uncreatedAliasRejectionFailure, runs.nilArgumentFailure, runs.uncreatedAliasReadFailure, runs.tierAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], valueFailures[runs.fixture.seed], runs.wrapperParameterFailure, renamedGraphFailures.first].compactMap(\.self)
 			return GraphFuzzerResult(
 				fixture: runs.fixture,
 				outcome: runs.firstOutcome,
@@ -5215,7 +5613,12 @@ enum GraphFuzzerOracle {
 	/// of one call are compared in one batch. Nothing is compared when `compileVerificationIsEnabled` is `false`.
 	static func valueFailures(of toolRuns: [GraphFuzzerToolRuns]) throws -> [UInt64: GraphFuzzerFailure] {
 		let inspectedRuns = toolRuns.filter(\.isInspectedByValueOracle)
-		guard !inspectedRuns.isEmpty, compileVerificationIsEnabled else { return [:] }
+		// A graph with a hole is compared with its visible build too, in which the seam builds the fulfilling type.
+		let visibleRuns = toolRuns.filter { runs in
+			guard case .accepted = runs.firstOutcome, case .accepted = runs.visibleOutcome else { return false }
+			return true
+		}
+		guard !inspectedRuns.isEmpty || !visibleRuns.isEmpty, compileVerificationIsEnabled else { return [:] }
 		var filesToDelete = [URL]()
 		defer {
 			for fileToDelete in filesToDelete {
@@ -5233,12 +5636,48 @@ enum GraphFuzzerOracle {
 				exemptions: Self.documentedSeamValueDivergences(of: runs.fixture),
 			)
 		}
-		guard let comparisons = try DifferentialValueOracle.compare(graphs: graphs, filesToDelete: &filesToDelete) else { return [:] }
+		let visibleGraphs = visibleRuns.compactMap { runs -> DifferentialValueGraph? in
+			guard case let .accepted(holeFiles, _) = runs.firstOutcome, case let .accepted(visibleFiles, _) = runs.visibleOutcome else { return nil }
+			let storingFixture = GraphFuzzerGenerator.fixture(forSeed: runs.fixture.seed, features: GraphFuzzerGeneratorFeature.features(drawnIn: runs.fixture), storingEveryParameter: true)
+			return DifferentialValueGraph(
+				name: "seed \(runs.fixture.seed), visible build",
+				feature: DifferentialValuePath(fixture: storingFixture, generatedFiles: holeFiles),
+				knownRight: DifferentialValuePath(fixture: storingFixture.withoutHoles, generatedFiles: visibleFiles),
+				probes: storingFixture.differentialValueProbes(generatedFiles: holeFiles),
+			)
+		}
+		guard let comparisons = try DifferentialValueOracle.compare(graphs: graphs + visibleGraphs, filesToDelete: &filesToDelete) else { return [:] }
 		var failures = [UInt64: GraphFuzzerFailure]()
-		for (runs, comparison) in zip(inspectedRuns, comparisons) {
+		for (runs, comparison) in zip(visibleRuns, comparisons.dropFirst(graphs.count)) {
 			switch comparison.result {
 			case let .success(valueComparison):
 				let differences = valueComparison.differences
+				guard !differences.isEmpty else { continue }
+				failures[runs.fixture.seed] = GraphFuzzerFailure(
+					seed: runs.fixture.seed,
+					kind: .holeBuildsOtherValuesThanVisibleBuild,
+					details: "\(differences.map(\.description).joined(separator: "\n"))\n\(valueComparison.report)With the hole:\n\(runs.firstOutcome.description)\nThe visible build:\n\(runs.visibleOutcome?.description ?? "")",
+					valueDifferences: differences.map(\.description),
+				)
+			case let .failure(error):
+				failures[runs.fixture.seed] = GraphFuzzerFailure(
+					seed: runs.fixture.seed,
+					kind: .valueComparatorCouldNotDescribeGraph,
+					details: "\(error)\nWith the hole:\n\(runs.firstOutcome.description)\nThe visible build:\n\(runs.visibleOutcome?.description ?? "")",
+				)
+			}
+		}
+		// A difference from the visible build is reported before one from the inline build. The visible build is the
+		// reference for the hole draw's seam re-entered inside its tree (`holeSeamBuilder`): the inline reference closes
+		// that lazy cycle on the outer builder function, a main defect (the shape of seed 662), and hands the second
+		// round the outer seam's values, where the hole build and the visible build both build the seam afresh.
+		let visiblyComparedSeeds = Set(visibleRuns.map(\.fixture.seed))
+		for (runs, comparison) in zip(inspectedRuns, comparisons) where failures[runs.fixture.seed] == nil {
+			switch comparison.result {
+			case let .success(valueComparison):
+				let differences = valueComparison.differences.filter { difference in
+					!visiblyComparedSeeds.contains(runs.fixture.seed) || !difference.path.contains("holeSeamBuilder")
+				}
 				guard !differences.isEmpty else { continue }
 				failures[runs.fixture.seed] = GraphFuzzerFailure(
 					seed: runs.fixture.seed,
@@ -5635,6 +6074,9 @@ enum GraphFuzzerOracle {
 		"error: SafeDI cannot generate the dependency tree of `",
 		"error: SafeDI cannot generate a call to the initializer SafeDI generated for `",
 		"` receives from outside it, because `",
+		// A fill's own errors: what the struct does not carry, or what a re-entering call or a passing-up seam hides.
+		"the builder for `",
+		"but that call passes the builder `",
 	]
 
 	/// Runs the tool twice over `fixture`, and once over it renamed by each of `renamings`.
@@ -5650,12 +6092,15 @@ enum GraphFuzzerOracle {
 		// or a defect (`differentialFailure`), and an accepted graph must pass no receiver `nil` that inline passes a
 		// value (`nilArgumentFailure`).
 		let inlineOutcome: GraphFuzzerToolOutcome? = fixture.declaresSeam ? try await toolOutcome(of: fixture.withoutSeams) : nil
+		// A graph with a hole is run again with the fulfilling type in the seam's module, whose values a fill must equal.
+		let visibleOutcome: GraphFuzzerToolOutcome? = fixture.drawsHole ? try await toolOutcome(of: fixture.withoutHoles) : nil
 		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
 			firstOutcome: firstOutcome,
 			secondOutcome: toolOutcome(of: fixture),
 			renamedOutcomes: renamedOutcomes,
 			inlineOutcome: inlineOutcome,
+			visibleOutcome: visibleOutcome,
 		)
 	}
 
@@ -5875,11 +6320,23 @@ enum GraphFuzzerOracle {
 					let modifiers = trimmedLine[..<parametersStart.lowerBound].split(separator: " ")
 					let access = modifiers.first { ["public", "package", "internal", "fileprivate", "private"].contains($0) }.map(String.init) ?? "internal"
 					let parameters = String(trimmedLine[parametersStart.upperBound..<trimmedLine.index(trimmedLine.endIndex, offsetBy: -3)])
-					initializers.append((extendedType, access, topLevelParameters(parameters)))
+					initializers.append((extendedType, access, topLevelParameters(parameters).map { callerSpelling(ofParameter: $0, of: extendedType) }))
 				}
 			}
 		}
 		return initializers.filter { guardedTypes.contains($0.seamTypeName) }
+	}
+
+	/// `parameter`, a parameter of a generated initializer of `seamTypeName`, as code outside the seam's extension spells
+	/// it: a builder for a hole (`userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService)
+	/// -> any UserService`) without its internal name, and with its scope struct, which the extension names unqualified,
+	/// qualified by the seam. Any other parameter as written.
+	static func callerSpelling(ofParameter parameter: String, of seamTypeName: String) -> String {
+		let parameter = parameter.trimmingCharacters(in: .whitespaces)
+		let label = parameter.prefix { $0 != ":" }
+		guard label.contains(" ") else { return parameter }
+		let type = parameter.dropFirst(label.count)
+		return String(label.prefix { $0 != " " }) + type.replacingOccurrences(of: #"(?<![A-Za-z0-9_.])SafeDIScope_"#, with: "\(seamTypeName).SafeDIScope_", options: .regularExpression)
 	}
 
 	/// `seamInitializers(inGeneratedFile:)` without each tier's access.

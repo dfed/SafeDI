@@ -73,6 +73,13 @@ struct SafeDIToolGraphFuzzerTests {
 			}
 		}
 		#expect(Set(GraphFuzzerSeamOutputFeature.allCases).subtracting(outputFeatures).sorted() == [])
+		// Graphs with a hole whose generated code shows every `GraphFuzzerHoleOutputFeature`.
+		let holeOutputFeatures = acceptedResults.reduce(into: Set<GraphFuzzerHoleOutputFeature>()) { features, result in
+			if case let .accepted(generatedFiles, _) = result.outcome {
+				features.formUnion(GraphFuzzerFeature.holeOutputFeatures(generatedFiles: generatedFiles))
+			}
+		}
+		#expect(Set(GraphFuzzerHoleOutputFeature.allCases).subtracting(holeOutputFeatures).sorted() == [])
 		// Graphs split across modules – with a caller in another package, and with a caller or a seam's module run without
 		// its package's name – among those the tool accepts, so that the batch compiles each module of a split graph and
 		// the callers of each package configuration.
@@ -1622,12 +1629,12 @@ struct SafeDIToolGraphFuzzerTests {
 	)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0x29A158E1C63EB09B
-	static let seamCorpusAcceptedSeedCount = 299
-	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xC41430E71DB69EB9
+	static let seamCorpusFixtureHash: UInt64 = 0x37DC9D5524B7C93E
+	static let seamCorpusAcceptedSeedCount = 296
+	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x1A6B65458355CF55
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
 	/// oracle compares.
-	static let seamCorpusValueOracleInspectedGraphCount = 245
+	static let seamCorpusValueOracleInspectedGraphCount = 243
 	/// How many of the seam corpus's graphs the tool rejects because a caller holds a value the tier it calls omits.
 	static let seamCorpusOmittedValueGraphCount = 18
 
@@ -1636,18 +1643,20 @@ struct SafeDIToolGraphFuzzerTests {
 	/// closure parameter, an `@escaping @Sendable` one, and an optional closure – graphs split across modules, with a
 	/// caller in another package (seed 31), a caller in the same package run without its package's name (seed 180) and a
 	/// seam's module run so (seed 98), the last two also accepted inline, so the batch compiles every module, judges an
-	/// omitted value and compares a split graph's values, and a graph it rejects, which
+	/// omitted value and compares a split graph's values; graphs with a hole whose code, between them, shows every
+	/// `GraphFuzzerHoleOutputFeature` – a passed-up builder whose fill re-enters the inner seam (seed 196) and a staged
+	/// builder whose fill re-enters its seam (seed 277); and a graph it rejects, which
 	/// `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` checks. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 31, 92, 98, 180]
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 31, 92, 98, 180, 196, 277]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xAE4812864CA59209
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x8E4E23FC12E809A9
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
 	/// `seamCorpus_drawsEachShapeInThePinnedNumberOfGraphs_whenFixturesAreGeneratedWithoutTheTool`.
 	static let seamCorpusDrawFeatureCounts: [GraphFuzzerSeamDrawFeature: Int] = [
 		.collidingFormsBeneathSeam: 10,
-		.innerSeam: 83,
+		.innerSeam: 165,
 		.instanceHeldByCaller: 350,
 		.instanceReceiveBeneathSeam: 113,
 		.otherKindWrapperReceiveBeneathSeam: 25,
@@ -1729,10 +1738,26 @@ struct SafeDIToolGraphFuzzerTests {
 		.typeInExtensionOfSeam: 41,
 		.typeInExtensionOfNarrowerRecordedType: 39,
 		.valueDeclaredAfterSeam: 79,
-		.moduleSplit: 318,
+		.moduleSplit: 484,
 		.otherPackageCaller: 221,
 		.samePackageCallerRunWithoutPackageName: 53,
 		.seamModuleRunWithoutPackageName: 38,
+		.hole: 331,
+		.holeOwnedBySeam: 75,
+		.holeBeneathConstant: 60,
+		.holeBeneathInstantiator: 89,
+		.holeBeneathSendableInstantiator: 44,
+		.holeBeneathLazilyInstantiated: 55,
+		.holeBeneathSendableLazilyInstantiated: 8,
+		.holeOwnerReachedAtTwoSites: 56,
+		.holeReadsField: 167,
+		.holeReadsCallerValue: 92,
+		.holePassedUp: 84,
+		.holeReentersSeam: 43,
+		.holeReentersSeamBeneathRedeclaredLabel: 7,
+		.holeReentersInnerSeamOfPassedUpBuilder: 13,
+		.holeSeamReentersItself: 19,
+		.holeSeamReentersItselfBeneathBoundLabel: 2,
 	]
 
 	/// Seeds in `0..<seamCorpusSeedCount` whose graphs fail today. The 1 000-seed run of this corpus found that each
@@ -1798,7 +1823,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
 	private static let seamCorpusSeedsAddedToInheritedShapes: [String: [UInt64]] = [
-		"SafeDIMockConfiguration.swift declares its extensions in the order of the roots that reach them": [182, 794],
+		"SafeDIMockConfiguration.swift declares its extensions in the order of the roots that reach them": [93, 182, 594, 794],
 	]
 
 	/// Seeds whose seam has two or more pass-throughs. They are sorted by label – kept by ruling: a parameter order

@@ -179,6 +179,40 @@ Four shapes differ from building the tree inline, because the seam cannot see it
 - A by-value parameter filled from a wrapper the caller holds reads `.instance` at the call, so the instance is created when the seam is, where inline it is created when the receiver inside the tree is built. SafeDI does not warn about that read.
 - A `@Sendable` builder inside the seam that reads a parameter of a non-`Sendable` wrapper type – `Instantiator`, `ErasedInstantiator`, or `LazilyInstantiated` – is rejected, since the generated initializer declares the parameter outside every builder function, even where inline would pass `nil`: receive the label inside the seam as the `Sendable` wrapper of that kind, and declare it so where the caller declares it.
 
+A seam’s tree may instantiate a type that no `@Instantiable` declaration its module can see fulfills – a protocol whose implementation lives in the app, for instance. The initializer SafeDI generates then takes a builder for it, `<label>Builder`, one for each place the tree builds it: a closure handed a struct of the values in scope there and returning the property’s type – or, where `@Sendable` builder functions lie between the seam and that place, a `@Sendable` closure for the values bound inside the first of them, and so on, the last returning the property’s type. A module that can see an implementation fills the builder in the code it generates, building the implementation from the struct’s fields and from its own tree; a seam that cannot passes the builder up through its own initializer; a root that cannot is an error. A value the implementation receives must be in the struct, or come from the module that fills it. The builder, and each value in the struct, is as visible as the types it names, as a parameter is. A seam whose tree instantiates the seam again, directly or through another seam of its module, hands the builders it took on to that call; a value the implementation reads that such a path binds is an error, as for a builder passed up.
+
+```swift
+// Generated in module Feature, where `Profile` instantiates `userService: any UserService`.
+extension Service {
+    public struct SafeDIScope_Profile_userService {
+        public let analytics: Analytics
+    }
+
+    public init(userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+        let analytics = Analytics()
+        func __safeDI_profile() -> Profile {
+            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(analytics: analytics))
+            return Profile(userService: userService, analytics: analytics)
+        }
+        let profile: Profile = __safeDI_profile()
+        self.init(analytics: analytics, profile: profile)
+    }
+}
+```
+
+```swift
+// Generated in module App, which declares `DefaultUserService`, an implementation of `UserService`.
+func __safeDI_service() -> Service {
+    _ = Service.__safeDI_Service_80890FC499DC6112.self // If this line does not compile, add the SafeDI plugin to the target that declares Service.
+    func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
+        let analytics = scope.analytics
+        let userService: any UserService = DefaultUserService(analytics: analytics)
+        return userService
+    }
+    return Service(userServiceBuilder: __safeDI_userServiceBuilder)
+}
+```
+
 #### Making protocols `@Instantiable`
 
 While it is not necessary to utilize protocols with SafeDI, protocol-driven development aids both testability and dependency inversion. The `@Instantiable` macro has a parameter `fulfillingAdditionalTypes` that enables any concrete `@Instantiable` type to fulfill properties that are declared as conforming to a protocol (or superclass) type.

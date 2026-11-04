@@ -202,6 +202,8 @@ struct ModuleTestOutput {
 	/// What `generate` read, when it ran: the module it generated code for, whose declarations under
 	/// `.swiftPackagePlugin` include those of every module the CSV lists, and the dependent modules' `.safedi`.
 	let generateOutput: Generate.Output?
+	/// The DOT tree `generate` wrote (`--dot-file-output`), when the test asked for one under `.moduleInfo`.
+	var dotTree: String?
 }
 
 /// What `executeSafeDIToolMultiModuleTest` produced: each module's output and, when the modules were compiled,
@@ -278,6 +280,8 @@ struct MultiModuleFixtureError: Error, CustomStringConvertible {
 ///     module instead of running the tool for it – one an earlier run wrote, so a dependent reads module info written
 ///     against other declarations than this run's. The module's files are still written, so a consumer's CSV can list
 ///     them. Such a run is not compiled.
+///   - writesDOTTrees: Whether `.moduleInfo` has `generate` write each module's DOT tree (`--dot-file-output`), which
+///     `ModuleTestOutput.dotTree` holds.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func executeSafeDIToolMultiModuleTest(
 	modules: [ModuleFixture],
@@ -286,6 +290,7 @@ func executeSafeDIToolMultiModuleTest(
 	writesTargetGraph: Bool = true,
 	scansDuringGenerate: Bool = false,
 	moduleInfoOverrides: [String: String] = [:],
+	writesDOTTrees: Bool = false,
 	filesToDelete: inout [URL],
 	sourceLocation: SourceLocation = #_sourceLocation,
 ) async throws -> MultiModuleTestOutput {
@@ -370,14 +375,24 @@ func executeSafeDIToolMultiModuleTest(
 				)
 				continue
 			}
-			var arguments = [
+			var arguments: [String] = [
 				swiftFileCSV.path,
 				"--combined-output", outputDirectory.appendingPathComponent("\(moduleName).swift").path,
+			]
+			if writesDOTTrees {
+				arguments += ["--dot-file-output", outputDirectory.appendingPathComponent("\(moduleName).dot").path]
+			}
+			arguments += [
 				"--module-info-output", output.path,
 				"--compiler-receives-input-paths-unchanged",
-			] + (module.fixture.omitsModuleName ? [] : ["--module-name", moduleName])
-				+ (module.fixture.omitsPackageName ? [] : ["--package-name", module.fixture.packageName])
-				+ activeCompilationConditionArguments
+			]
+			if !module.fixture.omitsModuleName {
+				arguments += ["--module-name", moduleName]
+			}
+			if !module.fixture.omitsPackageName {
+				arguments += ["--package-name", module.fixture.packageName]
+			}
+			arguments += activeCompilationConditionArguments
 			if !module.fixture.dependencies.isEmpty {
 				let dependentModuleInfoFileCSV = moduleInfoDirectory.appendingPathComponent("\(moduleName)-dependencies.csv")
 				try module.fixture.dependencies
@@ -494,6 +509,7 @@ func executeSafeDIToolMultiModuleTest(
 			warnings: generateOutput?.warnings ?? [],
 			generatedFiles: try generatedSwiftFiles(in: outputDirectory),
 			generateOutput: generateOutput,
+			dotTree: writesDOTTrees ? try String(contentsOf: outputDirectory.appendingPathComponent("\(moduleName).dot"), encoding: .utf8) : nil,
 		)
 	}
 

@@ -145,11 +145,214 @@ public struct SeamSignature: Sendable {
 		public let otherInitializerArgumentsAccess: AccessLevel
 	}
 
-	public init(seamType: TypeDescription, parameters: [Parameter], tiers: [AccessLevel], noTierParameters: [Parameter] = []) {
+	/// A build site in the seam's tree of an `@Instantiated` property whose type no production `@Instantiable`
+	/// declaration the seam's module can see fulfills, or one an inner seam's tree holds that this seam passes up: the
+	/// generated initializer takes a builder for it, which a caller that can see a fulfilling declaration fills. Each
+	/// site is its own hole, with its own builder and scope struct, never grouped with another site of the property.
+	public struct Hole: Sendable {
+		/// A value in scope at the site, which the scope struct the builder is handed carries.
+		public struct Field: Sendable {
+			public init(property: Property, access: AccessLevel, accessCause: TypeAccessProof.Cause? = nil, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, isReceivedOnlyIfAvailable: Bool = false) {
+				self.property = property
+				self.access = access
+				self.accessCause = accessCause
+				self.declaringType = declaringType
+				self.declarationLocation = declarationLocation
+				self.isReceivedOnlyIfAvailable = isReceivedOnlyIfAvailable
+			}
+
+			/// The value's label and the type of its declaration.
+			public let property: Property
+			/// The access the struct declares the field at: as visible as the narrowest type the field names, as the
+			/// declarations the signature is computed from prove it (`TypeAccessProof`), capped at the seam's type.
+			public let access: AccessLevel
+			/// How the narrowest type the field names is proven, which a diagnostic explains, or `nil` when every type it
+			/// names is `public`.
+			public let accessCause: TypeAccessProof.Cause?
+			/// The type whose declaration of the value the field carries: for a parameter that passes a receive through
+			/// the seam, the first type in the tree that receives it.
+			public let declaringType: TypeDescription
+			public let declarationLocation: Dependency.DeclarationLocation?
+			/// Whether the field passes through a parameter the seam's tree receives only if available, so a caller
+			/// may pass `nil` for it.
+			public let isReceivedOnlyIfAvailable: Bool
+		}
+
+		/// A declaration on the site's path whose label a fill cannot read from the scope struct: the nearest declaration
+		/// of its label is bound after the site. A fill whose tree receives such a label is an error, since inline the
+		/// receive reads that declaration.
+		public struct UncarriedDeclaration: Sendable {
+			public init(property: Property, declaringType: TypeDescription, declarationLocation: Dependency.DeclarationLocation?, builtAfter: Property?, reason: Reason) {
+				self.property = property
+				self.declaringType = declaringType
+				self.declarationLocation = declarationLocation
+				self.builtAfter = builtAfter
+				self.reason = reason
+			}
+
+			/// Why the declaration is bound after the site.
+			public enum Reason: Sendable {
+				/// Its type receives `builtAfter`, the scope on the site's path, only if available.
+				case receivesPathScopeOnlyIfAvailable(type: TypeDescription)
+				/// Its type requires `carrier`, a sibling that holds another site.
+				case requiresOtherCarrier(type: TypeDescription, carrier: Property)
+				/// It is the scope on the site's path, still being built, the hole itself, or an alias not created there.
+				case other
+				/// `seam`'s tree binds it on a path to a call of the seam whose hole `seam` passes up: inline, a receive
+				/// of its label would read it, and `seam`'s caller, which fills the builder, does not hold it.
+				case boundByPassingUpSeam(seam: TypeDescription)
+			}
+
+			public let property: Property
+			public let declaringType: TypeDescription
+			public let declarationLocation: Dependency.DeclarationLocation?
+			/// The property of the scope on the site's path that the declaration's scope builds before it, or `nil`.
+			public let builtAfter: Property?
+			public let reason: Reason
+		}
+
+		public init(
+			ownerType: TypeDescription,
+			property: Property,
+			instantiatedType: TypeDescription,
+			declarationLocation: Dependency.DeclarationLocation?,
+			erasedToConcreteExistential: Bool,
+			sitePath: [Property],
+			sitePathDeclarationLocations: [Dependency.DeclarationLocation?],
+			fillPropertyStack: [Property],
+			builderLabel: String,
+			internalName: String,
+			scopeSeamType: TypeDescription,
+			scopeTypeName: String,
+			stages: [[Field]],
+			stageBoundaryDepths: [Int],
+			tierAccess: AccessLevel,
+			accessCause: TypeAccessProof.Cause? = nil,
+			uncarriedDeclarations: [UncarriedDeclaration],
+			innerSeamType: TypeDescription? = nil,
+			isSendable: Bool = false,
+		) {
+			self.ownerType = ownerType
+			self.property = property
+			self.instantiatedType = instantiatedType
+			self.declarationLocation = declarationLocation
+			self.erasedToConcreteExistential = erasedToConcreteExistential
+			self.sitePath = sitePath
+			self.sitePathDeclarationLocations = sitePathDeclarationLocations
+			self.fillPropertyStack = fillPropertyStack
+			self.builderLabel = builderLabel
+			self.internalName = internalName
+			self.scopeSeamType = scopeSeamType
+			self.scopeTypeName = scopeTypeName
+			self.stages = stages
+			self.stageBoundaryDepths = stageBoundaryDepths
+			self.tierAccess = tierAccess
+			self.accessCause = accessCause
+			self.uncarriedDeclarations = uncarriedDeclarations
+			self.innerSeamType = innerSeamType
+			self.isSendable = isSendable
+		}
+
+		/// The type whose `@Instantiated` property the site builds.
+		public let ownerType: TypeDescription
+		/// The property the site builds, as its owner declares it: the builder returns its type.
+		public let property: Property
+		/// The type a declaration must fulfill to fill the builder: the property's instantiated type, or the type an
+		/// erased property names with `fulfilledByType:`.
+		public let instantiatedType: TypeDescription
+		/// Where the owner declares the property.
+		public let declarationLocation: Dependency.DeclarationLocation?
+		/// Whether the property is `erasedToConcreteExistential`, which a fill wraps the fulfilling type in.
+		public let erasedToConcreteExistential: Bool
+		/// The properties from the root of the tree that holds the site down to the owner's property, outermost first:
+		/// the site's identity in that tree.
+		public let sitePath: [Property]
+		/// Where each property of `sitePath` is declared, by the type that builds it.
+		public let sitePathDeclarationLocations: [Dependency.DeclarationLocation?]
+		/// The stack a fill builds the property's tree with: the properties from the root of the seam whose tree holds
+		/// the site to the owner's property, innermost first, each lazily instantiated one preceded by its instance, as
+		/// `Scope.createScopeGenerator` stacks them.
+		public let fillPropertyStack: [Property]
+		/// The label the generated initializer takes the builder under.
+		public let builderLabel: String
+		/// The name the generated initializer binds the builder to.
+		public let internalName: String
+		/// The seam whose extension declares the scope struct: this seam, or the inner seam a passed-up hole is from.
+		public let scopeSeamType: TypeDescription
+		/// The name of the scope struct, or, for a staged builder, of the enum holding one struct per stage.
+		public let scopeTypeName: String
+		/// The fields of each stage's struct: one stage, unless `@Sendable` builder functions lie between the seam and
+		/// the site, each of which starts another.
+		public let stages: [[Field]]
+		/// The length of the site's path at each `@Sendable` builder function between the seam and the site, outermost
+		/// first: the path of the property whose builder function it is.
+		public let stageBoundaryDepths: [Int]
+		/// The access each tier that takes the builder must have no more than: the builder's type is as visible as the
+		/// narrowest type it names – the scope struct at the access of the seam that declares it, and the property's type
+		/// as the declarations the signature is computed from prove it (`TypeAccessProof`) – capped at the seam's type.
+		public let tierAccess: AccessLevel
+		/// How the narrowest type the builder's type names is proven, which a diagnostic explains, or `nil` when every
+		/// type it names is `public`.
+		public let accessCause: TypeAccessProof.Cause?
+		/// The declarations on the site's path a fill cannot read from the scope struct.
+		public let uncarriedDeclarations: [UncarriedDeclaration]
+		/// The seam the tree calls that presented the hole first, when this one passes it up, or `nil` for a site of this
+		/// seam's own tree.
+		public let innerSeamType: TypeDescription?
+		/// Whether the builder is `@Sendable`: the seam's tree passes it on from inside a `@Sendable` builder function,
+		/// which captures it.
+		public let isSendable: Bool
+
+		/// What identifies a hole: its site, by the seam whose tree holds it and its path there, which a passed-up hole
+		/// keeps. A seam takes one builder per site, whatever route presents it.
+		public struct Site: Hashable, Sendable {
+			public let seamType: TypeDescription
+			public let path: [Property]
+		}
+
+		/// The hole's site.
+		public var site: Site {
+			Site(seamType: scopeSeamType, path: sitePath)
+		}
+
+		/// The name of the struct of the stage at `stageIndex`, or `nil` for an unstaged builder.
+		public static func stageName(at stageIndex: Int) -> String {
+			stageIndex == 0 ? "Outer" : stageIndex == 1 ? "Inner" : "Inner\(stageIndex)"
+		}
+
+		/// The type of the struct the stage at `stageIndex` is handed, qualified by `seamType` when it is given.
+		public func stageStructType(at stageIndex: Int, qualifiedBy seamType: TypeDescription?) -> TypeDescription {
+			let scopeType: TypeDescription = if let seamType {
+				.nested(name: scopeTypeName, parentType: seamType, generics: [])
+			} else {
+				.simple(name: scopeTypeName, generics: [])
+			}
+			return stages.count == 1 ? scopeType : .nested(name: Self.stageName(at: stageIndex), parentType: scopeType, generics: [])
+		}
+
+		/// The type of the function the stage at `stageIndex` is: it takes that stage's struct and returns the next
+		/// stage's `@Sendable` function, or the property's type at the last stage.
+		public func stageFunctionType(at stageIndex: Int, qualifiedBy seamType: TypeDescription?) -> TypeDescription {
+			let returnType: TypeDescription = if stageIndex + 1 < stages.count {
+				.attributed(stageFunctionType(at: stageIndex + 1, qualifiedBy: seamType), specifiers: [], attributes: ["Sendable"])
+			} else {
+				property.typeDescription
+			}
+			return .closure(arguments: [stageStructType(at: stageIndex, qualifiedBy: seamType)], isAsync: false, doesThrow: false, returnType: returnType)
+		}
+
+		/// The builder parameter's type, `@escaping`, with its scope type qualified by `seamType` when it is given.
+		public func builderType(qualifiedBy seamType: TypeDescription?) -> TypeDescription {
+			.attributed(stageFunctionType(at: 0, qualifiedBy: seamType), specifiers: [], attributes: isSendable ? ["escaping", "Sendable"] : ["escaping"])
+		}
+	}
+
+	public init(seamType: TypeDescription, parameters: [Parameter], tiers: [AccessLevel], noTierParameters: [Parameter] = [], holes: [Hole] = []) {
 		self.seamType = seamType
 		self.parameters = parameters
 		self.tiers = tiers
 		self.noTierParameters = noTierParameters
+		self.holes = holes
 	}
 
 	/// The seam's concrete type.
@@ -157,6 +360,9 @@ public struct SeamSignature: Sendable {
 	/// The parameters of the narrowest tier, which takes every one: the seam's own `@Received` and `@Forwarded`
 	/// properties in declaration order, then the pass-throughs in label order.
 	public let parameters: [Parameter]
+	/// The holes the generated initializer takes a builder for, in builder-label order, after every parameter and on
+	/// every tier. Kept apart from `parameters`, so a builder is never receivable in the seam's own tree.
+	public let holes: [Hole]
 	/// The access level of each generated initializer, widest first: the widest is at the seam type's effective
 	/// access, as its enclosing types limit it, and each narrower one at a narrower `tierAccess` among the parameters.
 	/// Each tier but the narrowest omits every parameter whose `tierAccess` is narrower than the tier and calls the
@@ -196,12 +402,37 @@ public struct SeamSignature: Sendable {
 			public let defaultsToNil: Bool
 		}
 
+		/// A builder the call passes: its label, its type spelled without `any`, its tier access, and each field of
+		/// each stage's struct – label, type spelled without `any`, and access – in stage and field order.
+		public struct Hole: Hashable, Sendable {
+			public init(_ hole: SeamSignature.Hole) {
+				builderLabel = hole.builderLabel
+				type = hole.builderType(qualifiedBy: hole.scopeSeamType).withoutAny.asSource
+				tierAccess = hole.tierAccess
+				fields = hole.stages.map { stage in
+					stage.map { Field(label: $0.property.label, type: $0.property.typeDescription.withoutAny.asSource, access: $0.access) }
+				}
+			}
+
+			public struct Field: Hashable, Sendable {
+				public let label: String
+				public let type: String
+				public let access: AccessLevel
+			}
+
+			public let builderLabel: String
+			public let type: String
+			public let tierAccess: AccessLevel
+			public let fields: [[Field]]
+		}
+
 		public let parameters: [Parameter]
+		public let holes: [Hole]
 		public let tiers: [AccessLevel]
 	}
 
 	public var callShape: CallShape {
-		CallShape(parameters: parameters.map(CallShape.Parameter.init), tiers: tiers)
+		CallShape(parameters: parameters.map(CallShape.Parameter.init), holes: holes.map(CallShape.Hole.init), tiers: tiers)
 	}
 
 	/// What settling a module's seams solves for: each parameter – its property, whether it is a pass-through, its
@@ -224,7 +455,16 @@ public struct SeamSignature: Sendable {
 			public let access: AccessLevel
 		}
 
+		/// A hole's call shape, which a hole that changes changes what the seam's callers and the seams that pass it up
+		/// compute, and the labels of its uncarried declarations, which only accumulate where a seam's tree reaches the
+		/// seam again and hands the builder back.
+		public struct Hole: Hashable, Sendable {
+			public let callShape: CallShape.Hole
+			public let uncarriedLabels: Set<String>
+		}
+
 		public let parameters: [Parameter]
+		public let holes: [Hole]
 		public let tiers: [AccessLevel]
 		public let noTierParameters: [Parameter]
 	}
@@ -244,7 +484,12 @@ public struct SeamSignature: Sendable {
 				)
 			}
 		}
-		return SettledContent(parameters: settledContent(of: parameters), tiers: tiers, noTierParameters: settledContent(of: noTierParameters))
+		return SettledContent(
+			parameters: settledContent(of: parameters),
+			holes: holes.map { SettledContent.Hole(callShape: CallShape.Hole($0), uncarriedLabels: Set($0.uncarriedDeclarations.map(\.property.label))) },
+			tiers: tiers,
+			noTierParameters: settledContent(of: noTierParameters),
+		)
 	}
 
 	/// The name of the empty enum the seam's module generates in an extension of the seam, which every generated
@@ -259,6 +504,18 @@ public struct SeamSignature: Sendable {
 			hash.combine(parameter.type)
 			hash.combine(parameter.tierAccess.spelledOnGeneratedDeclaration)
 			hash.combine(parameter.defaultsToNil ? "= nil" : "")
+		}
+		// Each builder after every parameter, so a seam without one hashes what it always hashed. A field is hashed,
+		// since a caller that computed the struct without it would resolve the label from its own scope instead.
+		for hole in callShape.holes {
+			hash.combine(hole.builderLabel)
+			hash.combine(hole.type)
+			hash.combine(hole.tierAccess.spelledOnGeneratedDeclaration)
+			for field in hole.fields.joined() {
+				hash.combine(field.label)
+				hash.combine(field.type)
+				hash.combine(field.access.spelledOnGeneratedDeclaration)
+			}
 		}
 		return "\(ReservedName.builderFunctionNamePrefix)\(seamType.asIdentifier)_\(hash.hexadecimal)"
 	}
@@ -292,6 +549,7 @@ struct SeamSignatureHash {
 public struct SeamCall: Sendable {
 	public init(
 		parameters: [SeamSignature.Parameter],
+		holes: [SeamSignature.Hole] = [],
 		guardTypeName: String,
 		carriesPluginComment: Bool,
 		unreachableTierIsReported: Bool = false,
@@ -303,6 +561,7 @@ public struct SeamCall: Sendable {
 		callerModuleName: String? = nil,
 	) {
 		self.parameters = parameters
+		self.holes = holes
 		self.guardTypeName = guardTypeName
 		self.carriesPluginComment = carriesPluginComment
 		self.unreachableTierIsReported = unreachableTierIsReported
@@ -317,6 +576,8 @@ public struct SeamCall: Sendable {
 	/// The parameters of the tier the call passes, each at the access it was received at inside the seam, which a
 	/// seam that reaches this one passes on at that access.
 	public let parameters: [SeamSignature.Parameter]
+	/// The holes whose builders the call passes, in builder-label order: every tier takes every builder.
+	public let holes: [SeamSignature.Hole]
 	/// The `SeamSignature.guardTypeName` of the signature the call was generated from.
 	public let guardTypeName: String
 	/// Whether the call carries a comment saying what to do when it does not compile. Under the SwiftPM plugin,

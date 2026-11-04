@@ -23,11 +23,14 @@
 /// call omits, keyed by how the parameter's narrowest type is proven (`TypeAccessProof.Cause`), by what receives the
 /// parameter, and by the error.
 enum SeamAccessExplanation {
-	/// Which parameter the explanation is about: a pass-through, or one of the seam's own properties.
+	/// Which parameter the explanation is about: a pass-through, one of the seam's own properties, or the builder for a
+	/// type no declaration `seamModuleName` reads fulfills, `fulfilledType`, which the seam's tree builds or, when
+	/// `isPassedUp`, the seam passes up.
 	enum ParameterKind {
 		case passThrough
 		case ownForwarded
 		case ownReceived
+		case builder(fulfilledType: TypeDescription, seamModuleName: String?, isPassedUp: Bool)
 	}
 
 	/// A receive of the parameter, as the explanation names it.
@@ -91,7 +94,7 @@ enum SeamAccessExplanation {
 		parameterKind: ParameterKind,
 	) -> String {
 		var remedies = [String]()
-		if case let .unproven(type)? = cause, parameterKind == .passThrough {
+		if case let .unproven(type)? = cause, case .passThrough = parameterKind {
 			// A receive on the seam puts the type in an initializer the compiler checks, which then proves it.
 			remedies.append("declare `@\(Dependency.Source.receivedRawValue) let \(parameter.label): \(type.asSource)` on \(name(seam)), so that its initializer, which the compiler checks, states how visible \(name(type)) is (the compiler may then require \(name(seam))'s initializer, and so the seam, to be narrower)")
 		}
@@ -103,6 +106,8 @@ enum SeamAccessExplanation {
 			break
 		case .ownReceived:
 			remedies.append("receive `\(parameter.label)` with `onlyIfAvailable: true` and an optional type")
+		case let .builder(fulfilledType, seamModuleName, isPassedUp):
+			remedies.append(fulfillRemedy(fulfilling: fulfilledType, seam: seam, seamModuleName: seamModuleName, isPassedUp: isPassedUp))
 		case .passThrough:
 			if let aliasProperty = receivers.first(where: { $0.aliasProperty != nil })?.aliasProperty, receivers.count == 1 {
 				remedies.append("receive `\(aliasProperty.label)` with `onlyIfAvailable: true` and an optional type")
@@ -202,6 +207,14 @@ enum SeamAccessExplanation {
 		remedies += causeRemedies(parameter.accessCause, neededLevel: neededLevel)
 		remedies.append("stop providing \(label) on this path")
 		return "\(provider), but \(what)\(causeText) \(joined(remedies))"
+	}
+
+	/// What a module must declare so that `seam` needs no builder for `fulfilledType`: a fulfilling declaration in a
+	/// module `seamModuleName` reads, which `seam`'s tree builds, or, for a builder `seam` passes up, fills itself.
+	static func fulfillRemedy(fulfilling fulfilledType: TypeDescription, seam: TypeDescription, seamModuleName: String?, isPassedUp: Bool) -> String {
+		let module = seamModuleName.map { "module `\($0)`" } ?? "this module"
+		let effect = isPassedUp ? "\(name(seam)) fills the builder itself" : "\(name(seam))'s tree builds it"
+		return "make an @\(InstantiableVisitor.macroName) declaration that fulfills \(name(fulfilledType)) one \(module) reads, so \(effect)"
 	}
 
 	// MARK: Private
