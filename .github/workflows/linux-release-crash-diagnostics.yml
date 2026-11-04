@@ -1,16 +1,17 @@
 name: Linux Release Crash Diagnostics (temporary)
 
-# Temporary: diagnoses the Swift 6.3.3 -Osize crash in createSeamScopeMapping
-# on the commit publishing 2.3.0-alpha-1 crashed on. Removed before the pull
-# request leaves draft.
+# Temporary: tests candidate workarounds for the Swift 6.3.3 -Osize crash in
+# createSeamScopeMapping. Each job applies one candidate to this pull
+# request's tree and runs publish.yml's Linux build command on publish's
+# runners. Removed before the pull request leaves draft.
 
 on:
   pull_request:
 
 jobs:
-  diagnose:
-    name: Diagnose (${{ matrix.variant }})
-    runs-on: ubuntu-latest
+  candidate:
+    name: Candidate ${{ matrix.candidate }} (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
     container: swift:6.3
     timeout-minutes: 40
     permissions:
@@ -18,17 +19,31 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - variant: print SIL before ownership lowering
-            flags: -Xswiftc -Xllvm -Xswiftc -sil-print-before=ownership-model-eliminator -Xswiftc -Xllvm -Xswiftc -sil-print-functions=createSeamScopeMapping -Xswiftc -Xllvm -Xswiftc -sil-print-debuginfo
-          - variant: without copy-to-borrow-optimization
-            flags: -Xswiftc -Xllvm -Xswiftc -sil-disable-pass=copy-to-borrow-optimization
-          - variant: without semantic-arc-opts
-            flags: -Xswiftc -Xllvm -Xswiftc -sil-disable-pass=semantic-arc-opts
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+        candidate: [a-bind-both-names, b-inline-never, c-both]
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
-        with:
-          ref: 3460d8b97d0d0a3dd1c8d0a07bd7eec61ea540e7
+      - name: Apply candidate
+        run: |
+          set -eu
+          file=Sources/SafeDICore/Models/AccessReachability.swift
+          cp "$file" "$RUNNER_TEMP/original.swift"
+          case "${{ matrix.candidate }}" in
+            a-bind-both-names|c-both)
+              perl -pi -e 's/\Qemitter.moduleName, emitterModuleName == declarer.moduleName {\E/emitter.moduleName, let declarerModuleName = declarer.moduleName, emitterModuleName == declarerModuleName {/' "$file"
+              ;;
+          esac
+          case "${{ matrix.candidate }}" in
+            b-inline-never|c-both)
+              perl -pi -e 's/^(\t)(public static func required\(toConstructFrom)/$1\@inline(never)\n$1$2/' "$file"
+              ;;
+          esac
+          if diff "$RUNNER_TEMP/original.swift" "$file"; then
+            echo "The candidate changed nothing." >&2
+            exit 1
+          fi
       - name: Build SafeDITool
-        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize ${{ matrix.flags }}
+        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize
+      - name: Smoke test
+        run: .build/release/SafeDITool --version
