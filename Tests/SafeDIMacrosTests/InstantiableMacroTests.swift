@@ -5824,7 +5824,7 @@ import Testing
 		}
 
 		@Test
-		func throwsError_whenGenerateMockIsNotBoolLiteral() {
+		func throwsError_whenGenerateMockIsNotAMockGenerationSpelling() {
 			assertMacroExpansion(
 				"""
 				@Instantiable(generateMock: someVariable)
@@ -5839,7 +5839,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "The argument `generateMock` must be a Bool literal (`true` or `false`).",
+						message: "The argument `generateMock` must be `true`, `false`, `.none`, `.internal`, or `.public`.",
 						line: 1,
 						column: 1,
 					),
@@ -8887,7 +8887,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`mockOnly` and `generateMock` cannot both be `true`: a `mockOnly` declaration provides a hand-written mock. To generate a mock, set `generateMock: true` on the production `@Instantiable` declaration instead.",
+						message: "`mockOnly` cannot be combined with `generateMock: true`, `.internal`, or `.public`: a `mockOnly` declaration provides a hand-written mock. To generate a mock, set `generateMock` on the production `@Instantiable` declaration instead.",
 						line: 1,
 						column: 1,
 						fixIts: [
@@ -9226,7 +9226,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`mockOnly` and `generateMock` cannot both be `true`: a `mockOnly` declaration provides a hand-written mock. To generate a mock, set `generateMock: true` on the production `@Instantiable` declaration instead.",
+						message: "`mockOnly` cannot be combined with `generateMock: true`, `.internal`, or `.public`: a `mockOnly` declaration provides a hand-written mock. To generate a mock, set `generateMock` on the production `@Instantiable` declaration instead.",
 						line: 1,
 						column: 1,
 						fixIts: [
@@ -9400,7 +9400,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`mockOnly` and `generateMock` cannot both be `true`: a `mockOnly` declaration provides a hand-written mock. To generate a mock, set `generateMock: true` on the production `@Instantiable` declaration instead.",
+						message: "`mockOnly` cannot be combined with `generateMock: true`, `.internal`, or `.public`: a `mockOnly` declaration provides a hand-written mock. To generate a mock, set `generateMock` on the production `@Instantiable` declaration instead.",
 						line: 1,
 						column: 1,
 						fixIts: [

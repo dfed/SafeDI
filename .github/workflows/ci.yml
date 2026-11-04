@@ -829,9 +829,10 @@ jobs:
           flags: linux
 
   # Fuzzes each of the graph fuzzer's corpora whole – the base corpus, seeds
-  # 0..<corpusSeedCount, and the seam corpus, seeds 0..<seamCorpusSeedCount
-  # drawn with the generateDependencyTree feature (see
-  # SafeDIToolGraphFuzzerTests.swift) – split across shards that run the test
+  # 0..<corpusSeedCount, the seam corpus, seeds 0..<seamCorpusSeedCount
+  # drawn with the generateDependencyTree feature, and the public mock corpus,
+  # seeds 0..<publicMockCorpusSeedCount drawn with the generateMockPublic
+  # feature (see SafeDIToolGraphFuzzerTests.swift) – split across shards that run the test
   # bundle "Build and Test on Linux" built. A shard fails when a graph fails,
   # a known issue goes stale, the run reports a problem with itself, the
   # process crashes, or no graph runs, and names the seeds in its summary.
@@ -849,7 +850,8 @@ jobs:
     strategy:
       fail-fast: false
       # Each corpus is drawn with a set of generator features (SAFEDI_GRAPH_FUZZER_FEATURES, empty for the base
-      # corpus, `generateDependencyTree` for the seam corpus) and has pins of its own (fixture hash, accepted count
+      # corpus, `generateDependencyTree` for the seam corpus, `generateMockPublic` for the public mock corpus) and
+      # has pins of its own (fixture hash, accepted count
       # and seed-set sum, known issues); the combine job checks each corpus's shards against its pins, that the
       # shards cover it exactly once, and that every corpus the long run names has a report.
       matrix:
@@ -864,6 +866,10 @@ jobs:
             iterations: 2500
           - corpus: generateDependencyTree
             features: generateDependencyTree
+            starting-seed: 0
+            iterations: 1000
+          - corpus: generateMockPublic
+            features: generateMockPublic
             starting-seed: 0
             iterations: 1000
     defaults:

@@ -253,6 +253,29 @@ struct PluginScannerStripCommentsAndStringsTests {
 		""")
 		#expect(commentOnly.range(of: #"@Instantiable\s*\((.|\n)*?generateDependencyTree\s*:\s*true"#, options: .regularExpression) == nil)
 	}
+
+	@Test(arguments: [
+		("true", true),
+		(".internal", true),
+		(".public", true),
+		("MockGeneration.internal", true),
+		("MockGeneration.public", true),
+		("false", false),
+		(".none", false),
+		("MockGeneration.none", false),
+	])
+	func matchesGenerateMockEnablingPattern_whenGenerateMockSpellsCase(spelling: String, enablesMock: Bool) {
+		let source = """
+		@Instantiable(
+		    generateMock: \(spelling)
+		)
+		public struct Screen: Instantiable {
+		    public init() {}
+		}
+		"""
+		let stripped = stripSwiftCommentsAndStrings(from: source)
+		#expect((stripped.range(of: generateMockEnablingPattern, options: .regularExpression) != nil) == enablesMock)
+	}
 }
 
 struct PluginScannerArrayArgumentTests {

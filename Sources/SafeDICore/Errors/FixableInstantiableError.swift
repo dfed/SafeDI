@@ -51,7 +51,17 @@ public enum FixableInstantiableError: DiagnosticError {
 	case customMockNameWithoutMockGeneration
 	case customMockNameMethodNotFound(String)
 	case mockMethodNonDependencyMissingDefaultValue([Property])
-	case mockOnlyWithGenerateMock
+	/// A `mockOnly` declaration also asks for a generated mock, spelled as `spelling` (`true`, `.public`).
+	case mockOnlyWithGenerateMock(spelling: String)
+	/// `generateMock: .public` on a type declaration whose spelled access, `accessLevel`, is narrower than `public`.
+	case publicMockRequiresPublicType(typeName: String, accessLevel: AccessLevel, isSpelled: Bool)
+	/// `generateMock: .public` on an `@Instantiable` extension, which cannot prove the extended type is `public`.
+	case publicMockOnExtension
+	/// `generateMock: .public` on a declaration with a generic parameter clause, or on one declared inside the body of
+	/// `genericTypeName`, a type that has one.
+	case publicMockOnGenericType(typeName: String, genericTypeName: String?)
+	/// A default-valued non-dependency parameter is `@autoclosure`, which a generated mock cannot pass on.
+	case defaultValuedAutoclosureParameter(parameterLabel: String)
 	case mockOnlyWithIsRoot
 	case generateDependencyTreeWithIsRoot
 	case generateDependencyTreeWithMockOnly
@@ -143,7 +153,19 @@ public enum FixableInstantiableError: DiagnosticError {
 				"This `mock()` method’s parameters \(properties.asBacktickedList) do not correspond to a dependency, so they must have default values."
 			}
 		case .mockOnlyWithGenerateMock:
-			"`mockOnly` and `generateMock` cannot both be `true`: a `mockOnly` declaration provides a hand-written mock. To generate a mock, set `generateMock: true` on the production `@\(InstantiableVisitor.macroName)` declaration instead."
+			"`mockOnly` cannot be combined with `generateMock: true`, `.internal`, or `.public`: a `mockOnly` declaration provides a hand-written mock. To generate a mock, set `generateMock` on the production `@\(InstantiableVisitor.macroName)` declaration instead."
+		case let .publicMockRequiresPublicType(typeName, accessLevel, _):
+			"`generateMock: .public` requires a `public` or `open` type; `\(typeName)` is `\(accessLevel.spelling)`. Make it `public`, or use `.internal`."
+		case .publicMockOnExtension:
+			"`generateMock: .public` needs a type declaration; an extension cannot prove its type is `public`. Use `.internal`, or write a public `mock` by hand."
+		case let .publicMockOnGenericType(typeName, genericTypeName):
+			if let genericTypeName {
+				"`generateMock: .public` cannot be used on `\(typeName)`, which is declared inside the generic type `\(genericTypeName)`: SafeDI cannot generate a public `mock()` for a type in a generic context. Use `generateMock: true` for a mock its own module calls, or write a public `mock()` by hand for other modules to call."
+			} else {
+				"`generateMock: .public` cannot be used on the generic type `\(typeName)`: SafeDI cannot generate a public `mock()` for a type in a generic context. Use `generateMock: true` for a mock its own module calls, or write a public `mock()` by hand for other modules to call."
+			}
+		case let .defaultValuedAutoclosureParameter(parameterLabel):
+			"A default-valued `@autoclosure` parameter cannot be forwarded by a generated mock. Remove `@autoclosure` from `\(parameterLabel)`, or remove its default."
 		case .mockOnlyWithIsRoot:
 			"`mockOnly` types cannot be marked `isRoot`."
 		case .generateDependencyTreeWithIsRoot:
@@ -218,6 +240,10 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .customMockNameMethodNotFound,
 			     .mockMethodNonDependencyMissingDefaultValue,
 			     .mockOnlyWithGenerateMock,
+			     .publicMockRequiresPublicType,
+			     .publicMockOnExtension,
+			     .publicMockOnGenericType,
+			     .defaultValuedAutoclosureParameter,
 			     .mockOnlyWithIsRoot,
 			     .generateDependencyTreeWithIsRoot,
 			     .generateDependencyTreeWithMockOnly,
@@ -298,8 +324,20 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Add `public static func \(name)(…)` method"
 			case let .mockMethodNonDependencyMissingDefaultValue(properties):
 				"Add default values to `mock()` non-dependency parameters for \(properties.map(\.asSource).joined(separator: ", "))"
-			case .mockOnlyWithGenerateMock:
-				"Remove `generateMock: true`"
+			case let .mockOnlyWithGenerateMock(spelling):
+				"Remove `generateMock: \(spelling)`"
+			case let .publicMockRequiresPublicType(_, accessLevel, isSpelled):
+				if isSpelled {
+					"Replace `\(accessLevel.spelling)` with `public`"
+				} else {
+					"Insert `public`"
+				}
+			case .publicMockOnExtension:
+				"Replace `.public` with `.internal`"
+			case .publicMockOnGenericType:
+				"Replace `.public` with `true`"
+			case let .defaultValuedAutoclosureParameter(parameterLabel):
+				"Remove `@autoclosure` from `\(parameterLabel)`"
 			case .mockOnlyWithIsRoot:
 				"Remove `isRoot: true`"
 			case .generateDependencyTreeWithIsRoot, .generateDependencyTreeWithMockOnly:
@@ -363,5 +401,18 @@ extension [Property] {
 	/// The properties as a comma-separated list, each spelled as source in backticks.
 	fileprivate var asBacktickedList: String {
 		map { "`\($0.asSource)`" }.joined(separator: ", ")
+	}
+}
+
+/// The message of a fix-it that replaces the `generateMock:` argument's value, offered beside an error's own fix-it.
+public struct MockGenerationArgumentFixItMessage: FixItMessage {
+	public init(replacement: String) {
+		message = "Replace `.public` with `\(replacement)`"
+	}
+
+	public let message: String
+
+	public var fixItID: MessageID {
+		MessageID(domain: "\(Self.self)", id: message)
 	}
 }

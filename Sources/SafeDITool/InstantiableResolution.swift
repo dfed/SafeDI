@@ -115,7 +115,9 @@ func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable]) 
 			enclosingExtensionAccess: unnormalizedInstantiable.enclosingExtensionAccess,
 			generatedInitializerAttributes: unnormalizedInstantiable.generatedInitializerAttributes,
 			mockAttributes: unnormalizedInstantiable.mockAttributes,
+			declarationIsolation: unnormalizedInstantiable.declarationIsolation,
 			generateMock: unnormalizedInstantiable.generateMock,
+			mockGenerationArgumentRange: unnormalizedInstantiable.mockGenerationArgumentRange,
 			mockOnly: unnormalizedInstantiable.mockOnly,
 			// A hand-written mock's arguments are matched to dependencies by type. A `mockOnly` declaration has no
 			// dependencies of its own to map them by, and its mock is matched to those of the declaration it merges

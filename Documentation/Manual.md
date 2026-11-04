@@ -1044,6 +1044,51 @@ List each type by its declared name, with enclosing types and without the module
 
 **Note:** `additionalDirectoriesToInclude` helps SafeDI scan source from Xcode project dependencies, but it does not generate mocks for those dependency modules.
 
+### Public mocks
+
+`generateMock: .public` generates a `public` `mock()` that tests and previews in other modules, of this package or another, can call. It requires a type declaration that is `public` or `open`, or directly inside a `public extension`, and not generic (the macro reports anything else with a fix-it), and `generateMock: true` is the same as `.internal`. The module that declares the type generates the mock; internal mocks are generated as before.
+
+```swift
+@Instantiable(generateMock: .public)
+public struct Service: Instantiable {
+    package init(analytics: LazilyInstantiated<Analytics>, session: Session, tokenCache: TokenCache, retries: Int = 3) {
+        // …
+    }
+
+    @Received private let analytics: LazilyInstantiated<Analytics>
+    @Received private let session: Session // `Session` is `package`.
+    @Instantiated private let tokenCache: TokenCache
+}
+```
+
+The rule: each parameter of a public `mock()` is as visible as SafeDI can prove the types it names to be, from the declarations it reads, as for a type whose dependency tree it generates (see [Access levels](#access-levels)); a type nothing proves counts as `internal`. So the mock has a `public` tier, which takes what code in any module can name, and one narrower tier for each narrower access its parameters have. The narrowest tier builds the tree, and each wider tier calls the next narrower one, passing `nil` for what it omits:
+
+```swift
+public static func mock(retries: Int? = nil, analytics: Analytics? = nil, safeDIOverrides: SafeDIOverrides = .init()) -> Service {
+    Service.mock(retries: retries, analytics: analytics, session: nil, safeDIOverrides: safeDIOverrides)
+}
+
+package static func mock(retries: Int? = nil, analytics: Analytics? = nil, session: Session? = nil, safeDIOverrides: SafeDIOverrides = .init()) -> Service {
+    // …builds the tree…
+}
+```
+
+The parameters, in order, are the type’s `@Forwarded` properties, its construction’s default-valued parameters, the received dependencies the mock cannot build and the builders of its holes, which are required, the received dependencies it builds and those received only if available, by label, and `safeDIOverrides`.
+
+- A received dependency the mock builds is `T? = nil`: `nil` builds it as an internal mock does, and a value is used as it is, the override for it then never called. A lazily received dependency is taken by value.
+- A non-optional default-valued parameter is `T? = nil` too, `nil` meaning the declaration’s default; a magic literal (`#fileID`) keeps its default. An optional-typed one is a field of `SafeDIOverrides`, defaulting to what the declaration’s default evaluates to – or, for a mock with no `SafeDIOverrides` and for a `mock()` bound to a global actor, a parameter with that default, which the latter evaluates in its isolation, as an internal mock does.
+- A type the tree instantiates that no `@Instantiable` or `mockOnly` declaration the module sees fulfills – a hole – is a required builder, `<label>Builder`, as a [generated dependency tree’s](#generating-a-dependency-tree-per-module) is: a closure handed a `public` struct, `<Type>.SafeDIMockScope_<Owner>_<label>`, of the values in scope where the type is built, each as visible as its type, staged in the same way beneath a `Sendable` wrapper.
+- `SafeDIOverrides` is `public`, each member as visible as the types it names, with an initializer for each access its members have.
+- A required parameter, such as a `@Forwarded` property, that no `public` tier can take is an error at the `generateMock:` argument, which says how to widen it.
+
+A type in the mock’s tree that has a configuration of its own is configured by a `public` struct the module’s public mocks share, `__safeDI_<Module>_<Type>_MockConfiguration`, and built by a function in its own extension that resolves its defaults where its declaration resolves them and mirrors the isolation of the initializer it calls. Each public mock also declares an empty `public enum __safeDI_<Type>_mock_<hash>` that names its signature: every generated call names it, so a call generated from an out-of-date signature fails to compile at the call.
+
+`Service.mock()` builds the whole tree; `Service.mock(analytics: Analytics())` hands the mock a value; `Service.mock(safeDIOverrides: .init(tokenCache: .init(capacity: 5)))` configures a type in the tree.
+
+A mock another module generates builds a type it cannot construct – whose tree names a declaration that module cannot reach – by calling the type’s public mock, at the narrowest tier the module can reach, passing what its own tree provides for each parameter that tier takes and `nil` for the rest, and its overrides of the type as `safeDIOverrides`. So a value the tree provides is shared with the public mock’s tree as it would be inline, with two exceptions: a dependency the calling tree does not provide, which includes one its module cannot name, is built by each call of a public mock that builds it, and is `nil` in one that receives it only if available; and a lazily instantiated dependency the tree holds is created when the public mock is built. A dependency the called mocks build that more than one receiver shares is built once by the calling mock, where its module can build it, and passed to each. A type the module can construct is built inline, as before. Where the tier the module reaches omits a parameter its tree provides, which the inline mock would hand on, generation fails at the providing declaration, saying how to widen the parameter’s type; a public mock that calls another module’s takes what that call passes as `T? = nil` parameters of its own, so its callers can hand one instance down the chain. Two modules must generate their mocks under one `mockConditionalCompilation`, unless the declaring module’s mocks are unconditional; and a module that reaches a type with a public mock cannot also hold a hand-written method named `mock` for it, which would make every call ambiguous: name it apart and pass it as `customMockName`. A calling module that sees a production `@Instantiable` declaration fulfilling a hole passes a function that builds it from the struct’s values, which no override reaches, as a generated dependency tree’s caller fills a builder, when that is all the declaration’s tree reads and the module can build every type in it; otherwise the calling mock takes the builder as a required parameter of its own and passes it on. A mock tree in an Xcode project target, or one whose declaring module’s module info names no module, builds the type inline where it can, and otherwise generation fails, naming the module info or target to regenerate; so does one that must call a public mock whose declaring module depends on a module whose module info its run was not given, naming the module to add. A public mock whose signature its callers would compute otherwise, because a directory its `#SafeDIConfiguration` adds or a module whose module info names no module declares a type its tree reaches, is an error, as for a generated dependency tree.
+
+Stated limits: a default of a configured type in the tree that reads global-actor-isolated state cannot be evaluated by the `nonisolated` function that provides it, as it cannot by an internal mock’s configuration; and a narrower declaration of a standard type’s name in scope, an access-level import, and an `@_spi` type read as `public` make a tier wider than the compiler accepts, which the compiler reports in the generated file. A non-`@Instantiable` type a module declares with the name of a standard type SafeDI counts as `public` (`Result`, `Data`, `Locale`, …) is taken to be the standard one, and the compiler reports it.
+
 ## Installation
 
 Integrating SafeDI is a three-step process: add the package, wire the `SafeDIGenerator` plugin into your build, and decorate your types with SafeDI’s macros.

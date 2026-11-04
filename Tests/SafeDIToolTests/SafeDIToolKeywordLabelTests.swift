@@ -418,6 +418,99 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func publicMock_documentsKeywordLabelsWithoutBackticks_whenOwnAndChildDefaultsHaveKeywordLabels() async throws {
+		// A public mock's documentation names a keyword label as prose does, and its example call spells the label as a
+		// call does.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable
+				public struct Session: Instantiable {
+				    public init(`inout` value: Int = 2) {}
+				}
+				""",
+				"""
+				@Instantiable(generateMock: .public)
+				public struct Service: Instantiable {
+				    public init(session: Session, default value: String? = "default") {
+				        self.session = session
+				    }
+
+				    @Instantiated let session: Session
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			/// Configuration for how `Session` is constructed within the public mock trees of this module.
+			public struct __safeDI_Session_MockConfiguration {
+			    public init(
+			        `inout`: Int? = nil,
+			        _ safeDIBuilder: ((Int) -> Session)? = nil
+			    ) {
+			        self.`inout` = `inout`
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    /// `nil` keeps the default of `Session`'s `inout`.
+			    public let `inout`: Int?
+			    /// Overrides how `Session` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((Int) -> Session)?
+			}
+
+			extension Session {
+			    static func __safeDI_init(value: Int?, safeDIBuilder: ((Int) -> Session)?) -> Session {
+			        let value = value ?? (2)
+			        return if let safeDIBuilder { safeDIBuilder(value) } else { Session(`inout`: value) }
+			    }
+			}
+			#endif
+			""" + "\n",
+			"Service+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Service {
+			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_default() -> String? { "default" }
+
+			    /// Overrides for the mock dependency tree.
+			    public struct SafeDIOverrides {
+			        public init(
+			            session: __safeDI_Session_MockConfiguration = .init(),
+			            `default`: String? = Service.__safeDI_publicMockDefault_default()
+			        ) {
+			            self.session = session
+			            self.`default` = `default`
+			        }
+
+			        public let session: __safeDI_Session_MockConfiguration
+			        /// The default of `Service`'s `default` unless set; `.init(default: nil)` passes `nil`.
+			        public let `default`: String?
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Service {
+			        func __safeDI_session() -> Session {
+			            return Session.__safeDI_init(value: safeDIOverrides.session.`inout`, safeDIBuilder: safeDIOverrides.session.safeDIBuilder)
+			        }
+			        let session: Session = __safeDI_session()
+			        return Service(session: session, default: safeDIOverrides.`default`)
+			    }
+			}
+
+			extension Service {
+			    public enum __safeDI_Service_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_storesDefaultValuedArgumentUnderEscapedName_whenChildHasDefaultValuedKeywordLabeledParameter() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [

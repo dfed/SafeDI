@@ -404,7 +404,10 @@ public struct TypeAccessProof: Sendable {
 	private static let allowlistedNames: Set<String> = [
 		"Int", "Bool", "String", "Double", "Void", "Optional", "Array", "Dictionary", "Set",
 		"Instantiator", "ErasedInstantiator", "SendableInstantiator", "SendableErasedInstantiator", "LazilyInstantiated", "SendableLazilyInstantiated",
-		"Date", "URL", "UUID", "Decimal", "TimeInterval",
+		"Result", "Error", "Never", "Float", "Int8", "Int16", "Int32", "Int64", "UInt", "UInt8", "UInt16", "UInt32", "UInt64",
+		"Character", "Substring", "AnyHashable", "Range", "ClosedRange",
+		"Date", "URL", "UUID", "Decimal", "TimeInterval", "Data", "Calendar", "Locale", "TimeZone", "Bundle", "UserDefaults",
+		"NotificationCenter", "FileManager", "JSONEncoder", "JSONDecoder",
 	]
 
 	private static func isAllowlisted(_ type: TypeDescription) -> Bool {

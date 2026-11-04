@@ -639,11 +639,37 @@ public struct SeamResolution: Sendable {
 		public let declaringModuleMockCondition: MockCondition?
 	}
 
-	public init(currentModule: ModuleIdentity, currentModuleMockCondition: MockCondition = MockCondition("DEBUG"), generatedSeams: Set<TypeDescription>, foreignSeams: [TypeDescription: ForeignSeam], callersComputeFromTargetGraph: Bool = false, callersVisibleInstantiables: [TypeDescription: Instantiable]? = nil) {
+	/// A type another module declares with `generateMock: .public`, whose `mock()` that module's run of `generate`
+	/// generated, and which a mock tree of this module calls where it cannot build the type's tree itself.
+	public struct ForeignPublicMock: Sendable {
+		public init(declaringModule: ModuleIdentity, missingDependencyModuleName: String? = nil, visibleInstantiables: [TypeDescription: Instantiable], callCarriesPluginComment: Bool, declaringModuleMockCondition: MockCondition) {
+			self.declaringModule = declaringModule
+			self.missingDependencyModuleName = missingDependencyModuleName
+			self.visibleInstantiables = visibleInstantiables
+			self.callCarriesPluginComment = callCarriesPluginComment
+			self.declaringModuleMockCondition = declaringModuleMockCondition
+		}
+
+		/// The module that declares the type, whose name is known: a type whose module is unknown is built inline.
+		public let declaringModule: ModuleIdentity
+		/// See `ForeignSeam.missingDependencyModuleName`.
+		public let missingDependencyModuleName: String?
+		/// The declarations the declaring module can see, resolved as `generate` resolves them, from which the public
+		/// mock's signature is computed exactly as that module computed it.
+		public let visibleInstantiables: [TypeDescription: Instantiable]
+		/// See `SeamCall.carriesPluginComment`.
+		public let callCarriesPluginComment: Bool
+		/// The condition the declaring module generates its mocks under: its configuration's, `DEBUG` without one, read
+		/// from its module info or, under the target graph, from the configuration in a file the graph attributes to it.
+		public let declaringModuleMockCondition: MockCondition
+	}
+
+	public init(currentModule: ModuleIdentity, currentModuleMockCondition: MockCondition = MockCondition("DEBUG"), generatedSeams: Set<TypeDescription>, foreignSeams: [TypeDescription: ForeignSeam], foreignPublicMocks: [TypeDescription: ForeignPublicMock] = [:], callersComputeFromTargetGraph: Bool = false, callersVisibleInstantiables: [TypeDescription: Instantiable]? = nil) {
 		self.currentModule = currentModule
 		self.currentModuleMockCondition = currentModuleMockCondition
 		self.generatedSeams = generatedSeams
 		self.foreignSeams = foreignSeams
+		self.foreignPublicMocks = foreignPublicMocks
 		self.callersComputeFromTargetGraph = callersComputeFromTargetGraph
 		self.callersVisibleInstantiables = callersVisibleInstantiables
 	}
@@ -663,6 +689,9 @@ public struct SeamResolution: Sendable {
 	/// in a `.safedi` written without `--module-name`, or in a file no target of the plugin's graph lists – has no
 	/// set of declarations its signature could be computed from, so every tree builds it inline, as any other type.
 	public let foreignSeams: [TypeDescription: ForeignSeam]
+	/// The `generateMock: .public` types other modules declare, by concrete type. One whose module SafeDI does not know
+	/// is in neither this map nor the module's own files, and every mock tree builds it inline, as any other type.
+	public let foreignPublicMocks: [TypeDescription: ForeignPublicMock]
 	/// Whether the modules that call this module's seams compute their signatures from the build system's target
 	/// graph, which lists the files of each target: under the SwiftPM plugin, every seam's tree must then reach only
 	/// declarations the graph attributes to a module, since a caller cannot see a declaration in a directory this

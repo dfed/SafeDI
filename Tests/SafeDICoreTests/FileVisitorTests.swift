@@ -1480,6 +1480,7 @@ struct FileVisitorTests {
 					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
 				),
 				generateMock: true,
+				mockGenerationArgumentRange: Dependency.SourceRange(startLine: 1, startColumn: 29, endLine: 1, endColumn: 33),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 		])
@@ -1516,6 +1517,7 @@ struct FileVisitorTests {
 					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
 				),
 				generateMock: false,
+				mockGenerationArgumentRange: Dependency.SourceRange(startLine: 1, startColumn: 29, endLine: 1, endColumn: 34),
 				declarationLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
 			),
 		])

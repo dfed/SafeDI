@@ -38,6 +38,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 			.parameterClause
 			.parameters
 			.map(Argument.init)
+		spelledIsolation = Self.spelledIsolation(modifiers: node.modifiers, attributes: node.attributes)
 	}
 
 	/// - Parameter sourceLocationConverter: A converter for the tree that holds `node`. When provided, the initializer
@@ -54,6 +55,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 			.parameterClause
 			.parameters
 			.map(Argument.init)
+		spelledIsolation = Self.spelledIsolation(modifiers: node.modifiers, attributes: node.attributes)
 	}
 
 	public init(
@@ -64,6 +66,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 		hasGenericParameter: Bool = false,
 		hasGenericWhereClause: Bool = false,
 		arguments: [Initializer.Argument],
+		spelledIsolation: String? = nil,
 	) {
 		self.access = access
 		self.isOptional = isOptional
@@ -72,6 +75,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 		self.hasGenericParameter = hasGenericParameter
 		self.hasGenericWhereClause = hasGenericWhereClause
 		self.arguments = arguments
+		self.spelledIsolation = spelledIsolation
 	}
 
 	// MARK: Public
@@ -86,6 +90,28 @@ public struct Initializer: Codable, Hashable, Sendable {
 	public let hasGenericParameter: Bool
 	public let hasGenericWhereClause: Bool
 	public let arguments: [Argument]
+	/// The isolation the declaration spells, which code that calls it from another declaration mirrors: `nonisolated`
+	/// for the modifier, or a global actor attribute (an attribute whose name ends in `Actor`, such as `@MainActor`),
+	/// or `nil` when it spells neither and takes its type's isolation.
+	public let spelledIsolation: String?
+
+	/// See `spelledIsolation`.
+	/// The global actor attribute among `attributes`, a space-separated list of attributes as `mockAttributes` spells
+	/// them (`"@MainActor"`), found as `spelledIsolation(modifiers:attributes:)` finds one: an attribute without
+	/// arguments whose name ends in `Actor`.
+	public static func globalActorAttribute(in attributes: String) -> String? {
+		attributes.split(separator: " ").first { $0.hasPrefix("@") && !$0.contains("(") && $0.hasSuffix("Actor") }.map(String.init)
+	}
+
+	static func spelledIsolation(modifiers: DeclModifierListSyntax, attributes: AttributeListSyntax) -> String? {
+		if modifiers.contains(where: { $0.name.tokenKind == .keyword(.nonisolated) }) {
+			return "nonisolated"
+		}
+		return attributes.lazy
+			.compactMap { AttributeSyntax($0) }
+			.first { $0.arguments == nil && $0.attributeName.trimmedDescription.hasSuffix("Actor") }
+			.map { "@\($0.attributeName.trimmedDescription)" }
+	}
 
 	public func isValid(forFulfilling dependencies: [Dependency]) -> Bool {
 		do {
@@ -136,6 +162,7 @@ public struct Initializer: Codable, Hashable, Sendable {
 			hasGenericParameter: hasGenericParameter,
 			hasGenericWhereClause: hasGenericWhereClause,
 			arguments: arguments.map(transform),
+			spelledIsolation: spelledIsolation,
 		)
 	}
 

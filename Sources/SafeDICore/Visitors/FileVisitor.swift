@@ -186,7 +186,7 @@ public final class FileVisitor: SyntaxVisitor {
 				named: node.extendedType.typeDescription.asSource,
 				isRoot: false,
 				generatesDependencyTree: false,
-				generatesMock: instantiableVisitor.generateMock,
+				generatesMock: instantiableVisitor.generateMock.generatesMock,
 			)
 		}
 
@@ -284,7 +284,7 @@ public final class FileVisitor: SyntaxVisitor {
 				named: definedType.asSource,
 				isRoot: instantiableVisitor.isRoot,
 				generatesDependencyTree: instantiableVisitor.generatesDependencyTree,
-				generatesMock: instantiableVisitor.generateMock,
+				generatesMock: instantiableVisitor.generateMock.generatesMock,
 			)
 		}
 

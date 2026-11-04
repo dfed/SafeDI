@@ -407,7 +407,9 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("enclosingExtensionAccess", \.enclosingExtensionAccess),
 				BinaryLayoutField("generatedInitializerAttributes", \.generatedInitializerAttributes),
 				BinaryLayoutField("mockAttributes", \.mockAttributes),
+				BinaryLayoutField("declarationIsolation", \.declarationIsolation),
 				BinaryLayoutField("generateMock", \.generateMock),
+				BinaryLayoutField("mockGenerationArgumentRange", \.mockGenerationArgumentRange),
 				BinaryLayoutField("mockOnly", \.mockOnly),
 				BinaryLayoutField("mockInitializer", \.mockInitializer),
 				BinaryLayoutField("mockReturnType", \.mockReturnType),
@@ -441,7 +443,9 @@ extension Instantiable: BinarySchemaMember {
 			enclosingExtensionAccess: reader.read() as AccessDeclaration?,
 			generatedInitializerAttributes: reader.read(),
 			mockAttributes: reader.read(),
+			declarationIsolation: reader.read() as String?,
 			generateMock: reader.read(),
+			mockGenerationArgumentRange: reader.read() as Dependency.SourceRange?,
 			mockOnly: reader.read(),
 			mockInitializer: reader.read() as Initializer?,
 			mockReturnType: reader.read() as TypeDescription?,
@@ -473,7 +477,9 @@ extension Instantiable: BinarySchemaMember {
 			writer.write(enclosingExtensionAccess)
 			writer.write(generatedInitializerAttributes)
 			writer.write(mockAttributes)
+			writer.write(declarationIsolation)
 			writer.write(generateMock)
+			writer.write(mockGenerationArgumentRange)
 			writer.write(mockOnly)
 			writer.write(mockInitializer)
 			writer.write(mockReturnType)
@@ -523,6 +529,34 @@ extension Instantiable.DeclarationType: BinarySchemaMember {
 		case actorType
 		case structType
 		case extensionType
+	}
+}
+
+extension MockGeneration: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.enumeration(writtenAs: Tag.self) { _ in [] }
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		self = switch try reader.readTag() as Tag {
+		case .none: .none
+		case .internal: .internal
+		case .public: .public
+		}
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		switch self {
+		case .none: writer.writeTag(Tag.none)
+		case .internal: writer.writeTag(Tag.internal)
+		case .public: writer.writeTag(Tag.public)
+		}
+	}
+
+	enum Tag: UInt8, BinaryTag {
+		case none
+		case `internal`
+		case `public`
 	}
 }
 
@@ -604,6 +638,7 @@ extension Initializer: BinarySchemaMember {
 				BinaryLayoutField("hasGenericParameter", \.hasGenericParameter),
 				BinaryLayoutField("hasGenericWhereClause", \.hasGenericWhereClause),
 				BinaryLayoutField("arguments", \.arguments),
+				BinaryLayoutField("spelledIsolation", \.spelledIsolation),
 			],
 			unwrittenProperties: [],
 		)
@@ -618,6 +653,7 @@ extension Initializer: BinarySchemaMember {
 			hasGenericParameter: reader.read(),
 			hasGenericWhereClause: reader.read(),
 			arguments: reader.read(),
+			spelledIsolation: reader.read() as String?,
 		)
 	}
 
@@ -629,6 +665,7 @@ extension Initializer: BinarySchemaMember {
 		writer.write(hasGenericParameter)
 		writer.write(hasGenericWhereClause)
 		writer.write(arguments)
+		writer.write(spelledIsolation)
 	}
 }
 

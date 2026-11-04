@@ -101,6 +101,7 @@ enum BinaryFile {
 			SafeDIConfiguration.self,
 			Instantiable.self,
 			Instantiable.DeclarationType.self,
+			MockGeneration.self,
 			AccessDeclaration.self,
 			AccessLevel.self,
 			Initializer.self,

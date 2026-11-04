@@ -152,7 +152,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			writtenTagsByType[String(reflecting: type(of: value)), default: []].insert(writer.bytes[0])
 		}
 
-		#expect(writtenTagsByType.count == 6)
+		#expect(writtenTagsByType.count == 7)
 		for schemaMember in BinaryFile.schemaMembers where writtenTagsByType[String(reflecting: schemaMember)] != nil {
 			#expect(writtenTagsByType[String(reflecting: schemaMember)] == Set(0..<UInt8(Self.caseCount(of: schemaMember))), "\(schemaMember)")
 		}
@@ -970,7 +970,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			}
 			""",
 			"Pantry.swift": """
-			@Instantiable(generateMock: true, customMockName: "customMock")
+			@Instantiable(generateMock: .public, customMockName: "customMock")
 			public struct Pantry: Instantiable {
 			    public init() {}
 			    public init(shelves: Int) {}
@@ -1232,6 +1232,7 @@ extension ConditionalCompilationDecision: BinarySample {}
 extension SafeDIConfiguration: BinarySample {}
 extension Instantiable: BinarySample {}
 extension Instantiable.DeclarationType: BinarySample {}
+extension MockGeneration: BinarySample {}
 extension AccessDeclaration: BinarySample {}
 extension AccessLevel: BinarySample {}
 extension Initializer: BinarySample {}

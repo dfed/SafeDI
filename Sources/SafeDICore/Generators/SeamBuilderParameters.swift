@@ -34,12 +34,15 @@ extension DependencyTreeGenerator {
 	/// in the order it binds them – its forwarded properties, then its children in generation order. A declaration
 	/// bound after the site, the property still being built, and an `onlyIfAvailable` alias that is not created carry
 	/// no field, and hide the farther declarations of their label, which Swift would bind instead.
+	/// - Parameter scopeTypeNamePrefix: What each scope struct's name begins with: `SafeDIScope` for a seam's, and
+	///   `SafeDIMockScope` for a public mock's, whose type may be a seam too.
 	static func holes(
 		of seam: Instantiable,
 		generator: ScopeGenerator,
 		parameters: [SeamSignature.Parameter],
 		proof: TypeAccessProof,
 		instantiables: [TypeDescription: Instantiable],
+		scopeTypeNamePrefix: String = "SafeDIScope",
 	) -> [SeamSignature.Hole] {
 		guard generator.containsBuildSite || generator.passesUpBuilder else { return [] }
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
@@ -132,7 +135,7 @@ extension DependencyTreeGenerator {
 		var holes = [SeamSignature.Hole]()
 		for (index, content) in siteContents.enumerated() {
 			let property = content.site.property
-			var scopeTypeName = "SafeDIScope_\(content.owner.concreteInstantiable.asIdentifier)_\(property.label)".spelledAsJoinedIdentifier
+			var scopeTypeName = "\(scopeTypeNamePrefix)_\(content.owner.concreteInstantiable.asIdentifier)_\(property.label)".spelledAsJoinedIdentifier
 			if siteCountByProperty[OwnedProperty(owner: content.owner.concreteInstantiable, property: property), default: 0] > 1 {
 				scopeTypeName = "\(scopeTypeName)_\(content.site.pathLabels)".spelledAsJoinedIdentifier
 			}

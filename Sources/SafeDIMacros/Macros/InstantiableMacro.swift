@@ -75,7 +75,7 @@ public struct InstantiableMacro: MemberMacro {
 		if let generateMockArgument = declaration
 			.attributes
 			.instantiableMacro?
-			.generateMock, BooleanLiteralExprSyntax(generateMockArgument) == nil
+			.generateMock, AttributeSyntax.mockGeneration(spelledAs: generateMockArgument) == nil
 		{
 			throw InstantiableError.generateMockArgumentInvalid
 		}
@@ -195,9 +195,21 @@ public struct InstantiableMacro: MemberMacro {
 			{
 				context.diagnose(Diagnostic(
 					node: Syntax(instantiableMacro),
-					error: FixableInstantiableError.mockOnlyWithGenerateMock,
+					error: FixableInstantiableError.mockOnlyWithGenerateMock(spelling: Self.spelling(ofGenerateMockArgumentOf: instantiableMacro)),
 					changes: Self.removeArgument(labeled: "generateMock", from: instantiableMacro, on: declaration),
 				))
+			}
+			if !isMockOnly,
+			   let instantiableMacro = declaration.attributes.instantiableMacro
+			{
+				Self.validatePublicMockGeneration(
+					of: concreteDeclaration,
+					genericParameterClause: StructDeclSyntax(declaration)?.genericParameterClause
+						?? ClassDeclSyntax(declaration)?.genericParameterClause
+						?? ActorDeclSyntax(declaration)?.genericParameterClause,
+					instantiableMacro: instantiableMacro,
+					context: context,
+				)
 			}
 			if isMockOnly, visitor.isRoot,
 			   let instantiableMacro = declaration.attributes.instantiableMacro
@@ -850,6 +862,18 @@ public struct InstantiableMacro: MemberMacro {
 				context: context,
 			)
 
+			// An extension cannot prove the type it extends is `public`.
+			if !isMockOnly,
+			   let instantiableMacro = declaration.attributes.instantiableMacro,
+			   instantiableMacro.mockGenerationValue == .public,
+			   let generateMockArgument = instantiableMacro.generateMock
+			{
+				context.diagnose(Diagnostic(
+					node: Syntax(generateMockArgument),
+					error: FixableInstantiableError.publicMockOnExtension,
+					changes: [Self.replacing(generateMockArgument, with: ".internal")],
+				))
+			}
 			// Validate mockOnly on extensions.
 			if isMockOnly,
 			   let instantiableMacro = declaration.attributes.instantiableMacro,
@@ -857,7 +881,7 @@ public struct InstantiableMacro: MemberMacro {
 			{
 				context.diagnose(Diagnostic(
 					node: Syntax(instantiableMacro),
-					error: FixableInstantiableError.mockOnlyWithGenerateMock,
+					error: FixableInstantiableError.mockOnlyWithGenerateMock(spelling: Self.spelling(ofGenerateMockArgumentOf: instantiableMacro)),
 					changes: Self.removeArgument(labeled: "generateMock", from: instantiableMacro, on: declaration),
 				))
 			}
@@ -1369,6 +1393,16 @@ public struct InstantiableMacro: MemberMacro {
 			// `_`-labeled non-dependency defaults are elided from the mock
 			// call site, so the default is evaluated in the callee's scope.
 			guard firstName != "_" else { continue }
+			// A generated mock takes the value as a parameter of its own and passes it on, which an
+			// `@autoclosure` parameter, evaluated where it is called, cannot take.
+			if let attributedType = AttributedTypeSyntax(parameter.type),
+			   attributedType.attributes.contains(where: { AttributeSyntax($0)?.attributeName.trimmedDescription == "autoclosure" })
+			{
+				context.diagnose(Diagnostic(
+					node: Syntax(parameter),
+					message: FixableInstantiableError.defaultValuedAutoclosureParameter(parameterLabel: innerName.text).diagnostic,
+				))
+			}
 			let finder = SelfReferenceFinder(viewMode: .sourceAccurate)
 			finder.walk(Syntax(defaultValue))
 			guard finder.containsSelfReference else { continue }
@@ -1725,6 +1759,126 @@ public struct InstantiableMacro: MemberMacro {
 		return result
 	}
 
+	/// The `generateMock:` argument's value as the attribute spells it, or `true` when it spells none.
+	private static func spelling(ofGenerateMockArgumentOf attribute: AttributeSyntax) -> String {
+		attribute.generateMock?.trimmedDescription ?? "true"
+	}
+
+	/// A change that replaces the `generateMock:` argument's value with `replacement`, keeping its trivia.
+	private static func replacing(_ generateMockArgument: ExprSyntax, with replacement: String) -> FixIt.Change {
+		.replace(
+			oldNode: Syntax(generateMockArgument),
+			newNode: Syntax(ExprSyntax("\(raw: replacement)")
+				.with(\.leadingTrivia, generateMockArgument.leadingTrivia)
+				.with(\.trailingTrivia, generateMockArgument.trailingTrivia)),
+		)
+	}
+
+	/// Diagnoses `generateMock: .public` on a type declaration whose public `mock()` SafeDI cannot generate: one with
+	/// a generic parameter clause, one declared in the body of a type that has one, and one that is not `public` or
+	/// `open` – unless it spells no access level and sits directly inside a `public extension`, whose default it takes.
+	/// A `private` or `fileprivate` type is reported by `privateOrFilePrivateType` alone.
+	private static func validatePublicMockGeneration(
+		of concreteDeclaration: some ConcreteDeclSyntaxProtocol,
+		genericParameterClause: GenericParameterClauseSyntax?,
+		instantiableMacro: AttributeSyntax,
+		context: some MacroExpansionContext,
+	) {
+		guard instantiableMacro.mockGenerationValue == .public,
+		      let generateMockArgument = instantiableMacro.generateMock
+		else {
+			return
+		}
+		let typeName = concreteDeclaration.name.text
+		let enclosingDeclarations = context.lexicalContext.prefix(while: { $0.isProtocol(DeclGroupSyntax.self) })
+		let enclosingGenericTypeName = enclosingDeclarations.lazy.compactMap { enclosingDeclaration -> String? in
+			if let structDeclaration = StructDeclSyntax(enclosingDeclaration), structDeclaration.genericParameterClause != nil {
+				structDeclaration.name.text
+			} else if let classDeclaration = ClassDeclSyntax(enclosingDeclaration), classDeclaration.genericParameterClause != nil {
+				classDeclaration.name.text
+			} else if let actorDeclaration = ActorDeclSyntax(enclosingDeclaration), actorDeclaration.genericParameterClause != nil {
+				actorDeclaration.name.text
+			} else if let enumDeclaration = EnumDeclSyntax(enclosingDeclaration), enumDeclaration.genericParameterClause != nil {
+				enumDeclaration.name.text
+			} else {
+				nil
+			}
+		}.first
+		if genericParameterClause != nil || enclosingGenericTypeName != nil {
+			context.diagnose(Diagnostic(
+				node: Syntax(generateMockArgument),
+				error: FixableInstantiableError.publicMockOnGenericType(typeName: typeName, genericTypeName: genericParameterClause == nil ? enclosingGenericTypeName : nil),
+				changes: [Self.replacing(generateMockArgument, with: "true")],
+			))
+			return
+		}
+		let accessModifier = concreteDeclaration.modifiers.first { modifier in
+			switch modifier.name.tokenKind {
+			case .keyword(.open), .keyword(.public), .keyword(.package), .keyword(.internal), .keyword(.fileprivate), .keyword(.private):
+				true
+			default:
+				false
+			}
+		}
+		let accessLevel: AccessLevel = switch accessModifier?.name.tokenKind {
+		case .keyword(.open): .open
+		case .keyword(.public): .public
+		case .keyword(.package): .package
+		case .keyword(.fileprivate): .fileprivate
+		case .keyword(.private): .private
+		default: .internal
+		}
+		switch accessLevel {
+		case .open, .public, .fileprivate, .private:
+			return
+		case .package, .internal:
+			break
+		}
+		if accessModifier == nil,
+		   let enclosingExtension = enclosingDeclarations.first.flatMap({ ExtensionDeclSyntax($0) }),
+		   enclosingExtension.modifiers.contains(where: { $0.name.tokenKind == .keyword(.public) })
+		{
+			return
+		}
+		var publicDeclaration = concreteDeclaration
+		if let accessModifier, let index = publicDeclaration.modifiers.firstIndex(where: { $0.id == accessModifier.id }) {
+			publicDeclaration.modifiers[index].name = .keyword(
+				.public,
+				leadingTrivia: accessModifier.name.leadingTrivia,
+				trailingTrivia: accessModifier.name.trailingTrivia,
+			)
+		} else if let firstModifier = publicDeclaration.modifiers.first {
+			publicDeclaration.modifiers = DeclModifierListSyntax(
+				[DeclModifierSyntax(name: .keyword(.public, leadingTrivia: firstModifier.leadingTrivia, trailingTrivia: .space))]
+					+ publicDeclaration.modifiers.map { $0.with(\.leadingTrivia, []) },
+			)
+		} else {
+			publicDeclaration.modifiers = DeclModifierListSyntax([
+				DeclModifierSyntax(name: .keyword(.public, leadingTrivia: publicDeclaration.keyword.leadingTrivia, trailingTrivia: .space)),
+			])
+			publicDeclaration.keyword.leadingTrivia = []
+		}
+		let error = FixableInstantiableError.publicMockRequiresPublicType(
+			typeName: typeName,
+			accessLevel: accessLevel,
+			isSpelled: accessModifier != nil,
+		)
+		context.diagnose(Diagnostic(
+			node: Syntax(generateMockArgument),
+			message: error.diagnostic,
+			fixIts: [
+				FixIt(
+					message: error.fixIt,
+					changes: [.replace(oldNode: Syntax(concreteDeclaration), newNode: Syntax(publicDeclaration))],
+				),
+				FixIt(
+					message: MockGenerationArgumentFixItMessage(replacement: ".internal"),
+					changes: [Self.replacing(generateMockArgument, with: ".internal")],
+				),
+			],
+		))
+	}
+
 	/// Builds fix-it changes that remove a labeled argument from an `@Instantiable` attribute.
 	private static func removeArgument(
 		labeled label: String,
@@ -1944,7 +2098,7 @@ public struct InstantiableMacro: MemberMacro {
 			case .generatedAttributesArgumentInvalid:
 				"The argument `generatedAttributes` must be a string literal."
 			case .generateMockArgumentInvalid:
-				"The argument `generateMock` must be a Bool literal (`true` or `false`)."
+				"The argument `generateMock` must be `true`, `false`, `.none`, `.internal`, or `.public`."
 			case .mockOnlyArgumentInvalid:
 				"The argument `mockOnly` must be a Bool literal (`true` or `false`)."
 			case .generateDependencyTreeArgumentInvalid:
