@@ -15,6 +15,9 @@ Compile-time-safe dependency injection without the boilerplate. No containers. N
 - **Scoped runtime values.** Make your real logged-in `User` available non-optionally to any type in the subtree with just a single macro decoration.
 - **Full-graph mocks.** Generated from your real dependency graph, `mock()` lets you override any branch for easy previews and tests.
 - **Architecture-independent.** SwiftUI or UIKit, coordinators or MVVM, one module or hundreds — SafeDI fits what you already have.
+- **`package` and `internal` types.** An `@Instantiable` type and its initializer can stay `package` when only its package constructs them, or `internal` when only its own module does; the build names any that generated code cannot reach, with a fix-it where it can.
+- **Per-module generated trees.** `@Instantiable(generateDependencyTree: true)` generates a type’s dependency tree in its own module, so trees in other modules call one generated initializer, and a change inside that tree recompiles only its module and the calls into it.
+- **Public mocks across packages.** `@Instantiable(generateMock: .public)` generates a `public` `mock()` that tests and previews in other packages can call without seeing the types it builds.
 - **Delayed instantiation.** `Instantiator` creates a new instance each time you ask; `LazilyInstantiated` creates one shared instance the first time it is read. An expensive or rarely needed dependency is built only when something uses it.
 - **Clear failures.** SafeDI reports an unsolvable graph as a compiler diagnostic at your declaration, in Xcode and in build logs. It names the declarations involved and offers a fix-it where one exists.
 
@@ -117,6 +120,7 @@ For previews and tests that need real data, pass forwarded values directly and u
 <tr><td>✓ Transitive dependency solving</td><td>✓ Cycle detection</td><td>✓ Architecture independent</td></tr>
 <tr><td>✓ No DI-specific types or generics required</td><td>✓ Full-graph mocks</td><td>✓ Clear errors at your declaration, with fix-its</td></tr>
 <tr><td>✓ Conditional compilation support</td><td>✓ Lazy shared dependencies</td><td>✓ Swift Package Manager, Xcode, Bazel, and Tuist</td></tr>
+<tr><td>✓ <code>package</code> and <code>internal</code> types</td><td>✓ Per-module generated trees</td><td>✓ Public mocks across packages</td></tr>
 </table>
 
 ## Getting started
@@ -127,19 +131,19 @@ Three steps to integrate:
 2. Attach the `SafeDIGenerator` build tool plugin to your first-party target(s).
 3. Decorate your app’s root type with `@Instantiable(isRoot: true)` and add `@Instantiable` to the dependencies it reaches.
 
-Working sample projects live in the [Examples folder](Examples/) — clone, open, and build. The [Manual](Documentation/Manual.md#installation) covers Xcode projects, multi-module packages, custom build systems, and prebuild scripts in depth.
+Working sample projects live in the [Examples folder](Examples/) — clone, open, and build. The [Manual](Documentation/Manual.md#installation) covers Xcode projects, multi-module packages, Bazel, Tuist, and custom build systems in depth.
 
-If you are migrating an existing project to SafeDI, follow our [migration guide](Documentation/Manual.md#migrating-to-safedi). If you are upgrading from SafeDI 1.x, follow the [1.x → 2.x migration guide](Documentation/Manual.md#migrating-from-safedi-1x-to-2x).
+If you are migrating an existing project to SafeDI, follow our [migration guide](Documentation/Manual.md#migrating-to-safedi), which also covers [adopting SafeDI in a large, multi-module codebase](Documentation/Manual.md#adopting-safedi-in-a-large-codebase). If you are upgrading from SafeDI 1.x, follow the [1.x → 2.x migration guide](Documentation/Manual.md#migrating-from-safedi-1x-to-2x).
 
 ## Comparing SafeDI to other DI libraries
 
-SafeDI is closest in spirit to [Needle](https://github.com/uber/needle) and [Weaver](https://github.com/scribd/Weaver): all three validate the dependency graph at compile time and support hierarchical scoping, letting runtime-derived values like an authenticated user live non-optionally inside a subtree. Where Needle asks you to maintain a dependency protocol for every type, and Weaver keeps a separate container declaration alongside your code, SafeDI leaves your types untouched — the macros *are* the integration.
+SafeDI is closest in spirit to [Needle](https://github.com/uber/needle) and [Weaver](https://github.com/scribd/Weaver): all three validate the dependency graph at compile time and scope dependencies hierarchically, so a runtime value like an authenticated user lives non-optionally inside a subtree. Needle asks you to write a dependency protocol and a component for every scope; SafeDI’s macros on your existing types are the whole integration. Weaver’s maintainers no longer support it.
 
-[Factory](https://github.com/hmlongco/Factory) and [swift-dependencies](https://github.com/pointfreeco/swift-dependencies) take a container/environment approach that shines for scalar dependencies like a `Clock` or a `URLSession`. SafeDI is built around the object graph itself — hierarchical scoping makes graph-local runtime values (an auth token, a logged-in user) first-class subtree dependencies, received non-optionally where they’re actually needed. [Swinject](https://github.com/Swinject/Swinject) goes further in that runtime-lookup direction and offers no compile-time validation at all.
+[Factory](https://github.com/hmlongco/Factory) and [swift-dependencies](https://github.com/pointfreeco/swift-dependencies) take a container/environment approach that shines for scalar dependencies like a `Clock` or a `URLSession`, resolving at runtime. SafeDI is built around the object graph: its hierarchical scoping makes graph-local runtime values (an auth token, a logged-in user) first-class subtree dependencies, received non-optionally where they’re needed. [Swinject](https://github.com/Swinject/Swinject) also resolves at runtime, returning optionals.
 
 SwiftUI’s own `Environment` is a useful mental model for a dependency tree — but without compile-time validation. SafeDI applies that tree shape to the full object graph and guarantees it resolves.
 
-Across all of these, SafeDI is the only Swift DI library that generates full-graph mocks from your real dependency graph, and the only hierarchical DI library whose macros report integration errors as you type. The build reports errors in the graph as a whole — among them a type or initializer that the module constructing it cannot reach — the same way: as compiler diagnostics at your declaration, with a fix-it wherever the repair is unambiguous.
+Of these libraries, only SafeDI generates mocks from your real dependency graph — `public` ones, too, which tests in other packages call — and it generates each module’s tree in that module, checks `package` and `internal` types when you build, and reports errors at your declaration with fix-its.
 
 ## Contributing
 

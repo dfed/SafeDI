@@ -86,6 +86,12 @@ are scanned the way swiftc compiles them (see the manual's "Conditional
 compilation" section). A pinned `SafeDITool` release that predates the
 option is detected and left alone, so the plugin may be newer than the pin.
 
+Module and package: the script also passes `--module-name
+$PRODUCT_MODULE_NAME`, and `--package-name $SWIFT_PACKAGE_NAME` when the
+target sets `SWIFT_PACKAGE_NAME`, to a `SafeDITool` that accepts them, so
+SafeDI knows which module and package declare each type (see the manual's
+"Access levels" section).
+
 ## Why not use the `SafeDIGenerator` SPM plugin?
 
 SafeDI's build-tool plugin collects every `.swift` file from the target plus

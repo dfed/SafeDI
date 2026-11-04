@@ -1113,6 +1113,12 @@ jobs:
         uses: actions/checkout@v7
       - name: Link Checker
         uses: AlexanderDokuchaev/md-dead-link-check@5b5641a92ec95d13a5b04927e0e11de5c3405298 # v1.3.0
+        with:
+          config: .github/md-dead-link-check.toml
+      # The checker cannot decode `%20`, so its configuration excludes the links
+      # that need it, and this step checks that each names a path that exists.
+      - name: Check Excluded Links
+        run: python3 .github/scripts/check-excluded-markdown-links.py .github/md-dead-link-check.toml
 
   lint-swift:
     name: Lint Swift

@@ -1,0 +1,11 @@
+# Configuration for md-dead-link-check, which the "Check Markdown links" job in
+# ci.yml runs. The checker cannot decode `%20`, so it skips the Manual's links to
+# `Examples/Example Package Integration`, whose name has spaces so that CI builds
+# a package under a path with spaces. Each entry is a link exactly as
+# Documentation/Manual.md spells it, relative to Documentation/, and
+# .github/scripts/check-excluded-markdown-links.py checks that each resolves.
+[tool.md_dead_link_check]
+exclude_links = [
+    "../Examples/Example%20Package%20Integration",
+    "../Examples/Example%20Package%20Integration/Package.swift",
+]

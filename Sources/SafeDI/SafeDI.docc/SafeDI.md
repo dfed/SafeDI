@@ -59,7 +59,7 @@ Three steps to integrate:
 2. Attach the `SafeDIGenerator` build tool plugin to your first-party target(s).
 3. Decorate your app's root type with `@Instantiable(isRoot: true)` and add `@Instantiable` to the dependencies it reaches.
 
-Working sample projects live in the [Examples folder](https://github.com/dfed/SafeDI/tree/main/Examples) — clone, open, and build. The [Manual](https://github.com/dfed/SafeDI/blob/main/Documentation/Manual.md) covers Xcode projects, multi-module packages, custom build systems, and prebuild scripts in depth.
+Working sample projects live in the [Examples folder](https://github.com/dfed/SafeDI/tree/main/Examples) — clone, open, and build. The [Manual](https://github.com/dfed/SafeDI/blob/main/Documentation/Manual.md) covers Xcode projects, multi-module packages, Bazel, Tuist, and custom build systems in depth.
 
 ## Topics
 

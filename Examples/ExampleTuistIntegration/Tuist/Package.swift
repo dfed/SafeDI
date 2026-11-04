@@ -7,7 +7,7 @@
 // `SafeDITool.artifactbundle.zip`) because SafeDI's default trait
 // chain pulls it in for the `SafeDIGenerator` plugin.
 //
-// `Scripts/generate-safedi.sh` reads the unpacked binary directly
+// The `SafeDITuist` plugin's script reads the unpacked binary directly
 // from SPM's cache:
 //
 //   Tuist/.build/artifacts/safedi/SafeDIToolBinary/
