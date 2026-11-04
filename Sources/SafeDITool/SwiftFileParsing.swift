@@ -34,9 +34,9 @@ import SwiftSyntax
 /// which parallel parsing finished the files or by how `generate` assembled the module, so the module info
 /// `generate` writes for the same files is the same bytes every time.
 struct ModuleInfo: Codable {
-	/// A module with `imports`, `mockImports`, `filesWithUnexpectedNodes`, `conditionalCompilationDecisions`, and
-	/// `instantiableTypeNamesInAnyClause` sorted, whatever order they are given in, and all but
-	/// `filesWithUnexpectedNodes` without duplicates.
+	/// A module with `imports`, `mockImports`, `filesWithUnexpectedNodes`, `conditionalCompilationDecisions`,
+	/// `instantiableTypeNamesInAnyClause`, and `dependencyModuleNames` sorted, whatever order they are given in, and all
+	/// but `filesWithUnexpectedNodes` without duplicates.
 	init(
 		imports: [ImportStatement],
 		mockImports: [ImportStatement],
@@ -45,6 +45,9 @@ struct ModuleInfo: Codable {
 		filesWithUnexpectedNodes: [String]?,
 		conditionalCompilationDecisions: [ConditionalCompilationDecision],
 		instantiableTypeNamesInAnyClause: [String],
+		moduleName: String? = nil,
+		packageName: String? = nil,
+		dependencyModuleNames: [String] = [],
 	) {
 		self.imports = imports.sortedWithoutDuplicates()
 		self.mockImports = mockImports.sortedWithoutDuplicates()
@@ -53,6 +56,9 @@ struct ModuleInfo: Codable {
 		self.filesWithUnexpectedNodes = filesWithUnexpectedNodes?.sorted()
 		self.conditionalCompilationDecisions = Set(conditionalCompilationDecisions).sorted()
 		self.instantiableTypeNamesInAnyClause = Set(instantiableTypeNamesInAnyClause).sorted()
+		self.moduleName = moduleName
+		self.packageName = packageName
+		self.dependencyModuleNames = Set(dependencyModuleNames).sorted()
 	}
 
 	/// The imports generated dependency-tree code needs, from every file that declares SafeDI content,
@@ -79,6 +85,15 @@ struct ModuleInfo: Codable {
 	/// type, whose mock file it writes without code, from one that names no type at all. They are the same whatever
 	/// the conditions, which is why scan's cache needs no condition to reuse them.
 	let instantiableTypeNamesInAnyClause: [String]
+	/// The module `generate` generated code for from these files, or `nil` when the build system did not say. Each of
+	/// `instantiables` records the module that declares it, which in a build tool plugin's input set is often another.
+	let moduleName: String?
+	/// The package of the module `generate` generated code for, as `Instantiable.packageName` names a package, or `nil`
+	/// when the build system did not say.
+	let packageName: String?
+	/// The names of the modules the module `generate` generated code for depends on directly, as the build system
+	/// lists them, sorted and without duplicates. Empty when the build system did not say.
+	let dependencyModuleNames: [String]
 }
 
 /// A module's parsed input files together with the configuration that governed the parse.
@@ -462,6 +477,9 @@ extension ModuleInfo {
 			filesWithUnexpectedNodes: filesWithUnexpectedNodes.map { $0 + (additionalModuleInfo.filesWithUnexpectedNodes ?? []) } ?? additionalModuleInfo.filesWithUnexpectedNodes,
 			conditionalCompilationDecisions: conditionalCompilationDecisions + additionalModuleInfo.conditionalCompilationDecisions,
 			instantiableTypeNamesInAnyClause: instantiableTypeNamesInAnyClause + additionalModuleInfo.instantiableTypeNamesInAnyClause,
+			moduleName: moduleName,
+			packageName: packageName,
+			dependencyModuleNames: dependencyModuleNames,
 		)
 	}
 
@@ -478,6 +496,9 @@ extension ModuleInfo {
 			filesWithUnexpectedNodes: filesWithUnexpectedNodes.map { $0 + (addedModuleInfo.filesWithUnexpectedNodes ?? []) } ?? addedModuleInfo.filesWithUnexpectedNodes,
 			conditionalCompilationDecisions: conditionalCompilationDecisions + addedModuleInfo.conditionalCompilationDecisions,
 			instantiableTypeNamesInAnyClause: instantiableTypeNamesInAnyClause + addedModuleInfo.instantiableTypeNamesInAnyClause,
+			moduleName: moduleName,
+			packageName: packageName,
+			dependencyModuleNames: dependencyModuleNames,
 		)
 	}
 

@@ -119,7 +119,11 @@ func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable]) 
 			customMockName: unnormalizedInstantiable.customMockName,
 			mockDeclarationLocation: unnormalizedInstantiable.mockDeclarationLocation,
 			mockDeclarationAccess: unnormalizedInstantiable.mockDeclarationAccess,
+			mockDeclarationModuleName: unnormalizedInstantiable.mockDeclarationModuleName,
+			mockDeclarationPackageName: unnormalizedInstantiable.mockDeclarationPackageName,
 			declarationLocation: unnormalizedInstantiable.declarationLocation,
+			moduleName: unnormalizedInstantiable.moduleName,
+			packageName: unnormalizedInstantiable.packageName,
 		)
 		normalized.sourceFilePath = unnormalizedInstantiable.sourceFilePath
 		return normalized

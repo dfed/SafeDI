@@ -56,6 +56,10 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project’s root module.") var dotFileOutput: String?
 
+	@Option(help: "The name of the module this run generates code for: the module that compiles the files the input CSV and '--include' name. Each of those files' declarations, and the '--module-info-output' file, record it, so a module that reads the file knows which module declares each type. Files reached through a #SafeDIConfiguration's additionalDirectoriesToInclude belong to another module. Without this option and '--package-name', a run with '--swift-manifest' or '--output-directory' reads the module of each file from the target graph the SafeDIGenerator plugin writes beside its input CSV. Either way, the '--module-info-output' file also records, as modules this one depends on, the module each '--dependent-module-info-file-path' file records.") var moduleName: String?
+
+	@Option(help: "The package of the module this run generates code for, as the compiler's '-package-name' names it, recorded as '--module-name' is. Omit it when the compiler receives no '-package-name'.") var packageName: String?
+
 	@Flag(help: "States that the compiler is handed every input Swift file, including the files behind dependent module info, at exactly the path this tool is handed. Generated code then wraps each `@Received(fulfilledByDependencyNamed:ofType:)` assignment in a `#sourceLocation` directive naming that path, so the compiler reports a type mismatch at the declaration. Without this flag, and without a build tool plugin’s manifest, the assignment names the declaration in a comment instead, because the compiler warns at a directive whose path differs from the one it was handed.") var compilerReceivesInputPathsUnchanged = false
 
 	// MARK: Internal
@@ -63,7 +67,7 @@ struct Generate: AsyncParsableCommand {
 	func run() async throws {
 		let buildLog = BuildLog()
 		do {
-			let warnings = try await generate(buildLog: buildLog)
+			let warnings = try await generate(buildLog: buildLog).warnings
 			if !warnings.isEmpty {
 				FileHandle.standardError.write(Data("\(buildLog.formatted(warnings))\n".utf8))
 			}
@@ -97,12 +101,22 @@ struct Generate: AsyncParsableCommand {
 		fileprivate(set) var projectFilePaths: ProjectFilePaths?
 	}
 
+	/// What a run of `generate` read and reported.
+	struct Output {
+		/// Warnings about the module, which do not stop generation. `run()` prints them.
+		let warnings: [SourceDiagnostic]
+		/// The module this run generated code for, with the module that declares each of its declarations.
+		let module: ModuleInfo
+		/// The dependent modules' info, in the order this run combined their declarations.
+		let dependentModules: [ModuleInfo]
+	}
+
 	/// Parses, validates, and writes the configured outputs.
 	/// Throws `SourceLocatedError`s as-is so tests can inspect their diagnostics; `run()` formats them for the build log.
 	/// - Parameter buildLog: Learns how the project spells its files, which decides how `run()` prints diagnostics.
-	/// - Returns: Warnings about the module, which do not stop generation. `run()` prints them.
+	/// - Returns: Warnings about the module, which do not stop generation, and the modules this run read.
 	@discardableResult
-	func generate(buildLog: BuildLog = BuildLog()) async throws -> [SourceDiagnostic] {
+	func generate(buildLog: BuildLog = BuildLog()) async throws -> Output {
 		if swiftSourcesFilePath == nil, include.isEmpty {
 			throw ValidationError("Must provide 'swift-sources-file-path' or '--include'.")
 		}
@@ -191,31 +205,44 @@ struct Generate: AsyncParsableCommand {
 			additionalImportedModules
 		}
 
+		// Paths are compared as scan compared them: inputs relative to the manifest's project root, or else to the
+		// working directory. Without a project root, paths compare as the working directory spells them.
+		let comparisonFilePaths = projectFilePaths ?? ProjectFilePaths(projectRoot: FileManager.default.currentDirectoryPath)
+
 		// If the source configuration specifies additional directories to include,
 		// find and parse swift files in those directories and merge with initial
 		// results. Skipped when the initial module came from scan's cache —
 		// scan already merged the additional directories into the cached
 		// ModuleInfo, so re-parsing would be wasted work.
-		let module: ModuleInfo
+		let parsedModuleInfo: ModuleInfo
 		if !initialModuleIsFromCache,
 		   let sourceConfiguration,
 		   !sourceConfiguration.additionalDirectoriesToInclude.isEmpty
 		{
-			// Paths are compared as scan compared them: inputs relative to the manifest's project root, or else to
-			// the working directory. Each additional file is named as scan names it in the manifest, so the
-			// manifest lists the roots it declares; without a project root, files are named as found.
-			// Without a project root, paths compare as the working directory spells them.
-			let comparisonFilePaths = projectFilePaths ?? ProjectFilePaths(projectRoot: FileManager.default.currentDirectoryPath)
+			// Each additional file is named as scan names it in the manifest, so the manifest lists the roots it
+			// declares; without a project root, files are named as found.
 			let additionalFileScans = try await parseAdditionalDirectoryFiles(
 				Set(findSwiftFiles(inDirectories: sourceConfiguration.additionalDirectoriesToInclude).map(comparisonFilePaths.projectFilePath(of:))),
 				excludingInputFilesAt: Set(inputFilePaths.map(comparisonFilePaths.projectFilePath(of:))),
 				namedBy: projectFilePaths,
 				conditionalCompilation: evaluator,
 			)
-			module = initialModule.including(ModuleInfo(additionalFileScans.map(\.fileScan)))
+			parsedModuleInfo = initialModule.including(ModuleInfo(additionalFileScans.map(\.fileScan)))
 		} else {
-			module = initialModule
+			parsedModuleInfo = initialModule
 		}
+		// Each declaration with the module that declares its file, as the build system tells this run, if it does. The
+		// modules whose module info this run reads are ones this module depends on directly, as the build system lists
+		// them, named as each file records its module, however this run learns which module its own files belong to.
+		let module = try parsedModuleInfo.declared(
+			by: moduleMembership(
+				// Only a run with a manifest, which each of the SafeDIGenerator plugin's runs is, reads a target graph.
+				targetGraphInputSourcesFilePath: resolvedSwiftManifest != nil ? swiftSourcesFilePath : nil,
+				inputFilePaths: inputFilePaths,
+				comparisonFilePaths: comparisonFilePaths,
+			),
+			dependingOn: dependentModuleInfo.compactMap(\.moduleName),
+		)
 
 		// Each module's instantiables are already ordered by `parseSwiftFiles`, so the
 		// combined order depends only on the caller's dependent-module list.
@@ -557,7 +584,7 @@ struct Generate: AsyncParsableCommand {
 			}
 			""".write(toPath: dotFileOutput)
 		}
-		return warnings
+		return Output(warnings: warnings, module: module, dependentModules: dependentModuleInfo)
 	}
 
 	// MARK: Private
@@ -647,6 +674,35 @@ struct Generate: AsyncParsableCommand {
 			} else {
 				outputsByFilePath[filePath] = (output, outputFilePath, filePath)
 			}
+		}
+	}
+
+	/// Which module this run's own files belong to, as the build system tells it, or `nil` when it tells nothing. The
+	/// options, when either is given, describe a build system that runs `generate` once per module. Otherwise the target
+	/// graph the SafeDIGenerator plugin writes beside its input CSV describes the files, when there is one.
+	/// - Parameters:
+	///   - targetGraphInputSourcesFilePath: The input CSV beside which a target graph is read, or `nil` for a run that
+	///     reads none.
+	///   - inputFilePaths: The files the input CSV and `--include` name.
+	///   - comparisonFilePaths: How this run compares paths.
+	private func moduleMembership(
+		targetGraphInputSourcesFilePath: String?,
+		inputFilePaths: Set<String>,
+		comparisonFilePaths: ProjectFilePaths,
+	) throws -> ModuleMembership? {
+		if moduleName != nil || packageName != nil {
+			ModuleMembership(
+				moduleName: moduleName,
+				packageName: packageName,
+				inputFilePaths: Set(inputFilePaths.map(comparisonFilePaths.projectFilePath(of:))),
+				filePathsSpelledBy: comparisonFilePaths,
+			)
+		} else if let targetGraphInputSourcesFilePath,
+		          let targetGraph = try PluginTargetGraph(besideInputSourcesFileAt: targetGraphInputSourcesFilePath)
+		{
+			ModuleMembership(targetGraph: targetGraph)
+		} else {
+			nil
 		}
 	}
 

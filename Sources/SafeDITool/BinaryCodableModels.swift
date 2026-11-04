@@ -222,6 +222,9 @@ extension ModuleInfo: BinarySchemaMember {
 				BinaryLayoutField("filesWithUnexpectedNodes", \.filesWithUnexpectedNodes),
 				BinaryLayoutField("conditionalCompilationDecisions", \.conditionalCompilationDecisions),
 				BinaryLayoutField("instantiableTypeNamesInAnyClause", \.instantiableTypeNamesInAnyClause),
+				BinaryLayoutField("moduleName", \.moduleName),
+				BinaryLayoutField("packageName", \.packageName),
+				BinaryLayoutField("dependencyModuleNames", \.dependencyModuleNames),
 			],
 			unwrittenProperties: [],
 		)
@@ -236,6 +239,9 @@ extension ModuleInfo: BinarySchemaMember {
 			filesWithUnexpectedNodes: reader.read() as [String]?,
 			conditionalCompilationDecisions: reader.read(),
 			instantiableTypeNamesInAnyClause: reader.read(),
+			moduleName: reader.read() as String?,
+			packageName: reader.read() as String?,
+			dependencyModuleNames: reader.read(),
 		)
 	}
 
@@ -247,6 +253,9 @@ extension ModuleInfo: BinarySchemaMember {
 		writer.write(filesWithUnexpectedNodes)
 		writer.write(conditionalCompilationDecisions)
 		writer.write(instantiableTypeNamesInAnyClause)
+		writer.write(moduleName)
+		writer.write(packageName)
+		writer.write(dependencyModuleNames)
 	}
 }
 
@@ -399,7 +408,11 @@ extension Instantiable: BinarySchemaMember {
 				BinaryLayoutField("customMockName", \.customMockName),
 				BinaryLayoutField("mockDeclarationLocation", \.mockDeclarationLocation),
 				BinaryLayoutField("mockDeclarationAccess", \.mockDeclarationAccess),
+				BinaryLayoutField("mockDeclarationModuleName", \.mockDeclarationModuleName),
+				BinaryLayoutField("mockDeclarationPackageName", \.mockDeclarationPackageName),
 				BinaryLayoutField("declarationLocation", \.declarationLocation),
+				BinaryLayoutField("moduleName", \.moduleName),
+				BinaryLayoutField("packageName", \.packageName),
 				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
 			],
 			unwrittenProperties: ["instantiableTypes"],
@@ -426,7 +439,11 @@ extension Instantiable: BinarySchemaMember {
 			customMockName: reader.read() as String?,
 			mockDeclarationLocation: reader.read() as Dependency.DeclarationLocation?,
 			mockDeclarationAccess: reader.read() as AccessDeclaration?,
+			mockDeclarationModuleName: reader.read() as String?,
+			mockDeclarationPackageName: reader.read() as String?,
 			declarationLocation: reader.read() as Dependency.DeclarationLocation?,
+			moduleName: reader.read() as String?,
+			packageName: reader.read() as String?,
 		)
 		sourceFilePath = try reader.read() as String?
 	}
@@ -451,7 +468,11 @@ extension Instantiable: BinarySchemaMember {
 			writer.write(customMockName)
 			writer.write(mockDeclarationLocation)
 			writer.write(mockDeclarationAccess)
+			writer.write(mockDeclarationModuleName)
+			writer.write(mockDeclarationPackageName)
 			writer.write(declarationLocation)
+			writer.write(moduleName)
+			writer.write(packageName)
 			writer.write(sourceFilePath)
 		}
 	}
