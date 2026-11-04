@@ -649,359 +649,79 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
-	/// `Root` instantiates the seam `Screen`, and `user: User` when `rootHoldsUser`; `Screen` declares `own` and
-	/// instantiates `Left` (and `Right`, when `readerAlsoUnderRight`); `Left` declares `leftDeclares` and instantiates
-	/// `Reader`, which declares `reader`; `Right` instantiates `Reader` too.
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsHiddenErrorFromSeamsChainOnce_whenRootReachesSeamThroughProtocolItFulfills() async {
-		// `Root` reaches `Screen` through `ScreenProtocol`, so the root's chain names the protocol where the seam's names `Screen`: the
-		// chains are matched by the types of their scopes, and the root's copy is dropped.
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Screen -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
-			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
-			"""
-		}) {
-			try await executeSafeDIToolTest(swiftFileContent: [
-				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated(fulfilledByType: \"Screen\") let screen: ScreenProtocol"]),
-				"""
-				@Instantiable(generateDependencyTree: true, fulfillingAdditionalTypes: [ScreenProtocol.self])
-				public struct Screen: Instantiable, ScreenProtocol {
-				    public init(user: User?, left: Left) {
-				        self.user = user
-				        self.left = left
-				    }
+	/// How `Root` reaches the seam `Screen`: the property it declares, the type the root's chain names, and whether
+	/// `Screen` fulfills `ScreenProtocol` or is erased by `AnyScreen`; `user` is received only if available unless
+	/// `receiveIsRequired`.
+	struct SeamHolding: Sendable, CustomTestStringConvertible {
+		let name: String
+		let rootProperty: String
+		let chainType: String
+		var fulfillsProtocol = false
+		var isErased = false
+		var receiveIsRequired = false
 
-				    @Received(onlyIfAvailable: true) let user: User?
-				    @Instantiated let left: Left
-				}
-				""",
-				Self.left,
-				seamFixtureType(named: "Reader", declarations: ["@Received(onlyIfAvailable: true) let user: User?"]),
-				Self.user,
-				Self.name,
-			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		var testDescription: String {
+			name
 		}
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> ScreenProtocol -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
-			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
-			"""
-		}) {
-			try await executeSafeDIToolTest(swiftFileContent: [
-				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated(fulfilledByType: \"Screen\") let screen: ScreenProtocol"]),
-				"""
-				@Instantiable(fulfillingAdditionalTypes: [ScreenProtocol.self])
-				public struct Screen: Instantiable, ScreenProtocol {
-				    public init(user: User?, left: Left) {
-				        self.user = user
-				        self.left = left
-				    }
 
-				    @Received(onlyIfAvailable: true) let user: User?
-				    @Instantiated let left: Left
-				}
-				""",
-				Self.left,
-				seamFixtureType(named: "Reader", declarations: ["@Received(onlyIfAvailable: true) let user: User?"]),
-				Self.user,
-				Self.name,
-			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
+		static let all = [
+			SeamHolding(name: "protocol it fulfills", rootProperty: "@Instantiated(fulfilledByType: \"Screen\") let screen: ScreenProtocol", chainType: "ScreenProtocol", fulfillsProtocol: true),
+			SeamHolding(name: "protocol it fulfills, receive required", rootProperty: "@Instantiated(fulfilledByType: \"Screen\") let screen: ScreenProtocol", chainType: "ScreenProtocol", fulfillsProtocol: true, receiveIsRequired: true),
+			SeamHolding(name: "erased constant", rootProperty: "@Instantiated(fulfilledByType: \"Screen\", erasedToConcreteExistential: true) let screen: AnyScreen", chainType: "AnyScreen", isErased: true),
+			SeamHolding(name: "erased instantiator", rootProperty: "@Instantiated(fulfilledByType: \"Screen\", erasedToConcreteExistential: true) let screenBuilder: ErasedInstantiator<(), AnyScreen>", chainType: "ErasedInstantiator<(), AnyScreen>", isErased: true),
+			SeamHolding(name: "instantiator", rootProperty: "@Instantiated let screenBuilder: Instantiator<Screen>", chainType: "Instantiator<Screen>"),
+			SeamHolding(name: "lazily instantiated", rootProperty: "@Instantiated let screen: LazilyInstantiated<Screen>", chainType: "Screen"),
+		]
 	}
 
-	@Test
+	@Test(arguments: SeamHolding.all)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsHiddenErrorFromSeamsChainOnce_whenRootReachesSeamThroughErasedConstant() async {
-		// `Root` holds the seam erased as `AnyScreen`.
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Screen -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
-			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
-			"""
-		}) {
-			try await executeSafeDIToolTest(swiftFileContent: [
-				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated(fulfilledByType: \"Screen\", erasedToConcreteExistential: true) let screen: AnyScreen"]),
+	mutating func generate_throwsHiddenErrorFromSeamsChainOnce_whenRootReachesSeamThroughProtocolErasureOrWrapper(holding: SeamHolding) async {
+		// `Root` reaches `Screen` through a protocol, an erasure or a wrapper, so the root's chain names that type where
+		// the seam's names `Screen`: the chains are matched by the types of their scopes, and the root's copy is dropped.
+		// Built inline, the root's chain is the one reported.
+		let receive = holding.receiveIsRequired ? "@Received let user: User" : "@Received(onlyIfAvailable: true) let user: User?"
+		let receivedProperty = holding.receiveIsRequired ? "user: User" : "user: User?"
+		for isSeam in [true, false] {
+			// Appended rather than joined with `+` around ternaries: Swift 6.2 on Linux can time out type-checking a `+`
+			// chain of arrays with ternaries; later Swift does not.
+			var arguments = [String]()
+			if isSeam {
+				arguments.append("generateDependencyTree: true")
+			}
+			if holding.fulfillsProtocol {
+				arguments.append("fulfillingAdditionalTypes: [ScreenProtocol.self]")
+			}
+			var files = [
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", holding.rootProperty]),
 				"""
-				@Instantiable(generateDependencyTree: true)
-				public struct Screen: Instantiable, ScreenProtocol {
-				    public init(user: User?, left: Left) {
+				@Instantiable\(arguments.isEmpty ? "" : "(\(arguments.joined(separator: ", ")))")
+				public struct Screen: Instantiable\(holding.fulfillsProtocol || holding.isErased ? ", ScreenProtocol" : "") {
+				    public init(\(receivedProperty), left: Left) {
 				        self.user = user
 				        self.left = left
 				    }
 
-				    @Received(onlyIfAvailable: true) let user: User?
+				    \(receive)
 				    @Instantiated let left: Left
 				}
 				""",
-				Self.anyScreen,
 				Self.left,
-				seamFixtureType(named: "Reader", declarations: ["@Received(onlyIfAvailable: true) let user: User?"]),
+				seamFixtureType(named: "Reader", declarations: [receive]),
 				Self.user,
 				Self.name,
-			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> AnyScreen -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
-			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
-			"""
-		}) {
-			try await executeSafeDIToolTest(swiftFileContent: [
-				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated(fulfilledByType: \"Screen\", erasedToConcreteExistential: true) let screen: AnyScreen"]),
+			]
+			if holding.isErased {
+				files.append(Self.anyScreen)
+			}
+			await assertThrowsError(diagnostics: { fixtures in
 				"""
-				@Instantiable
-				public struct Screen: Instantiable, ScreenProtocol {
-				    public init(user: User?, left: Left) {
-				        self.user = user
-				        self.left = left
-				    }
-
-				    @Received(onlyIfAvailable: true) let user: User?
-				    @Instantiated let left: Left
-				}
-				""",
-				Self.anyScreen,
-				Self.left,
-				seamFixtureType(named: "Reader", declarations: ["@Received(onlyIfAvailable: true) let user: User?"]),
-				Self.user,
-				Self.name,
-			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsHiddenErrorFromSeamsChainOnce_whenRootReachesSeamThroughErasedInstantiator() async {
-		// `Root` holds an `ErasedInstantiator` of the seam.
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Screen -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
-			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
-			"""
-		}) {
-			try await executeSafeDIToolTest(swiftFileContent: [
-				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated(fulfilledByType: \"Screen\", erasedToConcreteExistential: true) let screenBuilder: ErasedInstantiator<(), AnyScreen>"]),
+				\(fixtures["Reader.swift"]):7:5: error: @Received property `\(receivedProperty)` is hidden in chain: \(isSeam ? "Screen" : "Root -> \(holding.chainType)") -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
+				\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
 				"""
-				@Instantiable(generateDependencyTree: true)
-				public struct Screen: Instantiable, ScreenProtocol {
-				    public init(user: User?, left: Left) {
-				        self.user = user
-				        self.left = left
-				    }
-
-				    @Received(onlyIfAvailable: true) let user: User?
-				    @Instantiated let left: Left
-				}
-				""",
-				Self.anyScreen,
-				Self.left,
-				seamFixtureType(named: "Reader", declarations: ["@Received(onlyIfAvailable: true) let user: User?"]),
-				Self.user,
-				Self.name,
-			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> ErasedInstantiator<(), AnyScreen> -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
-			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
-			"""
-		}) {
-			try await executeSafeDIToolTest(swiftFileContent: [
-				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated(fulfilledByType: \"Screen\", erasedToConcreteExistential: true) let screenBuilder: ErasedInstantiator<(), AnyScreen>"]),
-				"""
-				@Instantiable
-				public struct Screen: Instantiable, ScreenProtocol {
-				    public init(user: User?, left: Left) {
-				        self.user = user
-				        self.left = left
-				    }
-
-				    @Received(onlyIfAvailable: true) let user: User?
-				    @Instantiated let left: Left
-				}
-				""",
-				Self.anyScreen,
-				Self.left,
-				seamFixtureType(named: "Reader", declarations: ["@Received(onlyIfAvailable: true) let user: User?"]),
-				Self.user,
-				Self.name,
-			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsHiddenErrorFromSeamsChainOnce_whenRootReachesSeamThroughProtocolAndReceiveIsRequired() async {
-		// The protocol spelling with a required receive on both sides.
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User` is hidden in chain: Screen -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
-			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
-			"""
-		}) {
-			try await executeSafeDIToolTest(swiftFileContent: [
-				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated(fulfilledByType: \"Screen\") let screen: ScreenProtocol"]),
-				"""
-				@Instantiable(generateDependencyTree: true, fulfillingAdditionalTypes: [ScreenProtocol.self])
-				public struct Screen: Instantiable, ScreenProtocol {
-				    public init(user: User, left: Left) {
-				        self.user = user
-				        self.left = left
-				    }
-
-				    @Received let user: User
-				    @Instantiated let left: Left
-				}
-				""",
-				Self.left,
-				seamFixtureType(named: "Reader", declarations: ["@Received let user: User"]),
-				Self.user,
-				Self.name,
-			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User` is hidden in chain: Root -> ScreenProtocol -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
-			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
-			"""
-		}) {
-			try await executeSafeDIToolTest(swiftFileContent: [
-				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated(fulfilledByType: \"Screen\") let screen: ScreenProtocol"]),
-				"""
-				@Instantiable(fulfillingAdditionalTypes: [ScreenProtocol.self])
-				public struct Screen: Instantiable, ScreenProtocol {
-				    public init(user: User, left: Left) {
-				        self.user = user
-				        self.left = left
-				    }
-
-				    @Received let user: User
-				    @Instantiated let left: Left
-				}
-				""",
-				Self.left,
-				seamFixtureType(named: "Reader", declarations: ["@Received let user: User"]),
-				Self.user,
-				Self.name,
-			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsHiddenErrorFromSeamsChainOnce_whenRootReachesSeamThroughInstantiator() async {
-		// A guard: the wrapper spellings were already matched by the type each builds.
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Screen -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
-			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
-			"""
-		}) {
-			try await executeSafeDIToolTest(swiftFileContent: [
-				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
-				"""
-				@Instantiable(generateDependencyTree: true)
-				public struct Screen: Instantiable {
-				    public init(user: User?, left: Left) {
-				        self.user = user
-				        self.left = left
-				    }
-
-				    @Received(onlyIfAvailable: true) let user: User?
-				    @Instantiated let left: Left
-				}
-				""",
-				Self.left,
-				seamFixtureType(named: "Reader", declarations: ["@Received(onlyIfAvailable: true) let user: User?"]),
-				Self.user,
-				Self.name,
-			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> Instantiator<Screen> -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
-			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
-			"""
-		}) {
-			try await executeSafeDIToolTest(swiftFileContent: [
-				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
-				"""
-				@Instantiable
-				public struct Screen: Instantiable {
-				    public init(user: User?, left: Left) {
-				        self.user = user
-				        self.left = left
-				    }
-
-				    @Received(onlyIfAvailable: true) let user: User?
-				    @Instantiated let left: Left
-				}
-				""",
-				Self.left,
-				seamFixtureType(named: "Reader", declarations: ["@Received(onlyIfAvailable: true) let user: User?"]),
-				Self.user,
-				Self.name,
-			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsHiddenErrorFromSeamsChainOnce_whenRootReachesSeamThroughLazilyInstantiated() async {
-		// A guard: the lazily instantiated spelling.
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Screen -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
-			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
-			"""
-		}) {
-			try await executeSafeDIToolTest(swiftFileContent: [
-				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated let screen: LazilyInstantiated<Screen>"]),
-				"""
-				@Instantiable(generateDependencyTree: true)
-				public struct Screen: Instantiable {
-				    public init(user: User?, left: Left) {
-				        self.user = user
-				        self.left = left
-				    }
-
-				    @Received(onlyIfAvailable: true) let user: User?
-				    @Instantiated let left: Left
-				}
-				""",
-				Self.left,
-				seamFixtureType(named: "Reader", declarations: ["@Received(onlyIfAvailable: true) let user: User?"]),
-				Self.user,
-				Self.name,
-			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Reader.swift"]):7:5: error: @Received property `user: User?` is hidden in chain: Root -> Screen -> Left -> Reader. `Left` declares `user: Name` with the same label, so the types below `Left` receive `user: Name` instead. Give `user: Name` on `Left` a different label to fix.
-			\(fixtures["Left.swift"]):8:5: note: `user: Name` is declared here
-			"""
-		}) {
-			try await executeSafeDIToolTest(swiftFileContent: [
-				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated let screen: LazilyInstantiated<Screen>"]),
-				"""
-				@Instantiable
-				public struct Screen: Instantiable {
-				    public init(user: User?, left: Left) {
-				        self.user = user
-				        self.left = left
-				    }
-
-				    @Received(onlyIfAvailable: true) let user: User?
-				    @Instantiated let left: Left
-				}
-				""",
-				Self.left,
-				seamFixtureType(named: "Reader", declarations: ["@Received(onlyIfAvailable: true) let user: User?"]),
-				Self.user,
-				Self.name,
-			], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			}) {
+				try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+			}
 		}
 	}
 
@@ -1460,6 +1180,9 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 		}
 	}
 
+	/// `Root` instantiates the seam `Screen`, and `user: User` when `rootHoldsUser`; `Screen` declares `own` and
+	/// instantiates `Left` (and `Right`, when `readerAlsoUnderRight`); `Left` declares `leftDeclares` and instantiates
+	/// `Reader`, which declares `reader`; `Right` instantiates `Reader` too.
 	private static func ownPropertyFixture(own: String, reader: String, rootHoldsUser: Bool, leftDeclares: String = "@Instantiated let user: Name", readerAlsoUnderRight: Bool = false) -> [String] {
 		var files = [
 			"""

@@ -752,6 +752,7 @@ enum DifferentialValueOracle {
 			}).joined(separator: "\n")
 		}.joined(separator: "\n")
 		return """
+		import Foundation
 		import SafeDI
 		import \(describerModuleName)
 		\(imports)
@@ -1721,9 +1722,10 @@ extension GraphFuzzerFixture {
 						// label order, as `ForwardedProperties` spells them.
 						let hostName = rootName.hasSuffix("ProofOtherRoot") ? "ProofOtherHost" : "ProofHost"
 						let samples = forwardedProperties(ofTypeNamed: typeNamePrefix + hostName).sorted { $0.label < $1.label }.map { property in
-							(label: property.label, value: property.type == "Swift.Int" ? "0" : property.type == "Swift.String" ? "\"\"" : "\(property.type)()")
+							(label: property.label, value: Self.sampleExpression(ofForwardedType: property.type))
 						}
-						let argument = samples.count == 1 ? samples[0].value : "(\(samples.map { "\($0.label): \($0.value)" }.joined(separator: ", ")))"
+						// A host whose values are all received rather than forwarded is built through an instantiator that takes nothing.
+						let argument = samples.isEmpty ? "" : samples.count == 1 ? samples[0].value : "(\(samples.map { "\($0.label): \($0.value)" }.joined(separator: ", ")))"
 						probes.append(DifferentialValueProbe("\(rootName)().\(label).instantiate(\(argument))"))
 					default:
 						continue
@@ -1740,6 +1742,23 @@ extension GraphFuzzerFixture {
 			probes.append(DifferentialValueProbe("\(mockedType).mock()"))
 		}
 		return probes
+	}
+
+	/// A value of `type`, a plain type a host forwards, the same in every run: a standard type's fixed value, or the
+	/// plain type's own instance.
+	private static func sampleExpression(ofForwardedType type: String) -> String {
+		switch type {
+		case "Swift.Int":
+			"0"
+		case "Swift.String":
+			"\"\""
+		case "Foundation.Date":
+			"Foundation.Date(timeIntervalSinceReferenceDate: 0)"
+		case "Foundation.UUID":
+			"Foundation.UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))"
+		default:
+			"\(type)()"
+		}
 	}
 
 	/// The `@Forwarded` properties of the type named `typeName`, in declaration order.
