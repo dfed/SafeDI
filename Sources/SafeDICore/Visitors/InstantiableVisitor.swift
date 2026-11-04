@@ -327,6 +327,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				access: instantiableAccess,
 				enclosingTypeAccess: enclosingTypeAccess,
 				enclosingExtensionAccess: enclosingExtensionAccess,
+				generatedInitializerAttributes: generatedInitializerAttributes,
 				mockAttributes: mockAttributes,
 				generateMock: generateMock,
 				mockOnly: mockOnly,
@@ -432,6 +433,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	public private(set) var initializerSyntaxes = [InitializerDeclSyntax]()
 	public private(set) var instantiableType: TypeDescription?
 	public private(set) var additionalInstantiables: [TypeDescription]?
+	public private(set) var generatedInitializerAttributes = ""
 	public private(set) var mockAttributes = ""
 	public private(set) var generateMock: Bool = false
 	public private(set) var mockOnly: Bool = false
@@ -533,6 +535,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						access: instantiableAccess,
 						enclosingTypeAccess: enclosingTypeAccess,
 						enclosingExtensionAccess: enclosingExtensionAccess,
+						generatedInitializerAttributes: generatedInitializerAttributes,
 						mockAttributes: mockAttributes,
 						generateMock: generateMock,
 						mockOnly: mockOnly,
@@ -564,6 +567,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 						access: instantiableAccess,
 						enclosingTypeAccess: enclosingTypeAccess,
 						enclosingExtensionAccess: enclosingExtensionAccess,
+						generatedInitializerAttributes: generatedInitializerAttributes,
 						mockAttributes: mockAttributes,
 						generateMock: generateMock,
 						mockOnly: mockOnly,
@@ -761,8 +765,14 @@ public final class InstantiableVisitor: SyntaxVisitor {
 				.elements
 				.map(\.expression.typeDescription.asInstantiatedType)
 		}
-		func processMockAttributes() {
-			mockAttributes = macro.mockAttributesValue
+		func processGeneratedAttributes() {
+			if let generatedAttributes = macro.generatedAttributesValue {
+				generatedInitializerAttributes = generatedAttributes
+				mockAttributes = generatedAttributes
+			} else {
+				generatedInitializerAttributes = macro.generatedInitializerAttributesValue
+				mockAttributes = macro.mockAttributesValue
+			}
 		}
 		func processGenerateMock() {
 			generateMock = macro.generateMockValue
@@ -776,7 +786,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 
 		processIsRoot()
 		processFulfillingAdditionalTypesParameter()
-		processMockAttributes()
+		processGeneratedAttributes()
 		processGenerateMock()
 		processMockOnly()
 		processCustomMockName()

@@ -104,6 +104,7 @@ func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable]) 
 			access: unnormalizedInstantiable.access,
 			enclosingTypeAccess: unnormalizedInstantiable.enclosingTypeAccess,
 			enclosingExtensionAccess: unnormalizedInstantiable.enclosingExtensionAccess,
+			generatedInitializerAttributes: unnormalizedInstantiable.generatedInitializerAttributes,
 			mockAttributes: unnormalizedInstantiable.mockAttributes,
 			generateMock: unnormalizedInstantiable.generateMock,
 			mockOnly: unnormalizedInstantiable.mockOnly,
