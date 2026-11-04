@@ -44,10 +44,11 @@ struct SafeDIToolSeamForeignRootTests: ~Copyable {
 
 	@Test(arguments: [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_leavesDependencysRootWithoutCode_whenItsTreeCallsSeamWithReceiverAtNarrowerTier(seam: Bool) async throws {
-		// `Detail`'s internal initializer receives `logger` only if available, so `Screen`'s public tier omits it:
-		// `App`, which can call only that tier, would pass `nil` where `Feature` passes `logger`. Inline, the root's
-		// tree constructs the internal initializer, so `App` withholds it for that.
+	mutating func generate_leavesDependencysRootWithoutCode_whenItsTreeCallsSeamWhoseReceiversInitializerIsInternal(seam: Bool) async throws {
+		// `Detail`'s internal initializer receives `logger` only if available. `Logger` is `public`, so `Screen`'s one
+		// tier takes it, but `App` still leaves the root to `Feature`, which declares it: its tree calls the initializer
+		// `Feature` generates. Inline, the root's tree constructs the internal initializer, so `App` withholds it for
+		// that.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: Self.featureModule(seam: seam, detailInitializerIsPublic: false)),
@@ -63,7 +64,7 @@ struct SafeDIToolSeamForeignRootTests: ~Copyable {
 				    public init() {
 				        let logger = Logger()
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_DABB4FAC518FEAA3.self
+				            _ = Screen.__safeDI_Screen_5F3FDE2D827DABB3.self
 				            return Screen(logger: logger)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -73,18 +74,14 @@ struct SafeDIToolSeamForeignRootTests: ~Copyable {
 				""",
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public init() {
-				        self.init(logger: nil)
-				    }
-
-				    internal init(logger: Logger? = nil) {
+				    public init(logger: Logger? = nil) {
 				        let detail = Detail(logger: logger)
 				        self.init(detail: detail)
 				    }
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_DABB4FAC518FEAA3 {}
+				    public enum __safeDI_Screen_5F3FDE2D827DABB3 {}
 				}
 				""",
 			])
@@ -245,9 +242,9 @@ struct SafeDIToolSeamForeignRootTests: ~Copyable {
 
 	@Test(arguments: [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_leavesDependencysRootWithoutCode_whenItsTreeCallsThirdModulesSeamAtPackageTier(seam: Bool) async throws {
-		// `Core`'s `Screen` has a package tier taking `logger`, which `Feature`, of the same package, calls, while
-		// `App`, of another package, could call only the public tier.
+	mutating func generate_leavesDependencysRootWithoutCode_whenItsTreeCallsThirdModulesSeam(seam: Bool) async throws {
+		// `Core`'s `Screen` takes the public `logger` on its one tier, which `Detail`'s package initializer receives
+		// only if available, and `Feature` calls it; `App`, of another package, leaves `Feature`'s root to `Feature`.
 		let core = Self.featureModule(seam: seam, detailInitializerIsPublic: false)
 			.filter { !$0.contains("struct FeatureRoot") }
 			.map { $0.replacingOccurrences(of: "    init(logger: Logger?)", with: "    package init(logger: Logger?)") }
@@ -265,18 +262,14 @@ struct SafeDIToolSeamForeignRootTests: ~Copyable {
 			#expect(output.modules["Core"]?.generatedFiles == [
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public init() {
-				        self.init(logger: nil)
-				    }
-
-				    package init(logger: Logger? = nil) {
+				    public init(logger: Logger? = nil) {
 				        let detail = Detail(logger: logger)
 				        self.init(detail: detail)
 				    }
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_5E7104445F9E1848 {}
+				    public enum __safeDI_Screen_5F3FDE2D827DABB3 {}
 				}
 				""",
 			])
@@ -290,7 +283,7 @@ struct SafeDIToolSeamForeignRootTests: ~Copyable {
 				    public init() {
 				        let logger = Logger()
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_5E7104445F9E1848.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
+				            _ = Screen.__safeDI_Screen_5F3FDE2D827DABB3.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
 				            return Screen(logger: logger)
 				        }
 				        let screen: Screen = __safeDI_screen()

@@ -151,8 +151,11 @@ struct ModuleCompileSources {
 	let generatedFiles: [String: String]
 	let activeCompilationConditions: [String]
 	/// The condition the module's generated mocks are wrapped in, which the compile defines so the mocks compile
-	/// too, as the module's mock-enabled configuration does. `DEBUG` is always defined.
+	/// too, as the module's mock-enabled configuration does. `DEBUG` is defined unless `definesDebug` is `false`.
 	let mockConditionalCompilation: String?
+	/// Whether the compile defines `DEBUG` and the mock condition, as a debug build does, rather than compile as a
+	/// release build, where neither is defined, so mock-only content and generated mocks are not compiled.
+	var definesDebug = true
 }
 
 /// Why a module did not compile.
@@ -257,8 +260,8 @@ private func compileModule(
 		filesToDelete: &filesToDelete,
 	)
 	// Generated mock code is wrapped in `#if <mockConditionalCompilation>`, so define that condition
-	// to compile the mocks too, as the module's mock-enabled configuration does.
-	let compilationConditions = module.activeCompilationConditions + [module.mockConditionalCompilation].compactMap(\.self)
+	// to compile the mocks too, as the module's mock-enabled configuration does. A release build defines neither.
+	let compilationConditions = module.activeCompilationConditions + (module.definesDebug ? [module.mockConditionalCompilation].compactMap(\.self) : [])
 	func compile(_ sources: [URL]) throws -> SwiftCompileResult {
 		try compileSwift(
 			sources: sources,
@@ -269,6 +272,7 @@ private func compileModule(
 			packageName: module.packageName,
 			emitsModule: emitsModule,
 			moduleSearchPaths: moduleSearchPaths,
+			definesDebug: module.definesDebug,
 		)
 	}
 
@@ -551,7 +555,7 @@ func stageCompileSources(
 ///
 /// - Parameters:
 ///   - activeCompilationConditions: Conditions defined for the compile, mirroring what the
-///     test supplied to SafeDITool. `DEBUG` is always defined, as it is in a debug build.
+///     test supplied to SafeDITool. `DEBUG` is defined unless `definesDebug` is `false`, as it is in a debug build.
 ///   - moduleName: The module's name, which also names the object file and the `.swiftmodule`.
 ///   - packageName: The package the module belongs to, passed as `-package-name`, or `nil` for none.
 ///   - emitsModule: Whether to emit `<moduleName>.swiftmodule` into `outputDirectory` as well, for the
@@ -561,6 +565,8 @@ func stageCompileSources(
 ///     `@testable import` it.
 ///   - parsesAsLibrary: Whether to compile with `-parse-as-library`, so that a module of one file is a library
 ///     rather than a script that defines `main`, which a link into an executable would duplicate.
+///   - definesDebug: Whether to define `DEBUG`, as a debug build does; a release build defines neither it nor any
+///     condition `activeCompilationConditions` spells `DEBUG`.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func compileSwift(
 	sources: [URL],
@@ -573,6 +579,7 @@ func compileSwift(
 	moduleSearchPaths: [URL] = [],
 	enablesTesting: Bool = false,
 	parsesAsLibrary: Bool = false,
+	definesDebug: Bool = true,
 ) throws -> SwiftCompileResult {
 	var arguments = swiftCompilerCommand.arguments
 	arguments.append(contentsOf: [
@@ -587,9 +594,11 @@ func compileSwift(
 	}
 	arguments.append(contentsOf: [
 		"-load-plugin-executable", "\(artifacts.safeDIMacrosToolPath.path)#SafeDIMacros",
-		"-DDEBUG",
 		"-swift-version", "6",
 	])
+	if definesDebug {
+		arguments.append("-DDEBUG")
+	}
 	if enablesTesting {
 		arguments.append("-enable-testing")
 	}

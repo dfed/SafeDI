@@ -73,6 +73,11 @@ struct SafeDIToolGraphFuzzerTests {
 			}
 		}
 		#expect(Set(GraphFuzzerSeamOutputFeature.allCases).subtracting(outputFeatures).sorted() == [])
+		// Graphs split across modules – with a caller in another package, and with a caller or a seam's module run without
+		// its package's name – among those the tool accepts, so that the batch compiles each module of a split graph and
+		// the callers of each package configuration.
+		let drawFeatures = acceptedResults.reduce(into: Set<GraphFuzzerSeamDrawFeature>()) { $0.formUnion(GraphFuzzerFeature.seamDrawFeatures(of: $1.fixture)) }
+		#expect(Set([GraphFuzzerSeamDrawFeature.moduleSplit, .otherPackageCaller, .samePackageCallerRunWithoutPackageName, .seamModuleRunWithoutPackageName]).subtracting(drawFeatures).sorted() == [])
 		#expect(results.contains { !$0.isAccepted && $0.failure == nil }, "Rejected none of \(Self.seamSmokeSeeds.count) graphs")
 	}
 
@@ -110,6 +115,11 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(!GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: unfulfillable, seamTypeNames: ["Screen"]))
 		#expect(!GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: "\(collision)\n\(unfulfillable)", seamTypeNames: ["Screen"]))
 		#expect(!GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: "", seamTypeNames: ["Screen"]))
+		// A caller's error that it holds a value its tier omits is a seam's own only in a graph split across modules: a
+		// seam a graph in one module calls is called at its narrowest tier, which omits nothing.
+		let omittedValue = "/F/Host.swift:3:2: error: `Host` provides `theme: Theme`, but the `public` initializer SafeDI generated for `Screen` in module `Feature`, the narrowest one module `App` can call, does not take it."
+		#expect(!GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: omittedValue, seamTypeNames: ["Screen"]))
+		#expect(GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: omittedValue, seamTypeNames: ["Screen"], excusingOmittedValues: true))
 		// A hidden-label error in a chain that starts at a seam is the seam's: inline reports it only from a root that
 		// provides the property, so a caller that holds nothing builds the graph inline.
 		let hiddenAtSeam = "/F/Reader.swift:7:5: error: @Received property `token: Secret?` is hidden in chain: Screen -> Left -> Reader. `Left` declares `token: Token` with the same label, so the types below `Left` receive `token: Token` instead. Give `token: Token` on `Left` a different label to fix."
@@ -167,6 +177,89 @@ struct SafeDIToolGraphFuzzerTests {
 		let rejected = GraphFuzzerToolOutcome.rejected(diagnostics: "error")
 		#expect(GraphFuzzerToolRuns(fixture: fixture, firstOutcome: rejected, secondOutcome: rejected, inlineOutcome: inline).isInspectedByValueOracle == false)
 	}
+
+	@Test
+	func tiersWiderThanParameterTypes_reportsTier_whenTierIsWiderThanTypeItsParameterNames() {
+		// The ground truth: a tier a seam proved from the wrong declaration names a type narrower than itself, such as
+		// a `public` tier taking a type the generator declared `package`. A tier as narrow as the type is sound.
+		let unsoundTier = """
+		extension S1_ProofSeam {
+		    public convenience init(proofTheme: S1_ProofTheme? = nil) {
+		        self.init(proofTheme: proofTheme)
+		    }
+
+		    package convenience init(proofCrate: S1_ProofSpace.S1_ProofCrate, proofTheme: S1_ProofTheme? = nil) {
+		        let proofBadge = S1_ProofBadge(proofTheme: proofTheme)
+		        self.init(proofBadge: proofBadge)
+		    }
+		}
+
+		extension S1_ProofSeam {
+		    public enum __safeDI_S1_ProofSeam_0123456789ABCDEF {}
+		}
+		"""
+		let typeAccess: [String: GraphFuzzerGenerator.AccessLevel] = ["S1_ProofTheme": .package, "S1_ProofSpace.S1_ProofCrate": .internal]
+
+		#expect(GraphFuzzerOracle.tiersWiderThanParameterTypes(in: ["S1_ProofSeam+SafeDI.swift": unsoundTier], typeAccess: typeAccess) == [
+			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`'s `public` initializer takes `proofTheme: S1_ProofTheme? = nil`, but `S1_ProofTheme` is `package`.",
+			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`'s `package` initializer takes `proofCrate: S1_ProofSpace.S1_ProofCrate`, but `S1_ProofSpace.S1_ProofCrate` is `internal`.",
+		])
+		#expect(GraphFuzzerOracle.tiersWiderThanParameterTypes(in: ["S1_ProofSeam+SafeDI.swift": unsoundTier], typeAccess: ["S1_ProofTheme": .package, "S1_ProofSpace.S1_ProofCrate": .package]) == [
+			"S1_ProofSeam+SafeDI.swift: `S1_ProofSeam`'s `public` initializer takes `proofTheme: S1_ProofTheme? = nil`, but `S1_ProofTheme` is `package`.",
+		])
+	}
+
+	@Test(arguments: [
+		// The provider's declaration, where the error is reported.
+		"/F/Host.swift:3:2: error: `Host` provides `theme: Theme`, but the `public` initializer SafeDI generated for `Screen` in module `Feature`, the narrowest one module `App` can call, does not take it.",
+		// The provider's file cannot be read, so the error is reported where the module refers to the call, naming the
+		// provider's module.
+		"/F/Root.swift:11:5: error: `Host` in module `Base` provides `theme: Theme`, but the `public` initializer SafeDI generated for `Screen` in module `Feature`, the narrowest one module `App` can call, does not take it.",
+	])
+	func omittedValueLabel_readsLabel_whenErrorNamesProviderWithOrWithoutItsModule(error: String) {
+		// The omitted-value oracle recognizes an error that a caller holds a value its tier omits in both of its forms.
+		#expect(GraphFuzzerOracle.isOmittedValueError(Substring(error)))
+		#expect(GraphFuzzerOracle.omittedValueLabel(of: Substring(error)) == "theme")
+	}
+
+	@Test
+	func omittedValueFailure_reportsOmission_whenCallOmitsParameterInlineBuildPassesAValue() {
+		// A caller in another module calls the public tier, which omits `proofTheme`: inline, its module passes
+		// `S1_ProofBadge` the value it holds, so the tool must report it; inline passing `nil`, the omission is sound.
+		let runs = Self.omittedValueRuns(seamOutcome: .accepted(generatedFiles: Self.omittingCall, warnings: []), inlinePassing: "proofTheme")
+		#expect(runs.omittedValueFailure?.kind == .seamTierOmitsValueInlinePasses)
+		#expect(runs.omittedValueFailure?.details.prefix { $0 != "\n" } == "FuzzOther/S1_ProofOtherRoot+SafeDI.swift calls `S1_ProofSeam` without `proofTheme`, which the inline build of FuzzOther passes a receiver a value for, and the tool reports no error.")
+		#expect(Self.omittedValueRuns(seamOutcome: .accepted(generatedFiles: Self.omittingCall, warnings: []), inlinePassing: "nil").omittedValueFailure == nil)
+	}
+
+	@Test
+	func omittedValueFailure_reportsError_whenToolReportsOmittedValueInlineBuildPassesNil() {
+		// The tool reports that the caller holds `proofTheme`, which its tier omits: inline, its module passes
+		// `S1_ProofBadge` `nil`, so no receiver would lose a value; inline passing the value, the error is right.
+		let error = GraphFuzzerToolOutcome.rejected(diagnostics: "/x/<fixture-directory>/other/Sources/FuzzOther/S1_ProofOtherHost.swift:3:2: error: `S1_ProofOtherHost` provides `proofTheme: S1_ProofTheme`, but the `public` initializer SafeDI generated for `S1_ProofSeam` in module `FuzzFeature`, the narrowest one module `FuzzOther` can call, does not take it.")
+		#expect(Self.omittedValueRuns(seamOutcome: error, inlinePassing: "nil").omittedValueFailure?.kind == .seamTierOmitsProvidedValueReportedWhereInlinePassesNil)
+		#expect(Self.omittedValueRuns(seamOutcome: error, inlinePassing: "proofTheme").omittedValueFailure == nil)
+		// A split graph's omitted-value error is a seam's own, which this oracle judges, not an inlined validation's.
+		#expect(Self.omittedValueRuns(seamOutcome: error, inlinePassing: "proofTheme").differentialFailure == nil)
+	}
+
+	/// The runs of a graph split across modules whose `S1_ProofBadge`, in the seam's tree, receives `proofTheme` only
+	/// if available, with the inline build of the caller in another package passing it `argument`.
+	private static func omittedValueRuns(seamOutcome: GraphFuzzerToolOutcome, inlinePassing argument: String) -> GraphFuzzerToolRuns {
+		let fixture = GraphFuzzerFixture(seed: 1, swiftFileContent: [
+			"// module: FuzzFeature\n\n@Instantiable\npublic final class S1_ProofBadge: Instantiable {\n\tpackage init(proofTheme: S1_ProofTheme?) {\n\t\tself.proofTheme = proofTheme\n\t}\n\n\t@Received(onlyIfAvailable: true) let proofTheme: S1_ProofTheme?\n}\n",
+		])
+		let inline = GraphFuzzerToolOutcome.accepted(generatedFiles: [
+			"FuzzOther/S1_ProofOtherRoot+SafeDI.swift": "extension S1_ProofOtherRoot {\n    public convenience init() {\n        let proofBadge = S1_ProofBadge(proofTheme: \(argument))\n        self.init(proofSeam: S1_ProofSeam(proofBadge: proofBadge))\n    }\n}\n",
+		], warnings: [])
+		return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: seamOutcome, secondOutcome: seamOutcome, inlineOutcome: inline)
+	}
+
+	/// A seam's tiers and a call of its public tier from a caller in another package.
+	private static let omittingCall = [
+		"FuzzFeature/S1_ProofSeam+SafeDI.swift": "extension S1_ProofSeam {\n    public convenience init() {\n        self.init(proofTheme: nil)\n    }\n\n    package convenience init(proofTheme: S1_ProofTheme? = nil) {\n        self.init(proofBadge: S1_ProofBadge(proofTheme: proofTheme))\n    }\n}\n\nextension S1_ProofSeam {\n    public enum __safeDI_S1_ProofSeam_0123456789ABCDEF {}\n}\n",
+		"FuzzOther/S1_ProofOtherRoot+SafeDI.swift": "extension S1_ProofOtherRoot {\n    public convenience init() {\n        func __safeDI_proofSeam() -> S1_ProofSeam {\n            _ = S1_ProofSeam.__safeDI_S1_ProofSeam_0123456789ABCDEF.self\n            return S1_ProofSeam()\n        }\n        self.init(proofSeam: __safeDI_proofSeam())\n    }\n}\n",
+	]
 
 	@Test
 	func uncreatedAliasBindingReads_reportEachRead_whenSeamReadsAliasOfParameterThatMayBeNil() {
@@ -418,10 +511,9 @@ struct SafeDIToolGraphFuzzerTests {
 
 		let failure = try #require(failures[runs.fixture.seed])
 		#expect(failure.kind == .seamBuildsOtherValuesThanInline, Comment(rawValue: failure.details))
-		// Seed 0's receiver beneath the seam gets `nil`; the root's own `seamShared`, the same instance inline, is then
-		// first seen there, which the comparator reports as a second difference.
-		#expect(failure.valueDifferences.first == "probe `S0_Root0()` at <1> S0_Root0 > anyT2 > value > seamChild > \(perturbed.label):\n  feature:     \(perturbed.label): nil\n  known right: \(perturbed.label): <6> S0_SeamShared")
-		#expect(failure.valueDifferences.count == 2, "\(failure.valueDifferences)")
+		// Seed 16's receiver beneath the spelling's seam gets `nil` where inline it gets the value its host forwards.
+		#expect(failure.valueDifferences.first == "probe `S16_Root0().spellHostBuilder.instantiate(S16_SpellOuter.Item())` at <1> S16_SpellHost > spellSeam > spellChild > \(perturbed.label):\n  feature:     \(perturbed.label): nil\n  known right: \(perturbed.label): <2> S16_SpellOuter.Item (seen, first at <1> S16_SpellHost > spelled)")
+		#expect(failure.valueDifferences.count == 1, "\(failure.valueDifferences)")
 		#expect(failure.details.hasPrefix(failure.valueDifferences.joined(separator: "\n") + "\n"))
 		#expect(try GraphFuzzerOracle.valueFailures(of: [runs]).isEmpty)
 	}
@@ -1154,6 +1246,18 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
+	func difference_isNil_whenDiagnosticsListTheSameProvingDeclarationsInAnotherOrder() {
+		// SafeDI lists the declarations that prove a seam parameter's access in source order, which a file-name
+		// reversal reverses; the same declarations in another order are the same diagnostic, and a missing one is not.
+		func diagnostics(provers: String) -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: "/a/<fixture-directory>/S1_Seam.swift:1:1: error: SafeDI cannot generate the dependency tree of `S1_Seam`: … `S1_Key` is `package` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (\(provers)). …")
+		}
+
+		#expect(GraphFuzzerToolOutcome.difference(between: diagnostics(provers: "`S1_Host.init(key:seam:)`, `S1_Vault.init(key:)`"), and: diagnostics(provers: "`S1_Vault.init(key:)`, `S1_Host.init(key:seam:)`")) == nil)
+		#expect(GraphFuzzerToolOutcome.difference(between: diagnostics(provers: "`S1_Host.init(key:seam:)`, `S1_Vault.init(key:)`"), and: diagnostics(provers: "`S1_Vault.init(key:)`")) == "its diagnostics")
+	}
+
+	@Test
 	func difference_reportsDiagnostics_whenDiagnosticsDifferInMoreThanTheOrderOfTheirSuggestions() {
 		func diagnostics(chain: String, suggestions: String) -> GraphFuzzerToolOutcome {
 			.rejected(diagnostics: "/a/<fixture-directory>/S12_T1.swift:7:2: error: @Received property `t4: S12_T3` is not @Instantiated or @Forwarded in chain: \(chain). Did you mean one of \(suggestions)?")
@@ -1283,6 +1387,7 @@ struct SafeDIToolGraphFuzzerTests {
 		var valueOracleInspectedCount = 0
 		var valueOracleComparedCount = 0
 		var acceptedSpellingDrawFeatures = Set<GraphFuzzerSeamDrawFeature>()
+		var omittedValueGraphCount = 0
 		var knownIssueCount = 0
 		var failureCount = 0
 		// Batches run concurrently, one per core, but their findings are recorded in seed order, so the report and
@@ -1345,6 +1450,9 @@ struct SafeDIToolGraphFuzzerTests {
 							if result.isInspectedByValueOracle {
 								valueOracleInspectedCount += 1
 							}
+							if case let .rejected(diagnostics) = result.outcome, diagnostics.split(separator: "\n").contains(where: GraphFuzzerOracle.isOmittedValueError) {
+								omittedValueGraphCount += 1
+							}
 							if result.isComparedByValueOracle {
 								valueOracleComparedCount += 1
 							}
@@ -1390,6 +1498,8 @@ struct SafeDIToolGraphFuzzerTests {
 		// The graphs the comparator compared, which a compilation failure (a known warning among them) keeps below the
 		// inspected count: read from the report rather than derived.
 		report.append("compared \(valueOracleComparedCount) \(corpus.name)")
+		// The graphs the tool rejects because a caller holds a value its tier omits, which ci.yml's combine job adds up.
+		report.append("omitted-values \(omittedValueGraphCount) \(corpus.omittedValueGraphCount) \(corpus.name)")
 		report.append("spellings \(corpus.name) \(corpus.spellingDrawFeatures.map(\.rawValue).sorted().joined(separator: ",")) \(acceptedSpellingDrawFeatures.map(\.rawValue).sorted().joined(separator: ","))")
 		// Every corpus that exists, so the combine job can tell a corpus whose shards left no report from none.
 		report.append("corpora \(([Self.baseCorpus] + GraphFuzzerGeneratorFeature.allCases.map { Self.corpus(for: [$0]) }).map(\.name).joined(separator: " "))")
@@ -1401,6 +1511,9 @@ struct SafeDIToolGraphFuzzerTests {
 		if configuration.startingSeed == 0, configuration.iterations == corpus.seedCount {
 			if valueOracleInspectedCount != corpus.valueOracleInspectedGraphCount {
 				reportProblem("The value oracle inspected \(valueOracleInspectedCount) graphs of the \(corpus.name) corpus, but \(corpus.valueOracleInspectedGraphCount) are pinned.")
+			}
+			if omittedValueGraphCount != corpus.omittedValueGraphCount {
+				reportProblem("The tool rejected \(omittedValueGraphCount) graphs of the \(corpus.name) corpus because a caller holds a value its tier omits, but \(corpus.omittedValueGraphCount) are pinned.")
 			}
 			let missingSpellings = corpus.spellingDrawFeatures.subtracting(acceptedSpellingDrawFeatures)
 			if !missingSpellings.isEmpty {
@@ -1461,6 +1574,9 @@ struct SafeDIToolGraphFuzzerTests {
 		let valueOracleInspectedGraphCount: Int
 		/// The spellings each of which some graph the tool accepts must draw.
 		let spellingDrawFeatures: Set<GraphFuzzerSeamDrawFeature>
+		/// How many graphs the tool rejects with an error that a caller in another module holds a value the seam tier it
+		/// calls omits, which the omitted-value oracle judges against the inline build.
+		let omittedValueGraphCount: Int
 	}
 
 	static let baseCorpus = Corpus(
@@ -1475,6 +1591,7 @@ struct SafeDIToolGraphFuzzerTests {
 		staleSeedRemedy: { _, _ in "remove it from `knownIssues`, and from `seamCorpusSeedsOfOtherShapes` when it is listed there" },
 		valueOracleInspectedGraphCount: 0,
 		spellingDrawFeatures: [],
+		omittedValueGraphCount: 0,
 	)
 
 	/// The corpus drawn with the `generateDependencyTree` feature: seeds `0..<seamCorpusSeedCount`, each graph with
@@ -1501,23 +1618,29 @@ struct SafeDIToolGraphFuzzerTests {
 		},
 		valueOracleInspectedGraphCount: seamCorpusValueOracleInspectedGraphCount,
 		spellingDrawFeatures: Set(GraphFuzzerSpelling.allCases.map(\.drawFeature)),
+		omittedValueGraphCount: seamCorpusOmittedValueGraphCount,
 	)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0xAFF9EF38B356ED53
-	static let seamCorpusAcceptedSeedCount = 360
-	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x927832BEA746C7C7
+	static let seamCorpusFixtureHash: UInt64 = 0x29A158E1C63EB09B
+	static let seamCorpusAcceptedSeedCount = 299
+	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xC41430E71DB69EB9
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
 	/// oracle compares.
-	static let seamCorpusValueOracleInspectedGraphCount = 360
+	static let seamCorpusValueOracleInspectedGraphCount = 245
+	/// How many of the seam corpus's graphs the tool rejects because a caller holds a value the tier it calls omits.
+	static let seamCorpusOmittedValueGraphCount = 18
 
 	/// The ordinary suite's batch of the seam corpus: graphs the tool accepts whose generated code, between them, shows
 	/// every `GraphFuzzerSeamOutputFeature` – both kinds of pass-through, a call reading `.instance`, an `@escaping`
-	/// closure parameter, an `@escaping @Sendable` one, and an optional closure – and graphs it rejects, which
+	/// closure parameter, an `@escaping @Sendable` one, and an optional closure – graphs split across modules, with a
+	/// caller in another package (seed 31), a caller in the same package run without its package's name (seed 180) and a
+	/// seam's module run so (seed 98), the last two also accepted inline, so the batch compiles every module, judges an
+	/// omitted value and compares a split graph's values, and a graph it rejects, which
 	/// `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` checks. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 2, 5, 7, 19, 25]
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 31, 92, 98, 180]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xBA56EEB4FACA7BD5
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xAE4812864CA59209
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -1579,6 +1702,37 @@ struct SafeDIToolGraphFuzzerTests {
 		.uncreatedAliasAcceptedTwin: 121,
 		.uncreatedAliasLabelKeepingOptionalAlias: 37,
 		.wrapperReceiveBeneathSeam: 400,
+		.seamTypeNarrowerThanPublic: 255,
+		.receiverNarrowerThanType: 316,
+		.receiverTypeNarrowerThanItsInitializer: 102,
+		.ownInitializerNarrowerWithNoPassThrough: 74,
+		.ownInitializerNarrowerWithOnlyOptionalNarrowerPassThroughs: 85,
+		.ownInitializerNarrowerThanTwoParameterLevels: 50,
+		.requiredParameterNarrowerThanSeamType: 53,
+		.ownOnlyIfAvailableParameter: 115,
+		.ownOnlyIfAvailableParameterNarrowerThanSeam: 39,
+		.providedValueHeldByCaller: 96,
+		.providedValueHeldByNoCaller: 26,
+		.unprovenAliasType: 21,
+		.unprovenAliasTypeOnlyIfAvailable: 22,
+		.aliasOfNarrowerInstantiableType: 25,
+		.aliasFulfillingTypeAlsoReceived: 22,
+		.namespaceExtensionUnspelled: 64,
+		.namespaceExtensionSpelled: 37,
+		.publicNamespace: 20,
+		.namespaceTypeOnlyThroughExistential: 61,
+		.instantiableExtensionOfNarrowerType: 55,
+		.qualifiedAllowlistMention: 36,
+		.mockCappedByItsExtension: 52,
+		.mockCapRaisedByUnreachedMention: 30,
+		.mockInInstantiableExtension: 25,
+		.typeInExtensionOfSeam: 41,
+		.typeInExtensionOfNarrowerRecordedType: 39,
+		.valueDeclaredAfterSeam: 79,
+		.moduleSplit: 318,
+		.otherPackageCaller: 221,
+		.samePackageCallerRunWithoutPackageName: 53,
+		.seamModuleRunWithoutPackageName: 38,
 	]
 
 	/// Seeds in `0..<seamCorpusSeedCount` whose graphs fail today. The 1 000-seed run of this corpus found that each
@@ -1603,12 +1757,12 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "A caller whose tree holds only the optional form of an alias's fulfilling property passes it, and the seam creates the alias from it, where inline the alias is not created (the Manual's first documented divergence)",
 			signatures: [.seamBuildsOtherValuesThanInline(containing: "_Root0 > aliasSource)\n  known right: aliasAuth: nil"), .seamBuildsOtherValuesThanInline(containing: "_Root0 > aliasSource)\n  known right: aliasBearer: nil"), .seamBuildsOtherValuesThanInline(containing: "> aliasDetail > aliasToken:\n  feature:     aliasToken: <13> S843_AliasValue (seen, first at <1> S843_Root0 > aliasSource)\n  known right: aliasToken: nil")],
-			seeds: [430, 712, 843, 923, 924, 944],
+			seeds: [430, 843, 923, 924, 944],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "The seam's own onlyIfAvailable alias is bound from its fulfilling parameter, where inline the seam is passed the property of the alias's label that the scope building the seam creates (the Manual's second documented divergence)",
 			signatures: [.seamBuildsOtherValuesThanInline(containing: "> aliasSeam > aliasAuth:\n  feature:     aliasAuth: nil")],
-			seeds: [698, 835],
+			seeds: [698],
 		),
 		// Found by the comparator in round 7; the seam is right (adjudicated 2026-11-02): the comparator's inline reference
 		// carries a main defect.
@@ -1619,6 +1773,19 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.seamBuildsOtherValuesThanInline(containing: "> t0Builder > instantiate() > t1Builder)\n  known right: t1Builder: <2> Instantiator<S662_T1> (seen, first at <1> S662_Root0 > t1Builder)"), .seamBuildsOtherValuesThanInline(containing: "> t0Builder > instantiate() again > t1Builder)\n  known right: t1Builder: <2> Instantiator<S662_T1> (seen, first at <1> S662_Root0 > t1Builder)")],
 			seeds: [662],
 		),
+		// A seed `knownIssues` lists under another shape, whose graph the seam's draw changes so that it fails this one.
+		GraphFuzzerKnownIssue(
+			reason: "SafeDIMockConfiguration.swift declares its extensions in the order of the roots that reach them, in a graph the base corpus lists under another shape",
+			signatures: [.renamedGraphDiffers(containing: "changes its generated mock configuration code")],
+			seeds: [311],
+		),
+		// The access-proof draw's graphs whose inline build, the comparator's reference, constructs a type a caller in
+		// another package cannot name.
+		GraphFuzzerKnownIssue(
+			reason: "A type declared in an extension of a plain namespace type, which SafeDI records no access for because it is not @Instantiable, is constructed inline from a module in another package, and the compiler rejects the construction; the follow-up pull request before the release, in which scan records plain type declarations' access and the construction check caps by them, removes these seeds",
+			signatures: [.valueComparatorCouldNotDescribeGraph(containing: "error: cannot find '")],
+			seeds: [532, 878, 905],
+		),
 	]
 
 	private static let labelSortedPassThroughReason = "A seam's pass-through parameters are sorted by label, so reversing the labels reorders its generated initializer and the calls of it"
@@ -1626,12 +1793,12 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Seeds of `knownIssues` that the seam corpus's run observed failing with the seam's own shape, or not failing
 	/// at all, since the seam's draw changed their graphs; the inherited lists leave them out. Observed, not
 	/// derived: a seed here that a run finds failing its inherited shape again is a new failure, and goes back.
-	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 114, 309, 310, 371, 381, 431, 448, 476, 714, 768, 774, 808, 847, 903, 975]
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 114, 309, 310, 311, 371, 381, 431, 434, 448, 471, 476, 593, 714, 728, 768, 774, 808, 847, 903, 975]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
 	private static let seamCorpusSeedsAddedToInheritedShapes: [String: [UInt64]] = [
-		"SafeDIMockConfiguration.swift declares its extensions in the order of the roots that reach them": [182],
+		"SafeDIMockConfiguration.swift declares its extensions in the order of the roots that reach them": [182, 794],
 	]
 
 	/// Seeds whose seam has two or more pass-throughs. They are sorted by label – kept by ruling: a parameter order

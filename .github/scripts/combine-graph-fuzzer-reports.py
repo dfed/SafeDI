@@ -7,13 +7,14 @@ that ci.yml splits each corpus into. Each shard's long run ends its report with
     corpus <seed count> <pinned accepted count> <pinned accepted seed-set sum> <corpus>
     inspected <graphs the value oracle inspected> <pinned count> <corpus>
     compared <graphs the value comparator compared> <corpus>
+    omitted-values <graphs rejected because a caller holds a value its tier omits> <pinned count> <corpus>
     spellings <corpus> <spellings to draw, comma-separated> <spellings drawn in accepted graphs>
 
 where <corpus> names the corpus the shard fuzzed: `base`, or a generator
 feature's name. For each corpus the shards must cover 0..<seed count exactly
 once, and the accepted counts and seed-set sums (a wrapping sum of per-seed
 hashes, so parts add up) must add up to the pins, the graphs the value oracle
-inspected must add up to their pin, every spelling the corpus draws must be
+inspected and the graphs rejected for an omitted value must add up to their pins, every spelling the corpus draws must be
 drawn in some accepted graph of some shard, and no shard may report a failure,
 a stale known issue, or a problem. Writes a Markdown summary to
 SUMMARY and the job summary, and exits non-zero when anything is missing or
@@ -32,6 +33,8 @@ pins_by_corpus = {}
 inspected_by_corpus = {}
 inspected_pins_by_corpus = {}
 compared_by_corpus = {}
+omitted_values_by_corpus = {}
+omitted_values_pins_by_corpus = {}
 required_spellings_by_corpus = {}
 accepted_spellings_by_corpus = {}
 # Every corpus the long run knows, from the `corpora` line each report carries: a corpus whose shards all left no
@@ -56,6 +59,9 @@ for path in report_paths:
                 inspected_pins_by_corpus.setdefault(fields[3], set()).add(int(fields[2]))
             elif fields[0] == "compared" and len(fields) == 3:
                 compared_by_corpus[fields[2]] = compared_by_corpus.get(fields[2], 0) + int(fields[1])
+            elif fields[0] == "omitted-values" and len(fields) == 4:
+                omitted_values_by_corpus[fields[3]] = omitted_values_by_corpus.get(fields[3], 0) + int(fields[1])
+                omitted_values_pins_by_corpus.setdefault(fields[3], set()).add(int(fields[2]))
             elif fields[0] == "spellings" and len(fields) >= 2:
                 # An empty list is an absent field, so a corpus that draws no spelling reports two fields.
                 required_spellings_by_corpus.setdefault(fields[1], set()).update(filter(None, (fields[2] if len(fields) > 2 else "").split(",")))
@@ -101,6 +107,14 @@ if not problems:
             problems.append(
                 f"The value oracle inspected {inspected_by_corpus.get(corpus, 0)} graphs of the {corpus} corpus, but "
                 f"{next(iter(inspected_pins))} are pinned."
+            )
+        omitted_values_pins = omitted_values_pins_by_corpus.get(corpus, set())
+        if len(omitted_values_pins) > 1:
+            problems.append(f"The shards of the {corpus} corpus disagree about how many graphs the tool rejects for an omitted value: {sorted(omitted_values_pins)}.")
+        elif omitted_values_pins and omitted_values_by_corpus.get(corpus, 0) != next(iter(omitted_values_pins)):
+            problems.append(
+                f"The tool rejected {omitted_values_by_corpus.get(corpus, 0)} graphs of the {corpus} corpus because a caller holds "
+                f"a value its tier omits, but {next(iter(omitted_values_pins))} are pinned."
             )
         missing_spellings = required_spellings_by_corpus.get(corpus, set()) - accepted_spellings_by_corpus.get(corpus, set())
         if missing_spellings:

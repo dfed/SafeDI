@@ -150,8 +150,8 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 	@Test(arguments: [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_assumesPackageAccessWithComment_whenCallingPackageTierOfDependencysSeamWithoutPackageNames(seam: Bool) async throws {
-		// `Panel`'s own initializer is `package`, so its one tier is: `App` calls it with the comment, as inline it
-		// constructs `Panel` with the comment.
+		// `Panel` is `package`, so its one tier is: `App` calls it with the comment, as inline it constructs `Panel` with
+		// the comment.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(
@@ -162,7 +162,7 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 						seamFixtureType(named: "Engine", isFinalClass: true, declarations: []),
 						"""
 						@Instantiable\(seam ? "(generateDependencyTree: true)" : "")
-						public struct Panel: Instantiable {
+						package struct Panel: Instantiable {
 						    package init(service: Service, engine: Engine) {
 						        self.service = service
 						        self.engine = engine
@@ -334,13 +334,12 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 		try expectEveryModuleCompiled(output)
 	}
 
-	// MARK: A caller that reaches no tier
+	// MARK: A caller of a seam whose own initializer it cannot call
 
-	@Test(arguments: MultiModuleIntegration.allCases, [true, false])
+	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsErrorAtSeamsOwnInitializer_whenCallerReachesNoTier(integration: MultiModuleIntegration, seam: Bool) async {
-		// `Screen`'s own initializer is internal, so its one tier is: `App`, in another package, reaches none, and the
-		// error is at that initializer, with its fix-it, as where the tree is built inline.
+	mutating func generate_throwsErrorAtInitializer_whenTreeBuiltInlineConstructsInitializerCallerCannotCall(integration: MultiModuleIntegration) async {
+		// `Screen`'s own initializer is internal: `App`, in another package, cannot construct it inline.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let screenPath = Self.declarationPath(of: "Screen.swift", in: "Feature", fixtures: fixtures, under: integration)
 			return """
@@ -348,88 +347,103 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 			\(screenPath):3:5-3:5: fixit: public\(" ")
 			"""
 		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(
-						name: "Feature",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							@Instantiable\(seam ? "(generateDependencyTree: true)" : "")
-							public struct Screen: Instantiable {
-							    init(detail: Detail) {
-							        self.detail = detail
-							    }
-
-							    @Instantiated let detail: Detail
-							}
-							""",
-							seamFixtureType(named: "Detail", declarations: []),
-						],
-					),
-					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [Self.appRoot(declarations: ["@Instantiated let screen: Screen"])], dependencies: ["Feature"]),
-				],
-				integration: integration,
-				filesToDelete: &filesToDelete,
-			)
+			try await executeSafeDIToolMultiModuleTest(modules: Self.screenModules(seam: false, screenInitializer: "init(detail: Detail)", declarations: ["@Instantiated let detail: Detail"], appDeclarations: ["@Instantiated let screen: Screen"]), integration: integration, filesToDelete: &filesToDelete)
 		}
 	}
 
-	@Test(arguments: MultiModuleIntegration.allCases, [true, false])
+	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsErrorAtEachInitializerCappingTier_whenCallerReachesNoTierOfSeamWhoseReceiverRequiresParameter(integration: MultiModuleIntegration, seam: Bool) async {
-		// `Screen`'s own initializer and `Reader`'s, which requires `token`, are `package`, so the one tier is: `App`, in
-		// another package, reaches none. With the seam, `Reader` alone is reported, with its fix-it: widening `Screen`'s
-		// initializer alone would make the seam report an omission, while the public tier a widened `Reader` gives
-		// calls `Screen`'s package initializer inside `Feature`. Inline reports both initializers, each with its fix-it.
+	mutating func generate_callsPublicTier_whenSeamsOwnInitializerIsNarrowerThanCallerCanCall(integration: MultiModuleIntegration) async throws {
+		// `Screen`'s own initializer is internal, but its generated initializer is at its type's access, `public`, and
+		// calls the internal one inside `Feature`: `App`, in another package, calls it.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.screenModules(seam: true, screenInitializer: "init(detail: Detail)", declarations: ["@Instantiated let detail: Detail"], appDeclarations: ["@Instantiated let screen: Screen"]), integration: integration, filesToDelete: &filesToDelete)
+		#expect(Self.seamFile(of: output, integration: integration) == generatedFileHeader + """
+		extension Screen {
+		    public init() {
+		        let detail = Detail()
+		        self.init(detail: detail)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_CBF29CE484222325 {}
+		}
+		""")
+		#expect(Self.rootFile(of: output, integration: integration) == generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_screen() -> Screen {
+		            _ = Screen.__safeDI_Screen_CBF29CE484222325.self\(Self.pluginComment(integration))
+		            return Screen()
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        self.init(screen: screen)
+		    }
+		}
+		""")
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtEachInitializer_whenTreeBuiltInlineConstructsReceiverAndTypeCallerCannotCall(integration: MultiModuleIntegration) async {
+		// `Screen`'s own initializer and `Reader`'s, which requires `token`, are `package`: inline, `App`, in another
+		// package, reports both initializers, each with its fix-it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let readerPath = Self.declarationPath(of: "Reader.swift", in: "Feature", fixtures: fixtures, under: integration)
 			let screenPath = Self.declarationPath(of: "Screen.swift", in: "Feature", fixtures: fixtures, under: integration)
-			return seam ? """
-			\(readerPath):3:5: error: `Reader`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
-			\(readerPath):3:5-3:12: fixit: public
-			""" : """
+			return """
 			\(readerPath):3:5: error: `Reader`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
 			\(readerPath):3:5-3:12: fixit: public
 			\(screenPath):3:5: error: `Screen`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
 			\(screenPath):3:5-3:12: fixit: public
 			"""
 		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(
-						name: "Feature",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							@Instantiable\(seam ? "(generateDependencyTree: true)" : "")
-							public struct Screen: Instantiable {
-							    package init(reader: Reader) {
-							        self.reader = reader
-							    }
-
-							    @Instantiated let reader: Reader
-							}
-							""",
-							"""
-							@Instantiable
-							public struct Reader: Instantiable {
-							    package init(token: Token) {
-							        self.token = token
-							    }
-
-							    @Received let token: Token
-							}
-							""",
-							seamFixtureType(named: "Token", declarations: []),
-						],
-					),
-					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [Self.appRoot(declarations: ["@Instantiated let token: Token", "@Instantiated let screen: Screen"])], dependencies: ["Feature"]),
-				],
-				integration: integration,
-				filesToDelete: &filesToDelete,
-			)
+			try await executeSafeDIToolMultiModuleTest(modules: Self.screenModules(seam: false, screenInitializer: "package init(reader: Reader)", declarations: ["@Instantiated let reader: Reader"], appDeclarations: ["@Instantiated let token: Token", "@Instantiated let screen: Screen"]), integration: integration, filesToDelete: &filesToDelete)
 		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsPublicTierPassingValue_whenReceiversInitializerIsNarrowerThanCallerCanCall(integration: MultiModuleIntegration) async throws {
+		// `Reader`'s package initializer requires `token`, which `Token`'s own declaration proves `public`, so `Screen`'s
+		// generated initializer takes it at `Screen`'s access, `public`, and calls `Screen`'s package initializer inside
+		// `Feature`: `App`, in another package, calls it passing its `token`.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.screenModules(seam: true, screenInitializer: "package init(reader: Reader)", declarations: ["@Instantiated let reader: Reader"], appDeclarations: ["@Instantiated let token: Token", "@Instantiated let screen: Screen"]), integration: integration, filesToDelete: &filesToDelete)
+		#expect(Self.seamFile(of: output, integration: integration) == generatedFileHeader + """
+		extension Screen {
+		    public init(token: Token) {
+		        let reader = Reader(token: token)
+		        self.init(reader: reader)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_1EB503BFA23A82BA {}
+		}
+		""")
+		#expect(Self.rootFile(of: output, integration: integration) == generatedFileHeader + """
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        let token = Token()
+		        func __safeDI_screen() -> Screen {
+		            _ = Screen.__safeDI_Screen_1EB503BFA23A82BA.self\(Self.pluginComment(integration))
+		            return Screen(token: token)
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        self.init(token: token, screen: screen)
+		    }
+		}
+		""")
+		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Private
@@ -443,6 +457,74 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 	    package init() {}
 	}
 	"""
+
+	/// `Feature`, declaring the public `Screen` with `screenInitializer` and `declarations`, a seam when `seam` is set, the
+	/// public `Reader`, whose package initializer requires `token`, and the public `Detail` and `Token`; and `App`, in
+	/// another package, whose root declares `appDeclarations`.
+	private static func screenModules(seam: Bool, screenInitializer: String, declarations: [String], appDeclarations: [String]) -> [ModuleFixture] {
+		let properties = declarations.map { $0[$0.range(of: " let ")!.upperBound...].prefix { $0 != ":" } }
+		return [
+			ModuleFixture(
+				name: "Feature",
+				packageName: "Shop",
+				swiftFileContent: [
+					"""
+					@Instantiable\(seam ? "(generateDependencyTree: true)" : "")
+					public struct Screen: Instantiable {
+					    \(screenInitializer) {
+					\(properties.map { "        self.\($0) = \($0)" }.joined(separator: "\n"))
+					    }
+
+					\(declarations.map { "    \($0)" }.joined(separator: "\n"))
+					}
+					""",
+					"""
+					@Instantiable
+					public struct Reader: Instantiable {
+					    package init(token: Token) {
+					        self.token = token
+					    }
+
+					    @Received let token: Token
+					}
+					""",
+					seamFixtureType(named: "Detail", declarations: []),
+					seamFixtureType(named: "Token", declarations: []),
+				],
+			),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: [Self.appRoot(declarations: appDeclarations)], dependencies: ["Feature"]),
+		]
+	}
+
+	/// `Feature`'s generated `Screen` file under `integration`.
+	private static func seamFile(of output: MultiModuleTestOutput, integration: MultiModuleIntegration) -> String? {
+		switch integration {
+		case .moduleInfo:
+			output.modules["Feature"]?.generatedFiles["Feature.swift"]
+		case .swiftPackagePlugin:
+			output.modules["Feature"]?.generatedFiles["Screen+SafeDI.swift"]
+		}
+	}
+
+	/// `App`'s generated root file under `integration`.
+	private static func rootFile(of output: MultiModuleTestOutput, integration: MultiModuleIntegration) -> String? {
+		switch integration {
+		case .moduleInfo:
+			output.modules["App"]?.generatedFiles["App.swift"]
+		case .swiftPackagePlugin:
+			output.modules["App"]?.generatedFiles["Root+SafeDI.swift"]
+		}
+	}
+
+	/// The comment a call of `Feature`'s seam carries under `integration`.
+	private static func pluginComment(_ integration: MultiModuleIntegration) -> String {
+		switch integration {
+		case .moduleInfo:
+			""
+		case .swiftPackagePlugin:
+			" // If this line does not compile, add the SafeDI plugin to the target that declares Screen."
+		}
+	}
 
 	/// `App`'s internal root, which imports `Feature` and declares `declarations`.
 	private static func appRoot(declarations: [String]) -> String {

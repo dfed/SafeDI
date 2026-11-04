@@ -263,6 +263,7 @@ struct Generate: AsyncParsableCommand {
 			normalizedInstantiables: normalizedInstantiables,
 			ownFilePaths: ownFilePaths,
 			module: module,
+			configuration: sourceConfiguration,
 			dependentModuleInfo: dependentModuleInfo,
 			membership: membership,
 		)
@@ -775,11 +776,14 @@ struct Generate: AsyncParsableCommand {
 	/// module, its `.safedi` holds its own declarations and names the modules it depends on directly, whose `.safedi`
 	/// this run must have been given too; under the SwiftPM plugin, the target graph names each target's direct
 	/// dependencies, and the module's run read the files of every target it depends on, directly or through another.
-	/// A seam whose module SafeDITool does not know is built inline, as any other type is.
+	/// A seam whose module SafeDITool does not know is built inline, as any other type is. Under the target graph, this
+	/// run read every module's files under its own mock condition, the one `configuration` names, so each foreign seam
+	/// carries its module's, for the generator to compare.
 	private func seamResolution(
 		normalizedInstantiables: [Instantiable],
 		ownFilePaths: Set<String>,
 		module: ModuleInfo,
+		configuration: SafeDIConfiguration?,
 		dependentModuleInfo: [ModuleInfo],
 		membership: ModuleMembership?,
 	) throws -> SeamResolution {
@@ -807,14 +811,14 @@ struct Generate: AsyncParsableCommand {
 		)
 		var generatedSeams = Set<TypeDescription>()
 		var foreignSeams = [TypeDescription: SeamResolution.ForeignSeam]()
-		var visibleInstantiablesByModuleName = [String: (instantiables: [TypeDescription: Instantiable], readFromModuleInfo: Bool, missingDependencyModuleName: String?)]()
+		var visibleInstantiablesByModuleName = [String: (instantiables: [TypeDescription: Instantiable], readFromModuleInfo: Bool, missingDependencyModuleName: String?, mockCondition: MockCondition?)]()
 		// In declaration order, which decides nothing here: a module's visible declarations are read once, whichever
 		// of its seams is met first.
 		for seam in seamInstantiables {
 			if seam.sourceFilePath.map(ownFilePaths.contains) == true {
 				generatedSeams.insert(seam.concreteInstantiable)
 			} else if let moduleName = seam.moduleName {
-				let visible: (instantiables: [TypeDescription: Instantiable], readFromModuleInfo: Bool, missingDependencyModuleName: String?)
+				let visible: (instantiables: [TypeDescription: Instantiable], readFromModuleInfo: Bool, missingDependencyModuleName: String?, mockCondition: MockCondition?)
 				if let cached = visibleInstantiablesByModuleName[moduleName] {
 					visible = cached
 				} else if let dependentModule = dependentModulesByName[moduleName] {
@@ -828,14 +832,21 @@ struct Generate: AsyncParsableCommand {
 							missingDependencyModuleName = dependencyModuleName
 						}
 					}
-					visible = try (resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables)), true, missingDependencyModuleName)
+					// A module info holds the module's declarations as the module read them.
+					visible = try (resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables)), true, missingDependencyModuleName, nil)
 					visibleInstantiablesByModuleName[moduleName] = visible
 				} else {
 					// The seam's module is in the target graph: a declaration's module is named only by the graph, or by
 					// the options, which name this run's own module.
 					let visibleModuleNames = visibleModuleNames(from: moduleName, in: membership)
 					let instantiables = unnormalizedInstantiables.filter { $0.moduleName.map(visibleModuleNames.contains) == true }
-					visible = try (resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables)), false, nil)
+					// This run read the module's files under its own mock condition, while the module reads them under
+					// the one its own configuration names: of the configurations this run read, the one in a file the
+					// graph attributes to the module.
+					let moduleConfiguration = module.configurations.first { configuration in
+						configuration.sourceFilePath.flatMap { membership?.declaringModule(ofFileAt: $0)?.moduleName } == moduleName
+					}
+					visible = try (resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables)), false, nil, Self.mockCondition(of: moduleConfiguration))
 					visibleInstantiablesByModuleName[moduleName] = visible
 				}
 				foreignSeams[seam.concreteInstantiable] = SeamResolution.ForeignSeam(
@@ -843,6 +854,7 @@ struct Generate: AsyncParsableCommand {
 					missingDependencyModuleName: visible.missingDependencyModuleName,
 					visibleInstantiables: visible.instantiables,
 					callCarriesPluginComment: !visible.readFromModuleInfo,
+					declaringModuleMockCondition: visible.mockCondition,
 				)
 			}
 		}
@@ -869,11 +881,18 @@ struct Generate: AsyncParsableCommand {
 		}
 		return SeamResolution(
 			currentModule: ModuleIdentity(moduleName: module.moduleName, packageName: module.packageName),
+			currentModuleMockCondition: Self.mockCondition(of: configuration),
 			generatedSeams: generatedSeams,
 			foreignSeams: foreignSeams,
 			callersComputeFromTargetGraph: callersComputeFromTargetGraph,
 			callersVisibleInstantiables: callersVisibleInstantiables,
 		)
+	}
+
+	/// The condition a module whose configuration is `configuration` guards its mocks and mock-only declarations with,
+	/// as the module's own run reads them: `DEBUG` for a module that declares no configuration.
+	private static func mockCondition(of configuration: SafeDIConfiguration?) -> MockCondition {
+		MockCondition(configuration.map(\.mockConditionalCompilation) ?? "DEBUG")
 	}
 
 	/// The modules whose declarations a module named `moduleName` sees under the target graph `membership` describes:

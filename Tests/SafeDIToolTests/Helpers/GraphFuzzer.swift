@@ -83,6 +83,19 @@ struct GraphFuzzerFixture: Equatable {
 		swiftFileContent.joined(separator: "\n")
 	}
 
+	/// The module of each file, in `swiftFileContent`'s order, when the graph is split across modules: the module its
+	/// first line names (`GraphFuzzerModule.marker`), every other file belonging to `GraphFuzzerModule.samePackageCaller`.
+	/// `nil` for a graph in one module.
+	var modules: [GraphFuzzerModule]? {
+		guard swiftFileContent.contains(where: { GraphFuzzerModule(declaredIn: $0) != nil }) else { return nil }
+		return swiftFileContent.map { GraphFuzzerModule(declaredIn: $0) ?? .samePackageCaller }
+	}
+
+	/// The modules of a split graph the tool runs over without their package's name, which their files' first lines say.
+	var modulesOmittingPackageName: Set<GraphFuzzerModule> {
+		Set(swiftFileContent.filter(GraphFuzzerModule.omitsPackageName(declaredIn:)).compactMap(GraphFuzzerModule.init(declaredIn:)))
+	}
+
 	static func typeNamePrefix(forSeed seed: UInt64) -> String {
 		"S\(seed)_"
 	}
@@ -97,6 +110,27 @@ struct GraphFuzzerFixture: Equatable {
 				return nextLine.declaredTypeName
 			}
 		}
+	}
+
+	/// The access level each seam's declaration spells, by the seam's name: `public`, `package` or `internal`.
+	var seamTypeAccess: [String: String] {
+		var accessByName = [String: String]()
+		for content in swiftFileContent {
+			var nextTypeIsSeam = false
+			for rawLine in content.split(separator: "\n") {
+				let line = rawLine.trimmingCharacters(in: .whitespaces)
+				if line.hasPrefix("@Instantiable") {
+					nextTypeIsSeam = line.contains("generateDependencyTree: true")
+				} else if nextTypeIsSeam, let classRange = line.range(of: "final class ") {
+					let access = ["public", "package"].first { line.hasPrefix($0 + " ") } ?? "internal"
+					accessByName[String(line[classRange.upperBound...].prefix { $0.isLetter || $0.isNumber || $0 == "_" })] = access
+					nextTypeIsSeam = false
+				} else {
+					nextTypeIsSeam = false
+				}
+			}
+		}
+		return accessByName
 	}
 
 	/// Whether a type of the graph is declared as a seam.
@@ -123,6 +157,76 @@ struct GraphFuzzerFixture: Equatable {
 			seed: seed,
 			swiftFileContent: swiftFileContent.reversed().map { renaming.rename($0, typeNamePrefix: typeNamePrefix) },
 		)
+	}
+}
+
+/// A module of a graph split across modules. Every split graph uses the same module names and packages, so the modules
+/// of one role of many graphs compile as one module, kept apart by the per-seed type-name prefix: the seam's module
+/// in package `shop`, a caller in the same package that holds the rest of the graph, and a caller in package `other`.
+/// A file names its module on its first line, as `// module: <name>`, so every renaming and `withoutSeams` keep it.
+enum GraphFuzzerModule: String, CaseIterable, Comparable {
+	case seamModule = "FuzzFeature"
+	case samePackageCaller = "FuzzApp"
+	case otherPackageCaller = "FuzzOther"
+
+	init?(declaredIn content: String) {
+		guard content.hasPrefix(Self.marker) else { return nil }
+		self.init(rawValue: String(content.dropFirst(Self.marker.count).prefix { $0 != "\n" && $0 != "," }))
+	}
+
+	static let marker = "// module: "
+
+	/// What follows the module's name on a file's first line when the tool runs over the module without its package's
+	/// name, as Bazel without `package_name` and Tuist without `SWIFT_PACKAGE_NAME` do; the compiler still gets it.
+	static let packageNameOmittedMarker = ", run without its package name"
+
+	/// Whether `content`'s first line names its module and says the tool runs over it without its package's name.
+	static func omitsPackageName(declaredIn content: String) -> Bool {
+		content.hasPrefix(marker) && content.prefix { $0 != "\n" }.hasSuffix(packageNameOmittedMarker)
+	}
+
+	var name: String {
+		rawValue
+	}
+
+	var packageName: String {
+		switch self {
+		case .seamModule, .samePackageCaller:
+			"shop"
+		case .otherPackageCaller:
+			"other"
+		}
+	}
+
+	/// The modules this one imports: a caller imports the seam's module.
+	var dependencies: [GraphFuzzerModule] {
+		switch self {
+		case .seamModule:
+			[]
+		case .samePackageCaller, .otherPackageCaller:
+			[.seamModule]
+		}
+	}
+
+	/// The order the modules are run and compiled in: dependencies first.
+	static func < (lhs: GraphFuzzerModule, rhs: GraphFuzzerModule) -> Bool {
+		lhs.order < rhs.order
+	}
+
+	private var order: Int {
+		switch self {
+		case .seamModule:
+			0
+		case .samePackageCaller:
+			1
+		case .otherPackageCaller:
+			2
+		}
+	}
+
+	/// The first lines of a file of this module: the marker, and the import of each module it depends on.
+	func fileHeader(omitsPackageName: Bool) -> String {
+		([Self.marker + name + (omitsPackageName ? Self.packageNameOmittedMarker : "")] + dependencies.map { "import \($0.name)" }).joined(separator: "\n") + "\n\n"
 	}
 }
 
@@ -463,6 +567,72 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	/// A reader, alias-of-alias or same-property draw replaced by its accepted twin: the reader or the second alias
 	/// reads the fulfilling property, or the alias is made required.
 	case uncreatedAliasAcceptedTwin
+	/// `addingAccessProofShapes`' seam, `ProofSeam`, declared `package` or `internal`.
+	case seamTypeNarrowerThanPublic
+	/// A receiver, `ProofBadge`, whose initializer is narrower than the declaration of its parameter's type.
+	case receiverNarrowerThanType
+	/// A receiver type, `ProofVault`, declared `package` with a `public` initializer, which the type caps.
+	case receiverTypeNarrowerThanItsInitializer
+	/// The seam's own initializer narrower than its type, its tree passing nothing through (`ProofCog`).
+	case ownInitializerNarrowerWithNoPassThrough
+	/// The seam's own initializer narrower than its type, with only optional pass-throughs as narrow (`ProofVane`).
+	case ownInitializerNarrowerWithOnlyOptionalNarrowerPassThroughs
+	/// The seam's own initializer `internal`, beneath a public required pass-through and a package optional one, both
+	/// held by the caller (`ProofGauge`, `ProofDial`).
+	case ownInitializerNarrowerThanTwoParameterLevels
+	/// A required parameter, received by `ProofLock`, of a type narrower than the seam's type.
+	case requiredParameterNarrowerThanSeamType
+	/// The seam's own `@Received(onlyIfAvailable: true)` property, `proofOwn`.
+	case ownOnlyIfAvailableParameter
+	/// The seam's own only-if-available property of a type narrower than the seam.
+	case ownOnlyIfAvailableParameterNarrowerThanSeam
+	/// A plain public model type only a package initializer mentions (`ProofPanel`'s `proofModel`), held by a caller.
+	case providedValueHeldByCaller
+	/// The plain public model type held by no caller.
+	case providedValueHeldByNoCaller
+	/// A required alias, on `ProofConsumer`, whose fulfilling property's type is a plain type no declaration proves.
+	case unprovenAliasType
+	/// The alias of a plain type no declaration proves, only if available.
+	case unprovenAliasTypeOnlyIfAvailable
+	/// The alias's fulfilling type a package `@Instantiable` type instead, which its own declaration proves.
+	case aliasOfNarrowerInstantiableType
+	/// A package initializer, `ProofLedger`'s, which no tree reaches, receiving the alias's package fulfilling type itself.
+	case aliasFulfillingTypeAlsoReceived
+	/// An `@Instantiable` type, `ProofSpace.ProofShelf`, and a plain type declared in an extension of a namespace enum
+	/// narrower than them that spells no access level.
+	case namespaceExtensionUnspelled
+	/// The namespace's extension spelled at the namespace's access level, its members unspelled.
+	case namespaceExtensionSpelled
+	/// The namespace's `@Instantiable` type reached only through an existential, which no initializer names it in.
+	case namespaceTypeOnlyThroughExistential
+	/// The namespace enum declared `public`, so callers in other modules construct its types inline.
+	case publicNamespace
+	/// An `@Instantiable` extension of a narrower type, `ProofRack`, whose `public` `instantiate(…)` receives a package type.
+	case instantiableExtensionOfNarrowerType
+	/// A parameter type spelled `Swift.`-qualified, received only if available by a package initializer (`ProofMeter`).
+	case qualifiedAllowlistMention
+	/// A hand-written public mock, whose argument is a dependency, beside `ProofRack`'s `instantiate(…)`.
+	case mockInInstantiableExtension
+	/// A public mock beside the `instantiate(…)` of an unspelled `@Instantiable` extension of a package plain type,
+	/// `ProofShed`, whose argument is the widest mention of the type an internal receiver, `ProofBeam`, receives.
+	case mockCappedByItsExtension
+	/// `ProofShed` raised to `package` by the initializer of `ProofYard`, which no tree reaches.
+	case mockCapRaisedByUnreachedMention
+	/// An `@Instantiable` type, `ProofHelper`, declared in an extension that spells no access level of the seam.
+	case typeInExtensionOfSeam
+	/// `ProofHelper` declared in an extension that spells no access level of a package `@Instantiable` type narrower
+	/// than the seam, `ProofSettings`.
+	case typeInExtensionOfNarrowerRecordedType
+	/// An `@Instantiable` value a host instantiates declared after the seam.
+	case valueDeclaredAfterSeam
+	/// The graph split across modules: the seam's tree in package `shop`, its caller in the same package.
+	case moduleSplit
+	/// A second caller of the seam, in package `other`.
+	case otherPackageCaller
+	/// The caller in the seam's package run over without its package's name, which then cannot tell it shares one.
+	case samePackageCallerRunWithoutPackageName
+	/// The seam's module run over without its package's name, which no caller can then tell it shares.
+	case seamModuleRunWithoutPackageName
 
 	static func < (lhs: GraphFuzzerSeamDrawFeature, rhs: GraphFuzzerSeamDrawFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -692,6 +862,16 @@ enum GraphFuzzerGenerator {
 		return GraphFuzzerFixture(seed: seed, swiftFileContent: builder.build())
 	}
 
+	/// The access the generator gave each type of the graph it draws for `seed` and `features` that is narrower than
+	/// `public` – its spelled level capped by the type its extension extends – by the name the fixture spells it with
+	/// (`S1_ProofSpace.S1_ProofShelf` for a nested type): the ground truth a seam's generated tiers are checked
+	/// against. Every other type a graph declares is `public`.
+	static func narrowerTypeAccess(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>) -> [String: AccessLevel] {
+		var builder = Builder(seed: seed, features: features, storesEveryParameter: false)
+		_ = builder.build()
+		return builder.narrowerTypeAccess
+	}
+
 	private struct PropertyDeclaration {
 		let attribute: String
 		let label: String
@@ -710,6 +890,58 @@ enum GraphFuzzerGenerator {
 		/// Parameters of the initializer after those of `properties`, each with a default value, which the initializer
 		/// stores only when the builder stores every parameter. A default-valued parameter is not a dependency.
 		var defaultValuedParameters = [ParameterDeclaration]()
+		/// The type's spelled access level.
+		var access = AccessLevel.public
+		/// The initializer's spelled access level, or `nil` for the type's. Either is capped by the narrowest type the
+		/// initializer names that `addingAccessProofShapes` declares narrower (`proofTypeAccess`), so the fixture compiles.
+		var initializerAccess: AccessLevel?
+		/// The module the type belongs to in a graph split across modules, which its file's first lines name, or `nil`
+		/// for the module of the graph's roots, `GraphFuzzerModule.samePackageCaller` when the graph is split.
+		var module: GraphFuzzerModule?
+		/// The extension the type is declared in, such as `extension S1_ProofSpace` or `package extension S1_ProofSpace`,
+		/// or `nil` for a type declared at top level.
+		var enclosingExtension: String?
+		/// The access of the type the enclosing extension extends, which caps the type's own.
+		var enclosingTypeAccess = AccessLevel.public
+
+		/// The type's access as the compiler reads it: its own, capped by the type its extension extends.
+		var effectiveAccess: AccessLevel {
+			min(access, enclosingTypeAccess)
+		}
+	}
+
+	/// An access level a fixture spells, narrowest first. `internal` is spelled by leaving the modifier out.
+	enum AccessLevel: Int, Comparable, CaseIterable {
+		case `internal`
+		case package
+		case `public`
+
+		var spelling: String {
+			switch self {
+			case .internal:
+				"internal"
+			case .package:
+				"package"
+			case .public:
+				"public"
+			}
+		}
+
+		/// The modifier with the space after it, or nothing for `internal`.
+		var modifier: String {
+			switch self {
+			case .internal:
+				""
+			case .package:
+				"package "
+			case .public:
+				"public "
+			}
+		}
+
+		static func < (lhs: AccessLevel, rhs: AccessLevel) -> Bool {
+			lhs.rawValue < rhs.rawValue
+		}
 	}
 
 	/// A parameter of an initializer or of an extension's `instantiate(…)` that is not a decorated property.
@@ -820,6 +1052,7 @@ enum GraphFuzzerGenerator {
 			unbuildableDependencySiblingReceiverRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.unbuildableDependencySiblingReceiverRandomSeedMask)
 			aliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.aliasChainRandomSeedMask)
 			siblingAliasChainRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.siblingAliasChainRandomSeedMask)
+			proofRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.proofRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
 			let sendabilityRoll = random.integer(in: 0...99)
@@ -880,27 +1113,41 @@ enum GraphFuzzerGenerator {
 			appendMotif(to: &declarations)
 			// Decided last, so that the rest of a seed's graph does not depend on whether it has the extension.
 			let extensionSource = random.percentChance(25) ? extensionDeclarationSource(addingPropertyToOneOf: &declarations) : nil
-			let sources = addingUncreatedAliasShapes(to: addingSpelledProperties(to: addingSeam(
+			var finalDeclarations = addingAccessProofShapes(to: addingUncreatedAliasShapes(to: addingSpelledProperties(to: addingSeam(
 				to: addingReceiversOfDependenciesMocksCannotBuild(
 					to: addingSiblingAliasChains(to: addingAliasChains(to: addingDependenciesMocksCannotBuild(to: addingPropertiesLabeledAsGeneratedNames(to: declarations)))),
 				),
-			)))
-			.map(source(of:))
-			+ [extensionSource].compactMap(\.self)
+			))))
+			// In a graph split across modules, every file names its module and imports the seam's, so that a type of the
+			// caller can name what the seam's module declares, such as the creation stamps' counter.
+			let isSplit = finalDeclarations.contains { $0.module == .seamModule }
+			if isSplit {
+				for index in finalDeclarations.indices where finalDeclarations[index].module == nil {
+					finalDeclarations[index].module = .samePackageCaller
+				}
+			}
+			let sources = finalDeclarations.map(source(of:))
+				+ [extensionSource.map { isSplit ? GraphFuzzerModule.samePackageCaller.fileHeader(omitsPackageName: modulesOmittingPackageName.contains(.samePackageCaller)) + $0 : $0 }].compactMap(\.self)
 			return storesEveryParameter ? addingCreationStamps(to: sources) : sources
 		}
 
 		/// `sources` with the creation stamps of `DifferentialValueCreationStamp`: the counter, at the end of the first
 		/// file, which is `Root0`'s, and a stamp as the first stored property of every class the graph declares, each of
 		/// which begins a line, after its indentation (a nested class's, such as a spelling's `SpellOuter.Item`), with
-		/// `public final class` and ends it with ` {` or, for a class without a body, ` {}`.
+		/// `final class`, after a `public` or `package` modifier if it spells one, and ends it with ` {` or, for a class
+		/// without a body, ` {}`. A graph split across modules declares the counter in the seam's module, which the
+		/// others import.
 		private func addingCreationStamps(to sources: [String]) -> [String] {
 			let counterName = "\(prefix)CreationStamp"
 			let stamp = DifferentialValueCreationStamp.property(counterNamed: counterName)
+			// The counter is declared in the first file of the module every other module imports: the seam's module in a
+			// graph split across modules.
+			let counterIndex = sources.firstIndex { GraphFuzzerModule(declaredIn: $0) == .seamModule } ?? 0
 			return sources.enumerated().map { index, source in
 				let lines = source.split(separator: "\n", omittingEmptySubsequences: false).flatMap { line -> [String] in
 					let indentation = line.prefix { $0 == "\t" }
-					guard line.dropFirst(indentation.count).hasPrefix("public final class ") else { return [String(line)] }
+					let declaration = line.dropFirst(indentation.count)
+					guard ["public ", "package ", ""].contains(where: { declaration.hasPrefix($0 + "final class ") }) else { return [String(line)] }
 					if line.hasSuffix(" {}") {
 						return [String(line.dropLast("}".count)), "\(indentation)\t\(stamp)", "\(indentation)}"]
 					} else {
@@ -908,7 +1155,7 @@ enum GraphFuzzerGenerator {
 					}
 				}
 				let stampedSource = lines.joined(separator: "\n")
-				return index == 0 ? stampedSource + "\n" + DifferentialValueCreationStamp.counterDeclaration(named: counterName) + "\n" : stampedSource
+				return index == counterIndex ? stampedSource + "\n" + DifferentialValueCreationStamp.counterDeclaration(named: counterName) + "\n" : stampedSource
 			}
 		}
 
@@ -1014,6 +1261,21 @@ enum GraphFuzzerGenerator {
 		/// Draws only the choices of `addingUncreatedAliasShapes`, which draws only with the `generateDependencyTree`
 		/// feature on, last of every pass, so a seam graph it leaves plain is drawn as it was before the pass existed.
 		private var uncreatedAliasRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only the choices of `addingAccessProofShapes`, which draws only with the `generateDependencyTree` feature
+		/// on, after every other pass, so a seam graph it leaves plain is drawn as it was before the pass existed.
+		private var proofRandom: GraphFuzzerRandomNumberGenerator
+		/// The access of each type `addingAccessProofShapes` declares narrower than `public`, by the name the fixture
+		/// spells it with (`S1_ProofSpace.S1_ProofShelf` for a nested type), which caps every initializer naming it.
+		private var proofTypeAccess = [String: AccessLevel]()
+
+		/// The modules of a split graph the tool runs over without their package's name.
+		private var modulesOmittingPackageName = Set<GraphFuzzerModule>()
+
+		/// `proofTypeAccess`, once `build()` has drawn the graph.
+		var narrowerTypeAccess: [String: AccessLevel] {
+			proofTypeAccess
+		}
+
 		/// Draws only whether `addingUncreatedAliasShapes`' alias keeps its fulfilling property's label, and then whether
 		/// that property is `AliasLeft`'s own sibling generated after `AliasDetail`: rolls added after the pass's other draws
 		/// were pinned, so that every other graph of the pass is drawn as before.
@@ -2617,6 +2879,397 @@ enum GraphFuzzerGenerator {
 		private static let uncreatedAliasRandomSeedMask: UInt64 = 0x756E637265617465
 		private static let labelKeepingAliasRandomSeedMask: UInt64 = 0x6B6565704C61626C
 
+		// MARK: Access proof
+
+		/// With the `generateDependencyTree` feature on, four graphs in five gain a small seam tree of their own,
+		/// `ProofSeam`, whose parameters' types are narrower, or wider, than the access levels of the declarations that
+		/// name them, so that a tier whose access a seam reads from the wrong declaration fails to compile: the seam
+		/// type at `package` or `internal`; and either one of three shapes of the seam's own initializer narrower than
+		/// its type – with no pass-through (`ProofCog`), with only optional narrower ones (`ProofVane`), or narrower than
+		/// two parameter levels (`ProofGauge` requiring a public value, `ProofDial` receiving a package one only if
+		/// available) – or any of the facets: a receiver whose initializer is narrower than its parameter's type
+		/// (`ProofBadge`); a receiver type narrower than its spelled initializer (`ProofVault`); a required parameter
+		/// narrower than the seam's type (`ProofLock`); the seam's own only-if-available receive (`proofOwn`); a plain
+		/// public model type only package initializers mention (`ProofPanel`); an alias of a plain type nothing proves
+		/// (`ProofConsumer`), now and then a narrower `@Instantiable` type, or one a declaration no tree reaches receives
+		/// (`ProofLedger`); an `@Instantiable` type and a plain type declared in an extension of a namespace enum,
+		/// narrower than them or public, the extension spelled or not, reached by value or only through an existential
+		/// (`ProofSpace.ProofShelf`); an `@Instantiable` extension of a narrower type whose `instantiate(…)` is public
+		/// (`ProofRack`), now and then with a hand-written public mock beside it; a public mock beside the
+		/// `instantiate(…)` of an extension of a package type, the widest mention of what an internal receiver receives
+		/// (`ProofShed`, `ProofBeam`); an `@Instantiable` type declared in an extension that spells no access level of the
+		/// seam or of a package `@Instantiable` type (`ProofHelper`); and a `Swift.`-qualified parameter type
+		/// (`ProofMeter`). A host, `ProofHost`, which the first root builds, holds most of the values the tree receives
+		/// and instantiates the seam, with an `@Instantiable` value now and then declared after the seam. Half of the
+		/// graphs whose seam is not `internal` are split across modules (`GraphFuzzerModule`): the seam's tree in
+		/// package `shop`, the host and the rest of the graph in a caller in the same package, and, when the seam is
+		/// `public`, a second root and host in package `other` holding the public values. A sixth of the split graphs
+		/// run their same-package caller, and another sixth their seam's module, without the package's name
+		/// (`ModuleFixture.omitsPackageName`), as Bazel without `package_name` does, so the caller cannot tell the two
+		/// share a package. `proofRandom` draws only for this pass.
+		private mutating func addingAccessProofShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
+			guard features.contains(.generateDependencyTree), proofRandom.percentChance(80) else { return declarations }
+			var declarations = declarations
+			let instantiator = sendability == .sendable ? "SendableInstantiator" : "Instantiator"
+			let conformances = sendability == .mixed ? ["@unchecked Sendable"] : []
+			func name(_ suffix: String) -> String {
+				"\(prefix)\(suffix)"
+			}
+			func register(_ typeName: String, _ access: AccessLevel) {
+				if access < .public {
+					proofTypeAccess[typeName] = access
+				}
+			}
+			func instantiable(_ suffix: String, access: AccessLevel = .public, initializerAccess: AccessLevel? = nil, properties: [PropertyDeclaration] = []) -> TypeDeclaration {
+				var declaration = TypeDeclaration(name: name(suffix), instantiableArguments: [], properties: properties, declaresHelperTypes: false, additionalConformances: conformances)
+				declaration.access = access
+				declaration.initializerAccess = initializerAccess
+				register(declaration.name, access)
+				return declaration
+			}
+			/// A plain type declared `access`, which no `@Instantiable` declaration fulfills.
+			func plainType(_ typeName: String, access: AccessLevel, conformingTo protocols: [String] = []) -> String {
+				let inheritance = (protocols + (helperTypesAreSendable ? ["Sendable"] : [])).joined(separator: ", ")
+				return "\(access.modifier)final class \(typeName)\(inheritance.isEmpty ? "" : ": \(inheritance)") {\n\t\(access.modifier)init() {}\n}"
+			}
+			/// An access level narrower than `access`, which is wider than `internal`.
+			func narrower(than access: AccessLevel) -> AccessLevel {
+				access == .public && proofRandom.percentChance(60) ? .package : .internal
+			}
+
+			// The seam, a third of the time narrower than public.
+			let seamAccessRoll = proofRandom.integer(in: 0...5)
+			let seamAccess: AccessLevel = seamAccessRoll < 4 ? .public : seamAccessRoll == 4 ? .package : .internal
+			var seam = instantiable("ProofSeam", access: seamAccess)
+			seam.instantiableArguments = ["generateDependencyTree: true"]
+			let isSplit = seamAccess > .internal && proofRandom.percentChance(50)
+			let seamModule: GraphFuzzerModule? = isSplit ? .seamModule : nil
+			var treeDeclarations = [TypeDeclaration]()
+
+			/// A value the seam's tree receives that a caller can hold: a plain type, which a host forwards, or an
+			/// `@Instantiable` one, which a host instantiates.
+			struct ProofValue {
+				let label: String
+				let type: String
+				let access: AccessLevel
+				let isInstantiable: Bool
+			}
+			var heldValues = [ProofValue]()
+			/// Whether the same-package host can name a type of this access: any in one module, `package` or wider across modules.
+			func isVisibleToHost(_ access: AccessLevel) -> Bool {
+				!isSplit || access > .internal
+			}
+			/// Has the caller hold `value`, with a chance of `percent` out of 100, when its host can name the value's type.
+			func hold(_ value: ProofValue, percent: Int = 75) {
+				guard isVisibleToHost(value.access), proofRandom.percentChance(percent) else { return }
+				heldValues.append(value)
+			}
+			/// Declares a value type of the seam's tree: plain, in the file of `owner`, the type that receives it, or
+			/// `@Instantiable`, in a file of its own.
+			func valueType(_ suffix: String, access: AccessLevel, isInstantiable: Bool, declaredIn owner: inout TypeDeclaration, conformingTo protocols: [String] = []) -> ProofValue {
+				let typeName = name(suffix)
+				if isInstantiable {
+					var declaration = instantiable(suffix, access: access)
+					declaration.additionalConformances += protocols
+					declaration.module = seamModule
+					treeDeclarations.append(declaration)
+				} else {
+					register(typeName, access)
+					owner.additionalDeclarations.append(plainType(typeName, access: access, conformingTo: protocols))
+				}
+				let label = "proof" + suffix.dropFirst("Proof".count)
+				return ProofValue(label: label, type: typeName, access: access, isInstantiable: isInstantiable)
+			}
+			func receive(_ value: ProofValue, isRequired: Bool) -> PropertyDeclaration {
+				isRequired
+					? PropertyDeclaration(attribute: "@Received", label: value.label, type: value.type)
+					: PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: value.label, type: value.type + "?")
+			}
+			func addChild(_ child: TypeDeclaration, label: String) {
+				var child = child
+				child.module = seamModule
+				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: label, type: child.name))
+				treeDeclarations.append(child)
+			}
+
+			// The seam's own initializer narrower than its type, in one of three shapes, or the facets.
+			let modeRoll = proofRandom.integer(in: 0...99)
+			if seamAccess > .internal, modeRoll < 12 {
+				// No pass-through: the seam's only child receives nothing.
+				seam.initializerAccess = narrower(than: seamAccess)
+				addChild(instantiable("ProofCog"), label: "proofCog")
+			} else if seamAccess > .internal, modeRoll < 24 {
+				// Only optional pass-throughs, each of a type as narrow as the seam's own initializer.
+				let ownAccess = narrower(than: seamAccess)
+				seam.initializerAccess = ownAccess
+				var vane = instantiable("ProofVane", initializerAccess: ownAccess)
+				let draft = valueType("ProofDraft", access: ownAccess, isInstantiable: false, declaredIn: &vane)
+				vane.properties.append(receive(draft, isRequired: false))
+				hold(draft)
+				addChild(vane, label: "proofVane")
+			} else if seamAccess == .public, modeRoll < 34 {
+				// An internal own initializer, a public required pass-through and a package optional one, both held.
+				seam.initializerAccess = .internal
+				var gauge = instantiable("ProofGauge")
+				let label = valueType("ProofLabel", access: .public, isInstantiable: proofRandom.percentChance(50), declaredIn: &gauge)
+				gauge.properties.append(receive(label, isRequired: true))
+				hold(label, percent: 100)
+				var dial = instantiable("ProofDial", initializerAccess: .package)
+				let note = valueType("ProofNote", access: .package, isInstantiable: false, declaredIn: &dial)
+				dial.properties.append(receive(note, isRequired: false))
+				hold(note, percent: 100)
+				addChild(gauge, label: "proofGauge")
+				addChild(dial, label: "proofDial")
+			} else {
+				// A receiver whose initializer is narrower than its parameter's type.
+				if proofRandom.percentChance(55) {
+					let themeAccess: AccessLevel = proofRandom.percentChance(75) ? .public : .package
+					var badge = instantiable("ProofBadge", initializerAccess: narrower(than: themeAccess))
+					let theme = valueType("ProofTheme", access: themeAccess, isInstantiable: proofRandom.percentChance(40), declaredIn: &badge)
+					let isRequired = proofRandom.percentChance(15)
+					badge.properties.append(receive(theme, isRequired: isRequired))
+					hold(theme, percent: isRequired ? 100 : 75)
+					addChild(badge, label: "proofBadge")
+				}
+				// A receiver type narrower than its spelled initializer, which the type caps.
+				if proofRandom.percentChance(15) {
+					var vault = instantiable("ProofVault", access: .package, initializerAccess: .public)
+					let key = valueType("ProofKey", access: .package, isInstantiable: false, declaredIn: &vault)
+					let isRequired = proofRandom.percentChance(10)
+					vault.properties.append(receive(key, isRequired: isRequired))
+					hold(key, percent: isRequired ? 100 : 70)
+					addChild(vault, label: "proofVault")
+				}
+				// A required parameter narrower than the seam's type.
+				if proofRandom.percentChance(12), seamAccess > .internal {
+					let pinAccess = narrower(than: seamAccess)
+					var lock = instantiable("ProofLock", initializerAccess: pinAccess)
+					let pin = valueType("ProofPin", access: pinAccess, isInstantiable: false, declaredIn: &lock)
+					lock.properties.append(receive(pin, isRequired: true))
+					hold(pin, percent: 100)
+					addChild(lock, label: "proofLock")
+				}
+				// The seam's own only-if-available receive, half the time of a type narrower than the seam.
+				if proofRandom.percentChance(20) {
+					let ownAccess = seamAccess > .internal && proofRandom.percentChance(50) ? narrower(than: seamAccess) : seamAccess
+					let own = valueType("ProofOwn", access: ownAccess, isInstantiable: false, declaredIn: &seam)
+					seam.properties.insert(receive(own, isRequired: false), at: 0)
+					hold(own, percent: 70)
+				}
+				// A plain public model type only package initializers mention, which the caller holds or does not.
+				if proofRandom.percentChance(20) {
+					var panel = instantiable("ProofPanel", initializerAccess: .package)
+					let model = valueType("ProofModel", access: .public, isInstantiable: false, declaredIn: &panel)
+					panel.properties.append(receive(model, isRequired: false))
+					hold(model, percent: 75)
+					addChild(panel, label: "proofPanel")
+				}
+				// An alias of a plain type no declaration proves, required or only if available; now and then the type is a
+				// narrower `@Instantiable` one, and now and then a package initializer also receives the type itself.
+				if proofRandom.percentChance(12) {
+					var consumer = instantiable("ProofConsumer")
+					let authName = name("ProofAuth")
+					consumer.additionalDeclarations.append("public protocol \(authName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+					let sessionIsInstantiable = proofRandom.percentChance(35)
+					let sessionAccess: AccessLevel = sessionIsInstantiable || proofRandom.percentChance(60) ? .package : .public
+					let session = valueType("ProofSession", access: sessionAccess, isInstantiable: sessionIsInstantiable, declaredIn: &consumer, conformingTo: [authName])
+					if sessionAccess == .package, proofRandom.percentChance(30) {
+						// A declaration no tree reaches, which mentions the type at `package`.
+						var ledger = instantiable("ProofLedger", initializerAccess: .package)
+						ledger.properties.append(receive(session, isRequired: true))
+						ledger.module = seamModule
+						treeDeclarations.append(ledger)
+					}
+					let sessionType = session.type
+					consumer.properties.append(proofRandom.percentChance(50)
+						? PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"\(session.label)\", ofType: \(sessionType).self)", label: "proofAuth", type: "any \(authName)")
+						: PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"\(session.label)\", ofType: \(sessionType).self, onlyIfAvailable: true)", label: "proofAuth", type: "(any \(authName))?"))
+					hold(session, percent: 100)
+					addChild(consumer, label: "proofConsumer")
+				}
+				// An `@Instantiable` type and a plain type declared in an extension of a narrower namespace enum, or now and
+				// then of a public one: SafeDI records no namespace, so it reads either the same way, and a type reached
+				// only through an existential is then proven narrower than every caller in another module reaches,
+				// which still constructs it inline.
+				if proofRandom.percentChance(16) {
+					let namespaceRoll = proofRandom.integer(in: 0...99)
+					let namespaceAccess: AccessLevel = namespaceRoll < 55 ? .package : namespaceRoll < 80 ? .internal : .public
+					let namespace = name("ProofSpace")
+					let isSpelled = proofRandom.percentChance(50)
+					// Unspelled, the members are spelled wider than the namespace; spelled, they are left unspelled.
+					let memberAccess: AccessLevel = isSpelled ? .internal : .public
+					let shelfName = "\(namespace).\(name("ProofShelf"))"
+					let crateName = "\(namespace).\(name("ProofCrate"))"
+					let shelvingName = name("ProofShelving")
+					var shelf = TypeDeclaration(name: name("ProofShelf"), instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances + [shelvingName])
+					shelf.access = memberAccess
+					shelf.enclosingExtension = "\(isSpelled ? namespaceAccess.modifier : "")extension \(namespace)"
+					shelf.enclosingTypeAccess = namespaceAccess
+					register(shelfName, namespaceAccess)
+					register(crateName, namespaceAccess)
+					register(namespace, namespaceAccess)
+					shelf.properties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "proofCrate", type: crateName + "?"))
+					let crateDeclaration = plainType(name("ProofCrate"), access: memberAccess).split(separator: "\n").map { "\t" + $0 }.joined(separator: "\n")
+					shelf.additionalDeclarations += [
+						"\(namespaceAccess.modifier)enum \(namespace) {}",
+						"\(isSpelled ? namespaceAccess.modifier : "")extension \(namespace) {\n\(crateDeclaration)\n}",
+						"public protocol \(shelvingName)\(helperTypesAreSendable ? ": Sendable" : "") {}",
+					]
+					hold(ProofValue(label: "proofCrate", type: crateName, access: namespaceAccess, isInstantiable: false), percent: 70)
+					shelf.module = seamModule
+					treeDeclarations.append(shelf)
+					if proofRandom.percentChance(50) {
+						seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "proofShelf", type: shelfName))
+					} else {
+						// Only through an existential, which no initializer names the namespace's type in.
+						let erasedName = name("AnyProofShelf")
+						seam.additionalDeclarations.append("public final class \(erasedName)\(helperTypesAreSendable ? ": Sendable" : "") {\n\tpublic init(_ shelf: any \(shelvingName)) {}\n}")
+						seam.properties.append(PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(shelfName)\", erasedToConcreteExistential: true)", label: "proofShelf", type: erasedName))
+					}
+				}
+				// An `@Instantiable` extension of a narrower type, whose public `instantiate(…)` receives a package type,
+				// reached through an existential.
+				if proofRandom.percentChance(10) {
+					let rackAccess: AccessLevel = proofRandom.percentChance(50) ? .internal : .package
+					let rackName = name("ProofRack")
+					let rackingName = name("ProofRacking")
+					let erasedName = name("AnyProofRack")
+					register(rackName, rackAccess)
+					var bolt = instantiable("ProofBolt", access: .package)
+					bolt.module = seamModule
+					let boltValue = ProofValue(label: "proofBolt", type: bolt.name, access: .package, isInstantiable: true)
+					treeDeclarations.append(bolt)
+					hold(boltValue, percent: 100)
+					// Now and then with a hand-written public mock beside `instantiate(…)`, whose argument is the dependency.
+					let mock = proofRandom.percentChance(50) ? "\n\n\tpublic static func mock(proofBolt: \(bolt.name)) -> \(rackName) {\n\t\t\(rackName)()\n\t}" : ""
+					seam.additionalDeclarations += [
+						"public protocol \(rackingName)\(helperTypesAreSendable ? ": Sendable" : "") {}",
+						"\(rackAccess.modifier)final class \(rackName): \(rackingName) {\n\tinit() {}\n}",
+						"@Instantiable\nextension \(rackName): Instantiable {\n\tpublic static func instantiate(proofBolt: \(bolt.name)) -> \(rackName) {\n\t\t\(rackName)()\n\t}\(mock)\n}",
+						"public final class \(erasedName)\(helperTypesAreSendable ? ": Sendable" : "") {\n\tpublic init(_ rack: any \(rackingName)) {}\n}",
+					]
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated(fulfilledByType: \"\(rackName)\", erasedToConcreteExistential: true)", label: "proofRack", type: erasedName))
+				}
+				// An `@Instantiable` type declared in an extension, spelling no access level, of a type the graph records:
+				// the seam itself, or a package `@Instantiable` type narrower than the seam.
+				if proofRandom.percentChance(14) {
+					let extendsSeam = proofRandom.percentChance(50)
+					var extendedName = seam.name
+					var extendedAccess = seamAccess
+					if !extendsSeam {
+						var settings = instantiable("ProofSettings", access: .package)
+						settings.module = seamModule
+						treeDeclarations.append(settings)
+						extendedName = settings.name
+						extendedAccess = .package
+					}
+					var helper = TypeDeclaration(name: name("ProofHelper"), instantiableArguments: [], properties: [], declaresHelperTypes: false, additionalConformances: conformances)
+					helper.enclosingExtension = "extension \(extendedName)"
+					helper.enclosingTypeAccess = extendedAccess
+					let helperName = "\(extendedName).\(helper.name)"
+					register(helperName, extendedAccess)
+					var toneHost = helper
+					let tone = valueType("ProofTone", access: .public, isInstantiable: false, declaredIn: &toneHost)
+					helper.additionalDeclarations = toneHost.additionalDeclarations
+					let isRequired = proofRandom.percentChance(50)
+					helper.properties.append(receive(tone, isRequired: isRequired))
+					hold(tone, percent: isRequired ? 100 : 75)
+					helper.module = seamModule
+					treeDeclarations.append(helper)
+					seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "proofHelper", type: helperName))
+				}
+				// A mock whose argument is the only mention wider than an internal receiver's: a public mock beside the
+				// `instantiate(…)` of an extension of a package plain type, which caps it, now and then raised to `package`
+				// by an initializer no tree reaches.
+				if proofRandom.percentChance(10) {
+					let shedName = name("ProofShed")
+					register(shedName, .package)
+					var beam = instantiable("ProofBeam", initializerAccess: .internal)
+					let plank = valueType("ProofPlank", access: .package, isInstantiable: false, declaredIn: &beam)
+					beam.properties.append(receive(plank, isRequired: false))
+					beam.additionalDeclarations += [
+						"package final class \(shedName)\(helperTypesAreSendable ? ": Sendable" : "") {\n\tinit() {}\n}",
+						"@Instantiable\nextension \(shedName): Instantiable {\n\tstatic func instantiate(proofPlank: \(plank.type)) -> \(shedName) {\n\t\t\(shedName)()\n\t}\n\n\tpublic static func mock(proofPlank: \(plank.type)) -> \(shedName) {\n\t\t\(shedName)()\n\t}\n}",
+					]
+					if proofRandom.percentChance(50) {
+						var yard = instantiable("ProofYard", initializerAccess: .package)
+						yard.properties.append(PropertyDeclaration(attribute: "@Received", label: "proofShed", type: shedName))
+						yard.module = seamModule
+						treeDeclarations.append(yard)
+					}
+					hold(plank, percent: 75)
+					addChild(beam, label: "proofBeam")
+				}
+				// A `Swift.`-qualified parameter type, which a package initializer receives only if available.
+				if proofRandom.percentChance(6) {
+					var meter = instantiable("ProofMeter", initializerAccess: .package)
+					let count = ProofValue(label: "proofCount", type: proofRandom.percentChance(50) ? "Swift.Int" : "Swift.String", access: .public, isInstantiable: false)
+					meter.properties.append(receive(count, isRequired: false))
+					hold(count, percent: 75)
+					addChild(meter, label: "proofMeter")
+				}
+				// A tree with no facet still has a child, so that the seam has a signature.
+				if seam.properties.allSatisfy({ !$0.attribute.hasPrefix("@Instantiated") }) {
+					addChild(instantiable("ProofCog"), label: "proofCog")
+				}
+			}
+			seam.module = seamModule
+
+			// The host, which the first root builds, holds the values and instantiates the seam: through an instantiator
+			// when it forwards a plain value, else as a constant. An `@Instantiable` value is now and then declared after
+			// the seam.
+			func host(_ suffix: String, holding values: [ProofValue], module: GraphFuzzerModule?) -> TypeDeclaration {
+				var host = instantiable(suffix, access: ([seamAccess] + values.map(\.access)).min() ?? seamAccess)
+				host.module = module
+				var valuesAfterSeam = [PropertyDeclaration]()
+				for value in values {
+					if value.isInstantiable {
+						let property = PropertyDeclaration(attribute: "@Instantiated", label: value.label, type: value.type)
+						if proofRandom.percentChance(30) {
+							valuesAfterSeam.append(property)
+						} else {
+							host.properties.append(property)
+						}
+					} else {
+						host.properties.append(PropertyDeclaration(attribute: "@Forwarded", label: value.label, type: value.type))
+					}
+				}
+				host.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "proofSeam", type: seam.name))
+				host.properties += valuesAfterSeam
+				return host
+			}
+			func hostProperty(of host: TypeDeclaration) -> PropertyDeclaration {
+				host.properties.contains { $0.attribute == "@Forwarded" }
+					? PropertyDeclaration(attribute: "@Instantiated", label: "proofHostBuilder", type: "\(instantiator)<\(host.name)>")
+					: PropertyDeclaration(attribute: "@Instantiated", label: "proofHost", type: host.name)
+			}
+			// A split graph's caller in the same package, or its seam's module, now and then run over without its
+			// package's name, so the caller cannot tell whether the two share a package and assumes they do (with the
+			// seam's module unnamed, there is then no caller in another package, for which that assumption is wrong).
+			if isSplit {
+				let packageNameRoll = proofRandom.integer(in: 0...5)
+				if packageNameRoll == 0 {
+					modulesOmittingPackageName.insert(.samePackageCaller)
+				} else if packageNameRoll == 1 {
+					modulesOmittingPackageName.insert(.seamModule)
+				}
+			}
+			let sameModuleHost = host("ProofHost", holding: heldValues, module: isSplit ? .samePackageCaller : nil)
+			declarations[0].properties.append(hostProperty(of: sameModuleHost))
+			var callerDeclarations = [sameModuleHost]
+			if isSplit, seamAccess == .public, !modulesOmittingPackageName.contains(.seamModule) {
+				// A caller in another package, which can name only the public values.
+				let otherHost = host("ProofOtherHost", holding: heldValues.filter { $0.access == .public }, module: .otherPackageCaller)
+				var otherRoot = instantiable("ProofOtherRoot", properties: [hostProperty(of: otherHost)])
+				otherRoot.instantiableArguments = ["isRoot: true"]
+				otherRoot.module = .otherPackageCaller
+				callerDeclarations += [otherRoot, otherHost]
+			}
+			return declarations + [seam] + treeDeclarations + callerDeclarations
+		}
+
+		private static let proofRandomSeedMask: UInt64 = 0x70726F6F665F6163
+
 		// MARK: Extension
 
 		/// An `@Instantiable` extension of a type that is not itself `@Instantiable`, whose `instantiate(…)` has
@@ -2781,14 +3434,19 @@ enum GraphFuzzerGenerator {
 				"Instantiable"
 			}
 			let conformances = ([baseConformances] + declaration.additionalConformances).joined(separator: ", ")
-			var lines = [instantiableAttribute, "public final class \(declaration.name): \(conformances) {"]
+			var lines = [instantiableAttribute, "\(declaration.access.modifier)final class \(declaration.name): \(conformances) {"]
 			// A function-typed parameter is stored, so it escapes.
 			let parameters = (declaration.properties.map { "\($0.label): \(GraphFuzzerSpelling.isFunctionType($0.type) ? "@escaping " : "")\($0.type)" } + declaration.defaultValuedParameters.map(\.declaration)).joined(separator: ", ")
+			// The initializer is no wider, once its type caps it, than the narrowest type it names, so that the fixture
+			// compiles; a spelled access its type already caps is kept.
+			let spelledInitializerAccess = declaration.initializerAccess ?? declaration.access
+			let narrowestNamedAccess = (declaration.properties.map(\.type) + declaration.defaultValuedParameters.map(\.type)).map(narrowestProofTypeAccess(in:)).min() ?? .public
+			let initializerAccess = min(spelledInitializerAccess, declaration.effectiveAccess) <= narrowestNamedAccess ? spelledInitializerAccess : narrowestNamedAccess
 			let storedParameters = storesEveryParameter ? declaration.defaultValuedParameters : []
 			if declaration.properties.isEmpty, storedParameters.isEmpty {
-				lines.append("\tpublic init(\(parameters)) {}")
+				lines.append("\t\(initializerAccess.modifier)init(\(parameters)) {}")
 			} else {
-				lines.append("\tpublic init(\(parameters)) {")
+				lines.append("\t\(initializerAccess.modifier)init(\(parameters)) {")
 				lines += declaration.properties.map { "\t\tself.\($0.label) = \($0.label)" }
 				lines += storedParameters.map { "\t\tself.\($0.name) = \($0.name)" }
 				lines.append("\t}")
@@ -2797,6 +3455,9 @@ enum GraphFuzzerGenerator {
 				lines += storedParameters.map { "\tlet \($0.storedDeclaration)" }
 			}
 			lines.append("}")
+			if let enclosingExtension = declaration.enclosingExtension {
+				lines = ["\(enclosingExtension) {"] + lines.map { $0.isEmpty ? $0 : "\t" + $0 } + ["}"]
+			}
 			if declaration.declaresHelperTypes {
 				let erasedName = declaration.name.replacingOccurrences(of: "\(prefix)T", with: "\(prefix)AnyT")
 				lines += [
@@ -2820,7 +3481,26 @@ enum GraphFuzzerGenerator {
 			for additionalDeclaration in declaration.additionalDeclarations {
 				lines += ["", additionalDeclaration]
 			}
-			return lines.joined(separator: "\n") + "\n"
+			return (declaration.module.map { $0.fileHeader(omitsPackageName: modulesOmittingPackageName.contains($0)) } ?? "") + lines.joined(separator: "\n") + "\n"
+		}
+
+		/// The narrowest access of the types `addingAccessProofShapes` declares narrower than `public` that `type` names,
+		/// or `public` when it names none.
+		private func narrowestProofTypeAccess(in type: String) -> AccessLevel {
+			guard !proofTypeAccess.isEmpty else { return .public }
+			var narrowest = AccessLevel.public
+			var name = ""
+			for character in type + " " {
+				if character.isLetter || character.isNumber || character == "_" || character == "." {
+					name.append(character)
+				} else {
+					if let access = proofTypeAccess[name] {
+						narrowest = min(narrowest, access)
+					}
+					name = ""
+				}
+			}
+			return narrowest
 		}
 	}
 }
@@ -3388,6 +4068,154 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				}
 			}
 		}
+		return features.union(accessProofDrawFeatures(of: fixture))
+	}
+
+	/// The shapes `addingAccessProofShapes` draws, read from the access levels the fixture spells on the `Proof` types'
+	/// declarations and initializers, and from their properties.
+	private static func accessProofDrawFeatures(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerSeamDrawFeature> {
+		let prefix = fixture.typeNamePrefix
+		/// Each class's spelled access and its initializer's, by name, and each extension line, from every file.
+		var classAccess = [String: String]()
+		var initializerAccess = [String: String]()
+		var extensionLines = [String]()
+		var currentClass: String?
+		for content in fixture.swiftFileContent {
+			for rawLine in content.split(separator: "\n") {
+				let line = rawLine.trimmingCharacters(in: .whitespaces)
+				let access = ["public", "package"].first { line.hasPrefix($0 + " ") } ?? "internal"
+				let declaration = access == "internal" ? Substring(line) : line.dropFirst(access.count + 1)
+				if declaration.hasPrefix("final class ") {
+					let name = String(declaration.dropFirst("final class ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" })
+					classAccess[name] = access
+					currentClass = name
+				} else if declaration.hasPrefix("init("), let currentClass, initializerAccess[currentClass] == nil {
+					initializerAccess[currentClass] = access
+				} else if declaration.hasPrefix("extension ") {
+					extensionLines.append(line)
+				}
+			}
+		}
+		func properties(of typeSuffix: String) -> [(attribute: String, label: String, type: String)] {
+			fixture.swiftFileContent.flatMap { content -> [(attribute: String, label: String, type: String)] in
+				var isInType = false
+				var properties = [(attribute: String, label: String, type: String)]()
+				for line in GraphFuzzerSourceLine.lines(of: content) {
+					switch line {
+					case let .typeDeclaration(name):
+						isInType = name == prefix + typeSuffix
+					case let .property(attribute, label, type) where isInType:
+						properties.append((attribute, label, type))
+					case .instantiableAttribute, .instantiateMethod, .property, .other:
+						break
+					}
+				}
+				return properties
+			}
+		}
+		let order = ["internal", "package", "public"]
+		func isNarrower(_ access: String?, than otherAccess: String?) -> Bool {
+			guard let access, let otherAccess, let index = order.firstIndex(of: access), let otherIndex = order.firstIndex(of: otherAccess) else { return false }
+			return index < otherIndex
+		}
+		var features = Set<GraphFuzzerSeamDrawFeature>()
+		let seamName = prefix + "ProofSeam"
+		guard classAccess[seamName] != nil else { return features }
+		if classAccess[seamName] != "public" {
+			features.insert(.seamTypeNarrowerThanPublic)
+		}
+		let seamProperties = properties(of: "ProofSeam")
+		let seamInitializerIsNarrower = isNarrower(initializerAccess[seamName], than: classAccess[seamName])
+		if seamInitializerIsNarrower, classAccess[prefix + "ProofCog"] != nil, seamProperties.allSatisfy({ $0.label == "proofCog" }) {
+			features.insert(.ownInitializerNarrowerWithNoPassThrough)
+		}
+		if seamInitializerIsNarrower, classAccess[prefix + "ProofVane"] != nil {
+			features.insert(.ownInitializerNarrowerWithOnlyOptionalNarrowerPassThroughs)
+		}
+		if seamInitializerIsNarrower, classAccess[prefix + "ProofDial"] != nil {
+			features.insert(.ownInitializerNarrowerThanTwoParameterLevels)
+		}
+		if isNarrower(initializerAccess[prefix + "ProofBadge"], than: classAccess[prefix + "ProofTheme"]) {
+			features.insert(.receiverNarrowerThanType)
+		}
+		if isNarrower(classAccess[prefix + "ProofVault"], than: initializerAccess[prefix + "ProofVault"]) {
+			features.insert(.receiverTypeNarrowerThanItsInitializer)
+		}
+		if properties(of: "ProofLock").contains(where: { $0.attribute == "@Received" }), isNarrower(classAccess[prefix + "ProofPin"], than: classAccess[seamName]) {
+			features.insert(.requiredParameterNarrowerThanSeamType)
+		}
+		if seamProperties.contains(where: { $0.label == "proofOwn" && $0.attribute == "@Received(onlyIfAvailable: true)" }) {
+			features.insert(.ownOnlyIfAvailableParameter)
+			if isNarrower(classAccess[prefix + "ProofOwn"], than: classAccess[seamName]) {
+				features.insert(.ownOnlyIfAvailableParameterNarrowerThanSeam)
+			}
+		}
+		let hostProperties = properties(of: "ProofHost") + properties(of: "ProofOtherHost")
+		if classAccess[prefix + "ProofPanel"] != nil {
+			features.insert(hostProperties.contains { $0.label == "proofModel" } ? .providedValueHeldByCaller : .providedValueHeldByNoCaller)
+		}
+		if let alias = properties(of: "ProofConsumer").first(where: { $0.label == "proofAuth" }) {
+			if fixture.swiftFileContent.contains(where: { $0.contains("@Instantiable\npackage final class \(prefix)ProofSession:") }) {
+				features.insert(.aliasOfNarrowerInstantiableType)
+			} else {
+				features.insert(alias.attribute.contains("onlyIfAvailable: true") ? .unprovenAliasTypeOnlyIfAvailable : .unprovenAliasType)
+			}
+		}
+		if properties(of: "ProofLedger").contains(where: { $0.label == "proofSession" }) {
+			features.insert(.aliasFulfillingTypeAlsoReceived)
+		}
+		let namespaceExtensions = extensionLines.filter { $0.contains(prefix + "ProofSpace ") || $0.contains(prefix + "ProofSpace{") }
+		if namespaceExtensions.contains(where: { $0.hasPrefix("extension ") }) {
+			features.insert(.namespaceExtensionUnspelled)
+		}
+		if namespaceExtensions.contains(where: { !$0.hasPrefix("extension ") }) {
+			features.insert(.namespaceExtensionSpelled)
+		}
+		if seamProperties.contains(where: { $0.label == "proofShelf" && $0.attribute.contains("erasedToConcreteExistential: true") }) {
+			features.insert(.namespaceTypeOnlyThroughExistential)
+		}
+		if fixture.swiftFileContent.contains(where: { $0.contains("public enum \(prefix)ProofSpace {}") }) {
+			features.insert(.publicNamespace)
+		}
+		if extensionLines.contains("extension \(prefix)ProofRack: Instantiable {") {
+			features.insert(.instantiableExtensionOfNarrowerType)
+		}
+		if properties(of: "ProofMeter").contains(where: { $0.type.hasPrefix("Swift.") }) {
+			features.insert(.qualifiedAllowlistMention)
+		}
+		if fixture.swiftFileContent.contains(where: { $0.contains("public static func mock(proofBolt: ") }) {
+			features.insert(.mockInInstantiableExtension)
+		}
+		if extensionLines.contains("extension \(prefix)ProofShed: Instantiable {"), fixture.swiftFileContent.contains(where: { $0.contains("public static func mock(proofPlank: ") }) {
+			features.insert(.mockCappedByItsExtension)
+		}
+		if properties(of: "ProofYard").contains(where: { $0.label == "proofShed" }) {
+			features.insert(.mockCapRaisedByUnreachedMention)
+		}
+		if extensionLines.contains("extension \(seamName) {") {
+			features.insert(.typeInExtensionOfSeam)
+		}
+		if extensionLines.contains("extension \(prefix)ProofSettings {"), classAccess[prefix + "ProofSettings"] == "package" {
+			features.insert(.typeInExtensionOfNarrowerRecordedType)
+		}
+		for hostSuffix in ["ProofHost", "ProofOtherHost"] {
+			let hostProperties = properties(of: hostSuffix)
+			if let seamIndex = hostProperties.firstIndex(where: { $0.label == "proofSeam" }), hostProperties[(seamIndex + 1)...].contains(where: { $0.attribute == "@Instantiated" }) {
+				features.insert(.valueDeclaredAfterSeam)
+			}
+		}
+		if fixture.modules != nil {
+			features.insert(.moduleSplit)
+		}
+		if classAccess[prefix + "ProofOtherRoot"] != nil {
+			features.insert(.otherPackageCaller)
+		}
+		if fixture.modulesOmittingPackageName.contains(.samePackageCaller) {
+			features.insert(.samePackageCallerRunWithoutPackageName)
+		}
+		if fixture.modulesOmittingPackageName.contains(.seamModule) {
+			features.insert(.seamModuleRunWithoutPackageName)
+		}
 		return features
 	}
 
@@ -3431,8 +4259,14 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 			}
 		}
 		var features = Set<GraphFuzzerSeamOutputFeature>()
-		for contents in generatedFiles.values where contents.contains("public enum __safeDI_") {
-			guard let (seamTypeName, parameters) = GraphFuzzerOracle.seamInitializerParameters(inGeneratedFile: contents).first else { continue }
+		// The widest tier of each seam: the first of its initializers a file declares.
+		var widestTiers = [(seamTypeName: String, parameters: [String])]()
+		for contents in generatedFiles.values where contents.contains("enum __safeDI_") {
+			for initializer in GraphFuzzerOracle.seamInitializerParameters(inGeneratedFile: contents) where !widestTiers.contains(where: { $0.seamTypeName == initializer.seamTypeName }) {
+				widestTiers.append(initializer)
+			}
+		}
+		for (seamTypeName, parameters) in widestTiers {
 			for parameter in parameters {
 				let label = parameter.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces)
 				if parameter.contains("= nil") {
@@ -3571,6 +4405,15 @@ enum GraphFuzzerSourceLine: Equatable {
 		}
 	}
 
+	/// `line` without the access modifier it begins with, or `line` itself when it begins with none. `nil` never: the
+	/// optional lets a condition bind it.
+	private static func droppingAccessModifier(from line: String) -> Substring? {
+		for modifier in ["public ", "package ", "internal "] where line.hasPrefix(modifier) {
+			return line.dropFirst(modifier.count)
+		}
+		return Substring(line)
+	}
+
 	static func lines(of content: String) -> [GraphFuzzerSourceLine] {
 		var lines = [GraphFuzzerSourceLine]()
 		var previousLineWasInstantiableAttribute = false
@@ -3579,14 +4422,15 @@ enum GraphFuzzerSourceLine: Equatable {
 			let parsedLine: GraphFuzzerSourceLine
 			if line.hasPrefix("@Instantiable") {
 				parsedLine = .instantiableAttribute(arguments: String(line.dropFirst("@Instantiable".count)))
-			} else if previousLineWasInstantiableAttribute, line.hasPrefix("public final class ") {
-				let name = line.dropFirst("public final class ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
+			} else if previousLineWasInstantiableAttribute, let declaration = droppingAccessModifier(from: line), declaration.hasPrefix("final class ") {
+				let name = declaration.dropFirst("final class ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
 				parsedLine = .typeDeclaration(name: String(name))
-			} else if previousLineWasInstantiableAttribute, line.hasPrefix("extension ") {
-				let name = line.dropFirst("extension ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" }
-				parsedLine = .typeDeclaration(name: String(name))
-			} else if line.hasPrefix("public static func instantiate("), let parametersEnd = line.range(of: ") -> ", options: .backwards) {
-				parsedLine = .instantiateMethod(parameters: String(line[line.index(line.startIndex, offsetBy: "public static func instantiate(".count)..<parametersEnd.lowerBound]))
+			} else if previousLineWasInstantiableAttribute, let declaration = droppingAccessModifier(from: line), declaration.hasPrefix("extension ") {
+				// The extended type's last component: a nested extended type's file is named after it.
+				let extendedType = declaration.dropFirst("extension ".count).prefix { $0.isLetter || $0.isNumber || $0 == "_" || $0 == "." }
+				parsedLine = .typeDeclaration(name: String(extendedType.split(separator: ".").last ?? extendedType))
+			} else if let declaration = droppingAccessModifier(from: line), declaration.hasPrefix("static func instantiate("), let parametersEnd = declaration.range(of: ") -> ", options: .backwards) {
+				parsedLine = .instantiateMethod(parameters: String(declaration[declaration.index(declaration.startIndex, offsetBy: "static func instantiate(".count)..<parametersEnd.lowerBound]))
 			} else if line.hasPrefix("@Instantiated") || line.hasPrefix("@Received") || line.hasPrefix("@Forwarded"),
 			          let letRange = line.range(of: " let ", options: .backwards),
 			          let colonIndex = line[letRange.upperBound...].firstIndex(of: ":")
@@ -3620,8 +4464,8 @@ enum GraphFuzzerToolOutcome: Equatable {
 
 	/// The first aspect in which two outcomes differ, or `nil` when they agree: their verdict, their diagnostics
 	/// or warnings in any order, the names of their generated files, or one file's code, byte for byte. Paths to
-	/// fixture files are compared by file name, and the suggestions a diagnostic lists ("Did you mean one of …") in
-	/// any order: the order inside a message is presentation and changes nothing a user does.
+	/// fixture files are compared by file name, and the suggestions a diagnostic lists ("Did you mean one of …"), and
+	/// the declarations it lists as proving a type's access, in any order: the order inside a message is presentation and changes nothing a user does.
 	static func difference(between outcome: GraphFuzzerToolOutcome, and otherOutcome: GraphFuzzerToolOutcome) -> String? {
 		// A seam's guard enum is named after a hash of its signature, which names its parameters' types, so a
 		// renaming changes it as it changes the types: a hash restored textually cannot match, and is reduced away.
@@ -3642,7 +4486,7 @@ enum GraphFuzzerToolOutcome: Equatable {
 				guard code != otherCode else { continue }
 				let kind = if fileName.hasSuffix("+SafeDIMock.swift") {
 					"its generated mock code"
-				} else if fileName == "SafeDIMockConfiguration.swift" {
+				} else if fileName.hasSuffix("SafeDIMockConfiguration.swift") {
 					"its generated mock configuration code"
 				} else {
 					"its generated dependency tree code"
@@ -3670,12 +4514,13 @@ enum GraphFuzzerToolOutcome: Equatable {
 	}
 
 	/// `diagnostic` with the items of each list of suggestions it makes – "Did you mean one of `a: A`, `b: B`?",
-	/// which SafeDI sorts by `Property.<` – sorted as text, so two diagnostics that suggest the same properties in
-	/// another order compare equal, and any other difference, including a suggestion added, removed or changed,
-	/// still tells them apart.
+	/// which SafeDI sorts by `Property.<` – and of each parenthesized list of the declarations that prove a seam
+	/// parameter's access – "(`Host.init(key:seam:)`, `Vault.init(key:)`)", which SafeDI lists in source order, so a
+	/// file-name reversal reorders them – sorted as text, so two diagnostics that list the same items in another order
+	/// compare equal, and any other difference, including an item added, removed or changed, still tells them apart.
 	private static func sortingSuggestions(in diagnostic: String) -> String {
-		// Each suggestion is a property's source between backticks, and no fuzzer label or type contains one.
-		let expression = try! NSRegularExpression(pattern: "(?<=Did you mean one of )`[^`]*`(?:, `[^`]*`)+(?=\\?)")
+		// Each item is a property's or a declaration's source between backticks, and no fuzzer label or type contains one.
+		let expression = try! NSRegularExpression(pattern: "(?<=Did you mean one of )`[^`]*`(?:, `[^`]*`)+(?=\\?)|(?<=\\()`[^`]*`(?:, `[^`]*`)+(?=\\))")
 		let source = diagnostic as NSString
 		var result = ""
 		var location = 0
@@ -3764,6 +4609,15 @@ struct GraphFuzzerFailure: Equatable {
 		/// The comparator could not describe the seam build or the inline build: a path or its probes did not compile
 		/// or run.
 		case valueComparatorCouldNotDescribeGraph = "the differential value comparator could not describe the graph"
+		/// A seam's generated tier is wider than a type one of its parameters names, by the access the generator gave
+		/// the type: a tier SafeDI proved from the wrong declaration, which the seam's own module may not compile.
+		case seamTierWiderThanParameterType = "a seam's generated tier is wider than a type one of its parameters names"
+		/// A caller in another module calls a tier that omits a parameter some receiver of which the caller's module's
+		/// inline build passes a value, and the tool reports no error: the seam passes `nil` where inline passes a value.
+		case seamTierOmitsValueInlinePasses = "a caller's tier omits a parameter its inline build passes a receiver a value for, with no error"
+		/// The tool reports that a caller holds a value its tier omits, where the caller's module's inline build passes
+		/// every receiver of that parameter `nil`.
+		case seamTierOmitsProvidedValueReportedWhereInlinePassesNil = "the tool reports a value a caller's tier omits where its inline build passes every receiver nil"
 	}
 
 	let seed: UInt64
@@ -3853,6 +4707,9 @@ struct GraphFuzzerKnownIssue: Equatable {
 		/// The seam build constructs other values than the inline build, with a difference whose description
 		/// contains this text.
 		case seamBuildsOtherValuesThanInline(containing: String)
+		/// The value comparator could not describe the graph, with details containing this text, such as the error of
+		/// an inline build that does not compile.
+		case valueComparatorCouldNotDescribeGraph(containing: String)
 	}
 
 	let reason: String
@@ -3878,6 +4735,8 @@ struct GraphFuzzerKnownIssue: Equatable {
 				failure.kind == .seamRejectsGraphInlineAccepts && failure.details.contains(text)
 			case let .seamPassesNilWhereInlinePassesValue(text):
 				failure.kind == .seamPassesNilWhereInlinePassesValue && failure.details.contains(text)
+			case let .valueComparatorCouldNotDescribeGraph(text):
+				failure.kind == .valueComparatorCouldNotDescribeGraph && failure.details.contains(text)
 			case .seamBuildsOtherValuesThanInline:
 				// Every difference must match one of the shape's value signatures: a documented divergence beside an
 				// undocumented difference is a new failure, not a known one.
@@ -4029,8 +4888,11 @@ struct GraphFuzzerToolRuns {
 	/// validation, which the seam world should not add, or `nil`. A seam's own error is what the seam rules reject
 	/// that inline accepts; any other error is a shape the seam world sees differently than inline, a defect.
 	var differentialFailure: GraphFuzzerFailure? {
+		// In a graph split across modules, a caller's error that it holds a value its tier omits is a seam's own, which
+		// `omittedValueFailure` judges; in a graph in one module, whose seams are called at their narrowest tier, it is
+		// never one.
 		guard case let .rejected(diagnostics) = firstOutcome, case .accepted = inlineOutcome,
-		      !GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: diagnostics, seamTypeNames: fixture.seamTypeNames)
+		      !GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: diagnostics, seamTypeNames: fixture.seamTypeNames, excusingOmittedValues: fixture.modules != nil)
 		else { return nil }
 		return GraphFuzzerFailure(
 			seed: fixture.seed,
@@ -4095,6 +4957,85 @@ struct GraphFuzzerToolRuns {
 			kind: .seamReadsUncreatedAliasBinding,
 			details: "\(reads.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)",
 		)
+	}
+
+	/// The failure of a graph the tool accepts whose generated seam tier is wider than a type one of its parameters
+	/// names, by the access the generator gave each type it drew (`GraphFuzzerGenerator.narrowerTypeAccess`), or `nil`.
+	var tierAccessFailure: GraphFuzzerFailure? {
+		guard case let .accepted(seamFiles, _) = firstOutcome else { return nil }
+		let findings = GraphFuzzerOracle.tiersWiderThanParameterTypes(
+			in: seamFiles,
+			typeAccess: GraphFuzzerGenerator.narrowerTypeAccess(forSeed: fixture.seed, features: GraphFuzzerGeneratorFeature.features(drawnIn: fixture)),
+		)
+		guard !findings.isEmpty else { return nil }
+		return GraphFuzzerFailure(seed: fixture.seed, kind: .seamTierWiderThanParameterType, details: "\(findings.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)")
+	}
+
+	/// The failure of a graph split across modules whose `ProofSeam` call in a caller's module omits a parameter
+	/// against what the caller's inline build does, or `nil`. Inline, each type of the seam's tree is built in the
+	/// caller's module, so the inline build shows which receivers the caller hands a value. The tool must report an
+	/// error exactly where a tier a caller calls omits a parameter some receiver of which the inline build passes a
+	/// value – a binding, rather than `nil` – so an accepted graph whose call omits such a parameter fails, as does an
+	/// error that a caller holds a value its tier omits where the inline build passes every receiver of it `nil`.
+	/// Judged only where the tool accepts the graph inline; an alias's receiver is not followed.
+	var omittedValueFailure: GraphFuzzerFailure? {
+		guard fixture.modules != nil, case let .accepted(inlineFiles, _) = inlineOutcome else { return nil }
+		let seamName = fixture.typeNamePrefix + "ProofSeam"
+		var receiversByLabel = [String: Set<String>]()
+		for content in fixture.swiftFileContent {
+			var currentType: String?
+			for line in GraphFuzzerSourceLine.lines(of: content) {
+				switch line {
+				case let .typeDeclaration(name):
+					currentType = name
+				case let .property(attribute, label, _):
+					if let currentType, attribute == "@Received" || attribute == "@Received(onlyIfAvailable: true)" {
+						receiversByLabel[label, default: []].insert(currentType)
+					}
+				case .instantiableAttribute, .instantiateMethod, .other:
+					break
+				}
+			}
+		}
+		/// Whether the inline build of `module` passes some receiver of `label` a value.
+		func inlinePassesValue(for label: String, in module: GraphFuzzerModule) -> Bool {
+			inlineFiles.contains { fileName, contents in
+				fileName.hasPrefix(module.name + "/") && (receiversByLabel[label] ?? []).contains { receiver in
+					GraphFuzzerOracle.initializerCalls(of: receiver, in: contents).contains { call in
+						call.contains { $0.label == label && $0.value != "nil" }
+					}
+				}
+			}
+		}
+		var findings = [String]()
+		let kind: GraphFuzzerFailure.Kind
+		switch firstOutcome {
+		case let .accepted(seamFiles, _):
+			kind = .seamTierOmitsValueInlinePasses
+			let parameterLabels = Set(seamFiles.values.flatMap(GraphFuzzerOracle.seamInitializers(inGeneratedFile:)).filter { $0.seamTypeName == seamName }.flatMap { tier in
+				tier.parameters.map { $0.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces) }
+			})
+			for module in [GraphFuzzerModule.samePackageCaller, .otherPackageCaller] {
+				for (fileName, contents) in seamFiles.sorted(by: { $0.key < $1.key }) where fileName.hasPrefix(module.name + "/") && !fileName.hasSuffix("+SafeDISeamCaller.swift") {
+					for call in GraphFuzzerOracle.initializerCalls(of: seamName, in: contents) {
+						for label in parameterLabels.subtracting(call.map(\.label)).sorted() where inlinePassesValue(for: label, in: module) {
+							findings.append("\(fileName) calls `\(seamName)` without `\(label)`, which the inline build of \(module.name) passes a receiver a value for, and the tool reports no error.")
+						}
+					}
+				}
+			}
+		case let .rejected(diagnostics):
+			kind = .seamTierOmitsProvidedValueReportedWhereInlinePassesNil
+			for error in diagnostics.split(separator: "\n") where error.contains(": error: ") {
+				guard let label = GraphFuzzerOracle.omittedValueLabel(of: error),
+				      let module = [GraphFuzzerModule.samePackageCaller, .otherPackageCaller].first(where: { error.contains("/Sources/\($0.name)/") }),
+				      !inlinePassesValue(for: label, in: module)
+				else { continue }
+				findings.append("The tool reports that \(module.name) holds `\(label)`, but the inline build of \(module.name) passes every receiver of it `nil`: \(error)")
+			}
+		}
+		guard !findings.isEmpty else { return nil }
+		return GraphFuzzerFailure(seed: fixture.seed, kind: kind, details: "\(findings.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)\nInline:\n\(inlineOutcome?.description ?? "")")
 	}
 
 	/// Whether the value oracle inspected the graph: the tool accepts it with the seam and without it.
@@ -4190,7 +5131,8 @@ struct GraphFuzzerToolRuns {
 		let mockFileSuffix = "+SafeDIMock.swift"
 		var wrapperParameters = [String]()
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName.hasSuffix(mockFileSuffix) {
-			let mockedTypeName = String(fileName.dropLast(mockFileSuffix.count))
+			// A split graph's generated files are keyed by their module's name.
+			let mockedTypeName = String(fileName.dropLast(mockFileSuffix.count).split(separator: "/").last ?? "")
 			let lines = contents.split(separator: "\n", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) }
 			guard let signatureStart = lines.firstIndex(where: { $0.hasSuffix("static func mock(") }) else { continue }
 			for line in lines[(signatureStart + 1)...].prefix(while: { !$0.hasPrefix(")") }) {
@@ -4250,7 +5192,7 @@ enum GraphFuzzerOracle {
 		let valueFailures = try valueFailures(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil })
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
-			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.uncreatedAliasRejectionFailure, runs.nilArgumentFailure, runs.uncreatedAliasReadFailure, compilationFailures[runs.fixture.seed], valueFailures[runs.fixture.seed], runs.wrapperParameterFailure, renamedGraphFailures.first].compactMap(\.self)
+			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.uncreatedAliasRejectionFailure, runs.nilArgumentFailure, runs.uncreatedAliasReadFailure, runs.tierAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], valueFailures[runs.fixture.seed], runs.wrapperParameterFailure, renamedGraphFailures.first].compactMap(\.self)
 			return GraphFuzzerResult(
 				fixture: runs.fixture,
 				outcome: runs.firstOutcome,
@@ -4371,8 +5313,8 @@ enum GraphFuzzerOracle {
 				DifferentialValueDifference(
 					probe: "S358_Root0()",
 					path: ["<5>.instance"],
-					feature: "<5>.instance: <7> S358_SeamShared (built before the probe's value)",
-					knownRight: "<5>.instance: <7> S358_SeamShared",
+					feature: "<5>.instance: <8> S358_SeamShared (built before the probe's value)",
+					knownRight: "<5>.instance: <8> S358_SeamShared",
 				),
 				DifferentialValueDifference(
 					probe: "S358_Root1()",
@@ -4576,12 +5518,107 @@ enum GraphFuzzerOracle {
 	/// Whether every error in `diagnostics`, a seam-world rejection, is one of a seam's own: reported at the seam
 	/// about its generated initializer or a call of it, which no inlined tree has. The inlined validation's errors
 	/// name a property or a type; a seam's name the dependency tree of the seam, or the call of its initializer.
-	static func isSeamOnlyRejection(diagnostics: String, seamTypeNames: [String]) -> Bool {
+	static func isSeamOnlyRejection(diagnostics: String, seamTypeNames: [String], excusingOmittedValues: Bool = false) -> Bool {
 		let markers = seamOnlyErrorMarkers + seamTypeNames.map { "` is hidden in chain: \($0) -> " }
 		let errors = diagnostics.split(separator: "\n").filter { $0.contains(": error: ") }
 		return !errors.isEmpty && errors.allSatisfy { error in
-			markers.contains { error.contains($0) }
+			markers.contains { error.contains($0) } || excusingOmittedValues && isOmittedValueError(error)
 		}
+	}
+
+	/// Whether `error`, a diagnostic line, reports a caller holding a value for a parameter the seam tier it calls
+	/// omits: "`Host` provides `theme: Theme`, but …", or, where the provider's file cannot be read, "`Host` in module
+	/// `Base` provides `theme: Theme`, but …".
+	static func isOmittedValueError(_ error: Substring) -> Bool {
+		guard let message = error.range(of: ": error: ").map({ error[$0.upperBound...] }) else { return false }
+		return message.hasPrefix("`") && message.contains("` provides `") && message.contains("`, but ")
+	}
+
+	/// The label of the parameter an omitted-value error names: `theme` of "`Host` provides `theme: Theme`, but …".
+	static func omittedValueLabel(of error: Substring) -> String? {
+		guard isOmittedValueError(error), let provides = error.range(of: "` provides `") else { return nil }
+		return String(error[provides.upperBound...].prefix { $0 != ":" })
+	}
+
+	/// The access levels SafeDI and Swift spell, narrowest first, as `GraphFuzzerGenerator.AccessLevel` orders them.
+	static func accessLevel(spelled spelling: String) -> GraphFuzzerGenerator.AccessLevel {
+		switch spelling {
+		case "public", "open":
+			.public
+		case "package":
+			.package
+		default:
+			.internal
+		}
+	}
+
+	/// Each generated tier in `generatedFiles` wider than a type one of its parameters names, by `typeAccess` – the
+	/// access of each type narrower than `public`, by the name its fixture spells it with – as a line naming the seam,
+	/// the tier, the parameter and the type. Every type `typeAccess` does not name is `public`.
+	static func tiersWiderThanParameterTypes(in generatedFiles: [String: String], typeAccess: [String: GraphFuzzerGenerator.AccessLevel]) -> [String] {
+		var findings = [String]()
+		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where !fileName.hasSuffix("+SafeDISeamCaller.swift") {
+			for tier in seamInitializers(inGeneratedFile: contents) {
+				let tierAccess = accessLevel(spelled: tier.access)
+				for parameter in tier.parameters {
+					let type = parameter.drop { $0 != ":" }.dropFirst().prefix { $0 != "=" }
+					for name in typeNames(in: type) {
+						guard let typeLevel = typeAccess[name], typeLevel < tierAccess else { continue }
+						findings.append("\(fileName): `\(tier.seamTypeName)`'s `\(tier.access)` initializer takes `\(parameter.trimmingCharacters(in: .whitespaces))`, but `\(name)` is `\(typeLevel.spelling)`.")
+					}
+				}
+			}
+		}
+		return findings
+	}
+
+	/// The names `type` spells: each run of identifier characters and dots, so a nested type is one name.
+	private static func typeNames(in type: some StringProtocol) -> [String] {
+		var names = [String]()
+		var name = ""
+		for character in type + " " {
+			if character.isLetter || character.isNumber || character == "_" || character == "." {
+				name.append(character)
+			} else if !name.isEmpty {
+				names.append(name)
+				name = ""
+			}
+		}
+		return names
+	}
+
+	/// The arguments of each call of `typeName`'s initializer in `contents` – `typeName(` not part of a longer name, and
+	/// after the type that encloses it when it is a nested type's name – each as its label and the text it passes, in
+	/// the order the code calls them.
+	static func initializerCalls(of typeName: String, in contents: String) -> [[(label: String, value: String)]] {
+		var calls = [[(label: String, value: String)]]()
+		var searchStart = contents.startIndex
+		while let range = contents.range(of: typeName + "(", range: searchStart..<contents.endIndex) {
+			searchStart = range.upperBound
+			if range.lowerBound > contents.startIndex {
+				let previous = contents[contents.index(before: range.lowerBound)]
+				guard !(previous.isLetter || previous.isNumber || previous == "_") else { continue }
+			}
+			var depth = 1
+			var end = range.upperBound
+			while depth > 0, end < contents.endIndex {
+				switch contents[end] {
+				case "(", "[":
+					depth += 1
+				case ")", "]":
+					depth -= 1
+				default:
+					break
+				}
+				end = contents.index(after: end)
+			}
+			let arguments = topLevelParameters(String(contents[range.upperBound..<contents.index(before: end)])).compactMap { argument -> (label: String, value: String)? in
+				guard let colon = argument.firstIndex(of: ":") else { return nil }
+				return (argument[..<colon].trimmingCharacters(in: .whitespaces), argument[argument.index(after: colon)...].trimmingCharacters(in: .whitespaces))
+			}
+			calls.append(arguments)
+		}
+		return calls
 	}
 
 	/// What each of a seam's own errors says after the location: the label collision, the tier that cannot take a
@@ -4626,6 +5663,9 @@ enum GraphFuzzerOracle {
 	/// - Parameter fileNames: The names to give the fixture's files, in its order, or `nil` to name each after the
 	///   type it declares, as `executeSafeDIToolTest` does.
 	static func toolOutcome(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil) async throws -> GraphFuzzerToolOutcome {
+		if let modules = fixture.modules {
+			return try await splitToolOutcome(of: fixture, modules: modules, fileNames: fileNames ?? fixture.fileNames)
+		}
 		var filesToDelete = [URL]()
 		defer {
 			for fileToDelete in filesToDelete {
@@ -4642,7 +5682,7 @@ enum GraphFuzzerOracle {
 			)
 			let normalize = normalizer(fixtureDirectory: fixtureDirectory(of: fileNames ?? fixture.fileNames, in: output.fixtures))
 			return .accepted(
-				generatedFiles: addingSeamCallers(to: (output.generatedFiles ?? [:]).mapValues(normalize)),
+				generatedFiles: addingSeamCallers(to: (output.generatedFiles ?? [:]).mapValues(normalize), seamTypeAccess: fixture.seamTypeAccess),
 				warnings: output.warnings.map { normalize("\($0)") },
 			)
 		} catch let error as SafeDIToolTestError {
@@ -4655,6 +5695,93 @@ enum GraphFuzzerOracle {
 			// fixture it could not write: not the tool rejecting the graph.
 			throw GraphFuzzerInfrastructureError(description: "The test harness failed for seed \(fixture.seed) before or after SafeDITool ran: \(error)")
 		}
+	}
+
+	/// Runs SafeDITool over `fixture`, a graph split across modules, as Bazel runs it: one `generate` per module, in
+	/// dependency order, each reading the `.safedi` files of the modules it depends on and naming its module and package
+	/// (`executeSafeDIToolMultiModuleTest`'s `.moduleInfo`). Each generated file is keyed by its module's name and its
+	/// own (`FuzzFeature/FuzzFeature.swift`), and the outcome is the first module's error, if any.
+	private static func splitToolOutcome(of fixture: GraphFuzzerFixture, modules: [GraphFuzzerModule], fileNames: [String]) async throws -> GraphFuzzerToolOutcome {
+		var filesToDelete = [URL]()
+		defer {
+			for fileToDelete in filesToDelete {
+				try? FileManager.default.removeItem(at: fileToDelete)
+			}
+		}
+		let presentModules = Set(modules)
+		let moduleFixtures = GraphFuzzerModule.allCases.filter(presentModules.contains).map { module in
+			ModuleFixture(
+				name: module.name,
+				packageName: module.packageName,
+				swiftFileContentByFilePath: Dictionary(uniqueKeysWithValues: modules.indices.filter { modules[$0] == module }.map { (fileNames[$0], fixture.swiftFileContent[$0]) }),
+				dependencies: module.dependencies.filter(presentModules.contains).map(\.name),
+				omitsPackageName: fixture.modulesOmittingPackageName.contains(module),
+			)
+		}
+		do {
+			let output = try await executeSafeDIToolMultiModuleTest(modules: moduleFixtures, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+			let normalize = normalizer(fixtureDirectory: output.fixtureRoot.path)
+			var generatedFiles = [String: String]()
+			var warnings = [String]()
+			for moduleName in output.moduleNames {
+				guard let moduleOutput = output.modules[moduleName] else { continue }
+				for (_, contents) in moduleOutput.generatedFiles {
+					for (fileName, fileContents) in decomposingCombinedOutput(normalize(contents)) {
+						generatedFiles["\(moduleName)/\(fileName)"] = fileContents
+					}
+				}
+				warnings += moduleOutput.warnings.map { normalize("\($0)") }
+			}
+			return .accepted(
+				generatedFiles: addingSeamCallers(to: generatedFiles, seamTypeAccess: fixture.seamTypeAccess, modules: presentModules),
+				warnings: warnings,
+			)
+		} catch let error as SafeDIToolMultiModuleTestError {
+			// The harness registers the fixture root for deletion before it writes anything.
+			let normalize = normalizer(fixtureDirectory: filesToDelete.first?.path ?? "")
+			return .rejected(diagnostics: normalize("\(error.underlyingError)"))
+		} catch {
+			throw GraphFuzzerInfrastructureError(description: "The test harness failed for seed \(fixture.seed) before or after SafeDITool ran: \(error)")
+		}
+	}
+
+	/// `contents`, a module's combined output, as the files `executeSafeDIToolTest` writes for one module, each with the
+	/// combined output's header and imports: each type's extensions, `<Type>+SafeDI.swift`; each type's mock, the
+	/// conditional block declaring `mock()`, `<Type>+SafeDIMock.swift`; and the mock configurations, the conditional block
+	/// declaring none, `SafeDIMockConfiguration.swift`. A combined output declares its files' extensions in the files'
+	/// path order, which a file-name reversal reverses; one file per type compares, compiles, and is probed as the
+	/// per-file outputs of a graph in one module are.
+	static func decomposingCombinedOutput(_ contents: String) -> [String: String] {
+		let lines = contents.split(separator: "\n", omittingEmptySubsequences: false)
+		/// Whether a block begins at `index`: an extension, or a conditional block whose first declaration is one.
+		func beginsBlock(at index: Int) -> Bool {
+			lines[index].hasPrefix("extension ")
+				|| lines[index].hasPrefix("#if ") && lines[(index + 1)...].first { !$0.isEmpty }?.hasPrefix("extension ") == true
+		}
+		guard let firstBlock = lines.indices.first(where: beginsBlock(at:)) else { return ["Combined.swift": contents] }
+		let header = lines[..<firstBlock].joined(separator: "\n")
+		var blocksByFileName = [String: [String]]()
+		var index = firstBlock
+		while index < lines.count {
+			guard beginsBlock(at: index) else {
+				index += 1
+				continue
+			}
+			let isConditional = lines[index].hasPrefix("#if ")
+			let end = lines[(index + 1)...].firstIndex { isConditional ? $0.hasPrefix("#endif") : $0.hasPrefix("}") } ?? (lines.count - 1)
+			let block = lines[index...end]
+			let extendedType = block.first { $0.hasPrefix("extension ") }.map { String($0.dropFirst("extension ".count).prefix { $0 != " " && $0 != ":" }) } ?? "Combined"
+			let fileName = if !isConditional {
+				"\(extendedType)+SafeDI.swift"
+			} else if block.contains(where: { $0.contains("static func mock(") }) {
+				"\(extendedType)+SafeDIMock.swift"
+			} else {
+				"SafeDIMockConfiguration.swift"
+			}
+			blocksByFileName[fileName, default: []].append(block.joined(separator: "\n"))
+			index = end + 1
+		}
+		return blocksByFileName.mapValues { header + "\n" + $0.joined(separator: "\n\n") + "\n" }
 	}
 
 	/// The failure of a graph whose `SafeDITool generate` output differs between two processes, which seed their
@@ -4692,62 +5819,111 @@ enum GraphFuzzerOracle {
 		return GraphFuzzerFailure(seed: fixture.seed, kind: .runsDifferAcrossProcesses, details: "First process:\n\(outputs[0])\nSecond process:\n\(outputs[1])")
 	}
 
-	/// `generatedFiles` with, for each seam whose initializer the tool generated – the file holds the enum generated
-	/// beside it – a file holding a hand-written call of that initializer: a function that takes the initializer's
-	/// parameters and passes each on. The oracle compiles it with the rest, so a generated initializer a caller
-	/// outside SafeDI's generation cannot call fails there. Derived from the generated file, so the renamed graphs'
-	/// callers are restored with their files.
-	static func addingSeamCallers(to generatedFiles: [String: String]) -> [String: String] {
+	/// `generatedFiles` with, for each seam whose initializer the tool generated – a file that holds the enum generated
+	/// beside it – a file holding hand-written calls of that initializer: functions that take a tier's parameters and
+	/// pass each on. The oracle compiles them with the rest, so a generated initializer a caller outside SafeDI's
+	/// generation cannot call fails there. Each function is spelled at the narrower of its tier's access and the seam
+	/// type's (`seamTypeAccess`, read from the fixture), as a caller in the seam's module must spell it. In a graph split
+	/// across modules, the callers in the seam's module are joined by a caller in each other module of the graph, which
+	/// calls the narrowest tier its package can reach. Derived from the generated files, so the renamed graphs' callers
+	/// are restored with their files.
+	static func addingSeamCallers(to generatedFiles: [String: String], seamTypeAccess: [String: String] = [:], modules: Set<GraphFuzzerModule> = []) -> [String: String] {
 		var generatedFiles = generatedFiles
-		for (fileName, contents) in generatedFiles where contents.contains("public enum __safeDI_") {
-			if let caller = seamCaller(inGeneratedFile: contents) {
-				generatedFiles[fileName.replacingOccurrences(of: "+SafeDI.swift", with: "+SafeDISeamCaller.swift")] = caller
+		for (fileName, contents) in generatedFiles where contents.contains("enum __safeDI_") {
+			let initializersBySeam = seamInitializersBySeam(inGeneratedFile: contents)
+			// One file per seam, beside the file that generated it, so that a file's contents never depend on the order
+			// a module's combined output declares its seams in.
+			let directory = fileName.contains("/") ? String(fileName.prefix { $0 != "/" }) + "/" : ""
+			for (seamTypeName, initializers) in initializersBySeam {
+				generatedFiles["\(directory)\(seamTypeName)+SafeDISeamCaller.swift"] = seamCaller(named: "\(seamTypeName)SeamCaller", of: seamTypeName, calling: Array(initializers.enumerated()), seamTypeAccess: seamTypeAccess[seamTypeName] ?? "public")
+			}
+			// The callers in the other modules of a split graph, of each seam the seam's module generated.
+			guard fileName.hasPrefix(GraphFuzzerModule.seamModule.name + "/") else { continue }
+			for (seamTypeName, initializers) in initializersBySeam {
+				let seamAccess = seamTypeAccess[seamTypeName] ?? "public"
+				for (module, reachableAccesses, callerName) in [
+					(GraphFuzzerModule.samePackageCaller, ["public", "package"], "SamePackageCaller"),
+					(GraphFuzzerModule.otherPackageCaller, ["public"], "OtherPackageCaller"),
+				] where modules.contains(module) && reachableAccesses.contains(seamAccess) {
+					guard let tierIndex = initializers.lastIndex(where: { reachableAccesses.contains($0.access) }) else { continue }
+					generatedFiles["\(module.name)/\(seamTypeName)+SafeDISeamCaller.swift"] = "import \(GraphFuzzerModule.seamModule.name)\n\n"
+						+ seamCaller(named: "\(seamTypeName)\(callerName)", of: seamTypeName, calling: [(tierIndex, initializers[tierIndex])], seamTypeAccess: seamAccess)
+				}
 			}
 		}
 		return generatedFiles
 	}
 
-	/// The parameters of each initializer in `contents`, a seam's generated file, widest tier first, with the seam's
-	/// type name: each the text of one parameter.
-	static func seamInitializerParameters(inGeneratedFile contents: String) -> [(seamTypeName: String, parameters: [String])] {
-		var seamTypeName: String?
-		var initializers = [(seamTypeName: String, parameters: [String])]()
+	/// The generated initializers in `contents` – one seam's generated file, or a module's combined output – of each
+	/// seam whose guard enum the file declares, in the order the file declares them, widest tier first, with each
+	/// tier's access and parameters, each parameter the text of one: every initializer an extension of the seam
+	/// declares as its own member, not a member of a type nested in it.
+	static func seamInitializers(inGeneratedFile contents: String) -> [(seamTypeName: String, access: String, parameters: [String])] {
+		var extendedType: String?
+		var guardedTypes = Set<String>()
+		var initializers = [(seamTypeName: String, access: String, parameters: [String])]()
 		for line in contents.split(separator: "\n") {
-			let trimmedLine = line.trimmingCharacters(in: .whitespaces)
-			if seamTypeName == nil, trimmedLine.hasPrefix("extension "), trimmedLine.hasSuffix(" {") {
-				seamTypeName = String(trimmedLine.dropFirst("extension ".count).dropLast(2))
-			} else if let seamTypeName, let parametersStart = trimmedLine.range(of: "init("), trimmedLine.hasSuffix(") {") {
-				let parameters = String(trimmedLine[parametersStart.upperBound..<trimmedLine.index(trimmedLine.endIndex, offsetBy: -3)])
-				initializers.append((seamTypeName, topLevelParameters(parameters)))
+			if line.hasPrefix("extension "), line.hasSuffix(" {") {
+				extendedType = String(line.dropFirst("extension ".count).dropLast(2))
+			} else if line.hasPrefix("}") {
+				extendedType = nil
+			} else if let extendedType, line.hasPrefix("    "), !line.hasPrefix("     ") {
+				let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+				if trimmedLine.contains("enum __safeDI_") {
+					guardedTypes.insert(extendedType)
+				} else if let parametersStart = trimmedLine.range(of: "init("), trimmedLine.hasSuffix(") {") {
+					let modifiers = trimmedLine[..<parametersStart.lowerBound].split(separator: " ")
+					let access = modifiers.first { ["public", "package", "internal", "fileprivate", "private"].contains($0) }.map(String.init) ?? "internal"
+					let parameters = String(trimmedLine[parametersStart.upperBound..<trimmedLine.index(trimmedLine.endIndex, offsetBy: -3)])
+					initializers.append((extendedType, access, topLevelParameters(parameters)))
+				}
 			}
 		}
-		return initializers
+		return initializers.filter { guardedTypes.contains($0.seamTypeName) }
 	}
 
-	/// Calls of every generated initializer in `contents`, a seam's generated file, or `nil` when it holds none: for
-	/// each tier, one call passing every parameter and one passing only those without a default, so a tier a
-	/// hand-written caller cannot call fails to compile here.
-	private static func seamCaller(inGeneratedFile contents: String) -> String? {
-		let initializers = seamInitializerParameters(inGeneratedFile: contents)
-		guard let seamTypeName = initializers.first?.seamTypeName else { return nil }
+	/// `seamInitializers(inGeneratedFile:)` without each tier's access.
+	static func seamInitializerParameters(inGeneratedFile contents: String) -> [(seamTypeName: String, parameters: [String])] {
+		seamInitializers(inGeneratedFile: contents).map { ($0.seamTypeName, $0.parameters) }
+	}
+
+	/// `seamInitializers(inGeneratedFile:)` grouped by seam, in the order the file first declares each.
+	private static func seamInitializersBySeam(inGeneratedFile contents: String) -> [(seamTypeName: String, initializers: [(access: String, parameters: [String])])] {
+		var grouped = [(seamTypeName: String, initializers: [(access: String, parameters: [String])])]()
+		for initializer in seamInitializers(inGeneratedFile: contents) {
+			if let index = grouped.firstIndex(where: { $0.seamTypeName == initializer.seamTypeName }) {
+				grouped[index].initializers.append((initializer.access, initializer.parameters))
+			} else {
+				grouped.append((initializer.seamTypeName, [(initializer.access, initializer.parameters)]))
+			}
+		}
+		return grouped
+	}
+
+	/// An enum named `callerName` whose functions call each of `tiers` of the seam `seamTypeName`, indexed by the tier's
+	/// position among the seam's tiers: for each tier, one call passing every parameter and one passing only those
+	/// without a default, each spelled at the narrower of the tier's access and the seam type's.
+	private static func seamCaller(named callerName: String, of seamTypeName: String, calling tiers: [(offset: Int, element: (access: String, parameters: [String]))], seamTypeAccess: String) -> String {
+		let accessOrder = ["private", "fileprivate", "internal", "package", "public"]
 		var functions = [String]()
-		for (index, initializer) in initializers.enumerated() {
-			let labels = initializer.parameters.map { $0.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces) }
-			let requiredParameters = initializer.parameters.filter { !$0.contains("= nil") }
+		for (index, tier) in tiers {
+			let access = [tier.access, seamTypeAccess].min { (accessOrder.firstIndex(of: $0) ?? 2) < (accessOrder.firstIndex(of: $1) ?? 2) } ?? "internal"
+			let labels = tier.parameters.map { $0.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces) }
+			let requiredParameters = tier.parameters.filter { !$0.contains("= nil") }
 			let requiredLabels = requiredParameters.map { $0.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces) }
 			functions.append("""
-			    public static func callTier\(index)(\(initializer.parameters.joined(separator: ", "))) -> \(seamTypeName) {
+			    \(access) static func callTier\(index)(\(tier.parameters.joined(separator: ", "))) -> \(seamTypeName) {
 			        \(seamTypeName)(\(labels.map { "\($0): \($0)" }.joined(separator: ", ")))
 			    }
 			""")
 			functions.append("""
-			    public static func callTier\(index)Omitting(\(requiredParameters.joined(separator: ", "))) -> \(seamTypeName) {
+			    \(access) static func callTier\(index)Omitting(\(requiredParameters.joined(separator: ", "))) -> \(seamTypeName) {
 			        \(seamTypeName)(\(requiredLabels.map { "\($0): \($0)" }.joined(separator: ", ")))
 			    }
 			""")
 		}
 		return """
-		public enum \(seamTypeName)SeamCaller {
+		public enum \(callerName) {
 		\(functions.joined(separator: "\n"))
 		}
 
@@ -4797,14 +5973,17 @@ enum GraphFuzzerOracle {
 	/// Compiles each graph's fixture, with the generated code when the tool accepted it, and returns the failure
 	/// of each graph that does not compile, or whose generated code draws a compiler warning, keyed by seed.
 	///
-	/// Every graph is compiled in one `swiftc` invocation, as `verifyGeneratedCodeCompiles` compiles one test's
-	/// fixture and output; distinct type-name prefixes keep the graphs apart. When that fails, each error is
-	/// attributed to a graph by the prefix in its file name. Those graphs fail, and the rest are compiled again
-	/// without them, because a type error stops the compiler before the SIL passes that report errors such as a
-	/// closure that captures a later local. A failing graph is then compiled without its generated code, to tell
-	/// a generator defect from a fixture the fuzzer got wrong. A graph that compiles fails when the compile it
-	/// passed reports a warning in its generated code that its fixture does not draw, as `verifyGeneratedCodeCompiles`
-	/// fails a test (`warningsOnlyGeneratedCodeDraws`).
+	/// Every graph in one module, and the seam's module of every graph split across modules, compile in one `swiftc`
+	/// invocation, as `verifyGeneratedCodeCompiles` compiles one test's fixture and output, as the module
+	/// `GraphFuzzerModule.seamModule` in its package; distinct type-name prefixes keep the graphs apart. The split
+	/// graphs' callers then compile by module, in dependency order, each module of every graph in one invocation
+	/// against the modules before it. When an invocation fails, each error is attributed to a graph by the prefix in
+	/// its file name. Those graphs fail, and the rest are compiled again without them, because a type error stops the
+	/// compiler before the SIL passes that report errors such as a closure that captures a later local; a graph that
+	/// fails in one module is left out of the modules after it. A failing graph is then compiled without its
+	/// generated code, module by module, to tell a generator defect from a fixture the fuzzer got wrong. A graph that
+	/// compiles fails when a compile it passed reports a warning in its generated code – the seam callers among it –
+	/// that its fixture does not draw, as `verifyGeneratedCodeCompiles` fails a test (`warningsOnlyGeneratedCodeDraws`).
 	static func compilationFailures(of toolRuns: [GraphFuzzerToolRuns]) throws -> [UInt64: GraphFuzzerFailure] {
 		guard !toolRuns.isEmpty else { return [:] }
 		guard let artifacts = SafeDIBuildArtifactLocator.locate() else {
@@ -4822,46 +6001,100 @@ enum GraphFuzzerOracle {
 		try FileManager.default.createDirectory(at: fixtureDirectory, withIntermediateDirectories: true)
 		filesToDelete.append(fixtureDirectory)
 
-		var combinedUnits = [CompilationUnit]()
-		var inputOnlyUnitsBySeed = [UInt64: CompilationUnit]()
+		var combinedUnitsByModule = [GraphFuzzerModule: [CompilationUnit]]()
+		var inputOnlyUnitsBySeed = [UInt64: [(module: GraphFuzzerModule, unit: CompilationUnit)]]()
+		var seedsWithGeneratedCode = Set<UInt64>()
 		for runs in toolRuns {
-			let fixtureFiles = try zip(runs.fixture.fileNames, runs.fixture.swiftFileContent).map { fileName, content in
-				let fileURL = fixtureDirectory.appendingPathComponent(fileName)
-				try content.write(to: fileURL, atomically: true, encoding: .utf8)
-				return fileURL
-			}
-			// The mock configuration file has the same name in every graph, so name each file after its graph's prefix.
-			var generatedFiles = [String: String]()
-			for (fileName, contents) in runs.generatedFiles {
-				let stagedFileName = fileName.hasPrefix(runs.fixture.typeNamePrefix) ? fileName : runs.fixture.typeNamePrefix + fileName
-				generatedFiles[stagedFileName] = contents
-			}
-			let combined = try stageCompileSources(inputSwiftFiles: fixtureFiles, generatedFiles: generatedFiles, filesToDelete: &filesToDelete)
-			combinedUnits.append(CompilationUnit(
-				seed: runs.fixture.seed,
-				inputFiles: combined.inputFiles,
-				generatedFiles: combined.generatedFiles.sorted { $0.path < $1.path },
-			))
-			if !generatedFiles.isEmpty {
-				inputOnlyUnitsBySeed[runs.fixture.seed] = CompilationUnit(seed: runs.fixture.seed, inputFiles: combined.inputFiles, generatedFiles: [])
+			let fileModules = runs.fixture.modules ?? Array(repeating: .seamModule, count: runs.fixture.swiftFileContent.count)
+			for module in GraphFuzzerModule.allCases where fileModules.contains(module) {
+				let moduleDirectory = fixtureDirectory.appendingPathComponent(module.name)
+				try FileManager.default.createDirectory(at: moduleDirectory, withIntermediateDirectories: true)
+				let fixtureFiles = try zip(zip(runs.fixture.fileNames, runs.fixture.swiftFileContent), fileModules).filter { $0.1 == module }.map { file, _ in
+					let fileURL = moduleDirectory.appendingPathComponent(file.0)
+					try file.1.write(to: fileURL, atomically: true, encoding: .utf8)
+					return fileURL
+				}
+				// A graph in one module compiles every generated file there; a split graph's are keyed by module. The mock
+				// configuration file has the same name in every graph, so name each file after its graph's prefix.
+				var generatedFiles = [String: String]()
+				for (fileName, contents) in runs.generatedFiles {
+					let moduleFileName: String
+					if runs.fixture.modules == nil {
+						moduleFileName = fileName
+					} else if fileName.hasPrefix(module.name + "/") {
+						moduleFileName = String(fileName.dropFirst(module.name.count + 1))
+					} else {
+						continue
+					}
+					let stagedFileName = moduleFileName.hasPrefix(runs.fixture.typeNamePrefix) ? moduleFileName : runs.fixture.typeNamePrefix + moduleFileName
+					generatedFiles[stagedFileName] = contents
+				}
+				let combined = try stageCompileSources(inputSwiftFiles: fixtureFiles, generatedFiles: generatedFiles, filesToDelete: &filesToDelete)
+				combinedUnitsByModule[module, default: []].append(CompilationUnit(
+					seed: runs.fixture.seed,
+					inputFiles: combined.inputFiles,
+					generatedFiles: combined.generatedFiles.sorted { $0.path < $1.path },
+				))
+				inputOnlyUnitsBySeed[runs.fixture.seed, default: []].append((module, CompilationUnit(seed: runs.fixture.seed, inputFiles: combined.inputFiles, generatedFiles: [])))
+				if !generatedFiles.isEmpty {
+					seedsWithGeneratedCode.insert(runs.fixture.seed)
+				}
 			}
 		}
 
-		let combinedCompilation = try compilation(of: combinedUnits, outputDirectory: fixtureDirectory, artifacts: artifacts)
-		let combinedFailures = combinedCompilation.failures
-		// These units hold no generated code, so they record no warnings.
-		let inputOnlyFailures = try compilation(
-			of: toolRuns.compactMap { combinedFailures[$0.fixture.seed] == nil ? nil : inputOnlyUnitsBySeed[$0.fixture.seed] },
-			outputDirectory: fixtureDirectory,
-			artifacts: artifacts,
-		).failures
+		// Each module of every graph, in dependency order, each graph left out of the modules after one it fails in.
+		var combinedFailures = [UInt64: UnitDiagnostics]()
+		var generatedCodeWarnings = [UInt64: [String]]()
+		var moduleOutputDirectories = [GraphFuzzerModule: URL]()
+		let laterModulesAreCompiled = combinedUnitsByModule.keys.contains { $0 != .seamModule }
+		for module in GraphFuzzerModule.allCases {
+			let units = (combinedUnitsByModule[module] ?? []).filter { combinedFailures[$0.seed] == nil }
+			guard !units.isEmpty else { continue }
+			let outputDirectory = fixtureDirectory.appendingPathComponent("compiled-\(module.name)")
+			try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+			let moduleCompilation = try compilation(
+				of: units,
+				outputDirectory: outputDirectory,
+				artifacts: artifacts,
+				module: module,
+				emitsModule: laterModulesAreCompiled,
+				moduleSearchPaths: module.dependencies.compactMap { moduleOutputDirectories[$0] },
+			)
+			moduleOutputDirectories[module] = outputDirectory
+			combinedFailures.merge(moduleCompilation.failures) { first, _ in first }
+			generatedCodeWarnings.merge(moduleCompilation.generatedCodeWarnings) { $0 + $1 }
+		}
+		// Each failing graph's fixture alone, module by module. These units hold no generated code, so they record no
+		// warnings.
+		var inputOnlyFailures = [UInt64: UnitDiagnostics]()
+		for seed in combinedFailures.keys.sorted() where seedsWithGeneratedCode.contains(seed) {
+			let seedDirectory = fixtureDirectory.appendingPathComponent("inputs-only-\(seed)")
+			var seedModuleDirectories = [GraphFuzzerModule: URL]()
+			for (module, unit) in inputOnlyUnitsBySeed[seed] ?? [] {
+				let outputDirectory = seedDirectory.appendingPathComponent(module.name)
+				try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+				let unitCompilation = try compilation(
+					of: [unit],
+					outputDirectory: outputDirectory,
+					artifacts: artifacts,
+					module: module,
+					emitsModule: true,
+					moduleSearchPaths: module.dependencies.compactMap { seedModuleDirectories[$0] },
+				)
+				seedModuleDirectories[module] = outputDirectory
+				if let failure = unitCompilation.failures[seed] {
+					inputOnlyFailures[seed] = failure
+					break
+				}
+			}
+		}
 		var failures = [UInt64: GraphFuzzerFailure]()
-		for (seed, warnings) in combinedCompilation.generatedCodeWarnings {
+		for (seed, warnings) in generatedCodeWarnings where combinedFailures[seed] == nil {
 			failures[seed] = GraphFuzzerFailure(seed: seed, kind: .generatedCodeDrawsWarning, details: warnings.joined(separator: "\n"))
 		}
 		for (seed, diagnostics) in combinedFailures {
 			// A graph the tool rejected is compiled without generated code, so its failure is the fixture's own.
-			let fixtureFails = inputOnlyUnitsBySeed[seed] == nil || inputOnlyFailures[seed] != nil
+			let fixtureFails = !seedsWithGeneratedCode.contains(seed) || inputOnlyFailures[seed] != nil
 			let kind: GraphFuzzerFailure.Kind = if fixtureFails {
 				.fixtureDoesNotCompile
 			} else if diagnostics.isCompilerCrash {
@@ -4938,15 +6171,25 @@ enum GraphFuzzerOracle {
 		of units: [CompilationUnit],
 		outputDirectory: URL,
 		artifacts: SafeDIBuildArtifacts,
+		module: GraphFuzzerModule,
+		emitsModule: Bool,
+		moduleSearchPaths: [URL],
 	) throws -> UnitsCompilation {
+		func compile(_ units: [CompilationUnit]) throws -> SwiftCompileResult {
+			try compileSwift(
+				sources: units.flatMap(\.sources),
+				outputDirectory: outputDirectory,
+				artifacts: artifacts,
+				moduleName: module.name,
+				packageName: module.packageName,
+				emitsModule: emitsModule,
+				moduleSearchPaths: moduleSearchPaths,
+			)
+		}
 		var remainingUnits = units
 		var compilation = UnitsCompilation()
 		while !remainingUnits.isEmpty {
-			let result = try compileSwift(
-				sources: remainingUnits.flatMap(\.sources),
-				outputDirectory: outputDirectory,
-				artifacts: artifacts,
-			)
+			let result = try compile(remainingUnits)
 			guard result.exitCode != 0 else {
 				for unit in remainingUnits {
 					try compilation.recordGeneratedCodeWarnings(of: unit, inCompilerOutput: result.stderr)
@@ -4975,12 +6218,23 @@ enum GraphFuzzerOracle {
 				break
 			} else if attributedSeeds.isEmpty {
 				// Nothing names a graph, so compile each graph on its own to find the failing ones.
+				var compilingUnits = [CompilationUnit]()
 				for unit in remainingUnits {
-					let unitResult = try compileSwift(sources: unit.sources, outputDirectory: outputDirectory, artifacts: artifacts)
+					let unitResult = try compile([unit])
 					if unitResult.exitCode != 0 {
 						compilation.failures[unit.seed] = UnitDiagnostics(standardError: unitResult.stderr)
 					} else {
 						try compilation.recordGeneratedCodeWarnings(of: unit, inCompilerOutput: unitResult.stderr)
+						compilingUnits.append(unit)
+					}
+				}
+				// The modules compiled after this one import the graphs that compile, together.
+				if emitsModule, !compilingUnits.isEmpty {
+					let result = try compile(compilingUnits)
+					if result.exitCode != 0 {
+						for unit in compilingUnits {
+							compilation.failures[unit.seed] = UnitDiagnostics(standardError: result.stderr)
+						}
 					}
 				}
 				break

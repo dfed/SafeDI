@@ -1649,9 +1649,31 @@ func expectDifferentialValuesAgree(
 
 extension DifferentialValuePath {
 	/// One module holding a fuzzer graph's fixture, with its files named as `executeSafeDIToolTest` names them, and
-	/// the files the tool generated for it.
+	/// the files the tool generated for it; or, for a graph split across modules, each of its modules, with the
+	/// generated files keyed by the module's name.
 	init(fixture: GraphFuzzerFixture, generatedFiles: [String: String]) {
-		self.init(fixtureFiles: Dictionary(uniqueKeysWithValues: zip(fixture.fileNames, fixture.swiftFileContent)), generatedFiles: generatedFiles)
+		guard let fileModules = fixture.modules else {
+			// In the seam module's package, as the oracle compiles a graph in one module, so that `package` compiles.
+			self.init(modules: [DifferentialValueModule(
+				name: standaloneVerificationModuleName,
+				packageName: GraphFuzzerModule.seamModule.packageName,
+				fixtureFiles: Dictionary(uniqueKeysWithValues: zip(fixture.fileNames, fixture.swiftFileContent)),
+				generatedFiles: generatedFiles,
+			)])
+			return
+		}
+		let presentModules = Set(fileModules)
+		self.init(modules: GraphFuzzerModule.allCases.filter(presentModules.contains).map { module in
+			DifferentialValueModule(
+				name: module.name,
+				packageName: module.packageName,
+				dependencyModuleNames: module.dependencies.filter(presentModules.contains).map(\.name),
+				fixtureFiles: Dictionary(uniqueKeysWithValues: fileModules.indices.filter { fileModules[$0] == module }.map { (fixture.fileNames[$0], fixture.swiftFileContent[$0]) }),
+				generatedFiles: Dictionary(uniqueKeysWithValues: generatedFiles.compactMap { fileName, contents in
+					fileName.hasPrefix(module.name + "/") ? (String(fileName.dropFirst(module.name.count + 1)), contents) : nil
+				}),
+			)
+		})
 	}
 }
 
@@ -1694,6 +1716,15 @@ extension GraphFuzzerFixture {
 						}
 					case "aliasSeamBuilder":
 						probes.append(DifferentialValueProbe("\(rootName)().\(label).instantiate(\(typeNamePrefix)AliasValue())"))
+					case "proofHostBuilder":
+						// The host's forwarded values, each a plain type's instance: the one value, or a tuple of them in
+						// label order, as `ForwardedProperties` spells them.
+						let hostName = rootName.hasSuffix("ProofOtherRoot") ? "ProofOtherHost" : "ProofHost"
+						let samples = forwardedProperties(ofTypeNamed: typeNamePrefix + hostName).sorted { $0.label < $1.label }.map { property in
+							(label: property.label, value: property.type == "Swift.Int" ? "0" : property.type == "Swift.String" ? "\"\"" : "\(property.type)()")
+						}
+						let argument = samples.count == 1 ? samples[0].value : "(\(samples.map { "\($0.label): \($0.value)" }.joined(separator: ", ")))"
+						probes.append(DifferentialValueProbe("\(rootName)().\(label).instantiate(\(argument))"))
 					default:
 						continue
 					}
@@ -1704,9 +1735,30 @@ extension GraphFuzzerFixture {
 		}
 		let mockFileSuffix = "+SafeDIMock.swift"
 		for (fileName, contents) in generatedFiles.sorted(by: { $0.key < $1.key }) where fileName.hasSuffix(mockFileSuffix) && Self.mockTakesNoRequiredParameter(contents) {
-			probes.append(DifferentialValueProbe("\(fileName.dropLast(mockFileSuffix.count)).mock()"))
+			// A split graph's generated files are keyed by their module's name.
+			let mockedType = fileName.dropLast(mockFileSuffix.count).split(separator: "/").last ?? ""
+			probes.append(DifferentialValueProbe("\(mockedType).mock()"))
 		}
 		return probes
+	}
+
+	/// The `@Forwarded` properties of the type named `typeName`, in declaration order.
+	private func forwardedProperties(ofTypeNamed typeName: String) -> [(label: String, type: String)] {
+		var properties = [(label: String, type: String)]()
+		for content in swiftFileContent {
+			var isInType = false
+			for line in GraphFuzzerSourceLine.lines(of: content) {
+				switch line {
+				case let .typeDeclaration(name):
+					isInType = name == typeName
+				case let .property(attribute, label, type) where isInType && attribute == "@Forwarded":
+					properties.append((label, type))
+				case .instantiableAttribute, .instantiateMethod, .property, .other:
+					break
+				}
+			}
+		}
+		return properties
 	}
 
 	/// Whether the generated `mock()` in `contents` takes no parameter without a default value. A mock without

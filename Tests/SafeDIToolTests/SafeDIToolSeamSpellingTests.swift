@@ -766,51 +766,39 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 		])
 	}
 
-	@Test
+	/// A closure names no type but `Void`, which every module can name, so the seam's `public` initializer takes it
+	/// whatever access the initializer that receives it has: required, or only if available.
+	@Test(arguments: [
+		(forwarded: "onSelect: () -> Void", received: "@Received let onSelect: () -> Void", parameter: "onSelect: @escaping () -> Void", guardHash: "6E4AFC77A9D161A1"),
+		(forwarded: "onSelect: (() -> Void)?", received: "@Received(onlyIfAvailable: true) let onSelect: (() -> Void)?", parameter: "onSelect: (() -> Void)? = nil", guardHash: "AD44EC4607D4311B"),
+	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsTierError_whenPublicTierOmitsRequiredClosureOfInternalInitializer() async {
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["List.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `List`: its generated `public` initializer cannot take `onSelect: () -> Void`, which the initializer of `Row` receives at a narrower access level, and cannot pass `nil` for it, since it is required. Widen the initializer of `Row`, receive the property with `onlyIfAvailable: true` and an optional type, or narrow the initializers of every type in the tree to its level.
-			\(fixtures["Row.swift"]):7:5: note: `Row` receives `onSelect: () -> Void` here.
-			"""
-		}) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: Self.passThroughFixture(forwarded: "onSelect: () -> Void", received: "@Received let onSelect: () -> Void", rowInitializerIsInternal: true),
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesNilFromPublicTier_whenOptionalClosureIsReceivedOnlyIfAvailableByInternalInitializer() async throws {
-		let fixture = Self.passThroughFixture(forwarded: "onSelect: (() -> Void)?", received: "@Received(onlyIfAvailable: true) let onSelect: (() -> Void)?", rowInitializerIsInternal: true)
-		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+	mutating func generate_takesClosureOnPublicTier_whenInternalInitializerReceivesIt(forwarded: String, received: String, parameter: String, guardHash: String) async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.passThroughFixture(forwarded: forwarded, received: received, rowInitializerIsInternal: true),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		let argumentType = forwarded.dropFirst("onSelect: ".count).replacingOccurrences(of: "() -> Void", with: parameter.contains("@escaping") ? "@escaping () -> Void" : "() -> Void")
 		#expect(output.dependencyTreeFiles == [
 			"List+SafeDI.swift": generatedFileHeader + """
 			extension List {
-			    public init() {
-			        self.init(onSelect: nil)
-			    }
-
-			    internal init(onSelect: (() -> Void)? = nil) {
+			    public init(\(parameter)) {
 			        let row = Row(onSelect: onSelect)
 			        self.init(row: row)
 			    }
 			}
 
 			extension List {
-			    public enum __safeDI_List_BD8D9EBCAD8E00CB {}
+			    public enum __safeDI_List_\(guardHash) {}
 			}
 			""",
 			"Root+SafeDI.swift": generatedFileHeader + """
 			extension Root {
 			    public init() {
-			        func __safeDI_screenBuilder(onSelect: (() -> Void)?) -> Screen {
+			        func __safeDI_screenBuilder(onSelect: \(argumentType)) -> Screen {
 			            func __safeDI_list() -> List {
-			                _ = List.__safeDI_List_BD8D9EBCAD8E00CB.self
+			                _ = List.__safeDI_List_\(guardHash).self
 			                return List(onSelect: onSelect)
 			            }
 			            let list: List = __safeDI_list()

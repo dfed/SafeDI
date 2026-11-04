@@ -109,6 +109,7 @@ public actor DependencyTreeGenerator {
 		let rootScopeGenerators = try rootScopeGenerators
 		try await validateNoUncreatedAliasIsRead(inTreesRootedAt: rootScopeGenerators)
 		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: rootScopeGenerators.map { ($0.instantiable, $0.scopeGenerator) })
+		try await validateNoSeamTierOmitsProvidedValue(inTreesRootedAt: rootScopeGenerators)
 
 		let generatedRoots = try await withThrowingTaskGroup(
 			of: GeneratedRoot?.self,
@@ -1030,6 +1031,15 @@ public actor DependencyTreeGenerator {
 		/// `ErasedInstantiator`, or `LazilyInstantiated` declared outside it, with a note at that wrapper when a type
 		/// in the tree declares it.
 		case nonSendableWrapperCapturedBySendableBuilder([ScopeGenerator.NonSendableWrapperCapture])
+		/// Reported at each declaration whose value a call of a seam's generated initializer would drop: the tier the
+		/// call reaches omits the parameter it would pass, which the tree built inline would hand on. A note at each
+		/// receive of the parameter inside the seam. `callingType` is the type at the root of the tree that makes the
+		/// call.
+		case seamTierOmitsProvidedValue([ProvidedValueOmission])
+		/// Reported at the dependency of a tree this module generates that calls a seam of another module whose files
+		/// this run read under a mock condition that module does not guard its mock-only declarations with. See
+		/// `SeamModuleMockConditionDifference`.
+		case seamModuleMockConditionDiffers([SeamModuleMockConditionDifference])
 		/// Reported at the hand-written mock of each type that generated mocks build both with that mock and
 		/// without it, in ways one `SafeDIMockConfiguration` struct cannot describe. See `ConfigurationBuiltTwoWays`.
 		case configurationBuiltTwoWays([ConfigurationBuiltTwoWays])
@@ -1097,6 +1107,41 @@ public actor DependencyTreeGenerator {
 				seamError.sourceDiagnostics
 			case let .sourceLocated(error):
 				error.sourceDiagnostics
+			case let .seamModuleMockConditionDiffers(differences):
+				differences
+					.map(\.sourceDiagnostic)
+					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
+			case let .seamTierOmitsProvidedValue(omissions):
+				// Each root's omissions arrive in generation order, and the roots in type order; they are reported in
+				// source order. Two calls of one seam that drop one provider's value for the same receivers – the calls of
+				// two types a tree builds – read the same, so the error is reported once.
+				omissions
+					.map { providedValueOmission in
+						let omission = providedValueOmission.omission
+						// A signature records no receiver of the seam's own property, which the call's leaf declares as
+						// the seam declares it: that receive is the note.
+						let ownReceive = omission.parameter.isPassThrough ? nil : omission.seam.dependencies.first { $0.property == omission.parameter.property }
+						// The receives in the calling seam's tree that make the provider its parameter come first, then the
+						// receives the call would pass `nil` to, each declaration once.
+						let receivers = (omission.providerReceivers + omission.parameter.receivers)
+							.map { NotedReceive(declaringType: $0.declaringType, property: $0.property, declarationLocation: $0.declarationLocation) }
+							.uniqued()
+							+ (ownReceive.map { [NotedReceive(declaringType: omission.seam.concreteInstantiable, property: $0.property, declarationLocation: $0.declarationLocation)] } ?? [])
+						return [SourceDiagnostic(
+							severity: .error,
+							location: providedValueOmission.location,
+							message: SeamAccessExplanation.providedValueMessage(omission, callingType: providedValueOmission.callingType, unreadableProviderModuleName: providedValueOmission.unreadableProviderModuleName),
+						)] + receivers.map { receiver in
+							SourceDiagnostic(
+								severity: .note,
+								location: receiver.declarationLocation,
+								message: "`\(receiver.declaringType.asSource)` receives `\(receiver.property.asSource)` here.",
+							)
+						}
+					}
+					.uniqued()
+					.sorted { SourceDiagnostic.precedesInSourceOrder($0[0], $1[0]) }
+					.flatMap(\.self)
 			case let .nonSendableWrapperCapturedBySendableBuilder(captures):
 				// The captures arrive in set order. Two whose errors read the same name the same wrapper on the same
 				// type, so their notes, at that declaration, read the same too, and the diagnostics come out the same.
@@ -1479,6 +1524,55 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
+		/// A receive a diagnostic notes: the type that declares it, the property it receives, and where.
+		private struct NotedReceive: Hashable {
+			let declaringType: TypeDescription
+			let property: Property
+			let declarationLocation: Dependency.DeclarationLocation?
+		}
+
+		/// A value a call of a seam's generated initializer would drop (`ScopeGenerator.SeamTierOmission`), as reported.
+		struct ProvidedValueOmission {
+			let omission: ScopeGenerator.SeamTierOmission
+			/// The type at the root of the tree that makes the call.
+			let callingType: TypeDescription
+			/// Where the error is reported: the provider's declaration, or, when its file cannot be read, where the
+			/// module refers to what leads to the call.
+			let location: Dependency.DeclarationLocation?
+			/// The module that declares the provider, when the provider's file cannot be read and that module is known.
+			let unreadableProviderModuleName: String?
+		}
+
+		/// A call of the initializer SafeDI generated for a seam of another module, whose signature this run computed
+		/// from that module's files as it parsed them, under its own mock condition, while the module computed it under
+		/// another: a mock method in a block that only one of the conditions selects can prove a parameter's type, so
+		/// the two signatures can differ. Reported at the dependency that calls the seam.
+		struct SeamModuleMockConditionDifference {
+			let seam: TypeDescription
+			let seamModule: ModuleIdentity
+			let seamModuleMockCondition: MockCondition
+			let callingModule: ModuleIdentity
+			let callingModuleMockCondition: MockCondition
+			/// The first dependency, in source order, that instantiates the seam in a tree this module generates.
+			let callingDependencyLocation: Dependency.DeclarationLocation?
+
+			var sourceDiagnostic: SourceDiagnostic {
+				func name(of module: ModuleIdentity) -> String {
+					module.moduleName.map { "`\($0)`" } ?? "this module"
+				}
+				func spelling(of mockCondition: MockCondition) -> String {
+					mockCondition.conditionalCompilation.map { "`\($0)`" } ?? "no condition"
+				}
+				let seamModuleName = name(of: seamModule)
+				let callingModuleName = name(of: callingModule)
+				return SourceDiagnostic(
+					severity: .error,
+					location: callingDependencyLocation,
+					message: "\(callingModuleName) calls the initializer SafeDI generated for `\(seam.asSource)` in module \(seamModuleName), whose signature SafeDI computes from \(seamModuleName)'s declarations as \(seamModuleName) reads them, mock-only declarations under \(seamModuleName)'s mock condition included. \(seamModuleName) guards its mocks with \(spelling(of: seamModuleMockCondition)) and \(callingModuleName) with \(spelling(of: callingModuleMockCondition)), so \(callingModuleName) cannot read them as \(seamModuleName) does. Use the same `mockConditionalCompilation` in both modules.",
+				)
+			}
+		}
+
 		/// A seam whose generated initializer SafeDI cannot write, reported at the seam's declaration with a note at
 		/// each receive involved.
 		struct SeamError {
@@ -1490,9 +1584,15 @@ public actor DependencyTreeGenerator {
 				/// The type that declares the receive.
 				let declaringType: TypeDescription
 				let declarationLocation: Dependency.DeclarationLocation?
-				/// What to widen for the receive to be passed at a wider access: the initializer that declares it, when
-				/// its own modifier is narrower than its type, else the type or the type enclosing it, which caps it.
-				let accessIsCappedByInitializer: Bool
+				/// The alias's own property when the receive is an alias's fulfilling property, else `nil`.
+				let aliasProperty: Property?
+				/// Whether the receive is a parameter of an extension's `instantiate(…)` method, which has no
+				/// only-if-available form.
+				let isInstantiateMethodParameter: Bool
+
+				var asExplanationReceiver: SeamAccessExplanation.Receiver {
+					SeamAccessExplanation.Receiver(declaringType: declaringType, aliasProperty: aliasProperty, isInstantiateMethodParameter: isInstantiateMethodParameter)
+				}
 			}
 
 			/// Which of the seam's own properties an omitted parameter is, or `none` for a pass-through.
@@ -1500,7 +1600,6 @@ public actor DependencyTreeGenerator {
 				case none
 				case forwarded
 				case required
-				case onlyIfAvailable
 			}
 
 			/// What a label collision's message says to do.
@@ -1524,11 +1623,12 @@ public actor DependencyTreeGenerator {
 				/// Two receives of one label with different types, which the seam's generated initializer cannot both
 				/// take as parameters: it passes each dependency to its receivers by label, as a root's does.
 				case parametersShareLabel(label: String, receivers: [Receiver], remedy: LabelCollisionRemedy)
-				/// A tier of the generated initializer is wider than the initializer that declares a required receive
-				/// of `parameter`, so it cannot take the parameter, and cannot leave it out either. An own parameter –
-				/// one of the seam's `@Received` or `@Forwarded` properties – is taken as declared, with no default, so
-				/// a wider tier cannot pass `nil` for it, received only if available or not.
-				case tierOmitsRequiredParameter(parameter: Property, tier: AccessLevel, receivers: [Receiver], ownParameter: OwnParameter)
+				/// A tier of the generated initializer is wider than the access SafeDI can prove for a required
+				/// parameter's type (`TypeAccessProof`), so it cannot take the parameter, and cannot leave it out either:
+				/// a pass-through some receiver requires, or the seam's own required `@Received` or `@Forwarded`
+				/// property. `tier` is the widest tier, at the seam type's access; `parameterLevel` is the parameter's own
+				/// tier access, and `cause` how its narrowest type is proven.
+				case tierOmitsRequiredParameter(parameter: Property, tier: AccessLevel, parameterLevel: AccessLevel, receivers: [Receiver], ownParameter: OwnParameter, cause: TypeAccessProof.Cause?)
 				/// The seam declares an initializer with the generated initializer's parameters, which the generated
 				/// one would redeclare. The macro cannot report it: it cannot see the pass-throughs.
 				case initializerRedeclared(parameters: [Property], handWrittenInitializer: Initializer)
@@ -1623,47 +1723,49 @@ public actor DependencyTreeGenerator {
 						"Receive `\(label)` the same way in every type of the tree, or declare it on \(seamName) as the form that provides the others: `@\(Dependency.Source.receivedRawValue) let \(label): \(providingForm)`."
 					}
 					message = "SafeDI cannot generate the dependency tree of \(seamName): its tree receives `\(label)` as \(forms), and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. \(remedyText)"
-				case let .parameters(.tierOmitsRequiredParameter(parameter, tier, parameterReceivers, ownParameter)):
+				case let .parameters(.tierOmitsRequiredParameter(parameter, tier, parameterLevel, parameterReceivers, ownParameter, cause)):
 					receivers = parameterReceivers
-					// An omitted parameter of the seam's own – forwarded, received, or received only if available – is
-					// named by the seam's own initializer, which takes it at its own level, so that initializer is what to
-					// widen, beside the initializer of each type in the tree that also receives it; a forwarded one has no
-					// receiver.
-					let ownInitializer = "\(seamName)'s own initializer"
-					let treeReceiverTypes = parameterReceivers.map(\.declaringType).filter { $0 != seam.concreteInstantiable }
-					let initializerOfTreeReceivers = "the initializer of " + treeReceiverTypes.map { "`\($0.asSource)`" }.joined(separator: " and ")
-					let declaringTypes = if parameterReceivers.isEmpty {
-						ownInitializer
-					} else if ownParameter == .none {
-						initializerOfTreeReceivers
-					} else if treeReceiverTypes.isEmpty {
-						ownInitializer
-					} else {
-						"\(ownInitializer) and \(initializerOfTreeReceivers)"
-					}
-					// The verb agrees with its subject: plural for the seam's own initializer and a tree receiver's together.
-					let subjectIsCompound = ownParameter != .none && !treeReceiverTypes.isEmpty
-					let widenings = parameterReceivers.isEmpty
-						? "the initializer of \(seamName)"
-						: parameterReceivers.map { receiver in
-							receiver.accessIsCappedByInitializer
-								? "the initializer of `\(receiver.declaringType.asSource)`"
-								: "`\(receiver.declaringType.asSource)`, or the type enclosing it, which caps its initializer"
-						}.joined(separator: " and ")
-					// Only a tree receiver's receive can be made `onlyIfAvailable`: an own parameter is the seam's own. An own
-					// property received only if available is still taken as declared, with no default, which the message
-					// says rather than calling it required.
-					let (verb, whyNotNil, receiveRemedy) = switch ownParameter {
-					case .none:
-						("receives", ", since it is required", ", receive the property with `onlyIfAvailable: true` and an optional type")
+					let treeReceivers = parameterReceivers.filter { $0.declaringType != seam.concreteInstantiable }
+					// Who takes the parameter: the seam's own initializer, the seam itself, or the receivers in its tree.
+					let receiverNames = treeReceivers.map { receiver in
+						receiver.isInstantiateMethodParameter
+							? "`\(receiver.declaringType.asSource)`'s `instantiate(…)`"
+							: "`\(receiver.declaringType.asSource)`"
+					}.uniqued()
+					let takers: String = switch ownParameter {
 					case .forwarded:
-						(subjectIsCompound ? "take" : "takes", ", since it is required", "")
+						"\(seamName)'s own initializer takes"
 					case .required:
-						(subjectIsCompound ? "receive" : "receives", ", since it is required", "")
-					case .onlyIfAvailable:
-						(subjectIsCompound ? "receive" : "receives", ": \(seamName) receives `\(parameter.label)` only if available, but its generated initializers take each of \(seamName)'s own properties as declared, with no default", "")
+						receiverNames.isEmpty ? "\(seamName) receives" : "\(([seamName] + receiverNames).joinedAsList) receive"
+					case .none:
+						// A pass-through the seam's own alias receives names the seam; one only the seam's own aliases
+						// receive, the seam too.
+						if let receiver = parameterReceivers.first, parameterReceivers.count == 1, let aliasProperty = receiver.aliasProperty {
+							"`\(receiver.declaringType.asSource)` receives through its alias `\(aliasProperty.label)` (`fulfilledByDependencyNamed: \"\(parameter.label)\"`)"
+						} else {
+							receiverNames.count > 1 ? "\(receiverNames.joinedAsList) receive" : "\(receiverNames.first ?? seamName) receives"
+						}
 					}
-					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer cannot take `\(parameter.asSource)`, which \(declaringTypes) \(verb) at a narrower access level, and cannot pass `nil` for it\(whyNotNil). Widen \(widenings)\(receiveRemedy), or narrow the initializers of every type in the tree to its level."
+					let parameterKind: SeamAccessExplanation.ParameterKind = switch ownParameter {
+					case .none:
+						.passThrough
+					case .forwarded:
+						.ownForwarded
+					case .required:
+						.ownReceived
+					}
+					let requiredBy = tier == parameterLevel ? "" : ", which \(seamName)'s `\(tier.spelledOnGeneratedDeclaration)` access requires,"
+					let causeText = cause.map { " " + SeamAccessExplanation.causeSentence($0, receivers: treeReceivers.map(\.asExplanationReceiver)) } ?? ""
+					let remedies = SeamAccessExplanation.tierRemedies(
+						cause: cause,
+						neededLevel: tier,
+						parameterLevel: parameterLevel,
+						seam: seam.concreteInstantiable,
+						parameter: parameter,
+						receivers: treeReceivers.map(\.asExplanationReceiver),
+						parameterKind: parameterKind,
+					)
+					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(parameter.asSource)`, which \(takers), and cannot pass `nil` for it, since it is required.\(causeText) \(remedies)"
 				case let .moduleInfoMissing(moduleName, missingModuleName):
 					receivers = []
 					message = "SafeDI cannot generate a call to the initializer SafeDI generated for \(seamName) in module `\(moduleName)`: that initializer takes what the type's dependency tree needs from the declarations `\(moduleName)` sees, which include module `\(missingModuleName)`'s, and this run was not given `\(missingModuleName)`'s SafeDI module info. Give this run every module `\(moduleName)` depends on: add `\(missingModuleName)` (the target that compiles it) to this target's `deps` under Bazel, or to its `dependencies` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`."
@@ -2098,6 +2200,9 @@ public actor DependencyTreeGenerator {
 				// by property, so a seam that repeats a label is reported here rather than generating a tier that
 				// repeats it, or trapping where the uncreated-alias walk keys a seam call's parameters.
 				try Self.validateDependencyLabelsAreDistinct(in: reachableTypeDescriptions.compactMap { typeDescriptionToFulfillingInstantiableMap[$0] })
+				// A foreign seam whose module's files this run read under another mock condition is reported before
+				// its signature is computed from them.
+				try validateCalledSeamModulesShareMockCondition()
 				// A foreign seam's module info this run lacks is reported before the inlined trees, which reach that
 				// module's declarations, are found unfulfillable.
 				_ = try foreignSeamRoots.get()
@@ -2201,6 +2306,7 @@ public actor DependencyTreeGenerator {
 					rootReferenceLocation: seamTree.instantiable.declarationLocation,
 					isMock: false,
 					emittingModule: emittingModule,
+					instantiables: typeDescriptionToFulfillingInstantiableMap,
 				),
 				from: emittingModule,
 			)
@@ -2216,6 +2322,7 @@ public actor DependencyTreeGenerator {
 							rootReferenceLocation: rootInstantiable.declarationLocation,
 							isMock: false,
 							emittingModule: emittingModule,
+							instantiables: typeDescriptionToFulfillingInstantiableMap,
 						),
 						from: emittingModule,
 					)
@@ -2227,7 +2334,8 @@ public actor DependencyTreeGenerator {
 				rootReferenceLocation: nil,
 				isMock: false,
 				emittingModule: emittingModule,
-			).allSatisfy({ Self.isPubliclyConstructible($0.instantiable, withMockMethod: $0.usesMockMethod) }) {
+				instantiables: typeDescriptionToFulfillingInstantiableMap,
+			).allSatisfy(Self.isPubliclyConstructible) {
 				withheldRoots.append(WithheldRoot(typeDescription: rootScope.typeDescription, reason: .constructsNonPublicDeclaration))
 			} else if !seams.isEmpty, let seam = Self.firstSeamCalled(inTreeRootedAt: rootScope.scope) {
 				withheldRoots.append(WithheldRoot(typeDescription: rootScope.typeDescription, reason: .callsSeam(seam)))
@@ -2284,12 +2392,28 @@ public actor DependencyTreeGenerator {
 
 	/// Whether code in every module can construct `instantiable` with its hand-written mock method when
 	/// `withMockMethod` is set, and otherwise with its initializer or `instantiate()` method.
+	private static func isPubliclyConstructible(_ construction: Construction) -> Bool {
+		construction.accessNeeds.allSatisfy { $0.level.satisfies(.public) }
+	}
+
+	/// Whether code in every module can construct `instantiable` with its hand-written mock method when
+	/// `withMockMethod` is set, and otherwise with its initializer or `instantiate()` method.
 	private static func isPubliclyConstructible(_ instantiable: Instantiable, withMockMethod: Bool) -> Bool {
 		instantiable.accessNeeds(constructingWithMockMethod: withMockMethod).allSatisfy { $0.level.satisfies(.public) }
 	}
 
 	/// A type the generated code constructs, with how it constructs it.
 	private struct Construction {
+		/// - Parameter instantiables: The declarations the module reads, among which the own declaration of a type an
+		///   extension extends bounds the types declared inside that extension.
+		init(instantiable: Instantiable, usesMockMethod: Bool, referenceLocation: Dependency.DeclarationLocation?, isSeamLeaf: Bool, instantiables: [TypeDescription: Instantiable]) {
+			self.instantiable = instantiable
+			self.usesMockMethod = usesMockMethod
+			self.referenceLocation = referenceLocation
+			self.isSeamLeaf = isSeamLeaf
+			extendedTypeAccessNeeds = DependencyTreeGenerator.extendedTypeAccessNeeds(of: instantiable, in: instantiables)
+		}
+
 		let instantiable: Instantiable
 		/// Whether the type is constructed with its hand-written mock method rather than with its initializer or
 		/// `instantiate()` method.
@@ -2298,6 +2422,63 @@ public actor DependencyTreeGenerator {
 		/// declared in the module's own files on a path to it, or the declaration of the tree's root. An error about
 		/// the construction is reported there when the declaration that must change cannot be read.
 		let referenceLocation: Dependency.DeclarationLocation?
+		/// Whether the construction calls an initializer SafeDI generates for a seam, which is at most as visible as the
+		/// seam's type: only the type's declaration, and those enclosing it, can keep it from compiling.
+		let isSeamLeaf: Bool
+		/// The declarations of the type an extension extends that bound the constructed type, when it is declared inside
+		/// that extension (`extendedTypeAccessNeeds(of:in:)`): code that names the type names the extended type too.
+		let extendedTypeAccessNeeds: [AccessNeed]
+
+		/// The declarations whose access decides whether the construction compiles, which both the check of every
+		/// construction and the decision to generate a root another module declares read.
+		var accessNeeds: [AccessNeed] {
+			(isSeamLeaf
+				? DependencyTreeGenerator.seamLeafAccessNeeds(of: instantiable)
+				: instantiable.accessNeeds(constructingWithMockMethod: usesMockMethod)) + extendedTypeAccessNeeds
+		}
+	}
+
+	/// The declarations of the type an extension extends that bound a type declared inside that extension, when that
+	/// type's own `@Instantiable` declaration outside every extension is in the same module: the code that names the
+	/// nested type names the extended type too, so the extended type's declaration, and those enclosing it, must be
+	/// as visible as the construction needs. Empty for any other declaration, whose extended type SafeDI does not
+	/// record, which the compiler reports.
+	fileprivate static func extendedTypeAccessNeeds(of instantiable: Instantiable, in instantiables: [TypeDescription: Instantiable]) -> [AccessNeed] {
+		guard instantiable.enclosingExtensionAccess != nil, !instantiable.declarationType.isExtension else { return [] }
+		var extendedType: TypeDescription? = instantiable.concreteInstantiable
+		for _ in 0...instantiable.enclosingTypeAccess.count {
+			extendedType = extendedType?.popNested
+		}
+		guard let extendedType,
+		      let extended = instantiables[extendedType],
+		      extended.concreteInstantiable == extendedType,
+		      !extended.declarationType.isExtension,
+		      extended.enclosingExtensionAccess == nil,
+		      let moduleName = instantiable.moduleName,
+		      extended.moduleName == moduleName
+		else { return [] }
+		return extended.accessNeeds(constructingWithMockMethod: false).filter { accessNeed in
+			switch accessNeed.declaration {
+			case .type, .extensionDeclaringType:
+				true
+			case .member, .extensionDeclaringMember:
+				false
+			}
+		}
+	}
+
+	/// The declarations whose access decides whether a call of a seam's generated initializer compiles: the seam's type
+	/// and the types enclosing it, never the generated initializer, whose access is at most the type's, nor the seam's
+	/// own initializer, which the generated initializer calls inside the seam's module.
+	fileprivate static func seamLeafAccessNeeds(of leaf: Instantiable) -> [AccessNeed] {
+		leaf.accessNeeds(constructingWithMockMethod: false).filter { accessNeed in
+			switch accessNeed.declaration {
+			case .member, .extensionDeclaringMember:
+				false
+			case .type, .extensionDeclaringType:
+				true
+			}
+		}
 	}
 
 	/// What identifies a construction while walking a tree: the scope that builds it, and how it builds it.
@@ -2315,31 +2496,28 @@ public actor DependencyTreeGenerator {
 	///     where that method returns a type the property accepts, as `ScopeGenerator` builds it.
 	///   - emittingModule: The module the generated code compiles in, whose own files hold the dependencies that refer
 	///     to a construction.
+	///   - instantiables: The declarations the module reads, among which the own declaration of a type an extension
+	///     extends bounds the types declared inside that extension.
 	private static func constructions(
 		inTreeRootedAt rootScope: Scope,
 		rootIsConstructedWithMockMethod: Bool,
 		rootReferenceLocation: Dependency.DeclarationLocation?,
 		isMock: Bool,
 		emittingModule: EmittingModule,
+		instantiables: [TypeDescription: Instantiable],
 	) -> [Construction] {
 		var constructionsByKey = [ConstructionKey: Construction]()
 		// A scope can be reached along several paths, and the first reference location in source order is kept,
 		// whichever path is walked first. A scope is walked again only when it is reached with an earlier reference
 		// location, so the walk ends, and a worklist rather than recursion walks it, since a tree can be as deep as the
 		// module has types.
-		// A call of a seam's tier the caller cannot reach stands for the constructions of the types whose initializers
-		// cap it (`SeamCall.receiversCappingTier`), which the call reports as the tree built inline reports them.
-		var receiverConstructionsByType = [TypeDescription: Construction]()
 		var scopesToWalk = [(scope: rootScope, usesMockMethod: rootIsConstructedWithMockMethod, referenceLocation: rootReferenceLocation)]
 		while let (scope, usesMockMethod, referenceLocation) = scopesToWalk.popLast() {
 			let key = ConstructionKey(scope: ObjectIdentifier(scope), usesMockMethod: usesMockMethod)
 			guard constructionsByKey[key].map({ Dependency.DeclarationLocation.precedesInSourceOrder(referenceLocation, $0.referenceLocation) }) ?? true else {
 				continue
 			}
-			constructionsByKey[key] = Construction(instantiable: scope.instantiable, usesMockMethod: usesMockMethod, referenceLocation: referenceLocation)
-			for receiver in scope.seamCall?.receiversCappingTier ?? [] where receiverConstructionsByType[receiver.concreteInstantiable].map({ Dependency.DeclarationLocation.precedesInSourceOrder(referenceLocation, $0.referenceLocation) }) ?? true {
-				receiverConstructionsByType[receiver.concreteInstantiable] = Construction(instantiable: receiver, usesMockMethod: false, referenceLocation: referenceLocation)
-			}
+			constructionsByKey[key] = Construction(instantiable: scope.instantiable, usesMockMethod: usesMockMethod, referenceLocation: referenceLocation, isSeamLeaf: scope.seamCall != nil, instantiables: instantiables)
 			let isDeclaredInOwnFile = scope.instantiable.sourceFilePath.map(emittingModule.isOwnFile) ?? false
 			for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate {
 				scopesToWalk.append((
@@ -2352,7 +2530,7 @@ public actor DependencyTreeGenerator {
 				))
 			}
 		}
-		return Array(constructionsByKey.values) + Array(receiverConstructionsByType.values)
+		return Array(constructionsByKey.values)
 	}
 
 	/// An error for each declaration that keeps one of `constructions` from compiling in `emittingModule`.
@@ -2363,7 +2541,7 @@ public actor DependencyTreeGenerator {
 		var inaccessibleConstructions = [DependencyTreeGeneratorError.InaccessibleConstruction]()
 		for construction in constructions {
 			let instantiable = construction.instantiable
-			let accessNeeds = instantiable.accessNeeds(constructingWithMockMethod: construction.usesMockMethod)
+			let accessNeeds = construction.accessNeeds
 			// Nearly every construction is of `public` declarations, which need nothing more.
 			guard !accessNeeds.allSatisfy({ $0.level.satisfies(.public) }) else { continue }
 			for accessNeed in accessNeeds {
@@ -2430,6 +2608,58 @@ public actor DependencyTreeGenerator {
 	private struct ReachedForeignModule {
 		let moduleName: String
 		let seams: [(type: TypeDescription, seam: SeamResolution.ForeignSeam)]
+	}
+
+	/// Validates that this run reads each seam of another module that the trees it generates call as that module reads
+	/// it. Under the SwiftPM plugin's target graph, this run computes such a seam's signature from the module's files as
+	/// it parsed them, under its own mock condition, which selects the module's mock-only declarations – whose mock
+	/// methods can prove a parameter's type – as the module's own run does only when the two conditions are spelled the
+	/// same. A seam whose module's condition is spelled otherwise is reported at the first dependency, in source order,
+	/// that instantiates it in a tree this module generates: an own root's, since a root another module declares whose
+	/// tree calls a seam is left to that module, or an own seam's, without entering another module's seam, whose tree
+	/// that module generates.
+	private func validateCalledSeamModulesShareMockCondition() throws {
+		var seamModuleMockConditionBySeam = [TypeDescription: (seam: SeamResolution.ForeignSeam, mockCondition: MockCondition)]()
+		for (seamType, foreignSeam) in seams.foreignSeams {
+			if let mockCondition = foreignSeam.declaringModuleMockCondition, mockCondition != seams.currentModuleMockCondition {
+				seamModuleMockConditionBySeam[seamType] = (foreignSeam, mockCondition)
+			}
+		}
+		// A run that reads another module's files under its own mock condition knows its module.
+		guard let emittingModule, !seamModuleMockConditionBySeam.isEmpty else { return }
+		let ownRoots = rootInstantiables.filter { root in
+			typeDescriptionToFulfillingInstantiableMap[root]?.sourceFilePath.map(emittingModule.isOwnFile) == true
+		}
+		var differenceBySeam = [TypeDescription: DependencyTreeGeneratorError.SeamModuleMockConditionDifference]()
+		var visitedTypes = Set<TypeDescription>()
+		// A worklist rather than recursion, since a chain of types can be as long as the module has types.
+		var typesToVisit = Array(ownRoots.union(generatedSeamTypes))
+		while let visitedType = typesToVisit.popLast() {
+			guard visitedTypes.insert(visitedType).inserted,
+			      let instantiable = typeDescriptionToFulfillingInstantiableMap[visitedType]
+			else { continue }
+			for dependency in instantiable.dependencies where dependency.isInstantiated {
+				let instantiatedType = dependency.asInstantiatedType
+				guard let seamType = typeDescriptionToFulfillingInstantiableMap[instantiatedType]?.concreteInstantiable else { continue }
+				if seams.foreignSeams[seamType] == nil {
+					typesToVisit.append(instantiatedType)
+				} else if let (foreignSeam, mockCondition) = seamModuleMockConditionBySeam[seamType],
+				          differenceBySeam[seamType].map({ Self.declarationPrecedes(dependency.declarationLocation, $0.callingDependencyLocation) }) ?? true
+				{
+					differenceBySeam[seamType] = DependencyTreeGeneratorError.SeamModuleMockConditionDifference(
+						seam: seamType,
+						seamModule: foreignSeam.declaringModule,
+						seamModuleMockCondition: mockCondition,
+						callingModule: seams.currentModule,
+						callingModuleMockCondition: seams.currentModuleMockCondition,
+						callingDependencyLocation: dependency.declarationLocation,
+					)
+				}
+			}
+		}
+		if !differenceBySeam.isEmpty {
+			throw DependencyTreeGeneratorError.seamModuleMockConditionDiffers(Array(differenceBySeam.values))
+		}
 	}
 
 	/// The signature of each foreign seam this module's trees reach, by concrete type, or `nil` for a seam whose
@@ -2513,6 +2743,8 @@ public actor DependencyTreeGenerator {
 				// Another module's own run checks its constructions; whether that check reports a call is not known
 				// here, so an omission such a call would let its seam skip is reported.
 				checkingModule: nil,
+				// Another module's seams are computed from its named module's declarations.
+				isOwnFile: nil,
 			)
 			errors += computation.errors
 			for (seamType, seamRoot) in computation.seamRoots where !computation.failedSeams.contains(seamType) {
@@ -2550,6 +2782,7 @@ public actor DependencyTreeGenerator {
 			callerModule: seams.currentModule,
 			seams: seams,
 			checkingModule: emittingModuleToCheck,
+			isOwnFile: emittingModule?.isOwnFile,
 		)
 		var errors = ownComputation.errors
 		// Each generated seam is computed again over the declarations its callers see, when those differ from this
@@ -2573,6 +2806,7 @@ public actor DependencyTreeGenerator {
 				callerModule: seams.currentModule,
 				seams: seams,
 				checkingModule: emittingModuleToCheck,
+				isOwnFile: emittingModule?.isOwnFile,
 			)
 			for seamType in generatedSeamTypes.sorted() {
 				guard let seam = typeDescriptionToFulfillingInstantiableMap[seamType],
@@ -2589,6 +2823,7 @@ public actor DependencyTreeGenerator {
 					labelsCallersFailedOn: callersFailed ? Self.parameterLabels(namedBy: callersComputation.errors, about: seam) : nil,
 					unseenDeclarations: unseenDeclarations,
 					in: typeDescriptionToFulfillingInstantiableMap,
+					proof: ownComputation.proof,
 				) else { continue }
 				errors.append(.seam(.init(
 					seam: seam,
@@ -2622,6 +2857,7 @@ public actor DependencyTreeGenerator {
 		labelsCallersFailedOn: Set<String>?,
 		unseenDeclarations: Set<TypeDescription>,
 		in typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable],
+		proof: TypeAccessProof,
 	) -> TypeDescription? {
 		let callersParameterShapes = Set(callersSignature?.callShape.parameters ?? [])
 		let differingParameters = (ownSignature?.parameters ?? []).filter { parameter in
@@ -2641,8 +2877,14 @@ public actor DependencyTreeGenerator {
 		}
 		if let receiver = earliestUnseen(differingParameters.flatMap { $0.receivers.map(\.declaringType) }) {
 			return receiver
-		} else if let fulfillingType = earliestUnseen(differingParameters.compactMap { typeDescriptionToFulfillingInstantiableMap[$0.property.typeDescription.asInstantiatedType]?.concreteInstantiable }) {
-			return fulfillingType
+		} else if let provingDeclaration = earliestUnseen(differingParameters.flatMap { parameter in
+			// The declarations a parameter's access depends on: the entries of the types it names, and the declarations
+			// whose members mention those types, transitively through an extension's raised type.
+			let admittedModules = Set([seam.moduleName] + parameter.receivers.map { typeDescriptionToFulfillingInstantiableMap[$0.declaringType]?.moduleName })
+			let namedTypes = TypeAccessProof.mentionedTypes(in: parameter.property.typeDescription).compactMap { typeDescriptionToFulfillingInstantiableMap[$0]?.concreteInstantiable }
+			return (namedTypes + proof.declarationsProving(typesNamedBy: parameter.property.typeDescription, admittedModules: admittedModules)).sorted()
+		}) {
+			return provingDeclaration
 		} else {
 			let reachedTypes = Self.typesReachable(fromRoots: [seam.concreteInstantiable], in: typeDescriptionToFulfillingInstantiableMap)
 			return earliestUnseen(reachedTypes.compactMap { typeDescriptionToFulfillingInstantiableMap[$0]?.concreteInstantiable })
@@ -2665,7 +2907,7 @@ public actor DependencyTreeGenerator {
 				switch parameterKind {
 				case let .parametersShareLabel(label, _, _):
 					labels.insert(label)
-				case let .tierOmitsRequiredParameter(parameter, _, _, _):
+				case let .tierOmitsRequiredParameter(parameter, _, _, _, _, _):
 					labels.insert(parameter.label)
 				case let .initializerRedeclared(parameters, _):
 					labels.formUnion(parameters.map(\.label))
@@ -2762,22 +3004,30 @@ public actor DependencyTreeGenerator {
 		let property: Property
 		let declaringType: TypeDescription
 		let declarationLocation: Dependency.DeclarationLocation?
-		/// The access a parameter that passes the receive takes: that of the initializer that declares it, or, for a
-		/// parameter of another seam's generated initializer, the access that seam's signature gives it.
-		let access: AccessLevel
-		/// Whether the initializer that declares the receive, rather than its type or a type enclosing it, caps the
-		/// access: its effective access is narrower than its type's. An extension-based type's `instantiate(…)` is
-		/// always the cap, since an extension's level caps nothing and the type's is `open`.
-		let accessIsCappedByInitializer: Bool
+		/// The access a parameter that passes the receive takes, for a receive inside a nested seam the access that
+		/// seam's signature gives it; `seamRoot` proves each parameter again over its own computation's declarations.
+		var access: AccessLevel
+		/// The module of the type that declares the receive, whose declarations prove a type with no entry of its own.
+		let moduleName: String?
+		/// Whether the receive is a parameter of an extension's `instantiate(…)` method, which has no only-if-available
+		/// form.
+		let isInstantiateMethodParameter: Bool
+		/// Whether the receive reaches this seam only through a nested seam's call that omits it, so no tier of this seam
+		/// can pass it on (`SeamSignature.noTierParameters`).
+		var isNoTier = false
+		/// For a no-tier receive, the level of the nested seam's tier that omits it: the level that seam would have to
+		/// take it at.
+		var noTierCallTier: AccessLevel?
+		/// For a no-tier receive, the nested seam call that omits it.
+		var nestedSeamCall: SeamSignature.NestedSeamCall?
 		/// The alias's own property when the receive is an alias's fulfilling property, else `nil`. See
 		/// `SeamSignature.Receiver.aliasProperty`.
 		let aliasProperty: Property?
 		/// Whether the receive reaches this seam through a nested seam call that the module building the tree reaches
-		/// no tier of and that the check of every construction is certain to report: it then reports the declarations
-		/// whose widening makes a tier of that seam reachable, with their fix-its, as it does where the tree is built
-		/// inline, so a tier of this seam that omits the parameter reports no omission for it
-		/// (`SeamCall.unreachableTierIsReported`). A declaration reached on several paths is from such a call only when
-		/// every path reaches it through one.
+		/// no tier of and that the check of every construction is certain to report: it then reports the nested seam's
+		/// type, whose widening makes a tier of that seam reachable, with its fix-it, so a tier of this seam that omits
+		/// the parameter reports no omission for it (`SeamCall.unreachableTierIsReported`). A declaration reached on
+		/// several paths is from such a call only when every path reaches it through one.
 		var isFromReportedSeamCall: Bool
 
 		init(property: Property, instantiable: Instantiable, declarationLocation: Dependency.DeclarationLocation?, access: AccessLevel, aliasProperty: Property? = nil, isFromReportedSeamCall: Bool = false) {
@@ -2785,28 +3035,37 @@ public actor DependencyTreeGenerator {
 			declaringType = instantiable.concreteInstantiable
 			self.declarationLocation = declarationLocation
 			self.access = access
-			accessIsCappedByInitializer = instantiable.effectiveInitializerAccess.map { $0 < instantiable.effectiveTypeAccess } ?? false
+			moduleName = instantiable.moduleName
+			isInstantiateMethodParameter = aliasProperty == nil && instantiable.declarationType.isExtension
 			self.aliasProperty = aliasProperty
 			self.isFromReportedSeamCall = isFromReportedSeamCall
 		}
 
 		/// A receive inside a nested seam, which that seam's signature carries on the parameter passing it.
-		init(_ receiver: SeamSignature.Receiver, isFromReportedSeamCall: Bool = false) {
+		init(_ receiver: SeamSignature.Receiver, moduleName: String?, isFromReportedSeamCall: Bool = false) {
 			property = receiver.property
 			declaringType = receiver.declaringType
 			declarationLocation = receiver.declarationLocation
 			access = receiver.access
-			accessIsCappedByInitializer = receiver.accessIsCappedByInitializer
+			self.moduleName = moduleName
+			isInstantiateMethodParameter = receiver.isInstantiateMethodParameter
 			aliasProperty = receiver.aliasProperty
 			self.isFromReportedSeamCall = isFromReportedSeamCall
 		}
 
 		var asErrorReceiver: DependencyTreeGeneratorError.SeamError.Receiver {
-			.init(property: property, declaringType: declaringType, declarationLocation: declarationLocation, accessIsCappedByInitializer: accessIsCappedByInitializer)
+			.init(property: property, declaringType: declaringType, declarationLocation: declarationLocation, aliasProperty: aliasProperty, isInstantiateMethodParameter: isInstantiateMethodParameter)
+		}
+
+		/// The receive with `access`, the access the proof gives the parameter that passes it.
+		func with(access: AccessLevel) -> SeamReceiver {
+			var receiver = self
+			receiver.access = access
+			return receiver
 		}
 
 		var asSignatureReceiver: SeamSignature.Receiver {
-			.init(property: property, declaringType: declaringType, declarationLocation: declarationLocation, access: access, accessIsCappedByInitializer: accessIsCappedByInitializer, aliasProperty: aliasProperty)
+			.init(property: property, declaringType: declaringType, declarationLocation: declarationLocation, access: access, aliasProperty: aliasProperty, isInstantiateMethodParameter: isInstantiateMethodParameter)
 		}
 	}
 
@@ -2841,13 +3100,17 @@ public actor DependencyTreeGenerator {
 		callerModule: ModuleIdentity,
 		seams: SeamResolution,
 		checkingModule: EmittingModule?,
+		isOwnFile: (@Sendable (String) -> Bool)?,
 	) throws -> SeamSignatureComputation {
 		let seamInstantiables = seamTypes.sorted().compactMap { instantiables[$0] }.filter(\.generatesDependencyTree)
-		guard !seamInstantiables.isEmpty else { return SeamSignatureComputation(seamRoots: [:], errors: [], failedSeams: []) }
+		// One proof of every type's access per declaration map, which every seam of the computation reads.
+		let proof = TypeAccessProof(instantiables: instantiables, isOwnFile: isOwnFile)
+		guard !seamInstantiables.isEmpty else { return SeamSignatureComputation(seamRoots: [:], errors: [], failedSeams: [], proof: proof) }
 		let ownSeamTypes = Set(seamInstantiables.map(\.concreteInstantiable))
 		func initialSeamRoot(of seam: Instantiable) -> ScopeGenerator.SeamRoot {
-			ScopeGenerator.SeamRoot(
-				signature: SeamSignature(seamType: seam.concreteInstantiable, parameters: Self.ownParameters(of: seam), tiers: [Self.parameterAccess(seam.effectiveInitializerAccess)]),
+			let parameters = Self.ownParameters(of: seam, proof: proof)
+			return ScopeGenerator.SeamRoot(
+				signature: SeamSignature(seamType: seam.concreteInstantiable, parameters: parameters, tiers: Self.tiers(of: seam, parameters: parameters)),
 			)
 		}
 		// Until a seam's signature is computed, a tree that reaches it calls an initializer taking the seam's own
@@ -2906,7 +3169,7 @@ public actor DependencyTreeGenerator {
 							seamRoot: previousSeamRoot ?? initialSeamRoot(of: seam),
 							startsCodeGeneration: false,
 						)
-						let seamRoot = try Self.seamRoot(of: seam, generator: generator)
+						let seamRoot = try Self.seamRoot(of: seam, generator: generator, proof: proof, instantiables: instantiables)
 						if seamRoot?.signature.settledContent != previousSeamRoot?.signature.settledContent {
 							changed = true
 						}
@@ -2941,7 +3204,7 @@ public actor DependencyTreeGenerator {
 			errors += errorsOfLastPass
 			failedSeams.formUnion(failedSeamsOfLastPass)
 		}
-		return SeamSignatureComputation(seamRoots: seamRoots, errors: errors, failedSeams: failedSeams)
+		return SeamSignatureComputation(seamRoots: seamRoots, errors: errors, failedSeams: failedSeams, proof: proof)
 	}
 
 	/// What `seamSignatures` computed: each seam's signature, the errors of the last pass of each component, and the
@@ -2950,6 +3213,8 @@ public actor DependencyTreeGenerator {
 		let seamRoots: [TypeDescription: ScopeGenerator.SeamRoot?]
 		let errors: [DependencyTreeGeneratorError]
 		let failedSeams: Set<TypeDescription>
+		/// The proof of every type's access the computation read, which says what a parameter's access depends on.
+		let proof: TypeAccessProof
 	}
 
 	/// The strongly connected components of the graph in which a seam reaches another when its tree, built from
@@ -3026,20 +3291,45 @@ public actor DependencyTreeGenerator {
 		return components
 	}
 
-	/// The parameters that pass a seam's own `@Received` and `@Forwarded` properties, in declaration order, each at
-	/// the access of the seam's own initializer, which takes them. Read from `dependencies` rather than through
-	/// `forwardedReceivableProperties` or `propertiesToDeclare(in:)`: those are unordered sets that hold the by-value
-	/// form of each wrapper beside it, while a parameter is one property in declaration order.
-	private static func ownParameters(of seam: Instantiable) -> [SeamSignature.Parameter] {
-		let access = parameterAccess(seam.effectiveInitializerAccess)
+	/// The parameters that pass a seam's own `@Received` and `@Forwarded` properties, in declaration order, each as
+	/// visible as `proof` shows its type to be – the seam's own initializer, which takes it, among the members that
+	/// prove it – and capped at the seam's type. One received only if available defaults to `nil`, like a property the
+	/// tree receives only if available; a required `@Received` and a `@Forwarded` property have no default. Read from
+	/// `dependencies` rather than through `forwardedReceivableProperties` or `propertiesToDeclare(in:)`: those are
+	/// unordered sets that hold the by-value form of each wrapper beside it, while a parameter is one property in
+	/// declaration order.
+	private static func ownParameters(of seam: Instantiable, proof: TypeAccessProof) -> [SeamSignature.Parameter] {
+		let typeLevel = parameterAccess(seam.effectiveTypeAccess)
 		return seam.dependencies.compactMap { dependency in
 			switch dependency.source {
-			case .received, .forwarded:
-				SeamSignature.Parameter(property: dependency.property, isPassThrough: false, access: access, defaultsToNil: false)
+			case let .received(onlyIfAvailable):
+				ownParameter(dependency.property, of: seam, typeLevel: typeLevel, defaultsToNil: onlyIfAvailable, proof: proof)
+			case .forwarded:
+				ownParameter(dependency.property, of: seam, typeLevel: typeLevel, defaultsToNil: false, proof: proof)
 			case .instantiated, .aliased:
 				nil
 			}
 		}
+	}
+
+	private static func ownParameter(_ property: Property, of seam: Instantiable, typeLevel: AccessLevel, defaultsToNil: Bool, proof: TypeAccessProof) -> SeamSignature.Parameter {
+		let access = proof.access(ofParameterTyped: property.typeDescription, admittedModules: [seam.moduleName])
+		// Widening the seam's own initializer, which a remedy may offer, needs each of its other arguments' types to be as
+		// visible.
+		let otherInitializerArgumentsAccess = (seam.initializer?.arguments ?? [])
+			.filter { $0.innerLabel != property.label }
+			.map { proof.access(ofParameterTyped: $0.typeDescription, admittedModules: [seam.moduleName]).level }
+			.min() ?? .public
+		return SeamSignature.Parameter(property: property, isPassThrough: false, access: access.level, tierAccess: min(access.level, typeLevel), defaultsToNil: defaultsToNil, accessCause: access.cause, otherInitializerArgumentsAccess: otherInitializerArgumentsAccess)
+	}
+
+	/// The tiers of a seam's generated initializer, widest first: one at the seam type's effective access, as its
+	/// enclosing types limit it, and one at each narrower tier access among `parameters`. Each narrower tier takes a
+	/// parameter the next wider one omits, so no two take the same parameters; the seam's own initializer's level is
+	/// no tier, since the narrowest tier calls it whatever its level.
+	private static func tiers(of seam: Instantiable, parameters: [SeamSignature.Parameter]) -> [AccessLevel] {
+		let typeLevel = parameterAccess(seam.effectiveTypeAccess)
+		return [typeLevel] + Set(parameters.map(\.tierAccess)).filter { $0 < typeLevel }.sorted(by: >)
 	}
 
 	/// The access a seam parameter takes from `initializerAccess`, the effective access of the initializer that
@@ -3114,62 +3404,25 @@ public actor DependencyTreeGenerator {
 					declaredIn: (isOwnSeam ? callerModule : seams.foreignSeams[instantiable.concreteInstantiable]?.declaringModule) ?? ModuleIdentity(moduleName: nil, packageName: nil),
 					isOwnFile: isOwnSeam,
 				)
-				// The narrowest tier the generated code can reach. When it can reach none, the widest is called, and the
-				// check of every construction the code makes reports the declarations whose widening makes a tier
-				// reachable, never a generated initializer: the types whose initializers receive a required parameter
-				// at a level the caller cannot reach, which a wider tier would omit, and the seam's own initializer
-				// when no receiver caps the tier, or when the seam has an own parameter, which always sits on the
-				// widest tier at that initializer's level, so that initializer caps the tier too. Where receivers cap
-				// the tier and the seam has no own parameter, the leaf's initializer satisfies every requirement, so
-				// the capping receivers alone are reported, and widening them makes a tier reachable that calls the own
-				// initializer inside the seam's module; a declaration without a location never reports, so two seams'
-				// reports never merge into one.
+				// The narrowest tier the generated code can reach. The widest tier is at the seam type's access, so code that
+				// can construct the type reaches a tier; code that cannot calls the widest, and the check of every
+				// construction reports the type's declaration with its fix-it, never a generated initializer
+				// (`Construction.isSeamLeaf`).
 				let reachedTier = signature.tiers.last(where: { $0.satisfies(requirement) })
 				let tier = reachedTier ?? signature.tiers[0]
-				let receiversCappingTier: [Instantiable] = if reachedTier == nil {
-					signature.parameters(ofTierAt: tier)
-						.filter { !$0.defaultsToNil && !$0.tierAccess.satisfies(requirement) }
-						.flatMap { $0.receivers.filter { !$0.access.satisfies(requirement) } }
-						.compactMap { instantiables[$0.declaringType] }
-				} else {
-					[]
-				}
-				let leafInitializerAccess: AccessDeclaration = if reachedTier == nil {
-					receiversCappingTier.isEmpty || signature.parameters.contains(where: { !$0.isPassThrough })
-						? instantiable.initializer?.access ?? AccessDeclaration(level: tier)
-						: AccessDeclaration(level: .public)
-				} else {
-					AccessDeclaration(level: tier)
-				}
 				let leafInstantiable = Self.seamLeafInstantiable(
 					of: instantiable,
 					signature: signature,
 					tier: tier,
-					initializerAccess: leafInitializerAccess,
+					initializerAccess: AccessDeclaration(level: tier),
 				)
-				// Whether the check of every construction is certain to report the call it cannot reach a tier of: the
-				// leaf's initializer is the seam's own, which fails the requirement as every tier does, or every receiver
-				// capping the tier fails the requirement its own module puts on the caller. The check asks a receiver's
-				// own requirement, which can be weaker than the call's: a receiver whose module's package the caller
-				// cannot tell from its own is assumed to be reachable with `package` access
-				// (`AccessRequirement.packageUnverified`) and passes, so the omission a seam calling this one would skip
-				// must be reported there instead. A receiver these declarations lack cannot be checked, nor can any
-				// construction be where the caller runs no check.
+				// Whether the check of every construction is certain to report the call it cannot reach a tier of: it reports
+				// the seam's type, which every tier's access is capped at. The check asks the type's own requirement, which
+				// can be weaker than the call's: a type whose module's package the caller cannot tell from its own is
+				// assumed to be reachable with `package` access (`AccessRequirement.packageUnverified`). No construction can
+				// be checked where the caller runs no check.
 				let unreachableTierIsReported: Bool = if reachedTier == nil, let checkingModule {
-					{
-						func isReported(_ constructed: Instantiable) -> Bool {
-							let requirement = checkingModule.requirement(toConstructWithInitializer: constructed)
-							return !constructed.accessNeeds(constructingWithMockMethod: false).allSatisfy { $0.level.satisfies(requirement) }
-						}
-						if receiversCappingTier.isEmpty || signature.parameters.contains(where: { !$0.isPassThrough }) {
-							return isReported(leafInstantiable)
-						} else {
-							return signature.parameters(ofTierAt: tier)
-								.filter { !$0.defaultsToNil && !$0.tierAccess.satisfies(requirement) }
-								.flatMap { $0.receivers.filter { !$0.access.satisfies(requirement) } }
-								.allSatisfy { instantiables[$0.declaringType].map(isReported) ?? false }
-						}
-					}()
+					!Self.seamLeafAccessNeeds(of: leafInstantiable).allSatisfy { $0.level.satisfies(checkingModule.requirement(toConstructWithInitializer: leafInstantiable)) }
 				} else {
 					false
 				}
@@ -3180,8 +3433,13 @@ public actor DependencyTreeGenerator {
 						parameters: signature.parameters(ofTierAt: tier),
 						guardTypeName: signature.guardTypeName,
 						carriesPluginComment: seams.foreignSeams[instantiable.concreteInstantiable]?.callCarriesPluginComment ?? false,
-						receiversCappingTier: receiversCappingTier,
 						unreachableTierIsReported: unreachableTierIsReported,
+						omittedParameters: signature.parameters.filter { $0.tierAccess < tier },
+						noTierParameters: signature.noTierParameters,
+						tier: tier,
+						requirement: requirement,
+						seamModuleName: instantiable.moduleName,
+						callerModuleName: callerModule.moduleName,
 					),
 				)
 			} else {
@@ -3326,16 +3584,21 @@ public actor DependencyTreeGenerator {
 	/// type's declaration is an ancestor's, already kept. No receive is beneath a declaration of its label that does
 	/// not provide it, which validation reports as hidden, so a receive the scopes above do not provide leaves the
 	/// seam.
-	private static func receivers(in generator: ScopeGenerator, of _: Instantiable) -> [SeamReceiver] {
+	private static func receivers(in generator: ScopeGenerator, of _: Instantiable, instantiables: [TypeDescription: Instantiable]) -> [SeamReceiver] {
 		var receivers = [SeamReceiver]()
 		var keptDeclarationIndices = [ReceiverDeclaration: Int]()
 		typealias Frame = (generator: ScopeGenerator, providedProperties: Set<Property>)
 		var generatorsToVisit: [Frame] = [(generator, [])]
 		while let (visited, providedProperties) = generatorsToVisit.popLast() {
 			// A seam call the module reaches no tier of and the check of every construction is certain to report: it
-			// reports the declarations whose widening makes a tier reachable, so the receives the call folds into this
+			// reports the seam's type, whose widening makes a tier reachable, so the receives the call folds into this
 			// seam report no omission here.
 			let callsReportedSeam = visited.seamCall?.unreachableTierIsReported ?? false
+			// A nested seam's call passes `nil` for the parameters it omits, which its leaf declares as receives only if
+			// available: the receives inside that seam they stand for are no-tier receives of this seam.
+			let omittedByCall = visited.seamCall.map { seamCall in
+				Dictionary(grouping: seamCall.omittedParameters + seamCall.noTierParameters, by: \.property.label).compactMapValues(\.first)
+			} ?? [:]
 			// An alias declares no dependency of its own.
 			if let instantiable = visited.builtInstantiable {
 				func isProvided(_ property: Property, by providedProperties: Set<Property>) -> Bool {
@@ -3362,11 +3625,32 @@ public actor DependencyTreeGenerator {
 						guard !isProvided(dependency.property, by: providedProperties) else { continue }
 						// A nested seam's pass-through stands for the receives inside that seam, which its signature
 						// carries, so an error names the receiver that caps the parameter rather than the seam.
-						if let parameter = seamCallParameter(passing: dependency.property) {
+						if let omitted = omittedByCall[dependency.property.label] {
+							let noTierReceivers = omitted.receivers.isEmpty
+								? [SeamReceiver(property: dependency.property, instantiable: instantiable, declarationLocation: dependency.declarationLocation, access: omitted.access, isFromReportedSeamCall: callsReportedSeam)]
+								: omitted.receivers.map { SeamReceiver($0, moduleName: instantiables[$0.declaringType]?.moduleName, isFromReportedSeamCall: callsReportedSeam) }
+							let nestedSeamCall = visited.seamCall.map { seamCall in
+								SeamSignature.NestedSeamCall(
+									seamType: instantiable.concreteInstantiable,
+									seamModuleName: seamCall.seamModuleName,
+									tier: seamCall.tier,
+									requirement: seamCall.requirement,
+									callerModuleName: seamCall.callerModuleName,
+									parameterTierAccess: seamCall.omittedParameters.contains { $0.property.label == dependency.property.label } ? omitted.tierAccess : nil,
+									receivingTypes: noTierReceivers.map(\.declaringType).uniqued(),
+								)
+							}
+							for var receiver in noTierReceivers {
+								receiver.isNoTier = true
+								receiver.noTierCallTier = visited.seamCall?.tier
+								receiver.nestedSeamCall = nestedSeamCall
+								keep(receiver)
+							}
+						} else if let parameter = seamCallParameter(passing: dependency.property) {
 							if parameter.receivers.isEmpty {
 								keep(SeamReceiver(property: dependency.property, instantiable: instantiable, declarationLocation: dependency.declarationLocation, access: parameter.access, isFromReportedSeamCall: callsReportedSeam))
 							} else {
-								parameter.receivers.map { SeamReceiver($0, isFromReportedSeamCall: callsReportedSeam) }.forEach(keep)
+								parameter.receivers.map { SeamReceiver($0, moduleName: instantiables[$0.declaringType]?.moduleName, isFromReportedSeamCall: callsReportedSeam) }.forEach(keep)
 							}
 						} else {
 							keep(SeamReceiver(property: dependency.property, instantiable: instantiable, declarationLocation: dependency.declarationLocation, access: initializerAccess))
@@ -3397,9 +3681,8 @@ public actor DependencyTreeGenerator {
 	/// a required non-optional wrapper provides every by-value form and the optional form of its kind, a by-value
 	/// property its optional form, and an optional wrapper nothing but itself. Two parameters under one label are
 	/// `parametersShareLabel`. `nil` when the signature would equal the seam's own initializer's.
-	private static func seamRoot(of seam: Instantiable, generator: ScopeGenerator) throws -> ScopeGenerator.SeamRoot? {
-		let seamInitializerAccess = parameterAccess(seam.effectiveInitializerAccess)
-		let ownParameters = ownParameters(of: seam)
+	private static func seamRoot(of seam: Instantiable, generator: ScopeGenerator, proof: TypeAccessProof, instantiables: [TypeDescription: Instantiable]) throws -> ScopeGenerator.SeamRoot? {
+		let ownParameters = ownParameters(of: seam, proof: proof)
 		// The seam's own properties are parameters as declared, and provide forms as any parameter does.
 		var ownLabels = Set<String>()
 		var providedByOwnProperties = Set<Property>()
@@ -3417,7 +3700,7 @@ public actor DependencyTreeGenerator {
 		// alias is rejected (`ScopeGenerator.uncreatedAliasReads`), so in an accepted seam only the alias reads the
 		// parameter.
 		let requiredProperties = generator.requiredReceivedProperties
-		let treeReceivers = Self.receivers(in: generator, of: seam)
+		let treeReceivers = Self.receivers(in: generator, of: seam, instantiables: instantiables)
 		func receivers(ofLabel label: String) -> [SeamReceiver] {
 			treeReceivers.filter { $0.property.label == label }
 		}
@@ -3432,9 +3715,6 @@ public actor DependencyTreeGenerator {
 							|| form.typeDescription.unwrapped.lazilyInstantiatedInstanceType == receiver.property.typeDescription.unwrapped)
 				}
 			}
-		}
-		func access(of forms: [Property]) -> AccessLevel {
-			receivers(of: forms).map(\.access).max() ?? seamInitializerAccess
 		}
 		// Every label's collision and every tier's omission is collected, so the seam reports each of its errors.
 		var errors = [DependencyTreeGeneratorError]()
@@ -3463,8 +3743,33 @@ public actor DependencyTreeGenerator {
 			formsByLabel[property.label, default: []].append(property)
 		}
 		var passThroughs = [SeamSignature.Parameter]()
+		var noTierParameters = [SeamSignature.Parameter]()
 		for label in formsByLabel.keys.sorted() {
 			let forms = formsByLabel[label, default: []]
+			// A label the tree receives only through nested seam calls that omit it is a parameter on no tier: each call
+			// passes `nil` for it, as no tier of this seam can pass it on, so a caller holding a value for it is told.
+			let labelReceivers = receivers(ofLabel: label)
+			if !ownLabels.contains(label), !labelReceivers.isEmpty, labelReceivers.allSatisfy(\.isNoTier), let form = forms.first {
+				let property = form.typeDescription.isOptional ? form : form.asOptionalProperty
+				let access = proof.access(ofParameterTyped: property.typeDescription, admittedModules: Set([seam.moduleName] + labelReceivers.map(\.moduleName)))
+				// A parameter on no tier is taken by none, so its tier access records the level of the nested seam's tier that
+				// omits it instead: what that seam would have to take it at, which a caller holding a value is told.
+				// Of the nested calls that omit it, the one an error names is one at the widest tier, the first by seam type.
+				let nestedSeamCall = labelReceivers.compactMap(\.nestedSeamCall).min { left, right in
+					left.tier != right.tier ? left.tier > right.tier : left.seamType < right.seamType
+				}
+				noTierParameters.append(SeamSignature.Parameter(
+					property: property,
+					isPassThrough: true,
+					access: access.level,
+					tierAccess: labelReceivers.compactMap(\.noTierCallTier).max() ?? access.level,
+					defaultsToNil: true,
+					receivers: labelReceivers.map { $0.with(access: access.level).asSignatureReceiver },
+					accessCause: access.cause,
+					nestedSeamCall: nestedSeamCall,
+				))
+				continue
+			}
 			// A form the seam's own property of the label does not provide is a second parameter under the label.
 			guard !ownLabels.contains(label) else {
 				errors.append(labelCollision(label, among: receivers(ofLabel: label)))
@@ -3507,12 +3812,18 @@ public actor DependencyTreeGenerator {
 				parameterProperty = Property(label: label, typeDescription: .optional(wrapper.typeDescription))
 				isRequired = requiredProperties.contains(parameterProperty)
 			}
+			// The parameter is as visible as the narrowest type it names, as the declarations of the seam's module and of
+			// its receivers' modules prove it; each receiver records that access, at which a seam that reaches this one
+			// passes it on.
+			let parameterReceivers = receivers(of: forms)
+			let access = proof.access(ofParameterTyped: parameterProperty.typeDescription, admittedModules: Set([seam.moduleName] + parameterReceivers.map(\.moduleName)))
 			passThroughs.append(SeamSignature.Parameter(
 				property: parameterProperty,
 				isPassThrough: true,
-				access: access(of: forms),
+				access: access.level,
 				defaultsToNil: !isRequired,
-				receivers: receivers(of: forms).map(\.asSignatureReceiver),
+				receivers: parameterReceivers.map { $0.with(access: access.level).asSignatureReceiver },
+				accessCause: access.cause,
 			))
 		}
 		passThroughs.sort { $0.property.label < $1.property.label }
@@ -3528,54 +3839,48 @@ public actor DependencyTreeGenerator {
 		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
 			throw error
 		}
-		guard hasTree || !passThroughs.isEmpty else {
+		guard hasTree || !passThroughs.isEmpty || !noTierParameters.isEmpty else {
 			return nil
 		}
-		// No tier is wider than the seam's type, so each parameter's access is capped there. The candidates are every
-		// distinct parameter access level and the seam's own initializer's level, widest first. Every parameter level
-		// is a tier; the own initializer's level is a tier only when it is wider than every parameter's, where it is
-		// the widest tier, takes no parameter and passes `nil` for every optional one. Of two candidates that would
-		// take the same parameters – only the own level with no parameter at it and the next wider candidate can –
-		// the wider is generated, so a caller between the two levels reaches it: a tier at the own level beside it
-		// would redeclare it. The narrowest tier takes every parameter and calls the seam's own initializer, which may
-		// be narrower than it: Swift checks a member's signature against its access, never its body.
+		// No tier is wider than the seam's type, so each parameter's access is capped there. The widest tier is at the
+		// seam type's access, and each narrower tier at a narrower parameter access; the narrowest tier takes every
+		// parameter and calls the seam's own initializer, which may be narrower than it: Swift checks a member's
+		// signature against its access, never its body. A required parameter narrower than the seam's type is
+		// omitted by the widest tier, which cannot pass `nil` for it: reported once, at the widest tier.
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
 		let parameters = (ownParameters + passThroughs).map { parameter in
-			SeamSignature.Parameter(property: parameter.property, isPassThrough: parameter.isPassThrough, access: parameter.access, tierAccess: min(parameter.access, seamTypeAccess), defaultsToNil: parameter.defaultsToNil, receivers: parameter.receivers)
+			SeamSignature.Parameter(property: parameter.property, isPassThrough: parameter.isPassThrough, access: parameter.access, tierAccess: min(parameter.access, seamTypeAccess), defaultsToNil: parameter.defaultsToNil, receivers: parameter.receivers, accessCause: parameter.accessCause, otherInitializerArgumentsAccess: parameter.otherInitializerArgumentsAccess)
 		}
-		var tiers = Set(parameters.map(\.tierAccess)).union([seamInitializerAccess]).sorted(by: >)
-		tiers = tiers.enumerated().filter { index, tier in
-			index == 0 || parameters.contains { $0.tierAccess >= tier && $0.tierAccess < tiers[index - 1] }
-		}.map(\.element)
-		for tier in tiers.dropLast() {
-			for omitted in parameters where omitted.tierAccess < tier && !omitted.defaultsToNil {
-				// A pass-through that reaches this seam only through a nested seam call the module reaches no tier of,
-				// and that the check of every construction is certain to report, is no omission of this seam's: the check
-				// reports the declarations whose widening makes a tier of that seam reachable, with their fix-its, as
-				// where the tree is built inline, and this seam is rejected with them. A parameter some receiver of this
-				// seam's own tree needs, or one of a call the check may pass, is reported here.
-				let omittedReceivers = receivers(ofLabel: omitted.property.label).filter { $0.access < tier }
-				guard omittedReceivers.isEmpty || !omittedReceivers.allSatisfy(\.isFromReportedSeamCall) else { continue }
-				let ownParameter: DependencyTreeGeneratorError.SeamError.OwnParameter = switch seam.dependencies.first(where: { $0.property == omitted.property })?.source {
-				case .forwarded:
-					.forwarded
-				case .received(onlyIfAvailable: true):
-					.onlyIfAvailable
-				case .received(onlyIfAvailable: false):
-					.required
-				case .instantiated, .aliased, nil:
-					.none
-				}
-				errors.append(.seam(.init(
-					seam: seam,
-					kind: .parameters(.tierOmitsRequiredParameter(
-						parameter: omitted.property,
-						tier: tier,
-						receivers: omittedReceivers.map(\.asErrorReceiver),
-						ownParameter: ownParameter,
-					)),
-				)))
+		let tiers = Self.tiers(of: seam, parameters: parameters)
+		for omitted in parameters where omitted.tierAccess < seamTypeAccess && !omitted.defaultsToNil {
+			// A pass-through that reaches this seam only through a nested seam call the module reaches no tier of,
+			// and that the check of every construction is certain to report, is no omission of this seam's: the check
+			// reports the nested seam's type, whose widening makes a tier of that seam reachable, with its fix-it, and
+			// this seam is rejected with it. A parameter some receiver of this seam's own tree needs, or one of a call
+			// the check may pass, is reported here.
+			let omittedReceivers = receivers(ofLabel: omitted.property.label)
+			guard omittedReceivers.isEmpty || !omittedReceivers.allSatisfy(\.isFromReportedSeamCall) else { continue }
+			// An omitted own `@Received` property is a required one: one received only if available defaults to `nil`
+			// (`ownParameters(of:)`), which the loop leaves out.
+			let ownParameter: DependencyTreeGeneratorError.SeamError.OwnParameter = switch seam.dependencies.first(where: { $0.property == omitted.property })?.source {
+			case .forwarded:
+				.forwarded
+			case .received:
+				.required
+			case .instantiated, .aliased, nil:
+				.none
 			}
+			errors.append(.seam(.init(
+				seam: seam,
+				kind: .parameters(.tierOmitsRequiredParameter(
+					parameter: omitted.property,
+					tier: seamTypeAccess,
+					parameterLevel: omitted.tierAccess,
+					receivers: omittedReceivers.map(\.asErrorReceiver),
+					ownParameter: ownParameter,
+					cause: omitted.accessCause,
+				)),
+			)))
 		}
 		// Swift tells initializers apart by their parameters' labels and types, not by their default values, so a
 		// generated tier would redeclare a hand-written initializer with the same parameters.
@@ -3596,7 +3901,7 @@ public actor DependencyTreeGenerator {
 		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
 			throw error
 		}
-		return ScopeGenerator.SeamRoot(signature: SeamSignature(seamType: seam.concreteInstantiable, parameters: parameters, tiers: tiers))
+		return ScopeGenerator.SeamRoot(signature: SeamSignature(seamType: seam.concreteInstantiable, parameters: parameters, tiers: tiers, noTierParameters: noTierParameters))
 	}
 
 	/// What a collision of `forms`, the properties the receivers of one label declare, says to do. Forms of one
@@ -3635,14 +3940,13 @@ public actor DependencyTreeGenerator {
 		return forms
 	}
 
-	/// The scope that calls `seam`'s generated initializer wherever a tree reaches it: the parameters of `tier` are
-	/// its dependencies – the seam's own `@Received` and `@Forwarded` properties as the seam declares them, and each
-	/// pass-through as a `@Received` property, received only if available when it defaults to `nil` – and the tier's
-	/// initializer takes them.
-	/// - Parameter initializerAccess: The access the leaf's initializer carries: the tier's level, or, when the caller
-	///   reaches no tier, the declaration the check of every construction reports in the tier's place – the seam's own
-	///   initializer's, with its fix-it, as it is reported where the tree is built inline, or one that satisfies every
-	///   requirement, so that only the receivers capping the tier are reported (see `createSeamScopeMapping`).
+	/// The scope that calls `seam`'s generated initializer wherever a tree reaches it, which declares the whole
+	/// signature: the parameters of `tier` – the seam's own `@Received` and `@Forwarded` properties as the seam declares
+	/// them, and each pass-through as a `@Received` property, received only if available when it defaults to `nil` –
+	/// which the tier's initializer takes, and every parameter the tier omits or no tier takes, as an only-if-available
+	/// receive the call never passes but which orders the leaf among its siblings as the receivers built inline would.
+	/// - Parameter initializerAccess: The access the leaf's initializer carries, the tier's level: the check of every
+	///   construction reads only the seam's type for a leaf (`Construction.isSeamLeaf`).
 	private static func seamLeafInstantiable(of seam: Instantiable, signature: SeamSignature, tier: AccessLevel, initializerAccess: AccessDeclaration) -> Instantiable {
 		let parameters = signature.parameters(ofTierAt: tier)
 		let ownDependencies = seam.dependencies.filter { dependency in
@@ -3671,6 +3975,9 @@ public actor DependencyTreeGenerator {
 				},
 			),
 			additionalInstantiables: Array(seam.instantiableTypes.dropFirst()),
+			// The leaf declares the whole signature: the tier's parameters as the tier takes them, and every parameter the
+			// tier omits or no tier takes as an only-if-available receive, which the call never passes but which orders
+			// the leaf among its siblings, and reaches the trees that call it, exactly as the receivers built inline would.
 			dependencies: parameters.map { parameter in
 				if let ownDependency = ownDependencies.first(where: { $0.property == parameter.property }) {
 					ownDependency
@@ -3678,6 +3985,16 @@ public actor DependencyTreeGenerator {
 					Dependency(
 						property: parameter.property,
 						source: .received(onlyIfAvailable: parameter.defaultsToNil),
+						declarationLocation: seam.declarationLocation,
+					)
+				}
+			} + (signature.parameters.filter { $0.tierAccess < tier } + signature.noTierParameters).map { parameter in
+				if let ownDependency = ownDependencies.first(where: { $0.property == parameter.property }), ownDependency.source == .received(onlyIfAvailable: true) {
+					ownDependency
+				} else {
+					Dependency(
+						property: parameter.property.typeDescription.isOptional ? parameter.property : parameter.property.asOptionalProperty,
+						source: .received(onlyIfAvailable: true),
 						declarationLocation: seam.declarationLocation,
 					)
 				}
@@ -4063,6 +4380,7 @@ public actor DependencyTreeGenerator {
 				rootReferenceLocation: rootReferenceLocation,
 				isMock: true,
 				emittingModule: emittingModule,
+				instantiables: typeDescriptionToFulfillingInstantiableMap,
 			)
 			// `mock()` defaults a forwarded parameter that the root's construction gives no default to the type's
 			// hand-written mock that takes no arguments, when it has one, as `ScopeGenerator.generateMockRootCode` does.
@@ -4075,7 +4393,7 @@ public actor DependencyTreeGenerator {
 				}
 				.compactMap { dependency in
 					typeDescriptionToFulfillingInstantiableMap[dependency.property.typeDescription].map { forwardedInstantiable in
-						Construction(instantiable: forwardedInstantiable, usesMockMethod: true, referenceLocation: dependency.declarationLocation)
+						Construction(instantiable: forwardedInstantiable, usesMockMethod: true, referenceLocation: dependency.declarationLocation, isSeamLeaf: false, instantiables: typeDescriptionToFulfillingInstantiableMap)
 					}
 				}
 			let inaccessibleConstructions = Self.inaccessibleConstructions(constructions, from: emittingModule)
@@ -7228,6 +7546,35 @@ public actor DependencyTreeGenerator {
 		}
 		if !captures.isEmpty {
 			throw DependencyTreeGeneratorError.nonSendableWrapperCapturedBySendableBuilder(Array(captures))
+		}
+	}
+
+	/// Validates that no call of a seam's generated initializer in the trees rooted at `roots` drops a value the tree
+	/// holds: a value for a parameter the tier the call reaches omits, or no tier takes, which the receivers inside
+	/// the seam would be handed were the tree built inline. Walks each finished generator tree as generation does
+	/// (`ScopeGenerator.seamTierOmissions(ofTreeRootedAt:)`), before any code is generated, and reports every finding
+	/// of every root, in source order.
+	private func validateNoSeamTierOmitsProvidedValue(inTreesRootedAt roots: [RootScopeInfo]) async throws {
+		// A module that calls no seam's tier omitting a parameter has nothing to walk. A run that knows of a seam knows
+		// its module.
+		guard !seams.isEmpty, let emittingModule else { return }
+		var omissions = [DependencyTreeGeneratorError.ProvidedValueOmission]()
+		for root in roots {
+			for omission in await root.scopeGenerator.seamTierOmissions(ofTreeRootedAt: root.instantiable, isOwnFile: emittingModule.isOwnFile) {
+				// A provider in a file this run cannot read – another module's, in a build that hands this run that
+				// module's declarations but not its files – is reported where this module refers to what leads to the
+				// call, naming the provider's module.
+				let providerIsReadable = omission.providerDeclarationLocation.map { emittingModule.isReadableFile($0.filePath) } == true
+				omissions.append(DependencyTreeGeneratorError.ProvidedValueOmission(
+					omission: omission,
+					callingType: root.typeDescription,
+					location: providerIsReadable ? omission.providerDeclarationLocation : omission.referenceLocation,
+					unreadableProviderModuleName: providerIsReadable ? nil : omission.providerDeclaringType.flatMap { typeDescriptionToFulfillingInstantiableMap[$0]?.moduleName },
+				))
+			}
+		}
+		if !omissions.isEmpty {
+			throw DependencyTreeGeneratorError.seamTierOmitsProvidedValue(omissions)
 		}
 	}
 

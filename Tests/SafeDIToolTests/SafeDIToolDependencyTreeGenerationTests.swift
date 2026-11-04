@@ -523,122 +523,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsEachParametersAccess_whenSeamReachesSeamWithTwoTiers() async throws {
-		// A seam that reaches another seam calls its generated initializer and passes its parameters on at the
-		// access each was received at: `session`, which `Inner`'s public initializer declares, stays public, and
-		// `token`, which the internal initializer of `Internals.Analytics` declares, stays internal, so `Outer`
-		// generates the same two tiers as `Inner`. Found by the graph fuzzer.
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@Instantiable(isRoot: true)
-				public struct Root: Instantiable {
-				    public init(session: Session, token: Token, outer: Outer) {
-				        self.session = session
-				        self.token = token
-				        self.outer = outer
-				    }
-
-				    @Instantiated let session: Session
-				    @Instantiated let token: Token
-				    @Instantiated let outer: Outer
-				}
-				""",
-				"""
-				@Instantiable(generateDependencyTree: true)
-				public struct Outer: Instantiable {
-				    public init(inner: Inner) {
-				        self.inner = inner
-				    }
-
-				    @Instantiated let inner: Inner
-				}
-				""",
-				"""
-				@Instantiable(generateDependencyTree: true)
-				public struct Inner: Instantiable {
-				    public init(session: Session, analytics: AnyAnalytics) {
-				        self.session = session
-				        self.analytics = analytics
-				    }
-
-				    @Received let session: Session
-				    @Instantiated(fulfilledByType: "Internals.Analytics", erasedToConcreteExistential: true) let analytics: AnyAnalytics
-				}
-				""",
-				Self.internalAnalyticsContent(receivingToken: "@Received(onlyIfAvailable: true) let token: Token?", initializerParameter: "token: Token?"),
-				Self.anyAnalyticsContent,
-				"""
-				@Instantiable
-				public struct Session: Instantiable {
-				    public init() {}
-				}
-				""",
-				"""
-				@Instantiable
-				public struct Token: Instantiable {
-				    public init() {}
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(output.dependencyTreeFiles["Inner+SafeDI.swift"] == generatedFileHeader + """
-		extension Inner {
-		    public init(session: Session) {
-		        self.init(session: session, token: nil)
-		    }
-
-		    internal init(session: Session, token: Token? = nil) {
-		        let analytics = AnyAnalytics(Internals.Analytics(token: token))
-		        self.init(session: session, analytics: analytics)
-		    }
-		}
-
-		extension Inner {
-		    public enum __safeDI_Inner_8AA4C25F27F7C07A {}
-		}
-		""")
-		#expect(output.dependencyTreeFiles["Outer+SafeDI.swift"] == generatedFileHeader + """
-		extension Outer {
-		    public init(session: Session) {
-		        self.init(session: session, token: nil)
-		    }
-
-		    internal init(session: Session, token: Token? = nil) {
-		        func __safeDI_inner() -> Inner {
-		            _ = Inner.__safeDI_Inner_8AA4C25F27F7C07A.self
-		            return Inner(session: session, token: token)
-		        }
-		        let inner: Inner = __safeDI_inner()
-		        self.init(inner: inner)
-		    }
-		}
-
-		extension Outer {
-		    public enum __safeDI_Outer_8AA4C25F27F7C07A {}
-		}
-		""")
-		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
-		extension Root {
-		    public init() {
-		        let session = Session()
-		        let token = Token()
-		        func __safeDI_outer() -> Outer {
-		            _ = Outer.__safeDI_Outer_8AA4C25F27F7C07A.self
-		            return Outer(session: session, token: token)
-		        }
-		        let outer: Outer = __safeDI_outer()
-		        self.init(session: session, token: token, outer: outer)
-		    }
-		}
-		""")
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenSeamReceivesPropertyOnlyIfAvailableThatReceiverInsideRequires() async {
 		// The seam receives `session` only if available while `Detail`, inside its tree, requires it: the seam's own
 		// receive is a parameter as declared, which provides only optional receives of `session`, so `Detail`'s is a
@@ -1575,134 +1459,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_takesParameterAccessFromReceiversThatLeaveTheSeam_whenLabelIsAlsoFulfilledInsideByWiderType() async throws {
-		// `Title` receives `token: Caption`, which `Header` fulfills inside the seam, from a public initializer; only
-		// the internal `Internals.Store` receives `token: Token?` from outside. The pass-through's access comes from
-		// receivers of its own forms that leave the seam, so it is internal; the seam's own public level is a tier
-		// too, which passes `nil` for it, so a caller in another module can call the seam.
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@Instantiable(isRoot: true)
-				public struct Root: Instantiable {
-				    public init(token: Token, screen: Screen) {
-				        self.token = token
-				        self.screen = screen
-				    }
-
-				    @Instantiated let token: Token
-				    @Instantiated let screen: Screen
-				}
-				""",
-				"""
-				@Instantiable(generateDependencyTree: true)
-				public struct Screen: Instantiable {
-				    public init(header: Header, store: AnyStore) {
-				        self.header = header
-				        self.store = store
-				    }
-
-				    @Instantiated let header: Header
-				    @Instantiated(fulfilledByType: "Internals.Store", erasedToConcreteExistential: true) let store: AnyStore
-				}
-				""",
-				"""
-				@Instantiable
-				public struct Header: Instantiable {
-				    public init(token: Caption, title: Title) {
-				        self.token = token
-				        self.title = title
-				    }
-
-				    @Instantiated let token: Caption
-				    @Instantiated let title: Title
-				}
-				""",
-				"""
-				@Instantiable
-				public struct Title: Instantiable {
-				    public init(token: Caption) {
-				        self.token = token
-				    }
-
-				    @Received let token: Caption
-				}
-				""",
-				"""
-				@Instantiable
-				public struct Caption: Instantiable {
-				    public init() {}
-				}
-				""",
-				"""
-				internal enum Internals {
-				    @Instantiable
-				    public struct Store: Instantiable, StoreProtocol {
-				        public init(token: Token?) {
-				            self.token = token
-				        }
-
-				        @Received(onlyIfAvailable: true) let token: Token?
-				    }
-				}
-				""",
-				"""
-				public protocol StoreProtocol {}
-
-				public struct AnyStore: StoreProtocol {
-				    public init(_ store: some StoreProtocol) {}
-				}
-				""",
-				"""
-				@Instantiable
-				public struct Token: Instantiable {
-				    public init() {}
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
-		extension Screen {
-		    public init() {
-		        self.init(token: nil)
-		    }
-
-		    internal init(token: Token? = nil) {
-		        func __safeDI_header() -> Header {
-		            let token = Caption()
-		            let title = Title(token: token)
-		            return Header(token: token, title: title)
-		        }
-		        let header: Header = __safeDI_header()
-		        let store = AnyStore(Internals.Store(token: token))
-		        self.init(header: header, store: store)
-		    }
-		}
-
-		extension Screen {
-		    public enum __safeDI_Screen_BEC07F255DE644F9 {}
-		}
-		""")
-		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
-		extension Root {
-		    public init() {
-		        let token = Token()
-		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_BEC07F255DE644F9.self
-		            return Screen(token: token)
-		        }
-		        let screen: Screen = __safeDI_screen()
-		        self.init(token: token, screen: screen)
-		    }
-		}
-		""")
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenSendableBuilderInsideSeamReadsInstanceOfWrapperParameter() async {
 		// The seam's generated initializer declares `cache: LazilyInstantiated<Cache>` outside every builder function,
 		// so the `@Sendable` builder of `worker`, which reads its instance, captures a wrapper that is not `Sendable`:
@@ -1828,7 +1584,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let detailPath = output.fixtures["Detail.swift"]
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(session: Session?) {
+		    public init(session: Session? = nil) {
 		        func __safeDI_detail() -> Detail {
 		            #sourceLocation(file: "\(detailPath)", line: 7)
 		            let current: Session? = session
@@ -1841,7 +1597,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_8FA1C5921394D121 {}
+		    public enum __safeDI_Screen_75FDE4A4CAE60A7D {}
 		}
 		""")
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
@@ -1849,7 +1605,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    public init() {
 		        let session = Session()
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_8FA1C5921394D121.self
+		            _ = Screen.__safeDI_Screen_75FDE4A4CAE60A7D.self
 		            return Screen(session: session)
 		        }
 		        let screen: Screen = __safeDI_screen()
@@ -2180,57 +1936,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenPublicSeamsOnlyParameterIsRequiredAtInternalLevel() async {
-		// The seam's own public level is always a tier, and it cannot take `token`, which only the internal
-		// initializer of `Internals.Analytics` receives, nor pass `nil` for it: the error names the parameter and the
-		// receiver, and what to widen.
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `token: Token`, which the initializer of `Internals.Analytics` receives at a narrower access level, and cannot pass `nil` for it, since it is required. Widen `Internals.Analytics`, or the type enclosing it, which caps its initializer, receive the property with `onlyIfAvailable: true` and an optional type, or narrow the initializers of every type in the tree to its level.
-			\(fixtures["Analytics.swift"]):8:9: note: `Internals.Analytics` receives `token: Token` here.
-			"""
-		}) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init(token: Token, screen: Screen) {
-					        self.token = token
-					        self.screen = screen
-					    }
-
-					    @Instantiated let token: Token
-					    @Instantiated let screen: Screen
-					}
-					""",
-					"""
-					@Instantiable(generateDependencyTree: true)
-					public struct Screen: Instantiable {
-					    public init(analytics: AnyAnalytics) {
-					        self.analytics = analytics
-					    }
-
-					    @Instantiated(fulfilledByType: "Internals.Analytics", erasedToConcreteExistential: true) let analytics: AnyAnalytics
-					}
-					""",
-					Self.internalAnalyticsContent(receivingToken: "@Received let token: Token", initializerParameter: "token: Token"),
-					Self.anyAnalyticsContent,
-					"""
-					@Instantiable
-					public struct Token: Instantiable {
-					    public init() {}
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenSeamsTreeReachesAdditionalDirectoryDeclarationUnderTargetGraph() async {
 		// Under the plugin's target graph, a caller computes this module's seams from the files the graph lists, which
 		// leave out the directory the configuration adds, so a seam whose tree reaches `Detail` there would be called
@@ -2498,314 +2203,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		}
 	}
 
-	@Test(arguments: MultiModuleIntegration.allCases)
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_callsPublicTier_whenRootInAnotherModuleReachesSeamWithPublicAndInternalTiers(integration: MultiModuleIntegration) async throws {
-		// `Screen`'s tree receives `token` only through the internal initializer of `Internals.Analytics`, so its
-		// internal tier takes it and its public tier passes `nil`; a root in another module can reach only the public
-		// tier, and calls it, passing no internal parameter.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: [
-				ModuleFixture(
-					name: "Feature",
-					packageName: "Shop",
-					swiftFileContent: [
-						"""
-						@Instantiable(generateDependencyTree: true)
-						public struct Screen: Instantiable {
-						    public init(session: Session, analytics: AnyAnalytics) {
-						        self.session = session
-						        self.analytics = analytics
-						    }
-
-						    @Received let session: Session
-						    @Instantiated(fulfilledByType: "Internals.Analytics", erasedToConcreteExistential: true) let analytics: AnyAnalytics
-						}
-						""",
-						Self.internalAnalyticsContent(receivingToken: "@Received(onlyIfAvailable: true) let token: Token?", initializerParameter: "token: Token?"),
-						Self.anyAnalyticsContent,
-						"""
-						@Instantiable
-						public struct Session: Instantiable {
-						    public init() {}
-						}
-						""",
-						"""
-						@Instantiable
-						public struct Token: Instantiable {
-						    public init() {}
-						}
-						""",
-					],
-				),
-				ModuleFixture(
-					name: "App",
-					packageName: "Shop",
-					swiftFileContent: [
-						"""
-						import Feature
-
-							@Instantiable(isRoot: true)
-							public struct Root: Instantiable {
-							    public init(session: Session, token: Token, screen: Screen) {
-							        self.session = session
-							        self.token = token
-							        self.screen = screen
-							    }
-
-							    @Instantiated let session: Session
-							    @Instantiated let token: Token
-							    @Instantiated let screen: Screen
-							}
-						""",
-					],
-					dependencies: ["Feature"],
-				),
-			],
-			integration: integration,
-			filesToDelete: &filesToDelete,
-		)
-
-		let callComment = switch integration {
-		case .moduleInfo:
-			""
-		case .swiftPackagePlugin:
-			" // If this line does not compile, add the SafeDI plugin to the target that declares Screen."
-		}
-		let seamCode = """
-		extension Screen {
-		    public init(session: Session) {
-		        self.init(session: session, token: nil)
-		    }
-
-		    internal init(session: Session, token: Token? = nil) {
-		        let analytics = AnyAnalytics(Internals.Analytics(token: token))
-		        self.init(session: session, analytics: analytics)
-		    }
-		}
-
-		extension Screen {
-		    public enum __safeDI_Screen_8AA4C25F27F7C07A {}
-		}
-		"""
-		let expectedGeneratedFiles: [String: [String: String]] = switch integration {
-		case .moduleInfo:
-			["Feature": ["Feature.swift": generatedFileHeader + seamCode], "App": ["App.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n" + """
-			extension Root {
-			    public init() {
-			        let session = Session()
-			        let token = Token()
-			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_8AA4C25F27F7C07A.self\(callComment)
-			            return Screen(session: session)
-			        }
-			        let screen: Screen = __safeDI_screen()
-			        self.init(session: session, token: token, screen: screen)
-			    }
-			}
-			"""]]
-		case .swiftPackagePlugin:
-			["Feature": ["Screen+SafeDI.swift": generatedFileHeader + seamCode], "App": ["Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n" + """
-			extension Root {
-			    public init() {
-			        let session = Session()
-			        let token = Token()
-			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_8AA4C25F27F7C07A.self\(callComment)
-			            return Screen(session: session)
-			        }
-			        let screen: Screen = __safeDI_screen()
-			        self.init(session: session, token: token, screen: screen)
-			    }
-			}
-			"""]]
-		}
-		#expect(output.modules.mapValues(\.generatedFiles) == expectedGeneratedFiles)
-		for moduleName in output.moduleNames {
-			#expect(try #require(output.modules[moduleName]).warnings == [])
-		}
-		if compileVerificationIsEnabled {
-			let compilation = try #require(output.compilation)
-			#expect(compilation.modules.map(\.exitCode) == [0, 0])
-		}
-	}
-
-	@Test(arguments: MultiModuleIntegration.allCases)
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_callsPackageTier_whenRootInSamePackageReachesSeamWithPublicAndPackageTiers(integration: MultiModuleIntegration) async throws {
-		// A receiver nested in a `package enum` has a `package` initializer, so `Screen` has a `package` tier beside
-		// its public one; a root in another module of the same package calls the `package` tier, and a root in
-		// another package calls the public one.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: [
-				ModuleFixture(
-					name: "Feature",
-					packageName: "Shop",
-					swiftFileContent: [
-						"""
-						@Instantiable(generateDependencyTree: true)
-						public struct Screen: Instantiable {
-						    public init(analytics: AnyAnalytics) {
-						        self.analytics = analytics
-						    }
-
-						    @Instantiated(fulfilledByType: "Internals.Analytics", erasedToConcreteExistential: true) let analytics: AnyAnalytics
-						}
-						""",
-						"""
-						package enum Internals {
-						    @Instantiable
-						    public struct Analytics: Instantiable, AnalyticsProtocol {
-						        public init(token: Token?) {
-						            self.token = token
-						        }
-
-						        @Received(onlyIfAvailable: true) let token: Token?
-						    }
-						}
-						""",
-						Self.anyAnalyticsContent,
-						"""
-						@Instantiable
-						public struct Token: Instantiable {
-						    public init() {}
-						}
-						""",
-					],
-				),
-				ModuleFixture(
-					name: "App",
-					packageName: "Shop",
-					swiftFileContent: [
-						"""
-						import Feature
-
-							@Instantiable(isRoot: true)
-							public struct Root: Instantiable {
-							    public init(token: Token, screen: Screen) {
-							        self.token = token
-							        self.screen = screen
-							    }
-
-							    @Instantiated let token: Token
-							    @Instantiated let screen: Screen
-							}
-						""",
-					],
-					dependencies: ["Feature"],
-				),
-				ModuleFixture(
-					name: "Widget",
-					packageName: "Extras",
-					swiftFileContent: [
-						"""
-						import Feature
-
-							@Instantiable(isRoot: true)
-							public struct WidgetRoot: Instantiable {
-							    public init(token: Token, screen: Screen) {
-							        self.token = token
-							        self.screen = screen
-							    }
-
-							    @Instantiated let token: Token
-							    @Instantiated let screen: Screen
-							}
-						""",
-					],
-					dependencies: ["Feature"],
-				),
-			],
-			integration: integration,
-			filesToDelete: &filesToDelete,
-		)
-
-		let callComment = switch integration {
-		case .moduleInfo:
-			""
-		case .swiftPackagePlugin:
-			" // If this line does not compile, add the SafeDI plugin to the target that declares Screen."
-		}
-		let seamCode = """
-		extension Screen {
-		    public init() {
-		        self.init(token: nil)
-		    }
-
-		    package init(token: Token? = nil) {
-		        let analytics = AnyAnalytics(Internals.Analytics(token: token))
-		        self.init(analytics: analytics)
-		    }
-		}
-
-		extension Screen {
-		    public enum __safeDI_Screen_16885A1AAD60582A {}
-		}
-		"""
-		let expectedGeneratedFiles: [String: [String: String]] = switch integration {
-		case .moduleInfo:
-			["Feature": ["Feature.swift": generatedFileHeader + seamCode], "App": ["App.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n" + """
-			extension Root {
-			    public init() {
-			        let token = Token()
-			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_16885A1AAD60582A.self\(callComment)
-			            return Screen(token: token)
-			        }
-			        let screen: Screen = __safeDI_screen()
-			        self.init(token: token, screen: screen)
-			    }
-			}
-			"""], "Widget": ["Widget.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n" + """
-			extension WidgetRoot {
-			    public init() {
-			        let token = Token()
-			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_16885A1AAD60582A.self\(callComment)
-			            return Screen()
-			        }
-			        let screen: Screen = __safeDI_screen()
-			        self.init(token: token, screen: screen)
-			    }
-			}
-			"""]]
-		case .swiftPackagePlugin:
-			["Feature": ["Screen+SafeDI.swift": generatedFileHeader + seamCode], "App": ["Root+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n" + """
-			extension Root {
-			    public init() {
-			        let token = Token()
-			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_16885A1AAD60582A.self\(callComment)
-			            return Screen(token: token)
-			        }
-			        let screen: Screen = __safeDI_screen()
-			        self.init(token: token, screen: screen)
-			    }
-			}
-			"""], "Widget": ["WidgetRoot+SafeDI.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n" + """
-			extension WidgetRoot {
-			    public init() {
-			        let token = Token()
-			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_16885A1AAD60582A.self\(callComment)
-			            return Screen()
-			        }
-			        let screen: Screen = __safeDI_screen()
-			        self.init(token: token, screen: screen)
-			    }
-			}
-			"""]]
-		}
-		#expect(output.modules.mapValues(\.generatedFiles) == expectedGeneratedFiles)
-		for moduleName in output.moduleNames {
-			#expect(try #require(output.modules[moduleName]).warnings == [])
-		}
-		if compileVerificationIsEnabled {
-			let compilation = try #require(output.compilation)
-			#expect(compilation.modules.map(\.exitCode) == [0, 0, 0])
-		}
-	}
-
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_writesHeaderOnlyAndCallsHandWrittenInitializer_whenSeamSignatureEqualsItsInitializer() async throws {
@@ -2851,160 +2248,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    }
 		}
 		""")
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_generatesOneInitializerPerAccessLevel_whenParametersAreReceivedAtDifferentLevels() async throws {
-		// A parameter is as visible as the initializer that declares its receive. A type nested in an internal
-		// enum has an internal initializer, so the wider tier omits its parameter, passing `nil`, and calls the tier
-		// that takes it, which builds the tree.
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@Instantiable(isRoot: true)
-				public struct Root: Instantiable {
-				    public init(user: User, token: Token, screen: Screen) {
-				        self.user = user
-				        self.token = token
-				        self.screen = screen
-				    }
-
-				    @Instantiated let user: User
-				    @Instantiated let token: Token
-				    @Instantiated let screen: Screen
-				}
-				""",
-				"""
-				@Instantiable(generateDependencyTree: true)
-				public struct Screen: Instantiable {
-				    public init(tracker: Tracker, analytics: AnyAnalytics) {
-				        self.tracker = tracker
-				        self.analytics = analytics
-				    }
-
-				    @Instantiated let tracker: Tracker
-				    @Instantiated(fulfilledByType: "Internals.Analytics", erasedToConcreteExistential: true) let analytics: AnyAnalytics
-				}
-				""",
-				"""
-				@Instantiable
-				public struct Tracker: Instantiable {
-				    public init(user: User) {
-				        self.user = user
-				    }
-
-				    @Received let user: User
-				}
-				""",
-				Self.internalAnalyticsContent(receivingToken: "@Received(onlyIfAvailable: true) let token: Token?", initializerParameter: "token: Token?"),
-				Self.anyAnalyticsContent,
-				"""
-				@Instantiable
-				public struct Token: Instantiable {
-				    public init() {}
-				}
-				""",
-				Self.userContent,
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
-		extension Screen {
-		    public init(user: User) {
-		        self.init(token: nil, user: user)
-		    }
-
-		    internal init(token: Token? = nil, user: User) {
-		        let tracker = Tracker(user: user)
-		        let analytics = AnyAnalytics(Internals.Analytics(token: token))
-		        self.init(tracker: tracker, analytics: analytics)
-		    }
-		}
-
-		extension Screen {
-		    public enum __safeDI_Screen_7979DE7E456B3796 {}
-		}
-		""")
-		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
-		extension Root {
-		    public init() {
-		        let user = User()
-		        let token = Token()
-		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_7979DE7E456B3796.self
-		            return Screen(token: token, user: user)
-		        }
-		        let screen: Screen = __safeDI_screen()
-		        self.init(user: user, token: token, screen: screen)
-		    }
-		}
-		""")
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenRequiredParameterIsReceivedAtNarrowerLevelThanAnotherParameter() async {
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `token: Token`, which the initializer of `Internals.Analytics` receives at a narrower access level, and cannot pass `nil` for it, since it is required. Widen `Internals.Analytics`, or the type enclosing it, which caps its initializer, receive the property with `onlyIfAvailable: true` and an optional type, or narrow the initializers of every type in the tree to its level.
-			\(fixtures["Analytics.swift"]):8:9: note: `Internals.Analytics` receives `token: Token` here.
-			"""
-		}) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init(user: User, token: Token, screen: Screen) {
-					        self.user = user
-					        self.token = token
-					        self.screen = screen
-					    }
-
-					    @Instantiated let user: User
-					    @Instantiated let token: Token
-					    @Instantiated let screen: Screen
-					}
-					""",
-					"""
-					@Instantiable(generateDependencyTree: true)
-					public struct Screen: Instantiable {
-					    public init(tracker: Tracker, analytics: AnyAnalytics) {
-					        self.tracker = tracker
-					        self.analytics = analytics
-					    }
-
-					    @Instantiated let tracker: Tracker
-					    @Instantiated(fulfilledByType: "Internals.Analytics", erasedToConcreteExistential: true) let analytics: AnyAnalytics
-					}
-					""",
-					"""
-					@Instantiable
-					public struct Tracker: Instantiable {
-					    public init(user: User) {
-					        self.user = user
-					    }
-
-					    @Received let user: User
-					}
-					""",
-					Self.internalAnalyticsContent(receivingToken: "@Received let token: Token", initializerParameter: "token: Token"),
-					Self.anyAnalyticsContent,
-					"""
-					@Instantiable
-					public struct Token: Instantiable {
-					    public init() {}
-					}
-					""",
-					Self.userContent,
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
 	}
 
 	@Test
@@ -4753,7 +3996,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		// first; `T`'s initializer is internal, so the seam's public tier cannot take `x` and reports it.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `x: Internals.X`, which the initializer of `Internals.T` receives at a narrower access level, and cannot pass `nil` for it, since it is required. Widen `Internals.T`, or the type enclosing it, which caps its initializer, receive the property with `onlyIfAvailable: true` and an optional type, or narrow the initializers of every type in the tree to its level.
+			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer, which `Screen`'s `public` access requires, cannot take `x: Internals.X`, which `Internals.T` receives, and cannot pass `nil` for it, since it is required. `Internals.X`'s own `@Instantiable` declaration is `internal`. Declare `Internals.X` `public`; declare `Screen` `internal`; build `x` inside the tree or receive it with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
 			\(fixtures["Root.swift"]):39:9: note: `Internals.T` receives `x: Internals.X` here.
 			"""
 		}) {
@@ -4892,25 +4135,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		}) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: Self.receiverUnderTwoParentsFixture(summaryReceivesString: true, detailIsInternal: false),
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_listsReceiverOnce_whenTierOmitsParameterOfReceiverReachedUnderTwoParentsProvidingNothing() async {
-		// `Helpers.Detail`'s internal receive of `token` leaves the seam on both paths: the public tier's omission
-		// names the declaration once.
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `token: Token`, which the initializer of `Helpers.Detail` receives at a narrower access level, and cannot pass `nil` for it, since it is required. Widen `Helpers.Detail`, or the type enclosing it, which caps its initializer, receive the property with `onlyIfAvailable: true` and an optional type, or narrow the initializers of every type in the tree to its level.
-			\(fixtures["Detail.swift"]):8:9: note: `Helpers.Detail` receives `token: Token` here.
-			"""
-		}) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: Self.receiverUnderTwoParentsFixture(summaryReceivesString: false, detailIsInternal: true),
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
@@ -6048,14 +5272,14 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let output = try await labelFormsOutput(Self.labelFormsFixture(detail: nil, summary: .onlyIfAvailable, own: (.onlyIfAvailable, asWrapper: true), caller: .wrapper))
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: LazilyInstantiated<User>?) {
+		    public init(user: LazilyInstantiated<User>? = nil) {
 		        let summary = Summary(user: user)
 		        self.init(user: user, summary: summary)
 		    }
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_FEB4BBC2D6616E24 {}
+		    public enum __safeDI_Screen_71C706F9FE9BEAFE {}
 		}
 		""")
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
@@ -6066,7 +5290,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        }
 		        let user = LazilyInstantiated<User>(__safeDI_user)
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_FEB4BBC2D6616E24.self
+		            _ = Screen.__safeDI_Screen_71C706F9FE9BEAFE.self
 		            return Screen(user: user)
 		        }
 		        let screen: Screen = __safeDI_screen()
@@ -7130,14 +6354,14 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			fixture: Self.labelFormsFixture(detail: nil, summary: .onlyIfAvailable, own: (.onlyIfAvailable, asWrapper: true), caller: .wrapper),
 			seamCode: """
 			extension Screen {
-			    public init(user: LazilyInstantiated<User>?) {
+			    public init(user: LazilyInstantiated<User>? = nil) {
 			        let summary = Summary(user: user)
 			        self.init(user: user, summary: summary)
 			    }
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_FEB4BBC2D6616E24 {}
+			    public enum __safeDI_Screen_71C706F9FE9BEAFE {}
 			}
 			""",
 			rootCode: """
@@ -7148,7 +6372,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			        }
 			        let user = LazilyInstantiated<User>(__safeDI_user)
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_FEB4BBC2D6616E24.self<COMMENT>
+			            _ = Screen.__safeDI_Screen_71C706F9FE9BEAFE.self<COMMENT>
 			            return Screen(user: user)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -7437,14 +6661,14 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			fixture: Self.labelFormsFixture(detail: nil, summary: .requiredOptional, own: (.onlyIfAvailable, asWrapper: true), caller: .optionalWrapper),
 			seamCode: """
 			extension Screen {
-			    public init(user: LazilyInstantiated<User>?) {
+			    public init(user: LazilyInstantiated<User>? = nil) {
 			        let summary = Summary(user: user)
 			        self.init(user: user, summary: summary)
 			    }
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_FEB4BBC2D6616E24 {}
+			    public enum __safeDI_Screen_71C706F9FE9BEAFE {}
 			}
 			""",
 			rootCode: """
@@ -7452,7 +6676,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			    public init() {
 			        func __safeDI_featureBuilder(user: LazilyInstantiated<User>?) -> Feature {
 			            func __safeDI_screen() -> Screen {
-			                _ = Screen.__safeDI_Screen_FEB4BBC2D6616E24.self<COMMENT>
+			                _ = Screen.__safeDI_Screen_71C706F9FE9BEAFE.self<COMMENT>
 			                return Screen(user: user)
 			            }
 			            let screen: Screen = __safeDI_screen()
@@ -7599,14 +6823,14 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			fixture: Self.labelFormsFixture(detail: .onlyIfAvailable, summary: nil, own: (.onlyIfAvailable, asWrapper: false), caller: .instance),
 			seamCode: """
 			extension Screen {
-			    public init(user: User?) {
+			    public init(user: User? = nil) {
 			        let detail = Detail(user: user)
 			        self.init(user: user, detail: detail)
 			    }
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_A1F38183A3184A01 {}
+			    public enum __safeDI_Screen_0A0B087775B360DD {}
 			}
 			""",
 			rootCode: """
@@ -7614,7 +6838,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			    public init() {
 			        let user = User()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_A1F38183A3184A01.self<COMMENT>
+			            _ = Screen.__safeDI_Screen_0A0B087775B360DD.self<COMMENT>
 			            return Screen(user: user)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -7628,14 +6852,14 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			fixture: Self.labelFormsFixture(detail: .requiredOptional, summary: nil, own: (.onlyIfAvailable, asWrapper: false), caller: .instance),
 			seamCode: """
 			extension Screen {
-			    public init(user: User?) {
+			    public init(user: User? = nil) {
 			        let detail = Detail(user: user)
 			        self.init(user: user, detail: detail)
 			    }
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_A1F38183A3184A01 {}
+			    public enum __safeDI_Screen_0A0B087775B360DD {}
 			}
 			""",
 			rootCode: """
@@ -7643,7 +6867,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			    public init() {
 			        let user = User()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_A1F38183A3184A01.self<COMMENT>
+			            _ = Screen.__safeDI_Screen_0A0B087775B360DD.self<COMMENT>
 			            return Screen(user: user)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -9013,9 +8237,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 					"""
 					public enum Feature {}
 
-					extension Feature {
+					public extension Feature {
 					    @Instantiable
-					    public final class Logger: Instantiable {
+					    final class Logger: Instantiable {
 					        public init() {}
 					    }
 					}
@@ -9030,9 +8254,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 					"""
 					import Base
 
-					extension Feature {
+					public extension Feature {
 					    @Instantiable(generateDependencyTree: true)
-					    public final class Screen: Instantiable {
+					    final class Screen: Instantiable {
 					        public init(logger: Logger, detail: Detail) {
 					            self.logger = logger
 					            self.detail = detail
@@ -9123,9 +8347,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 					)
 					""",
 					"""
-					extension Feature {
+					public extension Feature {
 					    @Instantiable(generateDependencyTree: true)
-					    public final class Screen: Instantiable {
+					    final class Screen: Instantiable {
 					        public init(logger: Logger, detail: Detail) {
 					            self.logger = logger
 					            self.detail = detail
@@ -9147,9 +8371,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 					"""
 					public enum Feature {}
 
-					extension Feature {
+					public extension Feature {
 					    @Instantiable
-					    public final class Logger: Instantiable {
+					    final class Logger: Instantiable {
 					        public init() {}
 					    }
 					}
@@ -9163,85 +8387,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 						dependencyTargets: [],
 					)
 				},
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesReceiverInsideNestedSeam_whenOuterSeamsTierOmitsParameterPassedThroughIt() async {
-		// `Internals.Panel`, an internal seam, takes `session` from `Helpers.Detail`, whose initializer is internal by
-		// nesting, and the public `Screen` passes it on: `Screen`'s public tier cannot take it, and the error names
-		// the receiver that caps it, inside the nested seam, not the nested seam.
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `session: Session`, which the initializer of `Helpers.Detail` receives at a narrower access level, and cannot pass `nil` for it, since it is required. Widen `Helpers.Detail`, or the type enclosing it, which caps its initializer, receive the property with `onlyIfAvailable: true` and an optional type, or narrow the initializers of every type in the tree to its level.
-			\(fixtures["Detail.swift"]):8:9: note: `Helpers.Detail` receives `session: Session` here.
-			"""
-		}) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init(session: Session, screen: Screen) {
-					        self.session = session
-					        self.screen = screen
-					    }
-
-					    @Instantiated let session: Session
-					    @Instantiated let screen: Screen
-					}
-					""",
-					"""
-					@Instantiable(generateDependencyTree: true)
-					public struct Screen: Instantiable {
-					    public init(panel: AnyPanel) {
-					        self.panel = panel
-					    }
-
-					    @Instantiated(fulfilledByType: "Internals.Panel", erasedToConcreteExistential: true) let panel: AnyPanel
-					}
-
-					public protocol PanelProtocol {}
-
-					public struct AnyPanel: PanelProtocol {
-					    public init(_ panel: some PanelProtocol) {}
-					}
-					""",
-					"""
-					internal enum Internals {
-					    @Instantiable(generateDependencyTree: true)
-					    public struct Panel: Instantiable, PanelProtocol {
-					        public init(detail: Helpers.Detail) {
-					            self.detail = detail
-					        }
-
-					        @Instantiated let detail: Helpers.Detail
-					    }
-					}
-					""",
-					"""
-					internal enum Helpers {
-					    @Instantiable
-					    public struct Detail: Instantiable {
-					        public init(session: Session) {
-					            self.session = session
-					        }
-
-					        @Received let session: Session
-					    }
-					}
-					""",
-					"""
-					@Instantiable
-					public struct Session: Instantiable {
-					    public init() {}
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -9562,75 +8707,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		}
 	}
 
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenSeamsOwnInitializerIsNarrowerThanTierOfPassThrough() async {
-		// `Screen`'s own initializer is internal, so its own `token` is a parameter of the internal tier alone, while
-		// `Detail`'s public initializer gives `session` a public tier, which cannot take `token`: the error says to widen
-		// the seam's own initializer, as it does for a receiver's.
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `token: Token`, which `Screen`'s own initializer receives at a narrower access level, and cannot pass `nil` for it, since it is required. Widen the initializer of `Screen`, or narrow the initializers of every type in the tree to its level.
-			\(fixtures["Screen.swift"]):8:5: note: `Screen` receives `token: Token` here.
-			"""
-		}) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateDependencyTree: true)
-					public struct Screen: Instantiable {
-					    init(token: Token, detail: Detail) {
-					        self.token = token
-					        self.detail = detail
-					    }
-
-					    @Received let token: Token
-					    @Instantiated let detail: Detail
-					}
-					""",
-					"""
-					@Instantiable
-					public struct Detail: Instantiable {
-					    public init(session: Session) {
-					        self.session = session
-					    }
-
-					    @Received let session: Session
-					}
-					""",
-					"""
-					@Instantiable
-					public struct Token: Instantiable {
-					    public init() {}
-					}
-					""",
-					"""
-					@Instantiable
-					public struct Session: Instantiable {
-					    public init() {}
-					}
-					""",
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init(token: Token, session: Session, screen: Screen) {
-					        self.token = token
-					        self.session = session
-					        self.screen = screen
-					    }
-
-					    @Instantiated let token: Token
-					    @Instantiated let session: Session
-					    @Instantiated let screen: Screen
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorAtDeclaration_whenSeamsTreeConstructsInternalTypeOfAnotherModule(integration: MultiModuleIntegration) async {
@@ -9781,15 +8857,15 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenRequiredParameterComesFromInstantiateMethodOfPrivateExtension() async {
-		// An unspelled `instantiate(…)` in a `private` extension is `fileprivate`, so `token`, which it takes, is a
-		// parameter at that level, which `Screen`'s public tier cannot take: the error names the method as what to
-		// widen, since an extension's level caps nothing. The macro rejects such a method, so this is the tool's
+	mutating func generate_throwsError_whenSeamsTreeCallsInstantiateMethodOfPrivateExtension() async {
+		// An unspelled `instantiate(…)` in a `private` extension is `fileprivate`, which the code SafeDI generates in
+		// another file cannot call: the check of every construction reports the extension. `Token`'s own declaration
+		// proves it `public`, so `Screen`'s public tier takes it. The macro rejects such a method, so this is the tool's
 		// check alone, with no generated code to compile.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `token: Token`, which the initializer of `Detail` receives at a narrower access level, and cannot pass `nil` for it, since it is required. Widen the initializer of `Detail`, receive the property with `onlyIfAvailable: true` and an optional type, or narrow the initializers of every type in the tree to its level.
-			\(fixtures["Detail.swift"]):7:29: note: `Detail` receives `token: Token` here.
+			\(fixtures["Detail.swift"]):6:1: error: The extension that declares `Detail.instantiate()` is `fileprivate`, so the code SafeDI generates in another file of this module cannot call `Detail.instantiate()`. Make the extension `internal` to fix.
+			\(fixtures["Detail.swift"]):6:1-6:8: fixit: internal
 			"""
 		}) {
 			try await executeSafeDIToolTest(
@@ -11923,26 +10999,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenUnseenReceiversInitializerWidensPublicSeamsTier() async {
-		// Under the public `Cache`, `Logger`'s `public init` makes `token` public, so the own view generates one tier;
-		// the callers, seeing `Helpers.Store`'s initializer, internal by nesting, alone, compute an `internal` tier
-		// access and a public tier that cannot take the required parameter: their computation of this seam throws,
-		// which is reported once, at the seam, naming `Logger`.
-		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-			"""
-			\(fixtures["Feature"]!["Cache.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Cache`: the initializer SafeDI generates for it depends on `Logger`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [Self.coreTokenModule] + Self.sharedReceiveModules(storeIsInternal: true),
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsOnlySeamWhoseCallersViewComputationThrows_whenAnotherSeamReachesNothingUnseen() async {
 		// `Screen`'s `Detail` receives `logger: Logger` and `Panel` `logger: Feature.Logger`, one type in this run's
 		// view, which qualifies `Logger` by `Base`'s declaration, and two in the callers', which cannot: their
@@ -11962,9 +11018,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 							"""
 							public enum Feature {}
 
-							extension Feature {
+							public extension Feature {
 							    @Instantiable
-							    public final class Logger: Instantiable {
+							    final class Logger: Instantiable {
 							        public init() {}
 							    }
 							}
@@ -12077,156 +11133,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesUnseenReceiverOfParameterThrownErrorNames_whenCallersComputationThrows() async {
-		// The callers cannot see `Alpha`, which receives `name`, or `Logger`, which receives `token`: without `Logger`,
-		// `token` is received at `Helpers.Store`'s internal level alone, so the callers' public tier omits it and their
-		// computation throws, naming `token`. `Logger` is named, not `Alpha`, which is declared first and whose absence
-		// changes nothing, since `Beta` receives `name` too.
-		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-			"""
-			\(fixtures["Feature"]!["Cache.swift"]):5:1: error: SafeDI cannot generate the dependency tree of `Cache`: the initializer SafeDI generates for it depends on `Logger`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(name: "Core", packageName: "Shop", swiftFileContent: [seamFixtureType(named: "Token", declarations: []), seamFixtureType(named: "Name", declarations: [])]),
-					ModuleFixture(
-						name: "ABase",
-						packageName: "Shop",
-						swiftFileContent: ["import Core\n\n" + seamFixtureType(named: "Alpha", declarations: ["@Received let name: Name"])],
-						dependencies: ["Core"],
-						omitsModuleName: true,
-					),
-					ModuleFixture(
-						name: "BBase",
-						packageName: "Shop",
-						swiftFileContent: ["import Core\n\n" + seamFixtureType(named: "Logger", declarations: ["@Received let token: Token"])],
-						dependencies: ["Core"],
-						omitsModuleName: true,
-					),
-					ModuleFixture(
-						name: "Feature",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							import ABase
-							import BBase
-							import Core
-
-							@Instantiable(generateDependencyTree: true)
-							public struct Cache: Instantiable {
-							    init(store: Helpers.Store, logger: Logger, beta: Beta, alpha: Alpha) {
-							        self.store = store
-							        self.logger = logger
-							        self.beta = beta
-							        self.alpha = alpha
-							    }
-
-							    @Instantiated let store: Helpers.Store
-							    @Instantiated let logger: Logger
-							    @Instantiated let beta: Beta
-							    @Instantiated let alpha: Alpha
-							}
-							""",
-							"""
-							import Core
-
-							enum Helpers {
-							    @Instantiable
-							    public struct Store: Instantiable {
-							        public init(token: Token) {
-							            self.token = token
-							        }
-
-							        @Received let token: Token
-							    }
-							}
-							""",
-							"import Core\n\n" + seamFixtureType(named: "Beta", declarations: ["@Received let name: Name"]),
-						],
-						dependencies: ["ABase", "BBase", "Core"],
-					),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesUnseenReceiverOfEitherParameterThrownErrorsName_whenCallersComputationThrowsTwice() async {
-		// Without `Logger` and `Writer`, which the callers cannot see, `token` and `name` are received at `Helpers.Store`'s
-		// internal level alone, so the callers' public tier omits both and their computation throws twice. `Logger`,
-		// declared first of the receivers of those parameters, is named, not `Alpha`, declared before it, whose
-		// parameter neither error names.
-		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-			"""
-			\(fixtures["Feature"]!["Cache.swift"]):6:1: error: SafeDI cannot generate the dependency tree of `Cache`: the initializer SafeDI generates for it depends on `Logger`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(name: "Core", packageName: "Shop", swiftFileContent: [seamFixtureType(named: "Token", declarations: []), seamFixtureType(named: "Name", declarations: []), seamFixtureType(named: "Other", declarations: [])]),
-					ModuleFixture(name: "ABase", packageName: "Shop", swiftFileContent: ["import Core\n\n" + seamFixtureType(named: "Alpha", declarations: ["@Received let other: Other"])], dependencies: ["Core"], omitsModuleName: true),
-					ModuleFixture(name: "BBase", packageName: "Shop", swiftFileContent: ["import Core\n\n" + seamFixtureType(named: "Logger", declarations: ["@Received let token: Token"])], dependencies: ["Core"], omitsModuleName: true),
-					ModuleFixture(name: "CBase", packageName: "Shop", swiftFileContent: ["import Core\n\n" + seamFixtureType(named: "Writer", declarations: ["@Received let name: Name"])], dependencies: ["Core"], omitsModuleName: true),
-					ModuleFixture(
-						name: "Feature",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							import ABase
-							import BBase
-							import CBase
-							import Core
-
-							@Instantiable(generateDependencyTree: true)
-							public struct Cache: Instantiable {
-							    init(store: Helpers.Store, logger: Logger, writer: Writer, alpha: Alpha, beta: Beta) {
-							        self.store = store
-							        self.logger = logger
-							        self.writer = writer
-							        self.alpha = alpha
-							        self.beta = beta
-							    }
-
-							    @Instantiated let store: Helpers.Store
-							    @Instantiated let logger: Logger
-							    @Instantiated let writer: Writer
-							    @Instantiated let alpha: Alpha
-							    @Instantiated let beta: Beta
-							}
-							""",
-							"""
-							import Core
-
-							enum Helpers {
-							    @Instantiable
-							    public struct Store: Instantiable {
-							        public init(token: Token, name: Name) {
-							            self.token = token
-							            self.name = name
-							        }
-
-							        @Received let token: Token
-							        @Received let name: Name
-							    }
-							}
-							""",
-							"import Core\n\n" + seamFixtureType(named: "Beta", declarations: ["@Received let other: Other"]),
-						],
-						dependencies: ["ABase", "BBase", "CBase", "Core"],
-					),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_namesUnseenReceiverOfRedeclaredInitializersParameter_whenCallersGeneratedInitializerWouldRedeclareOne() async {
 		// Without `Logger`, which the callers cannot see, `Cache`'s generated initializer would take `token` alone, which
 		// the initializer `Cache` declares takes, so the callers' computation throws naming `token`: `Logger`, its unseen
@@ -12299,9 +11205,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 							"""
 							public enum Feature {}
 
-							extension Feature {
+							public extension Feature {
 							    @Instantiable
-							    public final class Logger: Instantiable {
+							    final class Logger: Instantiable {
 							        public init() {}
 							    }
 							}
@@ -12611,9 +11517,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let screen = switch use {
 		case .forwarded:
 			"""
-			extension Feature {
+			public extension Feature {
 			    @Instantiable(generateDependencyTree: true)
-			    public final class Screen: Instantiable {
+			    final class Screen: Instantiable {
 			        public init(logger: Logger, detail: Detail) {
 			            self.logger = logger
 			            self.detail = detail
@@ -12626,9 +11532,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			"""
 		case .alias:
 			"""
-			extension Feature {
+			public extension Feature {
 			    @Instantiable(generateDependencyTree: true)
-			    public final class Screen: Instantiable {
+			    final class Screen: Instantiable {
 			        public init(logger: Logger, detail: Detail) {
 			            self.logger = logger
 			            self.detail = detail
@@ -12641,9 +11547,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			"""
 		case .receivedInsideTree:
 			"""
-			extension Feature {
+			public extension Feature {
 			    @Instantiable(generateDependencyTree: true)
-			    public final class Screen: Instantiable {
+			    final class Screen: Instantiable {
 			        public init(panel: Panel, detail: Detail) {
 			            self.panel = panel
 			            self.detail = detail
@@ -12698,9 +11604,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 							"""
 							public enum Feature {}
 
-							extension Feature {
+							public extension Feature {
 							    @Instantiable
-							    public final class Logger: Instantiable {
+							    final class Logger: Instantiable {
 							        public init() {}
 							    }
 							}
@@ -12743,9 +11649,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 					"""
 					public enum Feature {}
 
-					extension Feature {
+					public extension Feature {
 					    @Instantiable
-					    public final class Logger: Instantiable {
+					    final class Logger: Instantiable {
 					        public init() {}
 					    }
 					}
@@ -13575,7 +12481,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let section = try #require(manual.components(separatedBy: "#### Generating a dependency tree per module").dropFirst().first)
 			.components(separatedBy: "\n#").first ?? ""
 		let codeBlocks = section.components(separatedBy: "```swift\n").dropFirst().map { $0.components(separatedBy: "\n```").first ?? "" }
-		#expect(codeBlocks.count == 3)
+		// The fourth block illustrates the access a parameter is taken at, and is not generated from these fixtures.
+		#expect(codeBlocks.count == 4)
 		let fixture = try #require(codeBlocks.first).replacingOccurrences(of: "// In module Feature.\n", with: "")
 		let generated = try #require(codeBlocks.dropFirst().first)
 		let callerBlock = try #require(codeBlocks.dropFirst(2).first)

@@ -62,6 +62,9 @@ struct ModuleFixture {
 	///     it names one other than `DEBUG`, which the compile always defines. The compile defines it so the mocks
 	///     compile too, and each integration checks it against the configuration the tool found: `.moduleInfo`
 	///     in the module's `.safedi`, `.swiftPackagePlugin` in what `scan` cached.
+	///   - isReleaseConfiguration: Whether the module is built as a release build is, as Bazel's `opt` mode builds it:
+	///     the tool is given `NDEBUG` among its conditions in place of `DEBUG`, and the compile defines neither `DEBUG`
+	///     nor the mock condition, so mock-only content and generated mocks are not compiled.
 	///   - deletesSwiftFilesAfterRunning: Whether the harness deletes the module's Swift files once the tool has run
 	///     for it, as a sandboxed Bazel action hands the modules that depend on it its `.safedi` but not its files. The
 	///     module's files then cannot be compiled, so a test that deletes them skips compile verification.
@@ -79,8 +82,10 @@ struct ModuleFixture {
 		deletesSwiftFilesAfterRunning: Bool = false,
 		omitsModuleName: Bool = false,
 		omitsPackageName: Bool = false,
+		isReleaseConfiguration: Bool = false,
 	) {
 		self.name = name
+		self.isReleaseConfiguration = isReleaseConfiguration
 		self.omitsModuleName = omitsModuleName
 		self.omitsPackageName = omitsPackageName
 		self.packageName = packageName
@@ -113,6 +118,16 @@ struct ModuleFixture {
 	/// know packages does, so the tool cannot verify that two modules share one. The module still compiles in its
 	/// package.
 	let omitsPackageName: Bool
+	/// Whether the module is built as a release build is: see `init`.
+	let isReleaseConfiguration: Bool
+
+	/// The conditions the tool is given: `activeCompilationConditions`, with `NDEBUG` in place of `DEBUG` in a release
+	/// build.
+	var toolCompilationConditions: [String] {
+		isReleaseConfiguration
+			? activeCompilationConditions.filter { $0 != "DEBUG" } + (activeCompilationConditions.contains("NDEBUG") ? [] : ["NDEBUG"])
+			: activeCompilationConditions
+	}
 
 	/// The same module for `executeSafeDIToolQuery`, which names the module after its directory and reads its
 	/// files from there.
@@ -320,9 +335,9 @@ func executeSafeDIToolMultiModuleTest(
 		for directory in [swiftFileCSV.deletingLastPathComponent(), outputDirectory] {
 			try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 		}
-		let activeCompilationConditionArguments = module.fixture.activeCompilationConditions.isEmpty
+		let activeCompilationConditionArguments = module.fixture.toolCompilationConditions.isEmpty
 			? []
-			: ["--active-compilation-conditions"] + module.fixture.activeCompilationConditions
+			: ["--active-compilation-conditions"] + module.fixture.toolCompilationConditions
 
 		// The module's files as the CSV spells them, and as the build system spells them to the compiler.
 		let inputSwiftFilePaths: [String]
@@ -418,7 +433,7 @@ func executeSafeDIToolMultiModuleTest(
 				outputDirectory: outputDirectory.path,
 				manifestFile: manifestFile.path,
 				mockScopedFiles: compilerSwiftFilePaths,
-				activeCompilationConditions: Set(module.fixture.activeCompilationConditions),
+				activeCompilationConditions: Set(module.fixture.toolCompilationConditions),
 				filesToDelete: &filesUnderFixtureRoot,
 				sourceLocation: sourceLocation,
 			)
@@ -493,8 +508,9 @@ func executeSafeDIToolMultiModuleTest(
 					dependencyModuleNames: module.transitiveDependencies,
 					inputSwiftFiles: module.swiftFiles,
 					generatedFiles: outputs[module.fixture.name]!.generatedFiles,
-					activeCompilationConditions: module.fixture.verificationCompilationConditions ?? module.fixture.activeCompilationConditions,
+					activeCompilationConditions: module.fixture.verificationCompilationConditions ?? module.fixture.toolCompilationConditions,
 					mockConditionalCompilation: module.fixture.mockConditionalCompilation,
+					definesDebug: !module.fixture.isReleaseConfiguration,
 				)
 			},
 			recordsIssues: compileVerification == .recordingIssues,

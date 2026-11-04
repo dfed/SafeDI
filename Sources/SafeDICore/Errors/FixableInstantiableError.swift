@@ -348,7 +348,7 @@ extension String {
 
 extension [String] {
 	/// The strings joined as a list in prose: `A`, `A and B`, or `A, B, and C`.
-	fileprivate var joinedAsList: String {
+	var joinedAsList: String {
 		if count > 2 {
 			"\(dropLast().joined(separator: ", ")), and \(self[count - 1])"
 		} else {
