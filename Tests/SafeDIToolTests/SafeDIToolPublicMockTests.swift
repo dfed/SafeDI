@@ -2097,6 +2097,112 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesOptionalMembersOfTypealiasedFunctionType_whenDefaultValuedParametersDeclaredEscapingAreInPublicMock() async throws {
+		// A public mock takes a non-optional default as an optional, which escapes, so a default-valued parameter of a
+		// typealiased function type declared `@escaping` needs no `@escaping` there, whether the mocked type declares
+		// it or a type in its tree does. (SafeDI reads the `public typealias`, so `mock()` and the configuration's
+		// initializer and fields that take one are `public`.) `MockCallSite.swift` passes a closure for each.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				public typealias Handler = () -> Void
+				""",
+				"""
+				@Instantiable(generateMock: .public)
+				public struct Root: Instantiable {
+				    public init(child: Child, onOpen: @escaping Handler = {}) {
+				        self.child = child
+				        self.onOpen = onOpen
+				    }
+				    @Instantiated let child: Child
+				    public let onOpen: Handler
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(onTap: @escaping Handler = {}) { self.onTap = onTap }
+				    public let onTap: Handler
+				}
+				""",
+			],
+			swiftFileContentByFilePath: [
+				"MockCallSite.swift": """
+				#if DEBUG
+				func mockRoot() -> Root {
+				    Root.mock(onOpen: {}, safeDIOverrides: .init(child: .init(onTap: {})))
+				}
+				#endif
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    public struct SafeDIOverrides {
+			        public init(
+			            child: __safeDI_Child_MockConfiguration = .init()
+			        ) {
+			            self.child = child
+			        }
+
+			        public let child: __safeDI_Child_MockConfiguration
+			    }
+
+			    public static func mock(
+			        onOpen: Handler? = nil,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        let onOpen = onOpen ?? ({})
+			        func __safeDI_child() -> Child {
+			            return Child.__safeDI_init(onTap: safeDIOverrides.child.onTap, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
+			        }
+			        let child: Child = __safeDI_child()
+			        return Root(child: child, onOpen: onOpen)
+			    }
+			}
+
+			extension Root {
+			    public enum __safeDI_Root_mock_C30DD4EB01E3CFC4 {}
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + """
+			#if DEBUG
+			/// Configuration for how `Child` is constructed within the public mock trees of this module.
+			public struct __safeDI_Child_MockConfiguration {
+			    public init(
+			        onTap: Handler? = nil,
+			        _ safeDIBuilder: ((@escaping Handler) -> Child)? = nil
+			    ) {
+			        self.onTap = onTap
+			        self.safeDIBuilder = safeDIBuilder
+			    }
+
+			    /// `nil` keeps the default of `Child`'s `onTap`.
+			    public let onTap: Handler?
+			    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
+			    public let safeDIBuilder: ((@escaping Handler) -> Child)?
+			}
+
+			extension Child {
+			    static func __safeDI_init(onTap: Handler?, safeDIBuilder: ((@escaping Handler) -> Child)?) -> Child {
+			        let onTap = onTap ?? ({})
+			        return if let safeDIBuilder { safeDIBuilder(onTap) } else { Child(onTap: onTap) }
+			    }
+			}
+			#endif
+
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesStandardTypedParameterOnPublicTier_whenOnlyPackageInitializerMentionsIt() async throws {
 		// The allowlist proves `Result`, `Data` and `Error` `public`, so the required parameter is on the public tier
 		// although only an `internal` initializer mentions its type.
