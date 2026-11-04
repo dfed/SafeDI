@@ -4565,14 +4565,20 @@ public actor DependencyTreeGenerator {
 		for typeDescription in reachableTypeDescriptions.sorted() {
 			guard let instantiable = instantiables[typeDescription], typeDescriptionToScopeMap[instantiable.concreteInstantiable] == nil else { continue }
 			let scope: Scope
-			if instantiable.generatesDependencyTree, let seamRoot = seamRoots[instantiable.concreteInstantiable] ?? nil {
+			// Swift 6.3.3 crashes compiling this function with `-Osize` (signal 11 on a SIL verification error about a
+			// `borrowed from` instruction, before ownership is lowered) when a value merged from several paths –
+			// `seamRoots[…] ?? nil`, or the declaring module `isOwnSeam ? callerModule : … ?? …` – is borrowed, so each
+			// path below binds a value of its own.
+			if instantiable.generatesDependencyTree, case let seamRoot?? = seamRoots[instantiable.concreteInstantiable] {
 				let signature = seamRoot.signature
 				let isOwnSeam = ownSeamTypes.contains(instantiable.concreteInstantiable)
-				let requirement = AccessLevel.required(
-					toConstructFrom: callerModule,
-					declaredIn: (isOwnSeam ? callerModule : seams.foreignSeams[instantiable.concreteInstantiable]?.declaringModule) ?? ModuleIdentity(moduleName: nil, packageName: nil),
-					isOwnFile: isOwnSeam,
-				)
+				let requirement = if isOwnSeam {
+					AccessLevel.required(toConstructFrom: callerModule, declaredIn: callerModule, isOwnFile: true)
+				} else if let foreignSeam = seams.foreignSeams[instantiable.concreteInstantiable] {
+					AccessLevel.required(toConstructFrom: callerModule, declaredIn: foreignSeam.declaringModule, isOwnFile: false)
+				} else {
+					AccessLevel.required(toConstructFrom: callerModule, declaredIn: ModuleIdentity(moduleName: nil, packageName: nil), isOwnFile: false)
+				}
 				// The narrowest tier the generated code can reach. The widest tier is at the seam type's access, so code that
 				// can construct the type reaches a tier; code that cannot calls the widest, and the check of every
 				// construction reports the type's declaration with its fix-it, never a generated initializer
