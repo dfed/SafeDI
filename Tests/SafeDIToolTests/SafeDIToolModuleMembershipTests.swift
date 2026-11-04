@@ -505,6 +505,51 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 		#expect(membership.dependencyModuleNames == ["ChildAModule", "ChildBModule", "ChildCModule", "SafeDI", "SharedModule"])
 	}
 
+	// MARK: Tests – Imports of the module itself
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_omitsImportOfModuleItself_whenFileInAdditionalDirectoryImportsIt() async throws {
+		let output = try await generateReadingFileThatImportsVerifiedModule(
+			moduleMembershipArguments: ["--module-name", standaloneVerificationModuleName],
+		)
+
+		#expect(output.generatedFiles == Self.generatedFiles(importing: ["SafeDI"]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_omitsImportOfModuleItself_whenXcodeProjectTargetReadsFileImportingIt() async throws {
+		// The Xcode project plugin writes no target graph, so the product module name is all this run knows.
+		let output = try await generateReadingFileThatImportsVerifiedModule(
+			buildSettingArguments: ["--build-setting-product-module-name=[\(standaloneVerificationModuleName)]"],
+		)
+
+		#expect(output.generatedFiles == Self.generatedFiles(importing: ["SafeDI"]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsImportOfModuleItself_whenProductModuleNameIsUnexpanded() async throws {
+		// SwiftPM's native build system passes build tool plugin arguments through unexpanded, and no module is known.
+		let output = try await generateReadingFileThatImportsVerifiedModule(
+			buildSettingArguments: ["--build-setting-product-module-name=[${PRODUCT_MODULE_NAME}]"],
+			skipCompileVerification: true,
+		)
+
+		#expect(output.generatedFiles == Self.generatedFiles(importing: ["SafeDI", standaloneVerificationModuleName]))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenProductModuleNameIsNotBracketed() async {
+		await assertThrowsError("--build-setting-product-module-name must be wrapped in square brackets, e.g. `--build-setting-product-module-name=[${PRODUCT_MODULE_NAME}]`.") {
+			try await generateReadingFileThatImportsVerifiedModule(
+				buildSettingArguments: ["--build-setting-product-module-name=\(standaloneVerificationModuleName)"],
+			)
+		}
+	}
+
 	// MARK: Tests – Query
 
 	@Test
@@ -583,6 +628,82 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// Scans and generates, as a build tool plugin's `generate --swift-manifest` does, for a module whose configuration
+	/// reads a directory holding a file that imports the module the compile verifier compiles everything as: a module
+	/// above it, whose files a configuration's `additionalDirectoriesToInclude` can name.
+	private mutating func generateReadingFileThatImportsVerifiedModule(
+		buildSettingArguments: [String] = [],
+		moduleMembershipArguments: [String] = [],
+		skipCompileVerification: Bool = false,
+	) async throws -> TestOutput {
+		try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				#SafeDIConfiguration(
+				    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
+				)
+				""",
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(logger: Logger) {
+				        self.logger = logger
+				    }
+
+				    @Instantiated private let logger: Logger
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Logger: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			additionalDirectorySwiftFileContent: [
+				"""
+				import \(standaloneVerificationModuleName)
+				import SafeDI
+
+				@Instantiable
+				public struct Extra: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			skipCompileVerification: skipCompileVerification,
+			buildSettingArguments: buildSettingArguments,
+			moduleMembershipArguments: moduleMembershipArguments,
+		)
+	}
+
+	/// What `generateReadingFileThatImportsVerifiedModule` generates when every file's header imports `moduleNames`.
+	private static func generatedFiles(importing moduleNames: [String]) -> [String: String] {
+		let header = generatedFileHeader + moduleNames.map { "#if canImport(\($0))\nimport \($0)\n#endif\n" }.joined() + "\n"
+		return [
+			"Logger+SafeDIMock.swift": header + """
+			#if DEBUG
+			extension Logger {
+			    static func mock() -> Logger {
+			        Logger()
+			    }
+			}
+			#endif
+			""",
+			"Root+SafeDI.swift": header + """
+			extension Root {
+			    public init() {
+			        let logger = Logger()
+			        self.init(logger: logger)
+			    }
+			}
+			""",
+			"SafeDIMockConfiguration.swift": header,
+		]
+	}
 
 	/// The input CSV the SafeDIGenerator plugin wrote for `RootModule` in a build of the Example Package Integration
 	/// (in a directory named `Example`) with SwiftPM's native backend on 2026-10-30, in order. `$STAGE` stands for the

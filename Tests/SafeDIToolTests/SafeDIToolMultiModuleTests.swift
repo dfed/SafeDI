@@ -90,7 +90,7 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 		// reaches a declaration two levels down sees it only when that module is listed too.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Middle"]!["Pump.swift"]):8:5: error: No @Instantiable type or extension fulfills `Engine`, which @Instantiated property `engine: Engine` instantiates. Decorate `Engine`, or an extension of it, with @Instantiable; list `Engine` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
+			\(fixtures["Middle"]!["Pump.swift"]):8:5: error: No @Instantiable type or extension fulfills `Engine`, which @Instantiated property `engine: Engine` instantiates. Decorate `Engine`, or an extension of it, with @Instantiable; list `Engine` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -229,7 +229,7 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 				NormalizedFilePath(fixtures["App"]!.compilerPath(of: "Root.swift")).path
 			}
 			return """
-			\(rootPath):10:5: error: No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `missing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable; list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
+			\(rootPath):10:5: error: No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `missing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable; list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -622,7 +622,7 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 	mutating func multiModuleTest_throwsErrorForCheckoutDeclaration_whenConfigurationDoesNotIncludeCheckoutDirectory() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(NormalizedFilePath(fixtures["App"]!.compilerPath(of: "Root.swift")).path):8:5: error: No @Instantiable type or extension fulfills `Engine`, which @Instantiated property `engine: Engine` instantiates. Decorate `Engine`, or an extension of it, with @Instantiable; list `Engine` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
+			\(NormalizedFilePath(fixtures["App"]!.compilerPath(of: "Root.swift")).path):8:5: error: No @Instantiable type or extension fulfills `Engine`, which @Instantiated property `engine: Engine` instantiates. Decorate `Engine`, or an extension of it, with @Instantiable; list `Engine` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

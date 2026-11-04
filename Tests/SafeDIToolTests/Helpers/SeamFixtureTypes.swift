@@ -49,3 +49,10 @@ func seamFixtureType(
 func inlineFixture(_ files: [String]) -> [String] {
 	files.map { $0.replacingOccurrences(of: "@Instantiable(generateDependencyTree: true)", with: "@Instantiable") }
 }
+
+/// `declaration`, of a type that is not `@Instantiable`, inside an `#if` block, where SafeDI records no declaration of
+/// the type (`PlainTypeDeclaration`): only the members that mention it then prove its access, as they prove the access
+/// of a type of a module SafeDI does not read, such as a framework's.
+func unrecordedTypeDeclaration(_ declaration: String) -> String {
+	"#if canImport(Foundation)\n\(declaration)\n#endif"
+}

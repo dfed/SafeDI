@@ -771,12 +771,14 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		""")
 	}
 
-	@Test
+	@Test(arguments: [nil, .xcodeProjectPlugin, .noModuleName] as [DependencyTreeGenerator.EmittingModule.UnnamedReason?])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsSeamsTreeInline_whenSeamIsDeclaredInAdditionalDirectory() async throws {
+	mutating func generate_buildsSeamsTreeInlineWithComment_whenSeamIsDeclaredInAdditionalDirectory(unnamedReason: DependencyTreeGenerator.EmittingModule.UnnamedReason?) async throws {
 		// A seam in a directory a `#SafeDIConfiguration` adds is in no module's own files: `scan` plans a seam's file
 		// among the module's own files only, so no module generates its initializer, and a tree that reaches it
-		// builds its tree inline, as it builds any other type's.
+		// builds its tree inline, as it builds any other type's. Its construction says so, and names the Xcode project
+		// plugin when the run carries the product module name that plugin passes. A `nil` reason is a run given
+		// `--module-name`, which names the module of no file the configuration adds.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -827,9 +829,13 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			moduleMembershipArguments: ["--module-name", "App"],
+			buildSettingArguments: unnamedReason == .xcodeProjectPlugin ? ["--build-setting-product-module-name=[App]"] : [],
+			moduleMembershipArguments: unnamedReason == nil ? ["--module-name", "App"] : [],
 		)
 
+		let xcodeProjectPluginNote = unnamedReason == .xcodeProjectPlugin
+			? " (a target the Xcode project plugin builds names no module; see the Manual's \"Limits of the Xcode project plugin\")"
+			: ""
 		#expect(output.dependencyTreeFiles.keys.sorted() == ["Root+SafeDI.swift"])
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
 		extension Root {
@@ -837,12 +843,115 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        let session = Session()
 		        func __safeDI_screen() -> Screen {
 		            let detail = Detail(session: session)
-		            return Screen(detail: detail)
+		            return Screen(detail: detail) // Built inline: SafeDI does not know which module declares `Screen`, so this tree cannot call the initializer SafeDI generates for it\(xcodeProjectPluginNote).
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        self.init(session: session, screen: screen)
 		    }
 		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_buildsSeamsTreeInlineWithoutComment_whenSeamIsDeclaredInAdditionalDirectory() async throws {
+		// A mock builds every seam's tree inline, whether or not SafeDI knows which module declares the seam, so the
+		// comment that a production construction of a seam of an unknown module ends with would give the wrong cause
+		// in a mock: neither a mock that instantiates the seam nor the default of a mock's forwarded parameter, which
+		// calls the seam's hand-written mock, carries it, also under the Xcode project plugin, whose note it would add.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				#SafeDIConfiguration(
+				    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
+				)
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Holder: Instantiable {
+				    public init(screen: Screen) {
+				        self.screen = screen
+				    }
+
+				    @Instantiated let screen: Screen
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct Forwarder: Instantiable {
+				    public init(screen: Screen) {
+				        self.screen = screen
+				    }
+
+				    @Forwarded let screen: Screen
+				}
+				""",
+			],
+			additionalDirectorySwiftFileContent: [
+				"""
+				@Instantiable(generateDependencyTree: true)
+				public struct Screen: Instantiable {
+				    public init(detail: Detail) {
+				        self.detail = detail
+				    }
+
+				    @Instantiated let detail: Detail
+
+				    public static func mock(detail: Detail = Detail()) -> Screen {
+				        Screen(detail: detail)
+				    }
+				}
+				""",
+				"""
+				@Instantiable
+				public struct Detail: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+			buildSettingArguments: ["--build-setting-product-module-name=[App]"],
+		)
+
+		#expect(output.mockFiles.keys.sorted() == ["Forwarder+SafeDIMock.swift", "Holder+SafeDIMock.swift"])
+		#expect(output.mockFiles["Forwarder+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Forwarder {
+		    static func mock(
+		        screen: Screen = Screen.mock()
+		    ) -> Forwarder {
+		        return Forwarder(screen: screen)
+		    }
+		}
+		#endif
+		""")
+		#expect(output.mockFiles["Holder+SafeDIMock.swift"] == generatedFileHeader + """
+		#if DEBUG
+		extension Holder {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            screen: Screen.SafeDIMockConfiguration = .init()
+		        ) {
+		            self.screen = screen
+		        }
+
+		        let screen: Screen.SafeDIMockConfiguration
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Holder {
+		        func __safeDI_screen() -> Screen {
+		            let detail = if let safeDIBuilder = safeDIOverrides.screen.detail { safeDIBuilder() } else { Detail() }
+		            return if let safeDIBuilder = safeDIOverrides.screen.safeDIBuilder { safeDIBuilder(detail) } else { Screen.mock(detail: detail) }
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        return Holder(screen: screen)
+		    }
+		}
+		#endif
 		""")
 	}
 
@@ -2188,7 +2297,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		// reaches, with the remedy for each integration.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate a call to the initializer SafeDI generated for `Screen` in module `Feature`: that initializer takes what the type's dependency tree needs from the declarations `Feature` sees, which include module `Core`'s, and this run was not given `Core`'s SafeDI module info. Give this run every module `Feature` depends on: add `Core` (the target that compiles it) to this target's `deps` under Bazel, or to its `dependencies` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate a call to the initializer SafeDI generated for `Screen` in module `Feature`: that initializer takes what the type's dependency tree needs from the declarations `Feature` sees, which include module `Core`'s, and this run was not given `Core`'s SafeDI module info. Give this run every module `Feature` depends on: add `Core`'s `Core_safedi` target to this target's `safedi_deps` under Bazel (the `deps` of a hand-written `safedi_compile`), add `Core` to the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -3238,8 +3347,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		// each module's seam is reported, in source order, before the inlined trees are found to need `Database`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["Cache.swift"]):3:1: error: SafeDI cannot generate a call to the initializer SafeDI generated for `Cache` in module `Core`: that initializer takes what the type's dependency tree needs from the declarations `Core` sees, which include module `Base`'s, and this run was not given `Base`'s SafeDI module info. Give this run every module `Core` depends on: add `Base` (the target that compiles it) to this target's `deps` under Bazel, or to its `dependencies` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`.
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate a call to the initializer SafeDI generated for `Screen` in module `Feature`: that initializer takes what the type's dependency tree needs from the declarations `Feature` sees, which include module `Base`'s, and this run was not given `Base`'s SafeDI module info. Give this run every module `Feature` depends on: add `Base` (the target that compiles it) to this target's `deps` under Bazel, or to its `dependencies` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`.
+			\(fixtures["Core"]!["Cache.swift"]):3:1: error: SafeDI cannot generate a call to the initializer SafeDI generated for `Cache` in module `Core`: that initializer takes what the type's dependency tree needs from the declarations `Core` sees, which include module `Base`'s, and this run was not given `Base`'s SafeDI module info. Give this run every module `Core` depends on: add `Base`'s `Base_safedi` target to this target's `safedi_deps` under Bazel (the `deps` of a hand-written `safedi_compile`), add `Base` to the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`.
+			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate a call to the initializer SafeDI generated for `Screen` in module `Feature`: that initializer takes what the type's dependency tree needs from the declarations `Feature` sees, which include module `Base`'s, and this run was not given `Base`'s SafeDI module info. Give this run every module `Feature` depends on: add `Base`'s `Base_safedi` target to this target's `safedi_deps` under Bazel (the `deps` of a hand-written `safedi_compile`), add `Base` to the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -3588,15 +3697,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		case otherWrapper
 		/// `Root` instantiates a `Feature` builder; `Feature` forwards `user` as the optional form of the wrapper.
 		case optionalWrapper
-		/// `Root` instantiates `user: User` and a `Feature` builder; `Feature` forwards `user: User?`, which is the
-		/// nearer declaration of the label where `Screen` is built.
-		case instanceAndNearerForwardedOptionalInstance
 		/// `Root` instantiates `user: User`, whose own tree instantiates `Screen`.
 		case instanceWhoseTreeBuildsScreen
-		/// `Root` instantiates `screen` then `user: User`, whose tree receives `screen` only if available.
-		case instanceWhoseTreeReceivesScreenOnlyIfAvailable
-		/// `Root` instantiates `screen` alone: no form of `user` is in its tree.
-		case nothing
 		/// No root in the module: the seam's own errors show where the inlined validation would reject every caller.
 		case noCaller
 	}
@@ -3604,7 +3706,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 	/// `Screen`, a seam, whose tree receives `user` by value (`Detail`, inside a `SendableInstantiator` builder when
 	/// `detailInSendableBuilder`), as the non-optional wrapper or its optional form (`Summary`), and as the optional
 	/// form of a wrapper of `previewWrapper`'s kind (`Preview`), beside the seam's own receive of it, called from a
-	/// tree holding `user` as `caller` says, with `user` declared before or after `screen`.
+	/// tree holding `user` as `caller` says.
 	private static func labelFormsFixture(
 		detail: UserReceive?,
 		summary: UserReceive?,
@@ -3613,7 +3715,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		own: (receive: UserReceive, asWrapper: Bool)? = nil,
 		wrapper: String = "LazilyInstantiated",
 		caller: CallerHolding,
-		callerDeclaresUserFirst: Bool = true,
 		detailInSendableBuilder: Bool = false,
 	) -> [String] {
 		let otherWrapper = wrapper == "LazilyInstantiated" ? "SendableLazilyInstantiated" : "LazilyInstantiated"
@@ -3692,28 +3793,27 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			files.append(receiver(named: "Preview", receive: preview, ofType: "\(previewWrapper ?? wrapper)<User>"))
 		}
 		let userIsBuiltByRoot = switch caller {
-		case .instance, .instanceWhoseTreeReceivesScreenOnlyIfAvailable:
+		case .instance:
 			"user: User"
 		case .wrapper:
 			"user: \(wrapper)<User>"
 		case .otherWrapper:
 			"user: \(otherWrapper)<User>"
-		case .optionalInstance, .optionalWrapper, .instanceAndNearerForwardedOptionalInstance, .instanceWhoseTreeBuildsScreen, .nothing, .noCaller:
+		case .optionalInstance, .optionalWrapper, .instanceWhoseTreeBuildsScreen, .noCaller:
 			""
 		}
 		switch caller {
-		case .instance, .wrapper, .otherWrapper, .instanceWhoseTreeReceivesScreenOnlyIfAvailable:
-			let declarations = callerDeclaresUserFirst ? [userIsBuiltByRoot, "screen: Screen"] : ["screen: Screen", userIsBuiltByRoot]
+		case .instance, .wrapper, .otherWrapper:
 			files.append("""
 			@Instantiable(isRoot: true)
 			public struct Root: Instantiable {
-			    public init(\(declarations.joined(separator: ", "))) {
-			        self.\(declarations[0].prefix { $0 != ":" }) = \(declarations[0].prefix { $0 != ":" })
-			        self.\(declarations[1].prefix { $0 != ":" }) = \(declarations[1].prefix { $0 != ":" })
+			    public init(\(userIsBuiltByRoot), screen: Screen) {
+			        self.user = user
+			        self.screen = screen
 			    }
 
-			    @Instantiated let \(declarations[0])
-			    @Instantiated let \(declarations[1])
+			    @Instantiated let \(userIsBuiltByRoot)
+			    @Instantiated let screen: Screen
 			}
 			""")
 		case .optionalInstance, .optionalWrapper:
@@ -3740,31 +3840,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			    @Instantiated let screen: Screen
 			}
 			""")
-		case .instanceAndNearerForwardedOptionalInstance:
-			files.append("""
-			@Instantiable(isRoot: true)
-			public struct Root: Instantiable {
-			    public init(user: User, featureBuilder: Instantiator<Feature>) {
-			        self.user = user
-			        self.featureBuilder = featureBuilder
-			    }
-
-			    @Instantiated let user: User
-			    @Instantiated let featureBuilder: Instantiator<Feature>
-			}
-			""")
-			files.append("""
-			@Instantiable
-			public struct Feature: Instantiable {
-			    public init(user: User?, screen: Screen) {
-			        self.user = user
-			        self.screen = screen
-			    }
-
-			    @Forwarded let user: User?
-			    @Instantiated let screen: Screen
-			}
-			""")
 		case .instanceWhoseTreeBuildsScreen:
 			files.append("""
 			@Instantiable(isRoot: true)
@@ -3774,17 +3849,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			    }
 
 			    @Instantiated let user: User
-			}
-			""")
-		case .nothing:
-			files.append("""
-			@Instantiable(isRoot: true)
-			public struct Root: Instantiable {
-			    public init(screen: Screen) {
-			        self.screen = screen
-			    }
-
-			    @Instantiated let screen: Screen
 			}
 			""")
 		case .noCaller:
@@ -3802,28 +3866,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			    @Instantiated let screen: Screen
 			}
 			""")
-		case .instanceWhoseTreeReceivesScreenOnlyIfAvailable:
-			files.append("""
-			@Instantiable
-			public final class User: Instantiable {
-			    public init(gate: Gate) {
-			        self.gate = gate
-			    }
-
-			    @Instantiated let gate: Gate
-			}
-			""")
-			files.append("""
-			@Instantiable
-			public struct Gate: Instantiable {
-			    public init(screen: Screen?) {
-			        self.screen = screen
-			    }
-
-			    @Received(onlyIfAvailable: true) let screen: Screen?
-			}
-			""")
-		case .instance, .optionalInstance, .wrapper, .otherWrapper, .optionalWrapper, .instanceAndNearerForwardedOptionalInstance, .nothing, .noCaller:
+		case .instance, .optionalInstance, .wrapper, .otherWrapper, .optionalWrapper, .noCaller:
 			files.append("""
 			@Instantiable
 			public final class User: Instantiable, Sendable {
@@ -3879,6 +3922,84 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		""")
 	}
 
+	// Kept by hand: the seam corpus draws this shape in 2 graphs and accepts none (census at 3b12802a); delete when the
+	// per-shape accepted pin reaches 3.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesNilForWrapper_whenOnlyWrapperIsReceivedOnlyIfAvailableAndCallerHoldsOtherWrapperKind() async throws {
+		// A `SendableLazilyInstantiated` the caller holds is no `LazilyInstantiated`: the optional parameter is passed
+		// `nil`, as an only-if-available receive of the wrapper is inline.
+		let output = try await labelFormsOutput(Self.labelFormsFixture(detail: nil, summary: .onlyIfAvailable, caller: .otherWrapper))
+		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
+		extension Screen {
+		    public init(user: LazilyInstantiated<User>? = nil) {
+		        let summary = Summary(user: user)
+		        self.init(summary: summary)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_71C706F9FE9BEAFE {}
+		}
+		""")
+		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
+		extension Root {
+		    public init() {
+		        @Sendable func __safeDI_user() -> User {
+		            User()
+		        }
+		        let user = SendableLazilyInstantiated<User>(__safeDI_user)
+		        func __safeDI_screen() -> Screen {
+		            _ = Screen.__safeDI_Screen_71C706F9FE9BEAFE.self
+		            return Screen(user: nil)
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        self.init(user: user, screen: screen)
+		    }
+		}
+		""")
+	}
+
+	// Kept by hand: the regression pin of a defect review 4 found (a seam read `user?.instance` where inline passes
+	// `nil`), a shape the seam corpus draws in 7 graphs and accepts in none (census at 3b12802a).
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesNilForInstance_whenByValueReceiveIsOnlyIfAvailableAndCallerForwardsOptionalWrapper() async throws {
+		// An optional wrapper offers no instance, inline or across a seam: the optional by-value parameter is passed
+		// `nil`.
+		let output = try await labelFormsOutput(Self.labelFormsFixture(detail: .onlyIfAvailable, summary: nil, caller: .optionalWrapper))
+		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
+		extension Screen {
+		    public init(user: User? = nil) {
+		        let detail = Detail(user: user)
+		        self.init(detail: detail)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_0A0B087775B360DD {}
+		}
+		""")
+		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
+		extension Root {
+		    public init() {
+		        func __safeDI_featureBuilder(user: LazilyInstantiated<User>?) -> Feature {
+		            func __safeDI_screen() -> Screen {
+		                _ = Screen.__safeDI_Screen_0A0B087775B360DD.self
+		                return Screen(user: nil)
+		            }
+		            let screen: Screen = __safeDI_screen()
+		            return Feature(user: user, screen: screen)
+		        }
+		        let featureBuilder = Instantiator<Feature> {
+		            __safeDI_featureBuilder(user: $0)
+		        }
+		        self.init(featureBuilder: featureBuilder)
+		    }
+		}
+		""")
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesNilForInstance_whenInstancesOwnTreeBuildsSeam() async throws {
@@ -3909,6 +4030,82 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        }
 		        let user: User = __safeDI_user()
 		        self.init(user: user)
+		    }
+		}
+		""")
+	}
+
+	// Kept by hand: the seam corpus draws the required variant's shape in 4 graphs and accepts none (census at 3b12802a);
+	// delete when the per-shape accepted pin reaches 3.
+	@Test(arguments: [UserReceive.required, UserReceive.onlyIfAvailable])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesSeamsOwnByValueReceive_whenByValueReceiveInsideIsRequiredOrOnlyIfAvailable(detail: UserReceive) async throws {
+		// The seam's own `@Received let user: User` provides every by-value receive of `user` inside.
+		let output = try await labelFormsOutput(Self.labelFormsFixture(detail: detail, summary: nil, own: (.required, asWrapper: false), caller: .instance))
+		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
+		extension Screen {
+		    public init(user: User) {
+		        let detail = Detail(user: user)
+		        self.init(user: user, detail: detail)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_38882A8C29DA6D12 {}
+		}
+		""")
+		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
+		extension Root {
+		    public init() {
+		        let user = User()
+		        func __safeDI_screen() -> Screen {
+		            _ = Screen.__safeDI_Screen_38882A8C29DA6D12.self
+		            return Screen(user: user)
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        self.init(user: user, screen: screen)
+		    }
+		}
+		""")
+	}
+
+	// Kept by hand: the seam corpus draws this shape in 6 graphs and accepts none (census at 3b12802a), and a wrong
+	// rejection here is a seam's own error, which no oracle judges; delete when the per-shape accepted pin reaches 3.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_capturesSendableWrapperParameter_whenSendableBuilderInsideSeamReadsItsInstance() async throws {
+		// A `SendableLazilyInstantiated` parameter is `Sendable`, so the `@Sendable` builder of `detailBuilder` may
+		// capture it to read its instance: no error, and the generated code compiles.
+		let output = try await labelFormsOutput(Self.labelFormsFixture(detail: .required, summary: .required, wrapper: "SendableLazilyInstantiated", caller: .wrapper, detailInSendableBuilder: true))
+		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
+		extension Screen {
+		    public init(user: SendableLazilyInstantiated<User>) {
+		        @Sendable func __safeDI_detailBuilder() -> Detail {
+		            Detail(user: user.instance)
+		        }
+		        let detailBuilder = SendableInstantiator<Detail>(__safeDI_detailBuilder)
+		        let summary = Summary(user: user)
+		        self.init(detailBuilder: detailBuilder, summary: summary)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_307551CFFDF140EB {}
+		}
+		""")
+		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
+		extension Root {
+		    public init() {
+		        @Sendable func __safeDI_user() -> User {
+		            User()
+		        }
+		        let user = SendableLazilyInstantiated<User>(__safeDI_user)
+		        func __safeDI_screen() -> Screen {
+		            _ = Screen.__safeDI_Screen_307551CFFDF140EB.self
+		            return Screen(user: user)
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        self.init(user: user, screen: screen)
 		    }
 		}
 		""")
@@ -4241,8 +4438,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		var own: (receive: UserReceive, asWrapper: Bool)?
 		var wrapper = "LazilyInstantiated"
 		let caller: CallerHolding
-		var callerDeclaresUserFirst = true
-		var detailInSendableBuilder = false
 		let receives: [Receive]
 		/// What the error says to do.
 		let remedy: Remedy
@@ -4316,8 +4511,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 					own: mix.own,
 					wrapper: mix.wrapper,
 					caller: mix.caller,
-					callerDeclaresUserFirst: mix.callerDeclaresUserFirst,
-					detailInSendableBuilder: mix.detailInSendableBuilder,
 				),
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
@@ -4858,7 +5051,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		// reached as `any ServiceProtocol` is a reached seam, so the missing module info is reported.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["Service.swift"]):3:1: error: SafeDI cannot generate a call to the initializer SafeDI generated for `Service` in module `Core`: that initializer takes what the type's dependency tree needs from the declarations `Core` sees, which include module `Base`'s, and this run was not given `Base`'s SafeDI module info. Give this run every module `Core` depends on: add `Base` (the target that compiles it) to this target's `deps` under Bazel, or to its `dependencies` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`.
+			\(fixtures["Core"]!["Service.swift"]):3:1: error: SafeDI cannot generate a call to the initializer SafeDI generated for `Service` in module `Core`: that initializer takes what the type's dependency tree needs from the declarations `Core` sees, which include module `Base`'s, and this run was not given `Base`'s SafeDI module info. Give this run every module `Core` depends on: add `Base`'s `Base_safedi` target to this target's `safedi_deps` under Bazel (the `deps` of a hand-written `safedi_compile`), add `Base` to the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(

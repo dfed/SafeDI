@@ -245,9 +245,11 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 					packageName: "Shop",
 					swiftFileContent: [
 						"""
+						#if canImport(Foundation)
 						public struct Theme {
 						    public init() {}
 						}
+						#endif
 						""",
 						"""
 						@Instantiable
@@ -339,11 +341,13 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorAtInitializer_whenTreeBuiltInlineConstructsInitializerCallerCannotCall(integration: MultiModuleIntegration) async {
-		// `Screen`'s own initializer is internal: `App`, in another package, cannot construct it inline.
+		// `Screen`'s own initializer is internal: `App`, in another package, cannot construct it inline. Declared a seam,
+		// `Screen` is called through its generated `public` initializer instead
+		// (`generate_callsPublicTier_whenSeamsOwnInitializerIsNarrowerThanCallerCanCall`), which the error offers.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let screenPath = Self.declarationPath(of: "Screen.swift", in: "Feature", fixtures: fixtures, under: integration)
 			return """
-			\(screenPath):3:5: error: `Screen`’s initializer is `internal`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(screenPath):3:5: error: `Screen`’s initializer is `internal`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
 			\(screenPath):3:5-3:5: fixit: public\(" ")
 			"""
 		}) {
@@ -392,14 +396,16 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorAtEachInitializer_whenTreeBuiltInlineConstructsReceiverAndTypeCallerCannotCall(integration: MultiModuleIntegration) async {
 		// `Screen`'s own initializer and `Reader`'s, which requires `token`, are `package`: inline, `App`, in another
-		// package, reports both initializers, each with its fix-it.
+		// package, reports both initializers, each with its fix-it. Declared a seam, `Screen` is called through its
+		// generated `public` initializer instead, which takes `token` and calls both inside `Feature`
+		// (`generate_callsPublicTierPassingValue_whenReceiversInitializerIsNarrowerThanCallerCanCall`), which each error offers.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let readerPath = Self.declarationPath(of: "Reader.swift", in: "Feature", fixtures: fixtures, under: integration)
 			let screenPath = Self.declarationPath(of: "Screen.swift", in: "Feature", fixtures: fixtures, under: integration)
 			return """
-			\(readerPath):3:5: error: `Reader`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(readerPath):3:5: error: `Reader`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
 			\(readerPath):3:5-3:12: fixit: public
-			\(screenPath):3:5: error: `Screen`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(screenPath):3:5: error: `Screen`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
 			\(screenPath):3:5-3:12: fixit: public
 			"""
 		}) {

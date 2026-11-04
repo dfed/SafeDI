@@ -272,9 +272,74 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func scan_cachesProtocolDeclarationOfFileWithoutSafeDIMarker_whenDeclarationsInitializerMentionsIt() async throws {
+		let project = try await scannedProject(alongside: Self.mentionedProtocolFiles)
+
+		let cache = try CachedScannedModuleInfo(scanCacheData: Data(contentsOf: scannedModuleInfoURL(forManifestPath: project.manifestFile.path)))
+		#expect(cache.moduleInfo.plainTypeDeclarations.map(\.typeDescription) == [.simple(name: "Theme")])
+		#expect(cache.moduleInfo.plainTypeDeclarations.map(\.access.level) == [.public])
+		#expect(cache.moduleInfo.plainTypeDeclarations.map(\.sourceFilePath) == ["Theme.swift"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_parsesAfresh_whenFileWithoutSafeDIMarkerDeclaringMentionedProtocolChanges() async throws {
+		let project = try await scannedProject(alongside: Self.mentionedProtocolFiles)
+		try FileModificationTime(seconds: 0, nanoseconds: 0).apply(toItemAtPath: project.directory.appendingPathComponent("Theme.swift").path)
+
+		await assertThrowsError(project.rootNotInManifestMessage) {
+			try await project.generate()
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_parsesAfresh_whenFileWalkedAgainUnderGeneratesConditionsMentionsTypeScansDeclarationsDidNot() async throws {
+		// Under scan's conditions no declaration mentions `Theme`, so scan read no declaration of it; under `STAGING`
+		// `Badge`'s does, which only a fresh parse reads.
+		let project = try await scannedProject(alongside: [
+			"Theme.swift": "public protocol Theme {}",
+			"Badge.swift": """
+			@Instantiable
+			public struct Badge: Instantiable {
+			    #if STAGING
+			    public init(theme: (any Theme)?) {
+			        self.theme = theme
+			    }
+
+			    @Received(onlyIfAvailable: true) let theme: (any Theme)?
+			    #else
+			    public init() {}
+			    #endif
+			}
+			""",
+		])
+
+		await assertThrowsError(project.rootNotInManifestMessage) {
+			try await project.generate(activeCompilationConditions: ["STAGING"])
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// A protocol in a file of its own, which mentions no SafeDI marker, and a declaration whose initializer mentions it.
+	private static let mentionedProtocolFiles = [
+		"Theme.swift": "public protocol Theme {}",
+		"Badge.swift": """
+		@Instantiable
+		public struct Badge: Instantiable {
+		    public init(theme: any Theme) {
+		        self.theme = theme
+		    }
+
+		    @Received let theme: any Theme
+		}
+		""",
+	]
 
 	/// A namespace enum in a file of its own, which mentions no SafeDI marker, and an extension of it that declares an
 	/// `@Instantiable` type.
@@ -318,11 +383,11 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 			"Found @Instantiable(isRoot: true) in '\(rootFile.path)', but this file is not listed in the manifest’s dependencyTreeGeneration. SafeDI decides which files to generate before the build runs, listing every file that declares a root, a type that sets `generateDependencyTree: true` or `generateMock: true`, or a #SafeDIConfiguration in any clause of its `#if` blocks, so the file most likely changed after that decision; building again lists it. A hand-written manifest must list the file, or the type must not be a root."
 		}
 
-		func generate() async throws {
+		func generate(activeCompilationConditions: [String] = []) async throws {
 			try await Generate.parse([
 				swiftFileCSV.path,
 				"--swift-manifest", manifestFile.path,
-			]).run()
+			] + (activeCompilationConditions.isEmpty ? [] : ["--active-compilation-conditions"] + activeCompilationConditions)).run()
 		}
 	}
 

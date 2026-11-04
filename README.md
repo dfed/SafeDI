@@ -118,7 +118,7 @@ For previews and tests that need real data, pass forwarded values directly and u
 <tr><td>✓ Compile-time safe</td><td>✓ Thread safe</td><td>✓ Hierarchical dependency scoping</td></tr>
 <tr><td>✓ Constructor injection</td><td>✓ Multi-module support</td><td>✓ Dependency inversion support</td></tr>
 <tr><td>✓ Transitive dependency solving</td><td>✓ Cycle detection</td><td>✓ Architecture independent</td></tr>
-<tr><td>✓ No DI-specific types or generics required</td><td>✓ Full-graph mocks</td><td>✓ Clear errors at your declaration, with fix-its</td></tr>
+<tr><td>✓ No DI-specific types or generics required</td><td>✓ Full-graph mocks</td><td>✓ Clear errors at your declaration, with a fix-it where one exists</td></tr>
 <tr><td>✓ Conditional compilation support</td><td>✓ Lazy shared dependencies</td><td>✓ Swift Package Manager, Xcode, Bazel, and Tuist</td></tr>
 <tr><td>✓ <code>package</code> and <code>internal</code> types</td><td>✓ Per-module generated trees</td><td>✓ Public mocks across packages</td></tr>
 </table>
@@ -143,7 +143,7 @@ SafeDI is closest in spirit to [Needle](https://github.com/uber/needle) and [Wea
 
 SwiftUI’s own `Environment` is a useful mental model for a dependency tree — but without compile-time validation. SafeDI applies that tree shape to the full object graph and guarantees it resolves.
 
-Of these libraries, only SafeDI generates mocks from your real dependency graph — `public` ones, too, which tests in other packages call — and it generates each module’s tree in that module, checks `package` and `internal` types when you build, and reports errors at your declaration with fix-its.
+Of these libraries, only SafeDI generates mocks from your real dependency graph — `public` ones, too, which tests in other packages call — and it can generate a module’s tree in that module (`generateDependencyTree: true`), checks `package` and `internal` types when you build, and reports errors at your declaration, with a fix-it where the repair is unambiguous.
 
 ## Contributing
 

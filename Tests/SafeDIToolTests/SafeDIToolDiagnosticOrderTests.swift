@@ -656,8 +656,8 @@ struct SafeDIToolDiagnosticOrderTests: ~Copyable {
 			await assertThrowsError(
 				diagnostics: { fixtures in
 					"""
-					\(fixtures["Module.swift"]):6:5: error: No @Instantiable type or extension fulfills `\(firstType)`, which @Instantiated property `first: \(firstType)` instantiates. Decorate `\(firstType)`, or an extension of it, with @Instantiable; list `\(firstType)` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
-					\(fixtures["Module.swift"]):7:5: error: No @Instantiable type or extension fulfills `\(secondType)`, which @Instantiated property `second: \(secondType)` instantiates. Decorate `\(secondType)`, or an extension of it, with @Instantiable; list `\(secondType)` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
+					\(fixtures["Module.swift"]):6:5: error: No @Instantiable type or extension fulfills `\(firstType)`, which @Instantiated property `first: \(firstType)` instantiates. Decorate `\(firstType)`, or an extension of it, with @Instantiable; list `\(firstType)` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+					\(fixtures["Module.swift"]):7:5: error: No @Instantiable type or extension fulfills `\(secondType)`, which @Instantiated property `second: \(secondType)` instantiates. Decorate `\(secondType)`, or an extension of it, with @Instantiable; list `\(secondType)` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 					"""
 				},
 			) {

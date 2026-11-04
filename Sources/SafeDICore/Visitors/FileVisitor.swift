@@ -38,8 +38,14 @@ public final class FileVisitor: SyntaxVisitor {
 
 	// MARK: SyntaxVisitor
 
-	public override func visit(_: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
-		.skipChildren
+	public override func visit(_ node: ProtocolDeclSyntax) -> SyntaxVisitorContinueKind {
+		// A protocol declares no type SafeDI scans for, but its declaration proves its access, as any plain type's does.
+		recordPlainTypeDeclaration(
+			typeDefined(named: node.name.text),
+			access: node.modifiers.access(introducedBy: node.protocolKeyword, sourceLocationConverter: sourceLocationConverter),
+			isInstantiable: false,
+		)
+		return .skipChildren
 	}
 
 	public override func visit(_: VariableDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -248,9 +254,9 @@ public final class FileVisitor: SyntaxVisitor {
 	/// The declarations that decide which files SafeDI generates, found in every clause of every `#if`
 	/// block. They depend on no condition, so walking the file with any evaluator finds the same.
 	public private(set) var outputFileDeclarations = OutputFileDeclarations()
-	/// Every `struct`, `class`, `actor`, and `enum` declaration that is not `@Instantiable`, outside every `#if` block
-	/// and every extension, in source order. They depend on no condition, so walking the file with any evaluator finds
-	/// the same.
+	/// Every `struct`, `class`, `actor`, `enum`, and `protocol` declaration that is not `@Instantiable`, outside every
+	/// `#if` block and every extension, in source order. They depend on no condition, so walking the file with any
+	/// evaluator finds the same.
 	public private(set) var plainTypeDeclarations = [PlainTypeDeclaration]()
 
 	/// A run of a file's imports.
@@ -320,11 +326,17 @@ public final class FileVisitor: SyntaxVisitor {
 	/// records it among `plainTypeDeclarations` when it is not `@Instantiable` and neither an `#if` block nor an
 	/// extension encloses it.
 	private func enterType(_ type: TypeDescription, access: AccessDeclaration, isInstantiable: Bool) {
+		recordPlainTypeDeclaration(type, access: access, isInstantiable: isInstantiable)
+		parentType = type
+		enclosingTypeAccess.append(access)
+	}
+
+	/// Records `type`, which a type definition with `access` defines, among `plainTypeDeclarations` when it is not
+	/// `@Instantiable` and neither an `#if` block nor an extension encloses it.
+	private func recordPlainTypeDeclaration(_ type: TypeDescription, access: AccessDeclaration, isInstantiable: Bool) {
 		if !isInstantiable, ifConfigBlockDepth == 0, enclosingExtensionAccess == nil {
 			plainTypeDeclarations.append(PlainTypeDeclaration(typeDescription: type, access: access, enclosingTypeAccess: enclosingTypeAccess))
 		}
-		parentType = type
-		enclosingTypeAccess.append(access)
 	}
 
 	/// The type a type definition named `name` defines among the members of `parentType`.

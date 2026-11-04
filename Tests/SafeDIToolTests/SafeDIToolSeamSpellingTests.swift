@@ -285,6 +285,69 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 		])
 	}
 
+	// Kept by hand: the seam corpus draws this shape in 6 graphs and accepts none (census at 3b12802a); delete when the
+	// per-shape accepted pin reaches 3.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsSeamPassingOptionalSendableClosure_whenTreeReceivesItOnlyIfAvailable() async throws {
+		// An optional `@Sendable` closure is not `@escaping` either.
+		let fixture = Self.passThroughFixture(forwarded: "onSelect: (@Sendable () -> Void)?", received: "@Received(onlyIfAvailable: true) let onSelect: (@Sendable () -> Void)?")
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.dependencyTreeFiles == [
+			"List+SafeDI.swift": generatedFileHeader + """
+			extension List {
+			    public init(onSelect: (@Sendable () -> Void)? = nil) {
+			        let row = Row(onSelect: onSelect)
+			        self.init(row: row)
+			    }
+			}
+
+			extension List {
+			    public enum __safeDI_List_7F243DDBE260C44D {}
+			}
+			""",
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        func __safeDI_screenBuilder(onSelect: (@Sendable () -> Void)?) -> Screen {
+			            func __safeDI_list() -> List {
+			                _ = List.__safeDI_List_7F243DDBE260C44D.self
+			                return List(onSelect: onSelect)
+			            }
+			            let list: List = __safeDI_list()
+			            return Screen(onSelect: onSelect, list: list)
+			        }
+			        let screenBuilder = Instantiator<Screen> {
+			            __safeDI_screenBuilder(onSelect: $0)
+			        }
+			        self.init(screenBuilder: screenBuilder)
+			    }
+			}
+			""",
+		])
+		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: Self.inline(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(inlineOutput.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        func __safeDI_screenBuilder(onSelect: (@Sendable () -> Void)?) -> Screen {
+			            func __safeDI_list() -> List {
+			                let row = Row(onSelect: onSelect)
+			                return List(row: row)
+			            }
+			            let list: List = __safeDI_list()
+			            return Screen(onSelect: onSelect, list: list)
+			        }
+			        let screenBuilder = Instantiator<Screen> {
+			            __safeDI_screenBuilder(onSelect: $0)
+			        }
+			        self.init(screenBuilder: screenBuilder)
+			    }
+			}
+			""",
+		])
+	}
+
 	// MARK: Other spellings
 
 	@Test
@@ -517,7 +580,6 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 		// declares: both compute the parameter's type from the declaration they read and spell it alike, so the guard
 		// hashes match and the call compiles, under both integrations and for each spelling.
 		let type = spelling.type
-		let parameterType = Self.isFunctionType(type) ? "@escaping \(type)" : type
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Core", packageName: "Shop", swiftFileContent: [spelling.coreDeclaration]),

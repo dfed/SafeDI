@@ -85,6 +85,26 @@ struct SafeDIToolGraphFuzzerTests {
 		// the callers of each package configuration.
 		let drawFeatures = acceptedResults.reduce(into: Set<GraphFuzzerSeamDrawFeature>()) { $0.formUnion(GraphFuzzerFeature.seamDrawFeatures(of: $1.fixture)) }
 		#expect(Set([GraphFuzzerSeamDrawFeature.moduleSplit, .otherPackageCaller, .samePackageCallerRunWithoutPackageName, .seamModuleRunWithoutPackageName]).subtracting(drawFeatures).sorted() == [])
+		// Every roll of `addingHoleShapes` beyond its base draw that draws a shape the tool accepts, in an accepted graph.
+		#expect(Set([
+			GraphFuzzerSeamDrawFeature.holeCrossPackage,
+			.holeCrossPackageFulfillerInitializerPackage,
+			.holeNarrowerField,
+			.holeAliasOrOnlyIfAvailable,
+			.holeReadOnlyIfAvailable,
+			.holeOwnerAliasesField,
+			.holeMocks,
+			.holeImplInNamespace,
+			.holeSeamModuleWithoutPackageName,
+			.holeReentryThroughPassingSeam,
+			.holeReentryThroughSendablePassingSeam,
+			.holeSecondHole,
+			.holeSendableDiamond,
+			.holeNestedSameLabelFill,
+		]).subtracting(drawFeatures).sorted() == [])
+		// A split graph whose modules all name their package, which the SwiftPM plugin flow agreed on with the module-info
+		// flow.
+		#expect(acceptedResults.contains { $0.isComparedAcrossIntegrations })
 		#expect(results.contains { !$0.isAccepted && $0.failure == nil }, "Rejected none of \(Self.seamSmokeSeeds.count) graphs")
 	}
 
@@ -155,6 +175,134 @@ struct SafeDIToolGraphFuzzerTests {
 		let accepted2 = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: accepted, secondOutcome: accepted)
 		#expect(accepted2.differentialFailure == nil)
 	}
+
+	@Test
+	func acceptanceDifferentialFailure_reportsSeamAcceptsGraphInlineRejects_whenSingleModuleGraphIsAcceptedWithSeamAndRejectedWithout() {
+		// In one module the seam world adds rules to the inlined validation and removes none, so a graph the seam accepts
+		// and inline rejects is a defect. Across modules the inline build cannot construct another module's `internal`
+		// types, so a split graph is not judged.
+		let singleModuleFixture = GraphFuzzerGenerator.fixture(forSeed: 1, features: [.generateDependencyTree])
+		let splitFixture = GraphFuzzerGenerator.fixture(forSeed: 31, features: [.generateDependencyTree])
+		#expect(singleModuleFixture.modules == nil)
+		#expect(splitFixture.modules != nil)
+		let accepted = GraphFuzzerToolOutcome.accepted(generatedFiles: [:], warnings: [])
+		let rejected = GraphFuzzerToolOutcome.rejected(diagnostics: "Root.swift:1:1: error: e")
+		let defect = GraphFuzzerToolRuns(fixture: singleModuleFixture, firstOutcome: accepted, secondOutcome: accepted, inlineOutcome: rejected)
+		#expect(defect.acceptanceDifferentialFailure?.kind == .seamAcceptsGraphInlineRejects)
+		#expect(defect.acceptanceDifferentialFailure?.details == "With the seam, the tool accepts the graph.\nWithout it:\nRoot.swift:1:1: error: e")
+		#expect(GraphFuzzerToolRuns(fixture: splitFixture, firstOutcome: accepted, secondOutcome: accepted, inlineOutcome: rejected).acceptanceDifferentialFailure == nil)
+		#expect(GraphFuzzerToolRuns(fixture: singleModuleFixture, firstOutcome: accepted, secondOutcome: accepted, inlineOutcome: accepted).acceptanceDifferentialFailure == nil)
+	}
+
+	@Test
+	func integrationsDisagreeFailure_reportsDisagreement_whenPluginFlowRejectsWhatModuleInfoFlowAccepts() {
+		// The SwiftPM plugin flow computes every seam signature, tier and public mock from source, and must give a split
+		// graph the verdict the module-info flow gives it.
+		let accepted = GraphFuzzerToolOutcome.accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": Self.rootInitializer], warnings: [])
+		let rejected = GraphFuzzerToolOutcome.rejected(diagnostics: Self.rootError)
+		#expect(Self.integrationRuns(moduleInfoOutcome: accepted, pluginOutcome: rejected).integrationsDisagreeFailure?.kind == .integrationsDisagree)
+		#expect(Self.integrationRuns(moduleInfoOutcome: accepted, pluginOutcome: rejected).integrationsDisagreeFailure?.details.prefix { $0 != "\n" } == "The module-info flow accepts the graph, and the SwiftPM plugin flow rejects it.")
+		#expect(Self.integrationRuns(moduleInfoOutcome: rejected, pluginOutcome: accepted).integrationsDisagreeFailure?.details.prefix { $0 != "\n" } == "The module-info flow rejects the graph, and the SwiftPM plugin flow accepts it.")
+		#expect(Self.integrationRuns(moduleInfoOutcome: accepted, pluginOutcome: nil).integrationsDisagreeFailure == nil)
+	}
+
+	@Test
+	func integrationsDisagreeFailure_reportsDisagreement_whenFlowsRejectGraphWithOtherDiagnostics() {
+		// Both flows lay a module's files out at the same paths, so a rejection's diagnostics are compared as they are.
+		let rejected = GraphFuzzerToolOutcome.rejected(diagnostics: Self.rootError)
+		let rejectedOtherwise = GraphFuzzerToolOutcome.rejected(diagnostics: Self.rootError + "\n/x/<fixture-directory>/shop/Sources/FuzzApp/S31_Root.swift:2:1: error: f")
+		#expect(Self.integrationRuns(moduleInfoOutcome: rejected, pluginOutcome: rejectedOtherwise).integrationsDisagreeFailure?.details.prefix { $0 != "\n" } == "The two flows report other diagnostics.")
+		#expect(Self.integrationRuns(moduleInfoOutcome: rejected, pluginOutcome: rejected).integrationsDisagreeFailure == nil)
+	}
+
+	@Test
+	func integrationsDisagreeFailure_reportsFirstDeclarationOneFlowGenerates_whenGeneratedCodeDiffers() {
+		// A declaration only one of the flows generates is a disagreement, whichever flow and whatever file holds it.
+		let optionalAlias = Self.rootInitializer.replacingOccurrences(of: "let authToken: S31_Secret = token", with: "let authToken: S31_Secret? = token")
+		let runs = Self.integrationRuns(
+			moduleInfoOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": Self.rootInitializer], warnings: []),
+			pluginOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": optionalAlias], warnings: []),
+		)
+		#expect(runs.integrationsDisagreeFailure?.details.hasPrefix("Only the module-info flow generates, in FuzzApp:\n\(Self.rootExtension)\nThe module-info flow:\n") == true)
+		let pluginOnlyRuns = Self.integrationRuns(
+			moduleInfoOutcome: .accepted(generatedFiles: [:], warnings: []),
+			pluginOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": Self.rootInitializer], warnings: []),
+		)
+		#expect(pluginOnlyRuns.integrationsDisagreeFailure?.details.hasPrefix("Only the SwiftPM plugin flow generates, in FuzzApp:\nextension S31_Root {") == true)
+	}
+
+	@Test
+	func knownIssueMatches_matchesFailureOfSignaturesKind_whenDetailsContainSignaturesText() {
+		// A known issue of either new oracle documents a failure of its kind whose details contain its text, and no other.
+		let acceptance = GraphFuzzerKnownIssue(reason: "r", signatures: [.seamAcceptsGraphInlineRejects(containing: "error: e")], seeds: [1])
+		let integrations = GraphFuzzerKnownIssue(reason: "r", signatures: [.integrationsDisagree(containing: "in FuzzApp")], seeds: [31])
+		let acceptanceFailure = GraphFuzzerFailure(seed: 1, kind: .seamAcceptsGraphInlineRejects, details: "Without it:\nRoot.swift:1:1: error: e")
+		let integrationsFailure = GraphFuzzerFailure(seed: 31, kind: .integrationsDisagree, details: "Only the SwiftPM plugin flow generates, in FuzzApp:")
+		#expect(acceptance.matches(acceptanceFailure))
+		#expect(!acceptance.matches(integrationsFailure))
+		#expect(integrations.matches(integrationsFailure))
+		#expect(!integrations.matches(acceptanceFailure))
+	}
+
+	@Test
+	func integrationsDisagreeFailure_returnsNil_whenOutputsDifferOnlyBySourceLocationAndPluginHeader() {
+		// Only a flow that knows the compiler's spelling of an alias's file refers to it with a `#sourceLocation`
+		// directive, and every file the plugin writes opens with its header.
+		let withDirective = Self.rootInitializer.replacingOccurrences(
+			of: "        let authToken: S31_Secret = token\n",
+			with: "        #sourceLocation(file: \"/x/<fixture-directory>/shop/Sources/FuzzApp/S31_Root.swift\", line: 8)\n        let authToken: S31_Secret = token\n        #sourceLocation()\n",
+		)
+		let withHeader = GraphFuzzerOracle.generatedFileHeaderLines.joined(separator: "\n") + "\n" + Self.rootInitializer
+		let runs = Self.integrationRuns(
+			moduleInfoOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": withDirective], warnings: []),
+			pluginOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": withHeader], warnings: []),
+		)
+		#expect(withDirective != withHeader)
+		#expect(runs.integrationsDisagreeFailure == nil)
+	}
+
+	@Test
+	func integrationsDisagreeFailure_returnsNil_whenOutputsDifferOnlyByCommentsOneFlowWritesForWhatItCannotKnow() {
+		// A flow that cannot spell an alias's file as the compiler does refers to it with a comment, and a seam call carries
+		// a comment where SafeDI cannot know the seam's module generated the initializer it calls.
+		let withComments = Self.rootInitializer
+			.replacingOccurrences(of: "let authToken: S31_Secret = token", with: "let authToken: S31_Secret = token // Declared at Sources/FuzzApp/S31_Root.swift:8")
+			.replacingOccurrences(of: "_ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self", with: "_ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self // If this line does not compile, add the SafeDI plugin to the target that declares S31_Screen.")
+		let runs = Self.integrationRuns(
+			moduleInfoOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": Self.rootInitializer], warnings: []),
+			pluginOutcome: .accepted(generatedFiles: ["FuzzApp/S31_Root+SafeDI.swift": withComments], warnings: []),
+		)
+		#expect(withComments.components(separatedBy: " // ").count == 3)
+		#expect(runs.integrationsDisagreeFailure == nil)
+	}
+
+	/// The runs of seam smoke seed 31's graph, split across modules with every package name given, with `moduleInfoOutcome`
+	/// as Bazel runs the tool and `pluginOutcome` as the SwiftPM plugin runs it.
+	private static func integrationRuns(moduleInfoOutcome: GraphFuzzerToolOutcome, pluginOutcome: GraphFuzzerToolOutcome?) -> GraphFuzzerToolRuns {
+		GraphFuzzerToolRuns(fixture: GraphFuzzerGenerator.fixture(forSeed: 31, features: [.generateDependencyTree]), firstOutcome: moduleInfoOutcome, secondOutcome: moduleInfoOutcome, pluginOutcome: pluginOutcome)
+	}
+
+	/// A root's generated file in the module of a split graph that calls a seam: its import and `rootExtension`.
+	private static let rootInitializer = "import FuzzFeature\n\n\(rootExtension)\n"
+
+	/// The extension declaring that root's generated initializer.
+	private static let rootExtension = """
+	extension S31_Root {
+	    public convenience init() {
+	        let token = S31_Secret()
+	        let authToken: S31_Secret = token
+	        func __safeDI_screen() -> S31_Screen {
+	            _ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self
+	            return S31_Screen(token: token)
+	        }
+	        let screen: S31_Screen = __safeDI_screen()
+	        self.init(authToken: authToken, screen: screen)
+	    }
+	}
+	"""
+
+	/// An error at the root of that module.
+	private static let rootError = "/x/<fixture-directory>/shop/Sources/FuzzApp/S31_Root.swift:1:1: error: e"
 
 	@Test
 	func nilArgumentFailure_reportsArgument_whenSeamPassesLiteralNilWhereInlinePassesValue() {
@@ -2271,6 +2419,7 @@ struct SafeDIToolGraphFuzzerTests {
 								multiModuleRuns: results[index].multiModuleRuns,
 								isInspectedByValueOracle: results[index].isInspectedByValueOracle,
 								isComparedByValueOracle: results[index].isComparedByValueOracle,
+								isComparedAcrossIntegrations: results[index].isComparedAcrossIntegrations,
 							)
 						}
 						for result in results {
@@ -2519,34 +2668,37 @@ struct SafeDIToolGraphFuzzerTests {
 	)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0x73FE9571CEC308EC
-	static let seamCorpusAcceptedSeedCount = 253
-	static let seamCorpusAcceptedSeedsSum: UInt64 = 0xD0EC42E39AD4EF47
+	static let seamCorpusFixtureHash: UInt64 = 0x9B0D8696A59334D8
+	static let seamCorpusAcceptedSeedCount = 266
+	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x4D837B60B874D9E
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
 	/// oracle compares.
-	static let seamCorpusValueOracleInspectedGraphCount = 204
+	static let seamCorpusValueOracleInspectedGraphCount = 186
 	/// How many of the seam corpus's graphs the tool rejects because a caller holds a value the tier it calls omits.
-	static let seamCorpusOmittedValueGraphCount = 18
+	static let seamCorpusOmittedValueGraphCount = 3
 
 	/// The ordinary suite's batch of the seam corpus: graphs the tool accepts whose generated code, between them, shows
 	/// every `GraphFuzzerSeamOutputFeature` – both kinds of pass-through, a call reading `.instance`, an `@escaping`
 	/// closure parameter, an `@escaping @Sendable` one, and an optional closure – graphs split across modules, with a
-	/// caller in another package (seed 31), a caller in the same package run without its package's name (seed 609) and a
-	/// seam's module run so (seed 98), the last two also accepted inline, so the batch compiles every module, judges an
-	/// omitted value and compares a split graph's values; graphs with a hole whose code, between them, shows every
-	/// `GraphFuzzerHoleOutputFeature` – a passed-up builder whose fill re-enters the inner seam (seed 196) and a staged
-	/// builder whose fill re-enters its seam (seed 277); and a graph it rejects, which
-	/// `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` checks. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 31, 92, 98, 196, 277, 609]
+	/// caller in another package, a caller in the same package run without its package's name and a seam's module run so
+	/// (seeds 19, 31, 98, 180, 609 and 743 between them), the last two also accepted inline, so the batch compiles every
+	/// module, judges an omitted value, compares a split graph's values and compares one across the two integrations;
+	/// graphs with a hole whose code, between them, shows every `GraphFuzzerHoleOutputFeature` – a passed-up builder whose
+	/// fill re-enters the inner seam, a staged builder whose fill re-enters its seam, a fill passed to a seam that passes
+	/// its site up, also `@Sendable`, and a fill named apart (seeds 196, 277 and 743 between them) – and that draw, between
+	/// them, every roll of `addingHoleShapes` with an accepted variant (with seeds 19, 98, 605 and 743); and a graph it
+	/// rejects, which `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` checks. The union of the batches the
+	/// hole rolls and the seam tests' draws were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 92, 98, 180, 196, 277, 605, 609, 743]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x78529BE9E3EAD44B
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x9F5CC38FDE161121
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
 	/// `seamCorpus_drawsEachShapeInThePinnedNumberOfGraphs_whenFixturesAreGeneratedWithoutTheTool`.
 	static let seamCorpusDrawFeatureCounts: [GraphFuzzerSeamDrawFeature: Int] = [
 		.collidingFormsBeneathSeam: 71,
-		.innerSeam: 337,
+		.innerSeam: 342,
 		.instanceHeldByCaller: 392,
 		.instanceReceiveBeneathSeam: 242,
 		.otherKindWrapperReceiveBeneathSeam: 32,
@@ -2619,6 +2771,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.namespaceExtensionUnspelled: 64,
 		.namespaceExtensionSpelled: 37,
 		.publicNamespace: 20,
+		.namespaceInMarkerFreeFile: 50,
 		.namespaceTypeOnlyThroughExistential: 61,
 		.instantiableExtensionOfNarrowerType: 55,
 		.qualifiedAllowlistMention: 14,
@@ -2631,23 +2784,42 @@ struct SafeDIToolGraphFuzzerTests {
 		.moduleSplit: 484,
 		.otherPackageCaller: 221,
 		.samePackageCallerRunWithoutPackageName: 53,
-		.seamModuleRunWithoutPackageName: 38,
+		.seamModuleRunWithoutPackageName: 62,
 		.hole: 331,
 		.holeOwnedBySeam: 75,
+		.holeProtocolInMarkerFreeFile: 166,
+		.holeProtocolPackage: 79,
 		.holeBeneathConstant: 60,
 		.holeBeneathInstantiator: 89,
 		.holeBeneathSendableInstantiator: 44,
 		.holeBeneathLazilyInstantiated: 55,
 		.holeBeneathSendableLazilyInstantiated: 8,
 		.holeOwnerReachedAtTwoSites: 56,
-		.holeReadsField: 167,
-		.holeReadsCallerValue: 92,
+		.holeReadsField: 174,
+		.holeReadsCallerValue: 99,
 		.holePassedUp: 84,
 		.holeReentersSeam: 43,
 		.holeReentersSeamBeneathRedeclaredLabel: 7,
 		.holeReentersInnerSeamOfPassedUpBuilder: 13,
 		.holeSeamReentersItself: 19,
 		.holeSeamReentersItselfBeneathBoundLabel: 2,
+		.holeCrossPackage: 93,
+		.holeCrossPackageFulfillerInitializerPackage: 11,
+		.holeCrossPackageFulfillerBuildsPackageInitializerOfSeamsPackage: 14,
+		.holeNarrowerField: 25,
+		.holeAliasOrOnlyIfAvailable: 63,
+		.holeReadOnlyIfAvailable: 34,
+		.holeOwnerAliasesField: 24,
+		.holeMocks: 48,
+		.holeImplInNamespace: 48,
+		.holeSeamModuleWithoutPackageName: 33,
+		.holeReentryThroughPassingSeam: 18,
+		.holeReentryThroughPassingSeamBeneathBoundLabel: 8,
+		.holeReentryThroughSendablePassingSeam: 10,
+		.holeSecondHole: 103,
+		.holeSecondHoleBeneathRedeclaredLabel: 2,
+		.holeSendableDiamond: 22,
+		.holeNestedSameLabelFill: 18,
 		.uncreatedAliasLabelLazilyInstantiatedBeside: 26,
 		.uncreatedAliasLabelReceivedBeside: 17,
 		.uncreatedAliasLabelOnMid: 9,
@@ -2713,7 +2885,7 @@ struct SafeDIToolGraphFuzzerTests {
 		GraphFuzzerKnownIssue(
 			reason: "A caller whose tree holds only the optional form of an alias's fulfilling property passes it, and the seam creates the alias from it, where inline the alias is not created (the Manual's first documented divergence)",
 			signatures: [.seamBuildsOtherValuesThanInline(containing: "_Root0 > aliasSource)\n  known right: aliasAuth: nil"), .seamBuildsOtherValuesThanInline(containing: "_Root0 > aliasSource)\n  known right: aliasBearer: nil"), .seamBuildsOtherValuesThanInline(containing: "> aliasDetail > aliasToken:\n  feature:     aliasToken: <13> S843_AliasValue (seen, first at <1> S843_Root0 > aliasSource)\n  known right: aliasToken: nil")],
-			seeds: [430, 923, 924],
+			seeds: [430, 924],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "The seam's own onlyIfAvailable alias is bound from its fulfilling parameter, where inline the seam is passed the property of the alias's label that the scope building the seam creates (the Manual's second documented divergence)",
@@ -2733,12 +2905,13 @@ struct SafeDIToolGraphFuzzerTests {
 	/// Seeds of `knownIssues` that the seam corpus's run observed failing with the seam's own shape, or not failing
 	/// at all, since the seam's draw changed their graphs; the inherited lists leave them out. Observed, not
 	/// derived: a seed here that a run finds failing its inherited shape again is a new failure, and goes back.
-	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 309, 310, 311, 364, 371, 381, 393, 431, 434, 448, 471, 476, 545, 593, 632, 714, 728, 768, 774, 786, 808, 847, 903, 975]
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 309, 310, 311, 364, 371, 381, 393, 431, 434, 448, 476, 545, 632, 714, 728, 768, 774, 786, 808, 847, 903, 975]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
 	private static let seamCorpusSeedsAddedToInheritedShapes: [String: [UInt64]] = [
-		"SafeDIMockConfiguration.swift declares its extensions in the order of the roots that reach them": [93, 594, 794],
+		"A mock's API follows the order of type names or labels: which back-edge of a lazy cycle loses its override, which promoted sibling is passed nil, and the order of overrides": [135],
+		"SafeDIMockConfiguration.swift declares its extensions in the order of the roots that reach them": [93, 378, 594, 794],
 	]
 
 	/// Seeds whose seam has two or more pass-throughs. They are sorted by label – kept by ruling: a parameter order
@@ -2782,43 +2955,43 @@ struct SafeDIToolGraphFuzzerTests {
 	/// percent: the floor of the share the corpus run observed, for each feature the generated code shows today. The
 	/// commits that make another feature show pin it in turn.
 	static let publicMockCorpusOutputFeatureMinimumShares: [GraphFuzzerPublicMockOutputFeature: Int] = [
-		.allNonPublicConfiguration: 30,
+		.allNonPublicConfiguration: 24,
 		.configurationStruct: 21,
-		.constructionFunction: 50,
+		.constructionFunction: 49,
 		.consumerCall: 52,
 		.consumerErasedCall: 13,
 		.consumerErasedInline: 2,
-		.consumerFillReentersPublicMock: 0,
+		.consumerFillReentersPublicMock: 1,
 		.consumerFillsHole: 2,
 		.consumerInline: 22,
-		.consumerPassesHoleBuilderUp: 7,
-		.consumerPassesInstance: 18,
+		.consumerPassesHoleBuilderUp: 6,
+		.consumerPassesInstance: 26,
 		.consumerSendableFactory: 10,
-		.defaultRewritten: 54,
-		.forwardedProvider: 1,
-		.holeBuilder: 24,
+		.defaultRewritten: 53,
+		.forwardedProvider: 2,
+		.holeBuilder: 23,
 		.isolatedConstruction: 1,
-		.moduleConfiguration: 50,
-		.publicTier: 65,
-		.secondTier: 48,
+		.moduleConfiguration: 49,
+		.publicTier: 64,
+		.secondTier: 37,
 		.stagedHoleBuilder: 1,
-		.thirdTier: 3,
+		.thirdTier: 0,
 	]
 
 	static let publicMockCorpusSeedCount = 1_000
-	static let publicMockCorpusFixtureHash: UInt64 = 0x4C64A1EAB031F06B
-	static let publicMockCorpusAcceptedSeedCount = 747
-	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0x49F6381819B5B6A9
+	static let publicMockCorpusFixtureHash: UInt64 = 0xAF6DFAA2BF826D7C
+	static let publicMockCorpusAcceptedSeedCount = 836
+	static let publicMockCorpusAcceptedSeedsSum: UInt64 = 0xC2B61A7A5012EBE1
 	/// How many of the public mock corpus's graphs the tool accepts as drawn and as their known-right path, which the
 	/// value oracle compares.
-	static let publicMockCorpusValueOracleInspectedGraphCount = 747
+	static let publicMockCorpusValueOracleInspectedGraphCount = 836
 	/// How many of the public mock corpus's graphs the tool rejects because a caller provides a value the tier of the public
 	/// mock it calls omits (`leafTierOmitsProvidedValue`), which the long run counts as it counts the seam's.
-	static let publicMockCorpusOmittedValueGraphCount = 97
+	static let publicMockCorpusOmittedValueGraphCount = 32
 	/// How many of the public mock corpus's graphs the tool rejects with each of a public mock's own errors, in the order
 	/// of `GraphFuzzerOracle.publicMockOnlyErrorMarkers`: the public tier, a narrower enclosing type, a leaf tier and a
 	/// nested leaf tier omitting a provided value, the mock condition, the by-name check, and the view that cannot call.
-	static let publicMockCorpusErrorGraphCounts = [123, 0, 97, 0, 36, 0, 0]
+	static let publicMockCorpusErrorGraphCounts = [96, 0, 32, 0, 36, 0, 0]
 
 	/// The ordinary suite's batch of the public mock corpus: graphs the tool accepts – a consumer in the same package
 	/// calling a public mock with `analytics.instance` of the wrapper it holds, M8.32's stated divergence, of a `@MainActor`
@@ -2831,13 +3004,13 @@ struct SafeDIToolGraphFuzzerTests {
 	/// through an `Instantiator`, a fully lazy cycle (seed 197); a staged builder for a hole beneath a `Sendable` wrapper
 	/// (seed 211); a consumer in another package only and a differing mock condition (seed 253); a configuration's
 	/// module-level forwarder of a default's provider, and a hole's builder passed up into a `@Sendable` builder function
-	/// (seed 551) – a graph the public tier rejects (seed 7), and a graph of the configuration order's known issue (seed
+	/// (seed 551); a third tier, which a parameter of a type SafeDI reads no declaration of makes (seed 92) – a graph the public tier rejects (seed 7), and a graph of the configuration order's known issue (seed
 	/// 23). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
 	/// which `publicMockSmokeSeeds_exercisePublicMockFeature_inGraphsTheToolAccepts` checks. Pinned by
 	/// `publicMockSmokeAndKnownIssueFixtureHash`.
-	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 23, 43, 46, 142, 151, 197, 211, 253, 551]
+	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 23, 43, 46, 92, 142, 151, 197, 211, 253, 551]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x44F5B09789F791E4
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0xEF3456A2336A01AB
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -2846,28 +3019,30 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "SafeDIMockConfiguration.swift declares its configurations (public mocks' module-level structs among them) in the order of the roots that reach them",
 			signatures: [.renamedGraphDiffers(containing: "changes its generated mock configuration code")],
 			seeds: [
-				2, 5, 8, 16, 21, 23, 26, 28, 29, 42, 48, 50, 56, 58, 59, 63,
-				64, 65, 71, 79, 88, 90, 99, 101, 103, 110, 111, 115, 131, 133, 137, 146,
-				148, 150, 152, 157, 158, 168, 175, 178, 192, 199, 204, 209, 219, 220, 225, 231,
-				240, 241, 242, 247, 248, 256, 257, 259, 267, 269, 270, 274, 275, 276, 282, 289,
-				295, 297, 301, 306, 308, 309, 310, 314, 325, 333, 336, 338, 349, 351, 360, 365,
-				367, 368, 369, 374, 378, 380, 381, 389, 398, 402, 405, 412, 414, 415, 417, 419,
-				421, 426, 428, 435, 436, 441, 451, 456, 459, 469, 475, 477, 479, 482, 492, 496,
-				497, 498, 504, 511, 515, 523, 525, 527, 529, 530, 542, 549, 553, 555, 562, 564,
-				580, 584, 586, 587, 592, 597, 598, 600, 603, 610, 611, 613, 615, 618, 619, 623,
-				624, 625, 627, 632, 635, 637, 639, 642, 645, 651, 652, 668, 671, 672, 673, 681,
-				683, 684, 690, 691, 693, 697, 700, 706, 709, 714, 716, 721, 723, 726, 727, 732,
-				735, 738, 740, 745, 747, 748, 751, 753, 754, 755, 756, 759, 760, 762, 765, 772,
-				773, 774, 777, 783, 784, 790, 793, 798, 805, 817, 821, 825, 827, 828, 837, 845,
-				846, 848, 851, 854, 862, 868, 873, 878, 880, 881, 889, 891, 895, 896, 901, 907,
-				909, 911, 912, 923, 925, 932, 936, 937, 945, 946, 958, 959, 964, 968, 970, 976,
-				978, 979, 984, 985, 991, 993, 995,
+				2, 5, 8, 16, 21, 23, 25, 26, 28, 29, 31, 42, 48, 50, 56, 58,
+				59, 63, 64, 65, 70, 71, 79, 88, 90, 99, 101, 103, 110, 111, 115, 129,
+				131, 133, 136, 137, 146, 148, 150, 152, 157, 158, 164, 168, 175, 178, 192, 198,
+				199, 204, 209, 219, 220, 225, 231, 233, 240, 241, 242, 247, 248, 256, 257, 259,
+				264, 267, 269, 270, 271, 274, 275, 276, 282, 289, 295, 297, 299, 301, 306, 308,
+				309, 310, 313, 314, 325, 326, 333, 336, 338, 349, 351, 360, 365, 367, 368, 369,
+				374, 378, 380, 381, 389, 398, 402, 405, 412, 414, 415, 417, 419, 421, 425, 426,
+				428, 429, 433, 435, 436, 441, 451, 453, 456, 459, 469, 475, 477, 479, 482, 492,
+				496, 497, 498, 504, 508, 511, 515, 523, 525, 526, 527, 529, 530, 542, 543, 545,
+				549, 553, 554, 555, 562, 564, 580, 581, 584, 586, 587, 592, 595, 597, 598, 600,
+				603, 607, 608, 610, 611, 613, 615, 618, 619, 623, 624, 625, 627, 632, 635, 637,
+				638, 639, 642, 643, 645, 651, 652, 668, 671, 672, 673, 681, 683, 684, 690, 691,
+				693, 697, 699, 700, 706, 709, 714, 716, 721, 723, 726, 727, 732, 735, 738, 740,
+				745, 747, 748, 751, 753, 754, 755, 756, 759, 760, 762, 765, 772, 773, 774, 777,
+				783, 784, 790, 792, 793, 798, 805, 807, 817, 818, 821, 825, 827, 828, 837, 845,
+				846, 848, 851, 854, 857, 862, 868, 872, 873, 878, 879, 880, 881, 886, 889, 891,
+				895, 896, 901, 904, 907, 909, 911, 912, 923, 925, 932, 936, 937, 943, 945, 946,
+				958, 959, 964, 968, 970, 976, 978, 979, 984, 985, 991, 993, 995,
 			],
 		),
 		GraphFuzzerKnownIssue(
 			reason: "A public mock's parameters are sorted by label (decision 27), so reversing the labels reorders a `.public` consumer's `mock()` and the parameters it surfaces from its leaves",
 			signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")],
-			seeds: [106, 251, 407, 708, 771, 947],
+			seeds: [12, 106, 251, 407, 708, 771, 947],
 		),
 		// The base corpus's shape, in a consumer that builds a `.public` type's tree inline with a fill that closes a lazy
 		// cycle through it.
@@ -2882,6 +3057,19 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.valueComparatorCouldNotDescribeGraph(containing: "cannot convert value of type")],
 			seeds: [574],
 		),
+		// Two shapes the corpus first compiled once SafeDI proved a type's access from its plain declaration (2026-11-03):
+		// before, a consumer held a holder the public tier omitted, which the tool rejected; now `Dock`'s own declaration
+		// proves the holder `public`, or, `package`, leaves a consumer in another package holding none.
+		GraphFuzzerKnownIssue(
+			reason: "A consumer's mock calls a tiered public mock whose tree receives one label as two types, and passes only one of the two parameters SafeDI names apart for it",
+			signatures: [.compilerError(containing: "missing argument for parameter 'count_Int' in call"), .renamedGraphDiffers(containing: "changes its generated mock configuration code")],
+			seeds: [665],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "Two public mocks a consumer in another package calls each build their own instance of a dependency it cannot name (M8.9b), first built in a leaf's child, which the stated divergence's exemption does not derive",
+			signatures: [.publicMockBuildsOtherValuesThanKnownRight(containing: "t1 > t4 > session")],
+			seeds: [95],
+		),
 	]
 
 	/// How many of the public mock corpus's graphs each shape of `GraphFuzzerPublicMockDraw` lands in, exactly, so a draw
@@ -2893,11 +3081,13 @@ struct SafeDIToolGraphFuzzerTests {
 		.bothConsumerModules: 393,
 		.childDefaultNamingOwnStaticMember: 452,
 		.closureDefault: 225,
-		.consumerHoldsLazilyInstantiatedWrapper: 378,
-		.consumerHoldsOmittedValue: 220,
+		.consumerHoldsLazilyInstantiatedWrapper: 262,
+		.consumerHoldsOmittedValue: 188,
 		.consumerInstantiatesLeaf: 655,
+		.consumerReachesHoleTypeUnderTwoLabels: 87,
 		.consumerReachesHoleTypeWithFill: 155,
 		.consumerReachesHoleTypeWithoutFill: 166,
+		.consumerReceivesLazilyInstantiatedWrapper: 136,
 		.consumerReceivesLeaf: 550,
 		.customMockName: 369,
 		.declaringModuleConfigurationFile: 30,
@@ -2908,7 +3098,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.fakeMockDefaultedParameter: 344,
 		.fakeMockDependencyBoundParameter: 221,
 		.fakeTypeInternal: 344,
-		.holderlessOmittedValue: 66,
+		.holderlessOmittedValue: 57,
 		.holeBeneathInstantiator: 67,
 		.holeBeneathLazilyInstantiated: 82,
 		.holeBeneathSendableWrapper: 21,
@@ -2918,29 +3108,34 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeDeclaredAsErasedInstantiator: 73,
 		.holeDeclaredAsExistential: 86,
 		.holeDeclaredAsInstantiator: 34,
+		.holeFakeAlone: 7,
+		.holeFakeBesideFill: 12,
 		.holeFillClosesLazyCycle: 15,
 		.holeFillReceivesField: 24,
-		.holeFillReceivesNonField: 58,
+		.holeFillReceivesNonField: 56,
 		.holeOnPublicMockType: 228,
 		.holeScopeHoldsPackageValue: 103,
 		.holeScopeHoldsPublicValue: 140,
 		.instantiableParameterType: 235,
 		.internalInitializer: 520,
-		.lazilyInstantiatedOmittedValueProvider: 68,
+		.lazilyInstantiatedOmittedValueProvider: 58,
 		.lazilyReceivedLabelWithOnlyIfAvailableByValueReceive: 227,
 		.mainActorChildInitializerSpellsIsolation: 66,
 		.mainActorChildIsolatedInitializer: 141,
 		.mainActorChildNonisolatedInitializer: 40,
 		.mockConditionDiffers: 103,
 		.namespaceExtensionPackage: 93,
+		.namespaceInMarkerFreeFile: 101,
+		.dockPackage: 163,
+		.dockUnrecorded: 172,
 		.namespaceExtensionPublic: 44,
 		.namespaceExtensionUnspelled: 78,
 		.narrowerTreeType: 878,
 		.nonOptionalDefault: 694,
-		.omittedValueProviderAfterLeaf: 119,
-		.omittedValueProviderAndLeafReceiveEachOther: 64,
-		.omittedValueProviderBeforeLeaf: 120,
-		.omittedValueProviderUnderSendableBuilder: 36,
+		.omittedValueProviderAfterLeaf: 101,
+		.omittedValueProviderAndLeafReceiveEachOther: 51,
+		.omittedValueProviderBeforeLeaf: 100,
+		.omittedValueProviderUnderSendableBuilder: 32,
 		.onePublicMockType: 369,
 		.optionalDefaultOfPackageType: 282,
 		.optionalDefaultOfPublicType: 267,

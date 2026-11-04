@@ -65,6 +65,7 @@ func performScan(
 	manifestFile: String,
 	mockScopedFiles: [String] = [],
 	activeCompilationConditions: Set<String> = [],
+	keepsTypeDeclarationsOtherModulesCanName: Bool = false,
 ) async throws -> CachedScannedModuleInfo {
 	let outputDirectoryURL = outputDirectory.asFileURL
 
@@ -103,6 +104,7 @@ func performScan(
 		filePaths: Set(allFilePathsByName.keys),
 		configurationFilePaths: Set(allFilePathsByName.keys.filter(isMockScoped)),
 		activeCompilationConditions: activeCompilationConditions,
+		keepsTypeDeclarationsOtherModulesCanName: keepsTypeDeclarationsOtherModulesCanName,
 	)
 	let evaluator = parsedModule.conditionalCompilationEvaluator
 

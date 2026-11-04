@@ -273,7 +273,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`generateMock: .public` needs a type declaration; an extension cannot prove its type is `public`. Use `.internal`, or write a public `mock` by hand.",
+						message: "`generateMock: .public` needs a type declaration; an extension cannot prove its type is `public`. Use `.internal`, or write a public `mock()` by hand.",
 						line: 1,
 						column: 29,
 						fixIts: [
@@ -350,17 +350,17 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`generateMock: .public` cannot be used on the generic type `Cache`: SafeDI cannot generate a public `mock()` for a type in a generic context. Use `generateMock: true` for a mock its own module calls, or write a public `mock()` by hand for other modules to call.",
+						message: "`generateMock: .public` cannot be used on the generic type `Cache`: SafeDI cannot generate a public `mock()` for a type in a generic context. Use `generateMock: .internal` for a mock its own module calls, or write a public `mock()` by hand for other modules to call.",
 						line: 1,
 						column: 29,
 						fixIts: [
-							FixItSpec(message: "Replace `.public` with `true`"),
+							FixItSpec(message: "Replace `.public` with `.internal`"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				fixedSource: """
-				@Instantiable(generateMock: true)
+				@Instantiable(generateMock: .internal)
 				public struct Cache<Key: Hashable>: Instantiable {
 				    public init() {}
 				}
@@ -387,17 +387,17 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`generateMock: .public` cannot be used on the generic type `Cache`: SafeDI cannot generate a public `mock()` for a type in a generic context. Use `generateMock: true` for a mock its own module calls, or write a public `mock()` by hand for other modules to call.",
+						message: "`generateMock: .public` cannot be used on the generic type `Cache`: SafeDI cannot generate a public `mock()` for a type in a generic context. Use `generateMock: .internal` for a mock its own module calls, or write a public `mock()` by hand for other modules to call.",
 						line: 1,
 						column: 29,
 						fixIts: [
-							FixItSpec(message: "Replace `.public` with `true`"),
+							FixItSpec(message: "Replace `.public` with `.internal`"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				fixedSource: """
-				@Instantiable(generateMock: true)
+				@Instantiable(generateMock: .internal)
 				\(declaration)
 				    public init() {}
 				}
@@ -429,18 +429,18 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`generateMock: .public` cannot be used on `Inner`, which is declared inside the generic type `Outer`: SafeDI cannot generate a public `mock()` for a type in a generic context. Use `generateMock: true` for a mock its own module calls, or write a public `mock()` by hand for other modules to call.",
+						message: "`generateMock: .public` cannot be used on `Inner`, which is declared inside the generic type `Outer`: SafeDI cannot generate a public `mock()` for a type in a generic context. Use `generateMock: .internal` for a mock its own module calls, or write a public `mock()` by hand for other modules to call.",
 						line: 2,
 						column: 33,
 						fixIts: [
-							FixItSpec(message: "Replace `.public` with `true`"),
+							FixItSpec(message: "Replace `.public` with `.internal`"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				fixedSource: """
 				\(enclosingDeclaration)
-				    @Instantiable(generateMock: true)
+				    @Instantiable(generateMock: .internal)
 				    public struct Inner: Instantiable {
 				        public init() {}
 				    }
@@ -504,18 +504,18 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`generateMock: .public` cannot be used on `Inner`, which is declared inside the generic type `Outer`: SafeDI cannot generate a public `mock()` for a type in a generic context. Use `generateMock: true` for a mock its own module calls, or write a public `mock()` by hand for other modules to call.",
+						message: "`generateMock: .public` cannot be used on `Inner`, which is declared inside the generic type `Outer`: SafeDI cannot generate a public `mock()` for a type in a generic context. Use `generateMock: .internal` for a mock its own module calls, or write a public `mock()` by hand for other modules to call.",
 						line: 2,
 						column: 33,
 						fixIts: [
-							FixItSpec(message: "Replace `.public` with `true`"),
+							FixItSpec(message: "Replace `.public` with `.internal`"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				fixedSource: """
 				public struct Outer<T> {
-				    @Instantiable(generateMock: true)
+				    @Instantiable(generateMock: .internal)
 				    public struct Inner: Instantiable {
 				        public init() {}
 				    }

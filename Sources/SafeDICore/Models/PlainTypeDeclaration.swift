@@ -18,9 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A declaration of a type that is not `@Instantiable` – a `struct`, `class`, `actor`, or `enum`, such as an enum used
-/// as a namespace – whose access bounds the types an extension of it declares, and the type an `@Instantiable`
-/// extension of it declares: code that names such a type names the extended type too.
+/// A declaration of a type that is not `@Instantiable` – a `struct`, `class`, `actor`, `enum`, or `protocol`, such as an
+/// enum used as a namespace – whose access bounds the types an extension of it declares, and the type an
+/// `@Instantiable` extension of it declares: code that names such a type names the extended type too. Its access is
+/// also the access of the type, which proves the access of a parameter of a generated initializer or mock that names
+/// it (`TypeAccessProof`).
 ///
 /// Only a declaration outside every `#if` block and every extension is recorded. Its access is then the same whatever
 /// the conditions, so a file's record needs no condition to be reused, and it is decided by the declaration's own
@@ -56,6 +58,24 @@ public struct PlainTypeDeclaration: Codable, Hashable, Sendable {
 	public var packageName: String?
 	/// The file that holds the declaration.
 	public var sourceFilePath: String?
+
+	/// Whether code in another file than the declaration's can name the type: a `private` or `fileprivate` level
+	/// anywhere in its chain – its own, or that of a type enclosing it in its file – keeps code in any other file from
+	/// naming it, so an extension in another file cannot extend it, and such a declaration can be the type an extension
+	/// extends only when it is in the extension's own file. Every level counts, not only the outermost:
+	/// `public enum Outer { private enum Space {} }` is as invisible from another file as a file-scope `private` type.
+	public var isVisibleOutsideItsFile: Bool {
+		!(enclosingTypeAccess + [access]).contains { $0.level.isPrivateOrFilePrivate }
+	}
+
+	/// The access with which code outside the declaration can name the type: the level its declaration spells, or
+	/// `internal` when it spells none, capped by the level of each type declaration enclosing it in its file. A recorded
+	/// declaration is in no extension, so no extension gives it a level.
+	public var effectiveAccessLevel: AccessLevel {
+		(enclosingTypeAccess + [access]).reduce(AccessLevel.open) { effectiveLevel, declaration in
+			effectiveLevel.capped(by: AccessLevel.ownLevel(of: declaration, directlyInside: nil))
+		}
+	}
 }
 
 extension [PlainTypeDeclaration] {

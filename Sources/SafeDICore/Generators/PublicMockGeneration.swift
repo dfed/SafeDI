@@ -33,13 +33,19 @@ struct PublicMockContext: Sendable {
 	let moduleName: String?
 	/// The name of each concrete type's module-level configuration struct (`configurationTypeNames(of:moduleName:)`).
 	let configurationTypeNameByType: [TypeDescription: String]
+	/// For each `generateMock: .public` type declared inside an extension, the declarations of the extended type that
+	/// bound it (`DependencyTreeGenerator.extendedTypeAccessNeeds(of:in:)`), which a public mock needs to be `public`.
+	let extendedTypeAccessNeedsByType: [TypeDescription: [AccessNeed]]
 
-	/// The access with which a declaration can name every type in `types`: the narrowest proof among them, read for a
-	/// type with no entry from `admittedModules`, and the cause of the narrowest.
+	/// The access with which a declaration can name every type in `types`: the narrowest proof among them, a type with
+	/// no entry resolved to its plain declaration in the module the mocks are generated in and otherwise read from
+	/// `admittedModules`, and the cause of the narrowest.
 	func access(ofTypes types: [TypeDescription], admittedModules: Set<String?>) -> TypeAccessProof.ParameterAccess {
 		var narrowest = TypeAccessProof.ParameterAccess(level: .public, cause: nil)
 		for type in types {
-			let access = proof.access(ofParameterTyped: type, admittedModules: admittedModules)
+			// The mocks are generated in the module whose files the proof's `isOwnFile` names as its own: a context computed
+			// for another module's public mock names none.
+			let access = proof.access(ofParameterTyped: type, mentionedFrom: .generatedCode(ofModuleNamed: moduleName, isRunsOwnModule: true), admittedModules: admittedModules)
 			if access.level < narrowest.level {
 				narrowest = access
 			}
@@ -595,6 +601,10 @@ struct PublicMockParameter: Sendable {
 	/// For a received dependency taken as `T? = nil`, whether the mock builds it when passed `nil`, rather than passing
 	/// `nil` on to the receivers in its tree, which receive it only if available.
 	var isBuiltWhenNil = false
+	/// For a dependency the mock builds when passed `nil` as a `LazilyInstantiated` or `SendableLazilyInstantiated`,
+	/// taken by value, the wrapper it builds, which a calling mock that can build it builds in its place, as the inline
+	/// mock would, and passes the instance of.
+	var builtWrapper: Property?
 	/// For the builder of a hole in the mock's tree, the hole, which a module calling the mock that sees a type that
 	/// fulfills it fills.
 	var hole: SeamSignature.Hole?
@@ -798,6 +808,14 @@ extension ScopeGenerator {
 		/// The provider of an optional-typed default, and how a declaration names it.
 		func provider(named label: String, type: TypeDescription, expression: String) -> String {
 			let isPublic = access(of: type, receivedAs: nil) == .public
+			if providerDeclarations.isEmpty, mockIsolation == nil, instantiable.declarationIsolation == nil {
+				// SafeDI cannot see isolation a type takes from a conformance or a superclass (a SwiftUI `View`, a
+				// `UIViewController` subclass), which is the user's to opt into through `mockAttributes`; the comment says so
+				// where the compiler reports a default that reads the actor's state.
+				providerDeclarations.append("\(standardIndent)// These providers evaluate `\(typeName)`'s own defaults outside any actor, since SafeDI sees no isolation on it. If one")
+				providerDeclarations.append("\(standardIndent)// reads the state of an actor `\(typeName)` takes from a conformance or a superclass and does not compile, give its")
+				providerDeclarations.append("\(standardIndent)// `@\(InstantiableVisitor.macroName)` `mockAttributes: \"@MainActor\"` (or that actor).")
+			}
 			providerDeclarations.append("\(standardIndent)\(isPublic ? "@usableFromInline " : "")\(mockIsolation ?? "nonisolated") static func \(PublicMockContext.rootProviderName(label: label))() -> \(type.asSource) { \(expression) }")
 			return "\(typeName).\(PublicMockContext.rootProviderName(label: label))()"
 		}
@@ -885,7 +903,7 @@ extension ScopeGenerator {
 			let parameterProperty = publicMockParameterProperty(of: node)
 			let parameterName = node.property.propertyType.isLazilyInstantiated ? node.propertyLabel : name
 			promotedParameterNames[node.property] = parameterName
-			optionalReceivedParameters.append(PublicMockParameter(name: parameterName, type: parameterProperty.typeDescription, typeSource: parameterProperty.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: parameterProperty.typeDescription, receivedAs: node.propertyLabel), accessCause: cause(of: parameterProperty.typeDescription, receivedAs: node.propertyLabel), role: .received(parameterProperty, isRequired: false), isBuiltWhenNil: true))
+			optionalReceivedParameters.append(PublicMockParameter(name: parameterName, type: parameterProperty.typeDescription, typeSource: parameterProperty.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: parameterProperty.typeDescription, receivedAs: node.propertyLabel), accessCause: cause(of: parameterProperty.typeDescription, receivedAs: node.propertyLabel), role: .received(parameterProperty, isRequired: false), isBuiltWhenNil: true, builtWrapper: node.property.propertyType.isLazilyInstantiated ? node.property : nil))
 		}
 		for onlyIfAvailableOverride in onlyIfAvailableOverrides {
 			optionalReceivedParameters.append(PublicMockParameter(name: onlyIfAvailableOverride.name, type: onlyIfAvailableOverride.typeDescription, typeSource: onlyIfAvailableOverride.typeDescription.asSource, defaultSource: "nil", defaultKind: .nilValue, access: access(of: onlyIfAvailableOverride.typeDescription, receivedAs: onlyIfAvailableOverride.receivedProperty.label), accessCause: cause(of: onlyIfAvailableOverride.typeDescription, receivedAs: onlyIfAvailableOverride.receivedProperty.label), role: .received(Property(label: onlyIfAvailableOverride.receivedProperty.label, typeDescription: onlyIfAvailableOverride.typeDescription), isRequired: false)))
@@ -908,7 +926,7 @@ extension ScopeGenerator {
 		// Each hole's fields after every parameter, as a seam hashes them – those of the holes whose builders the mock
 		// passes up too – since a caller that computed the struct without a field would resolve its label from its own
 		// scope instead.
-		let hashedHoles = holes + passedUpHoles.values.sorted { $0.builderLabel < $1.builderLabel }
+		let hashedHoles = holes + passedUpHoles.sorted { $0.key < $1.key }.map(\.value)
 		for field in hashedHoles.flatMap({ SeamSignature.CallShape.Hole($0).fields.joined() }) {
 			hash.combine(field.label)
 			hash.combine(field.type)
@@ -1069,6 +1087,19 @@ struct PublicMockFinding: Hashable, Sendable {
 		])
 	}
 
+	/// `generateMock: .public` on a type narrower than `public`, which the macro rejects (`publicMockRequiresPublicType`)
+	/// once it expands: a plain error at the declaration, with no fix-it, which the macro keeps for the IDE.
+	static func typeTheMacroRejects(_ instantiable: Instantiable, level: AccessLevel) -> PublicMockFinding {
+		let typeName = instantiable.concreteInstantiable.asSource
+		return PublicMockFinding(sourceDiagnostics: [
+			SourceDiagnostic(
+				severity: .error,
+				location: instantiable.declarationLocation,
+				message: "`\(typeName)` is `\(level.spelling)` and declares `generateMock: .public`. The @\(InstantiableVisitor.macroName) macro rejects that: `generateMock: .public` requires a `public` or `open` type. Declare `\(typeName)` `public`, or use `generateMock: .internal`.",
+			),
+		])
+	}
+
 	/// The modules that call the public mock of `instantiable` compute its signature from declarations that leave out
 	/// `declaration`, so their calls would not match the mock: a directory this module's configuration adds declares it
 	/// (`viaTargetGraph`), or a dependent module whose module info names no module does.
@@ -1105,25 +1136,48 @@ struct PublicMockFinding: Hashable, Sendable {
 			parameter.property.asSource
 		}
 		let causeText = SeamAccessExplanation.causeSentence(parameter.cause, receivers: [])
-		var remedies = SeamAccessExplanation.causeRemedies(parameter.cause, neededLevel: .public)
-		let causeType: TypeDescription = switch parameter.cause {
+		// A `mockOnly` mock of a type SafeDI reads no declaration of proves it, and lets the mock build a type it receives
+		// or forwards, whose parameter then defaults to `nil`.
+		let mockOnlyMockLetsMockBuildType = switch parameter.kind {
+		case .forwarded, .received:
+			true
+		case .instantiated, .builder:
+			false
+		}
+		var remedies = SeamAccessExplanation.causeRemedies(parameter.cause, neededLevel: .public, mockOnlyMockLetsMockBuildType: mockOnlyMockLetsMockBuildType)
+		let causeType: TypeDescription
+		let causeReadsNoDeclaration: Bool
+		switch parameter.cause {
 		case let .ownDeclaration(type, _),
-		     let .declarationInExtensionOfRecordedType(type, _, _, _, _),
-		     let .declarationInExtension(type, _, _, _, _, _, _),
-		     let .signatures(type, _, _),
+		     let .plainDeclaration(type, _, _, _),
+		     let .declarationInExtensionOfRecordedType(type, _, _, _, _, _),
+		     let .declarationInExtension(type, _, _, _, _, _, _, _):
+			causeType = type
+			causeReadsNoDeclaration = false
+		case let .signatures(type, _, _, _),
 		     let .unproven(type):
-			type
+			causeType = type
+			causeReadsNoDeclaration = true
 		}
 		switch parameter.kind {
-		case .forwarded:
+		case .forwarded where !causeReadsNoDeclaration:
+			// The cause's remedies offer the mock when SafeDI reads no declaration of the type.
 			remedies.append("give `\(causeType.asSource)` a `mockOnly` mock")
 		case .received:
 			remedies.append("receive it with `onlyIfAvailable: true` and an optional type")
-		case .instantiated, .builder:
+		case .forwarded, .instantiated:
 			break
+		case let .builder(hole):
+			// A stub the mock builds in place of taking the builder, which production never sees.
+			let holeType = hole.property.typeDescription.asInstantiatedType.withoutAny.asSource
+			let module = instantiable.moduleName.map { "module `\($0)`" } ?? "this module"
+			remedies.append("declare in \(module), or a module it depends on, a `mockOnly` `@\(InstantiableVisitor.macroName)` type that fulfills `\(holeType)` (`@\(InstantiableVisitor.macroName)(fulfillingAdditionalTypes: [\(holeType).self], mockOnly: true)`), which the mock builds instead of taking `\(hole.builderLabel)`, leaving production's hole as it is")
 		}
-		if case .ownDeclaration = parameter.cause {} else {
-			remedies.append("widen the declaration that proves the parameter's type")
+		if case let .signatures(_, _, provers, _) = parameter.cause {
+			// The members that prove the type, by name, each of which proves it at the level it spells.
+			for prover in provers where prover.cap == nil {
+				remedies.append("make \(prover.name) `public`")
+			}
 		}
 		remedies.append("use `generateMock: .internal`")
 		let message = "SafeDI cannot generate the public mock of \(typeName): its `public` tier, which `generateMock: .public` requires, cannot take `\(parameterName)`, \(taker), and cannot pass `nil` for it, since it is required. \(causeText) \(SeamAccessExplanation.joined(remedies))"
@@ -1134,6 +1188,7 @@ struct PublicMockFinding: Hashable, Sendable {
 			"receives"
 		}
 		var sourceDiagnostics = [SourceDiagnostic(severity: .error, location: instantiable.mockGenerationArgumentLocation, message: message)]
+			+ SeamAccessExplanation.declarationNotes(for: parameter.cause, neededLevel: .public)
 		for receiver in parameter.receivers {
 			sourceDiagnostics.append(SourceDiagnostic(
 				severity: .note,
@@ -1152,11 +1207,27 @@ extension ScopeGenerator {
 	/// - Parameter forwardedTypesWithMockDefaults: The types whose hand-written mock a forwarded parameter of their type
 	///   defaults to (`MockScopes.forwardedParameterMockDefaults`), which the mock then takes as `T? = nil`.
 	func publicMockFindings(of instantiable: Instantiable, context: PublicMockContext, forwardedTypesWithMockDefaults: Set<TypeDescription>) async -> [PublicMockFinding] {
-		// The macro requires the type to spell `public` or `open`, or to be directly inside a `public extension`, so
-		// only an enclosing type can make it narrower. The innermost such type is the one to name.
-		let enclosingTypeNames = Self.enclosingTypeNames(of: instantiable.concreteInstantiable)
-		if let (name, access) = zip(enclosingTypeNames, instantiable.enclosingTypeAccess).filter({ $0.1.level < .public }).last {
-			return [PublicMockFinding.narrowerEnclosingType(of: instantiable, enclosingTypeName: name, enclosingLevel: access.level)]
+		// The type's own declaration, the types enclosing it in its file and, for a type declared inside an extension,
+		// the declarations of the type the extension extends that SafeDI records, outermost first, each with its own
+		// level. The macro requires the type itself to be `public` or `open`, or directly inside a `public extension`, but
+		// `generate` runs before the macro expands, so a narrower type gets a plain error that points at the macro's rule.
+		// Otherwise only an enclosing type can make it narrower, and the innermost such type is the one to name.
+		var narrowerEnclosingType: (type: TypeDescription, level: AccessLevel)?
+		for accessNeed in context.extendedTypeAccessNeedsByType[instantiable.concreteInstantiable, default: []] + instantiable.accessNeeds(constructingWithMockMethod: false) {
+			switch accessNeed.declaration {
+			case let .type(type), let .extensionDeclaringType(type):
+				guard TypeAccessProof.normalized(accessNeed.level) < .public else { continue }
+				if type == instantiable.concreteInstantiable {
+					return [PublicMockFinding.typeTheMacroRejects(instantiable, level: accessNeed.level)]
+				} else {
+					narrowerEnclosingType = (type, accessNeed.level)
+				}
+			case .member, .extensionDeclaringMember:
+				continue
+			}
+		}
+		if let narrowerEnclosingType {
+			return [PublicMockFinding.narrowerEnclosingType(of: instantiable, enclosingTypeName: narrowerEnclosingType.type.asSource, enclosingLevel: narrowerEnclosingType.level)]
 		}
 		let parameters = await mockRootParameters(instantiable: instantiable)
 		let ownModules: Set<String?> = [context.moduleName, instantiable.moduleName]
@@ -1195,7 +1266,7 @@ extension ScopeGenerator {
 			check(uncovered.property, kind: .instantiated)
 		}
 		// A hole's builder is as visible as the hole's type, proven as a seam's builder is.
-		for hole in parameters.parameterTree.holesOfTree + passedUpHoles.values.sorted(by: { $0.builderLabel < $1.builderLabel }) where hole.tierAccess < .public {
+		for hole in parameters.parameterTree.holesOfTree + passedUpHoles.sorted(by: { $0.key < $1.key }).map(\.value) where hole.tierAccess < .public {
 			guard let cause = hole.accessCause else { continue }
 			omittedParameters.append(PublicMockFinding.OmittedRequiredParameter(
 				property: hole.property,
@@ -1206,17 +1277,6 @@ extension ScopeGenerator {
 			))
 		}
 		return omittedParameters.map { PublicMockFinding.omittedRequiredParameter($0, of: instantiable) }
-	}
-
-	/// The names of the types that enclose a nested type, outermost first, as its declaration spells them.
-	private static func enclosingTypeNames(of type: TypeDescription) -> [String] {
-		var names = [String]()
-		var current = type.popNested
-		while let enclosing = current {
-			names.insert(enclosing.asSource, at: 0)
-			current = enclosing.popNested
-		}
-		return names
 	}
 
 	/// The declarations in `items`' tree that receive or instantiate a dependency, by its label, in tree order: the
@@ -1303,6 +1363,9 @@ extension PublicMockCall {
 		let dependency: Dependency
 		/// Whether the called mock builds the dependency when the call passes `nil` (`PublicMockParameter.isBuiltWhenNil`).
 		let isBuiltWhenNil: Bool
+		/// The wrapper the called mock builds when the call passes `nil`, for a lazily instantiated dependency it takes by
+		/// value (`PublicMockParameter.builtWrapper`).
+		var builtWrapper: Property?
 		/// For the builder of a hole, the hole (`PublicMockParameter.hole`).
 		let hole: SeamSignature.Hole?
 	}
@@ -1336,7 +1399,7 @@ extension ScopeGenerator.PublicMockTierOmission {
 		let causeText = parameter.accessCause.map { " " + SeamAccessExplanation.causeSentence($0, receivers: receivers.map { SeamAccessExplanation.Receiver(declaringType: $0.declaringType, aliasProperty: nil, isInstantiateMethodParameter: false) }) } ?? ""
 		var remedies = [String]()
 		let unverifiedPackage = call.requirement == .packageUnverified ? ", or `public` if the two modules are in different packages" : ""
-		if case let .signatures(_, _, provers)? = parameter.accessCause, let first = provers.first, first.cap == nil {
+		if case let .signatures(_, _, provers, _)? = parameter.accessCause, let first = provers.first, first.cap == nil {
 			remedies.append("widen \(first.name) to `\(neededLevel.spelledOnGeneratedDeclaration)`\(unverifiedPackage)")
 		}
 		remedies += SeamAccessExplanation.causeRemedies(parameter.accessCause, neededLevel: neededLevel)
@@ -1353,6 +1416,7 @@ extension ScopeGenerator.PublicMockTierOmission {
 		}
 		let message = "\(name(providerDeclaringType)) provides `\(providerProperty.asSource)`, but \(what)\(causeText) \(SeamAccessExplanation.joined(remedies))"
 		return [SourceDiagnostic(severity: .error, location: providerDeclarationLocation, message: message)]
+			+ SeamAccessExplanation.declarationNotes(for: parameter.accessCause, neededLevel: neededLevel)
 			+ receivers.map { receiver in
 				SourceDiagnostic(
 					severity: .note,

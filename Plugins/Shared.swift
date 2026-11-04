@@ -36,10 +36,9 @@ import PackagePlugin
 
 	extension XcodeProjectPlugin.XcodePluginContext {
 		/// Hardcoded because Xcode command plugins can't read the package
-		/// manifest. OK to lag behind the latest release as long as
-		/// SafeDITool's CLI surface hasn't changed in ways that break older
-		/// callers — the binary format is forward-compatible within a minor
-		/// release line.
+		/// manifest. It must never name a release older than the first one
+		/// that accepts every option the Xcode project plugin passes
+		/// SafeDITool (see "Conditional compilation" in CLAUDE.md).
 		var safeDIVersion: String {
 			"2.2.0"
 		}

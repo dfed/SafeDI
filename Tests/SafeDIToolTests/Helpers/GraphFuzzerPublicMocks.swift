@@ -58,6 +58,15 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case namespaceExtensionUnspelled
 	case namespaceExtensionPublic
 	case namespaceExtensionPackage
+	/// The namespace enum `Space` declared in a file of its own that holds no SafeDI marker, which `scan` reads because an
+	/// `@Instantiable` type an extension of it holds is declared elsewhere.
+	case namespaceInMarkerFreeFile
+	/// `Dock`, the namespace of the holders a consumer may hold, declared `package`, so that only a consumer in the
+	/// declaring module's package can name a holder, and the public tier omits it.
+	case dockPackage
+	/// `Dock` declared `public` inside an `#if` block, where SafeDI reads no declaration of it, so that the initializer
+	/// receiving a holder proves it narrower than `public`, and the public tier omits it.
+	case dockUnrecorded
 	/// An `@Instantiable` type declared in an extension of an `@Instantiable` type of the module: an exact entry.
 	case typeInExtensionOfInstantiable
 	/// An extension-based `@Instantiable` type.
@@ -171,6 +180,13 @@ enum GraphFuzzerPublicMockDrawFeature: String, CaseIterable, Comparable {
 	case holeFillReceivesField
 	case holeFillReceivesNonField
 	case holeFillClosesLazyCycle
+	/// On the call-shape stream: a consumer receiving the lazily instantiated `analytics` its leaf receives (EOU-1); a
+	/// consumer reaching `T6` under a second label, `t6Second` (D530-1); and a `mockOnly` fake fulfilling `T6`'s
+	/// existential hole beside `HoleFill`, or alone (D530-2).
+	case consumerReceivesLazilyInstantiatedWrapper
+	case consumerReachesHoleTypeUnderTwoLabels
+	case holeFakeBesideFill
+	case holeFakeAlone
 
 	static func < (lhs: GraphFuzzerPublicMockDrawFeature, rhs: GraphFuzzerPublicMockDrawFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -332,6 +348,8 @@ struct GraphFuzzerPublicMockDraw {
 		var isolationSpellingRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockIsolationSpellingRandomSeedMask)
 		var erasureRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockErasureRandomSeedMask)
 		var holeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockHoleRandomSeedMask)
+		var callShapeRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockCallShapeRandomSeedMask)
+		var namespaceRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.publicMockNamespaceRandomSeedMask)
 		draw(
 			random: &random,
 			spellingRandom: &spellingRandom,
@@ -339,6 +357,8 @@ struct GraphFuzzerPublicMockDraw {
 			isolationSpellingRandom: &isolationSpellingRandom,
 			erasureRandom: &erasureRandom,
 			holeRandom: &holeRandom,
+			callShapeRandom: &callShapeRandom,
+			namespaceRandom: &namespaceRandom,
 		)
 	}
 
@@ -385,11 +405,21 @@ struct GraphFuzzerPublicMockDraw {
 	/// `drawsHoleConsumers` is on – the consumers that reach it: rolls added after the rest of the draw was pinned, so that
 	/// its other shapes are drawn as before.
 	static let publicMockHoleRandomSeedMask: UInt64 = 0x7075626D6B686F6C
+	/// Draws only where the namespaces `Space` and `Dock` are declared and how visible `Dock` is: `Space` in a file of its
+	/// own that holds no SafeDI marker half the time, and `Dock` `package` three times in ten and, in seven of twenty,
+	/// `public` inside an `#if` block. Rolls added after the rest of the draw was pinned, so that its other shapes are
+	/// drawn as before.
+	static let publicMockNamespaceRandomSeedMask: UInt64 = 0x7075626D6B6E7370
 	/// Whether consumers reach `T6`, some in a module that declares an `@Instantiable` type fulfilling its hole, whose
 	/// generated mock fills the builder, and some in one that does not, whose mock takes the builder and passes it on.
 	/// Off, `T6` is called only by its hand-written caller, so the corpus checks the declaring side alone. Its rolls are
 	/// drawn on the hole stream, after `T6`'s own, so turning it off moves no other shape.
 	static let drawsHoleConsumers = true
+	/// Draws only the shapes of how a consumer calls a public mock that the button-up review added: a consumer that
+	/// receives the lazily instantiated `analytics` its leaf receives rather than instantiating it (EOU-1), one that reaches
+	/// `T6` under a second label (D530-1), and a `mockOnly` fake that fulfills `T6`'s existential hole beside the fill or
+	/// alone (D530-2): rolls added after the rest of the draw was pinned, so that its other shapes are drawn as before.
+	static let publicMockCallShapeRandomSeedMask: UInt64 = 0x7075626D6B63616C
 	/// What begins the comment in `T6`'s file that holds its hand-written caller's call, after the caller's module:
 	/// `// publicMockCaller in FuzzOther: S1_T6.mock(holeBuilder: …)`. `GraphFuzzerOracle.addingPublicMockCallers` reads it.
 	static let publicMockCallerMarker = "// publicMockCaller in "
@@ -582,7 +612,17 @@ struct GraphFuzzerPublicMockDraw {
 		isolationSpellingRandom: inout GraphFuzzerRandomNumberGenerator,
 		erasureRandom: inout GraphFuzzerRandomNumberGenerator,
 		holeRandom: inout GraphFuzzerRandomNumberGenerator,
+		callShapeRandom: inout GraphFuzzerRandomNumberGenerator,
+		namespaceRandom: inout GraphFuzzerRandomNumberGenerator,
 	) {
+		// Both rolls are made in every graph, so the stream is consumed the same way whatever the rest of the draw.
+		let declaresSpaceInFileOfItsOwn = namespaceRandom.percentChance(50)
+		let dockRoll = namespaceRandom.integer(in: 0...99)
+		let dockAccess: AccessLevel = dockRoll < 30 ? .package : .public
+		// Half the other graphs declare the `public` `Dock` inside an `#if` block, where SafeDI reads no declaration of it, so
+		// that only the initializer receiving a holder proves it – narrower than `public`, so the public tier omits it and
+		// a consumer in another package that holds one is told so – as before SafeDI read plain declarations.
+		let declaresDockUnrecorded = dockRoll >= 65
 		let moduleRoll = random.integer(in: 0...9)
 		let consumerModules: [GraphFuzzerModule] = moduleRoll < 4 ? [.samePackageCaller, .otherPackageCaller] : moduleRoll < 7 ? [.samePackageCaller] : [.otherPackageCaller]
 		let leafCount = random.integer(in: 1...3)
@@ -743,9 +783,17 @@ struct GraphFuzzerPublicMockDraw {
 						var shelf = InstantiableClass(name: name("Shelf"), access: memberAccess, conformances: conformances)
 						shelf.initializerAccess = memberAccess
 						let shelfDeclaration = shelf
-						helperFiles.append(File(module: .seamModule, declarations: [{ rendering in
-							"\(rendering.modifier(namespaceAccess))enum \(namespaceName) {}\n\n\(rendering.extensionModifier(extensionAccess))extension \(namespaceName) {\n\(indented(Self.render(shelfDeclaration, rendering: rendering)))\n}"
-						}]))
+						let namespaceDeclaration = { (rendering: Rendering) in "\(rendering.modifier(namespaceAccess))enum \(namespaceName) {}" }
+						let extensionDeclaration = { (rendering: Rendering) in
+							"\(rendering.extensionModifier(extensionAccess))extension \(namespaceName) {\n\(indented(Self.render(shelfDeclaration, rendering: rendering)))\n}"
+						}
+						if declaresSpaceInFileOfItsOwn {
+							// A file that holds no SafeDI marker, which `scan` reads because the extension extends its type.
+							helperFiles.append(File(module: .seamModule, fileName: "\(namespaceName).swift", declarations: [namespaceDeclaration]))
+							helperFiles.append(File(module: .seamModule, declarations: [extensionDeclaration]))
+						} else {
+							helperFiles.append(File(module: .seamModule, declarations: [namespaceDeclaration, extensionDeclaration]))
+						}
 					}
 					property = received("shelf", shelfName, onlyIfAvailable: isOnlyIfAvailable)
 					namedAccess = typeAccess[shelfName] ?? .public
@@ -827,6 +875,9 @@ struct GraphFuzzerPublicMockDraw {
 			if random.percentChance(30) {
 				let holderName = name("Holder\(leafIndex)")
 				let qualifiedName = "\(dockName).\(holderName)"
+				// A `package` `Dock` caps the holder, which only a module of the declaring module's package can name.
+				register(dockName, dockAccess)
+				register(qualifiedName, min(.public, dockAccess))
 				leaf.holder = ("holder\(leafIndex)", qualifiedName)
 				var holder = InstantiableClass(name: holderName, conformances: conformances)
 				holder.initializerAccess = .public
@@ -839,7 +890,10 @@ struct GraphFuzzerPublicMockDraw {
 					"extension \(dockName) {\n\(indented(Self.render(holderDeclaration, rendering: rendering)))\n}"
 				}]))
 				if declared.insert("Dock").inserted {
-					plainDeclarations.append { rendering in "\(rendering.modifier(.public))enum \(dockName) {}" }
+					plainDeclarations.append { rendering in
+						let declaration = "\(rendering.modifier(dockAccess))enum \(dockName) {}"
+						return declaresDockUnrecorded ? "#if canImport(Foundation)\n\(declaration)\n#endif" : declaration
+					}
 				}
 				leaf.child.add(received(leaf.holder?.label ?? "", qualifiedName, onlyIfAvailable: true))
 				leaf.child.initializerAccess = min(leaf.child.initializerAccess ?? childAccess, .package)
@@ -1037,7 +1091,11 @@ struct GraphFuzzerPublicMockDraw {
 				let receivesLeaf = leaf.forwards || random.percentChance(50)
 				leafProperties.append(Property(attribute: receivesLeaf ? "@Received" : "@Instantiated", label: "t\(leafIndex)", type: leaf.declaration.name))
 				if leaf.receivesAnalyticsLazily, random.percentChance(50) {
-					providers.append(Property(attribute: "@Instantiated", label: "analytics", type: "LazilyInstantiated<\(name("Analytics"))>"))
+					// EOU-1, on the call-shape stream: now and then the consumer receives the wrapper rather than instantiating
+					// it, so its mock builds it at its root and hands each leaf call its instance – but not in the module of
+					// the `Sendable` wrapper, whose `@Sendable` builder could not capture a wrapper received from outside it.
+					let receivesWrapper = wrapperModule != module && callShapeRandom.percentChance(40)
+					providers.append(Property(attribute: receivesWrapper ? "@Received" : "@Instantiated", label: "analytics", type: "LazilyInstantiated<\(name("Analytics"))>"))
 				}
 				// A public consumer leaves `theme` unprovided half the time.
 				if leaf.receivesTheme, !(isPublicConsumer && random.percentChance(50)), random.percentChance(60) {
@@ -1047,15 +1105,22 @@ struct GraphFuzzerPublicMockDraw {
 					providers.append(Property(attribute: "@Forwarded", label: spelled.label, type: spelled.type))
 				}
 				if let holder = leaf.holder, random.percentChance(55) {
-					switch random.integer(in: 0...3) {
+					let provider = switch random.integer(in: 0...3) {
 					case 0:
-						providers.append(Property(attribute: "@Received", label: holder.label, type: holder.type))
+						Property(attribute: "@Received", label: holder.label, type: holder.type)
 					case 1:
-						providers.append(Property(attribute: "@Instantiated", label: holder.label, type: "LazilyInstantiated<\(holder.type)>"))
+						Property(attribute: "@Instantiated", label: holder.label, type: "LazilyInstantiated<\(holder.type)>")
 					default:
-						providers.append(Property(attribute: "@Instantiated", label: holder.label, type: holder.type))
+						Property(attribute: "@Instantiated", label: holder.label, type: holder.type)
 					}
 					providersFirst = random.percentChance(50)
+					// A consumer in another package cannot name a holder of a `package` `Dock`, so its declaration would not
+					// compile: it holds none. The rolls are made either way, so the rest of the draw is as before.
+					if dockAccess == .public || module == .samePackageCaller {
+						providers.append(provider)
+						// A holder of a `package` `Dock` caps the initializer that takes it.
+						consumer.names(dockAccess)
+					}
 				}
 			}
 			var uniqueProviders = [Property]()
@@ -1114,6 +1179,11 @@ struct GraphFuzzerPublicMockDraw {
 			var holeFulfillerDeclarations = [(Rendering) -> String]()
 			if Self.drawsHoleConsumers, let holeLeaf, holeRandom.percentChance(60) {
 				leafProperties.append(Property(attribute: holeRandom.percentChance(50) ? "@Received" : "@Instantiated", label: "t6", type: holeLeaf.declaration.name))
+				// D530-1, on the call-shape stream: now and then the consumer instantiates `T6` under a second label too, so its
+				// mock calls `T6`'s mock twice, each call with fills of its own.
+				if callShapeRandom.percentChance(30) {
+					leafProperties.append(Property(attribute: "@Instantiated", label: "t6Second", type: holeLeaf.declaration.name))
+				}
 				if !declared.contains("HoleFill"), holeRandom.percentChance(50) {
 					declared.insert("HoleFill")
 					let holeName = name("Hole")
@@ -1159,7 +1229,29 @@ struct GraphFuzzerPublicMockDraw {
 						}
 						fill.conformances = [name("HoleProtocol")] + conformances
 						fill.properties = dependencies
-						holeFulfillerDeclarations.insert(Self.renderer(of: fill), at: 0)
+						// D530-2, on the call-shape stream: now and then a `mockOnly` fake fulfills the existential hole too,
+						// which a mock builds in place of `HoleFill` – the inline mock, and so the fill – or alone, so that only
+						// mocks fill the hole.
+						let fakeRoll = holeLeaf.spelling == .existential && dependency != .lazyCycle ? callShapeRandom.integer(in: 0...9) : 9
+						if !(3..<6).contains(fakeRoll) {
+							holeFulfillerDeclarations.insert(Self.renderer(of: fill), at: 0)
+						}
+						if fakeRoll < 6 {
+							let protocolName = name("HoleProtocol")
+							let fakeName = name("HoleFake")
+							holeFulfillerDeclarations.append { rendering in
+								[
+									"@Instantiable(fulfillingAdditionalTypes: [\(protocolName).self], mockOnly: true)",
+									"\(rendering.modifier(.public))final class \(fakeName): \(protocolName) {",
+									"\t\(rendering.modifier(.public))init() {}",
+									"",
+									"\t\(rendering.modifier(.public))static func mock() -> \(fakeName) {",
+									"\t\t\(fakeName)()",
+									"\t}",
+									"}",
+								].joined(separator: "\n")
+							}
+						}
 					}
 				}
 			}
@@ -1172,6 +1264,7 @@ struct GraphFuzzerPublicMockDraw {
 					uniqueProviders.append(Property(attribute: "@Instantiated", label: "analytics", type: "LazilyInstantiated<\(name("Analytics"))>"))
 				}
 				var builtType = instantiableClass("T9")
+				builtType.names(consumer.narrowestNamedAccess)
 				builtType.properties = (providersFirst ? uniqueProviders + leafProperties : leafProperties + uniqueProviders).map { property in
 					property.attribute == "@Received" && property.label.hasPrefix("t") ? Property(attribute: "@Instantiated", label: property.label, type: property.type) : property
 				}
@@ -1715,13 +1808,53 @@ extension GraphFuzzerOracle {
 				if let body = declaration.range(of: " {", options: .backwards), declaration.hasSuffix("{") || declaration.hasSuffix("{}") {
 					declaration = String(declaration[..<body.lowerBound])
 				}
-				for name in qualifiedNames(in: declaration) {
+				// Swift checks the names in a default argument's value against the declaration's access only for a `public`
+				// declaration, whose default arguments other modules' code evaluates; a `package` declaration's are
+				// evaluated in its own module, so they may name an `internal` type.
+				let checkedText = declarationAccess == .package ? withoutDefaultValues(declaration) : declaration
+				for name in qualifiedNames(in: checkedText) {
 					guard let level = typeAccess[name], level < declarationAccess else { continue }
 					findings.append("\(fileName): `\(declaration)` is `\(declarationAccess.spelling)`, but `\(name)` is `\(level.spelling)`.")
 				}
 			}
 		}
 		return findings
+	}
+
+	/// `declaration` without the value of each default argument of its parameter list: everything from a ` = ` inside
+	/// the list to the `,` or `)` that ends the parameter.
+	private static func withoutDefaultValues(_ declaration: String) -> String {
+		var result = ""
+		var depth = 0
+		var skippingDepth: Int?
+		var characters = Array(declaration)[...]
+		while let character = characters.popFirst() {
+			if let skipping = skippingDepth {
+				if character == "(" {
+					depth += 1
+				} else if character == ")" {
+					depth -= 1
+					if depth < skipping {
+						skippingDepth = nil
+						result.append(character)
+					}
+				} else if character == ",", depth == skipping {
+					skippingDepth = nil
+					result.append(character)
+				}
+				continue
+			}
+			if character == "(" {
+				depth += 1
+			} else if character == ")" {
+				depth -= 1
+			} else if character == "=", depth > 0, result.hasSuffix(" "), characters.first == " " {
+				skippingDepth = depth
+				continue
+			}
+			result.append(character)
+		}
+		return result
 	}
 
 	/// Each name `text` spells, and every qualified prefix of a nested one: `A.B.C` is `A`, `A.B`, and `A.B.C`.
@@ -1764,6 +1897,15 @@ extension GraphFuzzerPublicMockDraw {
 			features.insert(.samePackageConsumerModuleOnly)
 		} else if modules.contains(.otherPackageCaller) {
 			features.insert(.otherPackageConsumerModuleOnly)
+		}
+		if fixture.swiftFileContent.contains(where: { $0.contains("enum \(prefix)Space {}") && !$0.contains("@Instantiable") }) {
+			features.insert(.namespaceInMarkerFreeFile)
+		}
+		if fixture.swiftFileContent.contains(where: { $0.contains("package enum \(prefix)Dock {}") }) {
+			features.insert(.dockPackage)
+		}
+		if fixture.swiftFileContent.contains(where: { $0.contains("#if canImport(Foundation)\npublic enum \(prefix)Dock {}") }) {
+			features.insert(.dockUnrecorded)
 		}
 		let leafNames = (0...2).map { "\(prefix)T\($0)" }.filter { types.declarations[$0] != nil }
 		switch leafNames.count {
@@ -1896,8 +2038,11 @@ extension GraphFuzzerPublicMockDraw {
 					)
 				}
 			}
-			if consumer.properties.contains(where: { $0.label == "analytics" && $0.type.hasPrefix("LazilyInstantiated<") }) {
+			if consumer.properties.contains(where: { $0.label == "analytics" && $0.type.hasPrefix("LazilyInstantiated<") && $0.attribute == "@Instantiated" }) {
 				features.insert(.consumerHoldsLazilyInstantiatedWrapper)
+			}
+			if consumer.properties.contains(where: { $0.label == "analytics" && $0.type.hasPrefix("LazilyInstantiated<") && $0.attribute == "@Received" }) {
+				features.insert(.consumerReceivesLazilyInstantiatedWrapper)
 			}
 			if sessionReceivers.count >= 2, consumer.properties.filter({ reachedLeaf($0).map(sessionReceivers.contains) == true }).count >= 2, consumerName != "\(prefix)T7" {
 				features.insert(.twoLeavesReceiveUnnameableDependency)
@@ -1968,8 +2113,14 @@ extension GraphFuzzerPublicMockDraw {
 				if content.contains(" let t6: \(holeLeafName)\n") {
 					reachingModules.insert(module)
 				}
+				if content.contains(" let t6Second: \(holeLeafName)\n") {
+					features.insert(.consumerReachesHoleTypeUnderTwoLabels)
+				}
 				guard fileName.hasSuffix("\(prefix)HoleFill.swift") else { continue }
 				fillModule = module
+				if content.contains("final class \(prefix)HoleFake: ") {
+					features.insert(content.contains(" class \(prefix)HoleFill: ") ? .holeFakeBesideFill : .holeFakeAlone)
+				}
 				if content.contains(" let t6Builder: Instantiator<\(holeLeafName)>") {
 					features.insert(.holeFillClosesLazyCycle)
 				}

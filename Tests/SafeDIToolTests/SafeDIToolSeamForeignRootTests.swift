@@ -257,7 +257,6 @@ struct SafeDIToolSeamForeignRootTests: ~Copyable {
 			integration: .swiftPackagePlugin,
 			filesToDelete: &filesToDelete,
 		)
-		let suffix = seam ? "" : "Inline"
 		if seam {
 			#expect(output.modules["Core"]?.generatedFiles == [
 				"Screen+SafeDI.swift": generatedFileHeader + """
@@ -477,8 +476,8 @@ struct SafeDIToolSeamForeignRootTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_judgesRootThroughSeamOfAdditionalDirectoryAsInline_whenModuleNamesNoSeamModule(detailInitializerIsPublic: Bool) async throws {
 		// `Feature`'s files are in a directory `App`'s configuration adds, so no module generates `Screen`'s initializer
-		// and `App` builds its tree inline: `FeatureRoot` is regenerated when every construction is public, and left
-		// with the non-public comment otherwise, as without the seam.
+		// and `App` builds its tree inline, saying so where it constructs `Screen`: `FeatureRoot` is regenerated when
+		// every construction is public, and left with the non-public comment otherwise, as without the seam.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -501,7 +500,7 @@ struct SafeDIToolSeamForeignRootTests: ~Copyable {
 				        let logger = Logger()
 				        func __safeDI_screen() -> Screen {
 				            let detail = Detail(logger: logger)
-				            return Screen(detail: detail)
+				            return Screen(detail: detail) // Built inline: SafeDI does not know which module declares `Screen`, so this tree cannot call the initializer SafeDI generates for it.
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(logger: logger, screen: screen)
@@ -527,7 +526,8 @@ struct SafeDIToolSeamForeignRootTests: ~Copyable {
 	mutating func generate_buildsDependencysSeamInline_whenOwnFilesAreMockScopedWithoutTargetGraph(scansDuringGenerate: Bool) async throws {
 		// `App`'s CSV lists `Feature`'s files, and the module's own files are the mock-scoped ones alone, as `scan` plans
 		// a seam's output for a mock-scoped file alone: `Feature`'s seam is no seam `App` generates, and with no module
-		// name or target graph its module is unknown, so `App` builds its tree inline.
+		// name or target graph its module is unknown, so `App` builds its tree inline, saying so where it constructs
+		// `Screen`.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: Self.featureModule(seam: true, detailInitializerIsPublic: true).filter { !$0.contains("struct FeatureRoot") }),
@@ -569,7 +569,7 @@ struct SafeDIToolSeamForeignRootTests: ~Copyable {
 				        let logger = Logger()
 				        func __safeDI_screen() -> Screen {
 				            let detail = Detail(logger: logger)
-				            return Screen(detail: detail)
+				            return Screen(detail: detail) // Built inline: SafeDI does not know which module declares `Screen`, so this tree cannot call the initializer SafeDI generates for it.
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(logger: logger, screen: screen)
@@ -603,7 +603,7 @@ struct SafeDIToolSeamForeignRootTests: ~Copyable {
 				        let logger = Logger()
 				        func __safeDI_screen() -> Screen {
 				            let detail = Detail(logger: logger)
-				            return Screen(detail: detail)
+				            return Screen(detail: detail) // Built inline: SafeDI does not know which module declares `Screen`, so this tree cannot call the initializer SafeDI generates for it.
 				        }
 				        let screen: Screen = __safeDI_screen()
 				        self.init(logger: logger, screen: screen)

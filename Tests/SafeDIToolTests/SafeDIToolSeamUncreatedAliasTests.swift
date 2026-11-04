@@ -178,6 +178,40 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 		])
 	}
 
+	// Kept by hand: the seam corpus draws this shape in 2 graphs and reports its error in none (census at 3b12802a);
+	// delete when the per-shape pin of graphs rejected with it reaches 3.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsUncreatedAliasError_whenReaderBeneathSeamsOwnAliasReceivesAliasProperty() async throws {
+		// The seam type's own alias is not created inline where `token` is unavailable, and `Reader` beneath reads the
+		// caller's `authToken`.
+		let fixture = Self.fixture(rootHolds: ["@Instantiated let authToken: Secret"], screen: [Self.alias, "@Instantiated let reader: Reader"], left: nil, detail: nil)
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Reader.swift"]):7:5: error: SafeDI cannot generate the dependency tree of `Screen`: `Reader` receives `authToken: Secret?` beneath the `onlyIfAvailable` alias `authToken` that `Screen` declares, which is not created where `token: Secret` is unavailable; built inline, `Reader` would then read whatever property named `authToken` is declared above `Screen`, or `nil`, depending on what encloses it. Receive `@Received(onlyIfAvailable: true) let token: Secret?` on `Reader` instead, or make the alias required.
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(inlineOutput.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        let authToken = Secret()
+			        func __safeDI_screen() -> Screen {
+			            // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			            let reader = Reader(authToken: authToken)
+			            return Screen(authToken: authToken, reader: reader)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(authToken: authToken, screen: screen)
+			    }
+			}
+			""",
+		])
+	}
+
 	// MARK: A receive of an uncreated alias beneath another declaration of its label
 
 	@Test
@@ -1468,6 +1502,89 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 		#expect(inlineOutput.dependencyTreeFiles == expectedInlineOutput[holder])
 	}
 
+	// Kept by hand: the seam corpus judges one graph of this shape by value (census at 3b12802a); delete when the
+	// per-shape accepted pin reaches 3.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsNearerDeclaration_whenTypeBetweenAliasAndReaderInstantiatesAliasProperty() async throws {
+		// `Mid` instantiates `authToken: Secret` between the alias and `Reader`, which reads `Mid`'s both ways.
+		let fixture = Self.fixture(rootHolds: ["@Instantiated let authToken: Secret"], detail: [Self.alias, "@Instantiated let mid: Mid"], otherTypes: [seamFixtureType(named: "Mid", isFinalClass: true, declarations: ["@Instantiated let authToken: Secret", "@Instantiated let reader: Reader"])])
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        let authToken = Secret()
+			        func __safeDI_screen() -> Screen {
+			            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+			            return Screen(token: nil)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(authToken: authToken, screen: screen)
+			    }
+			}
+			""",
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    public convenience init(token: Secret? = nil) {
+			        func __safeDI_left() -> Left {
+			            func __safeDI_detail() -> Detail {
+			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
+			                let authToken: Secret? = token
+			                #sourceLocation()
+			                func __safeDI_mid() -> Mid {
+			                    let authToken = Secret()
+			                    let reader = Reader(authToken: authToken)
+			                    return Mid(authToken: authToken, reader: reader)
+			                }
+			                let mid: Mid = __safeDI_mid()
+			                return Detail(authToken: authToken, mid: mid)
+			            }
+			            let detail: Detail = __safeDI_detail()
+			            return Left(detail: detail)
+			        }
+			        let left: Left = __safeDI_left()
+			        self.init(left: left)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_D306FBD537400E08 {}
+			}
+			""",
+		])
+		#expect(inlineOutput.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        let authToken = Secret()
+			        func __safeDI_screen() -> Screen {
+			            func __safeDI_left() -> Left {
+			                func __safeDI_detail() -> Detail {
+			                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			                    func __safeDI_mid() -> Mid {
+			                        let authToken = Secret()
+			                        let reader = Reader(authToken: authToken)
+			                        return Mid(authToken: authToken, reader: reader)
+			                    }
+			                    let mid: Mid = __safeDI_mid()
+			                    return Detail(authToken: nil, mid: mid)
+			                }
+			                let detail: Detail = __safeDI_detail()
+			                return Left(detail: detail)
+			            }
+			            let left: Left = __safeDI_left()
+			            return Screen(left: left)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(authToken: authToken, screen: screen)
+			    }
+			}
+			""",
+		])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_createsAlias_whenSeamIsForwardedAliasFulfillingProperty() async throws {
@@ -1743,6 +1860,170 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        }
 			        let screen: Screen = __safeDI_screen()
 			        self.init(token: token, screen: screen)
+			    }
+			}
+			""",
+		])
+	}
+
+	// Kept by hand: the seam corpus judges one graph of this shape by value (census at 3b12802a); delete when the
+	// per-shape accepted pin reaches 3.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_createsAlias_whenAliasIsMadeRequired() async throws {
+		// The second remedy: the alias is required, so `token` is a required parameter and `Reader` reads the alias.
+		let fixture = Self.fixture(rootHolds: ["@Instantiated let token: Secret"], detail: ["@Received(fulfilledByDependencyNamed: \"token\", ofType: Secret.self) let authToken: Secret", "@Instantiated let reader: Reader"])
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        let token = Secret()
+			        func __safeDI_screen() -> Screen {
+			            _ = Screen.__safeDI_Screen_AC3B2DB59BEF585F.self
+			            return Screen(token: token)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(token: token, screen: screen)
+			    }
+			}
+			""",
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    public convenience init(token: Secret) {
+			        func __safeDI_left() -> Left {
+			            func __safeDI_detail() -> Detail {
+			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
+			                let authToken: Secret = token
+			                #sourceLocation()
+			                let reader = Reader(authToken: authToken)
+			                return Detail(authToken: authToken, reader: reader)
+			            }
+			            let detail: Detail = __safeDI_detail()
+			            return Left(detail: detail)
+			        }
+			        let left: Left = __safeDI_left()
+			        self.init(left: left)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_AC3B2DB59BEF585F {}
+			}
+			""",
+		])
+		#expect(inlineOutput.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        let token = Secret()
+			        func __safeDI_screen() -> Screen {
+			            func __safeDI_left() -> Left {
+			                func __safeDI_detail() -> Detail {
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                    let authToken: Secret = token
+			                    #sourceLocation()
+			                    let reader = Reader(authToken: authToken)
+			                    return Detail(authToken: authToken, reader: reader)
+			                }
+			                let detail: Detail = __safeDI_detail()
+			                return Left(detail: detail)
+			            }
+			            let left: Left = __safeDI_left()
+			            return Screen(left: left)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(token: token, screen: screen)
+			    }
+			}
+			""",
+		])
+	}
+
+	// Kept by hand: the seam corpus judges one graph of this shape by value (census at 3b12802a); delete when the
+	// per-shape accepted pin reaches 3.
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesNil_whenReaderBeneathAliasOfPropertyBeingBuiltReceivesFulfillingPropertyInstead() async throws {
+		// The first remedy where `token` is being built: `Reader` is passed `nil` both ways.
+		let fixture = Self.fixture(rootHolds: ["@Instantiated let authToken: Secret"], screen: ["@Instantiated let token: Secret"], left: nil, reader: ["@Received(onlyIfAvailable: true) let token: Secret?"], secret: ["@Instantiated let detailBuilder: Instantiator<Detail>"])
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_authToken() -> Secret {
+			            func __safeDI_detailBuilder() -> Detail {
+			                // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			                let reader = Reader(token: nil)
+			                return Detail(authToken: nil, reader: reader)
+			            }
+			            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+			            return Secret(detailBuilder: detailBuilder)
+			        }
+			        let authToken: Secret = __safeDI_authToken()
+			        func __safeDI_screen() -> Screen {
+			            _ = Screen.__safeDI_Screen_CBF29CE484222325.self
+			            return Screen()
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(authToken: authToken, screen: screen)
+			    }
+			}
+			""",
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    public convenience init() {
+			        func __safeDI_token() -> Secret {
+			            func __safeDI_detailBuilder() -> Detail {
+			                // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			                let reader = Reader(token: nil)
+			                return Detail(authToken: nil, reader: reader)
+			            }
+			            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+			            return Secret(detailBuilder: detailBuilder)
+			        }
+			        let token: Secret = __safeDI_token()
+			        self.init(token: token)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_CBF29CE484222325 {}
+			}
+			""",
+		])
+		#expect(inlineOutput.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_authToken() -> Secret {
+			            func __safeDI_detailBuilder() -> Detail {
+			                // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			                let reader = Reader(token: nil)
+			                return Detail(authToken: nil, reader: reader)
+			            }
+			            let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+			            return Secret(detailBuilder: detailBuilder)
+			        }
+			        let authToken: Secret = __safeDI_authToken()
+			        func __safeDI_screen() -> Screen {
+			            func __safeDI_token() -> Secret {
+			                func __safeDI_detailBuilder() -> Detail {
+			                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			                    let reader = Reader(token: nil)
+			                    return Detail(authToken: nil, reader: reader)
+			                }
+			                let detailBuilder = Instantiator<Detail>(__safeDI_detailBuilder)
+			                return Secret(detailBuilder: detailBuilder)
+			            }
+			            let token: Secret = __safeDI_token()
+			            return Screen(token: token)
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(authToken: authToken, screen: screen)
 			    }
 			}
 			""",
