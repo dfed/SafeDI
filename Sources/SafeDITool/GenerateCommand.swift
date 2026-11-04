@@ -234,13 +234,14 @@ struct Generate: AsyncParsableCommand {
 		// Each declaration with the module that declares its file, as the build system tells this run, if it does. The
 		// modules whose module info this run reads are ones this module depends on directly, as the build system lists
 		// them, named as each file records its module, however this run learns which module its own files belong to.
-		let module = try parsedModuleInfo.declared(
-			by: moduleMembership(
-				// Only a run with a manifest, which each of the SafeDIGenerator plugin's runs is, reads a target graph.
-				targetGraphInputSourcesFilePath: resolvedSwiftManifest != nil ? swiftSourcesFilePath : nil,
-				inputFilePaths: inputFilePaths,
-				comparisonFilePaths: comparisonFilePaths,
-			),
+		let membership = try moduleMembership(
+			// Only a run with a manifest, which each of the SafeDIGenerator plugin's runs is, reads a target graph.
+			targetGraphInputSourcesFilePath: resolvedSwiftManifest != nil ? swiftSourcesFilePath : nil,
+			inputFilePaths: inputFilePaths,
+			comparisonFilePaths: comparisonFilePaths,
+		)
+		let module = parsedModuleInfo.declared(
+			by: membership,
 			dependingOn: dependentModuleInfo.compactMap(\.moduleName),
 		)
 
@@ -249,6 +250,22 @@ struct Generate: AsyncParsableCommand {
 		let normalizedInstantiables = normalizingInstantiableTypes(of: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables)
 		let additionalImportStatements = resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
 		let typeDescriptionToFulfillingInstantiableMap = try resolveSafeDIFulfilledTypes(instantiables: normalizedInstantiables)
+		// The seams this run generates are those its own files declare; a seam another module declares is called
+		// with the signature that module computed, from the declarations it saw. Which files are the module's own is
+		// found only when a seam exists: without the build system's word, finding them normalizes every input path,
+		// which a project without seams must not pay for, and nothing consults the set for any other declaration.
+		let ownFilePaths: Set<String> = if normalizedInstantiables.contains(where: \.generatesDependencyTree) {
+			Set(ownFilePaths(of: module, membership: membership, manifest: manifest, inputFilePaths: inputFilePaths, comparisonFilePaths: comparisonFilePaths))
+		} else {
+			[]
+		}
+		let seamResolution = try seamResolution(
+			normalizedInstantiables: normalizedInstantiables,
+			ownFilePaths: ownFilePaths,
+			module: module,
+			dependentModuleInfo: dependentModuleInfo,
+			membership: membership,
+		)
 		let generator = DependencyTreeGenerator(
 			importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportStatements + module.imports,
 			// A dependent module's mock-only declarations reach this module's mocks, so its mock imports do too.
@@ -285,6 +302,7 @@ struct Generate: AsyncParsableCommand {
 				},
 				additionalMocksToGenerateLocation: sourceConfiguration?.declarationLocation,
 			),
+			seams: seamResolution,
 		)
 		if let moduleInfoOutput {
 			try module.moduleInfoData.write(toPath: moduleInfoOutput)
@@ -345,6 +363,14 @@ struct Generate: AsyncParsableCommand {
 					let manifestInputPaths = Set(manifest.dependencyTreeGeneration.map(\.inputFilePath))
 					if let sourceFilePath = Set(module.instantiables.filter(\.isRoot).compactMap(\.sourceFilePath)).subtracting(manifestInputPaths).min() {
 						throw ManifestError.rootNotInManifest(sourceFilePath: sourceFilePath)
+					}
+					// A seam gets a file in the module that declares it, as `scan` plans one for the module's own files.
+					// The first in declaration order, as the mock check chooses, never by type name.
+					if let seam = module.instantiables
+						.first(where: { $0.generatesDependencyTree && $0.sourceFilePath.map { ownFilePaths.contains($0) && !manifestInputPaths.contains($0) } == true }),
+						let sourceFilePath = seam.sourceFilePath
+					{
+						throw ManifestError.dependencyTreeTypeNotInManifest(typeName: seam.concreteInstantiable.asSource, sourceFilePath: sourceFilePath)
 					}
 					if let mockScopedFilePaths = manifest.mockScopedFilePaths {
 						// Paths are compared as scan wrote them, since this parse may name files as the CSV does.
@@ -445,7 +471,9 @@ struct Generate: AsyncParsableCommand {
 					// output is stable for stable inputs.
 					dependencyTreeDestinationsBySource = [:]
 					dependencyTreeSourcesInOrder = Set(
-						module.instantiables.filter(\.isRoot).compactMap(\.sourceFilePath),
+						module.instantiables
+							.filter { $0.isRoot || ($0.generatesDependencyTree && $0.sourceFilePath.map(ownFilePaths.contains) == true) }
+							.compactMap(\.sourceFilePath),
 					).sorted()
 				}
 				for sourceFile in dependencyTreeSourcesInOrder {
@@ -611,6 +639,7 @@ struct Generate: AsyncParsableCommand {
 	/// hand-written manifest whose paths `generate` cannot match or whose outputs would overwrite one another.
 	private enum ManifestError: Error, CustomStringConvertible {
 		case rootNotInManifest(sourceFilePath: String)
+		case dependencyTreeTypeNotInManifest(typeName: String, sourceFilePath: String)
 		case mockNotInManifest(typeName: String, sourceFilePath: String)
 		case configurationNotInManifest(sourceFilePath: String)
 		case additionalMockNotInManifest(typeName: String)
@@ -622,6 +651,8 @@ struct Generate: AsyncParsableCommand {
 			switch self {
 			case let .rootNotInManifest(sourceFilePath):
 				"Found @\(InstantiableVisitor.macroName)(isRoot: true) in '\(sourceFilePath)', but this file is not listed in the manifest’s dependencyTreeGeneration. \(Self.planningExplanation) A hand-written manifest must list the file, or the type must not be a root."
+			case let .dependencyTreeTypeNotInManifest(typeName, sourceFilePath):
+				"Found @\(InstantiableVisitor.macroName)(generateDependencyTree: true) on `\(typeName)` in '\(sourceFilePath)', but this file is not listed in the manifest’s dependencyTreeGeneration. \(Self.planningExplanation) A hand-written manifest must list the file, or the type must not set `generateDependencyTree: true`."
 			case let .mockNotInManifest(typeName, sourceFilePath):
 				"Found @\(InstantiableVisitor.macroName)(generateMock: true) on `\(typeName)` in '\(sourceFilePath)', but this file is not listed in the manifest’s mockGeneration. \(Self.planningExplanation) A hand-written manifest must list the file, or the type must not set `generateMock: true`."
 			case let .configurationNotInManifest(sourceFilePath):
@@ -637,7 +668,7 @@ struct Generate: AsyncParsableCommand {
 			}
 		}
 
-		private static let planningExplanation = "SafeDI decides which files to generate before the build runs, listing every file that declares a root, a type that sets `generateMock: true`, or a #\(SafeDIConfigurationVisitor.macroName) in any clause of its `#if` blocks, so the file most likely changed after that decision; building again lists it."
+		private static let planningExplanation = "SafeDI decides which files to generate before the build runs, listing every file that declares a root, a type that sets `generateDependencyTree: true` or `generateMock: true`, or a #\(SafeDIConfigurationVisitor.macroName) in any clause of its `#if` blocks, so the file most likely changed after that decision; building again lists it."
 	}
 
 	/// A file a manifest tells `generate` to write.
@@ -691,20 +722,172 @@ struct Generate: AsyncParsableCommand {
 		}
 	}
 
-	/// Whether a file a declaration records is one of the module's own files, which the module this run generates code
-	/// for compiles, so that the generated code needs only `internal` access to a declaration in it: a file the
-	/// manifest's `mockScopedFilePaths` lists (a build tool plugin's target files, or `--mock-scoped-files`); and,
-	/// without a manifest or with a hand-written one that lists none, a file the input CSV or `--include` names. A file
-	/// reached through `additionalDirectoriesToInclude` is another module's.
+	/// The module's own files, which the module this run generates code for compiles, as this run compares paths: the
+	/// files the manifest's `mockScopedFilePaths` lists (a build tool plugin's target files, or `--mock-scoped-files`);
+	/// and, without a manifest or with a hand-written one that lists none, the files the input CSV or `--include`
+	/// names. A file reached through `additionalDirectoriesToInclude` is another module's. Both the access check
+	/// (`isOwnFile`) and the seams (`ownFilePaths`, without a module name) read this one definition, as `scan` plans a
+	/// seam's output for a mock-scoped file alone.
 	/// - Parameter comparisonFilePaths: How this run compares paths, which spells a file the same way whichever
 	///   spelling names it.
+	private static func ownProjectFilePaths(
+		manifest: SafeDIToolManifest?,
+		inputFilePaths: Set<String>,
+		comparisonFilePaths: ProjectFilePaths,
+	) -> Set<ProjectFilePath> {
+		Set((manifest?.mockScopedFilePaths ?? Array(inputFilePaths)).map(comparisonFilePaths.projectFilePath(of:)))
+	}
+
+	/// Whether a file a declaration records is one of the module's own files (see `ownProjectFilePaths`), so that the
+	/// generated code needs only `internal` access to a declaration in it.
 	private static func isOwnFile(
 		manifest: SafeDIToolManifest?,
 		inputFilePaths: Set<String>,
 		comparisonFilePaths: ProjectFilePaths,
 	) -> @Sendable (String) -> Bool {
-		let ownFilePaths = Set((manifest?.mockScopedFilePaths ?? Array(inputFilePaths)).map(comparisonFilePaths.projectFilePath(of:)))
+		let ownFilePaths = ownProjectFilePaths(manifest: manifest, inputFilePaths: inputFilePaths, comparisonFilePaths: comparisonFilePaths)
 		return { filePath in ownFilePaths.contains(comparisonFilePaths.projectFilePath(of: filePath)) }
+	}
+
+	/// The files of the module this run generates code for, spelled as the declarations read from them spell
+	/// `sourceFilePath`: the files the build system attributes to that module when it attributes files to modules, and
+	/// otherwise the module's own files (see `ownProjectFilePaths`).
+	private func ownFilePaths(
+		of module: ModuleInfo,
+		membership: ModuleMembership?,
+		manifest: SafeDIToolManifest?,
+		inputFilePaths: Set<String>,
+		comparisonFilePaths: ProjectFilePaths,
+	) -> [String] {
+		if let membership, let moduleName = membership.moduleName {
+			return module.instantiables.filter { $0.moduleName == moduleName }.compactMap(\.sourceFilePath)
+		} else {
+			let ownProjectFilePaths = Self.ownProjectFilePaths(manifest: manifest, inputFilePaths: inputFilePaths, comparisonFilePaths: comparisonFilePaths)
+			return module.instantiables
+				.compactMap(\.sourceFilePath)
+				.filter { ownProjectFilePaths.contains(comparisonFilePaths.projectFilePath(of: $0)) }
+		}
+	}
+
+	/// How this run treats each seam among the declarations it read. A seam one of the module's own files declares is
+	/// one this run generates. A seam another module declares is called with the signature that module computed, so
+	/// this run computes it from the declarations that module saw: under a build system that runs `generate` once per
+	/// module, its `.safedi` holds its own declarations and names the modules it depends on directly, whose `.safedi`
+	/// this run must have been given too; under the SwiftPM plugin, the target graph names each target's direct
+	/// dependencies, and the module's run read the files of every target it depends on, directly or through another.
+	/// A seam whose module SafeDITool does not know is built inline, as any other type is.
+	private func seamResolution(
+		normalizedInstantiables: [Instantiable],
+		ownFilePaths: Set<String>,
+		module: ModuleInfo,
+		dependentModuleInfo: [ModuleInfo],
+		membership: ModuleMembership?,
+	) throws -> SeamResolution {
+		let seamInstantiables = normalizedInstantiables.filter(\.generatesDependencyTree)
+		guard !seamInstantiables.isEmpty else { return .none }
+		// A `mockOnly` declaration with `generateDependencyTree: true`, which the macro rejects, has no tree of its own:
+		// reported here, as a plain error at the declaration, since every seam type the generator sees must be a
+		// production declaration's concrete type, which the seam maps rely on.
+		let mockOnlySeams = seamInstantiables.filter(\.mockOnly)
+		if !mockOnlySeams.isEmpty {
+			throw MockOnlySeamError(sourceDiagnostics: SourceDiagnostic.joiningInSourceOrder(mockOnlySeams.map { seam in
+				[SourceDiagnostic(
+					severity: .error,
+					location: seam.declarationLocation,
+					message: "`\(seam.concreteInstantiable.asSource)` is declared `mockOnly: true` and `generateDependencyTree: true`. The @Instantiable macro rejects that: a `mockOnly` declaration provides a hand-written mock and has no dependency tree. Remove `generateDependencyTree: true`.",
+				)]
+			}))
+		}
+		// The declarations as each module read them: normalization qualifies a nested type among the declarations a
+		// run sees, so a module's seams are computed from its declarations normalized among what it saw.
+		let unnormalizedInstantiables = dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
+		let dependentModulesByName = Dictionary(
+			dependentModuleInfo.compactMap { dependentModule in dependentModule.moduleName.map { ($0, dependentModule) } },
+			uniquingKeysWith: { first, _ in first },
+		)
+		var generatedSeams = Set<TypeDescription>()
+		var foreignSeams = [TypeDescription: SeamResolution.ForeignSeam]()
+		var visibleInstantiablesByModuleName = [String: (instantiables: [TypeDescription: Instantiable], readFromModuleInfo: Bool, missingDependencyModuleName: String?)]()
+		// In declaration order, which decides nothing here: a module's visible declarations are read once, whichever
+		// of its seams is met first.
+		for seam in seamInstantiables {
+			if seam.sourceFilePath.map(ownFilePaths.contains) == true {
+				generatedSeams.insert(seam.concreteInstantiable)
+			} else if let moduleName = seam.moduleName {
+				let visible: (instantiables: [TypeDescription: Instantiable], readFromModuleInfo: Bool, missingDependencyModuleName: String?)
+				if let cached = visibleInstantiablesByModuleName[moduleName] {
+					visible = cached
+				} else if let dependentModule = dependentModulesByName[moduleName] {
+					// A dependency this run was not given is recorded, and reported only for a seam a tree reaches.
+					var instantiables = dependentModule.instantiables
+					var missingDependencyModuleName: String?
+					for dependencyModuleName in dependentModule.dependencyModuleNames {
+						if let dependency = dependentModulesByName[dependencyModuleName] {
+							instantiables += dependency.instantiables
+						} else if missingDependencyModuleName == nil {
+							missingDependencyModuleName = dependencyModuleName
+						}
+					}
+					visible = try (resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables)), true, missingDependencyModuleName)
+					visibleInstantiablesByModuleName[moduleName] = visible
+				} else {
+					// The seam's module is in the target graph: a declaration's module is named only by the graph, or by
+					// the options, which name this run's own module.
+					let visibleModuleNames = visibleModuleNames(from: moduleName, in: membership)
+					let instantiables = unnormalizedInstantiables.filter { $0.moduleName.map(visibleModuleNames.contains) == true }
+					visible = try (resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables)), false, nil)
+					visibleInstantiablesByModuleName[moduleName] = visible
+				}
+				foreignSeams[seam.concreteInstantiable] = SeamResolution.ForeignSeam(
+					declaringModule: ModuleIdentity(moduleName: moduleName, packageName: seam.packageName),
+					missingDependencyModuleName: visible.missingDependencyModuleName,
+					visibleInstantiables: visible.instantiables,
+					callCarriesPluginComment: !visible.readFromModuleInfo,
+				)
+			}
+		}
+		// Under the plugin's target graph, which names this module, callers compute this module's seams from the
+		// files the graph lists, which leaves out the directories its configuration adds.
+		let callersComputeFromTargetGraph = module.moduleName.map { membership?.dependencyModuleNames(ofModuleNamed: $0) != nil } ?? false
+		// The declarations the callers of this module's seams see, when some declaration this run sees is not among
+		// them: resolved as the callers resolve them, so a seam's signature can be computed over the callers' view and
+		// compared with this run's. A module whose name is unknown has no callers computing a signature.
+		let callersVisibleInstantiables: [TypeDescription: Instantiable]? = if !generatedSeams.isEmpty, let moduleName = module.moduleName {
+			if callersComputeFromTargetGraph {
+				if unnormalizedInstantiables.contains(where: { $0.moduleName == nil }) {
+					try resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: unnormalizedInstantiables.filter { $0.moduleName.map(visibleModuleNames(from: moduleName, in: membership).contains) == true }))
+				} else {
+					nil
+				}
+			} else if dependentModuleInfo.contains(where: { $0.moduleName == nil }) {
+				try resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: dependentModuleInfo.filter { $0.moduleName != nil }.flatMap(\.instantiables) + module.instantiables))
+			} else {
+				nil
+			}
+		} else {
+			nil
+		}
+		return SeamResolution(
+			currentModule: ModuleIdentity(moduleName: module.moduleName, packageName: module.packageName),
+			generatedSeams: generatedSeams,
+			foreignSeams: foreignSeams,
+			callersComputeFromTargetGraph: callersComputeFromTargetGraph,
+			callersVisibleInstantiables: callersVisibleInstantiables,
+		)
+	}
+
+	/// The modules whose declarations a module named `moduleName` sees under the target graph `membership` describes:
+	/// itself and, transitively, the modules it depends on. The graph lists every module whose files it names
+	/// (`ModuleMembership.dependencyModuleNames(ofModuleNamed:)`).
+	private func visibleModuleNames(from moduleName: String, in membership: ModuleMembership?) -> Set<String> {
+		var visibleModuleNames: Set<String> = [moduleName]
+		var moduleNamesToVisit = [moduleName]
+		while let visitedModuleName = moduleNamesToVisit.popLast() {
+			for dependencyModuleName in membership?.dependencyModuleNames(ofModuleNamed: visitedModuleName) ?? [] where visibleModuleNames.insert(dependencyModuleName).inserted {
+				moduleNamesToVisit.append(dependencyModuleName)
+			}
+		}
+		return visibleModuleNames
 	}
 
 	/// Which module this run's own files belong to, as the build system tells it, or `nil` when it tells nothing. The
@@ -1078,6 +1261,12 @@ extension SafeDIConfiguration {
 /// A `#SafeDIConfiguration` lists, in `additionalMocksToGenerate`, types no `@Instantiable` declaration declares.
 /// Each diagnostic names one such type, in name order.
 struct AdditionalMocksNameNoInstantiableError: SourceLocatedError {
+	let sourceDiagnostics: [SourceDiagnostic]
+}
+
+/// A `mockOnly: true` declaration that is also `generateDependencyTree: true`, which the `@Instantiable` macro rejects:
+/// `generate` runs before the compiler expands the macro, so it reports the shape plainly rather than relying on it.
+struct MockOnlySeamError: SourceLocatedError {
 	let sourceDiagnostics: [SourceDiagnostic]
 }
 

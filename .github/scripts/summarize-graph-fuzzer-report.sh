@@ -1,5 +1,5 @@
 #!/bin/bash
-# usage: summarize-graph-fuzzer-report.sh REPORT SUMMARY STARTING_SEED ITERATIONS
+# usage: summarize-graph-fuzzer-report.sh REPORT SUMMARY STARTING_SEED ITERATIONS [FEATURES]
 #
 # Writes a Markdown summary of the graph fuzzer's long-run report to SUMMARY
 # and appends it to the job summary. Exits non-zero when a graph failed, a
@@ -12,9 +12,14 @@ report=$1
 summary=$2
 starting_seed=$3
 iterations=$4
+features=${5:-}
 
 reproduce() {
-  echo "SAFEDI_GRAPH_FUZZER_STARTING_SEED=$1 SAFEDI_GRAPH_FUZZER_ITERATIONS=1 swift test --traits sourceBuild --filter SafeDIToolGraphFuzzerTests/longRun"
+  local features_variable=""
+  if [ -n "$features" ]; then
+    features_variable="SAFEDI_GRAPH_FUZZER_FEATURES=$features "
+  fi
+  echo "${features_variable}SAFEDI_GRAPH_FUZZER_STARTING_SEED=$1 SAFEDI_GRAPH_FUZZER_ITERATIONS=1 swift test --traits sourceBuild --filter SafeDIToolGraphFuzzerTests/longRun"
 }
 
 touch "$report"
@@ -46,7 +51,8 @@ fi
     if [ "$kind" = failure ]; then
       echo "- **Seed $seed**: $reason. Reproduce with \`$(reproduce "$seed")\`"
     else
-      echo "- **Seed $seed** is a known issue ($reason) that no longer fails. Remove it from \`knownIssues\`. Reproduce with \`$(reproduce "$seed")\`"
+      # The long run writes the remedy after the reason, chosen by the stale issue's shape.
+      echo "- **Seed $seed** is a known issue that no longer fails ($reason). Reproduce with \`$(reproduce "$seed")\`"
     fi
   done
   echo

@@ -26,14 +26,19 @@ final class Scope: Hashable {
 	///   - dependenciesLeftOut: The dependencies `instantiable` declared before a mock scope left them out because the
 	///     type's hand-written mock is not passed them.
 	///   - constructionComments: The comments the generated code ends the lines that construct the type with.
+	///   - seamCall: How a tree that reaches this scope calls it, when the scope stands for a seam whose generated
+	///     initializer another tree calls: `instantiable` then declares the initializer's parameters as its
+	///     dependencies and builds nothing. `nil` for every other scope.
 	init(
 		instantiable: Instantiable,
 		dependenciesLeftOut: [Dependency] = [],
 		constructionComments: ConstructionComments = ConstructionComments(),
+		seamCall: SeamCall? = nil,
 	) {
 		self.instantiable = instantiable
 		self.dependenciesLeftOut = dependenciesLeftOut
 		self.constructionComments = constructionComments
+		self.seamCall = seamCall
 	}
 
 	deinit {
@@ -80,6 +85,9 @@ final class Scope: Hashable {
 		/// The comment for a construction with the type's hand-written mock method, or `nil` for none.
 		let mockMethod: String?
 	}
+
+	/// How a tree that reaches this scope calls the seam it stands for, or `nil` for a scope that builds its type.
+	let seamCall: SeamCall?
 
 	/// The properties that this scope is responsible for instantiating.
 	var propertiesToGenerate = [PropertyToGenerate]()
@@ -309,6 +317,16 @@ final class Scope: Hashable {
 	///     copy them.
 	///   - alwaysAvailableProperties: The properties in scope wherever the tree is built: those a mock is passed.
 	///     The properties each scope forwards are added for the scopes beneath it.
+	///   - runtimeOptionalProperties: The forms of a seam's optional parameters that are in scope wherever the tree
+	///     is built but may be `nil` where inline they would be unavailable – both forms of a parameter the callers
+	///     may pass `nil` for, the unwrapped form of a required optional parameter – each by its exact form: an
+	///     `onlyIfAvailable` alias of one is bound from it as an optional value, as a mock binds an alias from an
+	///     optional override. Each scope prunes the set it hands the scopes it builds, and its own aliases, by what it
+	///     declares (see `ScopeGeneratorUnderConstruction.runtimeOptionalProperties(declaredBy:enclosedBy:)`).
+	///   - seamRoot: What the root generator emits when the tree is a seam's: its signature and the hand-written
+	///     initializer's arguments. `nil` for a root of the dependency tree and for a mock root.
+	///   - startsCodeGeneration: Whether each generator of a dependency tree starts generating its code as soon as
+	///     it is created, which a tree built only to read its generators' sets skips.
 	func createScopeGenerator(
 		for property: Property?,
 		propertyStack: [Property],
@@ -316,8 +334,11 @@ final class Scope: Hashable {
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		boundProperties: Set<Property> = [],
 		alwaysAvailableProperties: Set<Property> = [],
+		runtimeOptionalProperties: Set<Property> = [],
+		seamRoot: ScopeGenerator.SeamRoot? = nil,
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool = false,
+		startsCodeGeneration: Bool = true,
 	) throws -> ScopeGenerator {
 		var scopeGeneratorsUnderConstruction = [ScopeGeneratorUnderConstruction(
 			scope: self,
@@ -327,8 +348,11 @@ final class Scope: Hashable {
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			alwaysAvailableProperties: alwaysAvailableProperties,
 			boundProperties: boundProperties,
+			runtimeOptionalProperties: runtimeOptionalProperties,
+			seamRoot: seamRoot,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
+			startsCodeGeneration: startsCodeGeneration,
 		)]
 		while true {
 			let index = scopeGeneratorsUnderConstruction.count - 1
@@ -372,8 +396,11 @@ private struct ScopeGeneratorUnderConstruction {
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		alwaysAvailableProperties: Set<Property>,
 		boundProperties: Set<Property>,
+		runtimeOptionalProperties: Set<Property>,
+		seamRoot: ScopeGenerator.SeamRoot?,
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool,
+		startsCodeGeneration: Bool,
 	) {
 		var childPropertyStack = propertyStack
 		let isPropertyCycle: Bool
@@ -459,9 +486,14 @@ private struct ScopeGeneratorUnderConstruction {
 			? alwaysAvailableProperties
 			: alwaysAvailableProperties.union(forwardedProperties)
 		self.boundProperties = boundProperties
+		self.runtimeOptionalProperties = runtimeOptionalProperties.isEmpty
+			? runtimeOptionalProperties
+			: Self.runtimeOptionalProperties(declaredBy: scope, enclosedBy: runtimeOptionalProperties)
+		self.seamRoot = seamRoot
 		self.erasedToConcreteExistential = erasedToConcreteExistential
 		self.isPropertyCycle = isPropertyCycle
 		self.forMockGeneration = forMockGeneration
+		self.startsCodeGeneration = startsCodeGeneration
 		childGenerators.reserveCapacity(propertiesToGenerate.count)
 	}
 
@@ -498,8 +530,11 @@ private struct ScopeGeneratorUnderConstruction {
 				lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 				alwaysAvailableProperties: alwaysAvailableProperties,
 				boundProperties: boundProperties,
+				runtimeOptionalProperties: runtimeOptionalProperties,
+				seamRoot: nil,
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				forMockGeneration: forMockGeneration,
+				startsCodeGeneration: startsCodeGeneration,
 			)
 		}
 	}
@@ -530,6 +565,10 @@ private struct ScopeGeneratorUnderConstruction {
 			// always created from it. Any other is built by a scope, which can build it after the alias.
 			fulfillingPropertyIsAlwaysAvailable: alwaysAvailableProperties.contains(fulfillingProperty)
 				|| alwaysAvailableProperties.contains(fulfillingProperty.asUnwrappedProperty),
+			// The exact form of a seam parameter that may be `nil`, which no declaration hides: validation reports a
+			// receive beneath a declaration of its label. An alias of a form the set lacks – exactly a required optional
+			// parameter – is created wherever the tree is built.
+			fulfillingPropertyIsRuntimeOptional: runtimeOptionalProperties.contains(fulfillingProperty),
 			declarationReference: declarationReference,
 		))
 	}
@@ -548,8 +587,10 @@ private struct ScopeGeneratorUnderConstruction {
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			isPropertyCycle: isPropertyCycle,
 			constructionComments: scope.constructionComments,
+			seamCall: scope.seamCall,
+			seamRoot: seamRoot,
 		)
-		if !forMockGeneration {
+		if !forMockGeneration, startsCodeGeneration {
 			_ = Task.detached {
 				// Kick off code generation.
 				try await scopeGenerator.generateCode()
@@ -575,9 +616,67 @@ private struct ScopeGeneratorUnderConstruction {
 	/// forward, and those a mock is passed.
 	private let alwaysAvailableProperties: Set<Property>
 	private let boundProperties: Set<Property>
+	/// The properties that may be `nil` where this scope's aliases and the scopes it builds read them, each by its
+	/// exact form: both forms of a seam parameter the seam's callers may pass `nil` for, the unwrapped form of a required
+	/// optional parameter, and both forms of an `onlyIfAvailable` alias of one, which no declaration on the path from
+	/// the seam's root down to and including this scope declares otherwise. See `createScopeGenerator`.
+	private let runtimeOptionalProperties: Set<Property>
+
+	/// `enclosingRuntimeOptionalProperties`, the properties that may be `nil` above `scope`, as the aliases `scope`
+	/// declares and the scopes it builds see them. The closest declaration of a property's label decides: one `scope`
+	/// instantiates, or forwards – a seam's root's own forwarded properties included – or declares by an alias that is
+	/// created whenever `scope` is, is not `nil` there, so every form of its label leaves the set, while an
+	/// `onlyIfAvailable` alias of a property in the set may be `nil` itself, so both of its forms join it – a chain of
+	/// such aliases on `scope` included. A received property declares nothing. Each property is held by its exact
+	/// form, so that an alias of exactly a required optional parameter, which the set never holds, is created.
+	private static func runtimeOptionalProperties(
+		declaredBy scope: Scope,
+		enclosedBy enclosingRuntimeOptionalProperties: Set<Property>,
+	) -> Set<Property> {
+		var runtimeOptionalProperties = enclosingRuntimeOptionalProperties
+		var aliases = [(property: Property, fulfillingProperty: Property, onlyIfAvailable: Bool)]()
+		func removeEveryForm(ofLabel label: String) {
+			runtimeOptionalProperties = runtimeOptionalProperties.filter { $0.label != label }
+		}
+		for dependency in scope.instantiable.dependencies {
+			switch dependency.source {
+			case .instantiated, .forwarded:
+				removeEveryForm(ofLabel: dependency.property.label)
+			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
+				aliases.append((dependency.property, fulfillingProperty, onlyIfAvailable))
+			case .received:
+				break
+			}
+		}
+		guard !aliases.isEmpty else { return runtimeOptionalProperties }
+		// An alias is the closest declaration of its property for the aliases of the same scope too, so an alias of
+		// another of the scope's aliases may be `nil` exactly when that one may: found to a fixed point. An alias that
+		// keeps the label it retypes is not in scope where its own value is read, so the forms of its fulfilling
+		// property stay in the set, which `addAliasGenerator` judges the alias by; a read of those forms beneath the
+		// alias is the hidden-label error, reported before any alias is judged.
+		for alias in aliases {
+			let formsTheAliasReads: Set<Property> = alias.property.label == alias.fulfillingProperty.label
+				? [alias.fulfillingProperty, alias.fulfillingProperty.asUnwrappedProperty]
+				: []
+			runtimeOptionalProperties = runtimeOptionalProperties.filter { $0.label != alias.property.label || formsTheAliasReads.contains($0) }
+		}
+		var foundAlias = true
+		while foundAlias {
+			foundAlias = false
+			for alias in aliases where alias.onlyIfAvailable && !runtimeOptionalProperties.contains(alias.property) && runtimeOptionalProperties.contains(alias.fulfillingProperty) {
+				runtimeOptionalProperties.insert(alias.property)
+				runtimeOptionalProperties.insert(alias.property.asUnwrappedProperty)
+				foundAlias = true
+			}
+		}
+		return runtimeOptionalProperties
+	}
+
+	private let seamRoot: ScopeGenerator.SeamRoot?
 	private let erasedToConcreteExistential: Bool
 	private let isPropertyCycle: Bool
 	private let forMockGeneration: Bool
+	private let startsCodeGeneration: Bool
 
 	/// Whether a scope enclosing this one provides `property` to the scopes this one
 	/// generates: it creates the property, or its unwrapped form, and is not an

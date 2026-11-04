@@ -1660,20 +1660,44 @@ extension GraphFuzzerFixture {
 	/// each mocked type whose parameters, if it has any, all have default values, in file name order. A mock with a
 	/// required parameter has no probe: the comparator has no value to pass it, and a feature that needs one judged
 	/// passes probes of its own.
+	/// A root's builder of a tree the comparator does not traverse – `spellSeamBuilder`, `spellHostBuilder` and
+	/// `aliasSeamBuilder`, instantiators whose types forward a value – gets a probe calling it with a sample value,
+	/// so that the seam's tree beneath, and the seam call's arguments, are judged too.
 	func differentialValueProbes(generatedFiles: [String: String]) -> [DifferentialValueProbe] {
 		var probes = [DifferentialValueProbe]()
+		let spelledType = swiftFileContent.lazy.flatMap(GraphFuzzerSourceLine.lines).compactMap { line -> String? in
+			guard case let .property(attribute, label, type) = line, attribute == "@Forwarded", label == GraphFuzzerSpelling.label else { return nil }
+			return type
+		}.first
+		let spelledSample = spelledType.flatMap(GraphFuzzerSpelling.spelling(ofType:))?.sampleExpression(prefix: typeNamePrefix)
 		for content in swiftFileContent {
 			var previousAttributeDeclaresRoot = false
+			var rootName: String?
 			for line in GraphFuzzerSourceLine.lines(of: content) {
 				switch line {
 				case let .instantiableAttribute(arguments):
 					previousAttributeDeclaresRoot = arguments.contains("isRoot: true")
+					rootName = nil
 				case let .typeDeclaration(name):
 					if previousAttributeDeclaresRoot {
 						probes.append(DifferentialValueProbe("\(name)()"))
+						rootName = name
 					}
 					previousAttributeDeclaresRoot = false
-				case .instantiateMethod, .property, .other:
+				case let .property(_, label, _):
+					previousAttributeDeclaresRoot = false
+					guard let rootName else { continue }
+					switch label {
+					case "spellSeamBuilder", "spellHostBuilder":
+						if let spelledSample {
+							probes.append(DifferentialValueProbe("\(rootName)().\(label).instantiate(\(spelledSample))"))
+						}
+					case "aliasSeamBuilder":
+						probes.append(DifferentialValueProbe("\(rootName)().\(label).instantiate(\(typeNamePrefix)AliasValue())"))
+					default:
+						continue
+					}
+				case .instantiateMethod, .other:
 					previousAttributeDeclaresRoot = false
 				}
 			}

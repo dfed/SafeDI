@@ -226,6 +226,33 @@ struct PluginScannerStripCommentsAndStringsTests {
 		) != nil
 		#expect(!matched)
 	}
+
+	@Test
+	func matchesGenerateDependencyTreeTrue_whenArgumentsSpanLines() {
+		// Mirrors `PluginScanner.fileContainsGenerateDependencyTreeTrue`, which plans a dependency-tree file for a
+		// type whose tree SafeDI generates in its module, as `fileContainsRoot` plans one for a root.
+		let source = """
+		@Instantiable(
+		    generateDependencyTree: true,
+		    fulfillingAdditionalTypes: [ScreenProtocol.self]
+		)
+		public struct Screen: Instantiable, ScreenProtocol {
+		    /// Not `@Instantiable(generateDependencyTree: true)`: a comment.
+		    public init() {}
+		}
+		"""
+		let stripped = stripSwiftCommentsAndStrings(from: source)
+		let matched = stripped.range(
+			of: #"@Instantiable\s*\((.|\n)*?generateDependencyTree\s*:\s*true"#,
+			options: .regularExpression,
+		) != nil
+		#expect(matched)
+		let commentOnly = stripSwiftCommentsAndStrings(from: """
+		/// `@Instantiable(generateDependencyTree: true)` in a comment.
+		public struct Screen {}
+		""")
+		#expect(commentOnly.range(of: #"@Instantiable\s*\((.|\n)*?generateDependencyTree\s*:\s*true"#, options: .regularExpression) == nil)
+	}
 }
 
 struct PluginScannerArrayArgumentTests {

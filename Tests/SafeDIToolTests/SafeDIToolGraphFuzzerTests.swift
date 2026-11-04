@@ -38,11 +38,408 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func smokeSeeds_exerciseEveryFeature_inGraphsTheToolAccepts() async throws {
-		// Features are read from the emitted source, so a generator that stops emitting one fails here.
+		// Features are read from the emitted source, so a generator that stops emitting one fails here. A generator
+		// feature's own feature is drawn only with the generator feature on, which the seam smoke batch checks.
 		let features = try await smokeResults.value
 			.filter { $0.isAccepted && $0.failure == nil }
 			.reduce(into: Set<GraphFuzzerFeature>()) { $0.formUnion(GraphFuzzerFeature.features(of: $1.fixture)) }
-		#expect(Set(GraphFuzzerFeature.allCases).subtracting(features).sorted() == [])
+		#expect(Set(GraphFuzzerFeature.baseCases).subtracting(features).sorted() == [])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func seamSmokeSeeds_produceNoFailures_whenRunThroughToolAndCompiler() async throws {
+		for result in try await seamSmokeResults.value {
+			if let failure = result.failure {
+				Issue.record(failure.issueComment(fixture: result.fixture))
+			}
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts() async throws {
+		// A graph drawn with the `generateDependencyTree` feature declares a seam, and the smoke batch holds graphs the
+		// tool accepts whose generated code, read from what the oracle compiled, between them shows every
+		// `GraphFuzzerSeamOutputFeature`, and one graph it rejects.
+		let results = try await seamSmokeResults.value
+		let acceptedResults = results.filter { $0.isAccepted && $0.failure == nil }
+
+		#expect(acceptedResults.allSatisfy { GraphFuzzerFeature.features(of: $0.fixture).contains(.generateDependencyTree) })
+		#expect(acceptedResults.count >= 2, "Accepted \(acceptedResults.count) of \(Self.seamSmokeSeeds.count) graphs")
+		let outputFeatures = acceptedResults.reduce(into: Set<GraphFuzzerSeamOutputFeature>()) { features, result in
+			if case let .accepted(generatedFiles, _) = result.outcome {
+				features.formUnion(GraphFuzzerFeature.seamOutputFeatures(of: result.fixture, generatedFiles: generatedFiles))
+			}
+		}
+		#expect(Set(GraphFuzzerSeamOutputFeature.allCases).subtracting(outputFeatures).sorted() == [])
+		#expect(results.contains { !$0.isAccepted && $0.failure == nil }, "Rejected none of \(Self.seamSmokeSeeds.count) graphs")
+	}
+
+	@Test
+	func seamCorpus_drawsEachShapeInThePinnedNumberOfGraphs_whenFixturesAreGeneratedWithoutTheTool() throws {
+		// Each shape `addingSeam` draws lands in exactly the pinned number of the seam corpus's graphs, read from
+		// their source: the draw is deterministic, so a change in a shape's share is a reviewed diff, as the
+		// accepted-seed pins are, and a draw that stops landing – a filter that empties its sources, a roll that
+		// never fires – fails here rather than in a review of the corpus. Every shape has a pin.
+		var counts = [GraphFuzzerSeamDrawFeature: Int]()
+		for seed in 0..<UInt64(Self.seamCorpusSeedCount) {
+			for feature in GraphFuzzerFeature.seamDrawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])) {
+				counts[feature, default: 0] += 1
+			}
+		}
+		for feature in GraphFuzzerSeamDrawFeature.allCases {
+			let pinnedCount = try #require(Self.seamCorpusDrawFeatureCounts[feature], "\(feature.rawValue) has no pinned count")
+			#expect(counts[feature, default: 0] == pinnedCount, "\(feature.rawValue) drawn in \(counts[feature, default: 0]) graphs")
+		}
+	}
+
+	@Test
+	func isSeamOnlyRejection_tellsSeamsOwnErrorsFromInlinedValidations_whenDiagnosticsAreClassified() {
+		// The differential oracle counts a rejection as a seam's own only when every error is reported about the
+		// seam's generated initializer or a call of it.
+		let collision = "/F/Screen.swift:1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `x` as `x: X` on `A` and `x: Y?` on `B`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Rename one of the properties, or @Instantiated one of them inside the tree.\n/F/A.swift:7:5: note: `A` receives `x: X` here."
+		let missingModuleInfo = "/F/Screen.swift:1:1: error: SafeDI cannot generate a call to the initializer SafeDI generated for `Screen` in module `Core`: that initializer takes what the type's dependency tree needs from the declarations `Core` sees, which include module `Base`'s, and this run was not given `Base`'s SafeDI module info."
+		let unfulfillable = "/F/A.swift:7:5: error: @Received property `x: X` is not @Instantiated or @Forwarded in chain: Root -> Screen -> A."
+		#expect(GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: collision, seamTypeNames: ["Screen"]))
+		#expect(GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: missingModuleInfo, seamTypeNames: ["Screen"]))
+		let parameterCapture = "/F/Detail.swift:7:5: error: @Received property `cache: LazilyInstantiated<Cache>?` cannot be received inside a `@Sendable` function in chain: Screen -> Detail. SafeDI builds `detailBuilder: SendableInstantiator<Detail>` on `Screen` in a `@Sendable` function, which cannot capture `cache: LazilyInstantiated<Cache>?`, which the tree of `Screen` receives from outside it, because `LazilyInstantiated<Cache>` is not `Sendable`."
+		let declaredCapture = "/F/Detail.swift:7:5: error: @Received property `cache: Cache` cannot be received inside a `@Sendable` function in chain: Root -> Detail. SafeDI builds `detailBuilder: SendableInstantiator<Detail>` on `Root` in a `@Sendable` function, which cannot capture `cache: LazilyInstantiated<Cache>` on `Root`, because `LazilyInstantiated<Cache>` is not `Sendable`."
+		#expect(GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: parameterCapture, seamTypeNames: ["Screen"]))
+		#expect(!GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: declaredCapture, seamTypeNames: ["Screen"]))
+		#expect(!GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: unfulfillable, seamTypeNames: ["Screen"]))
+		#expect(!GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: "\(collision)\n\(unfulfillable)", seamTypeNames: ["Screen"]))
+		#expect(!GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: "", seamTypeNames: ["Screen"]))
+		// A hidden-label error in a chain that starts at a seam is the seam's: inline reports it only from a root that
+		// provides the property, so a caller that holds nothing builds the graph inline.
+		let hiddenAtSeam = "/F/Reader.swift:7:5: error: @Received property `token: Secret?` is hidden in chain: Screen -> Left -> Reader. `Left` declares `token: Token` with the same label, so the types below `Left` receive `token: Token` instead. Give `token: Token` on `Left` a different label to fix."
+		let hiddenAtRoot = "/F/Reader.swift:7:5: error: @Received property `token: Secret?` is hidden in chain: Root -> Screen -> Left -> Reader. `Left` declares `token: Token` with the same label, so the types below `Left` receive `token: Token` instead. Give `token: Token` on `Left` a different label to fix."
+		#expect(GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: hiddenAtSeam, seamTypeNames: ["Screen"]))
+		#expect(!GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: hiddenAtSeam, seamTypeNames: []))
+		#expect(!GraphFuzzerOracle.isSeamOnlyRejection(diagnostics: hiddenAtRoot, seamTypeNames: ["Screen"]))
+	}
+
+	@Test
+	func differentialFailure_reportsSeed_whenSeamRejectsGraphWithInlinedValidationsErrorAndInlineAccepts() {
+		// A graph the tool rejects with the seam declared, with an error of the inlined validation, and accepts with
+		// no seam is a defect of the seam world; one it rejects with a seam's own error is what the seam rules
+		// reject, and one it rejects inline too is no seam's doing.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 0, features: [.generateDependencyTree])
+		let unfulfillable = GraphFuzzerToolOutcome.rejected(diagnostics: "/F/A.swift:7:5: error: @Received property `x: X` is not @Instantiated or @Forwarded in chain: Root -> Screen -> A.")
+		let collision = GraphFuzzerToolOutcome.rejected(diagnostics: "/F/Screen.swift:1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `x` as `x: X` on `A` and `x: Y?` on `B`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Rename one of the properties, or @Instantiated one of them inside the tree.")
+		let accepted = GraphFuzzerToolOutcome.accepted(generatedFiles: [:], warnings: [])
+		let defect = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: unfulfillable, secondOutcome: unfulfillable, inlineOutcome: accepted)
+		#expect(defect.differentialFailure?.kind == .seamRejectsGraphInlineAccepts)
+		#expect(defect.differentialFailure?.details == "With the seam:\n/F/A.swift:7:5: error: @Received property `x: X` is not @Instantiated or @Forwarded in chain: Root -> Screen -> A.\nWithout it, the tool accepts the graph.")
+		let seamsOwnError = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: collision, secondOutcome: collision, inlineOutcome: accepted)
+		#expect(seamsOwnError.differentialFailure == nil)
+		let rejectedInlineToo = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: unfulfillable, secondOutcome: unfulfillable, inlineOutcome: unfulfillable)
+		#expect(rejectedInlineToo.differentialFailure == nil)
+		let accepted2 = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: accepted, secondOutcome: accepted)
+		#expect(accepted2.differentialFailure == nil)
+	}
+
+	@Test
+	func nilArgumentFailure_reportsArgument_whenSeamPassesLiteralNilWhereInlinePassesValue() {
+		// The nil count counts, over every generated file, the literal `nil` arguments of each construction of a type
+		// of the graph: one more with the seam than without it is a receiver that loses a value. A seam type's own
+		// constructions are not counted, so the `nil` a wider tier passes for what it omits is no failure – and so a
+		// call of a tier that passes `nil` for a value the caller holds is not counted either, which the differential
+		// value comparator sees; the sound case therefore passes the value at the call.
+		let fixture = GraphFuzzerFixture(seed: 7, swiftFileContent: [
+			"@Instantiable(generateDependencyTree: true)\npublic final class S7_Screen: Instantiable {\n\tpublic init(reader: S7_Reader) {\n\t\tself.reader = reader\n\t}\n\n\t@Instantiated let reader: S7_Reader\n}\n",
+		])
+		let inline = GraphFuzzerToolOutcome.accepted(generatedFiles: ["S7_Root+SafeDI.swift": "let reader = S7_Reader(token: token, user: nil)\nreturn S7_Screen(reader: reader)"], warnings: [])
+		let seamPassingNil = GraphFuzzerToolOutcome.accepted(generatedFiles: [
+			"S7_Root+SafeDI.swift": "return S7_Screen(token: nil)",
+			"S7_Screen+SafeDI.swift": "public init(token: S7_Token? = nil) {\n    let reader = S7_Reader(token: nil, user: nil)\n    self.init(reader: reader)\n}",
+		], warnings: [])
+		let defect = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: seamPassingNil, secondOutcome: seamPassingNil, inlineOutcome: inline)
+		#expect(defect.nilArgumentFailure?.kind == .seamPassesNilWhereInlinePassesValue)
+		#expect(defect.nilArgumentFailure?.details.prefix { $0 != "\n" } == "`S7_Reader(token:)` is passed `nil` 1 times with the seam and 0 without it.")
+		let seamPassingValue = GraphFuzzerToolOutcome.accepted(generatedFiles: [
+			"S7_Root+SafeDI.swift": "let token = S7_Token()\nreturn S7_Screen(token: token)",
+			"S7_Screen+SafeDI.swift": "public init(token: S7_Token? = nil) {\n    let reader = S7_Reader(token: token, user: nil)\n    self.init(reader: reader)\n}",
+		], warnings: [])
+		let sound = GraphFuzzerToolRuns(fixture: fixture, firstOutcome: seamPassingValue, secondOutcome: seamPassingValue, inlineOutcome: inline)
+		#expect(sound.nilArgumentFailure == nil)
+		#expect(sound.isInspectedByValueOracle)
+		let rejected = GraphFuzzerToolOutcome.rejected(diagnostics: "error")
+		#expect(GraphFuzzerToolRuns(fixture: fixture, firstOutcome: rejected, secondOutcome: rejected, inlineOutcome: inline).isInspectedByValueOracle == false)
+	}
+
+	@Test
+	func uncreatedAliasBindingReads_reportEachRead_whenSeamReadsAliasOfParameterThatMayBeNil() {
+		// The structural oracle: an `onlyIfAvailable` alias bound from a parameter that defaults to `nil` is read only by
+		// the construction of the type that declares it. The seam outputs of an alias of such an alias, `onlyIfAvailable`
+		// and required, as the rule's first draft generated them, read it again.
+		let aliasOfAlias = { (attribute: String) in
+			"""
+			extension Screen {
+			    public convenience init(token: Token? = nil) {
+			        func __safeDI_left() -> Left {
+			            func __safeDI_detail() -> Detail {
+			                #sourceLocation(file: "/F/Types.swift", line: 32)
+			                let authToken: Token? = token
+			                #sourceLocation()
+			                #sourceLocation(file: "/F/Types.swift", line: 33)
+			                let bearer: Token? = authToken\(attribute)
+			                #sourceLocation()
+			                return Detail(authToken: authToken, bearer: bearer)
+			            }
+			            let detail: Detail = __safeDI_detail()
+			            return Left(detail: detail)
+			        }
+			        let left: Left = __safeDI_left()
+			        self.init(left: left)
+			    }
+			}
+			"""
+		}
+		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": aliasOfAlias("")]) == ["Screen+SafeDI.swift: `let bearer: Token? = authToken` reads `authToken`."])
+		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": aliasOfAlias(" // Declared at Types.swift:33")]) == ["Screen+SafeDI.swift: `let bearer: Token? = authToken` reads `authToken`."])
+		// A receiver beneath, built in a builder function of its own.
+		let readerBeneath = """
+		extension Screen {
+		    public init(token: Token? = nil) {
+		        func __safeDI_detail() -> Detail {
+		            let authToken: Token? = token
+		            func __safeDI_reader() -> Reader {
+		                return Reader(authToken: authToken)
+		            }
+		            let reader: Reader = __safeDI_reader()
+		            return Detail(authToken: authToken, reader: reader)
+		        }
+		        let detail: Detail = __safeDI_detail()
+		        self.init(detail: detail)
+		    }
+		}
+		"""
+		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": readerBeneath]) == ["Screen+SafeDI.swift: `return Reader(authToken: authToken)` reads `authToken`."])
+		// The canonical alias, read by its declaring type alone; the seam's own alias, read by `self.init`; an alias of a
+		// local that shadows the parameter, whose readers read the local's alias; and a reader beneath a nearer declaration
+		// of the alias's label.
+		let sound = """
+		extension Screen {
+		    public init(authToken: Token? = nil, token: Token? = nil) {
+		        let own: Token? = token
+		        func __safeDI_left() -> Left {
+		            let token = Token()
+		            func __safeDI_detail() -> Detail {
+		                let authToken: Token? = token
+		                let reader = Reader(authToken: authToken)
+		                return Detail(authToken: authToken, reader: reader)
+		            }
+		            let detail: Detail = __safeDI_detail()
+		            return Left(token: token, detail: detail)
+		        }
+		        let left: Left = __safeDI_left()
+		        func __safeDI_other() -> Other {
+		            let alias: Token? = token
+		            func __safeDI_mid() -> Mid {
+		                let alias = Token()
+		                let reader = Reader(alias: alias)
+		                return Mid(alias: alias, reader: reader)
+		            }
+		            let mid: Mid = __safeDI_mid()
+		            return Other(alias: alias, mid: mid)
+		        }
+		        let other: Other = __safeDI_other()
+		        self.init(own: own, left: left, other: other)
+		    }
+		}
+		"""
+		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": sound]) == [])
+	}
+
+	@Test
+	func uncreatedAliasBindingReads_reportEachRead_whenTierCarriesAttributesBeforeItsModifier() {
+		// A seam's tiers carry the seam's generated-initializer attributes before the access modifier, with spaces
+		// inside an attribute's arguments; the oracle recognizes the initializer by its modifier followed by `init(`.
+		let attributed = """
+		extension Screen {
+		    @MainActor public convenience init(token: Token? = nil) {
+		        let authToken: Token? = token
+		        func __safeDI_reader() -> Reader {
+		            return Reader(authToken: authToken)
+		        }
+		        let reader: Reader = __safeDI_reader()
+		        self.init(authToken: authToken, reader: reader)
+		    }
+
+		    @available(iOS 17, *) internal init(session: Session? = nil) {
+		        let bearer: Session? = session
+		        let panel = Panel(bearer: bearer)
+		        self.init(bearer: bearer, panel: panel)
+		    }
+		}
+		"""
+		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": attributed]) == [
+			"Screen+SafeDI.swift: `return Reader(authToken: authToken)` reads `authToken`.",
+			"Screen+SafeDI.swift: `let panel = Panel(bearer: bearer)` reads `bearer`.",
+		])
+		// A line that mentions `init(` after something other than a modifier is not an initializer.
+		let notAnInitializer = """
+		extension Screen {
+		    public static func callTier0(token: Token? = nil) -> Screen {
+		        let authToken: Token? = token
+		        return Screen.init(token: authToken)
+		    }
+		}
+		"""
+		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": notAnInitializer]) == [])
+	}
+
+	@Test
+	func uncreatedAliasRejectionFailure_reportsSeed_whenUncreatedAliasDrawsSeamIsRejectedWithAnotherError() {
+		// The uncreated-alias draw's seam has no shape another seam rule rejects, so any other seam error about it is a
+		// defect; an uncreated alias's own error, or another seam's error, is not.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: 0, features: [.generateDependencyTree])
+		let aliasSeam = "\(fixture.typeNamePrefix)AliasSeam"
+		let accepted = GraphFuzzerToolOutcome.accepted(generatedFiles: [:], warnings: [])
+		let uncreatedAliasRead = GraphFuzzerToolOutcome.rejected(diagnostics: "/F/Reader.swift:7:5: error: SafeDI cannot generate the dependency tree of `\(aliasSeam)`: `Reader` receives `aliasAuth: Value?` beneath the `onlyIfAvailable` alias `aliasAuth` that `Detail` declares, which is not created where `aliasToken: Value` is unavailable.")
+		let collision = GraphFuzzerToolOutcome.rejected(diagnostics: "/F/Screen.swift:1:1: error: SafeDI cannot generate the dependency tree of `\(aliasSeam)`: its tree receives `x` as `x: X` on `A` and `x: Y?` on `B`.")
+		let otherSeamsCollision = GraphFuzzerToolOutcome.rejected(diagnostics: "/F/Screen.swift:1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `x` as `x: X` on `A` and `x: Y?` on `B`.")
+		#expect(GraphFuzzerToolRuns(fixture: fixture, firstOutcome: collision, secondOutcome: collision, inlineOutcome: accepted).uncreatedAliasRejectionFailure?.kind == .uncreatedAliasSeamRejectedOtherwise)
+		#expect(GraphFuzzerToolRuns(fixture: fixture, firstOutcome: uncreatedAliasRead, secondOutcome: uncreatedAliasRead, inlineOutcome: accepted).uncreatedAliasRejectionFailure == nil)
+		#expect(GraphFuzzerToolRuns(fixture: fixture, firstOutcome: otherSeamsCollision, secondOutcome: otherSeamsCollision, inlineOutcome: accepted).uncreatedAliasRejectionFailure == nil)
+		#expect(GraphFuzzerToolRuns(fixture: fixture, firstOutcome: collision, secondOutcome: collision, inlineOutcome: collision).uncreatedAliasRejectionFailure == nil)
+	}
+
+	@Test
+	func uncreatedAliasRejectionFailure_reportsExactFormAliasRejected_whenToolRejectsAliasOfRequiredOptionalParameterSpelledWithItsOptionalForm() {
+		// The exact-form alias of a required optional parameter is always created, so an uncreated-alias error naming
+		// it is an over-rejection the rejection-kind oracle would otherwise take for the uncreated alias's own error;
+		// the unwrapped-form alias of such a parameter may be uncreated, and its error stands.
+		func seed(drawing wanted: Set<GraphFuzzerSeamDrawFeature>, not unwanted: Set<GraphFuzzerSeamDrawFeature>) -> UInt64 {
+			(0..<UInt64(Self.seamCorpusSeedCount)).first { seed in
+				let features = GraphFuzzerFeature.seamDrawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree]))
+				return features.isSuperset(of: wanted) && features.isDisjoint(with: unwanted)
+			}!
+		}
+		let exactFormFixture = GraphFuzzerGenerator.fixture(forSeed: seed(drawing: [.uncreatedAliasExactFormAlias, .uncreatedAliasRequiredOptionalParameter], not: []), features: [.generateDependencyTree])
+		let unwrappedFormFixture = GraphFuzzerGenerator.fixture(forSeed: seed(drawing: [.uncreatedAliasRequiredOptionalParameter], not: [.uncreatedAliasExactFormAlias]), features: [.generateDependencyTree])
+		let accepted = GraphFuzzerToolOutcome.accepted(generatedFiles: [:], warnings: [])
+		func rejection(of fixture: GraphFuzzerFixture) -> GraphFuzzerToolOutcome {
+			.rejected(diagnostics: "/F/Reader.swift:7:5: error: SafeDI cannot generate the dependency tree of `\(fixture.typeNamePrefix)AliasSeam`: `Reader` receives `aliasAuth: Value?` beneath the `onlyIfAvailable` alias `aliasAuth` that `Detail` declares, which is not created where `aliasToken: Value` is unavailable.")
+		}
+		let exactFormRejected = GraphFuzzerToolRuns(fixture: exactFormFixture, firstOutcome: rejection(of: exactFormFixture), secondOutcome: rejection(of: exactFormFixture), inlineOutcome: accepted)
+		#expect(exactFormRejected.uncreatedAliasRejectionFailure?.kind == .uncreatedAliasExactFormAliasRejected)
+		let unwrappedFormRejected = GraphFuzzerToolRuns(fixture: unwrappedFormFixture, firstOutcome: rejection(of: unwrappedFormFixture), secondOutcome: rejection(of: unwrappedFormFixture), inlineOutcome: accepted)
+		#expect(unwrappedFormRejected.uncreatedAliasRejectionFailure == nil)
+	}
+
+	@Test
+	func uncreatedAliasRejectionFailure_reportsAliasReadingItself_whenToolRejectsLabelKeepingAliasAsReadingItself() throws {
+		// An alias that keeps its fulfilling property's label is not an alias of itself, so an uncreated-alias error
+		// saying the type that declares it aliases it under its own label is an over-rejection the rejection-kind oracle
+		// would otherwise take for the uncreated alias's own error; the same words about an alias of it under another
+		// label on the same type, or about a label-keeping alias beneath it, stand.
+		let seed = try #require((0..<UInt64(Self.seamCorpusSeedCount)).first { seed in
+			GraphFuzzerFeature.seamDrawFeatures(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])).contains(.uncreatedAliasLabelKeepingOptionalAlias)
+		})
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree])
+		let aliasSeam = "\(fixture.typeNamePrefix)AliasSeam"
+		let accepted = GraphFuzzerToolOutcome.accepted(generatedFiles: [:], warnings: [])
+		func runs(_ message: String) -> GraphFuzzerToolRuns {
+			let outcome = GraphFuzzerToolOutcome.rejected(diagnostics: "/F/Detail.swift:7:2: error: SafeDI cannot generate the dependency tree of `\(aliasSeam)`: \(message)")
+			return GraphFuzzerToolRuns(fixture: fixture, firstOutcome: outcome, secondOutcome: outcome, inlineOutcome: accepted)
+		}
+		let readsItself = runs("`Detail` aliases `aliasToken: Value` as `aliasToken`, and `aliasToken` is an `onlyIfAvailable` alias that is not created where `aliasToken: Value` is unavailable.")
+		#expect(readsItself.uncreatedAliasRejectionFailure?.kind == .uncreatedAliasReadsItself)
+		let aliasOfAliasOnSameType = runs("`Detail` aliases `aliasToken: Value?` as `aliasBearer`, and `aliasToken` is an `onlyIfAvailable` alias that is not created where `aliasToken: Value` is unavailable.")
+		#expect(aliasOfAliasOnSameType.uncreatedAliasRejectionFailure == nil)
+		let labelKeepingAliasBeneath = runs("`Reader` aliases `aliasToken: Value?` as `aliasToken`, and `aliasToken` is an `onlyIfAvailable` alias that `Detail` declares, which is not created where `aliasToken: Value` is unavailable.")
+		#expect(labelKeepingAliasBeneath.uncreatedAliasRejectionFailure == nil)
+	}
+
+	@Test
+	func uncreatedAliasBindingReads_reportRead_whenAliasOfRequiredOptionalParameterIsReadAndThatParameterIsTracked() {
+		// The unwrapped-form alias of a required optional parameter may be uncreated as an alias of a parameter that
+		// defaults to `nil` may, so its binding's reads are reported when the parameter is named; the exact-form alias
+		// is always created, so the parameter is not named for it and its reads pass.
+		let seam = """
+		extension Screen {
+		    public convenience init(aliasToken: Value?) {
+		        func __safeDI_detail() -> Detail {
+		            let aliasAuth: Value? = aliasToken
+		            let reader = Reader(aliasAuth: aliasAuth)
+		            return Detail(aliasAuth: aliasAuth, reader: reader)
+		        }
+		        let detail: Detail = __safeDI_detail()
+		        self.init(aliasToken: aliasToken, detail: detail)
+		    }
+		}
+		"""
+		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": seam], requiredOptionalParameters: ["aliasToken"]) == ["Screen+SafeDI.swift: `let reader = Reader(aliasAuth: aliasAuth)` reads `aliasAuth`."])
+		#expect(GraphFuzzerOracle.uncreatedAliasBindingReads(in: ["Screen+SafeDI.swift": seam]) == [])
+	}
+
+	@Test
+	func finding_isKnownIssue_whenEveryValueDifferenceMatchesAValueSignature() {
+		let knownIssue = Self.valueDivergenceKnownIssue
+		let failure = GraphFuzzerFailure(seed: 430, kind: .seamBuildsOtherValuesThanInline, details: Self.documentedDifference + "\nFeature path:\n…", valueDifferences: [Self.documentedDifference])
+
+		#expect(GraphFuzzerFinding(failure: failure, knownIssue: knownIssue) == .knownIssue(knownIssue, failure))
+	}
+
+	@Test
+	func finding_isFailure_whenValueFailureHoldsDifferenceNoValueSignatureMatchesBesideOneThatMatches() {
+		// A documented divergence beside an undocumented difference is a new failure: the shape's signature documents
+		// the first difference, not the graph.
+		let knownIssue = Self.valueDivergenceKnownIssue
+		let failure = GraphFuzzerFailure(seed: 430, kind: .seamBuildsOtherValuesThanInline, details: Self.documentedDifference + "\n" + Self.undocumentedDifference + "\nFeature path:\n…", valueDifferences: [Self.documentedDifference, Self.undocumentedDifference])
+
+		#expect(GraphFuzzerFinding(failure: failure, knownIssue: knownIssue) == .failure(failure))
+	}
+
+	@Test
+	func finding_isFailure_whenKnownValueFailureIsFollowedByFailureTheKnownIssueDoesNotDocument() {
+		// A known value failure masks nothing: the failures after it in the oracle's chain are reported as they would
+		// be alone.
+		let knownIssue = Self.valueDivergenceKnownIssue
+		let known = GraphFuzzerFailure(seed: 430, kind: .seamBuildsOtherValuesThanInline, details: Self.documentedDifference, valueDifferences: [Self.documentedDifference])
+		let renamed = GraphFuzzerFailure(seed: 430, kind: .renamedGraphDiffers, details: "Reversing its labels changes its generated mock code, in Root+SafeDIMock.swift.\nThis graph:\n…")
+
+		#expect(GraphFuzzerFinding(failure: known, laterFailures: [renamed], knownIssue: knownIssue) == .failure(renamed))
+		#expect(GraphFuzzerFinding(failure: known, laterFailures: [], knownIssue: knownIssue) == .knownIssue(knownIssue, known))
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "The value comparator compiles generated code only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func valueFailures_reportsOtherValues_whenSeamBuildPassesNilWhereInlineBuildPassesValue() async throws {
+		// The seam build of a smoke graph, with the root's call of a tier passing `nil` for a parameter that defaults to
+		// `nil` where it passed a value, builds other values than the inline build: the receiver beneath gets `nil`.
+		let (runs, seamFiles, warnings) = try await Self.valueProbeRuns()
+		let perturbed = try #require(Self.passingNil(forADefaultedParameterIn: seamFiles, of: runs.fixture), "No smoke seam graph passes a value for a parameter that defaults to nil")
+		let perturbedRuns = GraphFuzzerToolRuns(fixture: runs.fixture, firstOutcome: .accepted(generatedFiles: perturbed.files, warnings: warnings), secondOutcome: .accepted(generatedFiles: perturbed.files, warnings: warnings), inlineOutcome: runs.inlineOutcome)
+
+		let failures = try GraphFuzzerOracle.valueFailures(of: [perturbedRuns])
+
+		let failure = try #require(failures[runs.fixture.seed])
+		#expect(failure.kind == .seamBuildsOtherValuesThanInline, Comment(rawValue: failure.details))
+		// Seed 0's receiver beneath the seam gets `nil`; the root's own `seamShared`, the same instance inline, is then
+		// first seen there, which the comparator reports as a second difference.
+		#expect(failure.valueDifferences.first == "probe `S0_Root0()` at <1> S0_Root0 > anyT2 > value > seamChild > \(perturbed.label):\n  feature:     \(perturbed.label): nil\n  known right: \(perturbed.label): <6> S0_SeamShared")
+		#expect(failure.valueDifferences.count == 2, "\(failure.valueDifferences)")
+		#expect(failure.details.hasPrefix(failure.valueDifferences.joined(separator: "\n") + "\n"))
+		#expect(try GraphFuzzerOracle.valueFailures(of: [runs]).isEmpty)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "The value comparator compiles generated code only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func valueFailures_reportsComparatorCouldNotDescribeGraph_whenSeamBuildDoesNotCompile() async throws {
+		let (runs, seamFiles, warnings) = try await Self.valueProbeRuns()
+		let fileName = try #require(seamFiles.keys.sorted().first)
+		var brokenFiles = seamFiles
+		brokenFiles[fileName] = (seamFiles[fileName] ?? "") + "\nfunc broken() -> Int { \"not an integer\" }\n"
+		let brokenRuns = GraphFuzzerToolRuns(fixture: runs.fixture, firstOutcome: .accepted(generatedFiles: brokenFiles, warnings: warnings), secondOutcome: .accepted(generatedFiles: brokenFiles, warnings: warnings), inlineOutcome: runs.inlineOutcome)
+
+		let failures = try GraphFuzzerOracle.valueFailures(of: [brokenRuns])
+
+		let failure = try #require(failures[runs.fixture.seed])
+		#expect(failure.kind == .valueComparatorCouldNotDescribeGraph)
+		#expect(failure.details.contains("not an integer"))
 	}
 
 	@Test
@@ -62,6 +459,16 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test
 	func knownIssues_listEachSeedOnceInIncreasingOrder_belowCorpusSeedCount() {
 		#expect(Self.knownIssueListProblems() == [])
+	}
+
+	@Test
+	func seamKnownIssues_listEachSeedOnceInIncreasingOrder_belowSeamCorpusSeedCount() {
+		#expect(Self.knownIssueListProblems(Self.seamKnownIssues, corpusSeedCount: Self.seamCorpusSeedCount) == [])
+		// A seed left out of the inherited shapes must be one of theirs, or the entry filters nothing.
+		#expect(Self.seamCorpusSeedsOfOtherShapes.subtracting(Self.knownIssues.flatMap(\.seeds)) == [])
+		// A seed added to an inherited shape must name a shape, and be one its list lacks, or the entry adds nothing.
+		#expect(Set(Self.seamCorpusSeedsAddedToInheritedShapes.keys).subtracting(Self.knownIssues.map(\.reason)) == [])
+		#expect(Set(Self.seamCorpusSeedsAddedToInheritedShapes.values.joined()).intersection(Self.knownIssues.flatMap(\.seeds)) == [])
 	}
 
 	@Test
@@ -815,6 +1222,8 @@ struct SafeDIToolGraphFuzzerTests {
 		// re-derive the smoke and known-issue seeds when it changes; the long run pins the rest of the corpus.
 		let seeds = Self.smokeSeeds + Self.knownIssues.flatMap(\.seeds)
 		#expect(Self.fixtureHash(forSeeds: seeds) == Self.smokeAndKnownIssueFixtureHash)
+		let seamSeeds = Self.seamSmokeSeeds + Self.seamKnownIssues.flatMap(\.seeds)
+		#expect(Self.fixtureHash(forSeeds: seamSeeds, features: [.generateDependencyTree]) == Self.seamSmokeAndKnownIssueFixtureHash)
 	}
 
 	// MARK: Long run
@@ -832,24 +1241,29 @@ struct SafeDIToolGraphFuzzerTests {
 			reportProblem("The graph fuzzer checks generated code by compiling it. Unset SAFEDI_SKIP_COMPILE_CHECK.")
 			return
 		}
+		guard let features = configuration.features else {
+			reportProblem("SAFEDI_GRAPH_FUZZER_FEATURES must name generator features: \(GraphFuzzerGeneratorFeature.allCases.map(\.rawValue).joined(separator: ", ")).")
+			return
+		}
 		guard configuration.iterations > 0 else {
 			reportProblem("SAFEDI_GRAPH_FUZZER_ITERATIONS must be a positive integer or `corpus`.")
 			return
 		}
-		let knownIssueListProblems = Self.knownIssueListProblems()
+		let corpus = Self.corpus(for: features)
+		let knownIssueListProblems = Self.knownIssueListProblems(corpus.knownIssues, corpusSeedCount: corpus.seedCount)
 		guard knownIssueListProblems.isEmpty else {
 			knownIssueListProblems.forEach(reportProblem)
 			return
 		}
-		let knownIssuesBySeed = Dictionary(uniqueKeysWithValues: Self.knownIssues.flatMap { knownIssue in
+		let knownIssuesBySeed = Dictionary(uniqueKeysWithValues: corpus.knownIssues.flatMap { knownIssue in
 			knownIssue.seeds.map { ($0, knownIssue) }
 		})
 
 		// Pin the whole corpus the long run covers, which the ordinary suite's hash covers only a sample of, and check
 		// that no graph uses a label beginning with `__safeDI_`, which the generated builder functions use.
 		var generatedCorpusHash = GraphFuzzerHash()
-		for seed in 0..<UInt64(Self.corpusSeedCount) {
-			let fixture = GraphFuzzerGenerator.fixture(forSeed: seed)
+		for seed in 0..<UInt64(corpus.seedCount) {
+			let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: corpus.features)
 			generatedCorpusHash.combine(fixture.description)
 			let reservedLabels = fixture.swiftFileContent.flatMap(GraphFuzzerSourceLine.lines(of:)).compactMap { line -> String? in
 				guard case let .property(_, label, _) = line, label.hasPrefix("__safeDI_") else { return nil }
@@ -859,13 +1273,16 @@ struct SafeDIToolGraphFuzzerTests {
 				reportProblem("Seed \(seed)'s graph uses \(reservedLabels), which begin with `__safeDI_`, the prefix of generated builder functions.")
 			}
 		}
-		if generatedCorpusHash.value != Self.corpusFixtureHash {
-			reportProblem("The generator's graphs for seeds 0..<\(Self.corpusSeedCount) changed (fixture hash \(Self.hexadecimal(generatedCorpusHash.value)), pinned \(Self.hexadecimal(Self.corpusFixtureHash))). Re-derive the known issues, smoke seeds, and pinned values.")
+		if generatedCorpusHash.value != corpus.fixtureHash {
+			reportProblem("The generator's graphs for seeds 0..<\(corpus.seedCount) of the \(corpus.name) corpus changed (fixture hash \(Self.hexadecimal(generatedCorpusHash.value)), pinned \(Self.hexadecimal(corpus.fixtureHash))). Re-derive the known issues, smoke seeds, and pinned values.")
 		}
 
 		var graphCount = 0
 		var acceptedCount = 0
 		var acceptedSeedsSum = GraphFuzzerSeedSetSum()
+		var valueOracleInspectedCount = 0
+		var valueOracleComparedCount = 0
+		var acceptedSpellingDrawFeatures = Set<GraphFuzzerSeamDrawFeature>()
 		var knownIssueCount = 0
 		var failureCount = 0
 		// Batches run concurrently, one per core, but their findings are recorded in seed order, so the report and
@@ -883,7 +1300,7 @@ struct SafeDIToolGraphFuzzerTests {
 						.map { configuration.startingSeed &+ UInt64($0) }
 					nextBatchIndex += 1
 					group.addTask {
-						var results = try await GraphFuzzerOracle.results(forSeeds: seeds) { seed in
+						var results = try await GraphFuzzerOracle.results(forSeeds: seeds, features: corpus.features) { seed in
 							report.append("seed \(seed)")
 						}
 						for index in results.indices where results[index].failure == nil
@@ -893,7 +1310,10 @@ struct SafeDIToolGraphFuzzerTests {
 								fixture: results[index].fixture,
 								outcome: results[index].outcome,
 								failure: GraphFuzzerOracle.crossProcessFailure(of: results[index].fixture),
+								laterFailures: results[index].laterFailures,
 								renamedGraphFailures: results[index].renamedGraphFailures,
+								isInspectedByValueOracle: results[index].isInspectedByValueOracle,
+								isComparedByValueOracle: results[index].isComparedByValueOracle,
 							)
 						}
 						for result in results {
@@ -918,14 +1338,28 @@ struct SafeDIToolGraphFuzzerTests {
 							if result.isAccepted {
 								acceptedCount += 1
 								acceptedSeedsSum.add(seed)
+								if result.failure == nil {
+									acceptedSpellingDrawFeatures.formUnion(GraphFuzzerFeature.seamDrawFeatures(of: result.fixture).intersection(corpus.spellingDrawFeatures))
+								}
+							}
+							if result.isInspectedByValueOracle {
+								valueOracleInspectedCount += 1
+							}
+							if result.isComparedByValueOracle {
+								valueOracleComparedCount += 1
 							}
 							// Counted whether or not the graph also fails another way.
 							for renamedGraphFailure in result.renamedGraphFailures {
 								report.append("renamed \(seed) \(renamedGraphFailure.details.prefix { $0 != "\n" })")
 							}
-							let finding = GraphFuzzerFinding(failure: result.failure, knownIssue: knownIssuesBySeed[seed])
+							let finding = GraphFuzzerFinding(failure: result.failure, laterFailures: result.laterFailures, knownIssue: knownIssuesBySeed[seed])
 							if let reportLine = finding.reportLine(seed: seed) {
-								report.append(reportLine)
+								// A stale line carries the remedy, chosen by the stale issue's shape, for the summary.
+								if case let .staleKnownIssue(knownIssue) = finding {
+									report.append("\(reportLine); \(corpus.staleSeedRemedy(knownIssue, seed))")
+								} else {
+									report.append(reportLine)
+								}
 							}
 							switch finding {
 							case .knownIssue:
@@ -948,12 +1382,30 @@ struct SafeDIToolGraphFuzzerTests {
 		// The oracle accepts any error the tool reports, so pin which graphs the tool accepts: a change that makes
 		// it reject valid graphs changes this. A shard of the corpus reports its part, which ci.yml's combine job
 		// adds up, and a run of the whole corpus checks the pins itself.
-		report.append("shard \(configuration.startingSeed) \(configuration.iterations) \(acceptedCount) \(Self.hexadecimal(acceptedSeedsSum.value))")
-		report.append("corpus \(Self.corpusSeedCount) \(Self.corpusAcceptedSeedCount) \(Self.hexadecimal(Self.corpusAcceptedSeedsSum))")
-		if configuration.startingSeed == 0, configuration.iterations == Self.corpusSeedCount,
-		   acceptedCount != Self.corpusAcceptedSeedCount || acceptedSeedsSum.value != Self.corpusAcceptedSeedsSum
+		report.append("shard \(configuration.startingSeed) \(configuration.iterations) \(acceptedCount) \(Self.hexadecimal(acceptedSeedsSum.value)) \(corpus.name)")
+		report.append("corpus \(corpus.seedCount) \(corpus.acceptedSeedCount) \(Self.hexadecimal(corpus.acceptedSeedsSum)) \(corpus.name)")
+		// The value oracle's inspected graphs and the spellings drawn in accepted graphs, which ci.yml's combine job adds
+		// up across shards: a draw that stops landing in accepted graphs, or an oracle that stops inspecting, fails it.
+		report.append("inspected \(valueOracleInspectedCount) \(corpus.valueOracleInspectedGraphCount) \(corpus.name)")
+		// The graphs the comparator compared, which a compilation failure (a known warning among them) keeps below the
+		// inspected count: read from the report rather than derived.
+		report.append("compared \(valueOracleComparedCount) \(corpus.name)")
+		report.append("spellings \(corpus.name) \(corpus.spellingDrawFeatures.map(\.rawValue).sorted().joined(separator: ",")) \(acceptedSpellingDrawFeatures.map(\.rawValue).sorted().joined(separator: ","))")
+		// Every corpus that exists, so the combine job can tell a corpus whose shards left no report from none.
+		report.append("corpora \(([Self.baseCorpus] + GraphFuzzerGeneratorFeature.allCases.map { Self.corpus(for: [$0]) }).map(\.name).joined(separator: " "))")
+		if configuration.startingSeed == 0, configuration.iterations == corpus.seedCount,
+		   acceptedCount != corpus.acceptedSeedCount || acceptedSeedsSum.value != corpus.acceptedSeedsSum
 		{
-			reportProblem("The tool accepted \(acceptedCount) of seeds 0..<\(Self.corpusSeedCount) (sum \(Self.hexadecimal(acceptedSeedsSum.value))), but \(Self.corpusAcceptedSeedCount) are pinned (sum \(Self.hexadecimal(Self.corpusAcceptedSeedsSum))). A tool change that rejects or accepts different graphs must update the pinned values deliberately.")
+			reportProblem("The tool accepted \(acceptedCount) of seeds 0..<\(corpus.seedCount) of the \(corpus.name) corpus (sum \(Self.hexadecimal(acceptedSeedsSum.value))), but \(corpus.acceptedSeedCount) are pinned (sum \(Self.hexadecimal(corpus.acceptedSeedsSum))). A tool change that rejects or accepts different graphs must update the pinned values deliberately.")
+		}
+		if configuration.startingSeed == 0, configuration.iterations == corpus.seedCount {
+			if valueOracleInspectedCount != corpus.valueOracleInspectedGraphCount {
+				reportProblem("The value oracle inspected \(valueOracleInspectedCount) graphs of the \(corpus.name) corpus, but \(corpus.valueOracleInspectedGraphCount) are pinned.")
+			}
+			let missingSpellings = corpus.spellingDrawFeatures.subtracting(acceptedSpellingDrawFeatures)
+			if !missingSpellings.isEmpty {
+				reportProblem("No accepted graph of the \(corpus.name) corpus draws \(missingSpellings.map(\.rawValue).sorted().joined(separator: ", ")).")
+			}
 		}
 		report.append("completed \(graphCount) graphs, \(acceptedCount) accepted, \(knownIssueCount) known issues, \(failureCount) unknown failures")
 		#expect(graphCount == configuration.iterations)
@@ -987,6 +1439,212 @@ struct SafeDIToolGraphFuzzerTests {
 	/// shards of the corpus can add up.
 	static let corpusAcceptedSeedCount = 2_299
 	static let corpusAcceptedSeedsSum: UInt64 = 0x62F41F76B0229D38
+
+	/// The graphs of seeds `0..<seedCount` drawn with `features`, and what is pinned about them. Each generator
+	/// feature has a corpus of its own, so that turning a feature on changes no graph of the corpus drawn without it.
+	struct Corpus {
+		/// The name the long run's report lines carry, which ci.yml's combine job groups shards by.
+		let name: String
+		let features: Set<GraphFuzzerGeneratorFeature>
+		let seedCount: Int
+		let fixtureHash: UInt64
+		let acceptedSeedCount: Int
+		let acceptedSeedsSum: UInt64
+		let knownIssues: [GraphFuzzerKnownIssue]
+		/// The name of the list `knownIssues` is read from, which a stale entry's message names.
+		let knownIssuesName: String
+		/// What to edit when a seed of `knownIssues` no longer fails in this corpus, by the shape it was listed under
+		/// and the list that put the seed there.
+		let staleSeedRemedy: @Sendable (GraphFuzzerKnownIssue, UInt64) -> String
+		/// How many graphs the value oracle compares with their inline build: those the tool accepts with a seam and
+		/// without it.
+		let valueOracleInspectedGraphCount: Int
+		/// The spellings each of which some graph the tool accepts must draw.
+		let spellingDrawFeatures: Set<GraphFuzzerSeamDrawFeature>
+	}
+
+	static let baseCorpus = Corpus(
+		name: "base",
+		features: [],
+		seedCount: corpusSeedCount,
+		fixtureHash: corpusFixtureHash,
+		acceptedSeedCount: corpusAcceptedSeedCount,
+		acceptedSeedsSum: corpusAcceptedSeedsSum,
+		knownIssues: knownIssues,
+		knownIssuesName: "knownIssues",
+		staleSeedRemedy: { _, _ in "remove it from `knownIssues`, and from `seamCorpusSeedsOfOtherShapes` when it is listed there" },
+		valueOracleInspectedGraphCount: 0,
+		spellingDrawFeatures: [],
+	)
+
+	/// The corpus drawn with the `generateDependencyTree` feature: seeds `0..<seamCorpusSeedCount`, each graph with
+	/// one type a root reaches declared as a seam. Smaller than the base corpus while the feature settles.
+	static let seamCorpus = Corpus(
+		name: GraphFuzzerGeneratorFeature.generateDependencyTree.rawValue,
+		features: [.generateDependencyTree],
+		seedCount: seamCorpusSeedCount,
+		fixtureHash: seamCorpusFixtureHash,
+		acceptedSeedCount: seamCorpusAcceptedSeedCount,
+		acceptedSeedsSum: seamCorpusAcceptedSeedsSum,
+		knownIssues: seamKnownIssues,
+		knownIssuesName: "seamKnownIssues",
+		// A label-sorted seed leaves its own list; an inherited seed leaves `knownIssues` when the base corpus reports
+		// it stale too, and is otherwise one the seam's draw changed.
+		staleSeedRemedy: { knownIssue, seed in
+			if knownIssue.reason == labelSortedPassThroughReason {
+				"remove it from `labelSortedPassThroughSeeds`"
+			} else if seamCorpusSeedsAddedToInheritedShapes[knownIssue.reason]?.contains(seed) == true {
+				"remove it from `seamCorpusSeedsAddedToInheritedShapes`"
+			} else {
+				"remove it from `knownIssues` if the base corpus reports it stale too, else add it to `seamCorpusSeedsOfOtherShapes`"
+			}
+		},
+		valueOracleInspectedGraphCount: seamCorpusValueOracleInspectedGraphCount,
+		spellingDrawFeatures: Set(GraphFuzzerSpelling.allCases.map(\.drawFeature)),
+	)
+
+	static let seamCorpusSeedCount = 1_000
+	static let seamCorpusFixtureHash: UInt64 = 0xAFF9EF38B356ED53
+	static let seamCorpusAcceptedSeedCount = 360
+	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x927832BEA746C7C7
+	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
+	/// oracle compares.
+	static let seamCorpusValueOracleInspectedGraphCount = 360
+
+	/// The ordinary suite's batch of the seam corpus: graphs the tool accepts whose generated code, between them, shows
+	/// every `GraphFuzzerSeamOutputFeature` – both kinds of pass-through, a call reading `.instance`, an `@escaping`
+	/// closure parameter, an `@escaping @Sendable` one, and an optional closure – and graphs it rejects, which
+	/// `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` checks. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 2, 5, 7, 19, 25]
+
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xBA56EEB4FACA7BD5
+
+	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
+	/// so a draw that stops landing, or a change in a shape's share, fails
+	/// `seamCorpus_drawsEachShapeInThePinnedNumberOfGraphs_whenFixturesAreGeneratedWithoutTheTool`.
+	static let seamCorpusDrawFeatureCounts: [GraphFuzzerSeamDrawFeature: Int] = [
+		.collidingFormsBeneathSeam: 10,
+		.innerSeam: 83,
+		.instanceHeldByCaller: 350,
+		.instanceReceiveBeneathSeam: 113,
+		.otherKindWrapperReceiveBeneathSeam: 25,
+		.renameAboveSeam: 19,
+		.renameOnSeamOrChild: 392,
+		.requiredWrapperProvidingByValueForm: 67,
+		.spelledAliasFulfillingProperty: 153,
+		.spelledArray: 65,
+		.spelledClosure: 69,
+		.spelledClosureTakingExistential: 62,
+		.spelledClosureWithParameterAndReturn: 68,
+		.spelledExistential: 57,
+		.spelledNestedType: 53,
+		.spelledOnlyIfAvailablePassThrough: 94,
+		.spelledOptionalClosure: 42,
+		.spelledOptionalSendableClosure: 64,
+		.spelledOwnForwarded: 242,
+		.spelledOwnReceived: 197,
+		.spelledRequiredPassThrough: 195,
+		.spelledResult: 56,
+		.spelledSendableClosure: 69,
+		.spelledTupleWithClosure: 54,
+		.spelledTypealias: 69,
+		.synthesizedChild: 338,
+		.synthesizedHeldProvider: 350,
+		.synthesizedLazyProvider: 486,
+		.synthesizedSharedProvider: 890,
+		.uncreatedAliasAliasOfAlias: 28,
+		.uncreatedAliasDeclarationAbove: 51,
+		.uncreatedAliasFulfillingPropertyPruned: 46,
+		.uncreatedAliasLabelHeldByCaller: 131,
+		.uncreatedAliasLabelParameter: 76,
+		.uncreatedAliasOtherTypeBeside: 28,
+		.uncreatedAliasReader: 54,
+		.uncreatedAliasSamePropertyBeside: 19,
+		.uncreatedAliasWrapperBeside: 29,
+		.spelledOptionalFormOnSibling: 226,
+		.spelledTreeMocked: 231,
+		.uncreatedAliasFulfillingPropertyHeldByCaller: 203,
+		.uncreatedAliasRequiredReader: 8,
+		.uncreatedAliasLabelKeepingAliasReader: 34,
+		.uncreatedAliasReaderInsideWrapper: 13,
+		.uncreatedAliasReaderInsideNestedSeam: 21,
+		.uncreatedAliasDeeperReader: 54,
+		.uncreatedAliasRequiredAliasOfAlias: 12,
+		.uncreatedAliasOnSeamItself: 30,
+		.uncreatedAliasFulfillingPropertyGeneratedAfterLabelKeepingAlias: 5,
+		.uncreatedAliasFulfillingPropertyBeingBuilt: 30,
+		.uncreatedAliasFulfillingPropertyGeneratedLater: 31,
+		.uncreatedAliasRequiredOptionalParameter: 119,
+		.uncreatedAliasExactFormAlias: 128,
+		.uncreatedAliasAcceptedTwin: 121,
+		.uncreatedAliasLabelKeepingOptionalAlias: 37,
+		.wrapperReceiveBeneathSeam: 400,
+	]
+
+	/// Seeds in `0..<seamCorpusSeedCount` whose graphs fail today. The 1 000-seed run of this corpus found that each
+	/// shape of `knownIssues` fails the same seeds here, below the corpus's size, but those the seam's own draw
+	/// changes (`seamCorpusSeedsOfOtherShapes`), and fails some the base corpus does not list under it
+	/// (`seamCorpusSeedsAddedToInheritedShapes`): the inherited shapes are listed from `knownIssues` with those
+	/// adjustments, a shape left with no seed dropped, so that a fix there is a fix here, and the long run reports a
+	/// seed that diverges as stale or new. The seam's own shape follows them. Each seed is listed once.
+	static let seamKnownIssues: [GraphFuzzerKnownIssue] = knownIssues.compactMap { knownIssue in
+		let seeds = (knownIssue.seeds.filter { $0 < UInt64(seamCorpusSeedCount) && !seamCorpusSeedsOfOtherShapes.contains($0) }
+			+ (seamCorpusSeedsAddedToInheritedShapes[knownIssue.reason] ?? [])).sorted()
+		return seeds.isEmpty ? nil : GraphFuzzerKnownIssue(reason: knownIssue.reason, signatures: knownIssue.signatures, seeds: seeds)
+	} + [
+		GraphFuzzerKnownIssue(
+			reason: labelSortedPassThroughReason,
+			signatures: [.renamedGraphDiffers(containing: "changes its generated dependency tree code")],
+			seeds: labelSortedPassThroughSeeds,
+		),
+		// The Manual's first two documented divergences, each a shape whose signatures every difference of a listed graph
+		// must match; a graph that also fails an inherited shape stays listed there, its documented difference exempted
+		// exactly (`documentedSeamValueDivergences`), as is every eager read of the third, which has no shape.
+		GraphFuzzerKnownIssue(
+			reason: "A caller whose tree holds only the optional form of an alias's fulfilling property passes it, and the seam creates the alias from it, where inline the alias is not created (the Manual's first documented divergence)",
+			signatures: [.seamBuildsOtherValuesThanInline(containing: "_Root0 > aliasSource)\n  known right: aliasAuth: nil"), .seamBuildsOtherValuesThanInline(containing: "_Root0 > aliasSource)\n  known right: aliasBearer: nil"), .seamBuildsOtherValuesThanInline(containing: "> aliasDetail > aliasToken:\n  feature:     aliasToken: <13> S843_AliasValue (seen, first at <1> S843_Root0 > aliasSource)\n  known right: aliasToken: nil")],
+			seeds: [430, 712, 843, 923, 924, 944],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "The seam's own onlyIfAvailable alias is bound from its fulfilling parameter, where inline the seam is passed the property of the alias's label that the scope building the seam creates (the Manual's second documented divergence)",
+			signatures: [.seamBuildsOtherValuesThanInline(containing: "> aliasSeam > aliasAuth:\n  feature:     aliasAuth: nil")],
+			seeds: [698, 835],
+		),
+		// Found by the comparator in round 7; the seam is right (adjudicated 2026-11-02): the comparator's inline reference
+		// carries a main defect.
+		GraphFuzzerKnownIssue(
+			reason: "A lazy cycle that re-enters the seam builds it again through its generated initializer, which is passed the nearest declaration of a label the seam receives, as the Manual's @Received rule says; the inline build, the comparator's reference, hands the type built on the second round the declaration above the cycle, because main's cycle-closing scope reuses the enclosing builder function (a main defect, fixed in its own pull request); the seed leaves this list when both builds agree",
+			// Every difference of the graph hands the re-entered seam the declaration above the cycle, which the known-right
+			// side describes the same way at each depth.
+			signatures: [.seamBuildsOtherValuesThanInline(containing: "> t0Builder > instantiate() > t1Builder)\n  known right: t1Builder: <2> Instantiator<S662_T1> (seen, first at <1> S662_Root0 > t1Builder)"), .seamBuildsOtherValuesThanInline(containing: "> t0Builder > instantiate() again > t1Builder)\n  known right: t1Builder: <2> Instantiator<S662_T1> (seen, first at <1> S662_Root0 > t1Builder)")],
+			seeds: [662],
+		),
+	]
+
+	private static let labelSortedPassThroughReason = "A seam's pass-through parameters are sorted by label, so reversing the labels reorders its generated initializer and the calls of it"
+
+	/// Seeds of `knownIssues` that the seam corpus's run observed failing with the seam's own shape, or not failing
+	/// at all, since the seam's draw changed their graphs; the inherited lists leave them out. Observed, not
+	/// derived: a seed here that a run finds failing its inherited shape again is a new failure, and goes back.
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 114, 309, 310, 371, 381, 431, 448, 476, 714, 768, 774, 808, 847, 903, 975]
+
+	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
+	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
+	private static let seamCorpusSeedsAddedToInheritedShapes: [String: [UInt64]] = [
+		"SafeDIMockConfiguration.swift declares its extensions in the order of the roots that reach them": [182],
+	]
+
+	/// Seeds whose seam has two or more pass-throughs. They are sorted by label – kept by ruling: a parameter order
+	/// that follows label order is how mocks and initializers already work – so the oracle's label reversal
+	/// reorders them, which is expected, not a defect, as the mock's label-sorted parameters are in `knownIssues`.
+	/// A seed whose type-name reversal changes its mock code first fails the inherited shape and stays listed there.
+	private static let labelSortedPassThroughSeeds: [UInt64] = [371, 381, 604, 788, 809, 816, 928]
+
+	/// The corpus drawn with `features`: the base corpus when there are none, and a feature's corpus for that
+	/// feature. Every feature has a corpus, so the two are the only ones.
+	static func corpus(for features: Set<GraphFuzzerGeneratorFeature>) -> Corpus {
+		features.contains(.generateDependencyTree) ? seamCorpus : baseCorpus
+	}
 
 	/// Seeds in `0..<corpusSeedCount` whose graphs fail today, grouped by shape. Every fix first adds a graph of
 	/// its shape, reduced, as a hand-written regression test; removing the seeds is the last step of the fix.
@@ -1042,6 +1700,58 @@ struct SafeDIToolGraphFuzzerTests {
 	]
 
 	/// Known issues for the tests of `GraphFuzzerFinding`, which must not depend on what `knownIssues` lists today.
+	private static let valueDivergenceKnownIssue = GraphFuzzerKnownIssue(
+		reason: "A documented divergence",
+		signatures: [.seamBuildsOtherValuesThanInline(containing: "known right: aliasAuth: nil")],
+		seeds: [430],
+	)
+	private static let documentedDifference = "probe `Root()` at <1> Root > aliasSeam > aliasDetail > aliasAuth:\n  feature:     aliasAuth: <2> Value (seen, first at <1> Root > aliasSource)\n  known right: aliasAuth: nil"
+	private static let undocumentedDifference = "probe `Root()` at <1> Root > aliasSeam > aliasRight > aliasToken:\n  feature:     aliasToken: nil\n  known right: aliasToken: <3> Value"
+
+	/// The runs of the first seam smoke graph the tool accepts with its seam and without it whose root passes a value
+	/// for a tier parameter that defaults to `nil`, with its seam build's files and warnings.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func valueProbeRuns() async throws -> (runs: GraphFuzzerToolRuns, seamFiles: [String: String], warnings: [String]) {
+		for seed in seamSmokeSeeds {
+			let runs = try await GraphFuzzerOracle.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: [.generateDependencyTree]), renamings: [])
+			guard case let .accepted(seamFiles, warnings) = runs.firstOutcome, case .accepted = runs.inlineOutcome, passingNil(forADefaultedParameterIn: seamFiles, of: runs.fixture) != nil else { continue }
+			return (runs, seamFiles, warnings)
+		}
+		throw GraphFuzzerTestError.noSmokeGraphPassesValueForDefaultedParameter
+	}
+
+	/// `seamFiles` with the first call, in a root's file, of a seam tier's parameter that defaults to `nil` passing
+	/// `nil` instead of the value it passed, with the parameter's label; or `nil` when no root's call passes a value
+	/// for such a parameter.
+	private static func passingNil(forADefaultedParameterIn seamFiles: [String: String], of fixture: GraphFuzzerFixture) -> (files: [String: String], label: String)? {
+		for (_, contents) in seamFiles.sorted(by: { $0.key < $1.key }) where contents.contains("public enum __safeDI_") {
+			for initializer in GraphFuzzerOracle.seamInitializerParameters(inGeneratedFile: contents) {
+				for parameter in initializer.parameters where parameter.hasSuffix("= nil") {
+					let label = parameter.prefix { $0 != ":" }.trimmingCharacters(in: .whitespaces)
+					for (rootFileName, rootContents) in seamFiles.sorted(by: { $0.key < $1.key }) where rootFileName.hasPrefix("\(fixture.typeNamePrefix)Root") {
+						// The arguments of the first call of the seam: up to the parenthesis that closes it.
+						guard let callRange = rootContents.range(of: "\(initializer.seamTypeName)(") else { continue }
+						var depth = 1
+						var callEnd = callRange.upperBound
+						while depth > 0, callEnd < rootContents.endIndex {
+							switch rootContents[callEnd] {
+							case "(": depth += 1
+							case ")": depth -= 1
+							default: break
+							}
+							callEnd = rootContents.index(after: callEnd)
+						}
+						guard let argument = rootContents[callRange.upperBound..<callEnd].range(of: "\(label): \(label)") else { continue }
+						var files = seamFiles
+						files[rootFileName] = rootContents.replacingCharacters(in: argument, with: "\(label): nil")
+						return (files, label)
+					}
+				}
+			}
+		}
+		return nil
+	}
+
 	private static let compilerErrorKnownIssue = GraphFuzzerKnownIssue(
 		reason: "A shape whose generated code redeclares a label",
 		signatures: [.compilerError(containing: "invalid redeclaration")],
@@ -1065,7 +1775,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What is wrong with `knownIssues`: a seed listed twice, a shape's seeds out of order, or a seed the long
 	/// run's corpus does not cover.
-	static func knownIssueListProblems(_ knownIssues: [GraphFuzzerKnownIssue] = knownIssues) -> [String] {
+	static func knownIssueListProblems(_ knownIssues: [GraphFuzzerKnownIssue] = knownIssues, corpusSeedCount: Int = corpusSeedCount) -> [String] {
 		var problems = [String]()
 		var seenSeeds = Set<UInt64>()
 		for knownIssue in knownIssues {
@@ -1087,10 +1797,10 @@ struct SafeDIToolGraphFuzzerTests {
 		return problems
 	}
 
-	static func fixtureHash(forSeeds seeds: [UInt64]) -> UInt64 {
+	static func fixtureHash(forSeeds seeds: [UInt64], features: Set<GraphFuzzerGeneratorFeature> = []) -> UInt64 {
 		var hash = GraphFuzzerHash()
 		for seed in seeds {
-			hash.combine(GraphFuzzerGenerator.fixture(forSeed: seed).description)
+			hash.combine(GraphFuzzerGenerator.fixture(forSeed: seed, features: features).description)
 		}
 		return hash.value
 	}
@@ -1110,7 +1820,7 @@ struct SafeDIToolGraphFuzzerTests {
 				Issue.record(failure.issueComment(fixture: fixture))
 			}
 		case let .staleKnownIssue(knownIssue):
-			withKnownIssue("Seed \(fixture.seed) no longer fails, so remove it from knownIssues: \(knownIssue.reason)") {}
+			withKnownIssue("Seed \(fixture.seed) no longer fails, so \(Self.corpus(for: GraphFuzzerGeneratorFeature.features(drawnIn: fixture)).staleSeedRemedy(knownIssue, fixture.seed)): \(knownIssue.reason)") {}
 		case let .failure(failure):
 			Issue.record(failure.issueComment(fixture: fixture))
 		}
@@ -1120,6 +1830,11 @@ struct SafeDIToolGraphFuzzerTests {
 /// The smoke batch's results, computed once per process and shared by the tests that check them.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) private let smokeResults = Task {
 	try await GraphFuzzerOracle.results(forSeeds: SafeDIToolGraphFuzzerTests.smokeSeeds)
+}
+
+/// The seam smoke batch's results, drawn with the `generateDependencyTree` feature, computed once per process.
+@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) private let seamSmokeResults = Task {
+	try await GraphFuzzerOracle.results(forSeeds: SafeDIToolGraphFuzzerTests.seamSmokeSeeds, features: [.generateDependencyTree])
 }
 
 extension GraphFuzzerToolRuns {
@@ -1141,19 +1856,27 @@ extension GraphFuzzerToolRuns {
 struct GraphFuzzerLongRunConfiguration {
 	let iterations: Int
 	let startingSeed: UInt64
+	/// The generator features the run's graphs are drawn with, which select the corpus and its pins, or `nil` when
+	/// `SAFEDI_GRAPH_FUZZER_FEATURES` names a feature that does not exist, which the run reports.
+	let features: Set<GraphFuzzerGeneratorFeature>?
 	/// A file the run appends its progress to, which `graph-fuzzer.yml` reads: `seed <n>` before the tool first
 	/// runs each graph; `failure <seed> <kind>`, `known <seed> <reason>`, or `stale <seed> <reason>` for each
 	/// finding; `problem <text>` for anything wrong with the run itself; and `completed …` at the end.
 	let reportPath: String?
 
-	/// `nil` unless `SAFEDI_GRAPH_FUZZER_ITERATIONS` is set: to a count of seeds, or to `corpus` for
-	/// `corpusSeedCount` seeds. Anything else becomes zero, which the run reports.
+	/// `nil` unless `SAFEDI_GRAPH_FUZZER_ITERATIONS` is set: to a count of seeds, or to `corpus` for the seed count
+	/// of the corpus `SAFEDI_GRAPH_FUZZER_FEATURES` selects – a comma-separated list of `GraphFuzzerGeneratorFeature`
+	/// names, or unset for the corpus drawn without features. Anything else becomes zero, which the run reports.
 	static var current: GraphFuzzerLongRunConfiguration? {
 		let environment = ProcessInfo.processInfo.environment
 		guard let iterations = environment["SAFEDI_GRAPH_FUZZER_ITERATIONS"] else { return nil }
+		let featureNames = (environment["SAFEDI_GRAPH_FUZZER_FEATURES"] ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+		let features = featureNames.compactMap(GraphFuzzerGeneratorFeature.init(rawValue:))
+		let validFeatures: Set<GraphFuzzerGeneratorFeature>? = features.count == featureNames.count ? Set(features) : nil
 		return GraphFuzzerLongRunConfiguration(
-			iterations: iterations == "corpus" ? SafeDIToolGraphFuzzerTests.corpusSeedCount : Int(iterations) ?? 0,
+			iterations: iterations == "corpus" ? validFeatures.map { SafeDIToolGraphFuzzerTests.corpus(for: $0).seedCount } ?? 0 : Int(iterations) ?? 0,
 			startingSeed: environment["SAFEDI_GRAPH_FUZZER_STARTING_SEED"].flatMap { UInt64($0) } ?? 0,
+			features: validFeatures,
 			reportPath: environment["SAFEDI_GRAPH_FUZZER_REPORT"],
 		)
 	}
@@ -1182,4 +1905,8 @@ final class GraphFuzzerReport: Sendable {
 	}
 
 	private let lock = NSLock()
+}
+
+private enum GraphFuzzerTestError: Error {
+	case noSmokeGraphPassesValueForDefaultedParameter
 }

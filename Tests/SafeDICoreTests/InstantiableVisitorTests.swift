@@ -88,6 +88,20 @@ struct InstantiableVisitorTests {
 		])
 	}
 
+	@Test
+	func walk_recordsGeneratesDependencyTree_whenArgumentIsTrue() throws {
+		let syntaxTree = Parser.parse(source: """
+		@Instantiable(generateDependencyTree: true, fulfillingAdditionalTypes: [ServiceProtocol.self])
+		public final class Service: Instantiable, ServiceProtocol {
+		    public init() {}
+		}
+		""")
+		let visitor = try Self.walkedVisitor(of: ClassDeclSyntax.self, in: syntaxTree)
+		#expect(visitor.generatesDependencyTree)
+		#expect(!visitor.isRoot)
+		#expect(visitor.instantiables.map(\.generatesDependencyTree) == [true])
+	}
+
 	// MARK: Private
 
 	/// A visitor that walked the first declaration in `syntaxTree`, a `Declaration`, as `FileVisitor` walks one.

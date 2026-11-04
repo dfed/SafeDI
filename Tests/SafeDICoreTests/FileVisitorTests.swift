@@ -122,6 +122,69 @@ struct SafeDIConfigurationVisitorTests {
 
 struct FileVisitorTests {
 	@Test
+	func walk_recordsDependencyTreeTypeInEveryClause_whenGenerateDependencyTreeIsTrueInInactiveClause() {
+		// The file's generated files are planned whatever the conditions, so the declaration is recorded from the
+		// inactive clause too, while the instantiable itself is found only in the active one.
+		let syntaxTree = Parser.parse(source: """
+		#if FEATURE
+		@Instantiable(generateDependencyTree: true)
+		public struct FeatureScreen: Instantiable {
+		    public init() {}
+		}
+		#else
+		@Instantiable
+		public struct Screen: Instantiable {
+		    public init() {}
+		}
+		#endif
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.instantiables.map(\.concreteInstantiable) == [.simple(name: "Screen")])
+		#expect(fileVisitor.instantiables.map(\.generatesDependencyTree) == [false])
+		#expect(fileVisitor.outputFileDeclarations.declaresDependencyTreeType)
+		#expect(!fileVisitor.outputFileDeclarations.declaresRoot)
+		#expect(fileVisitor.consultedCompilationConditions == ["FEATURE"])
+	}
+
+	@Test
+	func walk_recordsGeneratesDependencyTree_whenTypeDeclarationSetsIt() {
+		let syntaxTree = Parser.parse(source: """
+		@Instantiable(generateDependencyTree: true)
+		public struct Screen: Instantiable {
+		    public init(user: User) {
+		        self.user = user
+		    }
+
+		    @Received let user: User
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.instantiables.map(\.generatesDependencyTree) == [true])
+		#expect(fileVisitor.instantiables.map(\.isRoot) == [false])
+		#expect(fileVisitor.outputFileDeclarations.declaresDependencyTreeType)
+		#expect(!fileVisitor.outputFileDeclarations.declaresRoot)
+		#expect(fileVisitor.consultedCompilationConditions.isEmpty)
+	}
+
+	@Test
+	func walk_recordsNoDependencyTreeType_whenExtensionSpellsGenerateDependencyTree() {
+		// The macro rejects the argument on an extension, as it rejects `isRoot: true` there; the visitors plan
+		// no file for it either way.
+		let syntaxTree = Parser.parse(source: """
+		@Instantiable(generateDependencyTree: true)
+		extension Screen: Instantiable {
+		    public static func instantiate() -> Screen { Screen() }
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.instantiables.map(\.generatesDependencyTree) == [false])
+		#expect(!fileVisitor.outputFileDeclarations.declaresDependencyTreeType)
+	}
+
+	@Test
 	func walk_findsInstantiable() {
 		let syntaxTree = Parser.parse(source: """
 		import UIKit

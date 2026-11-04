@@ -162,7 +162,15 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		initializers.append(initializer)
 		initializerSyntaxes.append(node)
 		diagnoseNamesEncodedDifferently(amongParametersOf: node.signature.parameterClause.parameters)
+		// Inside an `#if` block the initializer was recorded with its block's every clause.
+		if enclosingConditionalCompilationBlockCount == 0 {
+			initializersInEveryClause.append(initializer)
+		}
 		return .skipChildren
+	}
+
+	public override func visitPost(_: IfConfigDeclSyntax) {
+		enclosingConditionalCompilationBlockCount -= 1
 	}
 
 	public override func visit(_ node: ClassDeclSyntax) -> SyntaxVisitorContinueKind {
@@ -186,6 +194,25 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	}
 
 	public override func visit(_ node: IfConfigDeclSyntax) -> SyntaxVisitorContinueKind {
+		// The initializers of every clause of an outermost member block, whichever clause the evaluator selects: the
+		// generated initializer of a seam is unconditional, so one it would redeclare in any clause is a
+		// redeclaration, and scan's cache may keep what this visitor reports under other conditions.
+		if enclosingConditionalCompilationBlockCount == 0, declarationType.isTypeDefinition {
+			var blocksToScan = [node]
+			while let block = blocksToScan.popLast() {
+				for clause in block.clauses {
+					guard let members = clause.elements?.as(MemberBlockItemListSyntax.self) else { continue }
+					for member in members {
+						if let initializer = member.decl.as(InitializerDeclSyntax.self) {
+							initializersInEveryClause.append(Initializer(initializer, sourceLocationConverter: sourceLocationConverter))
+						} else if let nestedBlock = member.decl.as(IfConfigDeclSyntax.self) {
+							blocksToScan.append(nestedBlock)
+						}
+					}
+				}
+			}
+		}
+		enclosingConditionalCompilationBlockCount += 1
 		if case let .evaluate(evaluator) = conditionalCompilation {
 			// Members of a declaration without `@Instantiable` are never scanned, so nothing inside matters.
 			let content: SafeDIContent = if let instantiableConstruction {
@@ -424,6 +451,10 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	// MARK: Public
 
 	public private(set) var isRoot = false
+	/// Whether the declaration spells `generateDependencyTree: true`, as `isRoot` records `isRoot: true`. The macro
+	/// rejects the argument on an extension, and an extension's `Instantiable` never carries it, as it never carries
+	/// `isRoot`.
+	public private(set) var generatesDependencyTree = false
 	public private(set) var dependencies = [Dependency]()
 	/// Whether two names SafeDI matches by name look the same but are encoded differently, which `diagnostics` reports.
 	public private(set) var hasNamesEncodedDifferently = false
@@ -431,6 +462,13 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// The declaration of each of `initializers`, at the same position. Two initializers can be equal – the same
 	/// signature in two clauses of an `#if` block – so a declaration is found by position, never by value.
 	public private(set) var initializerSyntaxes = [InitializerDeclSyntax]()
+	/// The declaration's initializers in every clause of every member `#if` block, with those outside any block,
+	/// whatever the evaluator selects, scanned when the outermost block is entered: those outside every block and
+	/// each outermost block's clauses in source order, then its nested blocks from a stack, so sibling nested blocks
+	/// in reverse source order.
+	private var initializersInEveryClause = [Initializer]()
+	/// How many `#if` blocks enclose the node being visited.
+	private var enclosingConditionalCompilationBlockCount = 0
 	public private(set) var instantiableType: TypeDescription?
 	public private(set) var additionalInstantiables: [TypeDescription]?
 	public private(set) var generatedInitializerAttributes = ""
@@ -474,6 +512,24 @@ public final class InstantiableVisitor: SyntaxVisitor {
 	/// `initializers`, which would false-positive on unused overloads.
 	public var canonicalConstructionInitializer: Initializer? {
 		initializers.first(where: { $0.isValid(forFulfilling: dependencies) })
+	}
+
+	/// The declaration's initializers other than `canonicalConstructionInitializer`, in the order of
+	/// `initializersInEveryClause`, which SafeDI never constructs the type with, from every clause of every member
+	/// `#if` block: the generated initializer
+	/// of a seam is unconditional, so one it would redeclare in any clause is a redeclaration, and what this reports
+	/// does not depend on the clauses the evaluator selects, which keeps scan's cache of it sound.
+	public var otherConstructionInitializers: [Initializer] {
+		guard let canonicalConstructionInitializer else { return initializersInEveryClause }
+		var skippedCanonical = false
+		return initializersInEveryClause.filter { initializer in
+			if !skippedCanonical, initializer == canonicalConstructionInitializer {
+				skippedCanonical = true
+				return false
+			} else {
+				return true
+			}
+		}
 	}
 
 	public static let macroName = "Instantiable"
@@ -528,7 +584,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 					Instantiable(
 						instantiableType: instantiableType,
 						isRoot: isRoot,
+						generatesDependencyTree: generatesDependencyTree,
 						initializer: canonicalConstructionInitializer,
+						otherInitializers: otherConstructionInitializers,
 						additionalInstantiables: additionalInstantiables,
 						dependencies: dependencies,
 						declarationType: instantiableDeclarationType.asDeclarationType,
@@ -753,6 +811,9 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		func processIsRoot() {
 			isRoot = macro.isRootValue
 		}
+		func processGenerateDependencyTree() {
+			generatesDependencyTree = macro.generatesDependencyTreeValue
+		}
 		func processFulfillingAdditionalTypesParameter() {
 			guard let fulfillingAdditionalTypesExpression = macro.fulfillingAdditionalTypes,
 			      let fulfillingAdditionalTypesArray = ArrayExprSyntax(fulfillingAdditionalTypesExpression)
@@ -785,6 +846,7 @@ public final class InstantiableVisitor: SyntaxVisitor {
 		}
 
 		processIsRoot()
+		processGenerateDependencyTree()
 		processFulfillingAdditionalTypesParameter()
 		processGeneratedAttributes()
 		processGenerateMock()

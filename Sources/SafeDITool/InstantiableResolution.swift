@@ -97,7 +97,16 @@ func normalizingInstantiableTypes(of unnormalizedInstantiables: [Instantiable]) 
 		var normalized = Instantiable(
 			instantiableType: unnormalizedInstantiable.concreteInstantiable,
 			isRoot: unnormalizedInstantiable.isRoot,
+			generatesDependencyTree: unnormalizedInstantiable.generatesDependencyTree,
 			initializer: normalizedInitializer,
+			// An initializer SafeDI never constructs the type with is compared with a generated tier's parameters by
+			// type, so each argument's type is qualified on its own, as a hand-written mock's are: a nested
+			// pass-through type it names unqualified must match the qualified parameter.
+			otherInitializers: unnormalizedInstantiable.otherInitializers.compactMap { initializer in
+				initializer.mapArguments {
+					$0.withUpdatedTypeDescription(normalized($0.typeDescription) ?? $0.typeDescription)
+				}
+			},
 			additionalInstantiables: normalizedAdditionalInstantiables,
 			dependencies: normalizedDependencies,
 			declarationType: unnormalizedInstantiable.declarationType,

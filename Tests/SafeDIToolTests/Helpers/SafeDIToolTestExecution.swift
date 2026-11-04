@@ -275,9 +275,9 @@ func executeSafeDIToolTest(
 		// Call `generate()` rather than `run()`: `run()` prints located errors in compiler format and
 		// rethrows them as an `ExitCode`, which would hide the error from the assertion helpers.
 		let fixtures = FixturePaths(
-			fileNames: contentNamedSwiftFiles.map(\.lastPathComponent) + swiftFileContentByFilePath.keys.sorted(),
-			paths: inputSwiftFilePaths,
-			compilerPaths: compilerSwiftFilePaths,
+			fileNames: contentNamedSwiftFiles.map(\.lastPathComponent) + swiftFileContentByFilePath.keys.sorted() + additionalDirectoryFiles.map { "AdditionalDirectory/\($0.lastPathComponent)" },
+			paths: inputSwiftFilePaths + additionalDirectoryFiles.map(\.path),
+			compilerPaths: compilerSwiftFilePaths + additionalDirectoryFiles.map(\.path),
 		)
 		let generateOutput: Generate.Output
 		do {
@@ -494,7 +494,8 @@ struct StubFileFinder: FileFinder {
 /// Each file is named after the `@Instantiable` type its snippet declares (falling back to the first
 /// declared type, then to `File`, with `_2`, `_3`… suffixes for repeats), so a test names the file it means
 /// rather than relying on the order of its snippets. A file from `swiftFileContentByFilePath` is looked up by
-/// the path it was given there, such as `Module/SafeDIConfiguration.swift`. Paths are exactly as they were written to the CSV
+/// the path it was given there, such as `Module/SafeDIConfiguration.swift`, and a file from
+/// `additionalDirectorySwiftFileContent` under `AdditionalDirectory/`, by the path the tool found it at. Paths are exactly as they were written to the CSV
 /// the tool read: absolute by default, or relative to the current directory when the test passed
 /// `inputPathsRelativeToCurrentDirectory: true`.
 struct FixturePaths {

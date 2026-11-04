@@ -88,6 +88,14 @@ public struct InstantiableMacro: MemberMacro {
 			throw InstantiableError.mockOnlyArgumentInvalid
 		}
 
+		if let generateDependencyTreeArgument = declaration
+			.attributes
+			.instantiableMacro?
+			.generateDependencyTree, BooleanLiteralExprSyntax(generateDependencyTreeArgument) == nil
+		{
+			throw InstantiableError.generateDependencyTreeArgumentInvalid
+		}
+
 		if let customMockNameArgument = declaration
 			.attributes
 			.instantiableMacro?
@@ -198,6 +206,24 @@ public struct InstantiableMacro: MemberMacro {
 					node: Syntax(instantiableMacro),
 					error: FixableInstantiableError.mockOnlyWithIsRoot,
 					changes: Self.removeArgument(labeled: "isRoot", from: instantiableMacro, on: declaration),
+				))
+			}
+			if visitor.generatesDependencyTree, visitor.isRoot,
+			   let instantiableMacro = declaration.attributes.instantiableMacro
+			{
+				context.diagnose(Diagnostic(
+					node: Syntax(instantiableMacro),
+					error: FixableInstantiableError.generateDependencyTreeWithIsRoot,
+					changes: Self.removeArgument(labeled: "generateDependencyTree", from: instantiableMacro, on: declaration),
+				))
+			}
+			if visitor.generatesDependencyTree, isMockOnly,
+			   let instantiableMacro = declaration.attributes.instantiableMacro
+			{
+				context.diagnose(Diagnostic(
+					node: Syntax(instantiableMacro),
+					error: FixableInstantiableError.generateDependencyTreeWithMockOnly,
+					changes: Self.removeArgument(labeled: "generateDependencyTree", from: instantiableMacro, on: declaration),
 				))
 			}
 			if isMockOnly, visitor.mockFunctionSyntax == nil {
@@ -1134,6 +1160,9 @@ public struct InstantiableMacro: MemberMacro {
 					)
 				}
 			}
+			if visitor.generatesDependencyTree, let instantiableType = visitor.instantiableType {
+				throw InstantiableError.extensionCannotGenerateDependencyTree(instantiableType)
+			}
 
 			// A default-valued parameter of `instantiate(…)` is not a dependency, as for an initializer, so the
 			// method gets the checks an initializer gets. As for an initializer, its defaults reach a generated
@@ -1891,10 +1920,12 @@ public struct InstantiableMacro: MemberMacro {
 		case generatedAttributesArgumentInvalid
 		case generateMockArgumentInvalid
 		case mockOnlyArgumentInvalid
+		case generateDependencyTreeArgumentInvalid
 		case customMockNameArgumentInvalid
 		case tooManyInstantiateMethods(TypeDescription, count: Int)
 		case cannotBeRoot(TypeDescription, violatingDependencies: [Dependency])
 		case extensionCannotBeRoot(TypeDescription, instantiateParameters: [Dependency])
+		case extensionCannotGenerateDependencyTree(TypeDescription)
 
 		var description: String {
 			switch self {
@@ -1916,6 +1947,8 @@ public struct InstantiableMacro: MemberMacro {
 				"The argument `generateMock` must be a Bool literal (`true` or `false`)."
 			case .mockOnlyArgumentInvalid:
 				"The argument `mockOnly` must be a Bool literal (`true` or `false`)."
+			case .generateDependencyTreeArgumentInvalid:
+				"The argument `generateDependencyTree` must be a Bool literal (`true` or `false`)."
 			case .customMockNameArgumentInvalid:
 				"The argument `customMockName` must be a string literal or `nil`."
 			case let .tooManyInstantiateMethods(type, count):
@@ -1924,6 +1957,8 @@ public struct InstantiableMacro: MemberMacro {
 				"`\(declaredRootType.asSource)` is declared with `isRoot: true`, so no other type passes it dependencies, but it needs \(violatingDependencies.asBacktickedPropertyList) from outside it. Declare each as @\(Dependency.Source.instantiatedRawValue), or as `@\(Dependency.Source.receivedRawValue)(fulfilledByDependencyNamed:ofType:)` naming an @\(Dependency.Source.instantiatedRawValue) property of `\(declaredRootType.asSource)`, or remove `isRoot: true` and instantiate `\(declaredRootType.asSource)` from another type."
 			case let .extensionCannotBeRoot(declaredRootType, instantiateParameters):
 				"`\(declaredRootType.asSource)` is declared with `isRoot: true`, so no other type passes it dependencies, but its `\(InstantiableVisitor.instantiateMethodName)(…)` method takes \(instantiateParameters.asBacktickedPropertyList). Remove the parameters, or remove `isRoot: true` and instantiate `\(declaredRootType.asSource)` from another type."
+			case let .extensionCannotGenerateDependencyTree(extendedType):
+				"`\(extendedType.asSource)` is declared with `generateDependencyTree: true` on an extension, but SafeDI generates a dependency tree only for a type declaration: an extension's `\(InstantiableVisitor.instantiateMethodName)(…)` method takes every dependency it needs, and SafeDI cannot add an initializer that builds them to a type it does not declare. Remove `generateDependencyTree: true`, or declare the dependency tree on an @\(InstantiableVisitor.macroName) type that instantiates `\(extendedType.asSource)`."
 			}
 		}
 	}

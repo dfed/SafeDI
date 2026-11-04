@@ -93,7 +93,12 @@ enum PluginScanner {
 				.map { ScannedFile(url: $0, relativePath: NormalizedFilePath($0.path(percentEncoded: false)).path(relativeTo: normalizedProjectRoot)) }
 				.sorted { $0.relativePath < $1.relativePath }
 		}
-		let rootFiles = sortedByRelativePath(swiftFiles + additionalInputFiles).filter { fileContainsRoot(at: $0.url) }
+		// A file that declares a root, in any input, and one of the target's own files that declares a type whose
+		// dependency tree SafeDI generates in its module, named together so that no two share an output file, as
+		// `SafeDITool scan` names them.
+		let rootFileURLs = (swiftFiles + additionalInputFiles).filter(fileContainsRoot(at:))
+		let dependencyTreeFileURLs = mockScopedSwiftFiles.filter { !rootFileURLs.contains($0) && fileContainsGenerateDependencyTreeTrue(at: $0) }
+		let rootFiles = sortedByRelativePath(rootFileURLs + dependencyTreeFileURLs)
 		let rootOutputFileNames = outputFileNames(forFilesAt: rootFiles.map(\.relativePath))
 
 		let mockFiles = sortedByRelativePath(mockScopedSwiftFiles).filter { fileContainsGenerateMockTrue(at: $0.url) }
@@ -128,6 +133,15 @@ enum PluginScanner {
 		else { return false }
 		let stripped = stripSwiftCommentsAndStrings(from: content)
 		return stripped.range(of: #"@Instantiable\s*\((.|\n)*?isRoot\s*:\s*true"#, options: .regularExpression) != nil
+	}
+
+	/// Checks whether a file likely contains `@Instantiable(generateDependencyTree: true)`.
+	private static func fileContainsGenerateDependencyTreeTrue(at fileURL: URL) -> Bool {
+		guard let content = try? String(contentsOf: fileURL, encoding: .utf8),
+		      content.contains("@Instantiable")
+		else { return false }
+		let stripped = stripSwiftCommentsAndStrings(from: content)
+		return stripped.range(of: #"@Instantiable\s*\((.|\n)*?generateDependencyTree\s*:\s*true"#, options: .regularExpression) != nil
 	}
 
 	/// Checks whether a file likely contains `@Instantiable(generateMock: true)`.

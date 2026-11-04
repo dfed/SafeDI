@@ -796,6 +796,34 @@ import Testing
 		}
 
 		@Test
+		func extension_throwsErrorWhenGenerateDependencyTreeIsTrue() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateDependencyTree: true)
+				extension Foo: Instantiable {
+				    public static func instantiate() -> Foo { fatalError() }
+				}
+				""",
+				expandedSource: """
+				extension Foo: Instantiable {
+				    public static func instantiate() -> Foo { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: """
+						`Foo` is declared with `generateDependencyTree: true` on an extension, but SafeDI generates a dependency tree only for a type declaration: an extension's `instantiate(…)` method takes every dependency it needs, and SafeDI cannot add an initializer that builds them to a type it does not declare. Remove `generateDependencyTree: true`, or declare the dependency tree on an @Instantiable type that instantiates `Foo`.
+						""",
+						line: 1,
+						column: 1,
+						severity: .error,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func extension_rootWithNestedInstantiableHavingDependenciesDoesNotThrow() {
 			assertMacroExpansion(
 				"""
@@ -5821,6 +5849,31 @@ import Testing
 		}
 
 		@Test
+		func throwsError_whenGenerateDependencyTreeIsNotBoolLiteral() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateDependencyTree: someVariable)
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				expandedSource: """
+				public final class ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The argument `generateDependencyTree` must be a Bool literal (`true` or `false`).",
+						line: 1,
+						column: 1,
+					),
+				],
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func throwsError_whenCustomMockNameIsNotStringLiteralOrNil() {
 			assertMacroExpansion(
 				"""
@@ -8891,6 +8944,111 @@ import Testing
 				    public static func mock() -> ExampleService { fatalError() }
 				}
 				""",
+			)
+		}
+
+		@Test
+		func declaration_throwsErrorWhenGenerateDependencyTreeAndIsRootBothTrue() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(isRoot: true, generateDependencyTree: true)
+				public struct ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`isRoot` and `generateDependencyTree` cannot both be `true`: a root's dependency tree is generated as a `public init()` that takes nothing, and a type whose dependency tree SafeDI generates in its own module receives what its tree needs as parameters. Keep one.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Remove `generateDependencyTree: true`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(isRoot: true)
+				public struct ExampleService: Instantiable {
+				    public init() {}
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_throwsErrorWhenGenerateDependencyTreeAndMockOnlyBothTrue() {
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateDependencyTree: true, mockOnly: true)
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`mockOnly` types cannot be marked `generateDependencyTree`: a `mockOnly` declaration provides a hand-written mock and has no dependency tree.",
+						line: 1,
+						column: 1,
+						fixIts: [
+							FixItSpec(message: "Remove `generateDependencyTree: true`"),
+						],
+					),
+				],
+				macros: instantiableTestMacros,
+				fixedSource: """
+				@Instantiable(mockOnly: true)
+				public struct ExampleService {
+				    public static func mock() -> ExampleService { fatalError() }
+				}
+				""",
+			)
+		}
+
+		@Test
+		func declaration_expandsWithoutDiagnostics_whenGenerateDependencyTreeTypeReceivesAndForwardsDependencies() {
+			// A type whose dependency tree SafeDI generates may receive and forward dependencies, unlike a root.
+			assertMacroExpansion(
+				"""
+				@Instantiable(generateDependencyTree: true)
+				public struct ExampleService: Instantiable {
+				    public init(user: User, database: Database, cache: Cache) {
+				        self.user = user
+				        self.database = database
+				        self.cache = cache
+				    }
+
+				    @Forwarded let user: User
+				    @Received let database: Database
+				    @Instantiated let cache: Cache
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(user: User, database: Database, cache: Cache) {
+				        self.user = user
+				        self.database = database
+				        self.cache = cache
+				    }
+
+				    let user: User
+				    let database: Database
+				    let cache: Cache
+
+				    public typealias ForwardedProperties = User
+				}
+				""",
+				macros: instantiableTestMacros,
 			)
 		}
 

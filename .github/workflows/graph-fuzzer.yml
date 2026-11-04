@@ -2,9 +2,11 @@ name: Graph Fuzzer
 
 # Runs SafeDI's random dependency-graph fuzzer by hand, from any starting
 # seed and for any number of graphs, to explore graphs beyond the fixed
-# corpus that ci.yml fuzzes on every pull request and push to main. Its
-# default, `iterations: corpus`, is that corpus: seeds
-# 0..<corpusSeedCount (see SafeDIToolGraphFuzzerTests.swift). A failure,
+# corpora that ci.yml fuzzes on every pull request and push to main. Its
+# default, `iterations: corpus`, is the selected corpus: seeds
+# 0..<corpusSeedCount of the base corpus, or 0..<seamCorpusSeedCount of the
+# seam corpus when `features` is `generateDependencyTree` (see
+# SafeDIToolGraphFuzzerTests.swift). A failure,
 # a stale known issue, a problem with the run itself, a crash, or a run that
 # checks no graphs fails the job and names the seeds in the job summary.
 on:
@@ -14,8 +16,12 @@ on:
         description: The first seed to run.
         required: false
         default: '0'
+      features:
+        description: The generator features to draw with, comma-separated (`generateDependencyTree` for the seam corpus), or empty for the base corpus.
+        required: false
+        default: ''
       iterations:
-        description: The number of graphs to run, or `corpus` for the corpusSeedCount graphs of the corpus.
+        description: The number of graphs to run, or `corpus` for every seed of the selected corpus (corpusSeedCount, or seamCorpusSeedCount with the seam feature).
         required: false
         default: 'corpus'
 
@@ -37,6 +43,7 @@ jobs:
     env:
       ITERATIONS: ${{ inputs.iterations || 'corpus' }}
       STARTING_SEED: ${{ inputs.starting_seed || '0' }}
+      FEATURES: ${{ inputs.features || '' }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v7
@@ -54,13 +61,14 @@ jobs:
         run: swift build -c release -Xswiftc -enable-testing --traits sourceBuild --build-tests
       - name: Run Graph Fuzzer
         run: |
+          SAFEDI_GRAPH_FUZZER_FEATURES="$FEATURES" \
           SAFEDI_GRAPH_FUZZER_ITERATIONS="$ITERATIONS" \
           SAFEDI_GRAPH_FUZZER_STARTING_SEED="$STARTING_SEED" \
           SAFEDI_GRAPH_FUZZER_REPORT="$REPORT" \
             swift test -c release -Xswiftc -enable-testing --traits sourceBuild --skip-build --filter 'SafeDIToolGraphFuzzerTests/longRun'
       - name: Summarize
         if: ${{ !cancelled() }}
-        run: .github/scripts/summarize-graph-fuzzer-report.sh "$REPORT" "$SUMMARY" "$STARTING_SEED" "$ITERATIONS"
+        run: .github/scripts/summarize-graph-fuzzer-report.sh "$REPORT" "$SUMMARY" "$STARTING_SEED" "$ITERATIONS" "$FEATURES"
       - name: Upload Report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7

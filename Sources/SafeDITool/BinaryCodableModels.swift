@@ -180,6 +180,7 @@ extension OutputFileDeclarations: BinarySchemaMember {
 		.structure(
 			fields: [
 				BinaryLayoutField("declaresRoot", \.declaresRoot),
+				BinaryLayoutField("declaresDependencyTreeType", \.declaresDependencyTreeType),
 				BinaryLayoutField("declaresMockGeneratingType", \.declaresMockGeneratingType),
 				BinaryLayoutField("declaresConfiguration", \.declaresConfiguration),
 				BinaryLayoutField("instantiableTypeNames", \.instantiableTypeNames),
@@ -193,6 +194,7 @@ extension OutputFileDeclarations: BinarySchemaMember {
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
 			declaresRoot: reader.read(),
+			declaresDependencyTreeType: reader.read(),
 			declaresMockGeneratingType: reader.read(),
 			declaresConfiguration: reader.read(),
 			instantiableTypeNames: reader.read(),
@@ -203,6 +205,7 @@ extension OutputFileDeclarations: BinarySchemaMember {
 
 	func write(to writer: inout BinaryWriter) {
 		writer.write(declaresRoot)
+		writer.write(declaresDependencyTreeType)
 		writer.write(declaresMockGeneratingType)
 		writer.write(declaresConfiguration)
 		writer.write(instantiableTypeNames)
@@ -393,7 +396,9 @@ extension Instantiable: BinarySchemaMember {
 			fields: [
 				BinaryLayoutField("concreteInstantiable", \.concreteInstantiable),
 				BinaryLayoutField("isRoot", \.isRoot),
+				BinaryLayoutField("generatesDependencyTree", \.generatesDependencyTree),
 				BinaryLayoutField("initializer", \.initializer),
+				BinaryLayoutField("otherInitializers", \.otherInitializers),
 				BinaryLayoutField("additionalInstantiables", \.additionalInstantiables),
 				BinaryLayoutField("dependencies", \.dependencies),
 				BinaryLayoutField("declarationType", \.declarationType),
@@ -425,7 +430,9 @@ extension Instantiable: BinarySchemaMember {
 		try self.init(
 			instantiableType: reader.read(),
 			isRoot: reader.read(),
+			generatesDependencyTree: reader.read(),
 			initializer: reader.read() as Initializer?,
+			otherInitializers: reader.read(),
 			additionalInstantiables: reader.read() as [TypeDescription],
 			dependencies: reader.read(),
 			declarationType: reader.read(),
@@ -455,7 +462,9 @@ extension Instantiable: BinarySchemaMember {
 		writer.writeDescribed(as: concreteInstantiable.asSource) { writer in
 			writer.write(concreteInstantiable)
 			writer.write(isRoot)
+			writer.write(generatesDependencyTree)
 			writer.write(initializer)
+			writer.write(otherInitializers)
 			writer.write(additionalInstantiables)
 			writer.write(dependencies)
 			writer.write(declarationType)

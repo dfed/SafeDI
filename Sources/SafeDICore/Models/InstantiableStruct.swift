@@ -24,7 +24,9 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	public init(
 		instantiableType: TypeDescription,
 		isRoot: Bool,
+		generatesDependencyTree: Bool = false,
 		initializer: Initializer?,
+		otherInitializers: [Initializer] = [],
 		additionalInstantiables: [TypeDescription]?,
 		dependencies: [Dependency],
 		declarationType: DeclarationType,
@@ -49,7 +51,9 @@ public struct Instantiable: Codable, Hashable, Sendable {
 		instantiableTypes = [instantiableType] + (additionalInstantiables ?? [])
 		self.declarationLocation = declarationLocation
 		self.isRoot = isRoot
+		self.generatesDependencyTree = generatesDependencyTree
 		self.initializer = initializer
+		self.otherInitializers = otherInitializers
 		self.dependencies = dependencies
 		self.declarationType = declarationType
 		self.access = access
@@ -81,9 +85,18 @@ public struct Instantiable: Codable, Hashable, Sendable {
 
 	/// Whether the instantiable type is a root of a dependency graph.
 	public let isRoot: Bool
+	/// Whether SafeDI generates the type's dependency tree in the module that declares it, as an initializer that
+	/// takes what the tree needs from outside as parameters, which every other tree calls instead of building the
+	/// tree again. Never `true` together with `isRoot` or `mockOnly`, and never on an extension: the macro rejects
+	/// each.
+	public let generatesDependencyTree: Bool
 	/// A memberwise initializer for the concrete instantiable type.
 	/// If `nil`, the Instantiable type is incorrectly configured.
 	public let initializer: Initializer?
+	/// The type declaration's initializers other than `initializer`, in declaration order, which SafeDI never
+	/// constructs the type with. An initializer SafeDI generates for the type must not redeclare one of them. Empty
+	/// for an extension-based instantiable.
+	public let otherInitializers: [Initializer]
 	/// The ordered dependencies of this Instantiable.
 	public private(set) var dependencies: [Dependency]
 	/// The declaration type of the Instantiable’s concrete type.
@@ -109,7 +122,8 @@ public struct Instantiable: Codable, Hashable, Sendable {
 	/// type's own access is declared elsewhere and unknown to the tool. `nil` for an extension-based Instantiable, whose
 	/// own `access` is the extension's.
 	public let enclosingExtensionAccess: AccessDeclaration?
-	/// Attributes to add to the initializer SafeDI generates for this type (e.g. `"@MainActor"`): the macro's
+	/// Attributes to add to the initializers SafeDI generates for this type (e.g. `"@MainActor"`) – a root's `init()`,
+	/// and each tier of a type with `generateDependencyTree: true`: the macro's
 	/// `generatedAttributes` when it is given, else its `generatedInitializerAttributes`. The declaration's own: a
 	/// `mockOnly` declaration merged into this one contributes none, as for `mockAttributes`.
 	public let generatedInitializerAttributes: String
