@@ -157,6 +157,245 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		}
 	}
 
+	// MARK: An onlyIfAvailable alias of a label the function a lazy cycle closes on takes
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_createsSeamsAliasAsInlineDoes_whenSeamBetweenLazyCyclesFunctionAndItsCycleClosingScopeAliasesLabelFunctionTakes() async throws {
+		// `Mid`, the seam, declares an `onlyIfAvailable` alias `renamed` of its `x`, whose `X` receives `renamed` only if
+		// available, and builds `A` again, which receives `renamed`. The seam's tree creates the alias after `x` and hands it
+		// to `A`. Inline, `A`'s builder function takes `renamed`, which `Root` passes `nil`; that parameter does not keep
+		// `Mid`'s alias from being created, as nothing above the function provides `renamed`, so the inline build agrees.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let renamed: X?", "@Instantiated let midBuilder: Instantiator<Mid>"]),
+			seamFixtureType(named: "Mid", isSeam: true, isFinalClass: true, declarations: [
+				"@Instantiated let x: X",
+				#"@Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let renamed: X?"#,
+				"@Instantiated let aBuilder: Instantiator<A>",
+			]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let renamed: X?"]),
+		]
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_aBuilder() -> A {
+			            func __safeDI_midBuilder() -> Mid {
+			                _ = Mid.__safeDI_Mid_CBF29CE484222325.self
+			                return Mid()
+			            }
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			            return A(renamed: nil, midBuilder: midBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        self.init(aBuilder: aBuilder)
+			    }
+			}
+			""",
+			"Mid+SafeDI.swift": generatedFileHeader + """
+			extension Mid {
+			    public convenience init() {
+			        let x = X(renamed: nil)
+			        #sourceLocation(file: "\(output.fixtures["Mid.swift"])", line: 10)
+			        let renamed: X? = x
+			        #sourceLocation()
+			        func __safeDI_aBuilder() -> A {
+			            func __safeDI_midBuilder() -> Mid {
+			                _ = Mid.__safeDI_Mid_CBF29CE484222325.self
+			                return Mid()
+			            }
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			            return A(renamed: renamed, midBuilder: midBuilder)
+			        }
+			        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			        self.init(x: x, renamed: renamed, aBuilder: aBuilder)
+			    }
+			}
+
+			extension Mid {
+			    public enum __safeDI_Mid_CBF29CE484222325 {}
+			}
+			""",
+		])
+		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(inlineOutput.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_aBuilder(renamed: X?) -> A {
+			            func __safeDI_midBuilder() -> Mid {
+			                let x = X(renamed: nil)
+			                #sourceLocation(file: "\(inlineOutput.fixtures["Mid.swift"])", line: 10)
+			                let renamed: X? = x
+			                #sourceLocation()
+			                let aBuilder = Instantiator<A> {
+			                    __safeDI_aBuilder(renamed: renamed)
+			                }
+			                return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
+			            }
+			            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+			            return A(renamed: renamed, midBuilder: midBuilder)
+			        }
+			        let aBuilder = Instantiator<A> {
+			            __safeDI_aBuilder(renamed: nil)
+			        }
+			        self.init(aBuilder: aBuilder)
+			    }
+			}
+			""",
+		])
+		try expectDifferentialValuesAgree(
+			feature: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: output.dependencyTreeFiles),
+			knownRight: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(inlineFixture(fixture)), generatedFiles: inlineOutput.dependencyTreeFiles),
+			probes: [DifferentialValueProbe("Root()")],
+			filesToDelete: &filesToDelete,
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_createsAliasInFillAsInlineDoes_whenFillInsideLazyCyclesFunctionAliasesLabelFunctionTakes() async throws {
+		// `A`'s builder function takes `renamed`, which `Mid` declares again before building `A` again, and `A` calls `Service`,
+		// whose hole `routerBuilder` `App` fills with `Router`, which declares an `onlyIfAvailable` alias `renamed` of its `x`.
+		// The fill is declared inside the function, but its parameter does not keep `Router`'s alias from being created, as
+		// nothing above the function provides `renamed`, so the fill builds what `Router` built inline builds.
+		let core = """
+		public protocol Routing {}
+
+		public struct AnyRouting {
+		    public init(_ routing: any Routing) {
+		        self.routing = routing
+		    }
+
+		    public let routing: any Routing
+		}
+
+		@Instantiable(generateDependencyTree: true)
+		public final class Service: Instantiable {
+		    public init(routerBuilder: ErasedInstantiator<(), AnyRouting>) {
+		        self.routerBuilder = routerBuilder
+		    }
+
+		    @Instantiated(fulfilledByType: "Router", erasedToConcreteExistential: true) let routerBuilder: ErasedInstantiator<(), AnyRouting>
+		}
+		"""
+		let aliasOfX = #"@Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let renamed: X?"#
+		let app = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let renamed: X?", "@Instantiated let service: Service", "@Instantiated let midBuilder: Instantiator<Mid>"]),
+			seamFixtureType(named: "Mid", isFinalClass: true, declarations: ["@Instantiated let x: X", aliasOfX, "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "Router", isFinalClass: true, declarations: ["@Instantiated let x: X", aliasOfX], conformances: ", Routing"),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let renamed: X?"]),
+		]
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": core]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContent: app.map { "import Core\n\n" + $0 }, dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let appOutput = try #require(output.modules["App"])
+		#expect(appOutput.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_aBuilder(renamed: X?) -> A {
+		            func __safeDI_service() -> Service {
+		                _ = Service.__safeDI_Service_7694E1E05E0EF717.self
+		                func __safeDI_routerBuilderBuilder(_ scope: Service.SafeDIScope_Service_routerBuilder) -> ErasedInstantiator<(), AnyRouting> {
+		                    func __safeDI_routerBuilder() -> Router {
+		                        let x = X(renamed: nil)
+		                        #sourceLocation(file: "\(appOutput.fixtures["Router.swift"])", line: 11)
+		                        let renamed: X? = x
+		                        #sourceLocation()
+		                        return Router(x: x, renamed: renamed)
+		                    }
+		                    let routerBuilder = ErasedInstantiator<(), AnyRouting> {
+		                        AnyRouting(__safeDI_routerBuilder())
+		                    }
+		                    return routerBuilder
+		                }
+		                return Service(routerBuilderBuilder: __safeDI_routerBuilderBuilder)
+		            }
+		            let service: Service = __safeDI_service()
+		            func __safeDI_midBuilder() -> Mid {
+		                let x = X(renamed: nil)
+		                #sourceLocation(file: "\(appOutput.fixtures["Mid.swift"])", line: 12)
+		                let renamed: X? = x
+		                #sourceLocation()
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return A(renamed: renamed, service: service, midBuilder: midBuilder)
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: nil)
+		        }
+		        self.init(aBuilder: aBuilder)
+		    }
+		}
+		"""])
+		if compileVerificationIsEnabled {
+			let compilation = try #require(output.compilation)
+			#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 })
+		}
+		let inlineModules = [ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Service.swift": inlineFixture([core])[0]].merging(Self.fixtureFiles(app)) { first, _ in first })]
+		let inlineOutput = try await executeSafeDIToolMultiModuleTest(modules: inlineModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let inlineAppOutput = try #require(inlineOutput.modules["App"])
+		#expect(inlineAppOutput.generatedFiles == ["App.swift": generatedFileHeader + """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_aBuilder(renamed: X?) -> A {
+		            func __safeDI_service() -> Service {
+		                func __safeDI_routerBuilder() -> Router {
+		                    let x = X(renamed: nil)
+		                    #sourceLocation(file: "\(inlineAppOutput.fixtures["Router.swift"])", line: 9)
+		                    let renamed: X? = x
+		                    #sourceLocation()
+		                    return Router(x: x, renamed: renamed)
+		                }
+		                let routerBuilder = ErasedInstantiator<(), AnyRouting> {
+		                    AnyRouting(__safeDI_routerBuilder())
+		                }
+		                return Service(routerBuilder: routerBuilder)
+		            }
+		            let service: Service = __safeDI_service()
+		            func __safeDI_midBuilder() -> Mid {
+		                let x = X(renamed: nil)
+		                #sourceLocation(file: "\(inlineAppOutput.fixtures["Mid.swift"])", line: 10)
+		                let renamed: X? = x
+		                #sourceLocation()
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return Mid(x: x, renamed: renamed, aBuilder: aBuilder)
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return A(renamed: renamed, service: service, midBuilder: midBuilder)
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: nil)
+		        }
+		        self.init(aBuilder: aBuilder)
+		    }
+		}
+		"""])
+		// An `ErasedInstantiator` is not traversed, so the probe holds the `Router` each `A` – the first, and the one `Mid`
+		// builds again – builds.
+		try expectDifferentialValuesAgree(
+			feature: Self.differentialValuePath(of: output, modules: modules),
+			knownRight: Self.differentialValuePath(of: inlineOutput, modules: inlineModules),
+			probes: [DifferentialValueProbe(#"{ () -> (Router, Router) in let a = Root().aBuilder.instantiate(); let aBuiltAgain = a.midBuilder.instantiate().aBuilder.instantiate(); return (a.service.routerBuilder.instantiate().routing as! Router, aBuiltAgain.service.routerBuilder.instantiate().routing as! Router) }()"#)],
+			filesToDelete: &filesToDelete,
+		)
+	}
+
 	// MARK: A lazy cycle around a call of a tier that omits a parameter
 
 	@Test
