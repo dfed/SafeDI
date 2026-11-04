@@ -1,0 +1,34 @@
+name: Linux Release Crash Diagnostics (temporary)
+
+# Temporary: diagnoses the Swift 6.3.3 -Osize crash in createSeamScopeMapping
+# on the commit publishing 2.3.0-alpha-1 crashed on. Removed before the pull
+# request leaves draft.
+
+on:
+  pull_request:
+
+jobs:
+  diagnose:
+    name: Diagnose (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    container: swift:6.3
+    timeout-minutes: 40
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: print SIL before ownership lowering
+            flags: -Xswiftc -Xllvm -Xswiftc -sil-print-before=ownership-model-eliminator -Xswiftc -Xllvm -Xswiftc -sil-print-functions=createSeamScopeMapping -Xswiftc -Xllvm -Xswiftc -sil-print-debuginfo
+          - variant: without copy-to-borrow-optimization
+            flags: -Xswiftc -Xllvm -Xswiftc -sil-disable-pass=copy-to-borrow-optimization
+          - variant: without semantic-arc-opts
+            flags: -Xswiftc -Xllvm -Xswiftc -sil-disable-pass=semantic-arc-opts
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+        with:
+          ref: 3460d8b97d0d0a3dd1c8d0a07bd7eec61ea540e7
+      - name: Build SafeDITool
+        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize ${{ matrix.flags }}
