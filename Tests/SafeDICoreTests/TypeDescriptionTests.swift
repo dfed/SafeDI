@@ -1776,6 +1776,36 @@ struct TypeDescriptionTests {
 		#expect(namedPaths == [["Config"]])
 	}
 
+	// MARK: - nestingOutermostNames
+
+	@Test(arguments: [
+		("Theme", "Child.Theme"),
+		("Box<Theme>", "Child.Box<Child.Theme>"),
+		("Inner.Palette", "Child.Inner.Palette"),
+		("Swift.Result<Theme, Failure>", "Swift.Result<Child.Theme, Failure>"),
+		("Theme?", "Child.Theme?"),
+		("Theme!", "Child.Theme!"),
+		("some Delegate", "some Child.Delegate"),
+		("any Delegate", "any Child.Delegate"),
+		("Delegate & Sendable", "Child.Delegate & Sendable"),
+		("Theme.Type", "Child.Theme.Type"),
+		("@escaping (Theme) async throws -> Inner.Palette", "@escaping (Child.Theme) async throws -> Child.Inner.Palette"),
+		("[Theme]", "[Child.Theme]"),
+		("[Failure: Theme]", "[Failure: Child.Theme]"),
+		("(Theme, label: Theme)", "(Child.Theme, label: Child.Theme)"),
+		("Void", "Void"),
+		("~Copyable", "~Copyable"),
+	])
+	func nestingOutermostNames_nestsOnlyTheOutermostNamesItIsGivenAnEnclosingTypeFor_whereverTheyAreInTheType(source: String, expected: String) {
+		let typeDescription = TypeSyntax(stringLiteral: source).typeDescription
+
+		let nested = typeDescription.nestingOutermostNames { name in
+			["Theme", "Box", "Inner", "Delegate"].contains(name) ? .simple(name: "Child") : nil
+		}
+
+		#expect(nested.asSource == expected)
+	}
+
 	// MARK: - replacingInstantiatedType
 
 	@Test
