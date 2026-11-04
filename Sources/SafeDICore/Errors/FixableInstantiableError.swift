@@ -22,7 +22,9 @@ import SwiftDiagnostics
 
 public enum FixableInstantiableError: DiagnosticError {
 	case missingInstantiableConformance
-	case missingRequiredInstantiateMethod(typeName: String)
+	/// The extension has no `instantiate()` method of `typeName`. The method a fix-it adds spells `accessModifier`, or
+	/// no access modifier when it is `nil`.
+	case missingRequiredInstantiateMethod(typeName: String, accessModifier: AccessLevel?)
 	case instantiateMethodNotStatic
 	/// The extension's `instantiate()` method spells this `private` or `fileprivate` access, which generated code in
 	/// another file cannot use.
@@ -49,7 +51,9 @@ public enum FixableInstantiableError: DiagnosticError {
 	case mockMethodNeedsCustomName
 	case mockMethodConflictsWithGeneratedMock(customMockName: String)
 	case customMockNameWithoutMockGeneration
-	case customMockNameMethodNotFound(String)
+	/// `customMockName` names `name`, which no method of the declaration is named. The method a fix-it adds spells
+	/// `accessModifier`, or no access modifier when it is `nil`.
+	case customMockNameMethodNotFound(name: String, accessModifier: AccessLevel?)
 	case mockMethodNonDependencyMissingDefaultValue([Property])
 	/// A `mockOnly` declaration also asks for a generated mock, spelled as `spelling` (`true`, `.public`).
 	case mockOnlyWithGenerateMock(spelling: String)
@@ -65,7 +69,9 @@ public enum FixableInstantiableError: DiagnosticError {
 	case mockOnlyWithIsRoot
 	case generateDependencyTreeWithIsRoot
 	case generateDependencyTreeWithMockOnly
-	case mockOnlyMissingMockMethod(typeName: String, methodName: String)
+	/// The `mockOnly` declaration has no mock method named `methodName`. The method a fix-it adds spells
+	/// `accessModifier`, or no access modifier when it is `nil`.
+	case mockOnlyMissingMockMethod(typeName: String, methodName: String, accessModifier: AccessLevel?)
 	case unlabeledDefaultBeforeUnlabeledParameter(defaultedParameter: Property, followingParameter: Property)
 	case calleeScopeReferenceInDefaultExpression(parameterLabel: String, typeName: String)
 	/// A name SafeDI binds, or refers to, in generated code collides with a name generated code introduces.
@@ -93,7 +99,7 @@ public enum FixableInstantiableError: DiagnosticError {
 		switch self {
 		case .missingInstantiableConformance:
 			"@\(InstantiableVisitor.macroName)-decorated type or extension must declare conformance to `Instantiable`."
-		case let .missingRequiredInstantiateMethod(typeName):
+		case let .missingRequiredInstantiateMethod(typeName, _):
 			"@\(InstantiableVisitor.macroName)-decorated extension of `\(typeName)` must have a `static func instantiate() -> \(typeName)` method."
 		case .instantiateMethodNotStatic:
 			"@\(InstantiableVisitor.macroName)-decorated extension’s `instantiate()` method must be `static`: SafeDI calls it on the extended type. Add `static`."
@@ -144,8 +150,8 @@ public enum FixableInstantiableError: DiagnosticError {
 			"This `mock()` method conflicts with the `mock()` that `generateMock: true` generates. This type’s hand-written mock is `\(customMockName)`, which `customMockName` names; remove this method or rename it."
 		case .customMockNameWithoutMockGeneration:
 			"`customMockName` requires `generateMock: true` or `mockOnly: true`."
-		case let .customMockNameMethodNotFound(name):
-			"`customMockName` names `\(name)`, but this declaration has no method named `\(name)`. Add a `public static func \(name)(…)` method."
+		case let .customMockNameMethodNotFound(name, _):
+			"`customMockName` names `\(name)`, but this declaration has no method named `\(name)`. Add a `static func \(name)(…)` method."
 		case let .mockMethodNonDependencyMissingDefaultValue(properties):
 			if properties.count == 1 {
 				"This `mock()` method’s parameter \(properties.asBacktickedList) does not correspond to a dependency, so it must have a default value."
@@ -172,7 +178,7 @@ public enum FixableInstantiableError: DiagnosticError {
 			"`isRoot` and `generateDependencyTree` cannot both be `true`: a root's dependency tree is generated as a `public init()` that takes nothing, and a type whose dependency tree SafeDI generates in its own module receives what its tree needs as parameters. Keep one."
 		case .generateDependencyTreeWithMockOnly:
 			"`mockOnly` types cannot be marked `generateDependencyTree`: a `mockOnly` declaration provides a hand-written mock and has no dependency tree."
-		case let .mockOnlyMissingMockMethod(typeName, methodName):
+		case let .mockOnlyMissingMockMethod(typeName, methodName, _):
 			"@\(InstantiableVisitor.macroName)(mockOnly: true) requires a `static func \(methodName)(…) -> \(typeName)` method."
 		case let .unlabeledDefaultBeforeUnlabeledParameter(defaultedParameter, followingParameter):
 			"Unlabeled parameter `\(defaultedParameter.asSource)` has a default value but is followed by unlabeled required parameter `\(followingParameter.asSource)`, so a generated `mock()` cannot leave `\(defaultedParameter.label)` out of its call. Add an argument label to `\(defaultedParameter.label)`, move unlabeled parameters with defaults after the required ones, or remove the default."
@@ -272,8 +278,8 @@ public enum FixableInstantiableError: DiagnosticError {
 			message = switch error {
 			case .missingInstantiableConformance:
 				"Declare conformance to `Instantiable`"
-			case let .missingRequiredInstantiateMethod(typeName):
-				"Add `public static func instantiate() -> \(typeName)` method"
+			case let .missingRequiredInstantiateMethod(typeName, accessModifier):
+				"Add `\(accessModifier.spelledBeforeDeclaration)static func instantiate() -> \(typeName)` method"
 			case .instantiateMethodNotStatic:
 				"Add `static` modifier"
 			case let .privateOrFilePrivateInstantiateMethod(accessLevel):
@@ -320,8 +326,8 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Remove this `mock()` method"
 			case .customMockNameWithoutMockGeneration:
 				"Add `generateMock: true` or `mockOnly: true` to `@Instantiable`"
-			case let .customMockNameMethodNotFound(name):
-				"Add `public static func \(name)(…)` method"
+			case let .customMockNameMethodNotFound(name, accessModifier):
+				"Add `\(accessModifier.spelledBeforeDeclaration)static func \(name)(…)` method"
 			case let .mockMethodNonDependencyMissingDefaultValue(properties):
 				"Add default values to `mock()` non-dependency parameters for \(properties.map(\.asSource).joined(separator: ", "))"
 			case let .mockOnlyWithGenerateMock(spelling):
@@ -340,8 +346,8 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Remove `isRoot: true`"
 			case .generateDependencyTreeWithIsRoot, .generateDependencyTreeWithMockOnly:
 				"Remove `generateDependencyTree: true`"
-			case let .mockOnlyMissingMockMethod(typeName, methodName):
-				"Add `public static func \(methodName)(…) -> \(typeName)` method"
+			case let .mockOnlyMissingMockMethod(typeName, methodName, accessModifier):
+				"Add `\(accessModifier.spelledBeforeDeclaration)static func \(methodName)(…) -> \(typeName)` method"
 			case let .unlabeledDefaultBeforeUnlabeledParameter(defaultedParameter, _):
 				"Add argument label `\(defaultedParameter.label)`"
 			case let .calleeScopeReferenceInDefaultExpression(parameterLabel, _):
@@ -390,6 +396,16 @@ extension [String] {
 		} else {
 			joined(separator: " and ")
 		}
+	}
+}
+
+// MARK: - AccessLevel?
+
+extension AccessLevel? {
+	/// The access modifier this level sets, followed by a space, as source spells it before the rest of a declaration,
+	/// or nothing for `nil`, which sets none.
+	fileprivate var spelledBeforeDeclaration: String {
+		map { "\($0.spelling) " } ?? ""
 	}
 }
 

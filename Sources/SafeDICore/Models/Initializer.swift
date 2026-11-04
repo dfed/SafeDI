@@ -166,13 +166,16 @@ public struct Initializer: Codable, Hashable, Sendable {
 		)
 	}
 
+	/// The initializer the fix-it for a type without one adds: a parameter for each of `dependencies`, which it assigns
+	/// to its property, and a placeholder assignment for each property labeled with one of `additionalPropertyLabels`.
+	/// - Parameter accessLevel: The level the initializer's access modifier sets, or `nil` for no access modifier.
 	public static func generateRequiredInitializer(
 		for dependencies: [Dependency],
-		declarationType: ConcreteDeclType,
+		accessLevel: AccessLevel?,
 		andAdditionalPropertiesWithLabels additionalPropertyLabels: [String] = [],
 	) -> InitializerDeclSyntax {
 		InitializerDeclSyntax(
-			modifiers: declarationType.initializerModifiers,
+			modifiers: DeclModifierListSyntax(ofAddedDeclarationWithAccess: accessLevel, isStatic: false),
 			signature: FunctionSignatureSyntax(
 				parameterClause: FunctionParameterClauseSyntax(
 					parameters: FunctionParameterListSyntax(itemsBuilder: {
@@ -393,22 +396,6 @@ public struct Initializer: Codable, Hashable, Sendable {
 			dependency.property.label == innerLabel
 				&& dependency.property.typeDescription.isEqualToFunctionArgument(typeDescription)
 		}
-	}
-}
-
-// MARK: - ConcreteDeclType
-
-extension ConcreteDeclType {
-	fileprivate var initializerModifiers: DeclModifierListSyntax {
-		DeclModifierListSyntax(
-			arrayLiteral: DeclModifierSyntax(
-				name: TokenSyntax(
-					TokenKind.keyword(.public),
-					presence: .present,
-				),
-				trailingTrivia: .space,
-			),
-		)
 	}
 }
 

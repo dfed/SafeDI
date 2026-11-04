@@ -240,16 +240,19 @@ public struct InstantiableMacro: MemberMacro {
 			}
 			if isMockOnly, visitor.mockFunctionSyntax == nil {
 				let expectedMethodName = visitor.customMockName ?? InstantiableVisitor.mockMethodName
+				let accessModifier = Self.accessModifierOfDeclarationAdded(to: concreteDeclaration, takingParametersOf: visitor.dependencies, context: context)
 				context.diagnose(Diagnostic(
 					node: Syntax(node),
 					error: FixableInstantiableError.mockOnlyMissingMockMethod(
 						typeName: concreteDeclaration.name.text,
 						methodName: expectedMethodName,
+						accessModifier: accessModifier,
 					),
 					changes: Self.generateCustomMockStub(
 						named: expectedMethodName,
 						typeName: concreteDeclaration.name.text,
 						dependencies: visitor.dependencies,
+						accessModifier: accessModifier,
 						on: declaration,
 					),
 				))
@@ -540,7 +543,7 @@ public struct InstantiableMacro: MemberMacro {
 							leadingTrivia: .newline,
 							decl: Initializer.generateRequiredInitializer(
 								for: visitor.dependencies,
-								declarationType: concreteDeclaration.declType,
+								accessLevel: Self.accessModifierOfDeclarationAdded(to: concreteDeclaration, takingParametersOf: visitor.dependencies, context: context),
 								andAdditionalPropertiesWithLabels: visitor.uninitializedNonOptionalPropertyNames,
 							),
 							trailingTrivia: .newline,
@@ -634,13 +637,15 @@ public struct InstantiableMacro: MemberMacro {
 				   instantiableMacro.generateMockValue,
 				   visitor.mockFunctionSyntax == nil
 				{
+					let accessModifier = Self.accessModifierOfDeclarationAdded(to: concreteDeclaration, takingParametersOf: visitor.dependencies, context: context)
 					context.diagnose(Diagnostic(
 						node: Syntax(instantiableMacro),
-						error: FixableInstantiableError.customMockNameMethodNotFound(customMockNameValue),
+						error: FixableInstantiableError.customMockNameMethodNotFound(name: customMockNameValue, accessModifier: accessModifier),
 						changes: Self.generateCustomMockStub(
 							named: customMockNameValue,
 							typeName: concreteDeclaration.name.text,
 							dependencies: visitor.dependencies,
+							accessModifier: accessModifier,
 							on: declaration,
 						),
 					))
@@ -896,16 +901,19 @@ public struct InstantiableMacro: MemberMacro {
 			}
 			if isMockOnly, visitor.mockFunctionSyntax == nil {
 				let expectedMethodName = visitor.customMockName ?? InstantiableVisitor.mockMethodName
+				let accessModifier = Self.accessModifierOfDeclarationAdded(to: extensionDeclaration, besideInstantiateMethods: visitor.instantiateFunctions, takingParametersOf: [])
 				context.diagnose(Diagnostic(
 					node: Syntax(node),
 					error: FixableInstantiableError.mockOnlyMissingMockMethod(
 						typeName: extensionDeclaration.extendedType.typeDescription.asSource,
 						methodName: expectedMethodName,
+						accessModifier: accessModifier,
 					),
 					changes: Self.generateCustomMockStub(
 						named: expectedMethodName,
 						typeName: extensionDeclaration.extendedType.typeDescription.asSource,
 						dependencies: [],
+						accessModifier: accessModifier,
 						isExtension: true,
 						on: declaration,
 					),
@@ -970,13 +978,15 @@ public struct InstantiableMacro: MemberMacro {
 				   instantiableMacro.generateMockValue,
 				   visitor.mockFunctionSyntax == nil
 				{
+					let accessModifier = Self.accessModifierOfDeclarationAdded(to: extensionDeclaration, besideInstantiateMethods: visitor.instantiateFunctions, takingParametersOf: extensionDependencies)
 					context.diagnose(Diagnostic(
 						node: Syntax(instantiableMacro),
-						error: FixableInstantiableError.customMockNameMethodNotFound(customMockNameValue),
+						error: FixableInstantiableError.customMockNameMethodNotFound(name: customMockNameValue, accessModifier: accessModifier),
 						changes: Self.generateCustomMockStub(
 							named: customMockNameValue,
 							typeName: extendedTypeName,
 							dependencies: extensionDependencies,
+							accessModifier: accessModifier,
 							isExtension: true,
 							on: declaration,
 						),
@@ -1229,27 +1239,13 @@ public struct InstantiableMacro: MemberMacro {
 				}
 			} else if instantiables.isEmpty, !isMockOnly {
 				let extendedTypeName = extensionDeclaration.extendedType.typeDescription.asSource
+				let accessModifier = Self.accessModifierOfDeclarationAdded(to: extensionDeclaration, besideInstantiateMethods: [], takingParametersOf: [])
 				var membersWithInitializer = declaration.memberBlock.members
 				membersWithInitializer.insert(
 					MemberBlockItemSyntax(
 						leadingTrivia: .newline,
 						decl: FunctionDeclSyntax(
-							modifiers: DeclModifierListSyntax(
-								arrayLiteral: DeclModifierSyntax(
-									name: TokenSyntax(
-										TokenKind.keyword(.public),
-										presence: .present,
-									),
-									trailingTrivia: .space,
-								),
-								DeclModifierSyntax(
-									name: TokenSyntax(
-										TokenKind.keyword(.static),
-										presence: .present,
-									),
-									trailingTrivia: .space,
-								),
-							),
+							modifiers: DeclModifierListSyntax(ofAddedDeclarationWithAccess: accessModifier, isStatic: true),
 							name: TokenSyntax(
 								TokenKind.identifier(InstantiableVisitor.instantiateMethodName),
 								leadingTrivia: .space,
@@ -1283,6 +1279,7 @@ public struct InstantiableMacro: MemberMacro {
 					node: Syntax(extensionDeclaration.memberBlock.members),
 					error: FixableInstantiableError.missingRequiredInstantiateMethod(
 						typeName: extendedTypeName,
+						accessModifier: accessModifier,
 					),
 					changes: [
 						.replace(
@@ -1642,6 +1639,137 @@ public struct InstantiableMacro: MemberMacro {
 		} ?? .simple(name: name)
 	}
 
+	// MARK: - Access of Added Declarations
+
+	/// The access modifier of a declaration that a fix-it adds to the type declaration `declaration` – an initializer or a
+	/// hand-written mock method – that takes a parameter for each of `dependencies`, or `nil` when it spells none.
+	///
+	/// Generated code calls the added declaration wherever it constructs the type, so the declaration takes the type's
+	/// access, as far as the macro can see it: the level the type spells – or, when it spells none, the default of the
+	/// members of an extension it is directly inside, and `internal` otherwise – capped by the level of each type
+	/// declaration enclosing it, found in the same way. An extension caps nothing, as
+	/// `AccessLevel.effective(ofTypeDeclaredBy:)` describes. The members of a type declaration are `internal` unless they
+	/// spell another level. See `accessModifier(ofDeclarationAddedWithTypeLevel:memberDefaultLevel:members:declaredType:dependencies:)`.
+	private static func accessModifierOfDeclarationAdded(
+		to declaration: some ConcreteDeclSyntaxProtocol,
+		takingParametersOf dependencies: [Dependency],
+		context: some MacroExpansionContext,
+	) -> AccessLevel? {
+		// The declarations enclosing `declaration`, innermost first, up to a function, outside which a type declared in
+		// the function cannot be used.
+		let enclosingDeclarations = Array(
+			context.lexicalContext.lazy
+				.map { $0.asProtocol(DeclGroupSyntax.self) }
+				.prefix(while: { $0 != nil })
+				.compactMap(\.self),
+		)
+		func ownLevel(ofTypeDeclarationWith modifiers: DeclModifierListSyntax, directlyInside enclosingDeclaration: (any DeclGroupSyntax)?) -> AccessLevel {
+			modifiers.spelledAccessLevel
+				?? enclosingDeclaration.flatMap { ExtensionDeclSyntax(Syntax($0)) }?.modifiers.spelledAccessLevel?.asDefaultOfExtensionMembers
+				?? .internal
+		}
+		var typeLevel = ownLevel(ofTypeDeclarationWith: declaration.modifiers, directlyInside: enclosingDeclarations.first)
+		for (index, enclosingDeclaration) in enclosingDeclarations.enumerated() where ExtensionDeclSyntax(Syntax(enclosingDeclaration)) == nil {
+			typeLevel = typeLevel.capped(by: ownLevel(
+				ofTypeDeclarationWith: enclosingDeclaration.modifiers,
+				directlyInside: enclosingDeclarations.dropFirst(index + 1).first,
+			))
+		}
+		return accessModifier(
+			ofDeclarationAddedWithTypeLevel: typeLevel,
+			memberDefaultLevel: .internal,
+			members: declaration.memberBlock.members,
+			declaredType: qualifiedType(named: declaration.name.text, in: context),
+			dependencies: dependencies,
+		)
+	}
+
+	/// The access modifier of a declaration that a fix-it adds to the extension `declaration` – an `instantiate()` method
+	/// or a hand-written mock method – that takes a parameter for each of `dependencies`, or `nil` when it spells none.
+	///
+	/// The extension declares a type that is declared elsewhere, whose access the macro cannot see, so the added
+	/// declaration takes the access of the widest of `instantiateMethods`, which construct the type and which a mock
+	/// method stands in for, or, when there are none, the default of the extension's members: the level the extension
+	/// spells (`fileprivate` for a `private` extension), and `internal` when it spells none. See
+	/// `accessModifier(ofDeclarationAddedWithTypeLevel:memberDefaultLevel:members:declaredType:dependencies:)`.
+	private static func accessModifierOfDeclarationAdded(
+		to declaration: ExtensionDeclSyntax,
+		besideInstantiateMethods instantiateMethods: [InstantiableVisitor.InstantiateFunction],
+		takingParametersOf dependencies: [Dependency],
+	) -> AccessLevel? {
+		let memberDefaultLevel = declaration.modifiers.spelledAccessLevel?.asDefaultOfExtensionMembers ?? .internal
+		return accessModifier(
+			ofDeclarationAddedWithTypeLevel: instantiateMethods.map { $0.syntax.modifiers.spelledAccessLevel ?? memberDefaultLevel }.max() ?? memberDefaultLevel,
+			memberDefaultLevel: memberDefaultLevel,
+			members: declaration.memberBlock.members,
+			declaredType: declaration.extendedType.typeDescription,
+			dependencies: dependencies,
+		)
+	}
+
+	/// The access modifier of a declaration that a fix-it adds to a declaration of `declaredType`, whose members are
+	/// `members`, that takes a parameter for each of `dependencies`, or `nil` when it spells none.
+	///
+	/// The compiler requires a declaration to be no more visible than the types its parameters name, so the added
+	/// declaration has `typeLevel` capped by the level of each type declared among `members` that a dependency's type
+	/// names. The macro cannot see the level of a type declared anywhere else, so such a type caps nothing. The level is
+	/// never narrower than `internal`, since generated code in another file calls the added declaration, nor wider than
+	/// `public`, since an initializer or a static method cannot be `open`. The added declaration spells no access
+	/// modifier where its level is `memberDefaultLevel`, the level of a member of the declaration that spells none.
+	private static func accessModifier(
+		ofDeclarationAddedWithTypeLevel typeLevel: AccessLevel,
+		memberDefaultLevel: AccessLevel,
+		members: MemberBlockItemListSyntax,
+		declaredType: TypeDescription,
+		dependencies: [Dependency],
+	) -> AccessLevel? {
+		let declaredTypeNamePath = declaredType.namePath
+		let level = nestedTypes(declaredAmong: members, defaultLevel: memberDefaultLevel, enclosingPath: [], cappedBy: typeLevel)
+			.filter { nestedType in
+				dependencies.contains { dependency in
+					dependency.property.typeDescription.namesType { path in
+						// A path names the nested type when it ends with the nested type's path from the declared type,
+						// qualified with nothing, which code inside the declaration resolves to the nested type, with
+						// `Self`, or with the declared type's names from the innermost, as `Feature.Configuration` and
+						// `Outer.Feature.Configuration` are.
+						let qualifier = path.dropLast(nestedType.path.count)
+						return path.suffix(nestedType.path.count).elementsEqual(nestedType.path)
+							&& (qualifier.isEmpty
+								|| qualifier.elementsEqual(["Self"])
+								|| declaredTypeNamePath?.suffix(qualifier.count).elementsEqual(qualifier) == true)
+					}
+				}
+			}
+			.reduce(typeLevel) { $0.capped(by: $1.level) }
+		let addedLevel = max(.internal, level.capped(by: .public))
+		return addedLevel == memberDefaultLevel ? nil : addedLevel
+	}
+
+	/// Each type declared among `members`, in every clause of an `#if` block, and each type declared inside one of
+	/// those, with its path from the declaration that holds `members`, and its level capped by `enclosingLevel` and by
+	/// the level of each type it is declared inside. A type that spells no level has `defaultLevel`, the level of a
+	/// member that spells none, and a type declared inside it `internal`.
+	private static func nestedTypes(
+		declaredAmong members: MemberBlockItemListSyntax,
+		defaultLevel: AccessLevel,
+		enclosingPath: [String],
+		cappedBy enclosingLevel: AccessLevel,
+	) -> [(path: [String], level: AccessLevel)] {
+		declarations(in: members).flatMap { declaration -> [(path: [String], level: AccessLevel)] in
+			guard let nestedType = declaration.nestedTypeDeclaration,
+			      let modifiers = declaration.asProtocol(WithModifiersSyntax.self)?.modifiers
+			else {
+				return []
+			}
+			let path = enclosingPath + [nestedType.name]
+			let level = (modifiers.spelledAccessLevel ?? defaultLevel).capped(by: enclosingLevel)
+			let typesDeclaredInside = declaration.asProtocol(DeclGroupSyntax.self).map {
+				nestedTypes(declaredAmong: $0.memberBlock.members, defaultLevel: .internal, enclosingPath: path, cappedBy: level)
+			} ?? []
+			return [(path: path, level: level)] + typesDeclaredInside
+		}
+	}
+
 	/// The signatures of the hand-written mocks that `visitor` found, whose parameters fulfill the dependencies as an
 	/// initializer's do.
 	private static func mockFunctionSignatures(foundBy visitor: InstantiableVisitor) -> [FunctionSignatureSyntax] {
@@ -1963,10 +2091,14 @@ public struct InstantiableMacro: MemberMacro {
 	}
 
 	/// Builds fix-it changes that generate a stub custom mock method below the initializer.
+	/// - Parameter accessModifier: The level the method's access modifier sets, or `nil` for no access modifier, as
+	///   `accessModifierOfDeclarationAdded(to:takingParametersOf:context:)` and
+	///   `accessModifierOfDeclarationAdded(to:besideInstantiateMethods:takingParametersOf:)` return it.
 	private static func generateCustomMockStub(
 		named name: String,
 		typeName: String,
 		dependencies: [Dependency],
+		accessModifier: AccessLevel?,
 		isExtension: Bool = false,
 		on declaration: some DeclGroupSyntax,
 	) -> [FixIt.Change] {
@@ -2000,22 +2132,7 @@ public struct InstantiableMacro: MemberMacro {
 		}
 
 		let stubMethod = FunctionDeclSyntax(
-			modifiers: DeclModifierListSyntax(
-				arrayLiteral: DeclModifierSyntax(
-					name: TokenSyntax(
-						TokenKind.keyword(.public),
-						presence: .present,
-					),
-					trailingTrivia: .space,
-				),
-				DeclModifierSyntax(
-					name: TokenSyntax(
-						TokenKind.keyword(.static),
-						presence: .present,
-					),
-					trailingTrivia: .space,
-				),
-			),
+			modifiers: DeclModifierListSyntax(ofAddedDeclarationWithAccess: accessModifier, isStatic: true),
 			name: TokenSyntax(
 				TokenKind.identifier(name),
 				leadingTrivia: .space,

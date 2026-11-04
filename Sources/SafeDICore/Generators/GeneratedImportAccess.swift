@@ -420,7 +420,7 @@ private final class SignatureTypeNameVisitor: SyntaxVisitor {
 		let isUsableFromInline = attributes.contains { attribute in
 			attribute.as(AttributeSyntax.self)?.attributeName.trimmedDescription == "usableFromInline"
 		}
-		switch modifiers.accessLevel {
+		switch modifiers.spelledAccessLevel {
 		case .open, .public:
 			publicTypeNames.formUnion(TypeNameCollector.typeNames(in: signature))
 		case .package:

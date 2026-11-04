@@ -4980,18 +4980,18 @@ import Testing
 						column: 41,
 						severity: .error,
 						fixIts: [
-							FixItSpec(message: "Add `public static func instantiate() -> ExampleService` method"),
+							FixItSpec(message: "Add `static func instantiate() -> ExampleService` method"),
 						],
 					),
 				],
 				macros: instantiableTestMacros,
 				applyFixIts: [
-					"Add `public static func instantiate() -> ExampleService` method",
+					"Add `static func instantiate() -> ExampleService` method",
 				],
 				fixedSource: """
 				@Instantiable
 				extension ExampleService: Instantiable {
-				public static func instantiate() -> ExampleService
+				static func instantiate() -> ExampleService
 				{}
 
 
@@ -6107,7 +6107,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`customMockName` names `customMock`, but this declaration has no method named `customMock`. Add a `public static func customMock(…)` method.",
+						message: "`customMockName` names `customMock`, but this declaration has no method named `customMock`. Add a `static func customMock(…)` method.",
 						line: 1,
 						column: 1,
 						fixIts: [
@@ -6141,7 +6141,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`customMockName` names `customMock`, but this declaration has no method named `customMock`. Add a `public static func customMock(…)` method.",
+						message: "`customMockName` names `customMock`, but this declaration has no method named `customMock`. Add a `static func customMock(…)` method.",
 						line: 1,
 						column: 1,
 						fixIts: [
@@ -6179,7 +6179,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`customMockName` names `customMock`, but this declaration has no method named `customMock`. Add a `public static func customMock(…)` method.",
+						message: "`customMockName` names `customMock`, but this declaration has no method named `customMock`. Add a `static func customMock(…)` method.",
 						line: 1,
 						column: 1,
 						fixIts: [
@@ -6325,7 +6325,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`customMockName` names `customMock`, but this declaration has no method named `customMock`. Add a `public static func customMock(…)` method.",
+						message: "`customMockName` names `customMock`, but this declaration has no method named `customMock`. Add a `static func customMock(…)` method.",
 						line: 1,
 						column: 1,
 						fixIts: [
@@ -9144,7 +9144,7 @@ import Testing
 						line: 1,
 						column: 1,
 						fixIts: [
-							FixItSpec(message: "Add `public static func mock(…) -> ExternalService` method"),
+							FixItSpec(message: "Add `static func mock(…) -> ExternalService` method"),
 						],
 					),
 				],
@@ -9152,7 +9152,7 @@ import Testing
 				fixedSource: """
 				@Instantiable(mockOnly: true)
 				extension ExternalService {
-				public static func mock() -> ExternalService {ExternalService.instantiate()}
+				static func mock() -> ExternalService {ExternalService.instantiate()}
 
 
 				}

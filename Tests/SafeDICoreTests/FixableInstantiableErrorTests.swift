@@ -139,14 +139,26 @@ struct FixableInstantiableErrorTests {
 
 	@Test
 	func customMockNameMethodNotFound_description_mentionsMissingMethodName() {
-		let error = FixableInstantiableError.customMockNameMethodNotFound("customMock")
-		#expect(error.description == "`customMockName` names `customMock`, but this declaration has no method named `customMock`. Add a `public static func customMock(…)` method.")
+		let error = FixableInstantiableError.customMockNameMethodNotFound(name: "customMock", accessModifier: .public)
+		#expect(error.description == "`customMockName` names `customMock`, but this declaration has no method named `customMock`. Add a `static func customMock(…)` method.")
 	}
 
 	@Test
 	func customMockNameMethodNotFound_fixIt_mentionsAddingMethod() {
-		let error = FixableInstantiableError.customMockNameMethodNotFound("customMock")
+		let error = FixableInstantiableError.customMockNameMethodNotFound(name: "customMock", accessModifier: .public)
 		#expect(error.fixIt.message == "Add `public static func customMock(…)` method")
+	}
+
+	@Test
+	func customMockNameMethodNotFound_fixIt_mentionsAddingPackageMethod_whenAccessModifierIsPackage() {
+		let error = FixableInstantiableError.customMockNameMethodNotFound(name: "customMock", accessModifier: .package)
+		#expect(error.fixIt.message == "Add `package static func customMock(…)` method")
+	}
+
+	@Test
+	func customMockNameMethodNotFound_fixIt_mentionsAddingMethodWithoutAccessModifier_whenAccessModifierIsNil() {
+		let error = FixableInstantiableError.customMockNameMethodNotFound(name: "customMock", accessModifier: nil)
+		#expect(error.fixIt.message == "Add `static func customMock(…)` method")
 	}
 
 	@Test
@@ -206,14 +218,26 @@ struct FixableInstantiableErrorTests {
 
 	@Test
 	func mockOnlyMissingMockMethod_description_mentionsRequiredMockMethod() {
-		let error = FixableInstantiableError.mockOnlyMissingMockMethod(typeName: "MyService", methodName: "mock")
+		let error = FixableInstantiableError.mockOnlyMissingMockMethod(typeName: "MyService", methodName: "mock", accessModifier: .public)
 		#expect(error.description == "@Instantiable(mockOnly: true) requires a `static func mock(…) -> MyService` method.")
 	}
 
 	@Test
 	func mockOnlyMissingMockMethod_fixIt_mentionsAddingMethod() {
-		let error = FixableInstantiableError.mockOnlyMissingMockMethod(typeName: "MyService", methodName: "mock")
+		let error = FixableInstantiableError.mockOnlyMissingMockMethod(typeName: "MyService", methodName: "mock", accessModifier: .public)
 		#expect(error.fixIt.message == "Add `public static func mock(…) -> MyService` method")
+	}
+
+	@Test
+	func mockOnlyMissingMockMethod_fixIt_mentionsAddingPackageMethod_whenAccessModifierIsPackage() {
+		let error = FixableInstantiableError.mockOnlyMissingMockMethod(typeName: "MyService", methodName: "mock", accessModifier: .package)
+		#expect(error.fixIt.message == "Add `package static func mock(…) -> MyService` method")
+	}
+
+	@Test
+	func mockOnlyMissingMockMethod_fixIt_mentionsAddingMethodWithoutAccessModifier_whenAccessModifierIsNil() {
+		let error = FixableInstantiableError.mockOnlyMissingMockMethod(typeName: "MyService", methodName: "mock", accessModifier: nil)
+		#expect(error.fixIt.message == "Add `static func mock(…) -> MyService` method")
 	}
 
 	@Test
