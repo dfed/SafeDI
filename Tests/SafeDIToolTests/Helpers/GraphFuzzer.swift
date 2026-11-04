@@ -505,6 +505,11 @@ enum GraphFuzzerHoleOutputFeature: String, CaseIterable, Comparable {
 	case fillPassedToItsSeam
 	/// A call inside the fill of a passed-up builder of the inner seam the builder is of, which passes the fill (C1.23).
 	case fillOfPassedUpBuilderPassedToItsSeam
+	/// A call inside a fill, of a seam that passes the fill's site up and is neither the site's seam nor the seam the
+	/// fill is declared for, which passes the fill.
+	case fillPassedToSeamPassingItsSiteUp
+	/// A fill named apart from a fill enclosing it, or a builder its seam takes, of the same name (`__safeDI_…_`).
+	case fillNamedApart
 
 	static func < (lhs: GraphFuzzerHoleOutputFeature, rhs: GraphFuzzerHoleOutputFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
@@ -676,6 +681,9 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case namespaceTypeOnlyThroughExistential
 	/// The namespace enum declared `public`, so callers in other modules construct its types inline.
 	case publicNamespace
+	/// The namespace enum declared in a file of its own that holds no SafeDI marker, which `scan` reads because an
+	/// extension holding an `@Instantiable` type extends it.
+	case namespaceInMarkerFreeFile
 	/// An `@Instantiable` extension of a narrower type, `ProofRack`, whose `public` `instantiate(…)` receives a package type.
 	case instantiableExtensionOfNarrowerType
 	/// A parameter type spelled `Swift.`-qualified, received only if available by a package initializer (`ProofMeter`).
@@ -707,6 +715,12 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case hole
 	/// The hole's property is the seam's own.
 	case holeOwnedBySeam
+	/// `HoleService`, the hole's plain protocol, declared in a file of the seam's module that holds no SafeDI marker,
+	/// which `scan` reads because a declaration mentions it.
+	case holeProtocolInMarkerFreeFile
+	/// `HoleService` declared `package`, its seams `package`, and `HoleSeam`'s own initializer `internal`: the protocol's
+	/// own declaration proves it, so the seam's `package` tier takes its builder.
+	case holeProtocolPackage
 	/// The hole's owner, `HoleOwner`, which the seam instantiates by value.
 	case holeBeneathConstant
 	/// The hole's owner, which the seam instantiates through an `Instantiator`.
@@ -737,6 +751,48 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case holeSeamReentersItself
 	/// `HoleLoop` binds `holeLogger` on the re-entry path while `HoleImpl` reads the root's: rejected (C8.14).
 	case holeSeamReentersItselfBeneathBoundLabel
+	/// `HoleImpl`, and `HoleOtherRoot`, the root that reaches the seam, in another package than the seam's.
+	case holeCrossPackage
+	/// `HoleImpl`'s initializer `package`, in another package than the seam's, which the fill, in its module, calls.
+	case holeCrossPackageFulfillerInitializerPackage
+	/// `HoleImpl`, in another package, instantiating `HoleCache`, whose initializer is `package` in the seam's package,
+	/// which the fill cannot call: rejected, as the inline tree is.
+	case holeCrossPackageFulfillerBuildsPackageInitializerOfSeamsPackage
+	/// `HoleAnalytics` `package`, which the scope struct carries as a `package` field, read by `HoleImpl` in the seam's
+	/// package.
+	case holeNarrowerField
+	/// `HoleImpl` reads `holeAnalytics` through an alias or only if available.
+	case holeAliasOrOnlyIfAvailable
+	/// `HoleImpl` reads `holeAnalytics` only if available.
+	case holeReadOnlyIfAvailable
+	/// `HoleOwner` aliases `holeAnalytics` before its hole, so the scope struct carries the alias, which `HoleImpl` reads.
+	case holeOwnerAliasesField
+	/// `HoleSeam` or `HoleOwner` declared with `generateMock: true`.
+	case holeMocks
+	/// `HoleImpl` declared in an extension of a namespace enum, `HoleNamespace`.
+	case holeImplInNamespace
+	/// The seam's module run without its package name, every filler in the seam's package.
+	case holeSeamModuleWithoutPackageName
+	/// The type that re-enters `HoleSeam` also instantiates `HoleRelay`, which calls `HoleSeam` and passes its site up,
+	/// so the fill is passed to a seam that takes another copy of its hole.
+	case holeReentryThroughPassingSeam
+	/// `HoleRelay` binds `holeLogger` before it calls `HoleSeam` while `HoleImpl` reads the root's: rejected, since its
+	/// copy of the hole does not carry it.
+	case holeReentryThroughPassingSeamBeneathBoundLabel
+	/// `HoleRelay` builds `HoleSeam` in a `SendableInstantiator`, so it takes the builder `@Sendable`, which makes the
+	/// fill passed to it `@Sendable`.
+	case holeReentryThroughSendablePassingSeam
+	/// A second hole, `holeTracker` on `HoleSettings`, filled by `HoleTrackerImpl`, which reads the root's `holeLogger`.
+	case holeSecondHole
+	/// The second hole beside `HoleMiddle`, whose call of `HoleSeam` inside the first hole's fill passes the second's
+	/// beneath `HoleMiddle`'s `holeLogger`: rejected.
+	case holeSecondHoleBeneathRedeclaredLabel
+	/// `HoleTop` calls `HoleOuter` and `HoleOuterS`, which builds `HoleSeam` in a `SendableInstantiator`: `HoleTop`
+	/// takes one builder for the site, `@Sendable`.
+	case holeSendableDiamond
+	/// `HoleInner2`, a seam whose hole has the label of `HoleSeam`'s, filled inside `HoleSeam`'s fill by
+	/// `HoleTrackerImpl`, which instantiates `HoleSeam` again: the inner fill is named apart.
+	case holeNestedSameLabelFill
 
 	/// `addingUncreatedAliasExtensions`' second declaration of the alias's label: a lazily instantiated wrapper of the
 	/// alias's property, on `AliasLeft`, `AliasMid` or the seam.
@@ -1263,10 +1319,13 @@ enum GraphFuzzerGenerator {
 			holePassUpRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holePassUpRandomSeedMask)
 			holeReentryRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holeReentryRandomSeedMask)
 			holeSelfReentryRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holeSelfReentryRandomSeedMask)
+			holeRolls = HoleRolls(seed: seed)
 			aliasExtensionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.aliasExtensionRandomSeedMask)
 			formsRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.formsRandomSeedMask)
 			crossModuleRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.crossModuleRandomSeedMask)
 			proofExtensionRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.proofExtensionRandomSeedMask)
+			markerFreeFileRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.markerFreeFileRandomSeedMask)
+			holeProtocolAccessRandom = GraphFuzzerRandomNumberGenerator(seed: seed ^ Self.holeProtocolAccessRandomSeedMask)
 			prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: seed)
 			// One draw decides, so graphs that are not mixed draw exactly what they drew before mixed graphs existed.
 			let sendabilityRoll = random.integer(in: 0...99)
@@ -1344,8 +1403,19 @@ enum GraphFuzzerGenerator {
 					finalDeclarations[index].module = .samePackageCaller
 				}
 			}
+			// Each declaration moved to a file without a SafeDI marker, in its owner's module, named on its own line.
+			let markerFreeSources = markerFreeFiles.map { file in
+				let fileNameLine = GraphFuzzerFixture.fileNameMarker + file.fileName
+				guard isSplit, let module = finalDeclarations.first(where: { $0.name == file.ownerName })?.module else {
+					return fileNameLine + "\n\n" + file.declaration
+				}
+				let header = module.fileHeader(omitsPackageName: modulesOmittingPackageName.contains(module))
+				let firstLine = header.prefix { $0 != "\n" }
+				return firstLine + "\n" + fileNameLine + header.dropFirst(firstLine.count) + file.declaration
+			}
 			let sources = finalDeclarations.map(source(of:))
 				+ [extensionSource.map { isSplit ? GraphFuzzerModule.samePackageCaller.fileHeader(omitsPackageName: modulesOmittingPackageName.contains(.samePackageCaller)) + $0 : $0 }].compactMap(\.self)
+				+ markerFreeSources
 			return storesEveryParameter ? addingCreationStamps(to: sources) : sources
 		}
 
@@ -1489,6 +1559,8 @@ enum GraphFuzzerGenerator {
 		private var holePassUpRandom: GraphFuzzerRandomNumberGenerator
 		private var holeReentryRandom: GraphFuzzerRandomNumberGenerator
 		private var holeSelfReentryRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only `addingHoleShapes`' further rolls, each with a generator of its own.
+		private var holeRolls: HoleRolls
 		/// Draw only the choices of the passes added when the seam tests' siblings moved to the fuzzer, each after the
 		/// pass it extends, so that every graph those passes leave plain is drawn as before:
 		/// `addingUncreatedAliasExtensions`, `addingLabelFormsSeam`, `movingSelfContainedSeamsIntoSeamModule` and
@@ -1497,6 +1569,18 @@ enum GraphFuzzerGenerator {
 		private var formsRandom: GraphFuzzerRandomNumberGenerator
 		private var crossModuleRandom: GraphFuzzerRandomNumberGenerator
 		private var proofExtensionRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether a plain declaration the seam's tree relies on – `ProofSpace`, the namespace
+		/// `addingAccessProofShapes` extends, and `HoleService`, the protocol of `addingHoleShapes`' hole – is declared in
+		/// a file of its own that holds no SafeDI marker (`markerFreeFiles`), which `scan` reads only because a declaration
+		/// extends or mentions its type. Moving a declaration to such a file changes nothing the tool decides.
+		private var markerFreeFileRandom: GraphFuzzerRandomNumberGenerator
+		/// Draws only whether `addingHoleShapes`' protocol, `HoleService`, is declared `package`, with the seams that take
+		/// its builder `package` too and `HoleSeam`'s own initializer `internal`, which only the protocol's own declaration
+		/// lets the seam's `package` tier take (R9).
+		private var holeProtocolAccessRandom: GraphFuzzerRandomNumberGenerator
+		/// The files `markerFreeFileRandom` moved a declaration into: each named, holding the declaration alone, and in the
+		/// module of the type, `ownerName`, whose file it was drawn in.
+		private var markerFreeFiles = [(ownerName: String, fileName: String, declaration: String)]()
 		/// The access of each type `addingAccessProofShapes` declares narrower than `public`, by the name the fixture
 		/// spells it with (`S1_ProofSpace.S1_ProofShelf` for a nested type), which caps every initializer naming it.
 		private var proofTypeAccess = [String: AccessLevel]()
@@ -3344,8 +3428,13 @@ enum GraphFuzzerGenerator {
 					register(namespace, namespaceAccess)
 					shelf.properties.append(PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "proofCrate", type: crateName + "?"))
 					let crateDeclaration = plainType(name("ProofCrate"), access: memberAccess).split(separator: "\n").map { "\t" + $0 }.joined(separator: "\n")
+					let namespaceDeclaration = "\(namespaceAccess.modifier)enum \(namespace) {}"
+					if markerFreeFileRandom.percentChance(50) {
+						markerFreeFiles.append((ownerName: shelf.name, fileName: "\(namespace).swift", declaration: namespaceDeclaration))
+					} else {
+						shelf.additionalDeclarations.append(namespaceDeclaration)
+					}
 					shelf.additionalDeclarations += [
-						"\(namespaceAccess.modifier)enum \(namespace) {}",
 						"\(isSpelled ? namespaceAccess.modifier : "")extension \(namespace) {\n\(crateDeclaration)\n}",
 						"public protocol \(shelvingName)\(helperTypesAreSendable ? ": Sendable" : "") {}",
 					]
@@ -3524,6 +3613,14 @@ enum GraphFuzzerGenerator {
 		/// (`holeSelfReentryRandom`). The files declaring `HoleImpl` and `HoleMiddle` say on their first line that they
 		/// fill a hole, so that `GraphFuzzerFixture.withoutHoles` can declare them in the seam's module instead: the
 		/// visible build the value oracle compares with. `holeRandom` draws only for this pass, which runs last.
+		///
+		/// Ten rolls more, each with a generator of its own in `holeRolls`, each made whatever the base draw, so that every
+		/// other graph draws as before (`HoleRolls`): the fillers and the root that reaches the seam in another package;
+		/// `HoleAnalytics` `package`; `HoleImpl` reading it through an alias or only if available, and `HoleOwner`
+		/// aliasing it; a mocked seam or owner; `HoleImpl` declared in a namespace's extension; the seam's module run
+		/// without its package name; a second re-entry, of `HoleRelay`, which passes the site up; a second hole, `holeTracker`,
+		/// filled by `HoleTrackerImpl`; a diamond of two seams that pass the site up, one taking the builder `@Sendable`;
+		/// and a seam, `HoleInner2`, whose hole has the label of `HoleSeam`'s, filled inside `HoleSeam`'s fill.
 		private mutating func addingHoleShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard features.contains(.generateDependencyTree), holeRandom.percentChance(33) else { return declarations }
 			var declarations = declarations
@@ -3553,23 +3650,65 @@ enum GraphFuzzerGenerator {
 			case .mixed:
 				["LazilyInstantiated", "SendableLazilyInstantiated"]
 			}
+			// The further rolls, each made whatever the base draw.
+			let drawsCrossPackage = holeRolls.crossPackage.percentChance(30)
+			let crossPackageRoll = holeRolls.crossPackage.integer(in: 0...9)
+			let drawsNarrowerField = holeRolls.narrowerField.percentChance(15)
+			let drawsAliasedRead = holeRolls.aliasedRead.percentChance(20)
+			let readsOnlyIfAvailable = holeRolls.aliasedRead.percentChance(50)
+			let ownerAliasesField = holeRolls.aliasedRead.percentChance(50)
+			let mockRoll = holeRolls.mocks.integer(in: 0...9)
+			let drawsNamespace = holeRolls.namespace.percentChance(15)
+			let drawsSeamModuleWithoutPackageName = holeRolls.packageName.percentChance(15)
+			let drawsReentryThroughRelay = holeRolls.reentryThroughRelay.percentChance(50)
+			let relayBindsLogger = holeRolls.reentryThroughRelay.percentChance(25)
+			let relayBuildsSeamSendably = holeRolls.reentryThroughRelay.percentChance(50)
+			let drawsSecondHole = holeRolls.secondHole.percentChance(30)
+			let drawsDiamond = holeRolls.diamond.percentChance(50)
+			let drawsNestedFill = holeRolls.nestedFill.percentChance(30)
+			let nestedFillWrapper = holeRolls.nestedFill.element(of: instantiators)
+			// The fillers and the root that reaches the seam are in another package than the seam's, unless the seam's module
+			// is run without its package name, which a caller in another package would assume it shares.
+			let fillsFromOtherPackage = drawsCrossPackage && !modulesOmittingPackageName.contains(.seamModule)
+			let fillerModule: GraphFuzzerModule = fillsFromOtherPackage ? .otherPackageCaller : .samePackageCaller
+
 			let serviceName = name("HoleService")
 			let analyticsName = name("HoleAnalytics")
 			let loggerName = name("HoleLogger")
 			let seamName = name("HoleSeam")
+			let trackerServiceName = name("HoleTrackerService")
 			var seam = instantiable("HoleSeam", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeAnalytics", type: analyticsName)])
 			seam.instantiableArguments = ["generateDependencyTree: true"]
-			seam.additionalDeclarations.append("public protocol \(serviceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+			// Three times in ten the protocol is `package`, and so are the seams that take its builder, `HoleSeam`'s own
+			// initializer `internal`, as an adopter declares a feature's seam: registered, the types cap every initializer
+			// that names them, so the fixture compiles, and the access oracle checks the tiers against them. Never with the
+			// fillers in another package, which could not conform to the protocol; the roll is made whatever, as every roll is.
+			let drawsPackageService = holeProtocolAccessRandom.percentChance(30)
+			let serviceAccess: GraphFuzzerGenerator.AccessLevel = drawsPackageService && !fillsFromOtherPackage ? .package : .public
+			if serviceAccess == .package {
+				proofTypeAccess[serviceName] = .package
+				proofTypeAccess[seamName] = .package
+				seam.access = .package
+				seam.initializerAccess = .internal
+			}
+			let serviceDeclaration = "\(serviceAccess.modifier)protocol \(serviceName)\(helperTypesAreSendable ? ": Sendable" : "") {}"
+			if markerFreeFileRandom.percentChance(50) {
+				markerFreeFiles.append((ownerName: seamName, fileName: "\(serviceName).swift", declaration: serviceDeclaration))
+			} else {
+				seam.additionalDeclarations.append(serviceDeclaration)
+			}
 			var seamModuleDeclarations = [instantiable("HoleAnalytics", module: .seamModule), instantiable("HoleLogger", module: .seamModule)]
 			let holeProperty = PropertyDeclaration(attribute: "@Instantiated", label: "holeService", type: "any \(serviceName)")
 			// The owner: the seam itself, or `HoleOwner`, reached by value or through a wrapper, now and then at two sites.
 			// A tree that reaches the seam again closes the cycle at the first property it repeats, which must be an
 			// instantiator, so a re-entry is drawn only where the seam builds the owner through one.
+			var ownerIndex: Int?
 			var ownerIsBuiltByInstantiator = false
 			if holeRandom.percentChance(25) {
 				seam.properties.append(holeProperty)
 			} else {
 				let owner = instantiable("HoleOwner", module: .seamModule, properties: [holeProperty, PropertyDeclaration(attribute: "@Received", label: "holeAnalytics", type: analyticsName)])
+				ownerIndex = seamModuleDeclarations.count
 				seamModuleDeclarations.append(owner)
 				let wrapperRoll = holeRandom.integer(in: 0...3)
 				ownerIsBuiltByInstantiator = wrapperRoll == 1 || wrapperRoll == 2
@@ -3588,40 +3727,83 @@ enum GraphFuzzerGenerator {
 					ownerIsBuiltByInstantiator = false
 				}
 			}
-			var impl = instantiable("HoleImpl", module: .samePackageCaller)
+			// `HoleAnalytics` `package`, so the scope struct carries it as a `package` field, which only a filler in the seam's
+			// package can read: never drawn with the fillers in another package, which could not name the type, and only
+			// where `HoleOwner` holds the hole, which then does not receive the field, so that its `public` initializer
+			// proves `HoleService` `public`, as the builder's `public` tier needs.
+			let analyticsIsNarrower = drawsNarrowerField && !fillsFromOtherPackage && ownerIndex != nil
+			if analyticsIsNarrower, let ownerIndex {
+				seamModuleDeclarations[0].access = .package
+				proofTypeAccess[analyticsName] = .package
+				seamModuleDeclarations[ownerIndex].properties.removeAll { $0.label == "holeAnalytics" }
+			}
+			var impl = instantiable("HoleImpl", module: fillerModule)
 			impl.instantiableArguments = ["fulfillingAdditionalTypes: [\(serviceName).self]"]
 			impl.additionalConformances.append(serviceName)
 			impl.fillsHole = true
-			if holeRandom.percentChance(50) {
+			if holeRandom.percentChance(50) || analyticsIsNarrower {
 				impl.properties.append(PropertyDeclaration(attribute: "@Received", label: "holeAnalytics", type: analyticsName))
 			}
 			var readsRootLogger = holeRandom.percentChance(25)
 			var callerDeclarations = [TypeDeclaration]()
 
 			// A second seam of the seam's module that calls `HoleSeam`, whose builder it passes up.
-			var calledSeamName = seamName
+			var outerIndex: Int?
 			if holePassUpRandom.percentChance(25) {
 				var outer = instantiable("HoleOuter", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeSeam", type: seamName)])
 				outer.instantiableArguments = ["generateDependencyTree: true"]
+				if serviceAccess == .package {
+					// It takes the builder `HoleSeam` passes up, of the `package` protocol.
+					proofTypeAccess[outer.name] = .package
+					outer.access = .package
+				}
+				outerIndex = seamModuleDeclarations.count
 				seamModuleDeclarations.append(outer)
-				calledSeamName = outer.name
 			}
+			let outerName = name("HoleOuter")
 			// `HoleImpl` instantiates `HoleSeam` again, directly or, a quarter of the time, through `HoleMiddle`, which
 			// declares `holeLogger` above the call while `HoleImpl` reads the root's. Every roll is made whatever the base
-			// draw, so the draw's generator is consumed the same way in every graph.
+			// draw, so the draw's generator is consumed the same way in every graph. Now and then the type that re-enters
+			// `HoleSeam` also instantiates `HoleRelay`, a seam of the seam's module that calls `HoleSeam` and passes its site
+			// up, so the fill is passed to a seam that takes another copy of its hole: `HoleRelay` now and then binds
+			// `holeLogger` while `HoleImpl` reads the root's, and, in a `Sendable` or mixed graph, now and then builds
+			// `HoleSeam` in a `SendableInstantiator`, so it takes the builder `@Sendable`.
 			let drawsReentry = holeReentryRandom.percentChance(40)
-			let reentry = PropertyDeclaration(attribute: "@Instantiated", label: "holeSeamBuilder", type: "\(holeReentryRandom.element(of: instantiators))<\(seamName)>")
+			let reentryWrapper = holeReentryRandom.element(of: instantiators)
 			let reentersThroughMiddle = holeReentryRandom.percentChance(25)
+			let reentersThroughRelay = drawsReentry && ownerIsBuiltByInstantiator && drawsReentryThroughRelay
+			let relayName = name("HoleRelay")
+			var reentries = [PropertyDeclaration(attribute: "@Instantiated", label: "holeSeamBuilder", type: "\(reentryWrapper)<\(seamName)>")]
+			if reentersThroughRelay {
+				reentries.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeRelayBuilder", type: "\(reentryWrapper)<\(relayName)>"))
+			}
 			if drawsReentry, ownerIsBuiltByInstantiator {
 				if reentersThroughMiddle {
-					var middle = instantiable("HoleMiddle", module: .samePackageCaller, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeLogger", type: loggerName), reentry])
+					var middle = instantiable("HoleMiddle", module: fillerModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeLogger", type: loggerName)] + reentries)
 					middle.fillsHole = true
 					callerDeclarations.append(middle)
 					impl.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeMiddle", type: middle.name))
 					readsRootLogger = true
 				} else {
-					impl.properties.append(reentry)
+					impl.properties += reentries
 				}
+			}
+			if reentersThroughRelay {
+				// `HoleRelay` builds `HoleSeam` through an instantiator, at which a walk from `HoleRelay`'s own root closes the
+				// cycle, as the inline walk closes it at the owner's: by value, it would be a constant cycle from `HoleRelay`.
+				let relayWrapper = relayBuildsSeamSendably && sendability != .nonSendable ? "SendableInstantiator" : reentryWrapper
+				var relay = instantiable("HoleRelay", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeSeamBuilder", type: "\(relayWrapper)<\(seamName)>")])
+				relay.instantiableArguments = ["generateDependencyTree: true"]
+				if serviceAccess == .package {
+					// It takes the builder `HoleSeam` passes up, of the `package` protocol, as `HoleOuter` does.
+					proofTypeAccess[relay.name] = .package
+					relay.access = .package
+				}
+				if relayBindsLogger {
+					relay.properties.insert(PropertyDeclaration(attribute: "@Instantiated", label: "holeLogger", type: loggerName), at: 0)
+					readsRootLogger = true
+				}
+				seamModuleDeclarations.append(relay)
 			}
 			// The seam's own tree reaches the seam again through `HoleLoop`, a tenth of the time binding `holeLogger`.
 			if holeSelfReentryRandom.percentChance(5) {
@@ -3633,12 +3815,165 @@ enum GraphFuzzerGenerator {
 				seamModuleDeclarations.append(loop)
 				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeLoopBuilder", type: "\(holeSelfReentryRandom.element(of: instantiators))<\(loop.name)>"))
 			}
+
+			// `HoleImpl` reads `holeAnalytics` through an alias or only if available, and `HoleOwner` now and then aliases
+			// it, before its hole, so the scope struct carries the alias, which `HoleImpl` then reads too (never where
+			// `HoleAnalytics` is `package`, which would make `HoleOwner`'s initializer `package`).
+			if drawsAliasedRead {
+				impl.properties.removeAll { $0.label == "holeAnalytics" }
+				impl.properties.append(readsOnlyIfAvailable
+					? PropertyDeclaration(attribute: "@Received(onlyIfAvailable: true)", label: "holeAnalytics", type: analyticsName + "?")
+					: PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"holeAnalytics\", ofType: \(analyticsName).self)", label: "holeStats", type: analyticsName))
+				if ownerAliasesField, let ownerIndex, !analyticsIsNarrower {
+					seamModuleDeclarations[ownerIndex].properties.insert(PropertyDeclaration(attribute: "@Received(fulfilledByDependencyNamed: \"holeAnalytics\", ofType: \(analyticsName).self)", label: "holeMetrics", type: analyticsName), at: 0)
+					impl.properties.append(PropertyDeclaration(attribute: "@Received", label: "holeMetrics", type: analyticsName))
+				}
+			}
+			// A mocked seam, or a mocked owner, whose mock builds the tree inline and takes the hole's type as a parameter.
+			if mockRoll == 0 {
+				seam.instantiableArguments.append("generateMock: true")
+			} else if mockRoll == 1, let ownerIndex {
+				seamModuleDeclarations[ownerIndex].instantiableArguments.append("generateMock: true")
+			}
+			// `HoleImpl` declared in an extension of a namespace enum.
+			if drawsNamespace {
+				let namespaceName = name("HoleNamespace")
+				impl.enclosingExtension = "extension \(namespaceName)"
+				impl.additionalDeclarations.append("public enum \(namespaceName) {}")
+			}
+			// The fillers in another package: a fifth of the time `HoleImpl`'s initializer `package`, which the fill, in
+			// `HoleImpl`'s own module, can call, and a tenth `HoleImpl` instantiating `HoleCache`, whose initializer is
+			// `package` in the seam's package, which the fill cannot call, as the inline tree cannot.
+			if fillsFromOtherPackage {
+				if crossPackageRoll < 2 {
+					impl.initializerAccess = .package
+				} else if crossPackageRoll == 2 {
+					var cache = instantiable("HoleCache", module: .seamModule)
+					cache.initializerAccess = .package
+					seamModuleDeclarations.append(cache)
+					impl.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeCache", type: cache.name))
+				}
+			}
+			// The seam's module run without its package name, with every filler in the seam's package: never beside a caller
+			// in another package, which would assume it shares one.
+			if drawsSeamModuleWithoutPackageName, !fillsFromOtherPackage, !declarations.contains(where: { $0.module == .otherPackageCaller }) {
+				modulesOmittingPackageName.insert(.seamModule)
+			}
+			// A protocol of the seam's module a second hole, or a hole of another seam, is of, and the type of the roots'
+			// module that fulfills it.
+			var trackerImpl: TypeDeclaration?
+			func trackerImplementation() -> TypeDeclaration {
+				if let trackerImpl {
+					return trackerImpl
+				}
+				seam.additionalDeclarations.append("public protocol \(trackerServiceName)\(helperTypesAreSendable ? ": Sendable" : "") {}")
+				var implementation = instantiable("HoleTrackerImpl", module: fillerModule)
+				implementation.instantiableArguments = ["fulfillingAdditionalTypes: [\(trackerServiceName).self]"]
+				implementation.additionalConformances.append(trackerServiceName)
+				implementation.fillsHole = true
+				return implementation
+			}
+			// A second hole, `holeTracker`, on `HoleSettings`, which the seam builds by value, filled by `HoleTrackerImpl`,
+			// which reads the root's `holeLogger`: beside `HoleMiddle`, the call inside the first hole's fill passes this
+			// fill too, beneath `HoleMiddle`'s `holeLogger`.
+			if drawsSecondHole {
+				var tracker = trackerImplementation()
+				tracker.properties.append(PropertyDeclaration(attribute: "@Received", label: "holeLogger", type: loggerName))
+				trackerImpl = tracker
+				let settings = instantiable("HoleSettings", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeTracker", type: "any \(trackerServiceName)")])
+				seamModuleDeclarations.append(settings)
+				seam.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeSettings", type: settings.name))
+			}
+			// A seam, `HoleInner2`, whose hole's label is `HoleSeam`'s, of another type, filled by `HoleTrackerImpl`, which
+			// `HoleImpl` instantiates and which instantiates `HoleSeam` again: the fills share a name, and the call of
+			// `HoleSeam` inside the inner one passes the outer one.
+			// Never beside the second hole, which `HoleTrackerImpl` fills too: its re-entry would repeat `holeSettings`, a
+			// constant, first.
+			if drawsNestedFill, ownerIsBuiltByInstantiator, !drawsSecondHole {
+				var tracker = trackerImplementation()
+				tracker.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeSeamBuilder", type: "\(nestedFillWrapper)<\(seamName)>"))
+				trackerImpl = tracker
+				let badge = instantiable("HoleBadge", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeService", type: "any \(trackerServiceName)")])
+				var inner = instantiable("HoleInner2", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeBadgeBuilder", type: "\(nestedFillWrapper)<\(badge.name)>")])
+				inner.instantiableArguments = ["generateDependencyTree: true"]
+				seamModuleDeclarations += [badge, inner]
+				impl.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeInner2", type: inner.name))
+			}
+			if let trackerImpl {
+				callerDeclarations.append(trackerImpl)
+			}
+			// Where `HoleOuter` passes the site up, a seam, `HoleTop`, now and then calls it and a second
+			// seam, `HoleOuterS`, which builds `HoleSeam` in a `SendableInstantiator` and so takes the builder `@Sendable`:
+			// `HoleTop` takes one builder for the site, which both are handed.
+			let drawsDiamondOfOuterSeams = drawsDiamond && outerIndex != nil && sendability != .nonSendable
+			if drawsDiamondOfOuterSeams {
+				var sendableOuter = instantiable("HoleOuterS", module: .seamModule, properties: [PropertyDeclaration(attribute: "@Instantiated", label: "holeSeamBuilder", type: "SendableInstantiator<\(seamName)>")])
+				sendableOuter.instantiableArguments = ["generateDependencyTree: true"]
+				var top = instantiable("HoleTop", module: .seamModule, properties: [
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeOuter", type: outerName),
+					PropertyDeclaration(attribute: "@Instantiated", label: "holeOuterS", type: sendableOuter.name),
+				])
+				top.instantiableArguments = ["generateDependencyTree: true"]
+				if serviceAccess == .package {
+					// Both take the builder `HoleSeam` passes up, of the `package` protocol, as `HoleOuter` does.
+					proofTypeAccess[sendableOuter.name] = .package
+					proofTypeAccess[top.name] = .package
+					sendableOuter.access = .package
+					top.access = .package
+				}
+				seamModuleDeclarations += [sendableOuter, top]
+			}
+			// The root that reaches the seam: the first, or, with the fillers in another package, `HoleOtherRoot` there.
+			let rootCall = if drawsDiamondOfOuterSeams {
+				PropertyDeclaration(attribute: "@Instantiated", label: "holeTop", type: name("HoleTop"))
+			} else if outerIndex != nil {
+				PropertyDeclaration(attribute: "@Instantiated", label: "holeOuter", type: outerName)
+			} else {
+				PropertyDeclaration(attribute: "@Instantiated", label: "holeSeam", type: seamName)
+			}
+			var rootProperties = [PropertyDeclaration]()
 			if readsRootLogger {
 				impl.properties.append(PropertyDeclaration(attribute: "@Received", label: "holeLogger", type: loggerName))
-				declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeLogger", type: loggerName))
 			}
-			declarations[0].properties.append(PropertyDeclaration(attribute: "@Instantiated", label: calledSeamName == seamName ? "holeSeam" : "holeOuter", type: calledSeamName))
+			if readsRootLogger || trackerImpl?.properties.contains(where: { $0.label == "holeLogger" }) == true {
+				rootProperties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeLogger", type: loggerName))
+			}
+			rootProperties.append(rootCall)
+			if fillsFromOtherPackage {
+				var otherRoot = instantiable("HoleOtherRoot", module: .otherPackageCaller, properties: rootProperties)
+				otherRoot.instantiableArguments = ["isRoot: true"]
+				callerDeclarations.append(otherRoot)
+			} else {
+				declarations[0].properties += rootProperties
+			}
 			return declarations + [seam] + seamModuleDeclarations + [impl] + callerDeclarations
+		}
+
+		/// The generators of `addingHoleShapes`' further rolls, one apiece, each seeded from the graph's seed.
+		private struct HoleRolls {
+			init(seed: UInt64) {
+				crossPackage = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6543726F73)
+				narrowerField = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654E617272)
+				aliasedRead = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C65416C6961)
+				mocks = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654D6F636B)
+				namespace = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654E616D65)
+				packageName = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C65506B674E)
+				reentryThroughRelay = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654F757452)
+				secondHole = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C6553656348)
+				diamond = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654469616D)
+				nestedFill = GraphFuzzerRandomNumberGenerator(seed: seed ^ 0x686F6C654E657374)
+			}
+
+			var crossPackage: GraphFuzzerRandomNumberGenerator
+			var narrowerField: GraphFuzzerRandomNumberGenerator
+			var aliasedRead: GraphFuzzerRandomNumberGenerator
+			var mocks: GraphFuzzerRandomNumberGenerator
+			var namespace: GraphFuzzerRandomNumberGenerator
+			var packageName: GraphFuzzerRandomNumberGenerator
+			var reentryThroughRelay: GraphFuzzerRandomNumberGenerator
+			var secondHole: GraphFuzzerRandomNumberGenerator
+			var diamond: GraphFuzzerRandomNumberGenerator
+			var nestedFill: GraphFuzzerRandomNumberGenerator
 		}
 
 		private static let holeRandomSeedMask: UInt64 = 0x686F6C655F726E64
@@ -3649,6 +3984,8 @@ enum GraphFuzzerGenerator {
 		private static let formsRandomSeedMask: UInt64 = 0x666F726D735F726E
 		private static let crossModuleRandomSeedMask: UInt64 = 0x63726F73734D6F64
 		private static let proofExtensionRandomSeedMask: UInt64 = 0x70726F6F66457874
+		private static let markerFreeFileRandomSeedMask: UInt64 = 0x6D61726B65724672
+		private static let holeProtocolAccessRandomSeedMask: UInt64 = 0x686F6C6550726F74
 
 		// MARK: Uncreated alias extensions
 
@@ -5018,18 +5355,26 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		guard fixture.drawsHole else { return [] }
 		let prefix = fixture.typeNamePrefix
 		var propertiesByType = [String: [(attribute: String, label: String, type: String)]]()
+		var mockedTypeNames = Set<String>()
 		for content in fixture.swiftFileContent {
 			var currentType: String?
+			var nextTypeIsMocked = false
 			for line in GraphFuzzerSourceLine.lines(of: content) {
 				switch line {
 				case let .typeDeclaration(name):
 					currentType = name
 					propertiesByType[name, default: []] += []
+					if nextTypeIsMocked {
+						mockedTypeNames.insert(name)
+					}
+					nextTypeIsMocked = false
 				case let .property(attribute, label, type):
 					if let currentType {
 						propertiesByType[currentType, default: []].append((attribute, label, type))
 					}
-				case .instantiableAttribute, .instantiateMethod, .other:
+				case let .instantiableAttribute(arguments):
+					nextTypeIsMocked = arguments.contains("generateMock: true")
+				case .instantiateMethod, .other:
 					break
 				}
 			}
@@ -5040,7 +5385,17 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		func declares(_ suffix: String) -> Bool {
 			propertiesByType[prefix + suffix] != nil
 		}
+		/// Whether a file of the fixture declares `suffix`'s class and spells `text`.
+		func fileDeclaring(_ suffix: String, contains text: String) -> Bool {
+			fixture.swiftFileContent.contains { $0.contains("final class \(prefix)\(suffix): ") && $0.contains(text) }
+		}
 		var features: Set<GraphFuzzerSeamDrawFeature> = [.hole]
+		if fixture.swiftFileContent.contains(where: { $0.contains("protocol \(prefix)HoleService") && !$0.contains("@Instantiable") }) {
+			features.insert(.holeProtocolInMarkerFreeFile)
+		}
+		if fixture.swiftFileContent.contains(where: { $0.contains("package protocol \(prefix)HoleService") }) {
+			features.insert(.holeProtocolPackage)
+		}
 		let seamProperties = properties(of: "HoleSeam")
 		if seamProperties.contains(where: { $0.label == "holeService" }) {
 			features.insert(.holeOwnedBySeam)
@@ -5070,11 +5425,63 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		if declares("HoleOuter") {
 			features.insert(.holePassedUp)
 		}
-		if implProperties.contains(where: { $0.label == "holeSeamBuilder" }) || declares("HoleMiddle") {
+		// A re-entry of `HoleSeam` itself, and one of `HoleRelay`: a fill passed to a seam that passes its site up.
+		let reentryProperties = implProperties + properties(of: "HoleMiddle")
+		if reentryProperties.contains(where: { $0.label == "holeSeamBuilder" }) {
 			features.insert(.holeReentersSeam)
 			if declares("HoleOuter") {
 				features.insert(.holeReentersInnerSeamOfPassedUpBuilder)
 			}
+		}
+		if reentryProperties.contains(where: { $0.label == "holeRelayBuilder" }) {
+			features.insert(.holeReentryThroughPassingSeam)
+			if properties(of: "HoleRelay").contains(where: { $0.label == "holeLogger" }) {
+				features.insert(.holeReentryThroughPassingSeamBeneathBoundLabel)
+			}
+			if properties(of: "HoleRelay").contains(where: { $0.type.hasPrefix("SendableInstantiator<") }) {
+				features.insert(.holeReentryThroughSendablePassingSeam)
+			}
+		}
+		if declares("HoleOtherRoot") {
+			features.insert(.holeCrossPackage)
+			if fileDeclaring("HoleImpl", contains: "package init(") {
+				features.insert(.holeCrossPackageFulfillerInitializerPackage)
+			}
+			if implProperties.contains(where: { $0.label == "holeCache" }) {
+				features.insert(.holeCrossPackageFulfillerBuildsPackageInitializerOfSeamsPackage)
+			}
+		} else if fixture.modulesOmittingPackageName.contains(.seamModule) {
+			features.insert(.holeSeamModuleWithoutPackageName)
+		}
+		if fixture.swiftFileContent.contains(where: { $0.contains("package final class \(prefix)HoleAnalytics: ") }) {
+			features.insert(.holeNarrowerField)
+		}
+		if implProperties.contains(where: { $0.attribute.contains("fulfilledByDependencyNamed") || $0.attribute.contains("onlyIfAvailable: true") }) {
+			features.insert(.holeAliasOrOnlyIfAvailable)
+			if implProperties.contains(where: { $0.attribute.contains("onlyIfAvailable: true") }) {
+				features.insert(.holeReadOnlyIfAvailable)
+			}
+		}
+		if properties(of: "HoleOwner").contains(where: { $0.attribute.contains("fulfilledByDependencyNamed") }) {
+			features.insert(.holeOwnerAliasesField)
+		}
+		if mockedTypeNames.contains(prefix + "HoleSeam") || mockedTypeNames.contains(prefix + "HoleOwner") {
+			features.insert(.holeMocks)
+		}
+		if fixture.swiftFileContent.contains(where: { $0.contains("extension \(prefix)HoleNamespace {") }) {
+			features.insert(.holeImplInNamespace)
+		}
+		if declares("HoleSettings") {
+			features.insert(.holeSecondHole)
+			if declares("HoleMiddle") {
+				features.insert(.holeSecondHoleBeneathRedeclaredLabel)
+			}
+		}
+		if declares("HoleOuterS") {
+			features.insert(.holeSendableDiamond)
+		}
+		if declares("HoleInner2") {
+			features.insert(.holeNestedSameLabelFill)
 		}
 		if declares("HoleMiddle") {
 			features.insert(.holeReentersSeamBeneathRedeclaredLabel)
@@ -5193,6 +5600,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 		}
 		if fixture.swiftFileContent.contains(where: { $0.contains("public enum \(prefix)ProofSpace {}") }) {
 			features.insert(.publicNamespace)
+		}
+		if fixture.swiftFileContent.contains(where: { $0.contains("enum \(prefix)ProofSpace {}") && !$0.contains("@Instantiable") }) {
+			features.insert(.namespaceInMarkerFreeFile)
 		}
 		if extensionLines.contains("extension \(prefix)ProofRack: Instantiable {") {
 			features.insert(.instantiableExtensionOfNarrowerType)
@@ -5370,6 +5780,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				if !fill[2].isEmpty {
 					features.insert(.sendableFill)
 				}
+				if fill[3].hasSuffix("_") {
+					features.insert(.fillNamedApart)
+				}
 				// The fill's body, up to the line closing it at its indentation, and the call that passes it after it.
 				let indentation = fill[1]
 				let fillName = fill[3]
@@ -5383,6 +5796,9 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 				let callAfter = lines[(end + 1)...].first { $0.contains("return ") && passesFill($0) }
 				if let callAfter, calledInside.contains(scopeSeam), !callAfter.contains("return \(scopeSeam)(") {
 					features.insert(.fillOfPassedUpBuilderPassedToItsSeam)
+				}
+				if let callAfter, calledInside.contains(where: { $0 != scopeSeam && !callAfter.contains("return \($0)(") }) {
+					features.insert(.fillPassedToSeamPassingItsSiteUp)
 				}
 			}
 		}
@@ -5694,6 +6110,16 @@ struct GraphFuzzerFailure: Equatable {
 		case mockTakesWrapperParameterForReceive = "a generated mock takes a LazilyInstantiated parameter for a receive"
 		case integrationsDiffer = "the graph split across modules gives other results under the two multi-module integrations"
 		case seamRejectsGraphInlineAccepts = "the tool rejects the graph with an error that is not a seam's own, and accepts it with no seam"
+		/// The tool accepts a graph in one module with its seam and rejects it with no seam. In one module the seam world is
+		/// the inlined validation and the seam rules: it adds rules and removes none, so what the inline build rejects, the
+		/// seam must reject too. Across modules the inline build cannot construct another module's `internal` types, so a
+		/// graph split across modules is not judged this way.
+		case seamAcceptsGraphInlineRejects = "the tool accepts the graph with its seam and rejects it with no seam, in one module"
+		/// A graph split across modules gets another verdict, other diagnostics, or other generated declarations when the
+		/// tool runs as the SwiftPM plugin runs it (`MultiModuleIntegration.swiftPackagePlugin`), which computes every seam
+		/// signature, tier and public mock from source, than when it runs as Bazel runs it, reading the dependencies'
+		/// `.safedi` files (`.moduleInfo`).
+		case integrationsDisagree = "the SwiftPM plugin flow and the module-info flow give other results"
 		case seamPassesNilWhereInlinePassesValue = "the generated code passes a literal nil more often with the seam than without it"
 		case seamReadsUncreatedAliasBinding = "a seam's generated code reads the binding of an only-if-available alias of a parameter that may be nil other than as its declaring type's argument"
 		case uncreatedAliasSeamRejectedOtherwise = "the tool rejects the uncreated-alias draw's seam with an error that is not the uncreated alias's"
@@ -5773,6 +6199,7 @@ struct GraphFuzzerResult {
 		multiModuleRuns: [GraphFuzzerMultiModuleRuns] = [],
 		isInspectedByValueOracle: Bool = false,
 		isComparedByValueOracle: Bool = false,
+		isComparedAcrossIntegrations: Bool = false,
 	) {
 		self.fixture = fixture
 		self.outcome = outcome
@@ -5782,6 +6209,7 @@ struct GraphFuzzerResult {
 		self.multiModuleRuns = multiModuleRuns
 		self.isInspectedByValueOracle = isInspectedByValueOracle
 		self.isComparedByValueOracle = isComparedByValueOracle
+		self.isComparedAcrossIntegrations = isComparedAcrossIntegrations
 	}
 
 	let fixture: GraphFuzzerFixture
@@ -5805,6 +6233,10 @@ struct GraphFuzzerResult {
 	/// Whether the comparator did compare the two builds: the graph is inspected, its runs agree, and its generated
 	/// code compiles cleanly, since `results(of:)` hands the comparator no graph with a compilation failure.
 	let isComparedByValueOracle: Bool
+	/// Whether the oracle ran the graph as the SwiftPM plugin runs the tool too, and compared the two flows
+	/// (`GraphFuzzerToolRuns.integrationsDisagreeFailure`): the graph is split across modules, and no module of it is run
+	/// without its package's name.
+	let isComparedAcrossIntegrations: Bool
 
 	/// How each partitioned run that gives other results under the two multi-module integrations differs, whether or
 	/// not the graph also fails another way.
@@ -5843,6 +6275,12 @@ struct GraphFuzzerKnownIssue: Equatable {
 		case integrationsDiffer(containing: String)
 		/// The tool rejects the graph with the seam, with an error whose text contains this, and accepts it without.
 		case seamRejectsGraphInlineAccepts(containing: String)
+		/// The tool accepts a graph in one module with its seam, and rejects it without, with an error whose text contains
+		/// this.
+		case seamAcceptsGraphInlineRejects(containing: String)
+		/// The SwiftPM plugin flow and the module-info flow give a split graph other results, with details containing this,
+		/// such as the first declaration only one of them generates.
+		case integrationsDisagree(containing: String)
 		/// The generated code passes a literal `nil` more often with the seam than without it, to an argument whose
 		/// description contains this text.
 		case seamPassesNilWhereInlinePassesValue(containing: String)
@@ -5883,6 +6321,10 @@ struct GraphFuzzerKnownIssue: Equatable {
 				failure.kind == .integrationsDiffer && failure.details.prefix { $0 != "\n" }.contains(text)
 			case let .seamRejectsGraphInlineAccepts(text):
 				failure.kind == .seamRejectsGraphInlineAccepts && failure.details.contains(text)
+			case let .seamAcceptsGraphInlineRejects(text):
+				failure.kind == .seamAcceptsGraphInlineRejects && failure.details.contains(text)
+			case let .integrationsDisagree(text):
+				failure.kind == .integrationsDisagree && failure.details.contains(text)
 			case let .seamPassesNilWhereInlinePassesValue(text):
 				failure.kind == .seamPassesNilWhereInlinePassesValue && failure.details.contains(text)
 			case let .valueComparatorCouldNotDescribeGraph(text):
@@ -6025,12 +6467,14 @@ struct GraphFuzzerHash {
 struct GraphFuzzerToolRuns {
 	/// - Parameters:
 	///   - renamedOutcomes: The outcome of the graph renamed by each renaming, with the renaming undone.
-	///   - inlineOutcome: The outcome of the graph with no seam, when the graph declares one and the tool rejected it.
+	///   - inlineOutcome: The outcome of the graph with no seam, when the graph declares one.
 	///   - visibleOutcome: The outcome of the graph's visible build (`GraphFuzzerFixture.withoutHoles`), when the graph
 	///     draws a hole.
 	///   - knownRightOutcome: The outcome of the known-right path of a graph drawn with `generateMockPublic`
 	///     (`GraphFuzzerGenerator.knownRightPublicMockFixture(forSeed:)`).
 	///   - multiModuleRuns: What the two multi-module integrations produced for the graph split across modules.
+	///   - pluginOutcome: The outcome of a graph split across modules as the SwiftPM plugin runs the tool, when no module
+	///     of it is run without its package's name: `firstOutcome` is how Bazel runs it.
 	init(
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,
@@ -6040,6 +6484,7 @@ struct GraphFuzzerToolRuns {
 		visibleOutcome: GraphFuzzerToolOutcome? = nil,
 		knownRightOutcome: GraphFuzzerToolOutcome? = nil,
 		multiModuleRuns: [GraphFuzzerMultiModuleRuns] = [],
+		pluginOutcome: GraphFuzzerToolOutcome? = nil,
 	) {
 		self.fixture = fixture
 		self.firstOutcome = firstOutcome
@@ -6049,6 +6494,7 @@ struct GraphFuzzerToolRuns {
 		self.visibleOutcome = visibleOutcome
 		self.knownRightOutcome = knownRightOutcome
 		self.multiModuleRuns = multiModuleRuns
+		self.pluginOutcome = pluginOutcome
 	}
 
 	let fixture: GraphFuzzerFixture
@@ -6059,6 +6505,7 @@ struct GraphFuzzerToolRuns {
 	let visibleOutcome: GraphFuzzerToolOutcome?
 	let knownRightOutcome: GraphFuzzerToolOutcome?
 	let multiModuleRuns: [GraphFuzzerMultiModuleRuns]
+	let pluginOutcome: GraphFuzzerToolOutcome?
 
 	/// The failure of each partitioned run whose two integrations give other results, in the order the runs were made.
 	var multiModuleFailures: [GraphFuzzerFailure] {
@@ -6092,6 +6539,40 @@ struct GraphFuzzerToolRuns {
 			seed: fixture.seed,
 			kind: .seamRejectsGraphInlineAccepts,
 			details: "With the seam:\n\(diagnostics)\nWithout it, the tool accepts the graph.",
+		)
+	}
+
+	/// The failure of a graph in one module the tool accepts with its seam and rejects with no seam, or `nil`: in one
+	/// module the seam world adds rules to the inlined validation and removes none (`seamAcceptsGraphInlineRejects`).
+	var acceptanceDifferentialFailure: GraphFuzzerFailure? {
+		guard fixture.modules == nil, case .accepted = firstOutcome, case let .rejected(diagnostics) = inlineOutcome else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .seamAcceptsGraphInlineRejects,
+			details: "With the seam, the tool accepts the graph.\nWithout it:\n\(diagnostics)",
+		)
+	}
+
+	/// The failure of a graph split across modules that the SwiftPM plugin flow and the module-info flow give another
+	/// verdict, other diagnostics, or other generated declarations (`GraphFuzzerOracle.integrationComparedBlocks(of:)`),
+	/// or `nil`. Both flows lay a module's files out at the same paths, so their diagnostics are compared as they are.
+	var integrationsDisagreeFailure: GraphFuzzerFailure? {
+		guard let pluginOutcome else { return nil }
+		let difference: String? = switch (firstOutcome, pluginOutcome) {
+		case let (.rejected(moduleInfoDiagnostics), .rejected(pluginDiagnostics)):
+			moduleInfoDiagnostics == pluginDiagnostics ? nil : "The two flows report other diagnostics."
+		case let (.accepted(moduleInfoFiles, _), .accepted(pluginFiles, _)):
+			GraphFuzzerOracle.firstDeclarationOneIntegrationGenerates(moduleInfoFiles: moduleInfoFiles, pluginFiles: pluginFiles)
+		case (.accepted, .rejected):
+			"The module-info flow accepts the graph, and the SwiftPM plugin flow rejects it."
+		case (.rejected, .accepted):
+			"The module-info flow rejects the graph, and the SwiftPM plugin flow accepts it."
+		}
+		guard let difference else { return nil }
+		return GraphFuzzerFailure(
+			seed: fixture.seed,
+			kind: .integrationsDisagree,
+			details: "\(difference)\nThe module-info flow:\n\(firstOutcome.description)\nThe SwiftPM plugin flow:\n\(pluginOutcome.description)",
 		)
 	}
 
@@ -6397,7 +6878,7 @@ enum GraphFuzzerOracle {
 		let valueFailures = try valueFailures(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil })
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
-			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.uncreatedAliasRejectionFailure, runs.nilArgumentFailure, runs.uncreatedAliasReadFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], valueFailures[runs.fixture.seed], runs.wrapperParameterFailure, runs.multiModuleFailures.first, renamedGraphFailures.first].compactMap(\.self)
+			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.uncreatedAliasRejectionFailure, runs.nilArgumentFailure, runs.uncreatedAliasReadFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], valueFailures[runs.fixture.seed], runs.wrapperParameterFailure, runs.multiModuleFailures.first, renamedGraphFailures.first].compactMap(\.self)
 			return GraphFuzzerResult(
 				fixture: runs.fixture,
 				outcome: runs.firstOutcome,
@@ -6407,6 +6888,7 @@ enum GraphFuzzerOracle {
 				multiModuleRuns: runs.multiModuleRuns,
 				isInspectedByValueOracle: runs.isInspectedByValueOracle,
 				isComparedByValueOracle: compileVerificationIsEnabled && runs.isInspectedByValueOracle && runs.runsDifferFailure == nil && compilationFailures[runs.fixture.seed] == nil,
+				isComparedAcrossIntegrations: runs.pluginOutcome != nil,
 			)
 		}
 	}
@@ -6894,6 +7376,12 @@ enum GraphFuzzerOracle {
 		let knownRightOutcome: GraphFuzzerToolOutcome? = GraphFuzzerGeneratorFeature.features(drawnIn: fixture).contains(.generateMockPublic)
 			? try await toolOutcome(of: GraphFuzzerGenerator.knownRightPublicMockFixture(forSeed: fixture.seed))
 			: nil
+		// A graph split across modules is run again as the SwiftPM plugin runs the tool, which computes every seam
+		// signature, tier and public mock from source: the two must agree (`integrationsDisagreeFailure`). A graph with a
+		// module run without its package's name models Tuist or Bazel alone, since the plugin always knows the package.
+		let pluginOutcome: GraphFuzzerToolOutcome? = fixture.modules != nil && fixture.modulesOmittingPackageName.isEmpty
+			? try await toolOutcome(of: fixture, integration: .swiftPackagePlugin)
+			: nil
 		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
 			firstOutcome: firstOutcome,
@@ -6903,15 +7391,18 @@ enum GraphFuzzerOracle {
 			visibleOutcome: visibleOutcome,
 			knownRightOutcome: knownRightOutcome,
 			multiModuleRuns: multiModuleRuns,
+			pluginOutcome: pluginOutcome,
 		)
 	}
 
 	/// Runs SafeDITool once over `fixture`, as `executeSafeDIToolTest` runs it for every other generator test.
-	/// - Parameter fileNames: The names to give the fixture's files, in its order, or `nil` to name each after the
-	///   type it declares, as `executeSafeDIToolTest` does.
-	static func toolOutcome(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil) async throws -> GraphFuzzerToolOutcome {
+	/// - Parameters:
+	///   - fileNames: The names to give the fixture's files, in its order, or `nil` to name each after the type it
+	///     declares, as `executeSafeDIToolTest` does.
+	///   - integration: How the tool runs over a graph split across modules.
+	static func toolOutcome(of fixture: GraphFuzzerFixture, fileNames: [String]? = nil, integration: MultiModuleIntegration = .moduleInfo) async throws -> GraphFuzzerToolOutcome {
 		if let modules = fixture.modules {
-			return try await splitToolOutcome(of: fixture, modules: modules, fileNames: fileNames ?? fixture.fileNames)
+			return try await splitToolOutcome(of: fixture, modules: modules, fileNames: fileNames ?? fixture.fileNames, integration: integration)
 		}
 		var filesToDelete = [URL]()
 		defer {
@@ -6944,11 +7435,13 @@ enum GraphFuzzerOracle {
 		}
 	}
 
-	/// Runs SafeDITool over `fixture`, a graph split across modules, as Bazel runs it: one `generate` per module, in
-	/// dependency order, each reading the `.safedi` files of the modules it depends on and naming its module and package
-	/// (`executeSafeDIToolMultiModuleTest`'s `.moduleInfo`). Each generated file is keyed by its module's name and its
-	/// own (`FuzzFeature/FuzzFeature.swift`), and the outcome is the first module's error, if any.
-	private static func splitToolOutcome(of fixture: GraphFuzzerFixture, modules: [GraphFuzzerModule], fileNames: [String]) async throws -> GraphFuzzerToolOutcome {
+	/// Runs SafeDITool over `fixture`, a graph split across modules, as `integration` runs it. As Bazel runs it
+	/// (`.moduleInfo`), one `generate` per module, in dependency order, each reading the `.safedi` files of the modules it
+	/// depends on and naming its module and package, writes one combined output, which is decomposed into the files one
+	/// module writes; as the SwiftPM plugin runs it (`.swiftPackagePlugin`), `scan` and `generate` per module read the
+	/// module's own files and its dependencies' and write those files. Each generated file is keyed by its module's name
+	/// and its own (`FuzzFeature/Type+SafeDI.swift`), and the outcome is the first module's error, if any.
+	private static func splitToolOutcome(of fixture: GraphFuzzerFixture, modules: [GraphFuzzerModule], fileNames: [String], integration: MultiModuleIntegration) async throws -> GraphFuzzerToolOutcome {
 		var filesToDelete = [URL]()
 		defer {
 			for fileToDelete in filesToDelete {
@@ -6966,15 +7459,20 @@ enum GraphFuzzerOracle {
 			)
 		}
 		do {
-			let output = try await executeSafeDIToolMultiModuleTest(modules: moduleFixtures, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
+			let output = try await executeSafeDIToolMultiModuleTest(modules: moduleFixtures, integration: integration, compileVerification: .skipped, filesToDelete: &filesToDelete)
 			let normalize = normalizer(fixtureDirectory: output.fixtureRoot.path)
 			var generatedFiles = [String: String]()
 			var warnings = [String]()
 			for moduleName in output.moduleNames {
 				guard let moduleOutput = output.modules[moduleName] else { continue }
-				for (_, contents) in moduleOutput.generatedFiles {
-					for (fileName, fileContents) in decomposingCombinedOutput(normalize(contents)) {
-						generatedFiles["\(moduleName)/\(fileName)"] = fileContents
+				for (outputFileName, contents) in moduleOutput.generatedFiles {
+					switch integration {
+					case .moduleInfo:
+						for (fileName, fileContents) in decomposingCombinedOutput(normalize(contents)) {
+							generatedFiles["\(moduleName)/\(fileName)"] = fileContents
+						}
+					case .swiftPackagePlugin:
+						generatedFiles["\(moduleName)/\(outputFileName)"] = normalize(contents)
 					}
 				}
 				warnings += moduleOutput.warnings.map { normalize("\($0)") }
@@ -7045,6 +7543,77 @@ enum GraphFuzzerOracle {
 		}
 		return blocksByFileName.mapValues { header + "\n" + $0.joined(separator: "\n\n") + "\n" }
 	}
+
+	/// The top-level declarations each module of a split graph generates, by module name, on which the SwiftPM plugin
+	/// flow and the module-info flow must agree: every generated file but the oracle's own callers, in blocks that begin
+	/// where a line begins as `integrationComparedBlockStarts` say. What the flows spell differently is dropped first:
+	/// `#sourceLocation` directives, which only a flow that knows the compiler's spelling of a path emits, the header
+	/// lines every generated file opens with, and the comments of `integrationSpecificTrailingComments`. The blocks are
+	/// a set, since the plugin repeats a module's imports in every file it writes, where a combined output states them
+	/// once.
+	static func integrationComparedBlocks(of generatedFiles: [String: String]) -> [String: Set<String>] {
+		var blocksByModuleName = [String: Set<String>]()
+		for (fileName, contents) in generatedFiles where !fileName.hasSuffix("+SafeDISeamCaller.swift") && !fileName.hasSuffix(publicMockCallerFileSuffix) {
+			let moduleName = String(fileName.prefix { $0 != "/" })
+			var block = [Substring]()
+			func endBlock() {
+				let text = block.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+				if !text.isEmpty {
+					blocksByModuleName[moduleName, default: []].insert(text)
+				}
+				block = []
+			}
+			for line in contents.split(separator: "\n", omittingEmptySubsequences: false) {
+				let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+				guard !trimmedLine.hasPrefix("#sourceLocation"), !generatedFileHeaderLines.contains(trimmedLine) else { continue }
+				let code = integrationSpecificTrailingComments.reduce(line) { code, comment in
+					code.range(of: comment).map { code[..<$0.lowerBound] } ?? code
+				}
+				if integrationComparedBlockStarts.contains(where: { code.hasPrefix($0) }) {
+					endBlock()
+				}
+				block.append(code)
+			}
+			endBlock()
+		}
+		return blocksByModuleName
+	}
+
+	/// The first top-level declaration, in module and then text order, that one of the two flows generates and the other
+	/// does not (`integrationComparedBlocks(of:)`), described with the flow and the module, or `nil` when they generate
+	/// the same declarations.
+	static func firstDeclarationOneIntegrationGenerates(moduleInfoFiles: [String: String], pluginFiles: [String: String]) -> String? {
+		let moduleInfoBlocks = integrationComparedBlocks(of: moduleInfoFiles)
+		let pluginBlocks = integrationComparedBlocks(of: pluginFiles)
+		return Set(moduleInfoBlocks.keys).union(pluginBlocks.keys).sorted().lazy.compactMap { moduleName -> String? in
+			let moduleInfoModuleBlocks = moduleInfoBlocks[moduleName, default: []]
+			let pluginModuleBlocks = pluginBlocks[moduleName, default: []]
+			if let block = moduleInfoModuleBlocks.subtracting(pluginModuleBlocks).sorted().first {
+				return "Only the module-info flow generates, in \(moduleName):\n\(block)"
+			} else if let block = pluginModuleBlocks.subtracting(moduleInfoModuleBlocks).sorted().first {
+				return "Only the SwiftPM plugin flow generates, in \(moduleName):\n\(block)"
+			} else {
+				return nil
+			}
+		}.first
+	}
+
+	/// How each line that begins a block `integrationComparedBlocks(of:)` compares begins: an extension, a conditional
+	/// block, a public mock's module-level configuration or a forwarder of a default, or an import.
+	static let integrationComparedBlockStarts = ["extension ", "#if ", "/// Configuration for how ", "@usableFromInline ", "import "]
+
+	/// The lines every generated file opens with, in order.
+	static let generatedFileHeaderLines = [
+		"// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.",
+		"// Any modifications made to this file will be overwritten on subsequent builds.",
+		"// Please refrain from editing this file directly.",
+	]
+
+	/// The trailing comments generated code carries in one flow and not the other: `// Declared at …`, which refers to an
+	/// alias's declaration where a flow does not know the compiler's spelling of its path for a `#sourceLocation`
+	/// directive, and the comment a seam call carries where SafeDI cannot know the seam's module generated the
+	/// initializer it calls, which a flow that reads the module's `.safedi` knows.
+	static let integrationSpecificTrailingComments = [" // Declared at ", " // If this line does not compile, add the SafeDI plugin"]
 
 	/// The failure of a graph whose `SafeDITool generate` output differs between two processes, which seed their
 	/// hashing differently, or `nil` when both processes give the same output.

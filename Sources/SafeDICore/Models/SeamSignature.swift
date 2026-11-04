@@ -132,9 +132,9 @@ public struct SeamSignature: Sendable {
 		/// receiver requires, an own required `@Received` and an own `@Forwarded` have no default, optional type or
 		/// not.
 		public let defaultsToNil: Bool
-		/// The receives inside the seam's tree a pass-through fulfills, in tree order, each with the access that
-		/// bounds it, so a seam that passes the parameter on names the receiver that caps it, not this seam, when a
-		/// tier of its own cannot take it. Empty for one of the seam's own properties, which its own initializer
+		/// The receives inside the seam's tree that a pass-through fulfills, in tree order, each with the access the
+		/// proof gives the parameter; a seam that passes the parameter on names them in its notes, and admits their
+		/// modules' mentions to the proof. Empty for one of the seam's own properties, which its own initializer
 		/// receives.
 		public let receivers: [Receiver]
 		/// For a parameter on no tier (`SeamSignature.noTierParameters`), the nested seam call that omits it, else `nil`.
@@ -313,6 +313,32 @@ public struct SeamSignature: Sendable {
 		/// The hole's site.
 		public var site: Site {
 			Site(seamType: scopeSeamType, path: sitePath)
+		}
+
+		/// This hole as a call of a public mock takes its builder: under `parameterName`, the name the called mock gives
+		/// the builder's parameter, which a mock that passes up the builders of several holes of one label names apart.
+		func takenUnder(parameterName: String) -> Hole {
+			Hole(
+				ownerType: ownerType,
+				property: property,
+				instantiatedType: instantiatedType,
+				declarationLocation: declarationLocation,
+				erasedToConcreteExistential: erasedToConcreteExistential,
+				sitePath: sitePath,
+				sitePathDeclarationLocations: sitePathDeclarationLocations,
+				fillPropertyStack: fillPropertyStack,
+				builderLabel: parameterName,
+				internalName: internalName,
+				scopeSeamType: scopeSeamType,
+				scopeTypeName: scopeTypeName,
+				stages: stages,
+				stageBoundaryDepths: stageBoundaryDepths,
+				tierAccess: tierAccess,
+				accessCause: accessCause,
+				uncarriedDeclarations: uncarriedDeclarations,
+				innerSeamType: innerSeamType,
+				isSendable: isSendable,
+			)
 		}
 
 		/// The name of the struct of the stage at `stageIndex`, or `nil` for an unstaged builder.
@@ -612,10 +638,11 @@ public struct SeamCall: Sendable {
 public struct SeamResolution: Sendable {
 	/// A seam declared in another module, which that module's run of `generate` generated the initializer of.
 	public struct ForeignSeam: Sendable {
-		public init(declaringModule: ModuleIdentity, missingDependencyModuleName: String? = nil, visibleInstantiables: [TypeDescription: Instantiable], callCarriesPluginComment: Bool, declaringModuleMockCondition: MockCondition? = nil) {
+		public init(declaringModule: ModuleIdentity, missingDependencyModuleName: String? = nil, visibleInstantiables: [TypeDescription: Instantiable], visiblePlainTypeDeclarations: [PlainTypeDeclaration], callCarriesPluginComment: Bool, declaringModuleMockCondition: MockCondition? = nil) {
 			self.declaringModule = declaringModule
 			self.missingDependencyModuleName = missingDependencyModuleName
 			self.visibleInstantiables = visibleInstantiables
+			self.visiblePlainTypeDeclarations = visiblePlainTypeDeclarations
 			self.callCarriesPluginComment = callCarriesPluginComment
 			self.declaringModuleMockCondition = declaringModuleMockCondition
 		}
@@ -629,6 +656,9 @@ public struct SeamResolution: Sendable {
 		/// The declarations the seam's module can see, resolved as `generate` resolves them, from which the seam's
 		/// signature is computed exactly as that module computed it. The seams of one module share one map.
 		public let visibleInstantiables: [TypeDescription: Instantiable]
+		/// The plain type declarations of the modules whose declarations `visibleInstantiables` holds, which prove the
+		/// access of the types the seam's parameters name as they prove it in the seam's module.
+		public let visiblePlainTypeDeclarations: [PlainTypeDeclaration]
 		/// See `SeamCall.carriesPluginComment`.
 		public let callCarriesPluginComment: Bool
 		/// The mock condition of the seam's module, when this run read that module's files under its own mock condition,
@@ -642,10 +672,11 @@ public struct SeamResolution: Sendable {
 	/// A type another module declares with `generateMock: .public`, whose `mock()` that module's run of `generate`
 	/// generated, and which a mock tree of this module calls where it cannot build the type's tree itself.
 	public struct ForeignPublicMock: Sendable {
-		public init(declaringModule: ModuleIdentity, missingDependencyModuleName: String? = nil, visibleInstantiables: [TypeDescription: Instantiable], callCarriesPluginComment: Bool, declaringModuleMockCondition: MockCondition) {
+		public init(declaringModule: ModuleIdentity, missingDependencyModuleName: String? = nil, visibleInstantiables: [TypeDescription: Instantiable], visiblePlainTypeDeclarations: [PlainTypeDeclaration], callCarriesPluginComment: Bool, declaringModuleMockCondition: MockCondition) {
 			self.declaringModule = declaringModule
 			self.missingDependencyModuleName = missingDependencyModuleName
 			self.visibleInstantiables = visibleInstantiables
+			self.visiblePlainTypeDeclarations = visiblePlainTypeDeclarations
 			self.callCarriesPluginComment = callCarriesPluginComment
 			self.declaringModuleMockCondition = declaringModuleMockCondition
 		}
@@ -657,6 +688,8 @@ public struct SeamResolution: Sendable {
 		/// The declarations the declaring module can see, resolved as `generate` resolves them, from which the public
 		/// mock's signature is computed exactly as that module computed it.
 		public let visibleInstantiables: [TypeDescription: Instantiable]
+		/// See `ForeignSeam.visiblePlainTypeDeclarations`.
+		public let visiblePlainTypeDeclarations: [PlainTypeDeclaration]
 		/// See `SeamCall.carriesPluginComment`.
 		public let callCarriesPluginComment: Bool
 		/// The condition the declaring module generates its mocks under: its configuration's, `DEBUG` without one, read
@@ -664,7 +697,7 @@ public struct SeamResolution: Sendable {
 		public let declaringModuleMockCondition: MockCondition
 	}
 
-	public init(currentModule: ModuleIdentity, currentModuleMockCondition: MockCondition = MockCondition("DEBUG"), generatedSeams: Set<TypeDescription>, foreignSeams: [TypeDescription: ForeignSeam], foreignPublicMocks: [TypeDescription: ForeignPublicMock] = [:], callersComputeFromTargetGraph: Bool = false, callersVisibleInstantiables: [TypeDescription: Instantiable]? = nil) {
+	public init(currentModule: ModuleIdentity, currentModuleMockCondition: MockCondition = MockCondition("DEBUG"), generatedSeams: Set<TypeDescription>, foreignSeams: [TypeDescription: ForeignSeam], foreignPublicMocks: [TypeDescription: ForeignPublicMock] = [:], callersComputeFromTargetGraph: Bool = false, callersVisibleInstantiables: [TypeDescription: Instantiable]? = nil, callersVisiblePlainTypeDeclarations: [PlainTypeDeclaration] = []) {
 		self.currentModule = currentModule
 		self.currentModuleMockCondition = currentModuleMockCondition
 		self.generatedSeams = generatedSeams
@@ -672,6 +705,7 @@ public struct SeamResolution: Sendable {
 		self.foreignPublicMocks = foreignPublicMocks
 		self.callersComputeFromTargetGraph = callersComputeFromTargetGraph
 		self.callersVisibleInstantiables = callersVisibleInstantiables
+		self.callersVisiblePlainTypeDeclarations = callersVisiblePlainTypeDeclarations
 	}
 
 	/// No seam is treated as one: every type is built inline, as before seams existed.
@@ -706,6 +740,9 @@ public struct SeamResolution: Sendable {
 	/// seam: the callers' calls would not match the initializer. `nil` too when this module's name is unknown, since
 	/// every caller then builds its seams inline and computes no signature.
 	public let callersVisibleInstantiables: [TypeDescription: Instantiable]?
+	/// The plain type declarations of the modules whose declarations `callersVisibleInstantiables` holds, each with the
+	/// module that declares it: a declaration whose module SafeDI does not know is one the callers cannot see.
+	public let callersVisiblePlainTypeDeclarations: [PlainTypeDeclaration]
 
 	/// Whether any seam is treated as one, which is when the dependency tree generator builds a second map of scopes.
 	public var isEmpty: Bool {

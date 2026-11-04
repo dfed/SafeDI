@@ -145,6 +145,16 @@ final class Scope: Hashable {
 			}
 		}
 
+		/// The scope of the tree this builds, or `nil` for a hole or an alias, which build none.
+		var builtScope: Scope? {
+			switch self {
+			case let .instantiated(_, scope, _):
+				scope
+			case .hole, .aliased:
+				nil
+			}
+		}
+
 		/// The by-value property with which types further down the tree receive the instance of the lazily
 		/// instantiated property this declares. `nil` when it declares none.
 		var lazilyInstantiatedInstanceProperty: Property? {
@@ -470,7 +480,7 @@ final class Scope: Hashable {
 				}
 			} else if let fill = scopeGeneratorsUnderConstruction[index].nextFill() {
 				try scopeGeneratorsUnderConstruction.append(scopeGeneratorsUnderConstruction[index].fillUnderConstruction(
-					hole: fill.hole,
+					fill: fill.fill,
 					scope: fill.scope,
 				))
 			} else {
@@ -504,8 +514,8 @@ private struct ScopeGeneratorUnderConstruction {
 		erasedToConcreteExistential: Bool,
 		forMockGeneration: Bool,
 		startsCodeGeneration: Bool,
-		fill: SeamSignature.Hole? = nil,
-		fillKey: String? = nil,
+		fill: Fill? = nil,
+		buildsWithHandWrittenMocks: Bool = false,
 		previousPassGenerator: ScopeGenerator?,
 		cycleParameterContexts: [Property: CycleParameterContext],
 		cycleParameterProvidedForms: Set<Property>,
@@ -523,7 +533,7 @@ private struct ScopeGeneratorUnderConstruction {
 		}
 		// The parameters of this scope's builder function that the pass before found, when a lazy cycle closes on it,
 		// or those of the function a cycle-closing scope refers to. Nearly every scope has neither.
-		let ownCycleParameters = if !isPropertyCycle, fill == nil, property != nil {
+		let ownCycleParameters = if !isPropertyCycle, property != nil {
 			previousPassGenerator?.foundCycleParameters ?? []
 		} else {
 			[CycleParameter]()
@@ -584,10 +594,16 @@ private struct ScopeGeneratorUnderConstruction {
 		/// Whether an `onlyIfAvailable` dependency of `property` is unavailable. A property this scope
 		/// creates is available. Otherwise, the property this scope is built for and its ancestors are
 		/// still being built, so they are unavailable.
-		func isPropertyUnavailable(_ property: Property) -> Bool {
+		/// - Parameter mockBindsEveryReceive: Whether, in a mock, every receive of `property` is bound by the mock where it
+		///   is not declared above. `false` for a parameter of this scope's builder function that a lazy cycle closes on:
+		///   its label may be one only the calls of other modules' public mocks receive, which the mock leaves out
+		///   (`ScopeGenerator.receivedOnlyByPublicMockCallsLeftOut`), so the scope declaring the function passes it, as
+		///   production does, only what a declaration above the function or the mock's own binding provides, and `nil`
+		///   otherwise.
+		func isPropertyUnavailable(_ property: Property, mockBindsEveryReceive: Bool = true) -> Bool {
 			if scope.createdProperties.contains(property) {
 				return false
-			} else if forMockGeneration, scope.publicMockCall == nil {
+			} else if forMockGeneration, scope.publicMockCall == nil, mockBindsEveryReceive {
 				// A mock builds, or is handed, every property an ancestor does not
 				// create — onlyIfAvailable dependencies become optional mock parameters.
 				// Only a property that is still being built is unavailable, as in production. A mock promotes a
@@ -599,9 +615,13 @@ private struct ScopeGeneratorUnderConstruction {
 				}
 			} else {
 				// A mock binds what its tree receives, but not what only the public mocks it calls receive: a call passes
-				// such a property only where the tree provides it, as production would, and `nil` elsewhere.
+				// such a property only where the tree provides it, as production would, and `nil` elsewhere. The instance of
+				// a wrapper the tree holds – one the mock root promotes, or a scope above declares – is provided: the call
+				// passes it by reading the wrapper's instance, as the arguments read it (`lazilyInstantiatedInstanceProperties`).
 				func isReceivable(_ property: Property) -> Bool {
-					receivableProperties.contains(property) || (forMockGeneration && boundProperties.contains(property))
+					receivableProperties.contains(property)
+						|| (forMockGeneration && boundProperties.contains(property))
+						|| lazilyInstantiatedInstanceProperties.contains(property)
 				}
 				let propertyIsAvailableInParentStack = isReceivable(property) && !childPropertyStack.contains(property)
 				let unwrappedPropertyIsAvailableInParentStack = isReceivable(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty)
@@ -624,7 +644,7 @@ private struct ScopeGeneratorUnderConstruction {
 		} else if !ownCycleParameters.isEmpty {
 			// The scope that declares the function passes each parameter the binding in scope where it calls it, as the
 			// function's body read it before, and the body reads every form the parameters provide.
-			for parameter in ownCycleParameters where !parameter.isRequired && isPropertyUnavailable(parameter.property) {
+			for parameter in ownCycleParameters where !parameter.isRequired && isPropertyUnavailable(parameter.property, mockBindsEveryReceive: false) {
 				cycleParameterUnavailableProperties.insert(parameter.property)
 			}
 			receivableProperties = receivableProperties
@@ -709,28 +729,42 @@ private struct ScopeGeneratorUnderConstruction {
 		// The path is kept only where a hole needs it: a site, and the stage calls of a staged builder, are found by it.
 		self.sitePath = seamHoles.isEmpty ? [] : sitePath + (property.map { [$0] } ?? [])
 		self.fill = fill
-		self.fillKey = fillKey
 		self.erasedToConcreteExistential = erasedToConcreteExistential
 		self.isPropertyCycle = isPropertyCycle
 		self.forMockGeneration = forMockGeneration
 		self.startsCodeGeneration = startsCodeGeneration
+		self.buildsWithHandWrittenMocks = buildsWithHandWrittenMocks
 		// A scope that closes a cycle calls no seam; any other seam call passes a builder for each of the seam's holes. A
 		// call inside a fill of a seam that holds the fill's site, or that passes the site's builder up, passes that fill
 		// by name, so every instance of the seam calls the same fills with its own scopes.
 		self.enclosingFills = enclosingFills
 		holeArguments = isPropertyCycle ? [] : scope.holeArguments
-		holeArgumentsToFill = holeArguments.filter { holeArgument in
-			if case .fill = holeArgument {
-				enclosingFills[ScopeGenerator.fillKey(of: holeArgument.hole)] == nil
-			} else {
-				false
+		// The call's own fills are those no enclosing call fills. A fill is named apart from the fills enclosing it and from
+		// the builders the seam whose tree holds it takes, which a call inside it passes by name and which the fill, declared
+		// closer, would shadow. One seam's builder labels are distinct, so the call's own fills never share a name.
+		var fillsOfThisCall = [(fill: Fill, scope: Scope)]()
+		if !holeArguments.isEmpty {
+			let reservedNames = Set(enclosingFills.values).union(seamHoles.internalNames)
+			for case let .fill(hole, fulfillingScope) in holeArguments where enclosingFills[ScopeGenerator.fillKey(of: hole)] == nil {
+				var functionName = ScopeGenerator.fillFunctionName(of: hole)
+				while reservedNames.contains(functionName) {
+					functionName = "\(functionName)_".spelledAsJoinedIdentifier
+				}
+				fillsOfThisCall.append((Fill(hole: hole, key: ScopeGenerator.fillKey(of: hole), functionName: functionName), fulfillingScope))
 			}
 		}
-		childGenerators.reserveCapacity(propertiesToGenerate.count + holeArgumentsToFill.count)
+		self.fillsOfThisCall = fillsOfThisCall
+		childGenerators.reserveCapacity(propertiesToGenerate.count + fillsOfThisCall.count)
 	}
 
-	/// The generators created so far for `propertiesToGenerate`, in order, followed by those of the fills of
-	/// `holeArguments`.
+	/// A fill of a seam call: the hole it fills, its key (see `ScopeGenerator.fillKey(of:)`), and its function's name.
+	struct Fill {
+		let hole: SeamSignature.Hole
+		let key: String
+		let functionName: String
+	}
+
+	/// The generators created so far for `propertiesToGenerate`, in order, followed by those of `fillsOfThisCall`.
 	var childGenerators = [ScopeGenerator]()
 
 	/// The next of `propertiesToGenerate` to create a generator for, or `nil` once every one has its generator.
@@ -741,23 +775,20 @@ private struct ScopeGeneratorUnderConstruction {
 		return propertyToGenerate
 	}
 
-	/// The next fill of `holeArguments` to create a generator for, once every one of `propertiesToGenerate` has its
+	/// The next of `fillsOfThisCall` to create a generator for, once every one of `propertiesToGenerate` has its
 	/// generator, or `nil` once every fill has its generator.
-	mutating func nextFill() -> (hole: SeamSignature.Hole, scope: Scope)? {
-		while nextHoleArgumentIndex < holeArgumentsToFill.count {
-			let holeArgument = holeArgumentsToFill[nextHoleArgumentIndex]
-			nextHoleArgumentIndex += 1
-			if case let .fill(hole, scope) = holeArgument {
-				return (hole, scope)
-			}
-		}
-		return nil
+	mutating func nextFill() -> (fill: Fill, scope: Scope)? {
+		guard nextFillIndex < fillsOfThisCall.count else { return nil }
+		let fill = fillsOfThisCall[nextFillIndex]
+		nextFillIndex += 1
+		return fill
 	}
 
 	/// The scope under construction for the property a fill of this scope's seam call builds: the scope of the type
 	/// that fulfills the hole in the caller's declarations, built with the stack the seam whose tree holds the site
 	/// reaches it with, and with the fields of the site's scope struct in scope beside what encloses the call.
-	func fillUnderConstruction(hole: SeamSignature.Hole, scope: Scope) throws -> ScopeGeneratorUnderConstruction {
+	func fillUnderConstruction(fill: Fill, scope: Scope) throws -> ScopeGeneratorUnderConstruction {
+		let hole = fill.hole
 		let fields = hole.stages.joined().map(\.property)
 		let fieldLabels = Set(fields.map(\.label))
 		var fieldForms = Set<Property>()
@@ -787,11 +818,13 @@ private struct ScopeGeneratorUnderConstruction {
 			erasedToConcreteExistential: hole.erasedToConcreteExistential,
 			forMockGeneration: forMockGeneration,
 			startsCodeGeneration: startsCodeGeneration,
-			fill: hole,
-			fillKey: ScopeGenerator.fillKey(of: hole),
+			fill: fill,
+			// A fill a mock declares builds the hole's tree as the mock's tree built inline would.
+			buildsWithHandWrittenMocks: forMockGeneration,
 			// The pass before created a fill's generator around the generator of the property it builds. A fill is a
 			// function of its own, declared where the seam is called, so no function enclosing the call that a lazy cycle
-			// closes on encloses a cycle-closing scope in the fill.
+			// closes on encloses a cycle-closing scope in the fill. The fill's own built scope takes the parameters the
+			// pass before found for it as any scope does, when a lazy cycle inside the fill closes on its property.
 			previousPassGenerator: previousPassChildGenerator?.children.first,
 			cycleParameterContexts: [:],
 			cycleParameterProvidedForms: [],
@@ -838,6 +871,7 @@ private struct ScopeGeneratorUnderConstruction {
 				erasedToConcreteExistential: erasedToConcreteExistential,
 				forMockGeneration: forMockGeneration,
 				startsCodeGeneration: startsCodeGeneration,
+				buildsWithHandWrittenMocks: buildsWithHandWrittenMocks,
 				previousPassGenerator: previousPassChildGenerator,
 				cycleParameterContexts: childCycleParameterContexts,
 				cycleParameterProvidedForms: childCycleParameterProvidedForms,
@@ -856,8 +890,8 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The fills inside one of this scope's fills can refer to: those of enclosing calls, and every fill of this call.
 	private var enclosingFillsOfThisCall: [String: String] {
 		var fills = enclosingFills
-		for case let .fill(hole, _) in holeArgumentsToFill {
-			fills[ScopeGenerator.fillKey(of: hole)] = ScopeGenerator.fillFunctionName(of: hole)
+		for (fill, _) in fillsOfThisCall {
+			fills[fill.key] = fill.functionName
 		}
 		return fills
 	}
@@ -898,6 +932,8 @@ private struct ScopeGeneratorUnderConstruction {
 
 	/// Creates the scope's generator once `childGenerators` holds a generator for each of `propertiesToGenerate`.
 	func scopeGenerator() -> ScopeGenerator {
+		// Every fill this call passes is an enclosing call's or its own.
+		let fillNames = holeArguments.isEmpty ? [:] : enclosingFillsOfThisCall
 		let builtGenerator = ScopeGenerator(
 			instantiable: scope.instantiable,
 			property: property,
@@ -920,7 +956,8 @@ private struct ScopeGeneratorUnderConstruction {
 					let fillKey = ScopeGenerator.fillKey(of: hole)
 					return ScopeGenerator.HoleCallArgument(
 						label: hole.builderLabel,
-						value: enclosingFills[fillKey] ?? ScopeGenerator.fillFunctionName(of: hole),
+						value: fillNames[fillKey] ?? ScopeGenerator.fillFunctionName(of: hole),
+						hole: hole,
 						enclosingFillKey: enclosingFills[fillKey] == nil ? nil : fillKey,
 					)
 				case let .passUp(hole):
@@ -929,6 +966,7 @@ private struct ScopeGeneratorUnderConstruction {
 					return ScopeGenerator.HoleCallArgument(
 						label: hole.builderLabel,
 						value: seamHoles.hole(taking: hole)?.internalName ?? hole.internalName,
+						hole: hole,
 					)
 				}
 			},
@@ -940,13 +978,17 @@ private struct ScopeGeneratorUnderConstruction {
 				}
 			},
 			stageCalls: seamHoles.stageCalls(at: sitePath),
+			constructsWithHandWrittenMock: buildsWithHandWrittenMocks
+				&& scope.publicMockCall == nil
+				&& scope.instantiable.mockInitializer != nil
+				&& property.map { scope.instantiable.mockReturnTypeIsCompatible(withPropertyType: $0.typeDescription.asInstantiatedType) } ?? false,
 			cycleParameters: passedCycleParameters,
 			builtCycleParameters: ownCycleParameters,
 			cycleParameterUnavailableProperties: cycleParameterUnavailableProperties,
 			callSiteLazilyInstantiatedInstanceProperties: callSiteLazilyInstantiatedInstanceProperties,
 		)
 		let scopeGenerator = if let fill {
-			ScopeGenerator(fill: fill, key: fillKey ?? "", child: builtGenerator)
+			ScopeGenerator(fill: fill.hole, key: fill.key, functionName: fill.functionName, child: builtGenerator)
 		} else {
 			builtGenerator
 		}
@@ -961,6 +1003,9 @@ private struct ScopeGeneratorUnderConstruction {
 
 	private let scope: Scope
 	private let property: Property?
+	/// Whether this scope is in the tree of a fill a mock declares, whose types are built as the mock's tree built
+	/// inline builds them: each with its hand-written mock where `mockReturnTypeIsCompatible` says the mock builds it.
+	private let buildsWithHandWrittenMocks: Bool
 	private let propertiesToGenerate: [Scope.PropertyToGenerate]
 	/// The index in `propertiesToGenerate` of the next property to create a generator for.
 	private var nextPropertyIndex = 0
@@ -1063,19 +1108,19 @@ private struct ScopeGeneratorUnderConstruction {
 	private let seamHoles: SeamHoles
 	/// The properties from the root of the tree down to this scope's, when `seamHoles` is not empty; otherwise empty.
 	private let sitePath: [Property]
-	/// The hole whose fill this scope builds the property of, or `nil` for every other scope.
-	private let fill: SeamSignature.Hole?
+	/// For a scope a fill builds the property of, the fill's hole, its key (see `ScopeGenerator.fillKey(of:)`), and the
+	/// name of its function; `nil` for every other scope.
+	private let fill: Fill?
 	/// How the seam call this scope makes passes each builder (see `Scope.holeArguments`).
 	private let holeArguments: [Scope.HoleArgument]
-	/// The fills of `holeArguments` this scope's generator holds: those no enclosing call already fills.
-	private let holeArgumentsToFill: [Scope.HoleArgument]
+	/// The fills of `holeArguments` this scope's generator holds – those no enclosing call already fills – each with the
+	/// scope of the type that fulfills its hole.
+	private let fillsOfThisCall: [(fill: Fill, scope: Scope)]
 	/// The fills enclosing this scope, by `ScopeGenerator.fillKey(of:)`, each with its function's name, which a call
 	/// inside them of a seam that holds or passes up their site passes by name.
 	private let enclosingFills: [String: String]
-	/// For a scope a fill builds the property of, the key of that fill (see `ScopeGenerator.fillKey(of:)`).
-	private let fillKey: String?
-	/// The index in `holeArguments` of the next to look at for a fill.
-	private var nextHoleArgumentIndex = 0
+	/// The index in `fillsOfThisCall` of the next fill to create a generator for.
+	private var nextFillIndex = 0
 	private let erasedToConcreteExistential: Bool
 	private let isPropertyCycle: Bool
 	private let forMockGeneration: Bool
@@ -1226,6 +1271,7 @@ struct SeamHoles {
 		sitesByPath = [:]
 		passedUpHolesBySite = [:]
 		stageCallsByPath = [:]
+		internalNames = []
 	}
 
 	init(seamType: TypeDescription, holes: [SeamSignature.Hole]) {
@@ -1252,7 +1298,12 @@ struct SeamHoles {
 		self.sitesByPath = sitesByPath
 		self.passedUpHolesBySite = passedUpHolesBySite
 		self.stageCallsByPath = stageCallsByPath
+		internalNames = Set(holes.map(\.internalName))
 	}
+
+	/// The name of every builder the seam's generated initializer takes, inside the initializer, which a call its tree
+	/// makes passes up by name. Empty outside a seam's tree.
+	let internalNames: Set<String>
 
 	/// Whether the seam has no hole.
 	var isEmpty: Bool {

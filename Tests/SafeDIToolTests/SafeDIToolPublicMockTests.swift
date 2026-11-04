@@ -97,6 +97,196 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: [MultiModuleIntegration.moduleInfo, .swiftPackagePlugin])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenPublicMockedTypeIsDeclaredInExtensionOfNarrowerInstantiableType(integration: MultiModuleIntegration) async {
+		// cross-row-2: `Inner` is declared in an extension of `Outer`, whose own `@Instantiable` declaration is `package`,
+		// so code that names `Outer.Inner` reaches it at most from within the package, as when it is nested directly.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			let path = switch integration {
+			case .moduleInfo:
+				fixtures["Feature"]!["Outer.swift"]
+			case .swiftPackagePlugin:
+				NormalizedFilePath(fixtures["Feature"]!.compilerPath(of: "Outer.swift")).path
+			}
+			return """
+			\(path):7:33: error: `Outer.Inner` cannot have a public mock because `Outer` is `package`. Make `Outer` `public`, or use `generateMock: .internal`.
+			\(path):7:33-7:40: fixit: .internal
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "pkg", swiftFileContentByFilePath: ["Outer.swift": """
+					@Instantiable
+					package final class Outer: Instantiable {
+					    package init() {}
+					}
+
+					extension Outer {
+					    @Instantiable(generateMock: .public)
+					    public final class Inner: Instantiable {
+					        public init() {}
+					    }
+					}
+					"""]),
+				],
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingInnermostNarrowerType_whenPublicMockedTypeIsNestedInNarrowerTypeInsidePublicTypesExtension() async {
+		// gap-534-529-3: `Space` is `public` and `Inner`, declared in its extension, is `package`, so `Inner` is what
+		// keeps `Shelf` from being `public`.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Shelf.swift"]):5:37: error: `Space.Inner.Shelf` cannot have a public mock because `Space.Inner` is `package`. Make `Space.Inner` `public`, or use `generateMock: .internal`.
+			\(fixtures["Feature"]!["Shelf.swift"]):5:37-5:44: fixit: .internal
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "pkg", swiftFileContentByFilePath: ["Shelf.swift": """
+					public enum Space {}
+
+					extension Space {
+					    package enum Inner {
+					        @Instantiable(generateMock: .public)
+					        public final class Shelf: Instantiable {
+					            public init() {}
+					        }
+					    }
+					}
+					"""]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsPlainErrorAtDeclaration_whenTypeThatMacroRejectsForBeingNarrowerDeclaresPublicMock() async {
+		// F10: the macro rejects `generateMock: .public` on an `internal` type, but `generate` runs before the macro
+		// expands, so the tool says so at the declaration rather than reporting the tier its `internal` type caps.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["FeedScreen.swift"]):6:1: error: `FeedScreen` is `internal` and declares `generateMock: .public`. The @Instantiable macro rejects that: `generateMock: .public` requires a `public` or `open` type. Declare `FeedScreen` `public`, or use `generateMock: .internal`.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "pkg", swiftFileContentByFilePath: ["FeedScreen.swift": """
+					@Instantiable
+					package final class FeedService: Instantiable {
+					    package init() {}
+					}
+
+					@Instantiable(generateMock: .public)
+					final class FeedScreen: Instantiable {
+					    public init(service: FeedService) {
+					        self.service = service
+					    }
+
+					    @Forwarded let service: FeedService
+					}
+					"""]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsPlainErrorAtDeclaration_whenPackageSeamWithHoleDeclaresPublicMock() async {
+		// BZ-5: an adopter narrows a seam to `package` first, as the guide does, and meets this before `internal`: the plain
+		// error, not the tier error the seam's hole and `internal` tree would otherwise draw.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["ProfileScreen.swift"]):3:1: error: `ProfileScreen` is `package` and declares `generateMock: .public`. The @Instantiable macro rejects that: `generateMock: .public` requires a `public` or `open` type. Declare `ProfileScreen` `public`, or use `generateMock: .internal`.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Feature", packageName: "pkg", swiftFileContentByFilePath: ["ProfileScreen.swift": """
+					package protocol AvatarProviding {}
+
+					@Instantiable(generateDependencyTree: true, generateMock: .public)
+					package struct ProfileScreen: Instantiable {
+					    package init(avatarProvider: any AvatarProviding, formatter: BioFormatter) {
+					        self.avatarProvider = avatarProvider
+					        self.formatter = formatter
+					    }
+
+					    @Instantiated let avatarProvider: any AvatarProviding
+					    @Instantiated let formatter: BioFormatter
+					}
+
+					@Instantiable
+					struct BioFormatter: Instantiable {
+					    init() {}
+					}
+					"""]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases, [(declaration: "package enum Space {}", level: "package"), (declaration: "enum Space {}", level: "internal")])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtGenerateMockArgument_whenPublicMockedTypeIsDeclaredInExtensionOfNarrowerNamespaceInFileOfItsOwn(integration: MultiModuleIntegration, namespace: (declaration: String, level: String)) async {
+		// gap-534-529-2: `Space`, declared in a file without a SafeDI marker, keeps `Space.Shelf` from being `public`, as an
+		// enclosing type keeps a type declared directly inside it; the check reads `Space`'s plain declaration.
+		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
+			let shelfPath = Self.path(of: "Shelf.swift", in: "Feature", fixtures, integration)
+			return """
+			\(shelfPath):6:33: error: `Space.Shelf` cannot have a public mock because `Space` is `\(namespace.level)`. Make `Space` `public`, or use `generateMock: .internal`.
+			\(shelfPath):6:33-6:40: fixit: .internal
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: [Self.featureExtendingNamespace(declaredAs: namespace.declaration)], integration: integration, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_generatesPublicMock_whenPublicMockedTypeIsDeclaredInExtensionOfPublicNamespaceInFileOfItsOwn(integration: MultiModuleIntegration) async throws {
+		// gap-534-529-2's twin: a `public` `Space` bounds nothing narrower.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: [Self.featureExtendingNamespace(declaredAs: "public enum Space {}")], integration: integration, filesToDelete: &filesToDelete)
+		let mockCode = """
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Space.Shelf {
+		    public static func mock() -> Space.Shelf {
+		        Space.Shelf()
+		    }
+		}
+
+		extension Space.Shelf {
+		    public enum __safeDI_Space_Shelf_mock_CBF29CE484222325 {}
+		}
+		#endif
+		"""
+		switch integration {
+		case .moduleInfo:
+			#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + mockCode])
+		case .swiftPackagePlugin:
+			#expect(output.modules["Feature"]?.generatedFiles["Shelf+SafeDIMock.swift"] == generatedFileHeader + mockCode)
+		}
+		try expectEveryModuleCompiled(output)
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenPublicMockForwardsPackageType() async {
@@ -138,18 +328,22 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// from `internal`, and its initializer proves `Theme` only at `internal`. Cause (v).
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Panel.swift"]):8:33: error: SafeDI cannot generate the public mock of `Feed.Panel`: its `public` tier, which `generateMock: .public` requires, cannot take `theme: Theme`, which the initializer of `Feed.Panel` receives, and cannot pass `nil` for it, since it is required. `Theme` is `internal` as far as SafeDI can tell: `Feed.Panel` is declared inside an extension of `Feed` that spells no access level, and SafeDI cannot see `Feed`'s, so `Feed.Panel`'s initializer proves its parameter types only at `internal`. If `Feed` can be `public`, spell the extension's access level (`public extension Feed { … }`, dropping the modifier on `Panel` that Swift then reports as redundant; the compiler rejects a level wider than `Feed`'s), or declare `Panel` in `Feed`'s body or at top level; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; receive it with `onlyIfAvailable: true` and an optional type; widen the declaration that proves the parameter's type; or use `generateMock: .internal`.
-			\(fixtures["Panel.swift"]):14:9: note: `Feed.Panel` receives `theme: Theme` here.
+			\(fixtures["Panel.swift"]):12:33: error: SafeDI cannot generate the public mock of `Feed.Panel`: its `public` tier, which `generateMock: .public` requires, cannot take `theme: Theme`, which the initializer of `Feed.Panel` receives, and cannot pass `nil` for it, since it is required. `Theme` is `internal` as far as SafeDI can tell: `Feed.Panel` is declared inside an extension of `Feed` that spells no access level, and SafeDI cannot see `Feed`'s, so `Feed.Panel`'s initializer proves its parameter types only at `internal`. If `Feed` can be `public`, spell the extension's access level (`public extension Feed { … }`, dropping the modifier on `Panel` that Swift then reports as redundant; the compiler rejects a level wider than `Feed`'s), or declare `Panel` in `Feed`'s body or at top level; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; receive it with `onlyIfAvailable: true` and an optional type; or use `generateMock: .internal`.
+			\(fixtures["Panel.swift"]):18:9: note: `Feed.Panel` receives `theme: Theme` here.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
+					#if canImport(Foundation)
 					public enum Feed {}
+					#endif
 
+					#if canImport(Foundation)
 					public struct Theme {
 					    public init() {}
 					}
+					#endif
 
 					extension Feed {
 					    @Instantiable(generateMock: .public)
@@ -175,7 +369,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// M2.9b, M2.10: a received parameter nothing builds is required. Cause (ii), with a note at the receive.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):1:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `token: Token`, which the initializer of `TokenCache` receives, and cannot pass `nil` for it, since it is required. `Token` is `internal` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `internal` (`TokenCache.init(token:)`). Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Token`'s declaration); receive it with `onlyIfAvailable: true` and an optional type; widen the declaration that proves the parameter's type; or use `generateMock: .internal`.
+			\(fixtures["Service.swift"]):1:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `token: Token`, which the initializer of `TokenCache` receives, and cannot pass `nil` for it, since it is required. `Token` is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`TokenCache.init(token:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Token` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Token { public static func mock() -> Token }`), which proves `Token` `public` and lets the mock build it; receive it with `onlyIfAvailable: true` and an optional type; make `TokenCache.init(token:)` `public`; or use `generateMock: .internal`.
 			\(fixtures["TokenCache.swift"]):7:5: note: `TokenCache` receives `token: Token` here.
 			"""
 		}) {
@@ -201,7 +395,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 					    @Received let token: Token
 					}
 					""",
-					"public struct Token {\n    public init() {}\n}",
+					unrecordedTypeDeclaration("public struct Token {\n    public init() {}\n}"),
 				],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
@@ -271,6 +465,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"Service+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {
+			    // These providers evaluate `Service`'s own defaults outside any actor, since SafeDI sees no isolation on it. If one
+			    // reads the state of an actor `Service` takes from a conformance or a superclass and does not compile, give its
+			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
 			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_name() -> String? { Defaults.name }
 
 			    public static func mock(
@@ -996,6 +1193,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"Service+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {
+			    // These providers evaluate `Service`'s own defaults outside any actor, since SafeDI sees no isolation on it. If one
+			    // reads the state of an actor `Service` takes from a conformance or a superclass and does not compile, give its
+			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
 			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_tag() -> String? { "tag" }
 
 			    public struct SafeDIMockScope_Service_thing {
@@ -1314,6 +1514,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			"A+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension A {
+			    // These providers evaluate `A`'s own defaults outside any actor, since SafeDI sees no isolation on it. If one
+			    // reads the state of an actor `A` takes from a conformance or a superclass and does not compile, give its
+			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
 			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_tag() -> String? { "tag" }
 
 			    /// Overrides for the mock dependency tree.
@@ -1495,9 +1698,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// instantiation.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):1:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `thingBuilder`, which returns `Thing` for the hole `thing`, and cannot pass `nil` for it, since it is required. `Thing` is `internal` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `internal` (`Service.init(left:right:thing:)`). Mention `Thing` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Thing`'s declaration); widen the declaration that proves the parameter's type; or use `generateMock: .internal`.
+			\(fixtures["Service.swift"]):1:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `thingBuilder`, which returns `Thing` for the hole `thing`, and cannot pass `nil` for it, since it is required. `Thing` is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Service.init(left:right:thing:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Thing` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Thing` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Thing { public static func mock() -> Thing }`), which proves `Thing` `public`; declare in this module, or a module it depends on, a `mockOnly` `@Instantiable` type that fulfills `Thing` (`@Instantiable(fulfillingAdditionalTypes: [Thing.self], mockOnly: true)`), which the mock builds instead of taking `thingBuilder`, leaving production's hole as it is; make `Service.init(left:right:thing:)` `public`; or use `generateMock: .internal`.
 			\(fixtures["Service.swift"]):10:5: note: `Service` instantiates `thing: Thing` here.
-			\(fixtures["Service.swift"]):1:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `token: Token`, which the initializers of `Left` and `Right` receive, and cannot pass `nil` for it, since it is required. `Token` is `internal` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `internal` (`Left.init(token:)`, `Right.init(token:)`). Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Token`'s declaration); receive it with `onlyIfAvailable: true` and an optional type; widen the declaration that proves the parameter's type; or use `generateMock: .internal`.
+			\(fixtures["Service.swift"]):1:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `token: Token`, which the initializers of `Left` and `Right` receive, and cannot pass `nil` for it, since it is required. `Token` is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Left.init(token:)`, `Right.init(token:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Token` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Token { public static func mock() -> Token }`), which proves `Token` `public` and lets the mock build it; receive it with `onlyIfAvailable: true` and an optional type; make `Left.init(token:)` `public`; make `Right.init(token:)` `public`; or use `generateMock: .internal`.
 			\(fixtures["Left.swift"]):7:5: note: `Left` receives `token: Token` here.
 			\(fixtures["Right.swift"]):7:5: note: `Right` receives `token: Token` here.
 			"""
@@ -1538,8 +1741,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 					    @Received let token: Token
 					}
 					""",
-					"struct Token {}",
-					"struct Thing {}",
+					unrecordedTypeDeclaration("struct Token {}"),
+					unrecordedTypeDeclaration("struct Thing {}"),
 				],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
@@ -1554,7 +1757,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	mutating func generate_generatesPublicAndPackageTiers_whenCanonicalServiceTakesPackageParameter() async throws {
 		// M2.2, M3.14, M3.18, M3.18b, M4.1, M4.2, M5.5, M5.3, M6.1, M6.3, M6.3b: the canonical `Service`. Its public tier
 		// omits the package `session`, which its package tier takes; `name` and `policy` are fields of `SafeDIOverrides`,
-		// `policy` internal since only a default-valued argument names `Policy`; another package calls the public tier.
+		// `policy` internal since only a default-valued argument names `Policy`, whose declaration, inside an `#if` block,
+		// SafeDI does not read; another package calls the public tier.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.canonicalModules(appCaller: Self.canonicalAppCaller),
 			integration: .moduleInfo,
@@ -1600,6 +1804,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 			#if DEBUG
 			extension Service {
+			    // These providers evaluate `Service`'s own defaults outside any actor, since SafeDI sees no isolation on it. If one
+			    // reads the state of an actor `Service` takes from a conformance or a superclass and does not compile, give its
+			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
 			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_name() -> String? { Defaults.name }
 			    nonisolated static func __safeDI_publicMockDefault_policy() -> Policy? { Defaults.policy }
 
@@ -1940,6 +2147,70 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesInjectedFoundationAndDispatchTypesOnPublicTier_whenOnlyInternalInitializerMentionsThem() async throws {
+		// O2: `URLSession`, `DispatchQueue`, `Clock` and `Duration` are standard types a project injects and nearly never
+		// declares, so the allowlist proves them `public` although only an `internal` initializer mentions them.
+		// Outside Apple platforms `URLSession` is declared in `FoundationNetworking`, which the fixture imports where it can,
+		// as a project that builds for Linux does.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				import Foundation
+				#if canImport(FoundationNetworking)
+				import FoundationNetworking
+				#endif
+
+				@Instantiable(generateMock: .public)
+				public final class Client: Instantiable {
+				    init(session: URLSession, queue: DispatchQueue, clock: any Clock<Duration>) {
+				        self.session = session
+				        self.queue = queue
+				        self.clock = clock
+				    }
+
+				    @Received let session: URLSession
+				    @Received let queue: DispatchQueue
+				    @Received let clock: any Clock<Duration>
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		let imports = """
+		#if canImport(Foundation)
+		import Foundation
+		#endif
+		#if canImport(FoundationNetworking)
+		import FoundationNetworking
+		#endif
+		"""
+		#expect(output.generatedFiles == [
+			"Client+SafeDIMock.swift": generatedFileHeader + imports + """
+
+
+			#if DEBUG
+			extension Client {
+			    public static func mock(
+			        clock: any Clock<Duration>,
+			        queue: DispatchQueue,
+			        session: URLSession
+			    ) -> Client {
+			        return Client(session: session, queue: queue, clock: clock)
+			    }
+			}
+
+			extension Client {
+			    public enum __safeDI_Client_mock_FB334AC978DC8CED {}
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": generatedFileHeader + imports + "\n\n",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesOwnOptionalDefaultsAsParametersWithIsolatedProviders_whenTypeIsBoundToGlobalActor() async throws {
 		// M6.3b: `Dashboard` is bound to the main actor, so its `mock()` is, and its own optional default reads the actor's
 		// state, as an internal mock's parameter default may. The default is a parameter of `mock()` whose provider shares
@@ -2041,6 +2312,189 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 			extension NoTree {
 			    public enum __safeDI_NoTree_mock_9B791E5044AD415C {}
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+		])
+	}
+
+	/// A `@MainActor` protocol and a `@MainActor` superclass, which isolate the types that conform to or inherit from
+	/// them where SafeDI cannot see it, and a type of the tree.
+	private static let inferredIsolationDeclarations = """
+	@MainActor
+	public protocol Screenish {}
+
+	@MainActor
+	open class BaseController {
+	    public init() {}
+	}
+
+	@Instantiable
+	public struct Theme: Instantiable {
+	    public init() {}
+	}
+	"""
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_commentsOnNonisolatedProviders_whenTypeIsIsolatedByConformanceSafeDICannotSee() async throws {
+		// D530-3, decision 53: `ProfileView` is isolated by its conformance to `Screenish`, which SafeDI cannot see, so the
+		// provider of its own optional default is `nonisolated`, as the field of `SafeDIOverrides` that calls it is, and a
+		// comment above it names the opt-in for a default that reads the actor's state. A literal default compiles.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				Self.inferredIsolationDeclarations,
+				"""
+				@Instantiable(generateMock: .public)
+				public struct ProfileView: Instantiable, Screenish {
+				    init(theme: Theme, label: String? = "label") {
+				        self.theme = theme
+				    }
+
+				    @Instantiated let theme: Theme
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"ProfileView+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension ProfileView {
+			    // These providers evaluate `ProfileView`'s own defaults outside any actor, since SafeDI sees no isolation on it. If one
+			    // reads the state of an actor `ProfileView` takes from a conformance or a superclass and does not compile, give its
+			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
+			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_label() -> String? { "label" }
+
+			    /// Overrides for the mock dependency tree.
+			    public struct SafeDIOverrides {
+			        public init(
+			            theme: (() -> Theme)? = nil,
+			            label: String? = ProfileView.__safeDI_publicMockDefault_label()
+			        ) {
+			            self.theme = theme
+			            self.label = label
+			        }
+
+			        public let theme: (() -> Theme)?
+			        /// The default of `ProfileView`'s `label` unless set; `.init(label: nil)` passes `nil`.
+			        public let label: String?
+			    }
+
+			    public static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> ProfileView {
+			        let theme = if let safeDIBuilder = safeDIOverrides.theme { safeDIBuilder() } else { Theme() }
+			        return ProfileView(theme: theme, label: safeDIOverrides.label)
+			    }
+			}
+
+			extension ProfileView {
+			    public enum __safeDI_ProfileView_mock_51799E6AA5E7B634 {}
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_isolatesProvidersOfOwnDefaults_whenTypeIsolatedByConformanceOrSuperclassSpellsMockAttributes() async throws {
+		// D530-3, decision 53: the opt-in the comment names. `ProfileView` (isolated by conformance) and `ProfileController`
+		// (by inheritance) each read isolated state in their own optional default and spell `mockAttributes: "@MainActor"`,
+		// so each default is a parameter of the isolated `mock()` whose provider shares its isolation.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				Self.inferredIsolationDeclarations,
+				"""
+				@Instantiable(mockAttributes: "@MainActor", generateMock: .public)
+				public struct ProfileView: Instantiable, Screenish {
+				    static var defaultLabel: String? = "label"
+
+				    init(theme: Theme, label: String? = defaultLabel) {
+				        self.theme = theme
+				    }
+
+				    @Instantiated let theme: Theme
+				}
+				""",
+				"""
+				@Instantiable(mockAttributes: "@MainActor", generateMock: .public)
+				public final class ProfileController: BaseController, Instantiable {
+				    static var defaultLabel: String? = "label"
+
+				    init(theme: Theme, label: String? = defaultLabel) {
+				        self.theme = theme
+				    }
+
+				    @Instantiated let theme: Theme
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.generatedFiles == [
+			"ProfileController+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension ProfileController {
+			    @usableFromInline @MainActor static func __safeDI_publicMockDefault_label() -> String? { defaultLabel }
+
+			    /// Overrides for the mock dependency tree.
+			    public struct SafeDIOverrides {
+			        public init(
+			            theme: (() -> Theme)? = nil
+			        ) {
+			            self.theme = theme
+			        }
+
+			        public let theme: (() -> Theme)?
+			    }
+
+			    @MainActor public static func mock(
+			        label: String? = ProfileController.__safeDI_publicMockDefault_label(),
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> ProfileController {
+			        let theme = if let safeDIBuilder = safeDIOverrides.theme { safeDIBuilder() } else { Theme() }
+			        return ProfileController(theme: theme, label: label)
+			    }
+			}
+
+			extension ProfileController {
+			    public enum __safeDI_ProfileController_mock_81EB86AE43991940 {}
+			}
+			#endif
+			""",
+			"ProfileView+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension ProfileView {
+			    @usableFromInline @MainActor static func __safeDI_publicMockDefault_label() -> String? { defaultLabel }
+
+			    /// Overrides for the mock dependency tree.
+			    public struct SafeDIOverrides {
+			        public init(
+			            theme: (() -> Theme)? = nil
+			        ) {
+			            self.theme = theme
+			        }
+
+			        public let theme: (() -> Theme)?
+			    }
+
+			    @MainActor public static func mock(
+			        label: String? = ProfileView.__safeDI_publicMockDefault_label(),
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> ProfileView {
+			        let theme = if let safeDIBuilder = safeDIOverrides.theme { safeDIBuilder() } else { Theme() }
+			        return ProfileView(theme: theme, label: label)
+			    }
+			}
+
+			extension ProfileView {
+			    public enum __safeDI_ProfileView_mock_81EB86AE43991940 {}
 			}
 			#endif
 			""",
@@ -2239,6 +2693,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 		#if DEBUG
 		extension Service {
+		    // These providers evaluate `Service`'s own defaults outside any actor, since SafeDI sees no isolation on it. If one
+		    // reads the state of an actor `Service` takes from a conformance or a superclass and does not compile, give its
+		    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
 		    @usableFromInline nonisolated static func __safeDI_publicMockDefault_title() -> String? { "service" }
 
 		    /// Overrides for the mock dependency tree.
@@ -2575,16 +3032,18 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// the public tier cannot take it.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):5:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `userServiceBuilder`, which returns `UserService` for the hole `userService`, and cannot pass `nil` for it, since it is required. `UserService` is `package` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`Service.init(userService:)`). Mention `UserService` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `UserService`'s declaration); widen the declaration that proves the parameter's type; or use `generateMock: .internal`.
-			\(fixtures["Service.swift"]):11:5: note: `Service` instantiates `userService: UserService` here.
+			\(fixtures["Service.swift"]):7:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `userServiceBuilder`, which returns `UserService` for the hole `userService`, and cannot pass `nil` for it, since it is required. `UserService` is `package` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `package` (`Service.init(userService:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `UserService` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `UserService` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension UserService { public static func mock() -> UserService }`), which proves `UserService` `public`; declare in this module, or a module it depends on, a `mockOnly` `@Instantiable` type that fulfills `UserService` (`@Instantiable(fulfillingAdditionalTypes: [UserService.self], mockOnly: true)`), which the mock builds instead of taking `userServiceBuilder`, leaving production's hole as it is; make `Service.init(userService:)` `public`; or use `generateMock: .internal`.
+			\(fixtures["Service.swift"]):13:5: note: `Service` instantiates `userService: UserService` here.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
+					#if canImport(Foundation)
 					public final class UserService {
 					    public init() {}
 					}
+					#endif
 
 					@Instantiable(generateMock: .public)
 					public struct Service: Instantiable {
@@ -2600,6 +3059,92 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsMockOnlyStubInPlaceOfTakingBuilder_whenDeclaringModuleDeclaresStubThatFulfillsHole() async throws {
+		// BZ-6: the remedy the error above names. A `mockOnly` stub in `Core` fulfills the hole's type, so `Service`'s
+		// mock builds the stub and takes no builder, while production still has the hole; another package calls it.
+		// `UserService` is declared inside an `#if` block, as the error above declares it, so SafeDI reads no declaration
+		// of it and proves it `package` from `Service`'s initializer alone: a plain `public` declaration would prove it
+		// `public`, and the public tier would take the builder with no stub. The override for the stub is therefore
+		// `package`, beside a `public init()`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [
+					"""
+					#if canImport(Foundation)
+					public protocol UserService {}
+					#endif
+
+					@Instantiable(generateMock: .public)
+					public struct Service: Instantiable {
+					    package init(userService: any UserService) {
+					        self.userService = userService
+					    }
+
+					    @Instantiated let userService: any UserService
+					}
+					""",
+					"""
+					#if DEBUG
+					@Instantiable(fulfillingAdditionalTypes: [UserService.self], mockOnly: true)
+					public final class PreviewUserService: UserService {
+					    public static func mock() -> PreviewUserService {
+					        PreviewUserService()
+					    }
+					}
+					#endif
+					""",
+				]),
+				ModuleFixture(name: "App", packageName: "app", swiftFileContent: [
+					"""
+					import Core
+
+					#if DEBUG
+					func preview() {
+					    _ = Service.mock()
+					}
+					#endif
+					""",
+				], dependencies: ["Core"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + """
+		#if DEBUG
+		extension Service {
+		    /// Overrides for the mock dependency tree.
+		    public struct SafeDIOverrides {
+		        public init() {
+		            self.userService = nil
+		        }
+
+		        package init(
+		            userService: (() -> UserService)? = nil
+		        ) {
+		            self.userService = userService
+		        }
+
+		        package let userService: (() -> UserService)?
+		    }
+
+		    public static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Service {
+		        let userService: UserService = if let safeDIBuilder = safeDIOverrides.userService { safeDIBuilder() } else { PreviewUserService.mock() }
+		        return Service(userService: userService)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_mock_51799E6AA5E7B634 {}
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -3038,19 +3583,705 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
-		        func __safeDI_userServiceBuilder(_ scope: Service.SafeDIMockScope_Service_userService) -> AnyUserService {
-		            let analytics = scope.analytics
-		            let userService = AnyUserService(DefaultUserService(analytics: analytics))
-		            return userService
+		        func __safeDI_service() -> Service {
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIMockScope_Service_userService) -> AnyUserService {
+		                let analytics = scope.analytics
+		                let userService = AnyUserService(DefaultUserService(analytics: analytics))
+		                return userService
+		            }
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
-		        _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
-		        let service = Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        let service: Service = __safeDI_service()
 		        return Screen(analytics: analytics, service: service)
 		    }
 		}
 		#endif
 		"""])
 		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_declaresFillsInsideEachCallsBuilderFunction_whenConsumerCallsPublicMockTwice() async throws {
+		// D530-1: `Screen` builds two `Service`s, each by calling its public mock with a fill of its own, declared inside
+		// the function that makes the call, as a seam call's fills are, so the two fills do not redeclare one another.
+		let modules = Self.holeModules(app: """
+		import Core
+
+		@Instantiable(generateMock: true)
+		public final class Screen: Instantiable {
+		    public init(analytics: Analytics, service: Service, backupService: Service) {
+		        self.analytics = analytics
+		        self.service = service
+		        self.backupService = backupService
+		    }
+
+		    @Instantiated let analytics: Analytics
+		    @Instantiated let service: Service
+		    @Instantiated let backupService: Service
+		}
+
+		""" + Self.defaultUserService)
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init(),
+		            backupService: Service.SafeDIOverrides = .init()
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		            self.backupService = backupService
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let backupService: Service.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_service() -> Service {
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIMockScope_Service_userService) -> AnyUserService {
+		                let analytics = scope.analytics
+		                let userService = AnyUserService(DefaultUserService(analytics: analytics))
+		                return userService
+		            }
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        }
+		        let service: Service = __safeDI_service()
+		        func __safeDI_backupService() -> Service {
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIMockScope_Service_userService) -> AnyUserService {
+		                let analytics = scope.analytics
+		                let userService = AnyUserService(DefaultUserService(analytics: analytics))
+		                return userService
+		            }
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.backupService)
+		        }
+		        let backupService: Service = __safeDI_backupService()
+		        return Screen(analytics: analytics, service: service, backupService: backupService)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_declaresFillInsideCallsBuilderFunction_whenPublicConsumersOwnHoleSharesFilledHolesLabel() async throws {
+		// D530-1: `Screen`'s own hole `userService` binds its builder as `__safeDI_userServiceBuilder`, the name the fill of
+		// `Service`'s hole `userService` would take. The fill is declared inside the function that calls `Service`'s mock,
+		// and named apart from the enclosing builder (`__safeDI_userServiceBuilder_`), as every fill is.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.holeModules(app: """
+			import Core
+
+			public protocol Widget {}
+
+			public struct AnyWidget {
+			    public init(_ base: any Widget) {
+			        self.base = base
+			    }
+
+			    public let base: any Widget
+			}
+
+			@Instantiable
+			public struct WidgetHolder: Instantiable {
+			    public init(userService: AnyWidget) {
+			        self.userService = userService
+			    }
+
+			    @Received let userService: AnyWidget
+			}
+
+			@Instantiable(generateMock: .public)
+			public final class Screen: Instantiable {
+			    public init(analytics: Analytics, service: Service, userService: AnyWidget) {
+			        self.analytics = analytics
+			        self.service = service
+			        self.userService = userService
+			    }
+
+			    @Instantiated let analytics: Analytics
+			    @Instantiated let service: Service
+			    @Instantiated(fulfilledByType: "MissingWidget", erasedToConcreteExistential: true) let userService: AnyWidget
+			}
+
+			""" + Self.defaultUserService),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    public struct SafeDIMockScope_Screen_userService {
+		        public let analytics: Analytics
+		        public let service: Service
+		    }
+
+		    /// Overrides for the mock dependency tree.
+		    public struct SafeDIOverrides {
+		        public init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init()
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		        }
+
+		        public let analytics: (() -> Analytics)?
+		        public let service: Service.SafeDIOverrides
+		    }
+
+		    public static func mock(
+		        userServiceBuilder: @escaping (Screen.SafeDIMockScope_Screen_userService) -> AnyWidget,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let __safeDI_userServiceBuilder = userServiceBuilder
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_service() -> Service {
+		            func __safeDI_userServiceBuilder_(_ scope: Service.SafeDIMockScope_Service_userService) -> AnyUserService {
+		                let analytics = scope.analytics
+		                let userService = AnyUserService(DefaultUserService(analytics: analytics))
+		                return userService
+		            }
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder_, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        }
+		        let service: Service = __safeDI_service()
+		        let userService: AnyWidget = __safeDI_userServiceBuilder(SafeDIMockScope_Screen_userService(analytics: analytics, service: service))
+		        return Screen(analytics: analytics, service: service, userService: userService)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_mock_9B48AE38766FF0F8 {}
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsBuilderWithHandWrittenMock_whenFulfillingTypeHasMockOnlyMock() async throws {
+		// D530-2, O6: `App` declares `DefaultUserService` and, in a `mockOnly` extension, its hand-written mock, which the
+		// inline mock builds it with. The fill builds it with that mock too, so `Screen.mock()` holds the fake.
+		let modules = Self.holeModules(app: Self.holeScreen + "\n\n" + """
+		@Instantiable
+		public final class DefaultUserService: UserService, Instantiable {
+		    public init(analytics: Analytics) {
+		        self.analytics = analytics
+		        isFake = false
+		    }
+
+		    fileprivate init(fakeAnalytics: Analytics) {
+		        analytics = fakeAnalytics
+		        isFake = true
+		    }
+
+		    @Received let analytics: Analytics
+		    let isFake: Bool
+		}
+
+		@Instantiable(mockOnly: true)
+		extension DefaultUserService {
+		    public static func mock(analytics: Analytics = Analytics()) -> DefaultUserService {
+		        DefaultUserService(fakeAnalytics: analytics)
+		    }
+		}
+		""")
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init()
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_service() -> Service {
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIMockScope_Service_userService) -> AnyUserService {
+		                let analytics = scope.analytics
+		                let userService = AnyUserService(DefaultUserService.mock(analytics: analytics))
+		                return userService
+		            }
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        }
+		        let service: Service = __safeDI_service()
+		        return Screen(analytics: analytics, service: service)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesCycleParameterToHandWrittenMock_whenLazyCycleInsideFillClosesOnTypeBuiltWithIt() async throws {
+		// The fill of `Service`'s builder builds `DefaultUserService`, whose `t3Builder` builds `T3` with its hand-written
+		// mock, and `T0`, inside it, instantiates `T3` again through a lazy cycle. `T0` declares `logger` again, which
+		// `T3` receives only if available, so the function the cycle closes on takes `logger`, and the hand-written mock
+		// is passed that parameter, as an initializer is, rather than `nil`: `Screen.mock()` holds what the inline mock
+		// holds.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Analytics: Instantiable, Sendable {
+				    public init() {}
+				}
+
+				@Instantiable
+				package final class Session: Instantiable {
+				    package init() {}
+				}
+
+				public protocol UserService {}
+
+				public struct AnyUserService: UserService {
+				    public init(_ userService: any UserService) {
+				        self.userService = userService
+				    }
+
+				    public let userService: any UserService
+				}
+
+				@Instantiable
+				public struct Profile: Instantiable {
+				    public init(userService: AnyUserService) {
+				        self.userService = userService
+				    }
+
+				    @Received let userService: AnyUserService
+				}
+
+				@Instantiable(generateMock: .public)
+				public struct Service: Instantiable {
+				    package init(analytics: Analytics, session: Session, userService: AnyUserService) {
+				        self.analytics = analytics
+				        self.session = session
+				        self.userService = userService
+				    }
+
+				    @Received let analytics: Analytics
+				    @Instantiated let session: Session
+				    @Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) let userService: AnyUserService
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContent: [
+				"""
+				import Core
+
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(analytics: Analytics, service: Service) {
+				        self.analytics = analytics
+				        self.service = service
+				    }
+
+				    @Instantiated let analytics: Analytics
+				    @Instantiated let service: Service
+				}
+
+				@Instantiable
+				public final class DefaultUserService: UserService, Instantiable {
+				    public init(analytics: Analytics, logger: Logger, t3Builder: Instantiator<T3>) {
+				        self.analytics = analytics
+				        self.logger = logger
+				        self.t3Builder = t3Builder
+				    }
+
+				    @Received let analytics: Analytics
+				    @Instantiated let logger: Logger
+				    @Instantiated let t3Builder: Instantiator<T3>
+				}
+
+				@Instantiable
+				public final class Logger: Instantiable {
+				    public init(t3Builder: Instantiator<T3>?) {
+				        self.t3Builder = t3Builder
+				    }
+
+				    @Received(onlyIfAvailable: true) let t3Builder: Instantiator<T3>?
+				}
+
+				@Instantiable
+				public final class T3: Instantiable {
+				    public init(logger: Logger?, t0Builder: Instantiator<T0>) {
+				        self.logger = logger
+				        self.t0Builder = t0Builder
+				    }
+
+				    public static func mock(logger: Logger?, t0Builder: Instantiator<T0>) -> T3 {
+				        T3(logger: logger, t0Builder: t0Builder)
+				    }
+
+				    @Received(onlyIfAvailable: true) let logger: Logger?
+				    @Instantiated let t0Builder: Instantiator<T0>
+				}
+
+				@Instantiable
+				public final class T0: Instantiable {
+				    public init(t3Builder: Instantiator<T3>, logger: Logger) {
+				        self.t3Builder = t3Builder
+				        self.logger = logger
+				    }
+
+				    @Instantiated let t3Builder: Instantiator<T3>
+				    @Instantiated let logger: Logger
+				}
+				""",
+			], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init()
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_service() -> Service {
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIMockScope_Service_userService) -> AnyUserService {
+		                let analytics = scope.analytics
+		                func __safeDI_userService() -> DefaultUserService {
+		                    func __safeDI_t3Builder(logger: Logger?) -> T3 {
+		                        func __safeDI_t0Builder() -> T0 {
+		                            let logger = Logger(t3Builder: nil)
+		                            let t3Builder = Instantiator<T3> {
+		                                __safeDI_t3Builder(logger: logger)
+		                            }
+		                            return T0(t3Builder: t3Builder, logger: logger)
+		                        }
+		                        let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
+		                        return T3.mock(logger: logger, t0Builder: t0Builder)
+		                    }
+		                    let t3Builder = Instantiator<T3> {
+		                        __safeDI_t3Builder(logger: nil)
+		                    }
+		                    let logger = Logger(t3Builder: t3Builder)
+		                    return DefaultUserService(analytics: analytics, logger: logger, t3Builder: t3Builder)
+		                }
+		                let userService = AnyUserService(__safeDI_userService())
+		                return userService
+		            }
+		            _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
+		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        }
+		        let service: Service = __safeDI_service()
+		        return Screen(analytics: analytics, service: service)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_closesLazyCycleOnHolePropertyInsideFill_whenMockFillsPublicMocksBuilder() async throws {
+		// The fill of `Service`'s builder `routerBuilder` builds `Router`, whose `tBuilder` builds `T`, which instantiates
+		// `routerBuilder` again: a lazy cycle that closes on the hole's property inside the fill. `T` declares `analytics`
+		// again, so the function the cycle closes on, declared inside the fill, takes `analytics`, which the fill passes
+		// from the field it binds and `T` passes its own, as any scope's function does. Generation ends, and
+		// `Screen.mock()` holds what the inline mock holds.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [
+				"""
+				@Instantiable
+				package final class Session: Instantiable {
+				    package init() {}
+				}
+
+				public protocol Routing {}
+
+				public struct AnyRouting {
+				    public init(_ routing: any Routing) {}
+				}
+
+				@Instantiable
+				public struct Profile: Instantiable {
+				    public init(routing: AnyRouting) {
+				        self.routing = routing
+				    }
+
+				    @Received let routing: AnyRouting
+				}
+
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init() {}
+				}
+
+				@Instantiable(generateMock: .public)
+				public final class Service: Instantiable {
+				    package init(analytics: Analytics, session: Session, routerBuilder: ErasedInstantiator<(), AnyRouting>) {
+				        self.analytics = analytics
+				        self.session = session
+				        self.routerBuilder = routerBuilder
+				    }
+
+				    @Received let analytics: Analytics
+				    @Instantiated let session: Session
+				    @Instantiated(fulfilledByType: "Router", erasedToConcreteExistential: true) let routerBuilder: ErasedInstantiator<(), AnyRouting>
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContent: [
+				"""
+				import Core
+
+				@Instantiable
+				public final class Router: Instantiable, Routing {
+				    public init(analytics: Analytics, tBuilder: Instantiator<T>) {
+				        self.analytics = analytics
+				        self.tBuilder = tBuilder
+				    }
+
+				    @Received let analytics: Analytics
+				    @Instantiated let tBuilder: Instantiator<T>
+				}
+
+				@Instantiable
+				public final class T: Instantiable {
+				    public init(analytics: Analytics, routerBuilder: ErasedInstantiator<(), AnyRouting>) {
+				        self.analytics = analytics
+				        self.routerBuilder = routerBuilder
+				    }
+
+				    @Instantiated let analytics: Analytics
+				    @Instantiated(fulfilledByType: "Router", erasedToConcreteExistential: true) let routerBuilder: ErasedInstantiator<(), AnyRouting>
+				}
+
+				@Instantiable(generateMock: true)
+				public final class Screen: Instantiable {
+				    public init(service: Service) {
+				        self.service = service
+				    }
+
+				    @Instantiated let service: Service
+				}
+				""",
+			], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init()
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_service() -> Service {
+		            func __safeDI_routerBuilderBuilder(_ scope: Service.SafeDIMockScope_Service_routerBuilder) -> ErasedInstantiator<(), AnyRouting> {
+		                let analytics = scope.analytics
+		                func __safeDI_routerBuilder(analytics: Analytics) -> Router {
+		                    func __safeDI_tBuilder() -> T {
+		                        let analytics = Analytics()
+		                        let routerBuilder = ErasedInstantiator<(), AnyRouting> {
+		                            AnyRouting(__safeDI_routerBuilder(analytics: analytics))
+		                        }
+		                        return T(analytics: analytics, routerBuilder: routerBuilder)
+		                    }
+		                    let tBuilder = Instantiator<T>(__safeDI_tBuilder)
+		                    return Router(analytics: analytics, tBuilder: tBuilder)
+		                }
+		                let routerBuilder = ErasedInstantiator<(), AnyRouting> {
+		                    AnyRouting(__safeDI_routerBuilder(analytics: analytics))
+		                }
+		                return routerBuilder
+		            }
+		            _ = Service.__safeDI_Service_mock_EFE368FB931BE019.self
+		            return Service.mock(routerBuilderBuilder: __safeDI_routerBuilderBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        }
+		        let service: Service = __safeDI_service()
+		        return Screen(service: service)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsBuilderWithMockOnlyFake_whenOnlyFakeFulfillsHole() async throws {
+		// D530-2, O6: only `App`'s `mockOnly` `FakeUserService` fulfills `Service`'s hole `userService`, which the inline
+		// mock builds with its mock, so `Screen`'s mock fills the builder with it rather than take the builder.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init() {}
+				}
+
+				@Instantiable
+				package final class Session: Instantiable {
+				    package init() {}
+				}
+
+				public protocol UserService {}
+
+				@Instantiable
+				public struct Profile: Instantiable {
+				    public init(userService: any UserService) {
+				        self.userService = userService
+				    }
+
+				    @Received let userService: any UserService
+				}
+
+				@Instantiable(generateMock: .public)
+				public final class Service: Instantiable {
+				    package init(analytics: Analytics, session: Session, userService: any UserService) {
+				        self.analytics = analytics
+				        self.session = session
+				        self.userService = userService
+				    }
+
+				    @Received let analytics: Analytics
+				    @Instantiated let session: Session
+				    @Instantiated let userService: any UserService
+				}
+				""",
+			]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContent: [
+				Self.holeScreen,
+				"""
+				import Core
+
+				@Instantiable(fulfillingAdditionalTypes: [UserService.self], mockOnly: true)
+				public final class FakeUserService: UserService {
+				    public static func mock() -> FakeUserService {
+				        FakeUserService()
+				    }
+				}
+				""",
+			], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init()
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_service() -> Service {
+		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIMockScope_Service_userService) -> any UserService {
+		                let userService: any UserService = FakeUserService.mock()
+		                return userService
+		            }
+		            _ = Service.__safeDI_Service_mock_1DD763CB78198D80.self
+		            return Service.mock(userServiceBuilder: __safeDI_userServiceBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        }
+		        let service: Service = __safeDI_service()
+		        return Screen(analytics: analytics, service: service)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
 	@Test
@@ -3082,33 +4313,40 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
+		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init()
 		        ) {
+		            self.analytics = analytics
 		            self.service = service
 		        }
 
+		        let analytics: (() -> Analytics)?
 		        let service: Service.SafeDIOverrides
 		    }
 
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_routerBuilderBuilder(_ scope: Service.SafeDIMockScope_Service_routerBuilder) -> ErasedInstantiator<(), AnyRouting> {
-		            let analytics = scope.analytics
-		            func __safeDI_routerBuilder() -> Router {
-		                func __safeDI_serviceBuilder() -> Service {
-		                    Service.mock(routerBuilderBuilder: __safeDI_routerBuilderBuilder, analytics: analytics)
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        func __safeDI_service() -> Service {
+		            func __safeDI_routerBuilderBuilder(_ scope: Service.SafeDIMockScope_Service_routerBuilder) -> ErasedInstantiator<(), AnyRouting> {
+		                let analytics = scope.analytics
+		                func __safeDI_routerBuilder() -> Router {
+		                    func __safeDI_serviceBuilder() -> Service {
+		                        Service.mock(routerBuilderBuilder: __safeDI_routerBuilderBuilder, analytics: analytics)
+		                    }
+		                    let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
+		                    return Router(serviceBuilder: serviceBuilder)
 		                }
-		                let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
-		                return Router(serviceBuilder: serviceBuilder)
+		                let routerBuilder = ErasedInstantiator<(), AnyRouting> {
+		                    AnyRouting(__safeDI_routerBuilder())
+		                }
+		                return routerBuilder
 		            }
-		            let routerBuilder = ErasedInstantiator<(), AnyRouting> {
-		                AnyRouting(__safeDI_routerBuilder())
-		            }
-		            return routerBuilder
+		            _ = Service.__safeDI_Service_mock_EFE368FB931BE019.self
+		            return Service.mock(routerBuilderBuilder: __safeDI_routerBuilderBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        }
-		        _ = Service.__safeDI_Service_mock_EFE368FB931BE019.self
-		        let service = Service.mock(routerBuilderBuilder: __safeDI_routerBuilderBuilder, analytics: nil, safeDIOverrides: safeDIOverrides.service)
+		        let service: Service = __safeDI_service()
 		        return Screen(service: service)
 		    }
 		}
@@ -3147,11 +4385,14 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
+		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init()
 		        ) {
+		            self.analytics = analytics
 		            self.service = service
 		        }
 
+		        let analytics: (() -> Analytics)?
 		        let service: Service.SafeDIOverrides
 		    }
 
@@ -3159,8 +4400,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        routerBuilderBuilder: @escaping (Service.SafeDIMockScope_Service_routerBuilder) -> ErasedInstantiator<(), AnyRouting>,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        _ = Service.__safeDI_Service_mock_EFE368FB931BE019.self
-		        let service = Service.mock(routerBuilderBuilder: routerBuilderBuilder, analytics: nil, safeDIOverrides: safeDIOverrides.service)
+		        let service = Service.mock(routerBuilderBuilder: routerBuilderBuilder, analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        return Screen(service: service)
 		    }
 		}
@@ -3216,6 +4458,225 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#endif
 		"""])
 		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_ordersBuildersPassedUpUnderOneLabelByType_whenPublicConsumerPassesUpHolesOfSixTypesThatShareLabel() async throws {
+		// D530-4: `Screen` passes up the builder of each `ServiceN`'s hole `userService`, six builders whose holes share a
+		// label, so its signature, guard included, must not depend on the order a dictionary holds them in. Each hole's
+		// scope struct holds a field of its own type, so the guard, which hashes the fields of every hole, differs in
+		// every order but one.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.sameLabelHoleModules(
+				serviceNames: (0..<6).map { "Service\($0)" },
+				screenMockGeneration: ".public",
+				distinctValueInScopeAtEachHole: true,
+			),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    public struct SafeDIOverrides {
+		        public init(
+		            service0: Service0.SafeDIOverrides = .init(),
+		            service1: Service1.SafeDIOverrides = .init(),
+		            service2: Service2.SafeDIOverrides = .init(),
+		            service3: Service3.SafeDIOverrides = .init(),
+		            service4: Service4.SafeDIOverrides = .init(),
+		            service5: Service5.SafeDIOverrides = .init()
+		        ) {
+		            self.service0 = service0
+		            self.service1 = service1
+		            self.service2 = service2
+		            self.service3 = service3
+		            self.service4 = service4
+		            self.service5 = service5
+		        }
+
+		        public let service0: Service0.SafeDIOverrides
+		        public let service1: Service1.SafeDIOverrides
+		        public let service2: Service2.SafeDIOverrides
+		        public let service3: Service3.SafeDIOverrides
+		        public let service4: Service4.SafeDIOverrides
+		        public let service5: Service5.SafeDIOverrides
+		    }
+
+		    public static func mock(
+		        userServiceBuilder_Service0_SafeDIMockScope_Service0_userService_to_AnyUserService: @escaping (Service0.SafeDIMockScope_Service0_userService) -> AnyUserService,
+		        userServiceBuilder_Service1_SafeDIMockScope_Service1_userService_to_AnyUserService: @escaping (Service1.SafeDIMockScope_Service1_userService) -> AnyUserService,
+		        userServiceBuilder_Service2_SafeDIMockScope_Service2_userService_to_AnyUserService: @escaping (Service2.SafeDIMockScope_Service2_userService) -> AnyUserService,
+		        userServiceBuilder_Service3_SafeDIMockScope_Service3_userService_to_AnyUserService: @escaping (Service3.SafeDIMockScope_Service3_userService) -> AnyUserService,
+		        userServiceBuilder_Service4_SafeDIMockScope_Service4_userService_to_AnyUserService: @escaping (Service4.SafeDIMockScope_Service4_userService) -> AnyUserService,
+		        userServiceBuilder_Service5_SafeDIMockScope_Service5_userService_to_AnyUserService: @escaping (Service5.SafeDIMockScope_Service5_userService) -> AnyUserService,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        _ = Service0.__safeDI_Service0_mock_E521A76982D81E57.self
+		        func __safeDI_service0() -> Service0 {
+		            let userServiceBuilder: (Service0.SafeDIMockScope_Service0_userService) -> AnyUserService = userServiceBuilder_Service0_SafeDIMockScope_Service0_userService_to_AnyUserService
+		            return Service0.mock(userServiceBuilder: userServiceBuilder, safeDIOverrides: safeDIOverrides.service0)
+		        }
+		        let service0: Service0 = __safeDI_service0()
+		        _ = Service1.__safeDI_Service1_mock_3FE4547D4B8C13D2.self
+		        func __safeDI_service1() -> Service1 {
+		            let userServiceBuilder: (Service1.SafeDIMockScope_Service1_userService) -> AnyUserService = userServiceBuilder_Service1_SafeDIMockScope_Service1_userService_to_AnyUserService
+		            return Service1.mock(userServiceBuilder: userServiceBuilder, safeDIOverrides: safeDIOverrides.service1)
+		        }
+		        let service1: Service1 = __safeDI_service1()
+		        _ = Service2.__safeDI_Service2_mock_FD2BD23EC0D14669.self
+		        func __safeDI_service2() -> Service2 {
+		            let userServiceBuilder: (Service2.SafeDIMockScope_Service2_userService) -> AnyUserService = userServiceBuilder_Service2_SafeDIMockScope_Service2_userService_to_AnyUserService
+		            return Service2.mock(userServiceBuilder: userServiceBuilder, safeDIOverrides: safeDIOverrides.service2)
+		        }
+		        let service2: Service2 = __safeDI_service2()
+		        _ = Service3.__safeDI_Service3_mock_B32F4DD923757D74.self
+		        func __safeDI_service3() -> Service3 {
+		            let userServiceBuilder: (Service3.SafeDIMockScope_Service3_userService) -> AnyUserService = userServiceBuilder_Service3_SafeDIMockScope_Service3_userService_to_AnyUserService
+		            return Service3.mock(userServiceBuilder: userServiceBuilder, safeDIOverrides: safeDIOverrides.service3)
+		        }
+		        let service3: Service3 = __safeDI_service3()
+		        _ = Service4.__safeDI_Service4_mock_4DAF33966D25A303.self
+		        func __safeDI_service4() -> Service4 {
+		            let userServiceBuilder: (Service4.SafeDIMockScope_Service4_userService) -> AnyUserService = userServiceBuilder_Service4_SafeDIMockScope_Service4_userService_to_AnyUserService
+		            return Service4.mock(userServiceBuilder: userServiceBuilder, safeDIOverrides: safeDIOverrides.service4)
+		        }
+		        let service4: Service4 = __safeDI_service4()
+		        _ = Service5.__safeDI_Service5_mock_ECB08E789F12B296.self
+		        func __safeDI_service5() -> Service5 {
+		            let userServiceBuilder: (Service5.SafeDIMockScope_Service5_userService) -> AnyUserService = userServiceBuilder_Service5_SafeDIMockScope_Service5_userService_to_AnyUserService
+		            return Service5.mock(userServiceBuilder: userServiceBuilder, safeDIOverrides: safeDIOverrides.service5)
+		        }
+		        let service5: Service5 = __safeDI_service5()
+		        return Screen(service0: service0, service1: service1, service2: service2, service3: service3, service4: service4, service5: service5)
+		    }
+		}
+
+		extension Screen {
+		    public enum __safeDI_Screen_mock_3B071E403B8C9585 {}
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesEachBuilderPassedUpUnderOneLabel_whenCalledPublicMockPassesUpHolesThatShareLabel() async throws {
+		// D530-4: `Screen`'s public mock passes up the builders of `Service`'s and `Settings`' holes `userService`, which it
+		// names apart, so `Root`'s mock, which sees no type that fulfills them, takes both and passes each on by its name.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.sameLabelHoleModules(serviceNames: ["Service", "Settings"], screenMockGeneration: ".public") + [
+				ModuleFixture(name: "Other", packageName: "other", swiftFileContent: [Self.sameLabelHoleRoot], dependencies: ["Core", "App"]),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Other"]?.generatedFiles == ["Other.swift": generatedFileHeader + """
+		#if canImport(App)
+		import App
+		#endif
+		#if canImport(Core)
+		import Core
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            screen: Screen.SafeDIOverrides = .init()
+		        ) {
+		            self.screen = screen
+		        }
+
+		        let screen: Screen.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        userServiceBuilder_Service_SafeDIMockScope_Service_userService_to_AnyUserService: @escaping (Service.SafeDIMockScope_Service_userService) -> AnyUserService,
+		        userServiceBuilder_Settings_SafeDIMockScope_Settings_userService_to_AnyUserService: @escaping (Settings.SafeDIMockScope_Settings_userService) -> AnyUserService,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        _ = Screen.__safeDI_Screen_mock_5A2F665AFA12A400.self
+		        let screen = Screen.mock(userServiceBuilder_Service_SafeDIMockScope_Service_userService_to_AnyUserService: userServiceBuilder_Service_SafeDIMockScope_Service_userService_to_AnyUserService, userServiceBuilder_Settings_SafeDIMockScope_Settings_userService_to_AnyUserService: userServiceBuilder_Settings_SafeDIMockScope_Settings_userService_to_AnyUserService, safeDIOverrides: safeDIOverrides.screen)
+		        return Root(screen: screen)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_fillsEachBuilderPassedUpUnderOneLabelByItsName_whenCallerSeesTypeThatFulfillsBothHoles() async throws {
+		// D530-4: `Root`'s module sees `DefaultUserService`, which fulfills both holes `Screen`'s public mock passes up under
+		// the label `userService`, so it fills both, each fill named after the parameter that takes its builder.
+		let modules = Self.sameLabelHoleModules(serviceNames: ["Service", "Settings"], screenMockGeneration: ".public") + [
+			ModuleFixture(name: "Other", packageName: "other", swiftFileContent: [
+				Self.sameLabelHoleRoot,
+				"""
+				import Core
+
+				@Instantiable
+				public final class DefaultUserService: UserService, Instantiable {
+				    public init() {}
+				}
+				""",
+			], dependencies: ["Core", "App"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["Other"]?.generatedFiles == ["Other.swift": generatedFileHeader + """
+		#if canImport(App)
+		import App
+		#endif
+		#if canImport(Core)
+		import Core
+		#endif
+
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            screen: Screen.SafeDIOverrides = .init()
+		        ) {
+		            self.screen = screen
+		        }
+
+		        let screen: Screen.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        func __safeDI_screen() -> Screen {
+		            func __safeDI_userServiceBuilder_Service_SafeDIMockScope_Service_userService_to_AnyUserService(_ scope: Service.SafeDIMockScope_Service_userService) -> AnyUserService {
+		                let userService = AnyUserService(DefaultUserService())
+		                return userService
+		            }
+		            func __safeDI_userServiceBuilder_Settings_SafeDIMockScope_Settings_userService_to_AnyUserService(_ scope: Settings.SafeDIMockScope_Settings_userService) -> AnyUserService {
+		                let userService = AnyUserService(DefaultUserService())
+		                return userService
+		            }
+		            _ = Screen.__safeDI_Screen_mock_5A2F665AFA12A400.self
+		            return Screen.mock(userServiceBuilder_Service_SafeDIMockScope_Service_userService_to_AnyUserService: __safeDI_userServiceBuilder_Service_SafeDIMockScope_Service_userService_to_AnyUserService, userServiceBuilder_Settings_SafeDIMockScope_Settings_userService_to_AnyUserService: __safeDI_userServiceBuilder_Settings_SafeDIMockScope_Settings_userService_to_AnyUserService, safeDIOverrides: safeDIOverrides.screen)
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        return Root(screen: screen)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Root.mock()")])
 	}
 
 	@Test
@@ -3324,7 +4785,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// `App`'s dependency on `Service`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Screen.swift"]):9:5: error: SafeDI cannot generate a call to the public mock SafeDI generated for `Service` in module `Core`, which this module's mocks cannot build inline: that mock's signature depends on the declarations `Core` sees, which include module `Base`'s, and this run was not given `Base`'s SafeDI module info. Give this run every module `Core` depends on: add `Base` (the target that compiles it) to this target's `deps` under Bazel, or to its `dependencies` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`.
+			\(fixtures["App"]!["Screen.swift"]):9:5: error: SafeDI cannot generate a call to the public mock SafeDI generated for `Service` in module `Core`, which this module's mocks cannot build inline: that mock's signature depends on the declarations `Core` sees, which include module `Base`'s, and this run was not given `Base`'s SafeDI module info. Give this run every module `Core` depends on: add `Base`'s `Base_safedi` target to this target's `safedi_deps` under Bazel (the `deps` of a hand-written `safedi_compile`), add `Base` to the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -3408,11 +4869,14 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
+		            analytics: (() -> Analytics)? = nil,
 		            serviceBuilder: (@Sendable () -> Service.SafeDIOverrides)? = nil
 		        ) {
+		            self.analytics = analytics
 		            self.serviceBuilder = serviceBuilder
 		        }
 
+		        let analytics: (() -> Analytics)?
 		        let serviceBuilder: (@Sendable () -> Service.SafeDIOverrides)?
 		    }
 
@@ -3420,10 +4884,11 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        userServiceBuilder: @escaping @Sendable (Service.SafeDIMockScope_Service_userService) -> AnyUserService,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        _ = Service.__safeDI_Service_mock_2B11C431EE7A52B8.self
 		        let __safeDI_serviceBuilder__safeDIBuilder = safeDIOverrides.serviceBuilder
 		        @Sendable func __safeDI_serviceBuilder() -> Service {
-		            Service.mock(userServiceBuilder: userServiceBuilder, analytics: nil, safeDIOverrides: __safeDI_serviceBuilder__safeDIBuilder?() ?? .init())
+		            Service.mock(userServiceBuilder: userServiceBuilder, analytics: analytics, safeDIOverrides: __safeDI_serviceBuilder__safeDIBuilder?() ?? .init())
 		        }
 		        let serviceBuilder = SendableInstantiator<Service>(__safeDI_serviceBuilder)
 		        return Screen(serviceBuilder: serviceBuilder)
@@ -3481,14 +4946,16 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// R7: an array of an internal type nothing fulfills is a required parameter no public tier can take.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):3:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `secrets: [Secret]`, which `Service` instantiates and no `@Instantiable` declaration this module sees fulfills, and cannot pass `nil` for it, since it is required. `Secret` is `internal` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `internal` (`Service.init(secrets:)`). Mention `Secret` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Secret`'s declaration); widen the declaration that proves the parameter's type; or use `generateMock: .internal`.
-			\(fixtures["Service.swift"]):9:5: note: `Service` instantiates `secrets: [Secret]` here.
+			\(fixtures["Service.swift"]):5:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `secrets: [Secret]`, which `Service` instantiates and no `@Instantiable` declaration this module sees fulfills, and cannot pass `nil` for it, since it is required. `Secret` is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Service.init(secrets:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Secret` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Secret` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Secret { public static func mock() -> Secret }`), which proves `Secret` `public`; make `Service.init(secrets:)` `public`; or use `generateMock: .internal`.
+			\(fixtures["Service.swift"]):11:5: note: `Service` instantiates `secrets: [Secret]` here.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
+					#if canImport(Foundation)
 					struct Secret {}
+					#endif
 
 					@Instantiable(generateMock: .public)
 					public struct Service: Instantiable {
@@ -3588,6 +5055,387 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		)
 	}
 
+	@Test(arguments: [MultiModuleIntegration.moduleInfo, .swiftPackagePlugin])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesInstanceOfPromotedWrapper_whenConsumerAndPublicMockBothReceiveItLazily(integration: MultiModuleIntegration) async throws {
+		// EOU-1: `Screen` and `Service` both receive `analytics` lazily. `Screen`'s mock builds the wrapper at its root and
+		// hands `Service`'s mock its instance, as it would hand the instance to `Service` inline, rather than `nil`, which
+		// would build a second `Analytics`.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "corepkg", swiftFileContentByFilePath: ["Service.swift": """
+			import SafeDI
+
+			@Instantiable
+			public final class Analytics: Instantiable {
+			    public init() {}
+			}
+
+			@Instantiable
+			final class TokenCache: Instantiable {
+			    init() {}
+			}
+
+			@Instantiable(generateMock: .public)
+			public struct Service: Instantiable {
+			    init(analytics: LazilyInstantiated<Analytics>, tokenCache: TokenCache) {
+			        self.analytics = analytics
+			        self.tokenCache = tokenCache
+			    }
+
+			    @Received public let analytics: LazilyInstantiated<Analytics>
+			    @Instantiated let tokenCache: TokenCache
+			}
+			"""]),
+			ModuleFixture(name: "App", packageName: "apppkg", swiftFileContentByFilePath: ["Screen.swift": """
+			import Core
+			import SafeDI
+
+			@Instantiable(generateMock: true)
+			public struct Screen: Instantiable {
+			    public init(analytics: LazilyInstantiated<Analytics>, service: Service) {
+			        self.analytics = analytics
+			        self.service = service
+			    }
+
+			    @Received let analytics: LazilyInstantiated<Analytics>
+			    @Instantiated let service: Service
+			}
+			"""], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: integration, filesToDelete: &filesToDelete)
+		let pluginComment = integration == .swiftPackagePlugin ? " // If this line does not compile, add the SafeDI plugin to the target that declares Service." : ""
+		let screenMock = """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init()
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self\(pluginComment)
+		        let service = Service.mock(analytics: analytics.instance, safeDIOverrides: safeDIOverrides.service)
+		        return Screen(analytics: analytics, service: service)
+		    }
+		}
+		#endif
+		"""
+		switch integration {
+		case .moduleInfo:
+			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + screenMock])
+		case .swiftPackagePlugin:
+			#expect(output.modules["App"]?.generatedFiles["Screen+SafeDIMock.swift"] == generatedFileHeader + screenMock)
+		}
+		try expectEveryModuleCompiled(output)
+		guard integration == .moduleInfo else { return }
+		// M8.32's stated divergence: the call reads the instance of `Screen`'s `analytics` when `Service`'s mock is built,
+		// and the mock wraps it again; the instance is the one the inline mock shares.
+		try await expectValuesAgreeWithInlineMocks(
+			of: modules,
+			output: output,
+			probes: [DifferentialValueProbe("Screen.mock()")],
+			exempting: [
+				DifferentialValueDifference(
+					probe: "Screen.mock()",
+					path: ["Screen", "analytics"],
+					feature: "analytics: <1> LazilyInstantiated<Analytics> (already instantiated, instance read last)",
+					knownRight: "analytics: <1> LazilyInstantiated<Analytics> (instance read last)",
+				),
+				DifferentialValueDifference(
+					probe: "Screen.mock()",
+					path: ["Screen", "service", "analytics"],
+					feature: "analytics: <2> LazilyInstantiated<Analytics> (instance read last)",
+					knownRight: "analytics: <1> LazilyInstantiated<Analytics> (seen, first at Screen > analytics)",
+				),
+			],
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsLazilyInstantiatedDependencyAsWrapperAtCallersRoot_whenCalledPublicMockBuildsItLazily() async throws {
+		// O3 (corpus seed 36's shape): `Service`'s mock builds the `analytics` it receives lazily when passed `nil`.
+		// `Screen`'s mock, which can build it, builds the wrapper once at its root, as the inline mock promotes it, and
+		// passes its instance – M8.32's early read, the stated divergence – rather than an `Analytics` built eagerly.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "corepkg", swiftFileContentByFilePath: ["Service.swift": """
+			import SafeDI
+
+			@Instantiable
+			public final class Analytics: Instantiable {
+			    public init() {}
+			}
+
+			@Instantiable
+			final class TokenCache: Instantiable {
+			    init() {}
+			}
+
+			@Instantiable(generateMock: .public)
+			public struct Service: Instantiable {
+			    init(analytics: LazilyInstantiated<Analytics>, tokenCache: TokenCache) {
+			        self.analytics = analytics
+			        self.tokenCache = tokenCache
+			    }
+
+			    @Received public let analytics: LazilyInstantiated<Analytics>
+			    @Instantiated let tokenCache: TokenCache
+			}
+			"""]),
+			ModuleFixture(name: "App", packageName: "apppkg", swiftFileContentByFilePath: ["Screen.swift": """
+			import Core
+			import SafeDI
+
+			@Instantiable(generateMock: true)
+			public struct Screen: Instantiable {
+			    public init(service: Service) {
+			        self.service = service
+			    }
+
+			    @Instantiated let service: Service
+			}
+			"""], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init()
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self
+		        let service = Service.mock(analytics: analytics.instance, safeDIOverrides: safeDIOverrides.service)
+		        return Screen(service: service)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesOneInstance_whenConsumerReceivesOptionalWrapperOnlyIfAvailableThatPublicMockReceives() async throws {
+		// EOU-1, the optional wrapper: `Screen` receives `analytics: LazilyInstantiated<Analytics>?` only if available and
+		// `Service` requires the wrapper. `Screen`'s mock builds one `Analytics` and hands `Service`'s mock that instance.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "corepkg", swiftFileContentByFilePath: ["Service.swift": """
+			import SafeDI
+
+			@Instantiable
+			public final class Analytics: Instantiable {
+			    public init() {}
+			}
+
+			@Instantiable
+			final class TokenCache: Instantiable {
+			    init() {}
+			}
+
+			@Instantiable(generateMock: .public)
+			public struct Service: Instantiable {
+			    init(analytics: LazilyInstantiated<Analytics>, tokenCache: TokenCache) {
+			        self.analytics = analytics
+			        self.tokenCache = tokenCache
+			    }
+
+			    @Received public let analytics: LazilyInstantiated<Analytics>
+			    @Instantiated let tokenCache: TokenCache
+			}
+			"""]),
+			ModuleFixture(name: "App", packageName: "apppkg", swiftFileContentByFilePath: ["Screen.swift": """
+			import Core
+			import SafeDI
+
+			@Instantiable(generateMock: true)
+			public struct Screen: Instantiable {
+			    public init(analytics: LazilyInstantiated<Analytics>?, service: Service) {
+			        self.analytics = analytics
+			        self.service = service
+			    }
+
+			    @Received(onlyIfAvailable: true) let analytics: LazilyInstantiated<Analytics>?
+			    @Instantiated let service: Service
+			}
+			"""], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init()
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self
+		        let service = Service.mock(analytics: analytics.instance, safeDIOverrides: safeDIOverrides.service)
+		        return Screen(analytics: analytics, service: service)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsDependencyOnceAtCallersRoot_whenOneInstantiatorCallsPublicMockThatBuildsIt() async throws {
+		// O3: `Service`'s mock builds the `analytics` it receives when passed `nil`. `Panel`'s mock can build it, so it builds
+		// it once at its root and passes it to every `Service` its `Instantiator` makes, as the inline mock promotes it,
+		// rather than letting each call build one of its own.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "core", swiftFileContentByFilePath: ["Service.swift": """
+			import SafeDI
+
+			@Instantiable
+			public final class Analytics: Instantiable {
+			    public init() {}
+			}
+
+			@Instantiable
+			final class TokenCache: Instantiable {
+			    init() {}
+			}
+
+			@Instantiable(generateMock: .public)
+			public final class Service: Instantiable {
+			    init(analytics: Analytics, tokenCache: TokenCache) {
+			        self.analytics = analytics
+			        self.tokenCache = tokenCache
+			    }
+
+			    @Received public let analytics: Analytics
+			    @Instantiated let tokenCache: TokenCache
+			}
+			"""]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Panel.swift": """
+			import Core
+			import SafeDI
+
+			@Instantiable(generateMock: true)
+			public final class Panel: Instantiable {
+			    public init(serviceBuilder: Instantiator<Service>) {
+			        self.serviceBuilder = serviceBuilder
+			    }
+
+			    @Instantiated public let serviceBuilder: Instantiator<Service>
+			}
+			"""], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Panel {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            serviceBuilder: Service.SafeDIOverrides = .init()
+		        ) {
+		            self.analytics = analytics
+		            self.serviceBuilder = serviceBuilder
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let serviceBuilder: Service.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Panel {
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self
+		        func __safeDI_serviceBuilder() -> Service {
+		            Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.serviceBuilder)
+		        }
+		        let serviceBuilder = Instantiator<Service>(__safeDI_serviceBuilder)
+		        return Panel(serviceBuilder: serviceBuilder)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Panel.mock()")])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenConsumerProvidesValueThatReachedTierOmits() async {
@@ -3595,8 +5443,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// initializer mentions; `Screen` forwards `filter`, which the inline mock would hand `TokenCache`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Screen.swift"]):11:5: error: `Screen` provides `filter: Filter`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `Filter` is `package` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`TokenCache.init(filter:)`). Widen `TokenCache.init(filter:)` to `public`; mention `Filter` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Filter`'s declaration); or stop providing `filter` on this path.
-			\(fixtures["Core"]!["Service.swift"]):13:5: note: `TokenCache` receives `filter: Filter?` here.
+			\(fixtures["App"]!["Screen.swift"]):11:5: error: `Screen` provides `filter: Filter`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `Filter` is `package` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `Filter` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Filter` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Filter { public static func mock() -> Filter }`), which proves `Filter` `public`; or stop providing `filter` on this path.
+			\(fixtures["Core"]!["Service.swift"]):15:5: note: `TokenCache` receives `filter: Filter?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -3604,9 +5452,11 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 					ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": """
 					import SafeDI
 
+					#if canImport(Foundation)
 					public struct Filter {
 					    public init() {}
 					}
+					#endif
 
 					@Instantiable
 					package struct TokenCache: Instantiable {
@@ -3655,8 +5505,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// `Core`'s package, reaches the tier `package` access reaches, the public one, which omits `filter`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Screen.swift"]):11:5: error: `Screen` provides `filter: Filter`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App`, which SafeDI cannot tell is in the same package, can call, does not take it: `Service.mock` takes `filter` only on its `internal` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `Filter` is `internal` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `internal` (`TokenCache.init(filter:)`). Widen `TokenCache.init(filter:)` to `package`, or `public` if the two modules are in different packages; mention `Filter` in a `package` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Filter`'s declaration); or stop providing `filter` on this path.
-			\(fixtures["Core"]!["Service.swift"]):13:5: note: `TokenCache` receives `filter: Filter?` here.
+			\(fixtures["App"]!["Screen.swift"]):11:5: error: `Screen` provides `filter: Filter`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App`, which SafeDI cannot tell is in the same package, can call, does not take it: `Service.mock` takes `filter` only on its `internal` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `Filter` is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `internal` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `package`, or `public` if the two modules are in different packages; mention `Filter` in a `package` initializer, `instantiate(…)` or mock method SafeDI records; give `Filter` a `package` `mockOnly` mock (`@Instantiable(mockOnly: true) package extension Filter { package static func mock() -> Filter }`), which proves `Filter` `package`; or stop providing `filter` on this path.
+			\(fixtures["Core"]!["Service.swift"]):15:5: note: `TokenCache` receives `filter: Filter?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -3664,9 +5514,11 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 					ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": """
 					import SafeDI
 
+					#if canImport(Foundation)
 					public struct Filter {
 					    public init() {}
 					}
+					#endif
 
 					@Instantiable
 					struct TokenCache: Instantiable {
@@ -3706,121 +5558,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 			)
 		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_buildsTreeInlineThatDoesNotCompile_whenConsumerThatCannotTellItsPackageReachesPackageConstruction() async throws {
-		// M8.35b, a stated leftover of row 4b's B4.10b that this row does not cause: `App` has a module name and no package
-		// name, which SafeDI assumes reaches `package` access, so it builds `Service`'s tree inline, as it would from
-		// within `Core`'s package, with PR 3b's comment, and a module outside that package cannot compile it.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: [
-				ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": """
-				import SafeDI
-
-				public struct Filter {
-				    public init() {}
-				}
-
-				@Instantiable
-				package struct TokenCache: Instantiable {
-				    package init(filter: Filter?) {
-				        self.filter = filter
-				    }
-
-				    @Received(onlyIfAvailable: true) let filter: Filter?
-				}
-
-				@Instantiable(generateMock: .public)
-				public struct Service: Instantiable {
-				    package init(tokenCache: TokenCache) {
-				        self.tokenCache = tokenCache
-				    }
-
-				    @Instantiated let tokenCache: TokenCache
-				}
-				"""]),
-				ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Screen.swift": """
-				import Core
-				import SafeDI
-
-				@Instantiable(generateMock: true)
-				public struct Screen: Instantiable {
-				    public init(filter: Filter, service: Service) {
-				        self.filter = filter
-				        self.service = service
-				    }
-
-				    @Forwarded let filter: Filter
-				    @Received let service: Service
-				}
-				"""], dependencies: ["Core"], omitsPackageName: true),
-			],
-			integration: .moduleInfo,
-			compileVerification: .returningOutcomeOnly,
-			filesToDelete: &filesToDelete,
-		)
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
-		#if canImport(Core)
-		import Core
-		#endif
-		#if canImport(SafeDI)
-		import SafeDI
-		#endif
-
-		#if DEBUG
-		extension Screen {
-		    /// Overrides for the mock dependency tree.
-		    struct SafeDIOverrides {
-		        init(
-		            service: Service.SafeDIMockConfiguration = .init()
-		        ) {
-		            self.service = service
-		        }
-
-		        let service: Service.SafeDIMockConfiguration
-		    }
-
-		    static func mock(
-		        filter: Filter,
-		        safeDIOverrides: SafeDIOverrides = .init()
-		    ) -> Screen {
-		        func __safeDI_service() -> Service {
-		            let tokenCache = if let safeDIBuilder = safeDIOverrides.service.tokenCache { safeDIBuilder(filter) } else { TokenCache(filter: filter) } // SafeDI could not verify that TokenCache is in this package; `package` access is assumed.
-		            return if let safeDIBuilder = safeDIOverrides.service.safeDIBuilder { safeDIBuilder(tokenCache) } else { Service(tokenCache: tokenCache) } // SafeDI could not verify that Service is in this package; `package` access is assumed.
-		        }
-		        let service: Service = __safeDI_service()
-		        return Screen(filter: filter, service: service)
-		    }
-		}
-		#endif
-
-		#if DEBUG
-		extension Service {
-		    /// Configuration for how this type is constructed within a mock tree.
-		    struct SafeDIMockConfiguration {
-		        init(
-		            tokenCache: ((Filter?) -> TokenCache)? = nil,
-		            _ safeDIBuilder: ((TokenCache) -> Service)? = nil
-		        ) {
-		            self.tokenCache = tokenCache
-		            self.safeDIBuilder = safeDIBuilder
-		        }
-
-		        let tokenCache: ((Filter?) -> TokenCache)?
-		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((TokenCache) -> Service)?
-		    }
-		}
-		#endif
-		""" + "\n"])
-		guard compileVerificationIsEnabled else { return }
-		let compilation = try #require(output.compilation)
-		#expect(compilation.modules.map { $0.exitCode == 0 } == [true, false])
-		let failure = try #require(compilation.failure)
-		#expect(failure.moduleName == "App")
-		#expect(failure.standardError.contains("cannot find type 'TokenCache' in scope"), "Unexpected compiler output \(failure.standardError)")
 	}
 
 	@Test
@@ -3879,8 +5616,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// the call would pass `nil` for the value the inline mock hands `TokenCache`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Screen.swift"]):21:5: error: `Screen` provides `filter: any FilterProtocol`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `FilterProtocol` is `package` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`TokenCache.init(filter:)`). Widen `TokenCache.init(filter:)` to `public`; mention `FilterProtocol` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `FilterProtocol`'s declaration); or stop providing `filter` on this path.
-			\(fixtures["Core"]!["Service.swift"]):11:5: note: `TokenCache` receives `filter: (any FilterProtocol)?` here.
+			\(fixtures["App"]!["Screen.swift"]):21:5: error: `Screen` provides `filter: any FilterProtocol`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `FilterProtocol` is `package` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `FilterProtocol` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `FilterProtocol` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension FilterProtocol { public static func mock() -> FilterProtocol }`), which proves `FilterProtocol` `public`; or stop providing `filter` on this path.
+			\(fixtures["Core"]!["Service.swift"]):13:5: note: `TokenCache` receives `filter: (any FilterProtocol)?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -3895,7 +5632,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesValueDownChainOfPublicMocks_whenOuterPublicMockTakesWhatInnerCallPasses() async throws {
 		// M8.33: `Dashboard`'s mock calls `Service`'s and does not provide `analytics`, so it takes `analytics: Analytics? =
-		// nil` on its public tier and passes it on; `AppRoot` passes the instance it holds, so one instance is shared.
+		// nil` on its public tier, builds one once when passed `nil` (O3), and passes it on; `AppRoot` passes the instance
+		// it holds, so one instance is shared.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": """
@@ -3972,11 +5710,14 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    public struct SafeDIOverrides {
 		        public init(
+		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init()
 		        ) {
+		            self.analytics = analytics
 		            self.service = service
 		        }
 
+		        public let analytics: (() -> Analytics)?
 		        public let service: Service.SafeDIOverrides
 		    }
 
@@ -3984,6 +5725,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        analytics: Analytics? = nil,
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Dashboard {
+		        let analytics = if let analytics { analytics } else if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
 		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self
 		        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
 		        return Dashboard(service: service)
@@ -4228,8 +5970,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// but no tier of `Outer`'s mock takes it, since the tier of `Service`'s mock that `Outer`'s tree calls omits it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["AppRoot.swift"]):12:5: error: `AppRoot` provides `filter: Filter`, but no mock SafeDI generated for `Outer` takes it: `Outer`'s mock tree calls the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `Mid` can call, which takes `filter` only on its `package` tier, so calling it would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `Filter` is `package` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`TokenCache.init(filter:)`). Widen `TokenCache.init(filter:)` to `public`; mention `Filter` in a `public` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Filter`'s declaration); or stop providing `filter` on this path.
-			\(fixtures["Core"]!["Service.swift"]):13:5: note: `TokenCache` receives `filter: Filter?` here.
+			\(fixtures["App"]!["AppRoot.swift"]):12:5: error: `AppRoot` provides `filter: Filter`, but no mock SafeDI generated for `Outer` takes it: `Outer`'s mock tree calls the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `Mid` can call, which takes `filter` only on its `package` tier, so calling it would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `Filter` is `package` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `Filter` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Filter` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Filter { public static func mock() -> Filter }`), which proves `Filter` `public`; or stop providing `filter` on this path.
+			\(fixtures["Core"]!["Service.swift"]):15:5: note: `TokenCache` receives `filter: Filter?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -4358,7 +6100,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// M8.6: `Service` has no public mock, and `App` cannot construct `TokenCache` in its tree.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Core"]!["Service.swift"]):5:5: error: `TokenCache`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or give `Service` a public mock: `generateMock: .public`, or a hand-written public `mock`.
+			\(fixtures["Core"]!["Service.swift"]):5:5: error: `TokenCache`’s initializer is `package`, so the mock of `Screen`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or give `Service` a public mock: `generateMock: .public`, or a hand-written public `mock`.
 			\(fixtures["Core"]!["Service.swift"]):5:5-5:12: fixit: public
 			"""
 		}) {
@@ -4702,13 +6444,16 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    /// Overrides for the mock dependency tree.
 		    struct SafeDIOverrides {
 		        init(
+		            analytics: (() -> Analytics)? = nil,
 		            service: Service.SafeDIOverrides = .init(),
 		            theme: Theme? = nil
 		        ) {
+		            self.analytics = analytics
 		            self.service = service
 		            self.theme = theme
 		        }
 
+		        let analytics: (() -> Analytics)?
 		        let service: Service.SafeDIOverrides
 		        let theme: Theme?
 		    }
@@ -4717,8 +6462,12 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        let theme: Theme? = safeDIOverrides.theme
+		        func __safeDI_analytics() -> Analytics {
+		            if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics() }
+		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        _ = Service.__safeDI_Service_mock_209346FEA041FD20.self
-		        let service = Service.mock(analytics: nil, theme: theme, safeDIOverrides: safeDIOverrides.service)
+		        let service = Service.mock(analytics: analytics.instance, theme: theme, safeDIOverrides: safeDIOverrides.service)
 		        return Screen(theme: theme, service: service)
 		    }
 		}
@@ -5023,9 +6772,355 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
+	// MARK: Tests – plain declarations prove a parameter's type
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesHoleBuilderOfPublicProtocolOnPublicTier_whenMockedTypesOwnInitializerAndTheTypesItBuildsAreInternal(integration: MultiModuleIntegration) async throws {
+		// F6: `FeedService`'s own `public` declaration proves it, so the public mock takes the hole's builder while the
+		// seam's own initializer and `FeedStore` stay `internal`, and a module of another package calls the mock.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "SharedModule", packageName: "App", swiftFileContent: ["@Instantiable\npublic final class SharedThing: Instantiable {\n    public init() {}\n}"]),
+				ModuleFixture(
+					name: "FeedModule",
+					packageName: "App",
+					swiftFileContentByFilePath: [
+						"FeedService.swift": "public protocol FeedService {\n    func headlines() -> [String]\n}",
+						"FeedScreen.swift": """
+						import SharedModule
+
+						@Instantiable(generateDependencyTree: true, generateMock: .public)
+						public final class FeedScreen: Instantiable {
+						    init(shared: SharedThing, store: FeedStore, service: FeedService) {
+						        self.shared = shared
+						        self.store = store
+						        self.service = service
+						    }
+
+						    public func headlines() -> [String] { service.headlines() }
+
+						    @Received let shared: SharedThing
+						    @Instantiated let store: FeedStore
+						    @Instantiated let service: FeedService
+						}
+
+						@Instantiable
+						final class FeedStore: Instantiable {
+						    init(shared: SharedThing) {
+						        self.shared = shared
+						    }
+
+						    @Received let shared: SharedThing
+						}
+						""",
+					],
+					dependencies: ["SharedModule"],
+				),
+				ModuleFixture(name: "Previews", packageName: "Previews", swiftFileContentByFilePath: [
+					"FeedPreviews.swift": """
+					import FeedModule
+
+					#if DEBUG
+					struct StubFeedService: FeedService {
+					    func headlines() -> [String] { ["Previewing without the app"] }
+					}
+
+					func makeScreen() -> FeedScreen {
+					    FeedScreen.mock(serviceBuilder: { _ in StubFeedService() })
+					}
+					#endif
+					""",
+				], dependencies: ["SharedModule", "FeedModule"]),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		let imports = "#if canImport(SharedModule)\nimport SharedModule\n#endif\n\n"
+		let seamCode = """
+		extension FeedScreen {
+		    public struct SafeDIScope_FeedScreen_service {
+		        public let shared: SharedThing
+		        internal let store: FeedStore
+		    }
+
+		    public convenience init(shared: SharedThing, serviceBuilder __safeDI_serviceBuilder: @escaping (SafeDIScope_FeedScreen_service) -> FeedService) {
+		        let store = FeedStore(shared: shared)
+		        let service: FeedService = __safeDI_serviceBuilder(SafeDIScope_FeedScreen_service(shared: shared, store: store))
+		        self.init(shared: shared, store: store, service: service)
+		    }
+		}
+
+		extension FeedScreen {
+		    public enum __safeDI_FeedScreen_C92B4602192AF4D6 {}
+		}
+		"""
+		let mockCode = """
+		#if DEBUG
+		extension FeedScreen {
+		    public struct SafeDIMockScope_FeedScreen_service {
+		        public let shared: SharedThing
+		        internal let store: FeedStore
+		    }
+
+		    /// Overrides for the mock dependency tree.
+		    public struct SafeDIOverrides {
+		        public init(
+		            shared: (() -> SharedThing)? = nil
+		        ) {
+		            self.shared = shared
+		            self.store = nil
+		        }
+
+		        init(
+		            shared: (() -> SharedThing)? = nil,
+		            store: ((SharedThing) -> FeedStore)? = nil
+		        ) {
+		            self.shared = shared
+		            self.store = store
+		        }
+
+		        public let shared: (() -> SharedThing)?
+		        let store: ((SharedThing) -> FeedStore)?
+		    }
+
+		    public static func mock(
+		        serviceBuilder: @escaping (FeedScreen.SafeDIMockScope_FeedScreen_service) -> FeedService,
+		        shared: SharedThing? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> FeedScreen {
+		        let __safeDI_serviceBuilder = serviceBuilder
+		        let shared = if let shared { shared } else if let safeDIBuilder = safeDIOverrides.shared { safeDIBuilder() } else { SharedThing() }
+		        let store = if let safeDIBuilder = safeDIOverrides.store { safeDIBuilder(shared) } else { FeedStore(shared: shared) }
+		        let service: FeedService = __safeDI_serviceBuilder(SafeDIMockScope_FeedScreen_service(shared: shared, store: store))
+		        return FeedScreen(shared: shared, store: store, service: service)
+		    }
+		}
+
+		extension FeedScreen {
+		    public enum __safeDI_FeedScreen_mock_750B8EDD02D427AE {}
+		}
+		#endif
+		"""
+		switch integration {
+		case .moduleInfo:
+			#expect(output.modules["FeedModule"]?.generatedFiles == ["FeedModule.swift": generatedFileHeader + imports + seamCode + "\n\n" + mockCode])
+		case .swiftPackagePlugin:
+			#expect(output.modules["FeedModule"]?.generatedFiles == [
+				"FeedScreen+SafeDI.swift": generatedFileHeader + imports + seamCode,
+				"FeedScreen+SafeDIMock.swift": generatedFileHeader + imports + mockCode,
+				"SafeDIMockConfiguration.swift": generatedFileHeader + imports,
+			])
+		}
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingProverAndOfferingMockOnlyMock_whenPublicMockReceivesTypeSafeDIReadsNoDeclarationOf() async {
+		// EOU-3: `UserService`'s own `public` declaration proves it, while `Session` is declared inside an `#if` block, so
+		// only `Service`'s own `internal` initializer mentions it: the error names that initializer, and offers the
+		// `mockOnly` mock that proves `Session` and lets the mock build it.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Service.swift"]):1:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `session: Session`, which the initializer of `Service` receives, and cannot pass `nil` for it, since it is required. `Session` is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Service.init(userService:session:tokenCache:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Session` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Session` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Session { public static func mock() -> Session }`), which proves `Session` `public` and lets the mock build it; receive it with `onlyIfAvailable: true` and an optional type; make `Service.init(userService:session:tokenCache:)` `public`; or use `generateMock: .internal`.
+			\(fixtures["Service.swift"]):10:5: note: `Service` receives `session: Session` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: Self.serviceReceivingSession(alongside: []), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesOptionalReceivedParameter_whenPublicMockOnlyExtensionMocksTypeSafeDIReadsNoDeclarationOf() async throws {
+		// EOU-3's twin: the `public` `mockOnly` extension proves `Session` `public`, and the mock builds it.
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: Self.serviceReceivingSession(alongside: ["@Instantiable(mockOnly: true)\npublic extension Session {\n    static func mock() -> Session {\n        Session()\n    }\n}"]),
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.mockFiles == ["Service+SafeDIMock.swift": generatedFileHeader + """
+		#if DEBUG
+		extension Service {
+		    /// Overrides for the mock dependency tree.
+		    public struct SafeDIOverrides {
+		        public init(
+		            session: (() -> Session)? = nil
+		        ) {
+		            self.tokenCache = nil
+		            self.session = session
+		        }
+
+		        init(
+		            tokenCache: (() -> TokenCache)? = nil,
+		            session: (() -> Session)? = nil
+		        ) {
+		            self.tokenCache = tokenCache
+		            self.session = session
+		        }
+
+		        let tokenCache: (() -> TokenCache)?
+		        public let session: (() -> Session)?
+		    }
+
+		    public static func mock(
+		        userService: any UserService,
+		        session: Session? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Service {
+		        let tokenCache = if let safeDIBuilder = safeDIOverrides.tokenCache { safeDIBuilder() } else { TokenCache() }
+		        let session = if let session { session } else if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session.mock() }
+		        return Service(userService: userService, session: session, tokenCache: tokenCache)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_mock_8A6472169C457EAC {}
+		}
+		#endif
+		"""])
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesForwardedTypeOnPublicTier_whenUnspelledMockOnlyExtensionMocksPublicClass(integration: MultiModuleIntegration) async throws {
+		// EOU-4: the README's unspelled `@Instantiable(mockOnly: true) extension User` is bounded by `User`'s own `public`
+		// declaration, so the public mock takes `user`, and the README's call compiles in another package.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContentByFilePath: [
+					"User.swift": "public final class User: Sendable {\n    public init(name: String) {\n        self.name = name\n    }\n\n    public let name: String\n}",
+					"UserMock.swift": "@Instantiable(mockOnly: true)\nextension User {\n    public static func mock() -> User {\n        User(name: \"Mock\")\n    }\n}",
+					"ProfileView.swift": """
+					@Instantiable(generateMock: .public)
+					public final class ProfileView: Instantiable {
+					    init(user: User, store: ProfileStore) {
+					        self.user = user
+					        self.store = store
+					    }
+
+					    @Forwarded let user: User
+					    @Instantiated let store: ProfileStore
+					}
+
+					@Instantiable
+					final class ProfileStore: Instantiable {
+					    init() {}
+					}
+					""",
+				]),
+				ModuleFixture(name: "App", packageName: "Notes", swiftFileContentByFilePath: [
+					"Preview.swift": "import Feature\n\n#if DEBUG\nfunc preview() -> ProfileView {\n    ProfileView.mock(user: User(name: \"dfed\"))\n}\n#endif",
+				], dependencies: ["Feature"]),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		let mockCode = """
+		#if DEBUG
+		extension ProfileView {
+		    /// Overrides for the mock dependency tree.
+		    public struct SafeDIOverrides {
+		        public init() {
+		            self.store = nil
+		        }
+
+		        init(
+		            store: (() -> ProfileStore)? = nil
+		        ) {
+		            self.store = store
+		        }
+
+		        let store: (() -> ProfileStore)?
+		    }
+
+		    public static func mock(
+		        user: User? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> ProfileView {
+		        let user = user ?? (User.mock())
+		        let store = if let safeDIBuilder = safeDIOverrides.store { safeDIBuilder() } else { ProfileStore() }
+		        return ProfileView(user: user, store: store)
+		    }
+		}
+
+		extension ProfileView {
+		    public enum __safeDI_ProfileView_mock_77E7840731A6C4C1 {}
+		}
+		#endif
+		"""
+		switch integration {
+		case .moduleInfo:
+			#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + mockCode])
+		case .swiftPackagePlugin:
+			#expect(output.modules["Feature"]?.generatedFiles["ProfileView+SafeDIMock.swift"] == generatedFileHeader + mockCode)
+		}
+		try expectEveryModuleCompiled(output)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// `Feature`, in package `Shop`, whose `Space.swift` holds `namespaceDeclaration` alone, without a SafeDI marker, and
+	/// whose `Shelf.swift` declares the `public` `Space.Shelf`, with a public mock, in an unspelled extension of `Space`.
+	private static func featureExtendingNamespace(declaredAs namespaceDeclaration: String) -> ModuleFixture {
+		ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContentByFilePath: [
+			"Space.swift": namespaceDeclaration,
+			"Shelf.swift": """
+			import SafeDI
+
+			public protocol Shelving {}
+
+			extension Space {
+			    @Instantiable(generateMock: .public)
+			    public final class Shelf: Instantiable, Shelving {
+			        public init() {}
+			    }
+			}
+			""",
+		])
+	}
+
+	/// The path a diagnostic names `file` of `module` by under `integration`.
+	private static func path(of file: String, in module: String, _ fixtures: [String: FixturePaths], _ integration: MultiModuleIntegration) -> String {
+		guard let moduleFixtures = fixtures[module] else { return "<\(module) did not run>/\(file)" }
+		return switch integration {
+		case .moduleInfo:
+			moduleFixtures[file]
+		case .swiftPackagePlugin:
+			NormalizedFilePath(moduleFixtures.compilerPath(of: file)).path
+		}
+	}
+
+	/// A public `Service` whose public mock receives the `public` protocol `UserService` and `Session`, which is declared
+	/// inside an `#if` block, beside `otherFiles`.
+	private static func serviceReceivingSession(alongside otherFiles: [String]) -> [String] {
+		[
+			"public protocol UserService: AnyObject {\n    var name: String { get }\n}",
+			unrecordedTypeDeclaration("public final class Session {\n    public init() {}\n}"),
+			"""
+			@Instantiable(generateMock: .public)
+			public struct Service: Instantiable {
+			    init(userService: any UserService, session: Session, tokenCache: TokenCache) {
+			        self.userService = userService
+			        self.session = session
+			        self.tokenCache = tokenCache
+			    }
+
+			    @Received let userService: any UserService
+			    @Received let session: Session
+			    @Instantiated let tokenCache: TokenCache
+			}
+
+			@Instantiable
+			struct TokenCache: Instantiable {
+			    init() {}
+			}
+			""",
+		] + otherFiles
+	}
 
 	/// The canonical fixture's `Core` module (the shape matrix's section 0), with `appCaller` in `App`, another package.
 	/// M7.1's modules: `Service`'s tree holds a hole, `userService`, which `DefaultUserService` fulfills only where `App`
@@ -5036,7 +7131,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [
 				"""
 				@Instantiable
-				public final class Analytics: Instantiable {
+				public final class Analytics: Instantiable, Sendable {
 				    public init() {}
 				}
 
@@ -5048,7 +7143,11 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 				public protocol UserService {}
 
 				public struct AnyUserService: UserService {
-				    public init(_ userService: any UserService) {}
+				    public init(_ userService: any UserService) {
+				        self.userService = userService
+				    }
+
+				    public let userService: any UserService
 				}
 
 				@Instantiable
@@ -5141,6 +7240,117 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			], dependencies: ["Core"]),
 		]
 	}
+
+	/// D530-4's modules: `Core` declares a `.public` type for each of `serviceNames`, each with a hole `userService`
+	/// that `DefaultUserService` fulfills where a module declares it, and the package `Session`, which keeps another
+	/// package from building their trees; `App` declares `Screen`, which instantiates one of each. With
+	/// `distinctValueInScopeAtEachHole`, each type also instantiates `extra` of a package type of its own, so the scope
+	/// structs of the holes, whose fields a caller's guard hashes, differ.
+	private static func sameLabelHoleModules(serviceNames: [String], screenMockGeneration: String, distinctValueInScopeAtEachHole: Bool = false) -> [ModuleFixture] {
+		let services = serviceNames.map { name in
+			guard distinctValueInScopeAtEachHole else {
+				return """
+				@Instantiable(generateMock: .public)
+				public final class \(name): Instantiable {
+				    package init(session: Session, userService: AnyUserService) {
+				        self.session = session
+				        self.userService = userService
+				    }
+
+				    @Instantiated let session: Session
+				    @Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) let userService: AnyUserService
+				}
+				"""
+			}
+			return """
+			@Instantiable
+			package final class \(name)Extra: Instantiable {
+			    package init() {}
+			}
+
+			@Instantiable(generateMock: .public)
+			public final class \(name): Instantiable {
+			    package init(session: Session, extra: \(name)Extra, userService: AnyUserService) {
+			        self.session = session
+			        self.extra = extra
+			        self.userService = userService
+			    }
+
+			    @Instantiated let session: Session
+			    @Instantiated let extra: \(name)Extra
+			    @Instantiated(fulfilledByType: "DefaultUserService", erasedToConcreteExistential: true) let userService: AnyUserService
+			}
+			"""
+		}
+		let labels = serviceNames.map { $0.prefix(1).lowercased() + $0.dropFirst() }
+		let screenParameters = zip(labels, serviceNames).map { "\($0): \($1)" }.joined(separator: ", ")
+		let screenAssignments = labels.map { "        self.\($0) = \($0)" }.joined(separator: "\n")
+		let screenProperties = zip(labels, serviceNames).map { "    @Instantiated let \($0): \($1)" }.joined(separator: "\n")
+		return [
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [
+				"""
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init() {}
+				}
+
+				@Instantiable
+				package final class Session: Instantiable {
+				    package init() {}
+				}
+
+				public protocol UserService {}
+
+				public struct AnyUserService: UserService {
+				    public init(_ base: any UserService) {
+				        self.base = base
+				    }
+
+				    public let base: any UserService
+				}
+
+				@Instantiable
+				public struct Profile: Instantiable {
+				    public init(userService: AnyUserService) {
+				        self.userService = userService
+				    }
+
+				    @Received let userService: AnyUserService
+				}
+
+				""" + services.joined(separator: "\n\n"),
+			]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContent: [
+				"""
+				import Core
+
+				@Instantiable(generateMock: \(screenMockGeneration))
+				public final class Screen: Instantiable {
+				    package init(\(screenParameters)) {
+				\(screenAssignments)
+				    }
+
+				\(screenProperties)
+				}
+				""",
+			], dependencies: ["Core"]),
+		]
+	}
+
+	/// `Root`, in a third module, which instantiates `sameLabelHoleModules`' `Screen`.
+	private static let sameLabelHoleRoot = """
+	import App
+	import Core
+
+	@Instantiable(generateMock: true)
+	public final class Root: Instantiable {
+	    public init(screen: Screen) {
+	        self.screen = screen
+	    }
+
+	    @Instantiated let screen: Screen
+	}
+	"""
 
 	private static let holeScreen = """
 	import Core
@@ -5262,9 +7472,11 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	    package init() {}
 	}
 
+	#if canImport(Foundation)
 	package struct Policy {
 	    package static let standard = Policy()
 	}
+	#endif
 
 	enum Defaults {
 	    static let capacity = 10
@@ -5347,7 +7559,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": """
 			import SafeDI
 
+			#if canImport(Foundation)
 			public protocol FilterProtocol {}
+			#endif
 
 			@Instantiable
 			package struct TokenCache: Instantiable {
@@ -5403,9 +7617,11 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": """
 			import SafeDI
 
+			#if canImport(Foundation)
 			public struct Filter {
 			    public init() {}
 			}
+			#endif
 
 			@Instantiable
 			package struct TokenCache: Instantiable {

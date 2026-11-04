@@ -473,6 +473,9 @@ struct SafeDIToolKeywordLabelTests: ~Copyable {
 			"Service+SafeDIMock.swift": generatedFileHeader + """
 			#if DEBUG
 			extension Service {
+			    // These providers evaluate `Service`'s own defaults outside any actor, since SafeDI sees no isolation on it. If one
+			    // reads the state of an actor `Service` takes from a conformance or a superclass and does not compile, give its
+			    // `@Instantiable` `mockAttributes: "@MainActor"` (or that actor).
 			    @usableFromInline nonisolated static func __safeDI_publicMockDefault_default() -> String? { "default" }
 
 			    /// Overrides for the mock dependency tree.

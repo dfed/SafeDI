@@ -600,6 +600,517 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorsOfferingSeamForTypesInItsTree_whenRootOfAnotherPackageBuildsPackageTypesThroughPublicType(integration: MultiModuleIntegration) async {
+		// `Service`'s module could build its tree, `TokenCache` included, and `App` would call the initializer it generates
+		// for `Service`, whose widest tier is at `Service`'s access, `public`, and calls the `package` initializer inside
+		// `Core`, so the error about that initializer offers the seam too
+		// (`generate_callsSeamsPublicInitializer_whenErrorsOfferedSeamIsDeclared`).
+		await assertThrowsErrorsOfferingServiceAsSeamForTokenCache(tokenCacheReceivesSession: false, integration: integration)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorsOfferingSeamForTypesInItsTree_whenTypeInItsTreeReceivesPropertyTheSeamCandidateReceives() async {
+		// `TokenCache` receives the `session` that `Service` receives: the initializer `Core` would generate for `Service`
+		// takes it as `Service`'s own parameter, as visible as `Session`, `public`, and calls `Service`'s `package`
+		// initializer inside `Core`, so every error offers the seam.
+		await assertThrowsErrorsOfferingServiceAsSeamForTokenCache(tokenCacheReceivesSession: true, integration: .moduleInfo)
+	}
+
+	/// Asserts that `App`'s root, which builds `Core`'s `public` `Service` through its own `Screen`, gets an error at
+	/// `Service`'s `package` initializer, one at `TokenCache`, which `Service` instantiates, and one at its `package`
+	/// initializer, each offering `Service` as a seam. `Service` receives `analytics` and `session`, and so does
+	/// `TokenCache` when `tokenCacheReceivesSession` is set.
+	private mutating func assertThrowsErrorsOfferingServiceAsSeamForTokenCache(tokenCacheReceivesSession: Bool, integration: MultiModuleIntegration) async {
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let servicePath = Self.declarationPath(of: "Service.swift", in: "Core", fixtures: fixtures, under: integration)
+			return """
+			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix\(Self.seamRemedy(declaring: "Service", in: "Core")).
+			\(servicePath):3:5-3:12: fixit: public
+			\(servicePath):27:1: error: `TokenCache` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `TokenCache` `public` to fix\(Self.seamRemedy(declaring: "Service", in: "Core")).
+			\(servicePath):27:1-27:8: fixit: public
+			\(servicePath):28:5: error: `TokenCache`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix\(Self.seamRemedy(declaring: "Service", in: "Core")).
+			\(servicePath):28:5-28:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.coreDeclaringServiceBuildingTokenCache(serviceAttribute: "@Instantiable", tokenCacheReceivesSession: tokenCacheReceivesSession),
+					Self.appBuildingServiceThroughScreen(screenAttribute: "@Instantiable(generateMock: true)"),
+				],
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsSeamsPublicInitializer_whenErrorsOfferedSeamIsDeclared(integration: MultiModuleIntegration) async throws {
+		// The remedy the errors about `Service`'s `package` initializer and `TokenCache` offer, applied with nothing else
+		// changed: `Core` builds `TokenCache` and calls `Service`'s `package` initializer in the `public` initializer it
+		// generates, which `App` calls.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.coreDeclaringServiceBuildingTokenCache(serviceAttribute: "@Instantiable(generateDependencyTree: true)", tokenCacheReceivesSession: false),
+				Self.appBuildingServiceThroughScreen(screenAttribute: "@Instantiable"),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		let seamCode = """
+		extension Service {
+		    public init(analytics: LazilyInstantiated<Analytics>, session: Session) {
+		        let tokenCache = TokenCache()
+		        self.init(analytics: analytics, session: session, tokenCache: tokenCache)
+		    }
+		}
+
+		extension Service {
+		    public enum __safeDI_Service_EEBD82F55D1C7D4A {}
+		}
+		"""
+		let pluginComment = integration == .swiftPackagePlugin ? " // If this line does not compile, add the SafeDI plugin to the target that declares Service." : ""
+		let rootCode = """
+		extension AppRoot {
+		    public init() {
+		        func __safeDI_analytics() -> Analytics {
+		            Analytics()
+		        }
+		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+		        let session = Session()
+		        func __safeDI_screen() -> Screen {
+		            func __safeDI_service() -> Service {
+		                _ = Service.__safeDI_Service_EEBD82F55D1C7D4A.self\(pluginComment)
+		                return Service(analytics: analytics, session: session)
+		            }
+		            let service: Service = __safeDI_service()
+		            return Screen(analytics: analytics, session: session, service: service)
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        self.init(analytics: analytics, session: session, screen: screen)
+		    }
+		}
+		"""
+		switch integration {
+		case .moduleInfo:
+			#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + seamCode])
+			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + rootCode])
+		case .swiftPackagePlugin:
+			#expect(output.modules["Core"]?.generatedFiles == ["Service+SafeDI.swift": generatedFileHeader + seamCode])
+			#expect(output.modules["App"]?.generatedFiles == ["AppRoot+SafeDI.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + rootCode])
+		}
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingOutermostTypeOfAnotherModuleAsSeam_whenRootConstructsPackageTypeThroughIt(integration: MultiModuleIntegration) async {
+		// `Root` calls the initializer `Feature` generates for `Seam`, whose tree is built in `Feature`, so only the tree
+		// of `Service` constructs `Gate` in `App`'s production code. Production code is generated, and checked, before the
+		// mock of `Container`, which builds `Seam`'s tree too.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let gatePath = Self.declarationPath(of: "Gate.swift", in: "Feature", fixtures: fixtures, under: integration)
+			return """
+			\(gatePath):3:5: error: `Gate`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix\(Self.seamRemedy(declaring: "Service", in: "Feature")).
+			\(gatePath):3:5-3:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.featureDeclaringGateBuiltByServiceAndSeam,
+					Self.appInstantiatingServiceAndSeam(in: ["Root": "@Instantiable(isRoot: true)", "Container": "@Instantiable(generateMock: true)"]),
+				],
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_offersSeamOnlyForDeclarationsItsModuleCanConstruct_whenTreeOfTypeOfAnotherPackageReachesThirdModule(integration: MultiModuleIntegration) async {
+		// `Core`, which would build `Service`'s tree as a seam, can call its own `Cache`'s `package` initializer, but not
+		// `Base`'s `Formatter`'s, which is `internal`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let formatterPath = Self.declarationPath(of: "Formatter.swift", in: "Base", fixtures: fixtures, under: integration)
+			let cachePath = Self.declarationPath(of: "Cache.swift", in: "Core", fixtures: fixtures, under: integration)
+			return """
+			\(formatterPath):3:5: error: `Formatter`’s initializer is `internal`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(formatterPath):3:5-3:5: fixit: public\(" ")
+			\(cachePath):3:5: error: `Cache`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix\(Self.seamRemedy(declaring: "Service", in: "Core")).
+			\(cachePath):3:5-3:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Base",
+						packageName: "Toolkit",
+						swiftFileContent: [
+							"""
+							@Instantiable
+							public final class Formatter: Instantiable {
+							    init() {}
+							}
+							""",
+						],
+					),
+					ModuleFixture(
+						name: "Core",
+						packageName: "Toolkit",
+						swiftFileContent: [
+							"""
+							@Instantiable
+							public final class Cache: Instantiable {
+							    package init() {}
+							}
+							""",
+							"""
+							import Base
+
+							@Instantiable
+							public final class Service: Instantiable {
+							    public init(cache: Cache, formatter: Formatter) {
+							        self.cache = cache
+							        self.formatter = formatter
+							    }
+
+							    @Instantiated let cache: Cache
+							    @Instantiated let formatter: Formatter
+							}
+							""",
+						],
+						dependencies: ["Base"],
+					),
+					Self.rootInstantiatingService(dependencies: ["Base", "Core"]),
+				],
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: TokenCacheConstruction.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingNoSeam_whenAnotherPathConstructsTypeWithoutPassingThroughCandidate(construction: TokenCacheConstruction) async {
+		// Declaring `Service` a seam would leave the construction of `TokenCache` that bypasses it in `App`, although the
+		// path through `Service` refers to `TokenCache` first, and no one type is the outermost on every path to the
+		// `Cipher` that `TokenCache` instantiates.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["Core"]!["Service.swift"]):12:5: error: `TokenCache`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(fixtures["Core"]!["Service.swift"]):12:5-12:12: fixit: public
+			\(fixtures["Core"]!["Service.swift"]):21:5: error: `Cipher`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(fixtures["Core"]!["Service.swift"]):21:5-21:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Core",
+						packageName: "Toolkit",
+						swiftFileContent: [
+							"""
+							@Instantiable
+							public final class Service: Instantiable {
+							    public init(tokenCache: TokenCache) {
+							        self.tokenCache = tokenCache
+							    }
+
+							    @Instantiated let tokenCache: TokenCache
+							}
+
+							@Instantiable
+							public final class TokenCache: Instantiable {
+							    package init(cipher: Cipher) {
+							        self.cipher = cipher
+							    }
+
+							    @Instantiated let cipher: Cipher
+							}
+
+							@Instantiable
+							public final class Cipher: Instantiable {
+							    package init() {}
+							}
+							""",
+						],
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContentByFilePath: construction.appFiles,
+						dependencies: ["Core"],
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: SessionProvider.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_offersSeam_whenTypeBeneathCandidateReceivesPropertyProvidedAboveOrBeneathCandidate(sessionProvider: SessionProvider) async {
+		// `TokenCache` receives `session`. Where `Service`'s tree provides it, `Core` would build the tree and pass it;
+		// where `Root` provides it, the initializer `Core` would generate for `Service` takes it as a parameter as
+		// visible as `Session`, `public`, and calls `TokenCache`'s initializer inside `Core`, as
+		// `SafeDIToolSeamAccessTests.generate_callsPublicTierPassingValue_whenReceiversInitializerIsNarrowerThanCallerCanCall`
+		// compiles.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["Core"]!["TokenCache.swift"]):2:5: error: `TokenCache`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix\(Self.seamRemedy(declaring: "Service", in: "Core")).
+			\(fixtures["Core"]!["TokenCache.swift"]):2:5-2:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Core",
+						packageName: "Toolkit",
+						swiftFileContentByFilePath: [
+							"Service.swift": sessionProvider.serviceFile,
+							"Session.swift": """
+							@Instantiable
+							public final class Session: Instantiable {
+							    public init() {}
+							}
+							""",
+							"TokenCache.swift": """
+							@Instantiable public final class TokenCache: Instantiable {
+							    package init(session: Session) {
+							        self.session = session
+							    }
+
+							    @Received let session: Session
+							}
+							""",
+						],
+					),
+					ModuleFixture(name: "App", packageName: "Shop", swiftFileContentByFilePath: ["Root.swift": sessionProvider.rootFile], dependencies: ["Core"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_offersSeamForEveryDeclarationButCandidatesType_whenRootErasesPackageTypeOfAnotherPackage() async {
+		// `App` names `Service` only through the erasure. The initializer `Core` would generate for `Service` is no more
+		// visible than `Service`, so the error at `Service` offers no seam and must be fixed first; once it is, the seam
+		// leaves `Service`'s initializer and `TokenCache` to `Core`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["Core"]!["Service.swift"]):4:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix.
+			\(fixtures["Core"]!["Service.swift"]):4:1-4:8: fixit: public
+			\(fixtures["Core"]!["Service.swift"]):5:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix\(Self.seamRemedy(declaring: "Service", in: "Core")).
+			\(fixtures["Core"]!["Service.swift"]):5:5-5:12: fixit: public
+			\(fixtures["Core"]!["Service.swift"]):13:1: error: `TokenCache` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `TokenCache` `public` to fix\(Self.seamRemedy(declaring: "Service", in: "Core")).
+			\(fixtures["Core"]!["Service.swift"]):13:1-13:8: fixit: public
+			\(fixtures["Core"]!["Service.swift"]):14:5: error: `TokenCache`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix\(Self.seamRemedy(declaring: "Service", in: "Core")).
+			\(fixtures["Core"]!["Service.swift"]):14:5-14:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Core",
+						packageName: "CorePackage",
+						swiftFileContentByFilePath: [
+							"Service.swift": """
+							public protocol ServiceProtocol {}
+
+							@Instantiable(fulfillingAdditionalTypes: [ServiceProtocol.self])
+							package final class Service: ServiceProtocol, Instantiable {
+							    package init(tokenCache: TokenCache) {
+							        self.tokenCache = tokenCache
+							    }
+
+							    @Instantiated let tokenCache: TokenCache
+							}
+
+							@Instantiable
+							package struct TokenCache: Instantiable {
+							    package init() {}
+							}
+							""",
+						],
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "AppPackage",
+						swiftFileContentByFilePath: [
+							"Root.swift": """
+							import Core
+
+							@Instantiable(isRoot: true)
+							final class Root: Instantiable {
+							    init(service: any ServiceProtocol) {
+							        self.service = service
+							    }
+
+							    @Instantiated(fulfilledByType: "Service", erasedToConcreteExistential: true) let service: any ServiceProtocol
+							}
+							""",
+						],
+						dependencies: ["Core"],
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_offersNoSeam_whenDeclarationIsInModuleOtherThanCandidates() async {
+		// `Service`'s tree builds `DefaultUserService`, which fulfills `UserService` in `FeatureImpl`, a module that depends
+		// on `Feature`. Declared a seam, `Service` could not build it in `Feature`, which does not see it, so `App` would
+		// still construct it; SafeDI does not know which modules `Feature` sees, so the error offers no seam.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["FeatureImpl"]!["DefaultUserService.swift"]):5:5: error: `DefaultUserService`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(fixtures["FeatureImpl"]!["DefaultUserService.swift"]):5:5-5:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Feature",
+						packageName: "Kit",
+						swiftFileContentByFilePath: [
+							"Service.swift": """
+							public protocol UserService: AnyObject {}
+
+							@Instantiable
+							public final class Profile: Instantiable {
+							    public init(userService: any UserService) {
+							        self.userService = userService
+							    }
+
+							    @Instantiated let userService: any UserService
+							}
+
+							@Instantiable
+							public final class Service: Instantiable {
+							    public init(profile: Profile) {
+							        self.profile = profile
+							    }
+
+							    @Instantiated let profile: Profile
+							}
+							""",
+						],
+					),
+					ModuleFixture(
+						name: "FeatureImpl",
+						packageName: "Kit",
+						swiftFileContentByFilePath: [
+							"DefaultUserService.swift": """
+							import Feature
+
+							@Instantiable(fulfillingAdditionalTypes: [UserService.self])
+							public final class DefaultUserService: UserService, Instantiable {
+							    package init() {}
+							}
+							""",
+						],
+						dependencies: ["Feature"],
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContentByFilePath: [
+							"Root.swift": """
+							import Feature
+							import FeatureImpl
+
+							@Instantiable(isRoot: true)
+							final class Root: Instantiable {
+							    init(service: Service) {
+							        self.service = service
+							    }
+
+							    @Instantiated let service: Service
+							}
+							""",
+						],
+						dependencies: ["Feature", "FeatureImpl"],
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	/// Which type instantiates the `session` that `Core`'s `TokenCache`, beneath `Service`, receives.
+	enum SessionProvider: CaseIterable {
+		/// `Service`, the outermost type of `Core` on the path to `TokenCache`.
+		case service
+		/// `App`'s root, above `Service`.
+		case root
+
+		/// `Service.swift`: `Service`, which instantiates `TokenCache`, and `session` when it provides it.
+		var serviceFile: String {
+			let properties = (self == .service ? ["session: Session"] : []) + ["tokenCache: TokenCache"]
+			return TokenCacheConstruction.type(declaredAs: "@Instantiable\npublic final class Service", initializerModifier: "public ", instantiating: properties, importing: nil)
+		}
+
+		/// `Root.swift`: a root that instantiates `Service`, and `session` when it provides it.
+		var rootFile: String {
+			let properties = (self == .root ? ["session: Session"] : []) + ["service: Service"]
+			return TokenCacheConstruction.type(declaredAs: "@Instantiable(isRoot: true)\nfinal class Root", initializerModifier: "", instantiating: properties, importing: "Core")
+		}
+	}
+
+	/// How `App`'s roots construct `Core`'s `TokenCache` besides through `Service`, which they refer to first.
+	enum TokenCacheConstruction: CaseIterable {
+		/// The root that instantiates `Service` also instantiates `TokenCache`.
+		case besideServiceInOneRoot
+		/// A root after the one that instantiates `Service` instantiates `TokenCache`.
+		case inAnotherRoot
+
+		/// `App`'s files, by path.
+		var appFiles: [String: String] {
+			switch self {
+			case .besideServiceInOneRoot:
+				["Root.swift": Self.root(named: "Root", instantiating: ["service: Service", "tokenCache: TokenCache"])]
+			case .inAnotherRoot:
+				[
+					"Alpha.swift": Self.root(named: "Alpha", instantiating: ["service: Service"]),
+					"Beta.swift": Self.root(named: "Beta", instantiating: ["tokenCache: TokenCache"]),
+				]
+			}
+		}
+
+		/// A root named `name` of `App` that instantiates each of `properties`, in order.
+		private static func root(named name: String, instantiating properties: [String]) -> String {
+			type(declaredAs: "@Instantiable(isRoot: true)\nfinal class \(name)", initializerModifier: "", instantiating: properties, importing: "Core")
+		}
+
+		/// A type `declaration` declares, whose initializer, spelled with `initializerModifier`, takes each of
+		/// `properties`, which it instantiates, in order, in a file that imports `importedModule`.
+		static func type(declaredAs declaration: String, initializerModifier: String, instantiating properties: [String], importing importedModule: String?) -> String {
+			let labels = properties.map { $0.prefix { $0 != ":" } }
+			return (importedModule.map { "import \($0)\n\n" } ?? "") + """
+			\(declaration): Instantiable {
+			    \(initializerModifier)init(\(properties.joined(separator: ", "))) {
+			\(labels.map { "        self.\($0) = \($0)" }.joined(separator: "\n"))
+			    }
+
+			\(properties.map { "    @Instantiated let \($0)" }.joined(separator: "\n"))
+			}
+			"""
+		}
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorAtEnclosingType_whenTypeEnclosingConstructedTypeIsInternal() async {
@@ -679,7 +1190,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		// declared first: `Mike`, whose mock is checked neither first nor last, as mocks are checked in type order.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["SafeDIConfiguration.swift"]):1:1: error: `Namespace`, which encloses `Namespace.Mike`, is `internal` in module `Feature`, so module `App`, another module of the same package, cannot construct `Namespace.Mike` in the code SafeDI generates. Make `Namespace` `package` in module `Feature` to fix.
+			\(fixtures["App"]!["SafeDIConfiguration.swift"]):1:1: error: `Namespace`, which encloses `Namespace.Mike`, is `internal` in module `Feature`, so the mock of `Namespace.Mike`, generated in module `App`, another module of the same package, cannot construct `Namespace.Mike` in the code SafeDI generates. Make `Namespace` `package` in module `Feature` to fix.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -881,7 +1392,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		// The generated mock is in another file of the module, which cannot see into a `private` type.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Service.swift"]):1:1: error: `Namespace`, which encloses `Namespace.Service`, is `private`, so the code SafeDI generates in another file of module `App` cannot construct `Namespace.Service`. Make `Namespace` `internal` to fix.
+			\(fixtures["App"]!["Service.swift"]):1:1: error: `Namespace`, which encloses `Namespace.Service`, is `private`, so the mock of `Namespace.Service`, which SafeDI generates in another file of module `App`, cannot construct `Namespace.Service`. Make `Namespace` `internal` to fix.
 			\(fixtures["App"]!["Service.swift"]):1:1-1:8: fixit: internal
 			"""
 		}) {
@@ -1028,6 +1539,227 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: [DependencyTreeGenerator.EmittingModule.UnnamedReason.xcodeProjectPlugin, .noModuleName])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsSeamBuiltInlineAtItsReferenceAndEachDeclaration_whenTargetThatNamesNoModuleCannotConstructItsTree(unnamedReason: DependencyTreeGenerator.EmittingModule.UnnamedReason) async {
+		// As the Xcode project plugin runs the tool for an app target that reads its local package's modules through
+		// `additionalDirectoriesToInclude`: a CSV of the target's own files, `scan` while planning, then `generate` with
+		// the manifest, and no target graph, so SafeDI knows no module. The plugin passes the target's product module
+		// name, which tells the run apart from one given no module name, whose error leads with another remedy. The
+		// errors are joined in source order, and the harness writes the target's files and the additional directory
+		// into directories with random names.
+		let buildSettingArguments: [String] = switch unnamedReason {
+		case .xcodeProjectPlugin:
+			["--build-setting-product-module-name=[App]"]
+		case .noModuleName:
+			[]
+		}
+		await assertThrowsError(diagnostics: { fixtures in
+			let rootPath = NormalizedFilePath(fixtures.compilerPath(of: "Root.swift")).path
+			let featureViewPath = fixtures["AdditionalDirectory/FeatureView.swift"]
+			let inlineSeamError = "\(rootPath):9:5: error: \(Self.inlineSeamMessage(reaching: "`Formatter` is `internal`", unnamedReason: unnamedReason))"
+			let featureViewErrors = """
+			\(featureViewPath):5:5: error: `FeatureView`’s initializer is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
+			\(featureViewPath):5:5-5:5: fixit: package\(" ")
+			\(featureViewPath):15:1: error: `Formatter` is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Formatter` `package` to fix, or `public` if the two modules are in different packages.
+			\(featureViewPath):15:1-15:1: fixit: package\(" ")
+			\(featureViewPath):16:5: error: `Formatter`’s initializer is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
+			\(featureViewPath):16:5-16:5: fixit: package\(" ")
+			"""
+			return rootPath < featureViewPath ? "\(inlineSeamError)\n\(featureViewErrors)" : "\(featureViewErrors)\n\(inlineSeamError)"
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					Self.rootReferringToFeatureView,
+					"""
+					#SafeDIConfiguration(additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"])
+					""",
+				],
+				additionalDirectorySwiftFileContent: [
+					Self.featureViewFile(formatterDeclaration: Self.internalFormatter),
+					Self.packageNetworkClient,
+				],
+				pluginInvocation: .scanWhilePlanning(reportsFixtureDirectoryThroughSymbolicLink: false),
+				filesToDelete: &filesToDelete,
+				buildSettingArguments: buildSettingArguments,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsSeamBuiltInlineNamingItsInitializer_whenTargetThatNamesNoModuleCannotConstructOnlyTheSeam() async {
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let rootPath = NormalizedFilePath(fixtures["App"]!.compilerPath(of: "Root.swift")).path
+			let featureViewPath = NormalizedFilePath(fixtures["Feature"]!.compilerPath(of: "FeatureView.swift")).path
+			return """
+			\(rootPath):9:5: error: \(Self.inlineSeamMessage(reaching: "`FeatureView`’s initializer is `internal`", unnamedReason: .noModuleName))
+			\(featureViewPath):5:5: error: `FeatureView`’s initializer is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
+			\(featureViewPath):5:5-5:5: fixit: package\(" ")
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesOfTargetReachingFeatureView(formatterDeclaration: """
+				package struct Formatter: Instantiable {
+				    package init() {}
+				}
+				"""),
+				integration: .swiftPackagePlugin,
+				writesTargetGraph: false,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_commentsSeamBuiltInlineBeforeAssumedPackageAccess_whenXcodeProjectTargetBuildsPackageSeamOfUnnamedModule() async throws {
+		// `App` reads `Feature`'s files with no target graph and the product module name the Xcode project plugin passes,
+		// so SafeDI knows neither module: it builds `Screen`'s tree inline, and assumes `package` access reaches it.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(
+					name: "Feature",
+					packageName: "Shop",
+					swiftFileContentByFilePath: [
+						"Screen.swift": """
+						@Instantiable(generateDependencyTree: true)
+						package struct Screen: Instantiable {
+						    package init(session: Session, detail: Detail) {
+						        self.session = session
+						        self.detail = detail
+						    }
+
+						    @Received let session: Session
+						    @Instantiated let detail: Detail
+						}
+
+						@Instantiable
+						package struct Detail: Instantiable {
+						    package init(session: Session) {
+						        self.session = session
+						    }
+
+						    @Received let session: Session
+						}
+
+						@Instantiable
+						public struct Session: Instantiable {
+						    public init() {}
+						}
+						""",
+					],
+				),
+				ModuleFixture(
+					name: "App",
+					packageName: "Shop",
+					swiftFileContentByFilePath: [
+						"Root.swift": """
+						import Feature
+
+						@Instantiable(isRoot: true)
+						struct Root: Instantiable {
+						    init(session: Session, screen: Screen) {
+						        self.session = session
+						        self.screen = screen
+						    }
+
+						    @Instantiated let session: Session
+						    @Instantiated let screen: Screen
+						}
+						""",
+					],
+					dependencies: ["Feature"],
+					buildSettingArguments: buildSettingCompilationConditionArguments + ["--build-setting-product-module-name=[App]"],
+				),
+			],
+			integration: .swiftPackagePlugin,
+			writesTargetGraph: false,
+			filesToDelete: &filesToDelete,
+		)
+
+		// The seam's construction carries both comments, the one about building it inline first; `Detail`'s, the
+		// assumption alone.
+		let header = generatedFileHeader + Self.importBlock("Feature") + "\n\n"
+		#expect(try #require(output.modules["App"]).generatedFiles == [
+			"Root+SafeDI.swift": header + """
+			extension Root {
+			    public init() {
+			        let session = Session()
+			        func __safeDI_screen() -> Screen {
+			            let detail = Detail(session: session) // SafeDI could not verify that Detail is in this package; `package` access is assumed.
+			            return Screen(session: session, detail: detail) // Built inline: SafeDI does not know which module declares `Screen`, so this tree cannot call the initializer SafeDI generates for it (a target the Xcode project plugin builds names no module; see the Manual's "Limits of the Xcode project plugin"). // SafeDI could not verify that Screen is in this package; `package` access is assumed.
+			        }
+			        let screen: Screen = __safeDI_screen()
+			        self.init(session: session, screen: screen)
+			    }
+			}
+			""",
+		])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsNoSeamBuiltInline_whenModuleThatNamesNoModuleCallsSeamOfNamedModule() async {
+		// `App` calls the initializer `Feature` generates for `FeatureView`, which `App` cannot reach because `FeatureView`
+		// is `package`, and builds none of its tree.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["FeatureView.swift"]):2:1: error: `FeatureView` is `package`, so this module, in another package, cannot construct it in the code SafeDI generates. Make `FeatureView` `public` to fix.
+			\(fixtures["Feature"]!["FeatureView.swift"]):2:1-2:8: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Feature",
+						packageName: "Kit",
+						swiftFileContentByFilePath: [
+							"FeatureView.swift": """
+							@Instantiable(generateDependencyTree: true)
+							package struct FeatureView: Instantiable {
+							    package init(formatter: Formatter) {
+							        self.formatter = formatter
+							    }
+
+							    @Instantiated let formatter: Formatter
+							}
+
+							@Instantiable
+							struct Formatter: Instantiable {
+							    init() {}
+							}
+							""",
+						],
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContent: [
+							"""
+							import Feature
+
+							@Instantiable(isRoot: true)
+							struct Root: Instantiable {
+							    init(featureView: FeatureView) {
+							        self.featureView = featureView
+							    }
+
+							    @Instantiated let featureView: FeatureView
+							}
+							""",
+						],
+						dependencies: ["Feature"],
+						omitsModuleName: true,
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenHandWrittenManifestNamesNoOwnFilesAndAdditionalDirectoryDeclaresInternalType() async throws {
@@ -1081,13 +1813,148 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	// MARK: Tests – Mocks
 
+	/// BZ-4's modules, in package `Shop`: `Storage` declares what the trees receive; `Feature` declares the seam
+	/// `ProfileScreen`, `package`, whose tree constructs `ProfileStore` with its `internal` initializer and the `internal`
+	/// `BioFormatter`; `App`'s root calls the seam, and the mock of `LoggedInView` builds the seam's tree inline.
+	private static func modulesWhoseMockReachesPackageSeam(featureFilesAreDeleted: Bool = false) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Storage", packageName: "Shop", swiftFileContent: [
+				"""
+				public protocol StringStorage {}
+
+				@Instantiable(fulfillingAdditionalTypes: [StringStorage.self])
+				public final class DefaultStringStorage: Instantiable, StringStorage {
+				    public init() {}
+				}
+
+				public struct User {
+				    public init() {}
+				}
+				""",
+			]),
+			ModuleFixture(
+				name: "Feature",
+				packageName: "Shop",
+				swiftFileContentByFilePath: ["ProfileScreen.swift": """
+				import Storage
+
+				@Instantiable(generateDependencyTree: true)
+				package struct ProfileScreen: Instantiable {
+				    package init(user: User, stringStorage: StringStorage, profileStore: ProfileStore) {
+				        self.user = user
+				        self.stringStorage = stringStorage
+				        self.profileStore = profileStore
+				    }
+
+				    @Received let user: User
+				    @Received let stringStorage: StringStorage
+				    @Instantiated let profileStore: ProfileStore
+				}
+
+				@Instantiable
+				package final class ProfileStore: Instantiable {
+				    init(stringStorage: StringStorage, bioFormatter: BioFormatter) {
+				        self.stringStorage = stringStorage
+				        self.bioFormatter = bioFormatter
+				    }
+
+				    @Received let stringStorage: StringStorage
+				    @Instantiated let bioFormatter: BioFormatter
+				}
+
+				@Instantiable
+				struct BioFormatter: Instantiable {
+				    init() {}
+				}
+				"""],
+				dependencies: ["Storage"],
+				deletesSwiftFilesAfterRunning: featureFilesAreDeleted,
+			),
+			ModuleFixture(
+				name: "App",
+				packageName: "Shop",
+				swiftFileContentByFilePath: ["Root.swift": """
+				import Feature
+				import SafeDI
+				import Storage
+
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(stringStorage: StringStorage, loggedInViewBuilder: Instantiator<LoggedInView>) {
+				        self.stringStorage = stringStorage
+				        self.loggedInViewBuilder = loggedInViewBuilder
+				    }
+
+				    @Instantiated let stringStorage: StringStorage
+				    @Instantiated let loggedInViewBuilder: Instantiator<LoggedInView>
+				}
+
+				@Instantiable(generateMock: true)
+				public struct LoggedInView: Instantiable {
+				    init(user: User, profileScreen: ProfileScreen) {
+				        self.user = user
+				        self.profileScreen = profileScreen
+				    }
+
+				    @Forwarded let user: User
+				    @Instantiated let profileScreen: ProfileScreen
+				}
+				"""],
+				dependencies: ["Storage", "Feature"],
+			),
+		]
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingMockAndSuggestingPublicMockOfPackageSeam_whenMockBuildsSeamsTreeInline(integration: MultiModuleIntegration) async {
+		// BZ-4: the errors name the mock, whose tree the user did not write, and suggest declaring the `package` seam the
+		// mock builds inline `public` with a public mock, which the mock would call instead.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let path = Self.declarationPath(of: "ProfileScreen.swift", in: "Feature", fixtures: fixtures, under: integration)
+			let remedy = "or declare `ProfileScreen` `public` with `generateMock: .public`: mocks build a seam's tree inline, and this mock would call the mock `Feature` generates instead."
+			return """
+			\(path):18:5: error: `ProfileStore`’s initializer is `internal`, so the mock of `LoggedInView`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, \(remedy)
+			\(path):18:5-18:5: fixit: package\(" ")
+			\(path):28:1: error: `BioFormatter` is `internal`, so the mock of `LoggedInView`, generated in module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `BioFormatter` `package` to fix, \(remedy)
+			\(path):28:1-28:1: fixit: package\(" ")
+			\(path):29:5: error: `BioFormatter`’s initializer is `internal`, so the mock of `LoggedInView`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, \(remedy)
+			\(path):29:5-29:5: fixit: package\(" ")
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.modulesWhoseMockReachesPackageSeam(), integration: integration, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtReferenceNamingMockAndDeclaringModule_whenMockBuildsSeamsTreeWhoseFileCannotBeRead() async {
+		// BZ-4: a sandboxed Bazel action is handed `Feature`'s `.safedi` but not its files, so each error is reported
+		// where `LoggedInView` instantiates the seam, naming the module that must change.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let remedy = "or declare `ProfileScreen` `public` with `generateMock: .public`: mocks build a seam's tree inline, and this mock would call the mock `Feature` generates instead."
+			return """
+			\(fixtures["App"]!["Root.swift"]):24:5: error: `BioFormatter` is `internal` in module `Feature`, so the mock of `LoggedInView`, generated in module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `BioFormatter` `package` in module `Feature` to fix, \(remedy)
+			\(fixtures["App"]!["Root.swift"]):24:5: error: `BioFormatter`’s initializer is `internal` in module `Feature`, so the mock of `LoggedInView`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` in module `Feature` to fix, \(remedy)
+			\(fixtures["App"]!["Root.swift"]):24:5: error: `ProfileStore`’s initializer is `internal` in module `Feature`, so the mock of `LoggedInView`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make the initializer `package` in module `Feature` to fix, \(remedy)
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesWhoseMockReachesPackageSeam(featureFilesAreDeleted: true),
+				integration: .moduleInfo,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenMockConstructsTypeAnotherModuleCannotReach(integration: MultiModuleIntegration) async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let servicePath = Self.declarationPath(of: "Service.swift", in: "Feature", fixtures: fixtures, under: integration)
 			return """
-			\(servicePath):2:1: error: `Service` is `internal`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` to fix.
+			\(servicePath):2:1: error: `Service` is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` to fix, or declare `Service` `public` with `generateMock: .public`.
 			\(servicePath):2:1-2:1: fixit: package\(" ")
 			"""
 		}) {
@@ -1102,12 +1969,35 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingNoSeam_whenOnlyMockConstructsPackageTypeThroughTypeOfAnotherModule(integration: MultiModuleIntegration) async {
+		// Mocks build every tree inline, a seam's included, so declaring `Service` a seam would change nothing here; the
+		// error names the mock and offers `Service` a public mock, which the mock would call instead.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let gatePath = Self.declarationPath(of: "Gate.swift", in: "Feature", fixtures: fixtures, under: integration)
+			return """
+			\(gatePath):3:5: error: `Gate`’s initializer is `package`, so the mock of `Container`, generated in module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or give `Service` a public mock: `generateMock: .public`, or a hand-written public `mock`.
+			\(gatePath):3:5-3:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.featureDeclaringGateBuiltByServiceAndSeam,
+					Self.appInstantiatingServiceAndSeam(in: ["Container": "@Instantiable(generateMock: true)"]),
+				],
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsInaccessibleConstructionOnce_whenSeveralMocksConstructIt() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Service.swift"]):2:1: error: `Service` is `internal`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` to fix.
+			\(fixtures["Feature"]!["Service.swift"]):2:1: error: `Service` is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` to fix, or declare `Service` `public` with `generateMock: .public`.
 			\(fixtures["Feature"]!["Service.swift"]):2:1-2:1: fixit: package\(" ")
 			"""
 		}) {
@@ -1142,12 +2032,53 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsInaccessibleConstructionOnceNamingMockDeclaredFirst_whenSeveralMocksReachItThroughOneReference() async {
+		// BZ-4: `Screen`'s mock and `Zebra`'s, whose `Instantiator<Screen>` builds `Screen`, both reach `Service` through
+		// `Screen`'s `service`: the one error names the mock declared first (`Zebra`, in `Container.swift`), not the mock
+		// root checked first (`Screen`, by type order).
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["Feature"]!["Service.swift"]):2:1: error: `Service` is `internal`, so the mock of `Zebra`, generated in module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` to fix, or declare `Service` `public` with `generateMock: .public`.
+			\(fixtures["Feature"]!["Service.swift"]):2:1-2:1: fixit: package\(" ")
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.feature(inPackage: "Shop", declaring: Self.internalServiceWithPackageInitializer),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContentByFilePath: [
+							"Screen.swift": Self.screenMockedInApp,
+							"Container.swift": """
+							import SafeDI
+
+							@Instantiable(generateMock: true)
+							final class Zebra: Instantiable {
+							    init(screenBuilder: Instantiator<Screen>) {
+							        self.screenBuilder = screenBuilder
+							    }
+							    @Instantiated let screenBuilder: Instantiator<Screen>
+							}
+							""",
+						],
+						dependencies: ["Feature"],
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_reportsInaccessibleConstructionOnceAtEarliestReference_whenSeveralMocksConstructTypeWhoseFileCannotBeRead() async {
 		// Mock roots are checked in type order – `Alpha`, in `C.swift`, `Mike`, in `A.swift`, then `Zulu`, in `B.swift` –
 		// so the reference that comes first in source order is checked neither first nor last.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["A.swift"]):8:5: error: `Service` is `internal` in module `Feature`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` in module `Feature` to fix.
+			\(fixtures["App"]!["A.swift"]):8:5: error: `Service` is `internal` in module `Feature`, so the mock of `Mike`, generated in module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` in module `Feature` to fix, or declare `Service` `public` with `generateMock: .public`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -1172,7 +2103,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		// `#SafeDIConfiguration` that lists it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["SafeDIConfiguration.swift"]):1:1: error: `Service` is `internal` in module `Feature`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` in module `Feature` to fix.
+			\(fixtures["App"]!["SafeDIConfiguration.swift"]):1:1: error: `Service` is `internal` in module `Feature`, so the mock of `Service`, generated in module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` in module `Feature` to fix, or declare `Service` `public` with `generateMock: .public`.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -1203,7 +2134,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		// one place in `App`: its `hub` property.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Service.swift"]):2:1: error: `Service` is `internal`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` to fix.
+			\(fixtures["Feature"]!["Service.swift"]):2:1: error: `Service` is `internal`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Service` `package` to fix\(Self.seamRemedy(declaring: "Hub", in: "Feature")).
 			\(fixtures["Feature"]!["Service.swift"]):2:1-2:1: fixit: package\(" ")
 			"""
 		}) {
@@ -1234,7 +2165,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		// `mock()` defaults `user` to `User.mock()`, which `App` cannot call.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["User.swift"]):4:5: error: `User.mock()` is `internal`, so module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make `User.mock()` `package` to fix.
+			\(fixtures["Feature"]!["User.swift"]):4:5: error: `User.mock()` is `internal`, so the mock of `Profile`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make `User.mock()` `package` to fix.
 			\(fixtures["Feature"]!["User.swift"]):4:5-4:5: fixit: package\(" ")
 			"""
 		}) {
@@ -1287,7 +2218,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	mutating func generate_throwsErrorAtMockMethod_whenHandWrittenMockAnotherModuleDeclaresIsInternal() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["TestSupport"]!["ServiceMock.swift"]):5:5: error: `Service.mock()` is `internal`, so module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make `Service.mock()` `package` to fix.
+			\(fixtures["TestSupport"]!["ServiceMock.swift"]):5:5: error: `Service.mock()` is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make `Service.mock()` `package` to fix.
 			\(fixtures["TestSupport"]!["ServiceMock.swift"]):5:5-5:5: fixit: package\(" ")
 			"""
 		}) {
@@ -1309,7 +2240,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	mutating func generate_throwsErrorAtExtension_whenHandWrittenMockSpellsNoModifierAndItsExtensionIsInternal() async {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["TestSupport"]!["ServiceMock.swift"]):4:1: error: The extension that declares `Service.mock()` is `internal`, so module `App`, another module of the same package, cannot call `Service.mock()` in the code SafeDI generates. Make the extension `package` to fix.
+			\(fixtures["TestSupport"]!["ServiceMock.swift"]):4:1: error: The extension that declares `Service.mock()` is `internal`, so the mock of `Screen`, generated in module `App`, another module of the same package, cannot call `Service.mock()` in the code SafeDI generates. Make the extension `package` to fix.
 			\(fixtures["TestSupport"]!["ServiceMock.swift"]):4:1-4:9: fixit: package
 			"""
 		}) {
@@ -1382,7 +2313,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let mockPath = Self.declarationPath(of: "ServiceMock.swift", in: "TestSupport", fixtures: fixtures, under: integration)
 			return """
-			\(mockPath):4:1: error: The extension that declares `Service.mock()` is `package`, so module `App`, in another package, cannot call `Service.mock()` in the code SafeDI generates. Make the extension `public` to fix.
+			\(mockPath):4:1: error: The extension that declares `Service.mock()` is `package`, so the mock of `Screen`, generated in module `App`, in another package, cannot call `Service.mock()` in the code SafeDI generates. Make the extension `public` to fix.
 			\(mockPath):4:1-4:8: fixit: public
 			"""
 		}) {
@@ -1501,7 +2432,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let spacePath = Self.declarationPath(of: "Space.swift", in: "Feature", fixtures: fixtures, under: integration)
 			return """
-			\(spacePath):2:1: error: `Space`, which encloses `Space.Shelf`, is `package`, so module `App`, in another package, cannot construct `Space.Shelf` in the code SafeDI generates. Make `Space` `public` to fix.
+			\(spacePath):2:1: error: `Space`, which encloses `Space.Shelf`, is `package`, so module `App`, in another package, cannot construct `Space.Shelf` in the code SafeDI generates. Make `Space` `public` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
 			\(spacePath):2:1-2:8: fixit: public
 			"""
 		}) {
@@ -1549,7 +2480,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let spacePath = Self.declarationPath(of: "Space.swift", in: "Feature", fixtures: fixtures, under: integration)
 			return """
-			\(spacePath):2:1: error: `Space`, which encloses `Space.Shelf`, is `internal`, so module `App`, another module of the same package, cannot construct `Space.Shelf` in the code SafeDI generates. Make `Space` `package` to fix.
+			\(spacePath):2:1: error: `Space`, which encloses `Space.Shelf`, is `internal`, so module `App`, another module of the same package, cannot construct `Space.Shelf` in the code SafeDI generates. Make `Space` `package` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
 			\(spacePath):2:1-2:1: fixit: package\(" ")
 			"""
 		}) {
@@ -1571,7 +2502,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			let rackPath = Self.declarationPath(of: "Rack.swift", in: "Feature", fixtures: fixtures, under: integration)
 			return """
-			\(rackPath):1:1: error: `Rack` is `internal`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Rack` `package` to fix.
+			\(rackPath):1:1: error: `Rack` is `internal`, so module `App`, another module of the same package, cannot construct it in the code SafeDI generates. Make `Rack` `package` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
 			\(rackPath):1:1-1:1: fixit: package\(" ")
 			"""
 		}) {
@@ -1648,6 +2579,96 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}
 		"""))
 		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtEnclosingNamespace_whenAnotherPackageConstructsPublicTypeDeclaredInUnspelledExtensionOfNestedPublicEnumOfPackageEnum(integration: MultiModuleIntegration) async {
+		// The extension extends `Outer.Space`, whose file declares it inside `Outer`: the outermost type is what is narrower.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let spacePath = Self.declarationPath(of: "Space.swift", in: "Feature", fixtures: fixtures, under: integration)
+			return """
+			\(spacePath):2:1: error: `Outer`, which encloses `Outer.Space.Shelf`, is `package`, so module `App`, in another package, cannot construct `Outer.Space.Shelf` in the code SafeDI generates. Make `Outer` `public` to fix, or declare `Screen` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
+			\(spacePath):2:1-2:8: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.featureExtendingNamespace(inPackage: "Toolkit", declaredAs: "package enum Outer {\n    public enum Space {}\n}", extending: "Outer.Space"),
+					Self.app(inPackage: "Shop", serviceType: "Screen"),
+				],
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_constructsTypeDeclaredInUnspelledExtensionOfImportedNamespace_whenAnotherFileOfExtensionsModuleDeclaresFilePrivateTypeOfNamespacesName(integration: MultiModuleIntegration) async throws {
+		// `Metrics.swift`'s `Space` is invisible in `Shelf.swift`, whose extension therefore extends `Kit`'s `Space`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.kitDeclaringNamespaceAndAppImportingIt.kit,
+				Self.featureExtendingNamespace(inPackage: "Toolkit", declaredAs: nil, importing: "Kit", alongside: [
+					"Metrics.swift": """
+					// A file-private helper that shares the namespace's name.
+					private enum Space {
+					    static let spacing = 4
+					}
+
+					func featureSpacing() -> Int {
+					    Space.spacing
+					}
+					""",
+				]),
+				Self.kitDeclaringNamespaceAndAppImportingIt.app,
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+
+		let code = generatedFileHeader + Self.importBlock("Feature") + "\n" + Self.importBlock("Kit") + "\n\n" + """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_service() -> Screen {
+		            let shelf: any Shelving = Space.Shelf()
+		            return Screen(shelf: shelf)
+		        }
+		        let service: Screen = __safeDI_service()
+		        self.init(service: service)
+		    }
+		}
+		"""
+		#expect(try #require(output.modules["App"]).generatedFiles == [integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift": code])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtFilePrivateNamespace_whenExtensionsOwnFileDeclaresFilePrivateTypeOfImportedNamespacesName(integration: MultiModuleIntegration) async {
+		// A `private` type in the extension's own file is what the extension extends, so it is the namespace to report.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let shelfPath = Self.declarationPath(of: "Shelf.swift", in: "Feature", fixtures: fixtures, under: integration)
+			return """
+			\(shelfPath):5:1: error: `Space`, which encloses `Space.Shelf`, is `private`, so module `App`, in another package, cannot construct `Space.Shelf` in the code SafeDI generates. Make `Space` `public` to fix.
+			\(shelfPath):5:1-5:8: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					Self.kitDeclaringNamespaceAndAppImportingIt.kit,
+					Self.featureExtendingNamespace(inPackage: "Toolkit", declaredAs: nil, importing: "Kit", shelfFileDeclaration: """
+					private enum Space {
+					    static let spacing = 4
+					}
+					"""),
+					Self.kitDeclaringNamespaceAndAppImportingIt.app,
+				],
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
 	}
 
 	// MARK: Private
@@ -1742,6 +2763,277 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	}
 	"""
 
+	/// What an error about a production construction adds when declaring `typeName`, which `moduleName` declares,
+	/// with `generateDependencyTree: true` would have that module construct the declaration instead.
+	private static func seamRemedy(declaring typeName: String, in moduleName: String) -> String {
+		", or declare `\(typeName)` with `generateDependencyTree: true`, so that module `\(moduleName)` generates its tree and this module calls the initializer it generates"
+	}
+
+	/// A `Feature` module of package `FeaturePackage` whose `public` `Gate`, at the start of `Gate.swift`, has a
+	/// `package` initializer and is instantiated by `Service`, and by `Seam`, which is declared with
+	/// `generateDependencyTree: true`.
+	private static let featureDeclaringGateBuiltByServiceAndSeam = ModuleFixture(
+		name: "Feature",
+		packageName: "FeaturePackage",
+		swiftFileContent: [
+			"""
+			@Instantiable
+			public final class Gate: Instantiable {
+			    package init() {}
+			}
+
+			@Instantiable
+			public final class Service: Instantiable {
+			    public init(gate: Gate) {
+			        self.gate = gate
+			    }
+
+			    @Instantiated public let gate: Gate
+			}
+
+			@Instantiable(generateDependencyTree: true)
+			public final class Seam: Instantiable {
+			    public init(gate: Gate) {
+			        self.gate = gate
+			    }
+
+			    @Instantiated public let gate: Gate
+			}
+			""",
+		],
+	)
+
+	/// An `App` module of package `AppPackage` depending on `featureDeclaringGateBuiltByServiceAndSeam`, with a file for
+	/// each type `attributeByTypeName` names, decorated with its attribute, which instantiates `Service` and `Seam`.
+	private static func appInstantiatingServiceAndSeam(in attributeByTypeName: [String: String]) -> ModuleFixture {
+		ModuleFixture(
+			name: "App",
+			packageName: "AppPackage",
+			swiftFileContentByFilePath: Dictionary(uniqueKeysWithValues: attributeByTypeName.map { typeName, attribute in
+				(
+					"\(typeName).swift",
+					"""
+					import Feature
+
+					\(attribute)
+					public final class \(typeName): Instantiable {
+					    public init(service: Service, seam: Seam) {
+					        self.service = service
+					        self.seam = seam
+					    }
+
+					    @Instantiated public let service: Service
+					    @Instantiated public let seam: Seam
+					}
+					""",
+				)
+			}),
+			dependencies: ["Feature"],
+		)
+	}
+
+	/// The modules of package `Shop` that a target the Xcode project plugin builds sees, which SafeDI cannot name:
+	/// `Core`, which declares `packageNetworkClient`, `Feature`, which declares `featureViewFile(formatterDeclaration:)`,
+	/// and `App`, which declares `rootReferringToFeatureView`.
+	private static func modulesOfTargetReachingFeatureView(formatterDeclaration: String) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Core", packageName: "Shop", swiftFileContent: [packageNetworkClient]),
+			ModuleFixture(
+				name: "Feature",
+				packageName: "Shop",
+				swiftFileContentByFilePath: ["FeatureView.swift": featureViewFile(formatterDeclaration: formatterDeclaration)],
+				dependencies: ["Core"],
+			),
+			ModuleFixture(name: "App", packageName: "Shop", swiftFileContentByFilePath: ["Root.swift": rootReferringToFeatureView], dependencies: ["Feature"]),
+		]
+	}
+
+	/// A `package` `NetworkClient`.
+	private static let packageNetworkClient = """
+	@Instantiable
+	package final class NetworkClient: Instantiable {
+	    package init() {}
+	}
+	"""
+
+	/// `FeatureView.swift`: `FeatureView`, declared with `generateDependencyTree: true`, with an `internal` initializer at
+	/// line 5, which instantiates a `NetworkClient` and the `Formatter` that `formatterDeclaration` declares at line 15.
+	private static func featureViewFile(formatterDeclaration: String) -> String {
+		"""
+		import Core
+
+		@Instantiable(generateDependencyTree: true)
+		package struct FeatureView: Instantiable {
+		    init(networkClient: NetworkClient, formatter: Formatter) {
+		        self.networkClient = networkClient
+		        self.formatter = formatter
+		    }
+
+		    @Instantiated let networkClient: NetworkClient
+		    @Instantiated let formatter: Formatter
+		}
+
+		@Instantiable
+		\(formatterDeclaration)
+		"""
+	}
+
+	/// An `internal` `Formatter`, for `featureViewFile(formatterDeclaration:)`.
+	private static let internalFormatter = """
+	struct Formatter: Instantiable {
+	    init() {}
+	}
+	"""
+
+	/// A root that instantiates `FeatureView` at line 9.
+	private static let rootReferringToFeatureView = """
+	import Feature
+
+	@Instantiable(isRoot: true)
+	struct Root: Instantiable {
+	    init(featureView: FeatureView) {
+	        self.featureView = featureView
+	    }
+
+	    @Instantiated let featureView: FeatureView
+	}
+	"""
+
+	/// The error a target that names no module gets where it refers to `FeatureView`, whose tree it builds inline,
+	/// which says that `reachedDeclaration`, the first declaration in source order in the tree that the target cannot
+	/// reach, keeps the tree from compiling, and leads with the remedy that works where `unnamedReason` puts the run.
+	private static func inlineSeamMessage(reaching reachedDeclaration: String, unnamedReason: DependencyTreeGenerator.EmittingModule.UnnamedReason) -> String {
+		switch unnamedReason {
+		case .xcodeProjectPlugin:
+			"`FeatureView` is declared with `generateDependencyTree: true`, but a target the Xcode project plugin builds cannot call the initializer SafeDI generates for it, so this target builds its tree inline. \(reachedDeclaration), so that tree cannot be built here. Declare a root in a Swift package target that depends on `FeatureView`'s module and call it from this target, or make the types in `FeatureView`'s tree `public`."
+		case .noModuleName:
+			"`FeatureView` is declared with `generateDependencyTree: true`, but SafeDI does not know which module declares `FeatureView`, so this run builds `FeatureView`'s tree inline. \(reachedDeclaration), so that tree cannot be built here. Declare `FeatureView` in a module whose SafeDITool run is given its name (`--module-name`), so that this module calls the initializer SafeDI generates for `FeatureView`, or make the types in `FeatureView`'s tree `public`."
+		}
+	}
+
+	/// `Core`, in its own package, declaring with `serviceAttribute` the `public` `Service`, whose `package` initializer
+	/// takes `analytics` and `session`, which it receives, and the `package` `TokenCache`, which it instantiates; and the
+	/// `public` `Analytics` and `Session`. `TokenCache` receives `session` too when `tokenCacheReceivesSession` is set.
+	private static func coreDeclaringServiceBuildingTokenCache(serviceAttribute: String, tokenCacheReceivesSession: Bool) -> ModuleFixture {
+		let tokenCache = tokenCacheReceivesSession
+			? """
+			@Instantiable
+			package struct TokenCache: Instantiable {
+			    package init(session: Session, capacity: Int = 10) {
+			        self.session = session
+			        self.capacity = capacity
+			    }
+
+			    @Received let session: Session
+			    let capacity: Int
+			}
+			"""
+			: """
+			@Instantiable
+			package struct TokenCache: Instantiable {
+			    package init(capacity: Int = 10) { self.capacity = capacity }
+			    let capacity: Int
+			}
+			"""
+		return ModuleFixture(
+			name: "Core",
+			packageName: "CorePackage",
+			swiftFileContent: [
+				"""
+				\(serviceAttribute)
+				public struct Service: Instantiable {
+				    package init(analytics: LazilyInstantiated<Analytics>, session: Session, tokenCache: TokenCache, retries: Int = 3) {
+				        self.analytics = analytics
+				        self.session = session
+				        self.tokenCache = tokenCache
+				        self.retries = retries
+				    }
+
+				    @Received private let analytics: LazilyInstantiated<Analytics>
+				    @Received private let session: Session
+				    @Instantiated private let tokenCache: TokenCache
+				    private let retries: Int
+				}
+
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init() {}
+				}
+
+				@Instantiable
+				public final class Session: Instantiable {
+				    public init() {}
+				}
+
+				\(tokenCache)
+				""",
+			],
+		)
+	}
+
+	/// `App`, in another package, whose root instantiates `analytics` and `session` and `Screen`, declared with
+	/// `screenAttribute`, which receives both and instantiates `Core`'s `Service`.
+	private static func appBuildingServiceThroughScreen(screenAttribute: String) -> ModuleFixture {
+		ModuleFixture(
+			name: "App",
+			packageName: "AppPackage",
+			swiftFileContent: [
+				"""
+				import Core
+
+				@Instantiable(isRoot: true)
+				struct AppRoot: Instantiable {
+				    init(analytics: LazilyInstantiated<Analytics>, session: Session, screen: Screen) {
+				        self.session = session
+				        self.analytics = analytics
+				        self.screen = screen
+				    }
+
+				    @Instantiated let analytics: LazilyInstantiated<Analytics>
+				    @Instantiated let session: Session
+				    @Instantiated let screen: Screen
+				}
+
+				\(screenAttribute)
+				struct Screen: Instantiable {
+				    init(analytics: LazilyInstantiated<Analytics>, session: Session, service: Service) {
+				        self.session = session
+				        self.analytics = analytics
+				        self.service = service
+				    }
+
+				    @Received let analytics: LazilyInstantiated<Analytics>
+				    @Received let session: Session
+				    @Instantiated let service: Service
+				}
+				""",
+			],
+			dependencies: ["Core"],
+		)
+	}
+
+	/// An `App` module of package `Shop` depending on `dependencies`, whose root instantiates `Service`.
+	private static func rootInstantiatingService(dependencies: [String]) -> ModuleFixture {
+		ModuleFixture(
+			name: "App",
+			packageName: "Shop",
+			swiftFileContent: [
+				"""
+				import Core
+
+				@Instantiable(isRoot: true)
+				final class Root: Instantiable {
+				    init(service: Service) {
+				        self.service = service
+				    }
+				    @Instantiated let service: Service
+				}
+				""",
+			],
+			dependencies: dependencies,
+		)
+	}
+
 	/// A type in `App` whose generated mock builds `Feature`'s `Service`.
 	private static let screenMockedInApp = """
 	import Feature
@@ -1770,37 +3062,71 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		)
 	}
 
-	/// A `Feature` module of `packageName` whose public `Screen` instantiates the public `Space.Shelf`, declared in an
-	/// extension of `Space` that spells no access modifier, through the protocol it conforms to alone, as fulfilled by a
-	/// type `fulfilledByType:` names, which no initializer names; `Space` is declared as `spaceDeclaration` spells it, on
-	/// the second line of a file of its own, as adopters declare a namespace enum.
-	private static func featureExtendingNamespace(inPackage packageName: String, declaredAs spaceDeclaration: String, omitsPackageName: Bool = false) -> ModuleFixture {
-		ModuleFixture(
+	/// A `Feature` module of `packageName` whose public `Screen` instantiates the public `<extendedType>.Shelf`, declared
+	/// in an extension of `extendedType` that spells no access modifier, through the protocol it conforms to alone, as
+	/// fulfilled by a type `fulfilledByType:` names, which no initializer names. `Space.swift` holds `spaceDeclaration`,
+	/// when there is one, from its second line, as adopters declare a namespace enum in a file of its own;
+	/// `shelfFileDeclaration` sits in `Shelf.swift` above the extension, from its fifth line when the module imports
+	/// `importedModuleName`, on which it then depends; and the module holds `otherFiles` too.
+	private static func featureExtendingNamespace(
+		inPackage packageName: String,
+		declaredAs spaceDeclaration: String?,
+		extending extendedType: String = "Space",
+		importing importedModuleName: String? = nil,
+		shelfFileDeclaration: String? = nil,
+		alongside otherFiles: [String: String] = [:],
+		omitsPackageName: Bool = false,
+	) -> ModuleFixture {
+		let importLine = importedModuleName.map { "import \($0)\n\n" } ?? ""
+		// Split for Swift 6.2 on Linux, which times out type-checking the single expression.
+		let screenFile: String = importLine + """
+		@Instantiable
+		public final class Screen: Instantiable {
+		    public init(shelf: any Shelving) {
+		        self.shelf = shelf
+		    }
+		    @Instantiated(fulfilledByType: "\(extendedType).Shelf") let shelf: any Shelving
+		}
+		"""
+		let shelfFileDeclarationLines: String = shelfFileDeclaration.map { $0 + "\n\n" } ?? ""
+		let shelfFile: String = [importLine, "public protocol Shelving {}\n\n", shelfFileDeclarationLines, """
+		extension \(extendedType) {
+		    @Instantiable
+		    public final class Shelf: Instantiable, Shelving {
+		        public init() {}
+		    }
+		}
+		"""].joined()
+		let spaceFile: [String: String] = spaceDeclaration.map { ["Space.swift": "// A namespace enum, in its own file as adopters write it.\n" + $0] } ?? [:]
+		let swiftFileContentByFilePath: [String: String] = ["Screen.swift": screenFile, "Shelf.swift": shelfFile]
+			.merging(spaceFile, uniquingKeysWith: { first, _ in first })
+			.merging(otherFiles, uniquingKeysWith: { first, _ in first })
+		let dependencies: [String] = importedModuleName.map { [$0] } ?? []
+		return ModuleFixture(
 			name: "Feature",
 			packageName: packageName,
-			swiftFileContentByFilePath: [
-				"Screen.swift": """
-				@Instantiable
-				public final class Screen: Instantiable {
-				    public init(shelf: any Shelving) {
-				        self.shelf = shelf
-				    }
-				    @Instantiated(fulfilledByType: "Space.Shelf") let shelf: any Shelving
-				}
-				""",
-				"Shelf.swift": """
-				public protocol Shelving {}
-
-				extension Space {
-				    @Instantiable
-				    public final class Shelf: Instantiable, Shelving {
-				        public init() {}
-				    }
-				}
-				""",
-				"Space.swift": "// A namespace enum, in its own file as adopters write it.\n" + spaceDeclaration,
-			],
+			swiftFileContentByFilePath: swiftFileContentByFilePath,
+			dependencies: dependencies,
 			omitsPackageName: omitsPackageName,
+		)
+	}
+
+	/// A `Kit` module of package `Toolkit` that declares the design system's `public enum Space` in a file that holds no
+	/// SafeDI marker, and an `App` module of package `Shop` whose root, which imports `Kit` too, instantiates
+	/// `Feature`'s `Screen`.
+	private static var kitDeclaringNamespaceAndAppImportingIt: (kit: ModuleFixture, app: ModuleFixture) {
+		(
+			kit: ModuleFixture(
+				name: "Kit",
+				packageName: "Toolkit",
+				swiftFileContentByFilePath: ["Space.swift": "// The design system's namespace.\npublic enum Space {}"],
+			),
+			app: ModuleFixture(
+				name: "App",
+				packageName: "Shop",
+				swiftFileContent: ["import Kit\n" + rootInstantiating("Screen")],
+				dependencies: ["Feature", "Kit"],
+			),
 		)
 	}
 

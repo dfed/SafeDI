@@ -668,6 +668,32 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 		return name
 	}
 
+	/// The nominal type this names, with no generic arguments at any level – what a declaration of it records – or
+	/// `nil` when this names no nominal type.
+	var withoutGenericArguments: TypeDescription? {
+		switch self {
+		case let .simple(name, _):
+			.simple(name: name)
+		case let .nested(name, parentType, _):
+			parentType.withoutGenericArguments.map { .nested(name: name, parentType: $0) }
+		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .some, .tuple, .unknown, .void:
+			nil
+		}
+	}
+
+	/// This nested type without its outermost enclosing type – `Inner.Leaf` for `Outer.Inner.Leaf` – or `nil` for a type
+	/// nested in nothing.
+	public var droppingOutermostType: TypeDescription? {
+		switch self {
+		case let .nested(name, .simple, generics):
+			.simple(name: name, generics: generics)
+		case let .nested(name, parentType, generics):
+			parentType.droppingOutermostType.map { .nested(name: name, parentType: $0, generics: generics) }
+		case .any, .array, .attributed, .closure, .composition, .dictionary, .implicitlyUnwrappedOptional, .metatype, .optional, .simple, .some, .tuple, .unknown, .void:
+			nil
+		}
+	}
+
 	public var popNested: TypeDescription? {
 		switch self {
 		case let .nested(_, parentType, _):

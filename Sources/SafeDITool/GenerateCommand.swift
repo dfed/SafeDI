@@ -52,6 +52,8 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(name: .customLong(BuildSettingCompilationConditions.otherSwiftFlagsOptionName), help: "The target's `OTHER_SWIFT_FLAGS` build setting wrapped in square brackets, written as the literal `[${OTHER_SWIFT_FLAGS}]`. Its `-D` flags are active conditions. Used only together with `--build-setting-active-compilation-conditions`.") var buildSettingOtherSwiftFlags: String?
 
+	@Option(name: .customLong(BuildSettingProductModuleName.optionName), help: "The target's `PRODUCT_MODULE_NAME` build setting wrapped in square brackets, written as the literal `[${PRODUCT_MODULE_NAME}]`, which the Xcode project plugin passes. Names the module that compiles this run's files for the imports generated code copies; it is not `--module-name`: the plugin cannot say which module declares the files a `#SafeDIConfiguration`'s `additionalDirectoriesToInclude` adds, so a run given only this option still knows no module.") var buildSettingProductModuleName: String?
+
 	@Option(help: "When set, SafeDITool concatenates every generated Swift file (dependency trees + mocks + mock configuration) into this one path — one header, bodies joined in source-file order, deterministic for stable inputs. Intended for build systems that need rule outputs statically declared at analysis time (Bazel, Buck2). Requires 'swift-sources-file-path' or '--include'. Cannot be combined with '--output-directory' or '--swift-manifest' — those are per-file emission modes. May be combined with '--module-info-output'. The combined file is always rewritten on every run, even when content would be unchanged.") var combinedOutput: String?
 
 	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project’s root module.") var dotFileOutput: String?
@@ -138,6 +140,9 @@ struct Generate: AsyncParsableCommand {
 			activeCompilationConditions: buildSettingActiveCompilationConditions,
 			otherSwiftFlags: buildSettingOtherSwiftFlags,
 		)
+		// The module that compiles this run's files when the Xcode project plugin's build expanded it, which names no
+		// module for `moduleMembership` and serves only to keep generated code from importing that module.
+		let productModuleName = try BuildSettingProductModuleName.moduleName(buildSettingProductModuleName)
 
 		// When --output-directory is provided without --swift-manifest, run an
 		// inline scan to discover roots/mocks and build the manifest automatically.
@@ -158,6 +163,7 @@ struct Generate: AsyncParsableCommand {
 				manifestFile: manifestPath,
 				mockScopedFiles: mockScopedFiles,
 				activeCompilationConditions: buildSettingConditions ?? Set(activeCompilationConditions),
+				keepsTypeDeclarationsOtherModulesCanName: writesModuleInfoWithoutTargetGraph,
 			)
 			resolvedSwiftManifest = manifestPath
 		}
@@ -250,6 +256,23 @@ struct Generate: AsyncParsableCommand {
 		let normalizedInstantiables = normalizingInstantiableTypes(of: dependentModuleInfo.flatMap(\.instantiables) + module.instantiables)
 		let additionalImportStatements = resolvedAdditionalImportedModules.map { ImportStatement(moduleName: $0) }
 		let typeDescriptionToFulfillingInstantiableMap = try resolveSafeDIFulfilledTypes(instantiables: normalizedInstantiables)
+		// Generated code never imports the module it compiles in, which the compiler warns at: a file read from a module
+		// above this one, through `additionalDirectoriesToInclude`, can import it. The `.safedi` keeps every import,
+		// since a module that reads it imports this one rightly.
+		let ownModuleName = module.moduleName ?? productModuleName
+		func importingOtherModules(_ importStatements: [ImportStatement]) -> [ImportStatement] {
+			importStatements.filter { $0.moduleName != ownModuleName }
+		}
+		// Why this run knows no module, which decides the remedy a diagnostic or comment about a seam built inline leads
+		// with. Only the Xcode project plugin passes the product module name, expanded or not; the SwiftPM plugin writes
+		// a target graph instead.
+		let unnamedReason: DependencyTreeGenerator.EmittingModule.UnnamedReason? = if module.moduleName != nil {
+			nil
+		} else if buildSettingProductModuleName != nil {
+			.xcodeProjectPlugin
+		} else {
+			.noModuleName
+		}
 		// The seams this run generates are those its own files declare; a seam another module declares is called
 		// with the signature that module computed, from the declarations it saw. Which files are the module's own is
 		// found only when a seam or a public mock exists, since a public mock another module declares is called with
@@ -269,9 +292,9 @@ struct Generate: AsyncParsableCommand {
 			membership: membership,
 		)
 		let generator = DependencyTreeGenerator(
-			importStatements: dependentModuleInfo.flatMap(\.imports) + additionalImportStatements + module.imports,
+			importStatements: importingOtherModules(dependentModuleInfo.flatMap(\.imports) + additionalImportStatements + module.imports),
 			// A dependent module's mock-only declarations reach this module's mocks, so its mock imports do too.
-			mockImportStatements: dependentModuleInfo.flatMap(\.mockImports) + additionalImportStatements + module.mockImports,
+			mockImportStatements: importingOtherModules(dependentModuleInfo.flatMap(\.mockImports) + additionalImportStatements + module.mockImports),
 			typeDescriptionToFulfillingInstantiableMap: typeDescriptionToFulfillingInstantiableMap,
 			aliasDeclarationReferences: AliasDeclarationReferences(
 				declarationFilePaths: Set(normalizedInstantiables.flatMap { instantiable in
@@ -303,6 +326,7 @@ struct Generate: AsyncParsableCommand {
 					FileManager.default.isReadableFile(atPath: comparisonFilePaths.projectFilePath(of: filePath).path)
 				},
 				additionalMocksToGenerateLocation: sourceConfiguration?.declarationLocation,
+				unnamedReason: unnamedReason,
 			),
 			seams: seamResolution,
 			plainTypeDeclarations: dependentModuleInfo.flatMap(\.plainTypeDeclarations) + module.plainTypeDeclarations,
@@ -817,6 +841,7 @@ struct Generate: AsyncParsableCommand {
 		// The declarations as each module read them: normalization qualifies a nested type among the declarations a
 		// run sees, so a module's seams are computed from its declarations normalized among what it saw.
 		let unnormalizedInstantiables = dependentModuleInfo.flatMap(\.instantiables) + module.instantiables
+		let plainTypeDeclarations = dependentModuleInfo.flatMap(\.plainTypeDeclarations) + module.plainTypeDeclarations
 		let dependentModulesByName = Dictionary(
 			dependentModuleInfo.compactMap { dependentModule in dependentModule.moduleName.map { ($0, dependentModule) } },
 			uniquingKeysWith: { first, _ in first },
@@ -834,10 +859,12 @@ struct Generate: AsyncParsableCommand {
 			if let dependentModule = dependentModulesByName[moduleName] {
 				// A dependency this run was not given is recorded, and reported only for a seam a tree reaches.
 				var instantiables = dependentModule.instantiables
+				var visiblePlainTypeDeclarations = dependentModule.plainTypeDeclarations
 				var missingDependencyModuleName: String?
 				for dependencyModuleName in dependentModule.dependencyModuleNames {
 					if let dependency = dependentModulesByName[dependencyModuleName] {
 						instantiables += dependency.instantiables
+						visiblePlainTypeDeclarations += dependency.plainTypeDeclarations
 					} else if missingDependencyModuleName == nil {
 						missingDependencyModuleName = dependencyModuleName
 					}
@@ -845,6 +872,7 @@ struct Generate: AsyncParsableCommand {
 				// A module info holds the module's declarations as the module read them, and the configuration it read.
 				visible = try VisibleDeclarations(
 					instantiables: resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables)),
+					plainTypeDeclarations: visiblePlainTypeDeclarations,
 					readFromModuleInfo: true,
 					missingDependencyModuleName: missingDependencyModuleName,
 					mockCondition: Self.mockCondition(of: dependentModule.configurations.first),
@@ -862,6 +890,7 @@ struct Generate: AsyncParsableCommand {
 				}
 				visible = try VisibleDeclarations(
 					instantiables: resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: instantiables)),
+					plainTypeDeclarations: plainTypeDeclarations.filter { $0.moduleName.map(visibleModuleNames.contains) == true },
 					readFromModuleInfo: false,
 					missingDependencyModuleName: nil,
 					mockCondition: Self.mockCondition(of: moduleConfiguration),
@@ -881,6 +910,7 @@ struct Generate: AsyncParsableCommand {
 					declaringModule: ModuleIdentity(moduleName: moduleName, packageName: seam.packageName),
 					missingDependencyModuleName: visible.missingDependencyModuleName,
 					visibleInstantiables: visible.instantiables,
+					visiblePlainTypeDeclarations: visible.plainTypeDeclarations,
 					callCarriesPluginComment: !visible.readFromModuleInfo,
 					// A module info holds the module's declarations as the module read them.
 					declaringModuleMockCondition: visible.readFromModuleInfo ? nil : visible.mockCondition,
@@ -894,6 +924,7 @@ struct Generate: AsyncParsableCommand {
 				declaringModule: ModuleIdentity(moduleName: moduleName, packageName: publicMock.packageName),
 				missingDependencyModuleName: visible.missingDependencyModuleName,
 				visibleInstantiables: visible.instantiables,
+				visiblePlainTypeDeclarations: visible.plainTypeDeclarations,
 				callCarriesPluginComment: !visible.readFromModuleInfo,
 				declaringModuleMockCondition: visible.mockCondition,
 			)
@@ -904,20 +935,27 @@ struct Generate: AsyncParsableCommand {
 		// The declarations the callers of this module's seams see, when some declaration this run sees is not among
 		// them: resolved as the callers resolve them, so a seam's signature can be computed over the callers' view and
 		// compared with this run's. A module whose name is unknown has no callers computing a signature.
-		let callersVisibleInstantiables: [TypeDescription: Instantiable]? = if !generatedSeams.isEmpty || declaresPublicMock, let moduleName = module.moduleName {
+		let callersVisibleInstantiables: [TypeDescription: Instantiable]?
+		// The callers see the plain type declarations of the modules they see, each with its module.
+		var callersVisiblePlainTypeDeclarations = [PlainTypeDeclaration]()
+		if !generatedSeams.isEmpty || declaresPublicMock, let moduleName = module.moduleName {
 			if callersComputeFromTargetGraph {
 				if unnormalizedInstantiables.contains(where: { $0.moduleName == nil }) {
-					try resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: unnormalizedInstantiables.filter { $0.moduleName.map(visibleModuleNames(from: moduleName, in: membership).contains) == true }))
+					let callersVisibleModuleNames = visibleModuleNames(from: moduleName, in: membership)
+					callersVisibleInstantiables = try resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: unnormalizedInstantiables.filter { $0.moduleName.map(callersVisibleModuleNames.contains) == true }))
+					callersVisiblePlainTypeDeclarations = plainTypeDeclarations.filter { $0.moduleName.map(callersVisibleModuleNames.contains) == true }
 				} else {
-					nil
+					callersVisibleInstantiables = nil
 				}
 			} else if dependentModuleInfo.contains(where: { $0.moduleName == nil }) {
-				try resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: dependentModuleInfo.filter { $0.moduleName != nil }.flatMap(\.instantiables) + module.instantiables))
+				callersVisibleInstantiables = try resolveSafeDIFulfilledTypes(instantiables: normalizingInstantiableTypes(of: dependentModuleInfo.filter { $0.moduleName != nil }.flatMap(\.instantiables) + module.instantiables))
+				callersVisiblePlainTypeDeclarations = (dependentModuleInfo.filter { $0.moduleName != nil }.flatMap(\.plainTypeDeclarations) + module.plainTypeDeclarations)
+					.filter { $0.moduleName != nil }
 			} else {
-				nil
+				callersVisibleInstantiables = nil
 			}
 		} else {
-			nil
+			callersVisibleInstantiables = nil
 		}
 		return SeamResolution(
 			currentModule: ModuleIdentity(moduleName: module.moduleName, packageName: module.packageName),
@@ -927,12 +965,15 @@ struct Generate: AsyncParsableCommand {
 			foreignPublicMocks: foreignPublicMocks,
 			callersComputeFromTargetGraph: callersComputeFromTargetGraph,
 			callersVisibleInstantiables: callersVisibleInstantiables,
+			callersVisiblePlainTypeDeclarations: callersVisiblePlainTypeDeclarations,
 		)
 	}
 
 	/// The declarations a module sees, as `seamResolution` reads them for the seams and public mocks it declares.
 	private struct VisibleDeclarations {
 		let instantiables: [TypeDescription: Instantiable]
+		/// The plain type declarations of the modules whose declarations `instantiables` holds.
+		let plainTypeDeclarations: [PlainTypeDeclaration]
 		/// Whether they were read from the module's module info rather than from the files the target graph lists.
 		let readFromModuleInfo: Bool
 		let missingDependencyModuleName: String?
@@ -1003,6 +1044,13 @@ struct Generate: AsyncParsableCommand {
 		return swiftFiles
 	}
 
+	/// Whether this run writes the module's info for other modules to read, and has no target graph that would tell it
+	/// which of the module's types they name: a build system that runs `generate` once per module, such as the Bazel
+	/// rule or the Tuist plugin. Such a run keeps every plain type declaration another module can name.
+	private var writesModuleInfoWithoutTargetGraph: Bool {
+		moduleInfoOutput != nil && swiftManifest == nil
+	}
+
 	/// Loads the parsed `ModuleInfo` for this module. When scan ran earlier
 	/// (plugin-setup subprocess of this same build, or this command's own
 	/// scan for `--output-directory`), it persisted the parsed result
@@ -1070,6 +1118,7 @@ struct Generate: AsyncParsableCommand {
 					// files are matched among the CSV's paths.
 					configurationFilePaths: manifest.map { $0.configurationFilePaths(among: inputFilePaths, in: projectFilePaths) } ?? inputFilePaths,
 					activeCompilationConditions: activeCompilationConditions,
+					keepsTypeDeclarationsOtherModulesCanName: writesModuleInfoWithoutTargetGraph,
 				).module,
 				false,
 			)
@@ -1141,8 +1190,11 @@ struct Generate: AsyncParsableCommand {
 			activeCompilationConditions: activeCompilationConditions,
 			configuration: configuration,
 		)
-		guard let fileScans = try await refreshed(cached.conditionSensitiveFileScans, from: cached, activeCompilationConditions: activeCompilationConditions, evaluator: evaluator),
-		      let additionalFileScans = try await refreshed(cached.additionalConditionSensitiveFileScans, from: cached, activeCompilationConditions: activeCompilationConditions, evaluator: evaluator)
+		// Scan kept the plain declarations of the types its walk's declarations mention, which these conditions can select
+		// differently.
+		let scanMentionedTypeNames = mentionedTypeNames(of: cached.moduleInfo.instantiables + cached.conditionSensitiveFileScans.flatMap(\.fileScan.instantiables))
+		guard let fileScans = try await refreshed(cached.conditionSensitiveFileScans, from: cached, activeCompilationConditions: activeCompilationConditions, evaluator: evaluator, mentioningOnlyTypesNamed: scanMentionedTypeNames),
+		      let additionalFileScans = try await refreshed(cached.additionalConditionSensitiveFileScans, from: cached, activeCompilationConditions: activeCompilationConditions, evaluator: evaluator, mentioningOnlyTypesNamed: nil)
 		else {
 			return nil
 		}
@@ -1165,12 +1217,16 @@ struct Generate: AsyncParsableCommand {
 	///
 	/// A file that declares a configuration in any clause of its `#if` blocks could declare a different one
 	/// now, or one where it declared none, which would change the evaluator every file is walked with, so
-	/// then the whole module is parsed afresh.
+	/// then the whole module is parsed afresh. So is a module one of whose files, walked again, now has a declaration
+	/// that mentions a type none of scan's mentioned (`mentionedTypeNames(of:)`), and that is not a top-level
+	/// `@Instantiable` type, when `mentioningOnlyTypesNamed` gives the names scan's did: scan kept the plain
+	/// declarations of the types its walk's declarations mention, and a fresh parse keeps that type's too.
 	private func refreshed(
 		_ cachedFileScans: [CachedFileScan],
 		from cached: CachedScannedModuleInfo,
 		activeCompilationConditions: Set<String>,
 		evaluator: ConditionalCompilationEvaluator,
+		mentioningOnlyTypesNamed scanMentionedTypeNames: Set<String>?,
 	) async throws -> [FileScan]? {
 		let scanActiveCompilationConditions = Set(cached.activeCompilationConditions)
 		func hasChangedValue(_ condition: String) -> Bool {
@@ -1184,6 +1240,15 @@ struct Generate: AsyncParsableCommand {
 		}
 		// Scan parsed every file under its absolute path, so the file is read from the name it is parsed under.
 		let rescans = try await parseSwiftFiles(Set(staleFileScans.map(\.scannedPath)), conditionalCompilation: evaluator)
+		if let scanMentionedTypeNames {
+			// A top-level `@Instantiable` type's own declaration proves it, so no plain declaration of its name is read.
+			let instantiableTypeNames = Set((cached.moduleInfo.instantiables + cachedFileScans.flatMap(\.fileScan.instantiables) + rescans.flatMap(\.instantiables)).compactMap { instantiable in
+				instantiable.concreteInstantiable.popNested == nil ? instantiable.concreteInstantiable.outermostTypeName : nil
+			})
+			guard mentionedTypeNames(of: rescans.flatMap(\.instantiables)).subtracting(instantiableTypeNames).isSubset(of: scanMentionedTypeNames) else {
+				return nil
+			}
+		}
 		// safedi-source-rule: allow uniqueKeysWithValues — `parseSwiftFiles` walks each path of a set once, and names each scan by the path it walked.
 		let rescanByScannedPath = Dictionary(uniqueKeysWithValues: rescans.map { ($0.path, $0) })
 		let staleScannedPaths = Set(staleFileScans.map(\.scannedPath))

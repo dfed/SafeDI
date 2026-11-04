@@ -61,23 +61,24 @@ enum BuildSettingCompilationConditions {
 		return Set(arguments(in: activeCompilationConditions)).union(definedConditions(in: arguments(in: otherSwiftFlags)))
 	}
 
-	// MARK: Private
-
-	/// Compiler flags whose next argument is passed to another tool, so a `-D` there defines nothing for Swift.
-	private static let flagsForwardingNextArgument: Set<String> = ["-Xcc", "-Xclang-linker", "-Xfrontend", "-Xlinker", "-Xllvm"]
-
-	private static func unbracketed(_ value: String, optionName: String, settingName: String) throws -> String {
+	/// The value of an option that carries a build setting wrapped in square brackets, without the brackets.
+	static func unbracketed(_ value: String, optionName: String, settingName: String) throws -> String {
 		guard value.hasPrefix("["), value.hasSuffix("]"), value.count >= 2 else {
 			throw ValidationError("--\(optionName) must be wrapped in square brackets, e.g. `--\(optionName)=[${\(settingName)}]`.")
 		}
 		return String(value.dropFirst().dropLast())
 	}
 
-	/// Whether a build-setting reference reached the tool literally. Neither setting can legitimately
-	/// contain one once expanded, since expansion replaces every reference.
-	private static func isUnexpanded(_ value: String) -> Bool {
+	/// Whether a build-setting reference reached the tool literally. No setting an option carries can
+	/// legitimately contain one once expanded, since expansion replaces every reference.
+	static func isUnexpanded(_ value: String) -> Bool {
 		value.contains("${") || value.contains("$(")
 	}
+
+	// MARK: Private
+
+	/// Compiler flags whose next argument is passed to another tool, so a `-D` there defines nothing for Swift.
+	private static let flagsForwardingNextArgument: Set<String> = ["-Xcc", "-Xclang-linker", "-Xfrontend", "-Xlinker", "-Xllvm"]
 
 	/// The conditions `-D` flags define, as the Swift driver reads them.
 	private static func definedConditions(in flags: [String]) -> Set<String> {

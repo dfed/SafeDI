@@ -1808,7 +1808,7 @@ public struct InstantiableMacro: MemberMacro {
 			context.diagnose(Diagnostic(
 				node: Syntax(generateMockArgument),
 				error: FixableInstantiableError.publicMockOnGenericType(typeName: typeName, genericTypeName: genericParameterClause == nil ? enclosingGenericTypeName : nil),
-				changes: [Self.replacing(generateMockArgument, with: "true")],
+				changes: [Self.replacing(generateMockArgument, with: ".internal")],
 			))
 			return
 		}

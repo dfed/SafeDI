@@ -157,12 +157,12 @@ public enum FixableInstantiableError: DiagnosticError {
 		case let .publicMockRequiresPublicType(typeName, accessLevel, _):
 			"`generateMock: .public` requires a `public` or `open` type; `\(typeName)` is `\(accessLevel.spelling)`. Make it `public`, or use `.internal`."
 		case .publicMockOnExtension:
-			"`generateMock: .public` needs a type declaration; an extension cannot prove its type is `public`. Use `.internal`, or write a public `mock` by hand."
+			"`generateMock: .public` needs a type declaration; an extension cannot prove its type is `public`. Use `.internal`, or write a public `mock()` by hand."
 		case let .publicMockOnGenericType(typeName, genericTypeName):
 			if let genericTypeName {
-				"`generateMock: .public` cannot be used on `\(typeName)`, which is declared inside the generic type `\(genericTypeName)`: SafeDI cannot generate a public `mock()` for a type in a generic context. Use `generateMock: true` for a mock its own module calls, or write a public `mock()` by hand for other modules to call."
+				"`generateMock: .public` cannot be used on `\(typeName)`, which is declared inside the generic type `\(genericTypeName)`: SafeDI cannot generate a public `mock()` for a type in a generic context. Use `generateMock: .internal` for a mock its own module calls, or write a public `mock()` by hand for other modules to call."
 			} else {
-				"`generateMock: .public` cannot be used on the generic type `\(typeName)`: SafeDI cannot generate a public `mock()` for a type in a generic context. Use `generateMock: true` for a mock its own module calls, or write a public `mock()` by hand for other modules to call."
+				"`generateMock: .public` cannot be used on the generic type `\(typeName)`: SafeDI cannot generate a public `mock()` for a type in a generic context. Use `generateMock: .internal` for a mock its own module calls, or write a public `mock()` by hand for other modules to call."
 			}
 		case let .defaultValuedAutoclosureParameter(parameterLabel):
 			"A default-valued `@autoclosure` parameter cannot be forwarded by a generated mock. Remove `@autoclosure` from `\(parameterLabel)`, or remove its default."
@@ -332,10 +332,8 @@ public enum FixableInstantiableError: DiagnosticError {
 				} else {
 					"Insert `public`"
 				}
-			case .publicMockOnExtension:
+			case .publicMockOnExtension, .publicMockOnGenericType:
 				"Replace `.public` with `.internal`"
-			case .publicMockOnGenericType:
-				"Replace `.public` with `true`"
 			case let .defaultValuedAutoclosureParameter(parameterLabel):
 				"Remove `@autoclosure` from `\(parameterLabel)`"
 			case .mockOnlyWithIsRoot:

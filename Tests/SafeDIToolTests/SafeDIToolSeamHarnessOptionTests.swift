@@ -43,11 +43,11 @@ struct SafeDIToolSeamHarnessOptionTests: ~Copyable {
 	// MARK: Fixtures
 
 	/// A plain public model type, not `@Instantiable`, so no declaration of its own proves its access.
-	private static let theme = """
+	private static let theme = unrecordedTypeDeclaration("""
 	public struct Theme {
 	    public init() {}
 	}
-	"""
+	""")
 
 	/// `App`'s root, which builds `Shell` through an instantiator, so that `Shell` can forward `theme`.
 	private static let shellForwardingTheme = """
@@ -85,7 +85,7 @@ struct SafeDIToolSeamHarnessOptionTests: ~Copyable {
 		// it. Built inline, `Badge` would be handed `theme`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Shell.swift"]):11:5: error: `Shell` provides `theme: Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App`, which SafeDI cannot tell is in the same package, can call, does not take it: `Service` takes `theme` only on its `internal` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `internal` as far as SafeDI can tell: every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `internal` (`Badge.init(theme:)`). Widen `Badge.init(theme:)` to `package`, or `public` if the two modules are in different packages; mention `Theme` in a `package` initializer, `instantiate(…)` or mock method SafeDI records (or widen `Theme`'s declaration); or stop providing `theme` on this path.
+			\(fixtures["App"]!["Shell.swift"]):11:5: error: `Shell` provides `theme: Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App`, which SafeDI cannot tell is in the same package, can call, does not take it: `Service` takes `theme` only on its `internal` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `internal` as far as SafeDI can tell: SafeDI reads no declaration of it, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `package`, or `public` if the two modules are in different packages; mention `Theme` in a `package` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `package` `mockOnly` mock (`@Instantiable(mockOnly: true) package extension Theme { package static func mock() -> Theme }`), which proves `Theme` `package`; or stop providing `theme` on this path.
 			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: Theme?` here.
 			"""
 		}) {
@@ -237,7 +237,7 @@ struct SafeDIToolSeamHarnessOptionTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsSeamInline_whenSeamModuleRunsWithoutModuleName() async throws {
 		// `Feature`'s `.safedi` names no module, so `App` cannot tell which module generated `Service`'s initializer and
-		// builds `Service`'s tree itself, passing `analytics` to `Badge`.
+		// builds `Service`'s tree itself, passing `analytics` to `Badge`, and says so where it constructs `Service`.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(
@@ -290,7 +290,7 @@ struct SafeDIToolSeamHarnessOptionTests: ~Copyable {
 			        let analytics = Analytics()
 			        func __safeDI_service() -> Service {
 			            let badge = Badge(analytics: analytics)
-			            return Service(badge: badge)
+			            return Service(badge: badge) // Built inline: SafeDI does not know which module declares `Service`, so this tree cannot call the initializer SafeDI generates for it.
 			        }
 			        let service: Service = __safeDI_service()
 			        self.init(analytics: analytics, service: service)

@@ -28,6 +28,14 @@
 /// parameter, the scope that declares the function passes the binding in scope there, and each cycle-closing scope
 /// passes its own nearest declaration: the property, its instance, or `nil` where it is unavailable.
 struct CycleParameter: Hashable, Sendable {
+	/// A receive of a parameter's label in the function's body.
+	struct Receiver: Hashable, Sendable {
+		/// Where the receiving dependency is declared.
+		let declarationLocation: Dependency.DeclarationLocation?
+		/// The types from the type the function builds to the receiving type, both included.
+		let chain: [TypeDescription]
+	}
+
 	/// The property the parameter binds: the form of the label that provides every other form the function's body
 	/// receives, made optional when no receiver requires it, since a scope that calls the function may then have
 	/// nothing to pass.
@@ -42,6 +50,10 @@ struct CycleParameter: Hashable, Sendable {
 	/// The unwrapped forms of the label that every receiver receives only if available (see
 	/// `ScopeGenerator.onlyIfAvailableUnwrappedReceivedProperties`).
 	let onlyIfAvailableUnwrappedForms: Set<Property>
+	/// The first receive of the label a walk of the function's body meets (see
+	/// `ScopeGenerator.inOrderTheBodyFirstReceives`), which a diagnostic about what a cycle-closing scope passes the
+	/// parameter is reported at.
+	let receiver: Receiver
 
 	/// Whether every scope that calls the function passes a value: a receiver in its body requires the label.
 	var isRequired: Bool {
@@ -74,8 +86,8 @@ struct CycleParameter: Hashable, Sendable {
 	}
 
 	/// The parameters of the builder function of a scope whose tree receives `receivedProperties` from the scopes
-	/// enclosing it, for each of `labels` – those a scope between it and one of its cycle-closing scopes declares –
-	/// that the tree receives, in label order.
+	/// enclosing it, for each label of `firstReceives` – those a scope between it and one of its cycle-closing scopes
+	/// declares that the tree receives, each with its first receive – in that order.
 	///
 	/// A label is a parameter only when one form the tree receives provides every other: a declaration of that form
 	/// does, so each scope that calls the function passes one value. A label received in forms no one declaration
@@ -83,17 +95,18 @@ struct CycleParameter: Hashable, Sendable {
 	/// the function's body reads it from the scopes enclosing the function, as it does a label no scope between
 	/// declares again.
 	static func parameters(
-		ofLabels labels: Set<String>,
+		firstReceives: [(label: String, receiver: Receiver)],
 		receivedProperties: Set<Property>,
 		requiredReceivedProperties: Set<Property>,
 		requiredAliasFulfillingProperties: Set<Property>,
 		onlyIfAvailableUnwrappedReceivedProperties: Set<Property>,
 	) -> [CycleParameter] {
+		let labels = Set(firstReceives.map(\.label))
 		var formsByLabel = [String: Set<Property>]()
 		for receivedProperty in receivedProperties where labels.contains(receivedProperty.label) {
 			formsByLabel[receivedProperty.label, default: []].insert(receivedProperty)
 		}
-		return formsByLabel.keys.sorted().compactMap { label in
+		return firstReceives.compactMap { label, receiver in
 			let forms = formsByLabel[label, default: []]
 			// A label received in forms no one declaration provides is left out: a deliberate gap (see above).
 			let providingForm = forms.sorted().first { forms.isSubset(of: Self.forms(providedBy: $0)) }
@@ -112,6 +125,7 @@ struct CycleParameter: Hashable, Sendable {
 				requiredForms: requiredForms,
 				requiredAliasFulfillingForms: requiredAliasFulfillingForms,
 				onlyIfAvailableUnwrappedForms: Set(forms.map(\.asUnwrappedProperty)).intersection(onlyIfAvailableUnwrappedReceivedProperties),
+				receiver: receiver,
 			)
 		}
 	}

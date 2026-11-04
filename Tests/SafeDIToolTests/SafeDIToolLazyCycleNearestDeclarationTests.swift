@@ -884,6 +884,482 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_takesNoParameterOfLabelClosedOnTypeForwards_whenScopeBetweenDeclaresLabelOfAnotherType() async throws {
+		// Inside `T3`'s builder function `T3`'s own `session` is the nearest declaration of the label, so the function takes
+		// only the forwarded `session`, and `Child`, whose form nothing provides, is passed `nil` on every build, as before.
+		let fixture = Self.closedOnTypesOwnLabelFixture(t3Declares: "@Forwarded let session: Session", t0Declares: "@Instantiated let session: Other")
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: """
+		extension Root {
+		    public convenience init() {
+		        func __safeDI_t3Builder(session: Session) -> T3 {
+		            let child = Child(session: nil)
+		            func __safeDI_t0Builder() -> T0 {
+		                let session = Other()
+		                let t3Builder = Instantiator<T3> {
+		                    __safeDI_t3Builder(session: $0)
+		                }
+		                return T0(session: session, t3Builder: t3Builder)
+		            }
+		            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
+		            return T3(session: session, child: child, t0Builder: t0Builder)
+		        }
+		        let t3Builder = Instantiator<T3> {
+		            __safeDI_t3Builder(session: $0)
+		        }
+		        self.init(t3Builder: t3Builder)
+		    }
+		}
+		""", buildsTheSameValuesAs: """
+		extension Root {
+		    public convenience init() {
+		        func t3(session: Session) -> T3 {
+		            T3(session: session, child: Child(session: nil), t0Builder: Instantiator<T0> {
+		                T0(session: Other(), t3Builder: Instantiator<T3> { t3(session: $0) })
+		            })
+		        }
+		        self.init(t3Builder: Instantiator<T3> { t3(session: $0) })
+		    }
+		}
+		""", probes: [
+			DifferentialValueProbe("Root().t3Builder.instantiate(Session())"),
+			DifferentialValueProbe("Root().t3Builder.instantiate(Session()).t0Builder.instantiate().t3Builder.instantiate(Session())"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesNearestDeclaration_whenCycleClosingScopeIsBuiltBeforeTheReceiverOfItsParameter() async throws {
+		// A walk of `Screen`'s builder function meets the cycle-closing scope in `Step`, which passes `session`, before
+		// `Reader`, which receives it: the function's parameters settle, and `Reader` is passed the step's session.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"])
+				.replacingOccurrences(of: "@Instantiable(isRoot: true)", with: "@Instantiable(isRoot: true, generateMock: true)"),
+			seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Instantiated let stepBuilder: Instantiator<Step>", "@Instantiated let reader: Reader"]),
+			seamFixtureType(named: "Step", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
+			seamFixtureType(named: "Reader", isFinalClass: true, declarations: ["@Received let session: Session"]),
+			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
+		]
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: """
+		extension Root {
+		    public convenience init() {
+		        let session = Session()
+		        func __safeDI_screenBuilder(session: Session) -> Screen {
+		            func __safeDI_stepBuilder() -> Step {
+		                let session = Session()
+		                let screenBuilder = Instantiator<Screen> {
+		                    __safeDI_screenBuilder(session: session)
+		                }
+		                return Step(session: session, screenBuilder: screenBuilder)
+		            }
+		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
+		            let reader = Reader(session: session)
+		            return Screen(stepBuilder: stepBuilder, reader: reader)
+		        }
+		        let screenBuilder = Instantiator<Screen> {
+		            __safeDI_screenBuilder(session: session)
+		        }
+		        self.init(session: session, screenBuilder: screenBuilder)
+		    }
+		}
+		""", mock: """
+		#if DEBUG
+		extension Root {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            session: (() -> Session)? = nil,
+		            screenBuilder: Screen.SafeDIMockConfiguration = .init()
+		        ) {
+		            self.session = session
+		            self.screenBuilder = screenBuilder
+		        }
+
+		        let session: (() -> Session)?
+		        let screenBuilder: Screen.SafeDIMockConfiguration
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Root {
+		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+		        func __safeDI_screenBuilder(session: Session) -> Screen {
+		            func __safeDI_stepBuilder() -> Step {
+		                let session = if let safeDIBuilder = safeDIOverrides.screenBuilder.stepBuilder.session { safeDIBuilder() } else { Session() }
+		                let screenBuilder = Instantiator<Screen> {
+		                    __safeDI_screenBuilder(session: session)
+		                }
+		                return if let safeDIBuilder = safeDIOverrides.screenBuilder.stepBuilder.safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Step(session: session, screenBuilder: screenBuilder) }
+		            }
+		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
+		            let reader = if let safeDIBuilder = safeDIOverrides.screenBuilder.reader { safeDIBuilder(session) } else { Reader(session: session) }
+		            return if let safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder { safeDIBuilder(stepBuilder, reader) } else { Screen(stepBuilder: stepBuilder, reader: reader) }
+		        }
+		        let screenBuilder = Instantiator<Screen> {
+		            __safeDI_screenBuilder(session: session)
+		        }
+		        return Root(session: session, screenBuilder: screenBuilder)
+		    }
+		}
+		#endif
+		""", buildsTheSameValuesAs: """
+		extension Root {
+		    public convenience init() {
+		        func screen(session: Session) -> Screen {
+		            Screen(stepBuilder: Instantiator<Step> {
+		                let stepSession = Session()
+		                return Step(session: stepSession, screenBuilder: Instantiator<Screen> { screen(session: stepSession) })
+		            }, reader: Reader(session: session))
+		        }
+		        let session = Session()
+		        self.init(session: session, screenBuilder: Instantiator<Screen> { screen(session: session) })
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesNearestDeclarationToSendableFunction_whenCycleClosesThroughSendableInstantiator() async throws {
+		// M1's flow built through `SendableInstantiator`s: the function the cycle closes on is `@Sendable`, and each scope that
+		// calls it does so from a `@Sendable` closure.
+		let fixture = [
+			seamFixtureType(named: "App", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: SendableInstantiator<Screen>"], conformances: ", @unchecked Sendable")
+				.replacingOccurrences(of: "@Instantiable(isRoot: true)", with: "@Instantiable(isRoot: true, generateMock: true)"),
+			seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Received let session: Session", "@Instantiated let stepBuilder: SendableInstantiator<Step>"], conformances: ", @unchecked Sendable"),
+			seamFixtureType(named: "Step", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: SendableInstantiator<Screen>"], conformances: ", @unchecked Sendable"),
+			seamFixtureType(named: "Session", isFinalClass: true, declarations: [], conformances: ", @unchecked Sendable"),
+		]
+		try await expectGeneratedTree(of: fixture, root: "App", equals: """
+		extension App {
+		    public convenience init() {
+		        let session = Session()
+		        @Sendable func __safeDI_screenBuilder(session: Session) -> Screen {
+		            @Sendable func __safeDI_stepBuilder() -> Step {
+		                let session = Session()
+		                let screenBuilder = SendableInstantiator<Screen> {
+		                    __safeDI_screenBuilder(session: session)
+		                }
+		                return Step(session: session, screenBuilder: screenBuilder)
+		            }
+		            let stepBuilder = SendableInstantiator<Step>(__safeDI_stepBuilder)
+		            return Screen(session: session, stepBuilder: stepBuilder)
+		        }
+		        let screenBuilder = SendableInstantiator<Screen> {
+		            __safeDI_screenBuilder(session: session)
+		        }
+		        self.init(session: session, screenBuilder: screenBuilder)
+		    }
+		}
+		""", mock: """
+		#if DEBUG
+		extension App {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            session: (() -> Session)? = nil,
+		            screenBuilder: Screen.SafeDIMockConfiguration = .init()
+		        ) {
+		            self.session = session
+		            self.screenBuilder = screenBuilder
+		        }
+
+		        let session: (() -> Session)?
+		        let screenBuilder: Screen.SafeDIMockConfiguration
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> App {
+		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+		        let __safeDI_screenBuilder__screenBuilder_stepBuilder_safeDIBuilder = safeDIOverrides.screenBuilder.stepBuilder.safeDIBuilder
+		        let __safeDI_screenBuilder__screenBuilder_stepBuilder_session_safeDIBuilder = safeDIOverrides.screenBuilder.stepBuilder.session
+		        let __safeDI_screenBuilder__safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder
+		        @Sendable func __safeDI_screenBuilder(session: Session) -> Screen {
+		            @Sendable func __safeDI_stepBuilder() -> Step {
+		                let session = if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_stepBuilder_session_safeDIBuilder { safeDIBuilder() } else { Session() }
+		                let screenBuilder = SendableInstantiator<Screen> {
+		                    __safeDI_screenBuilder(session: session)
+		                }
+		                return if let safeDIBuilder = __safeDI_screenBuilder__screenBuilder_stepBuilder_safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Step(session: session, screenBuilder: screenBuilder) }
+		            }
+		            let stepBuilder = SendableInstantiator<Step>(__safeDI_stepBuilder)
+		            return if let safeDIBuilder = __safeDI_screenBuilder__safeDIBuilder { safeDIBuilder(session, stepBuilder) } else { Screen(session: session, stepBuilder: stepBuilder) }
+		        }
+		        let screenBuilder = SendableInstantiator<Screen> {
+		            __safeDI_screenBuilder(session: session)
+		        }
+		        return App(session: session, screenBuilder: screenBuilder)
+		    }
+		}
+		#endif
+		""", buildsTheSameValuesAs: """
+		extension App {
+		    public convenience init() {
+		        @Sendable func screen(session: Session) -> Screen {
+		            Screen(session: session, stepBuilder: SendableInstantiator<Step> {
+		                let stepSession = Session()
+		                return Step(session: stepSession, screenBuilder: SendableInstantiator<Screen> { screen(session: stepSession) })
+		            })
+		        }
+		        let session = Session()
+		        self.init(session: session, screenBuilder: SendableInstantiator<Screen> { screen(session: session) })
+		    }
+		}
+		""")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesNilThenNearestDeclarationToParameterOfSendableFunction_whenOnlyCycleClosingScopeInSendableBuilderMakesItSendable() async throws {
+		// The function's body reads its parameter, which captures nothing: `Root` passes `nil`, and `Z` passes its own `yBuilder`
+		// from inside its function, where it is declared.
+		try await expectSendableOnlyThroughCycleTree(rootDeclaresYBuilder: false)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesDeclaringScopesInstantiatorToParameterOfSendableFunction_whenOnlyCycleClosingScopeInSendableBuilderMakesItSendable() async throws {
+		// `Root` passes its `yBuilder` from a closure that is not `@Sendable`, and the function's body reads the parameter, so
+		// nothing captures `Root`'s `yBuilder`, which 2.2.0's function body read from above it, inside the `@Sendable` function.
+		try await expectSendableOnlyThroughCycleTree(rootDeclaresYBuilder: true)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesForwardedPropertiesThenNearestDeclaration_whenCycleClosesThroughErasedInstantiatorOfTypeWithForwardedProperties() async throws {
+		// The type built again forwards `name` and `count`, which each `ErasedInstantiator` passes before `session`.
+		let fixture = [
+			"""
+			public protocol ScreenProtocol: AnyObject {}
+			public final class AnyScreen {
+			    public init(_ screen: some ScreenProtocol) {
+			        self.screen = screen
+			    }
+
+			    public let screen: any ScreenProtocol
+			}
+			extension Screen: ScreenProtocol {}
+			""",
+			seamFixtureType(named: "App", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let session: Session", #"@Instantiated(fulfilledByType: "Screen", erasedToConcreteExistential: true) let screenBuilder: ErasedInstantiator<Screen.ForwardedProperties, AnyScreen>"#])
+				.replacingOccurrences(of: "@Instantiable(isRoot: true)", with: "@Instantiable(isRoot: true, generateMock: true)"),
+			seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Forwarded let name: String", "@Forwarded let count: Int", "@Received let session: Session", "@Instantiated let stepBuilder: Instantiator<Step>"]),
+			seamFixtureType(named: "Step", isFinalClass: true, declarations: ["@Instantiated let session: Session", #"@Instantiated(fulfilledByType: "Screen", erasedToConcreteExistential: true) let screenBuilder: ErasedInstantiator<Screen.ForwardedProperties, AnyScreen>"#]),
+			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
+		]
+		// An `ErasedInstantiator` is not traversed, so each probe holds a step and the screen it builds again.
+		let stepAndScreenBuiltAgain = { (app: String) in
+			DifferentialValueProbe(#"{ () -> (Step, AnyScreen) in let step = (\#(app).screenBuilder.instantiate((count: 1, name: "a")).screen as! Screen).stepBuilder.instantiate(); return (step, step.screenBuilder.instantiate((count: 2, name: "b"))) }()"#)
+		}
+		try await expectGeneratedTree(of: fixture, root: "App", equals: """
+		extension App {
+		    public convenience init() {
+		        let session = Session()
+		        func __safeDI_screenBuilder(count: Int, name: String, session: Session) -> Screen {
+		            func __safeDI_stepBuilder() -> Step {
+		                let session = Session()
+		                let screenBuilder = ErasedInstantiator<Screen.ForwardedProperties, AnyScreen> {
+		                    AnyScreen(__safeDI_screenBuilder(count: $0.count, name: $0.name, session: session))
+		                }
+		                return Step(session: session, screenBuilder: screenBuilder)
+		            }
+		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
+		            return Screen(name: name, count: count, session: session, stepBuilder: stepBuilder)
+		        }
+		        let screenBuilder = ErasedInstantiator<Screen.ForwardedProperties, AnyScreen> {
+		            AnyScreen(__safeDI_screenBuilder(count: $0.count, name: $0.name, session: session))
+		        }
+		        self.init(session: session, screenBuilder: screenBuilder)
+		    }
+		}
+		""", mock: """
+		#if DEBUG
+		extension App {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            session: (() -> Session)? = nil,
+		            screenBuilder: Screen.SafeDIMockConfiguration = .init()
+		        ) {
+		            self.session = session
+		            self.screenBuilder = screenBuilder
+		        }
+
+		        let session: (() -> Session)?
+		        let screenBuilder: Screen.SafeDIMockConfiguration
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> App {
+		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+		        func __safeDI_screenBuilder(count: Int, name: String, session: Session) -> AnyScreen {
+		            func __safeDI_stepBuilder() -> Step {
+		                let session = if let safeDIBuilder = safeDIOverrides.screenBuilder.stepBuilder.session { safeDIBuilder() } else { Session() }
+		                let screenBuilder = ErasedInstantiator<Screen.ForwardedProperties, AnyScreen> {
+		                    __safeDI_screenBuilder(count: $0.count, name: $0.name, session: session)
+		                }
+		                return if let safeDIBuilder = safeDIOverrides.screenBuilder.stepBuilder.safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Step(session: session, screenBuilder: screenBuilder) }
+		            }
+		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
+		            return if let safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder { AnyScreen(safeDIBuilder(name, count, session, stepBuilder)) } else { AnyScreen(Screen(name: name, count: count, session: session, stepBuilder: stepBuilder)) }
+		        }
+		        let screenBuilder = ErasedInstantiator<Screen.ForwardedProperties, AnyScreen> {
+		            __safeDI_screenBuilder(count: $0.count, name: $0.name, session: session)
+		        }
+		        return App(session: session, screenBuilder: screenBuilder)
+		    }
+		}
+		#endif
+		""", buildsTheSameValuesAs: """
+		extension App {
+		    public convenience init() {
+		        func screen(count: Int, name: String, session: Session) -> Screen {
+		            Screen(name: name, count: count, session: session, stepBuilder: Instantiator<Step> {
+		                let stepSession = Session()
+		                return Step(session: stepSession, screenBuilder: ErasedInstantiator<Screen.ForwardedProperties, AnyScreen> {
+		                    AnyScreen(screen(count: $0.count, name: $0.name, session: stepSession))
+		                })
+		            })
+		        }
+		        let session = Session()
+		        self.init(session: session, screenBuilder: ErasedInstantiator<Screen.ForwardedProperties, AnyScreen> {
+		            AnyScreen(screen(count: $0.count, name: $0.name, session: session))
+		        })
+		    }
+		}
+		""", probes: [stepAndScreenBuiltAgain("App()"), stepAndScreenBuiltAgain("App.mock()")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesEachCycleClosingScopesNearestDeclaration_whenScopesAtThreeDepthsCloseOneCycle() async throws {
+		// `Step`'s cycle-closing scope passes its own session; `Other`'s, with nothing between, passes `Screen`'s parameter; and
+		// `Inner`'s, beneath `Other`, passes the session forwarded into `Inner`.
+		let fixture = [
+			seamFixtureType(named: "App", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"])
+				.replacingOccurrences(of: "@Instantiable(isRoot: true)", with: "@Instantiable(isRoot: true, generateMock: true)"),
+			seamFixtureType(named: "Screen", isFinalClass: true, declarations: ["@Received let session: Session", "@Instantiated let stepBuilder: Instantiator<Step>", "@Instantiated let otherBuilder: Instantiator<Other>"]),
+			seamFixtureType(named: "Step", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
+			seamFixtureType(named: "Other", isFinalClass: true, declarations: ["@Instantiated let innerBuilder: Instantiator<Inner>", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
+			seamFixtureType(named: "Inner", isFinalClass: true, declarations: ["@Forwarded let session: Session", "@Instantiated let screenBuilder: Instantiator<Screen>"]),
+			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
+		]
+		// An instantiator with forwarded properties is not traversed, so a probe builds `Inner` with a session of its own.
+		let inner = { (app: String) in DifferentialValueProbe("\(app).screenBuilder.instantiate().otherBuilder.instantiate().innerBuilder.instantiate(Session())") }
+		try await expectGeneratedTree(of: fixture, root: "App", equals: """
+		extension App {
+		    public convenience init() {
+		        let session = Session()
+		        func __safeDI_screenBuilder(session: Session) -> Screen {
+		            func __safeDI_stepBuilder() -> Step {
+		                let session = Session()
+		                let screenBuilder = Instantiator<Screen> {
+		                    __safeDI_screenBuilder(session: session)
+		                }
+		                return Step(session: session, screenBuilder: screenBuilder)
+		            }
+		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
+		            func __safeDI_otherBuilder() -> Other {
+		                func __safeDI_innerBuilder(session: Session) -> Inner {
+		                    let screenBuilder = Instantiator<Screen> {
+		                        __safeDI_screenBuilder(session: session)
+		                    }
+		                    return Inner(session: session, screenBuilder: screenBuilder)
+		                }
+		                let innerBuilder = Instantiator<Inner> {
+		                    __safeDI_innerBuilder(session: $0)
+		                }
+		                let screenBuilder = Instantiator<Screen> {
+		                    __safeDI_screenBuilder(session: session)
+		                }
+		                return Other(innerBuilder: innerBuilder, screenBuilder: screenBuilder)
+		            }
+		            let otherBuilder = Instantiator<Other>(__safeDI_otherBuilder)
+		            return Screen(session: session, stepBuilder: stepBuilder, otherBuilder: otherBuilder)
+		        }
+		        let screenBuilder = Instantiator<Screen> {
+		            __safeDI_screenBuilder(session: session)
+		        }
+		        self.init(session: session, screenBuilder: screenBuilder)
+		    }
+		}
+		""", mock: """
+		#if DEBUG
+		extension App {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            session: (() -> Session)? = nil,
+		            screenBuilder: Screen.SafeDIMockConfiguration = .init()
+		        ) {
+		            self.session = session
+		            self.screenBuilder = screenBuilder
+		        }
+
+		        let session: (() -> Session)?
+		        let screenBuilder: Screen.SafeDIMockConfiguration
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> App {
+		        let session = if let safeDIBuilder = safeDIOverrides.session { safeDIBuilder() } else { Session() }
+		        func __safeDI_screenBuilder(session: Session) -> Screen {
+		            func __safeDI_stepBuilder() -> Step {
+		                let session = if let safeDIBuilder = safeDIOverrides.screenBuilder.stepBuilder.session { safeDIBuilder() } else { Session() }
+		                let screenBuilder = Instantiator<Screen> {
+		                    __safeDI_screenBuilder(session: session)
+		                }
+		                return if let safeDIBuilder = safeDIOverrides.screenBuilder.stepBuilder.safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Step(session: session, screenBuilder: screenBuilder) }
+		            }
+		            let stepBuilder = Instantiator<Step>(__safeDI_stepBuilder)
+		            func __safeDI_otherBuilder() -> Other {
+		                func __safeDI_innerBuilder(session: Session) -> Inner {
+		                    let screenBuilder = Instantiator<Screen> {
+		                        __safeDI_screenBuilder(session: session)
+		                    }
+		                    return if let safeDIBuilder = safeDIOverrides.screenBuilder.otherBuilder.innerBuilder.safeDIBuilder { safeDIBuilder(session, screenBuilder) } else { Inner(session: session, screenBuilder: screenBuilder) }
+		                }
+		                let innerBuilder = Instantiator<Inner> {
+		                    __safeDI_innerBuilder(session: $0)
+		                }
+		                let screenBuilder = Instantiator<Screen> {
+		                    __safeDI_screenBuilder(session: session)
+		                }
+		                return if let safeDIBuilder = safeDIOverrides.screenBuilder.otherBuilder.safeDIBuilder { safeDIBuilder(innerBuilder, screenBuilder) } else { Other(innerBuilder: innerBuilder, screenBuilder: screenBuilder) }
+		            }
+		            let otherBuilder = Instantiator<Other>(__safeDI_otherBuilder)
+		            return if let safeDIBuilder = safeDIOverrides.screenBuilder.safeDIBuilder { safeDIBuilder(session, stepBuilder, otherBuilder) } else { Screen(session: session, stepBuilder: stepBuilder, otherBuilder: otherBuilder) }
+		        }
+		        let screenBuilder = Instantiator<Screen> {
+		            __safeDI_screenBuilder(session: session)
+		        }
+		        return App(session: session, screenBuilder: screenBuilder)
+		    }
+		}
+		#endif
+		""", buildsTheSameValuesAs: """
+		extension App {
+		    public convenience init() {
+		        func screen(session: Session) -> Screen {
+		            Screen(session: session, stepBuilder: Instantiator<Step> {
+		                let stepSession = Session()
+		                return Step(session: stepSession, screenBuilder: Instantiator<Screen> { screen(session: stepSession) })
+		            }, otherBuilder: Instantiator<Other> {
+		                Other(innerBuilder: Instantiator<Inner> { innerSession in
+		                    Inner(session: innerSession, screenBuilder: Instantiator<Screen> { screen(session: innerSession) })
+		                }, screenBuilder: Instantiator<Screen> { screen(session: session) })
+		            })
+		        }
+		        let session = Session()
+		        self.init(session: session, screenBuilder: Instantiator<Screen> { screen(session: session) })
+		    }
+		}
+		""", probes: [DifferentialValueProbe("App()"), inner("App()"), inner("App.mock()")])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_spellsEachParameterType_whenScopesBetweenForwardClosureExistentialNestedGenericAndTypealiasValues() async throws {
 		let support = """
 		public protocol Service: AnyObject {}
@@ -1096,6 +1572,141 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_readsEachOverrideOnce_whenClosedOnFunctionTakesParametersInsideEnclosingSendableBuilder() async throws {
+		// `T3`'s builder function, which takes `session`, is inside `Host`'s `@Sendable` one, so the mock reads `T3`'s overrides,
+		// `flag` among them, into locals before `Host`'s function, each once.
+		let fixture = [
+			seamFixtureType(named: "App", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let hostBuilder: SendableInstantiator<Host>"], conformances: ", @unchecked Sendable")
+				.replacingOccurrences(of: "@Instantiable(isRoot: true)", with: "@Instantiable(isRoot: true, generateMock: true)"),
+			seamFixtureType(named: "Host", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let t3Builder: SendableInstantiator<T3>"], conformances: ", @unchecked Sendable"),
+			"""
+			@Instantiable
+			public final class T3: Instantiable, @unchecked Sendable {
+			    public init(session: Session, t0Builder: SendableInstantiator<T0>, flag: Int = 7) {
+			        self.session = session
+			        self.t0Builder = t0Builder
+			        self.flag = flag
+			    }
+
+			    @Received let session: Session
+			    @Instantiated let t0Builder: SendableInstantiator<T0>
+			    let flag: Int
+			}
+			""",
+			seamFixtureType(named: "T0", isFinalClass: true, declarations: ["@Instantiated let session: Session", "@Instantiated let t3Builder: SendableInstantiator<T3>"], conformances: ", @unchecked Sendable"),
+			seamFixtureType(named: "Session", isFinalClass: true, declarations: [], conformances: ", @unchecked Sendable"),
+		]
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.mockFiles == ["App+SafeDIMock.swift": generatedFileHeader + """
+		#if DEBUG
+		extension App {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            hostBuilder: Host.SafeDIMockConfiguration = .init()
+		        ) {
+		            self.hostBuilder = hostBuilder
+		        }
+
+		        let hostBuilder: Host.SafeDIMockConfiguration
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> App {
+		        let __safeDI_hostBuilder__hostBuilder_session_safeDIBuilder = safeDIOverrides.hostBuilder.session
+		        let __safeDI_hostBuilder__hostBuilder_t3Builder_safeDIBuilder = safeDIOverrides.hostBuilder.t3Builder.safeDIBuilder
+		        let __safeDI_hostBuilder__hostBuilder_t3Builder_flag = safeDIOverrides.hostBuilder.t3Builder.flag
+		        let __safeDI_hostBuilder__hostBuilder_t3Builder_t0Builder_safeDIBuilder = safeDIOverrides.hostBuilder.t3Builder.t0Builder.safeDIBuilder
+		        let __safeDI_hostBuilder__hostBuilder_t3Builder_t0Builder_session_safeDIBuilder = safeDIOverrides.hostBuilder.t3Builder.t0Builder.session
+		        let __safeDI_hostBuilder__safeDIBuilder = safeDIOverrides.hostBuilder.safeDIBuilder
+		        @Sendable func __safeDI_hostBuilder() -> Host {
+		            let session = if let safeDIBuilder = __safeDI_hostBuilder__hostBuilder_session_safeDIBuilder { safeDIBuilder() } else { Session() }
+		            @Sendable func __safeDI_t3Builder(session: Session) -> T3 {
+		                @Sendable func __safeDI_t0Builder() -> T0 {
+		                    let session = if let safeDIBuilder = __safeDI_hostBuilder__hostBuilder_t3Builder_t0Builder_session_safeDIBuilder { safeDIBuilder() } else { Session() }
+		                    let t3Builder = SendableInstantiator<T3> {
+		                        __safeDI_t3Builder(session: session)
+		                    }
+		                    return if let safeDIBuilder = __safeDI_hostBuilder__hostBuilder_t3Builder_t0Builder_safeDIBuilder { safeDIBuilder(session, t3Builder) } else { T0(session: session, t3Builder: t3Builder) }
+		                }
+		                let t0Builder = SendableInstantiator<T0>(__safeDI_t0Builder)
+		                return if let safeDIBuilder = __safeDI_hostBuilder__hostBuilder_t3Builder_safeDIBuilder { safeDIBuilder(session, t0Builder, __safeDI_hostBuilder__hostBuilder_t3Builder_flag()) } else { T3(session: session, t0Builder: t0Builder, flag: __safeDI_hostBuilder__hostBuilder_t3Builder_flag()) }
+		            }
+		            let t3Builder = SendableInstantiator<T3> {
+		                __safeDI_t3Builder(session: session)
+		            }
+		            return if let safeDIBuilder = __safeDI_hostBuilder__safeDIBuilder { safeDIBuilder(session, t3Builder) } else { Host(session: session, t3Builder: t3Builder) }
+		        }
+		        let hostBuilder = SendableInstantiator<Host>(__safeDI_hostBuilder)
+		        return App(hostBuilder: hostBuilder)
+		    }
+		}
+		#endif
+		"""])
+		// The `T3` a step builds again receives the step's session, and every `T3` the mock builds reads `flag` from its
+		// overrides.
+		try expectDifferentialValuesAgree(
+			feature: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: output.generatedFiles ?? [:]),
+			knownRight: DifferentialValuePath(fixtureFiles: Self.fixtureFiles(fixture), generatedFiles: ["App+SafeDI.swift": """
+			extension App {
+			    public convenience init() {
+			        self.init(hostBuilder: Self.hostBuilder(flag: 7))
+			    }
+
+			    struct SafeDIOverrides {
+			        init(hostBuilder: HostOverrides = .init()) {
+			            self.hostBuilder = hostBuilder
+			        }
+
+			        let hostBuilder: HostOverrides
+			    }
+
+			    struct HostOverrides {
+			        init(t3Builder: T3Overrides = .init()) {
+			            self.t3Builder = t3Builder
+			        }
+
+			        let t3Builder: T3Overrides
+			    }
+
+			    struct T3Overrides {
+			        init(flag: Int = 7) {
+			            self.flag = flag
+			        }
+
+			        let flag: Int
+			    }
+
+			    static func mock(safeDIOverrides: SafeDIOverrides = .init()) -> App {
+			        App(hostBuilder: hostBuilder(flag: safeDIOverrides.hostBuilder.t3Builder.flag))
+			    }
+
+			    private static func hostBuilder(flag: Int) -> SendableInstantiator<Host> {
+			        @Sendable func t3(session: Session) -> T3 {
+			            T3(session: session, t0Builder: SendableInstantiator<T0> {
+			                let stepSession = Session()
+			                return T0(session: stepSession, t3Builder: SendableInstantiator<T3> { t3(session: stepSession) })
+			            }, flag: flag)
+			        }
+			        return SendableInstantiator<Host> {
+			            let session = Session()
+			            return Host(session: session, t3Builder: SendableInstantiator<T3> { t3(session: session) })
+			        }
+			    }
+			}
+			"""]),
+			probes: [
+				DifferentialValueProbe("App()"),
+				DifferentialValueProbe("App.mock()"),
+				DifferentialValueProbe("App.mock(safeDIOverrides: .init(hostBuilder: .init(t3Builder: .init(flag: 9))))"),
+			],
+			filesToDelete: &filesToDelete,
+		)
+	}
+
 	// MARK: Tests – Declarations that cannot be passed
 
 	@Test
@@ -1120,6 +1731,98 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			"""
 			\(fixtures["T3.swift"]):9:5: error: @Received property `t1Builder: Instantiator<T1>` is hidden in chain: Root -> Instantiator<T3> -> Instantiator<T0> -> T3. `T0` declares `t1Builder: T1` with the same label, so the types below `T0` receive `t1Builder: T1` instead. Give `t1Builder: T1` on `T0` a different label to fix.
 			\(fixtures["T0.swift"]):8:5: note: `t1Builder: T1` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsHiddenError_whenScopeInsideNestedCycleDeclaresLabelOfAnotherTypeThanRequiredReceive() async {
+		await assertThrowsHiddenErrorOfNestedCycle(aReceives: "@Received let x: X", receivedProperty: "x: X")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsHiddenError_whenScopeInsideNestedCycleDeclaresLabelOfAnotherTypeThanOnlyIfAvailableReceiveAndScopeAboveProvidesIt() async {
+		await assertThrowsHiddenErrorOfNestedCycle(aReceives: "@Received(onlyIfAvailable: true) let x: X?", receivedProperty: "x: X?")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsHiddenError_whenClosedOnTypeForwardsLabelThatOnlyScopeBetweenProvidesInFormItsTreeReceivesOnlyIfAvailable() async {
+		await assertThrowsHiddenErrorOfClosedOnTypesOwnLabel(t3Declares: "@Forwarded let session: Session")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsHiddenError_whenClosedOnTypeInstantiatesLabelThatOnlyScopeBetweenProvidesInFormItsTreeReceivesOnlyIfAvailable() async {
+		await assertThrowsHiddenErrorOfClosedOnTypesOwnLabel(t3Declares: "@Instantiated let session: Session")
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsHiddenError_whenTypeBuiltAgainRedeclaresLabelThatOnlyScopeBetweenMakesAvailableToOnlyIfAvailableReceiveAboveIt() async {
+		// Nothing above the first `A` provides `x`, so its receive, and `C`'s beneath `B`'s `x: Y`, are passed `nil`. `T0`
+		// provides `x: X` above the `A` built again, whose receive then provides `x: X?` to `C`, which `B` hides, as it would
+		// outside a cycle.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let x: X?", "@Instantiated let b: B", "@Instantiated let t0Builder: Instantiator<T0>"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let x: Y", "@Instantiated let c: C"]),
+			seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let x: X?"]),
+			seamFixtureType(named: "T0", isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Y", isFinalClass: true, declarations: []),
+		]
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["C.swift"]):7:5: error: @Received property `x: X?` is hidden in chain: Root -> Instantiator<A> -> Instantiator<T0> -> Instantiator<A> -> B -> C. `B` declares `x: Y` with the same label, so the types below `B` receive `x: Y` instead. Give `x: Y` on `B` a different label to fix.
+			\(fixtures["B.swift"]):8:5: note: `x: Y` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCaptureError_whenCycleClosingScopeInSendableWrapperPassesInstantiatorDeclaredOutsideItToOnlyIfAvailableReceive() async {
+		// Nothing above `T3` provides `yBuilder`, so the first `T3` is passed `nil`, and no receive in the closed-on function's
+		// tree captures anything; the cycle-closing scope's own `SendableInstantiator` closure passes `T0`'s `yBuilder`.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let t3Builder: SendableInstantiator<T3>"], conformances: ", @unchecked Sendable"),
+			seamFixtureType(named: "T3", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let yBuilder: Instantiator<Y>?", "@Instantiated let t0Builder: Instantiator<T0>"], conformances: ", @unchecked Sendable"),
+			seamFixtureType(named: "T0", isFinalClass: true, declarations: ["@Instantiated let yBuilder: Instantiator<Y>", "@Instantiated let t3Builder: SendableInstantiator<T3>"]),
+			seamFixtureType(named: "Y", isFinalClass: true, declarations: []),
+		]
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["T3.swift"]):8:5: error: @Received property `yBuilder: Instantiator<Y>?` cannot be received inside a `@Sendable` function in chain: Root -> T3 -> T0 -> T3. SafeDI builds `t3Builder: SendableInstantiator<T3>` on `T0` in a `@Sendable` function, which cannot capture `yBuilder: Instantiator<Y>` on `T0`, because `Instantiator<Y>` is not `Sendable`. Declare `yBuilder` on `T0`, and this property, as `SendableInstantiator<Y>` to fix. `SendableInstantiator<Y>` builds `Y` in a `@Sendable` function, so what the tree of `Y` receives from outside that function must be `Sendable` too.
+			\(fixtures["T0.swift"]):8:5: note: `yBuilder: Instantiator<Y>` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCaptureError_whenCycleClosingScopeInsideSendableBuilderPassesInstantiatorDeclaredOutsideItToOnlyIfAvailableReceive() async {
+		// Nothing above `T3` provides `yBuilder`, so the first `T3` is passed `nil`; the cycle-closing scope in `Z`'s `@Sendable`
+		// builder function passes `T0`'s `yBuilder`, declared outside it.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let t3Builder: Instantiator<T3>"]),
+			seamFixtureType(named: "T3", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let yBuilder: Instantiator<Y>?", "@Instantiated let t0Builder: Instantiator<T0>"]),
+			seamFixtureType(named: "T0", isFinalClass: true, declarations: ["@Instantiated let yBuilder: Instantiator<Y>", "@Instantiated let zBuilder: SendableInstantiator<Z>"]),
+			seamFixtureType(named: "Z", isFinalClass: true, declarations: ["@Instantiated let t3Builder: Instantiator<T3>"], conformances: ", @unchecked Sendable"),
+			seamFixtureType(named: "Y", isFinalClass: true, declarations: []),
+		]
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["T3.swift"]):8:5: error: @Received property `yBuilder: Instantiator<Y>?` cannot be received inside a `@Sendable` function in chain: Root -> T3 -> T0 -> Z -> T3. SafeDI builds `zBuilder: SendableInstantiator<Z>` on `T0` in a `@Sendable` function, which cannot capture `yBuilder: Instantiator<Y>` on `T0`, because `Instantiator<Y>` is not `Sendable`. Declare `yBuilder` on `T0`, and this property, as `SendableInstantiator<Y>` to fix. `SendableInstantiator<Y>` builds `Y` in a `@Sendable` function, so what the tree of `Y` receives from outside that function must be `Sendable` too.
+			\(fixtures["T0.swift"]):8:5: note: `yBuilder: Instantiator<Y>` is declared here
 			"""
 		}) {
 			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
@@ -1154,7 +1857,8 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 	mutating func generate_throwsCaptureError_whenCycleClosingScopeInsideSendableBuilderPassesInstantiatorDeclaredOutsideIt() async {
 		// The cycle-closing scope in `Z`'s `@Sendable` builder function makes the function it closes on `@Sendable` too, and
 		// passes `T0`'s `yBuilder`, declared outside `Z`'s function: the capture error, reported where the closed-on function's
-		// tree receives `yBuilder`.
+		// tree first receives `yBuilder`. The function's body reads its parameter, and `Root` passes its `yBuilder` from a
+		// closure that is not `@Sendable`, so neither captures `Root`'s.
 		let fixture = [
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let yBuilder: Instantiator<Y>", "@Instantiated let t3Builder: Instantiator<T3>"]),
 			seamFixtureType(named: "T3", isFinalClass: true, declarations: ["@Received let yBuilder: Instantiator<Y>", "@Instantiated let t0Builder: Instantiator<T0>"]),
@@ -1164,7 +1868,76 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 		]
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["T3.swift"]):8:5: error: @Received property `yBuilder: Instantiator<Y>` cannot be received inside a `@Sendable` function in chain: Root -> T3. SafeDI builds `t3Builder: Instantiator<T3>` on `Root` in a `@Sendable` function (a `@Sendable` builder function in the tree of `T3` builds it again), which cannot capture `yBuilder: Instantiator<Y>` on `Root`, because `Instantiator<Y>` is not `Sendable`. Declare `yBuilder` on `Root`, and this property, as `SendableInstantiator<Y>` to fix. `SendableInstantiator<Y>` builds `Y` in a `@Sendable` function, so what the tree of `Y` receives from outside that function must be `Sendable` too.
+			\(fixtures["T3.swift"]):8:5: error: @Received property `yBuilder: Instantiator<Y>` cannot be received inside a `@Sendable` function in chain: Root -> T3 -> T0 -> Z -> T3. SafeDI builds `zBuilder: SendableInstantiator<Z>` on `T0` in a `@Sendable` function, which cannot capture `yBuilder: Instantiator<Y>` on `T0`, because `Instantiator<Y>` is not `Sendable`. Declare `yBuilder` on `T0`, and this property, as `SendableInstantiator<Y>` to fix. `SendableInstantiator<Y>` builds `Y` in a `@Sendable` function, so what the tree of `Y` receives from outside that function must be `Sendable` too.
+			\(fixtures["T0.swift"]):8:5: note: `yBuilder: Instantiator<Y>` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCaptureError_whenSendableBuilderInClosedOnFunctionsBodyReceivesInstantiatorParameter() async {
+		// `S`'s `@Sendable` builder function, inside the body of the function the cycle closes on, captures the function's
+		// `yBuilder` parameter, which `Root` passes its own `yBuilder`: the capture error 2.2.0 reported for `Root`'s.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let yBuilder: Instantiator<Y>", "@Instantiated let t3Builder: Instantiator<T3>"]),
+			seamFixtureType(named: "T3", isFinalClass: true, declarations: ["@Instantiated let sBuilder: SendableInstantiator<S>", "@Instantiated let t0Builder: Instantiator<T0>"]),
+			seamFixtureType(named: "S", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let yBuilder: Instantiator<Y>?"], conformances: ", @unchecked Sendable"),
+			seamFixtureType(named: "T0", isFinalClass: true, declarations: ["@Instantiated let yBuilder: Instantiator<Y>", "@Instantiated let t3Builder: Instantiator<T3>"]),
+			seamFixtureType(named: "Y", isFinalClass: true, declarations: []),
+		]
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["S.swift"]):7:5: error: @Received property `yBuilder: Instantiator<Y>?` cannot be received inside a `@Sendable` function in chain: Root -> T3 -> S. SafeDI builds `sBuilder: SendableInstantiator<S>` on `T3` in a `@Sendable` function, which cannot capture `yBuilder: Instantiator<Y>` on `Root`, because `Instantiator<Y>` is not `Sendable`. Declare `yBuilder` on `Root`, and this property, as `SendableInstantiator<Y>` to fix. `SendableInstantiator<Y>` builds `Y` in a `@Sendable` function, so what the tree of `Y` receives from outside that function must be `Sendable` too.
+			\(fixtures["Root.swift"]):8:5: note: `yBuilder: Instantiator<Y>` is declared here
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCaptureError_whenSendableBuilderInClosedOnFunctionsBodyReceivesParameterDeclaringScopeBuildsAfterCallingFunction() async {
+		// `Root` builds its `yBuilder` after `aBuilder`, since `Y` receives `aBuilder`, so it passes the function the cycle
+		// closes on `nil`, and `Mid`'s cycle-closing scope passes its own `yBuilder`: `Z`'s `@Sendable` builder function, inside
+		// the function's body, captures the parameter whichever scope declares a `yBuilder` later.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let yBuilder: Instantiator<Y>"]),
+			seamFixtureType(named: "Y", isFinalClass: true, declarations: ["@Received let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Instantiated let zBuilder: SendableInstantiator<Z>", "@Instantiated let midBuilder: Instantiator<Mid>"]),
+			seamFixtureType(named: "Z", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let yBuilder: Instantiator<Y>?"]),
+			seamFixtureType(named: "Mid", isFinalClass: true, declarations: ["@Forwarded let yBuilder: Instantiator<Y>", "@Instantiated let aBuilder: Instantiator<A>"]),
+		]
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Z.swift"]):7:5: error: @Received property `yBuilder: Instantiator<Y>?` cannot be received inside a `@Sendable` function in chain: Root -> A -> Z. SafeDI builds `zBuilder: SendableInstantiator<Z>` on `A` in a `@Sendable` function, which cannot capture `yBuilder: Instantiator<Y>?`, which the tree of `Root` receives from outside it, because `Instantiator<Y>` is not `Sendable`. Declare `yBuilder` as `SendableInstantiator<Y>` where it is declared and where it is received as `Instantiator<Y>` to fix. `SendableInstantiator<Y>` builds `Y` in a `@Sendable` function, so what the tree of `Y` receives from outside that function must be `Sendable` too.
+			"""
+		}) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsCaptureError_whenDeclaringScopesSendableWrapperPassesInstantiatorDeclaredOutsideItToClosedOnFunction() async {
+		// `Root`'s `SendableInstantiator` closure passes `Root`'s `yBuilder` to the function the cycle closes on, as 2.2.0's
+		// function body read it from there: the capture error, reported where the function's tree first receives `yBuilder`.
+		// `T0`'s cycle-closing scope passes `T0`'s from its own `SendableInstantiator` closure: the capture error too.
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let yBuilder: Instantiator<Y>", "@Instantiated let t3Builder: SendableInstantiator<T3>"]),
+			seamFixtureType(named: "T3", isFinalClass: true, declarations: ["@Instantiated let w: W", "@Instantiated let t0Builder: Instantiator<T0>"], conformances: ", @unchecked Sendable"),
+			seamFixtureType(named: "W", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let yBuilder: Instantiator<Y>?"]),
+			seamFixtureType(named: "T0", isFinalClass: true, declarations: ["@Instantiated let yBuilder: Instantiator<Y>", "@Instantiated let t3Builder: SendableInstantiator<T3>"]),
+			seamFixtureType(named: "Y", isFinalClass: true, declarations: []),
+		]
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["W.swift"]):7:5: error: @Received property `yBuilder: Instantiator<Y>?` cannot be received inside a `@Sendable` function in chain: Root -> T3 -> T0 -> T3 -> W. SafeDI builds `t3Builder: SendableInstantiator<T3>` on `T0` in a `@Sendable` function, which cannot capture `yBuilder: Instantiator<Y>` on `T0`, because `Instantiator<Y>` is not `Sendable`. Declare `yBuilder` on `T0`, and this property, as `SendableInstantiator<Y>` to fix. `SendableInstantiator<Y>` builds `Y` in a `@Sendable` function, so what the tree of `Y` receives from outside that function must be `Sendable` too.
+			\(fixtures["T0.swift"]):8:5: note: `yBuilder: Instantiator<Y>` is declared here
+			\(fixtures["W.swift"]):7:5: error: @Received property `yBuilder: Instantiator<Y>?` cannot be received inside a `@Sendable` function in chain: Root -> T3 -> W. SafeDI builds `t3Builder: SendableInstantiator<T3>` on `Root` in a `@Sendable` function, which cannot capture `yBuilder: Instantiator<Y>` on `Root`, because `Instantiator<Y>` is not `Sendable`. Declare `yBuilder` on `Root`, and this property, as `SendableInstantiator<Y>` to fix. `SendableInstantiator<Y>` builds `Y` in a `@Sendable` function, so what the tree of `Y` receives from outside that function must be `Sendable` too.
 			\(fixtures["Root.swift"]):8:5: note: `yBuilder: Instantiator<Y>` is declared here
 			"""
 		}) {
@@ -1186,6 +1959,130 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 			seamFixtureType(named: "T1", isFinalClass: true, declarations: []),
 			seamFixtureType(named: "Other", isFinalClass: true, declarations: []),
 		]
+	}
+
+	/// Expects the hidden-label error at `A`'s receive `aReceives` of `x` where nested lazy cycles build `A` again beneath `C`,
+	/// which declares `x` as another type: `Root` instantiates `x: X` and `A`; `A` instantiates `B`, which instantiates `C` and
+	/// `A` again; `C` instantiates `x: Y` and `B` again. The `B` built again beneath `C` builds `A` again with `C`'s `x`.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func assertThrowsHiddenErrorOfNestedCycle(aReceives: String, receivedProperty: String, sourceLocation: SourceLocation = #_sourceLocation) async {
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let x: X", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: [aReceives, "@Instantiated let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "B", isFinalClass: true, declarations: ["@Instantiated let cBuilder: Instantiator<C>", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "C", isFinalClass: true, declarations: ["@Instantiated let x: Y", "@Instantiated let bBuilder: Instantiator<B>"]),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Y", isFinalClass: true, declarations: []),
+		]
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["A.swift"]):8:5: error: @Received property `\(receivedProperty)` is hidden in chain: Root -> Instantiator<A> -> Instantiator<B> -> Instantiator<C> -> Instantiator<B> -> A. `C` declares `x: Y` with the same label, so the types below `C` receive `x: Y` instead. Give `x: Y` on `C` a different label to fix.
+			\(fixtures["C.swift"]):8:5: note: `x: Y` is declared here
+			"""
+		}, sourceLocation: sourceLocation) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	/// `Root` instantiates `t3Builder: Instantiator<T3>`; `T3` declares `t3Declares`, a `session`, instantiates `Child`, which
+	/// receives `session: Instantiator<Session>?` only if available, and `t0Builder`; `T0` declares `t0Declares`, a `session`,
+	/// and instantiates `T3` again.
+	private static func closedOnTypesOwnLabelFixture(t3Declares: String, t0Declares: String) -> [String] {
+		[
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let t3Builder: Instantiator<T3>"]),
+			seamFixtureType(named: "T3", isFinalClass: true, declarations: [t3Declares, "@Instantiated let child: Child", "@Instantiated let t0Builder: Instantiator<T0>"]),
+			seamFixtureType(named: "Child", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let session: Instantiator<Session>?"]),
+			seamFixtureType(named: "T0", isFinalClass: true, declarations: [t0Declares, "@Instantiated let t3Builder: Instantiator<T3>"]),
+			seamFixtureType(named: "Session", isFinalClass: true, declarations: []),
+			seamFixtureType(named: "Other", isFinalClass: true, declarations: []),
+		]
+	}
+
+	/// Expects the hidden-label error at `Child`'s receive of `closedOnTypesOwnLabelFixture` with `T0` declaring
+	/// `session: Instantiator<Session>`: nothing above the first `T3` provides that form, so the first `Child` is passed
+	/// `nil`, but `T0` provides it above the `T3` built again, whose own `session` hides it from `Child`, as outside a cycle.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func assertThrowsHiddenErrorOfClosedOnTypesOwnLabel(t3Declares: String, sourceLocation: SourceLocation = #_sourceLocation) async {
+		let fixture = Self.closedOnTypesOwnLabelFixture(t3Declares: t3Declares, t0Declares: "@Instantiated let session: Instantiator<Session>")
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Child.swift"]):7:5: error: @Received property `session: Instantiator<Session>?` is hidden in chain: Root -> Instantiator<T3> -> Instantiator<T0> -> Instantiator<T3> -> Child. `T3` declares `session: Session` with the same label, so the types below `T3` receive `session: Session` instead. Give `session: Session` on `T3` a different label to fix.
+			\(fixtures["T3.swift"]):9:5: note: `session: Session` is declared here
+			"""
+		}, sourceLocation: sourceLocation) {
+			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		}
+	}
+
+	/// Expects the tree of a graph whose function the cycle closes on is `@Sendable` only because a cycle-closing scope in a
+	/// `@Sendable` builder function refers to it: `Root` instantiates `t3Builder: Instantiator<T3>`, and its own `yBuilder` when
+	/// `rootDeclaresYBuilder`; `T3` instantiates `w: W`, which receives `yBuilder: Instantiator<Y>?` only if available, and
+	/// `t0Builder`; `T0` instantiates `zBuilder: SendableInstantiator<Z>`; `Z` instantiates its own `yBuilder` and `T3` again.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func expectSendableOnlyThroughCycleTree(rootDeclaresYBuilder: Bool, sourceLocation: SourceLocation = #_sourceLocation) async throws {
+		let rootYBuilder = rootDeclaresYBuilder ? ["@Instantiated let yBuilder: Instantiator<Y>"] : []
+		let fixture = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: rootYBuilder + ["@Instantiated let t3Builder: Instantiator<T3>"]),
+			seamFixtureType(named: "T3", isFinalClass: true, declarations: ["@Instantiated let w: W", "@Instantiated let t0Builder: Instantiator<T0>"]),
+			seamFixtureType(named: "W", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let yBuilder: Instantiator<Y>?"]),
+			seamFixtureType(named: "T0", isFinalClass: true, declarations: ["@Instantiated let zBuilder: SendableInstantiator<Z>"]),
+			seamFixtureType(named: "Z", isFinalClass: true, declarations: ["@Instantiated let yBuilder: Instantiator<Y>", "@Instantiated let t3Builder: Instantiator<T3>"], conformances: ", @unchecked Sendable"),
+			seamFixtureType(named: "Y", isFinalClass: true, declarations: []),
+		]
+		let rootYBuilderDeclaration = rootDeclaresYBuilder ? """
+		        func __safeDI_yBuilder() -> Y {
+		            Y()
+		        }
+		        let yBuilder = Instantiator<Y>(__safeDI_yBuilder)
+
+		""" : ""
+		let rootArgument = rootDeclaresYBuilder ? "yBuilder" : "nil"
+		let rootInitializerArguments = rootDeclaresYBuilder ? "yBuilder: yBuilder, t3Builder: t3Builder" : "t3Builder: t3Builder"
+		let handBuiltRootYBuilder = rootDeclaresYBuilder ? "        let yBuilder = Instantiator<Y> { Y() }\n" : ""
+		let handBuiltRootInitializerArguments = rootDeclaresYBuilder ? "yBuilder: yBuilder, t3Builder: Instantiator<T3> { t3(yBuilder: yBuilder) }" : "t3Builder: Instantiator<T3> { t3(yBuilder: nil) }"
+		try await expectGeneratedTree(of: fixture, root: "Root", equals: """
+		extension Root {
+		    public convenience init() {
+		\(rootYBuilderDeclaration)        @Sendable func __safeDI_t3Builder(yBuilder: Instantiator<Y>?) -> T3 {
+		            let w = W(yBuilder: yBuilder)
+		            func __safeDI_t0Builder() -> T0 {
+		                @Sendable func __safeDI_zBuilder() -> Z {
+		                    func __safeDI_yBuilder() -> Y {
+		                        Y()
+		                    }
+		                    let yBuilder = Instantiator<Y>(__safeDI_yBuilder)
+		                    let t3Builder = Instantiator<T3> {
+		                        __safeDI_t3Builder(yBuilder: yBuilder)
+		                    }
+		                    return Z(yBuilder: yBuilder, t3Builder: t3Builder)
+		                }
+		                let zBuilder = SendableInstantiator<Z>(__safeDI_zBuilder)
+		                return T0(zBuilder: zBuilder)
+		            }
+		            let t0Builder = Instantiator<T0>(__safeDI_t0Builder)
+		            return T3(w: w, t0Builder: t0Builder)
+		        }
+		        let t3Builder = Instantiator<T3> {
+		            __safeDI_t3Builder(yBuilder: \(rootArgument))
+		        }
+		        self.init(\(rootInitializerArguments))
+		    }
+		}
+		""", buildsTheSameValuesAs: """
+		extension Root {
+		    public convenience init() {
+		        @Sendable func t3(yBuilder: Instantiator<Y>?) -> T3 {
+		            T3(w: W(yBuilder: yBuilder), t0Builder: Instantiator<T0> {
+		                T0(zBuilder: SendableInstantiator<Z> {
+		                    let zYBuilder = Instantiator<Y> { Y() }
+		                    return Z(yBuilder: zYBuilder, t3Builder: Instantiator<T3> { t3(yBuilder: zYBuilder) })
+		                })
+		            })
+		        }
+		\(handBuiltRootYBuilder)        self.init(\(handBuiltRootInitializerArguments))
+		    }
+		}
+		""", sourceLocation: sourceLocation)
 	}
 
 	/// The body of a hand-built tree of `instantiatorCycleFixture` with `T0` declaring its own `t1Builder`, which builds the

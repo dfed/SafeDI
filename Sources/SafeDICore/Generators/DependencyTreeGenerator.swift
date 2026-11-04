@@ -69,22 +69,40 @@ public actor DependencyTreeGenerator {
 		///   - additionalMocksToGenerateLocation: Where the `#SafeDIConfiguration` that lists the module's
 		///     `additionalMocksToGenerate` is declared, at which an error about a construction in a listed type's
 		///     generated mock is reported when the declaration that must change cannot be read.
+		///   - unnamedReason: Why SafeDITool does not know the module's name, exactly when `identity` names no module,
+		///     or `nil` when it knows the name.
 		public init(
 			identity: ModuleIdentity,
 			isOwnFile: @escaping @Sendable (String) -> Bool,
 			isReadableFile: @escaping @Sendable (String) -> Bool,
 			additionalMocksToGenerateLocation: Dependency.DeclarationLocation?,
+			unnamedReason: UnnamedReason?,
 		) {
 			self.identity = identity
 			self.isOwnFile = isOwnFile
 			self.isReadableFile = isReadableFile
 			self.additionalMocksToGenerateLocation = additionalMocksToGenerateLocation
+			self.unnamedReason = unnamedReason
+		}
+
+		/// Why SafeDITool does not know the name of the module the generated code compiles in, which decides the remedy
+		/// a diagnostic or comment about a seam built inline leads with.
+		public enum UnnamedReason: Sendable {
+			/// The run carries `--build-setting-product-module-name`, expanded or not: a target the Xcode project plugin
+			/// builds, which knows no module. The option's presence is the only positive signal of the Xcode project
+			/// plugin, since only that plugin passes it; the SwiftPM plugin writes a target graph instead, which names
+			/// the module.
+			case xcodeProjectPlugin
+			/// The run was given no module name by any other means: a custom integration, or a hand-written run,
+			/// without `--module-name`.
+			case noModuleName
 		}
 
 		let identity: ModuleIdentity
 		let isOwnFile: @Sendable (String) -> Bool
 		let isReadableFile: @Sendable (String) -> Bool
 		let additionalMocksToGenerateLocation: Dependency.DeclarationLocation?
+		let unnamedReason: UnnamedReason?
 	}
 
 	public struct GeneratedRoot: Sendable {
@@ -201,7 +219,7 @@ public actor DependencyTreeGenerator {
 		// A forwarded parameter's default constructs its type with the type's hand-written mock, as the access check
 		// of each mock root reads that type.
 		let forwardedParameterMockDefaultComments = forwardedParameterMockDefaults.keys.reduce(into: [TypeDescription: String]()) { result, typeDescription in
-			result[typeDescription] = typeDescriptionToFulfillingInstantiableMap[typeDescription].flatMap { constructionComments(for: $0).mockMethod }
+			result[typeDescription] = typeDescriptionToFulfillingInstantiableMap[typeDescription].flatMap { constructionComments(for: $0, forMock: true).mockMethod }
 		}
 
 		// The public mocks of the module share one context, built only when the module declares one.
@@ -501,13 +519,20 @@ public actor DependencyTreeGenerator {
 		}
 		let moduleName = emittingModule?.identity.moduleName
 		return PublicMockContext(
-			proof: TypeAccessProof(instantiables: typeDescriptionToFulfillingInstantiableMap, isOwnFile: emittingModule?.isOwnFile),
+			proof: TypeAccessProof(instantiables: typeDescriptionToFulfillingInstantiableMap, plainTypeDeclarations: plainTypeDeclarations, isOwnFile: emittingModule?.isOwnFile),
 			moduleNameByType: moduleNameByType,
 			moduleName: moduleName,
 			configurationTypeNameByType: PublicMockContext.configurationTypeNames(
 				of: typeDescriptionToFulfillingInstantiableMap.values.map(\.concreteInstantiable),
 				moduleName: moduleName,
 			),
+			extendedTypeAccessNeedsByType: typeDescriptionToFulfillingInstantiableMap.values.reduce(into: [TypeDescription: [AccessNeed]]()) { needsByType, instantiable in
+				guard instantiable.generateMock == .public else { return }
+				let needs = Self.extendedTypeAccessNeeds(of: instantiable, in: extendedTypeDeclarations)
+				if !needs.isEmpty {
+					needsByType[instantiable.concreteInstantiable] = needs
+				}
+			},
 		)
 	}
 
@@ -1275,11 +1300,11 @@ public actor DependencyTreeGenerator {
 				// The trees of several mock roots can each need one declaration to widen, which is reported once.
 				SourceDiagnostic.joiningInSourceOrder(
 					errors.flatMap(\.sourceDiagnosticGroupsOtherThanInaccessibleConstructions)
-						+ InaccessibleConstruction.merging(errors.flatMap(\.reportedInaccessibleConstructions)).map { [$0.sourceDiagnostic] },
+						+ InaccessibleConstruction.sourceDiagnosticGroups(of: errors.flatMap(\.reportedInaccessibleConstructions)),
 				)
 			case let .inaccessibleConstructions(inaccessibleConstructions):
 				// A declaration that several constructions need to widen the same way is reported once.
-				SourceDiagnostic.joiningInSourceOrder(InaccessibleConstruction.merging(inaccessibleConstructions).map { [$0.sourceDiagnostic] })
+				SourceDiagnostic.joiningInSourceOrder(InaccessibleConstruction.sourceDiagnosticGroups(of: inaccessibleConstructions))
 			case let .seam(seamError):
 				seamError.sourceDiagnostics
 			case let .sourceLocated(error):
@@ -1308,7 +1333,7 @@ public actor DependencyTreeGenerator {
 							severity: .error,
 							location: providedValueOmission.location,
 							message: SeamAccessExplanation.providedValueMessage(omission, callingType: providedValueOmission.callingType, unreadableProviderModuleName: providedValueOmission.unreadableProviderModuleName),
-						)] + receivers.map { receiver in
+						)] + SeamAccessExplanation.declarationNotes(for: omission.parameter.accessCause, neededLevel: SeamAccessExplanation.neededLevel(for: omission)) + receivers.map { receiver in
 							SourceDiagnostic(
 								severity: .note,
 								location: receiver.declarationLocation,
@@ -1341,7 +1366,7 @@ public actor DependencyTreeGenerator {
 				[SourceDiagnostic(
 					severity: .error,
 					location: referenceLocation,
-					message: "SafeDI cannot generate a call to the public mock SafeDI generated for `\(type.asSource)` in module `\(moduleName)`, which this module's mocks cannot build inline: that mock's signature depends on the declarations `\(moduleName)` sees, which include module `\(missingModuleName)`'s, and this run was not given `\(missingModuleName)`'s SafeDI module info. Give this run every module `\(moduleName)` depends on: add `\(missingModuleName)` (the target that compiles it) to this target's `deps` under Bazel, or to its `dependencies` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`.",
+					message: "SafeDI cannot generate a call to the public mock SafeDI generated for `\(type.asSource)` in module `\(moduleName)`, which this module's mocks cannot build inline: that mock's signature depends on the declarations `\(moduleName)` sees, which include module `\(missingModuleName)`'s, and this run was not given `\(missingModuleName)`'s SafeDI module info. Give this run every module `\(moduleName)` depends on: add `\(missingModuleName)`'s `\(missingModuleName)_safedi` target to this target's `safedi_deps` under Bazel (the `deps` of a hand-written `safedi_compile`), add `\(missingModuleName)` to the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`.",
 				)]
 			case let .publicMockUnderOtherMockCondition(calls):
 				// One diagnostic per dependency that leads to such a call, in source order.
@@ -1468,6 +1493,10 @@ public actor DependencyTreeGenerator {
 			}
 		}
 
+		/// The last remedy for a type no `@Instantiable` declaration this module reads fulfills: what each integration
+		/// does to read the module that declares one.
+		static let fulfillingDeclarationInAnotherModuleRemedy = "or, if such a declaration is in another module, make that module one SafeDI reads for this target: add its target to this target's `dependencies` in `Package.swift`, declare that module with `safedi_swift_library` (or a `safedi_compile` rule) and list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, or give its target `SafeDI.preCompileScript` and list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist."
+
 		/// How to break a cycle closed by a receive of a property that is still being built.
 		fileprivate static let onlyIfAvailableRemedy = "Remove this @\(Dependency.Source.receivedRawValue) property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required."
 
@@ -1492,7 +1521,7 @@ public actor DependencyTreeGenerator {
 			return if fulfilledByMockOnlyDeclaration {
 				"No production @\(InstantiableVisitor.macroName) declaration fulfills \(reference). A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @\(InstantiableVisitor.macroName) declaration that fulfills `\(typeName)`."
 			} else {
-				"No @\(InstantiableVisitor.macroName) type or extension fulfills \(reference). Decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName); list `\(typeName)` in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target."
+				"No @\(InstantiableVisitor.macroName) type or extension fulfills \(reference). Decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName); list `\(typeName)` in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)"
 			}
 		}
 
@@ -1618,9 +1647,114 @@ public actor DependencyTreeGenerator {
 			let referenceLocation: Dependency.DeclarationLocation?
 			/// Where the constructed type is declared.
 			let constructedTypeDeclarationLocation: Dependency.DeclarationLocation?
-			/// In a mock's tree, what the outermost `public` type another module declares on the path to the construction
-			/// offers (`Construction.publicMockCandidate`), which the fix says.
+			/// In a production tree, the type another module declares whose module could construct the declaration
+			/// instead, were the type declared with `generateDependencyTree: true`, which the fix offers.
+			var seamRemedy: SeamRemedy?
+			/// In a production tree of a module SafeDI cannot name, the seam another module declares whose tree the module
+			/// builds inline, which leads to the construction.
+			var inlineSeam: InlineSeam?
+
+			/// In a mock's tree, what the outermost type another module declares on the path to the construction offers
+			/// (`Construction.publicMockCandidate`), which the fix says.
 			var publicMockCandidate: PublicMockCandidate?
+			/// The type whose mock makes the construction, with where it is declared, or `nil` for production code.
+			var mockRoot: MockRoot?
+
+			/// A type another module declares, and that module, which would build the type's tree, and construct the
+			/// declaration there, were the type declared with `generateDependencyTree: true`: see
+			/// `DependencyTreeGenerator.seamRemedy(offeredBy:toWiden:declaredIn:extendedTypes:)`.
+			struct SeamRemedy: Hashable {
+				let type: TypeDescription
+				let moduleName: String
+			}
+
+			/// A seam another module declares that a production tree builds inline because SafeDI cannot name the module
+			/// the tree is generated in – a target the Xcode project plugin builds, or a run given no module name – so the
+			/// tree cannot call the initializer generated for the seam, with where the module refers to what leads to the
+			/// seam, and why SafeDI cannot name the module.
+			struct InlineSeam: Hashable {
+				let type: TypeDescription
+				let referenceLocation: Dependency.DeclarationLocation?
+				let unnamedReason: DependencyTreeGenerator.EmittingModule.UnnamedReason
+			}
+
+			/// The type whose mock makes a construction.
+			struct MockRoot: Hashable {
+				let type: TypeDescription
+				let declarationLocation: Dependency.DeclarationLocation?
+			}
+
+			/// The diagnostics of `inaccessibleConstructions`, each in a group of its own: one error for each declaration to
+			/// widen (`merging(_:)`), and one for each seam that the trees build inline (`InlineSeam`) where a construction in
+			/// its tree is inaccessible, at the earliest reference to it in source order, which says why the tree is built
+			/// inline and names the first declaration in source order in the seam's tree that keeps it from compiling, of
+			/// a type other than the seam where there is one. Neither depends on the order of `inaccessibleConstructions`.
+			static func sourceDiagnosticGroups(of inaccessibleConstructions: [InaccessibleConstruction]) -> [[SourceDiagnostic]] {
+				// One run names no module for one reason, so every inline seam of a type carries the same one.
+				var inlineSeamErrors = [TypeDescription: (referenceLocation: Dependency.DeclarationLocation?, namedConstruction: InaccessibleConstruction, unnamedReason: DependencyTreeGenerator.EmittingModule.UnnamedReason)]()
+				for case let (inaccessibleConstruction, inlineSeam?) in inaccessibleConstructions.map({ ($0, $0.inlineSeam) }) {
+					inlineSeamErrors[inlineSeam.type] = inlineSeamErrors[inlineSeam.type].map { error in
+						(
+							referenceLocation: Dependency.DeclarationLocation.precedesInSourceOrder(inlineSeam.referenceLocation, error.referenceLocation) ? inlineSeam.referenceLocation : error.referenceLocation,
+							namedConstruction: inaccessibleConstruction.isNamedBefore(error.namedConstruction, inTreeOf: inlineSeam.type) ? inaccessibleConstruction : error.namedConstruction,
+							unnamedReason: error.unnamedReason,
+						)
+					} ?? (referenceLocation: inlineSeam.referenceLocation, namedConstruction: inaccessibleConstruction, unnamedReason: inlineSeam.unnamedReason)
+				}
+				return merging(inaccessibleConstructions).map { [$0.sourceDiagnostic] }
+					+ inlineSeamErrors.map { seamType, error in
+						[error.namedConstruction.inlineSeamDiagnostic(of: seamType, at: error.referenceLocation, unnamedReason: error.unnamedReason)]
+					}
+			}
+
+			/// Whether an error about the seam `seamType`, built inline, names this construction rather than `other`: one of
+			/// a type other than the seam before one of the seam itself, then the one whose declaration to widen comes first
+			/// in source order, then the one whose constructed type is declared first. Two constructions that tie need one
+			/// declaration to widen for one type, and the error reads the same whichever it names.
+			private func isNamedBefore(_ other: InaccessibleConstruction, inTreeOf seamType: TypeDescription) -> Bool {
+				// Whether the construction is of the seam, then each location's file and its line and column as one number.
+				func sortKey(of construction: InaccessibleConstruction) -> (Int, String, Int, String, Int) {
+					let declarationLocation = construction.accessNeed.access.declarationStartLocation
+					let typeLocation = construction.constructedTypeDeclarationLocation
+					return (
+						construction.constructedType == seamType ? 1 : 0,
+						declarationLocation?.filePath ?? "",
+						((declarationLocation?.line ?? 0) << 32) | (declarationLocation?.column ?? 0),
+						typeLocation?.filePath ?? "",
+						((typeLocation?.line ?? 0) << 32) | (typeLocation?.column ?? 0),
+					)
+				}
+				return sortKey(of: self) < sortKey(of: other)
+			}
+
+			/// The error about the seam `seamType`, which a production tree builds inline because SafeDI cannot name the
+			/// module the tree is generated in, at `referenceLocation`, where this module refers to what leads to the seam,
+			/// naming the declaration this construction needs to widen and the level it has, in a sentence of its own, since
+			/// the declaration's subject phrase can be an enclosing type's or an extension's. It leads with the remedy that
+			/// works where `unnamedReason` puts the run: a target the Xcode project plugin builds can call a root declared in
+			/// a Swift package target, and otherwise the seam can be declared in a module whose run is given its name, since
+			/// a tree builds a seam inline only where SafeDI does not know the seam's module – a `.safedi` written without
+			/// a name, or a directory a `#SafeDIConfiguration` adds. A single `error:` line, since Xcode drops notes from
+			/// build-tool output.
+			private func inlineSeamDiagnostic(
+				of seamType: TypeDescription,
+				at referenceLocation: Dependency.DeclarationLocation?,
+				unnamedReason: DependencyTreeGenerator.EmittingModule.UnnamedReason,
+			) -> SourceDiagnostic {
+				let seamName = "`\(seamType.asSource)`"
+				let reachedDeclaration = "\(declarationPhrases.subject) is `\(accessNeed.level.spelling)`, so that tree cannot be built here."
+				let message = switch unnamedReason {
+				case .xcodeProjectPlugin:
+					"\(seamName) is declared with `generateDependencyTree: true`, but a target the Xcode project plugin builds cannot call the initializer SafeDI generates for it, so this target builds its tree inline. \(reachedDeclaration) Declare a root in a Swift package target that depends on \(seamName)'s module and call it from this target, or make the types in \(seamName)'s tree `public`."
+				case .noModuleName:
+					"\(seamName) is declared with `generateDependencyTree: true`, but SafeDI does not know which module declares \(seamName), so this run builds \(seamName)'s tree inline. \(reachedDeclaration) Declare \(seamName) in a module whose SafeDITool run is given its name (`--module-name`), so that this module calls the initializer SafeDI generates for \(seamName), or make the types in \(seamName)'s tree `public`."
+				}
+				return SourceDiagnostic(
+					severity: .error,
+					location: referenceLocation,
+					message: message,
+				)
+			}
 
 			/// `inaccessibleConstructions`, in no particular order, with those that need one declaration to widen the
 			/// same way – the constructions of several roots' trees, or of several types the declaration encloses –
@@ -1651,22 +1785,28 @@ public actor DependencyTreeGenerator {
 
 			/// Of this construction and `other`, which needs the same declaration to widen the same way, the one an error
 			/// about the declaration reports. Two constructions whose types are declared at one location construct one
-			/// type and report the same error.
+			/// type and report the same error. The error offers a seam only when both offer the same one: declaring one
+			/// type a seam must keep every construction it reports out of this module.
 			private func merged(with other: InaccessibleConstruction) -> InaccessibleConstruction {
 				let otherIsReportedFirst = if other.referenceLocation == referenceLocation {
-					Dependency.DeclarationLocation.precedesInSourceOrder(other.constructedTypeDeclarationLocation, constructedTypeDeclarationLocation)
+					if other.constructedTypeDeclarationLocation == constructedTypeDeclarationLocation {
+						// The trees of two mock roots reach the construction through one reference: the error names the mock
+						// declared first.
+						Dependency.DeclarationLocation.precedesInSourceOrder(other.mockRoot?.declarationLocation, mockRoot?.declarationLocation)
+					} else {
+						Dependency.DeclarationLocation.precedesInSourceOrder(other.constructedTypeDeclarationLocation, constructedTypeDeclarationLocation)
+					}
 				} else {
 					Dependency.DeclarationLocation.precedesInSourceOrder(other.referenceLocation, referenceLocation)
 				}
-				return otherIsReportedFirst ? other : self
+				var merged = otherIsReportedFirst ? other : self
+				merged.seamRemedy = seamRemedy == other.seamRemedy ? seamRemedy : nil
+				return merged
 			}
 
-			/// A single `error:` line, since Xcode drops notes from build-tool output. When the declaration's file can
-			/// be read, it is reported there, with a fix-it that gives the declaration the level the generated code
-			/// needs. Otherwise – in a build that hands SafeDITool another module's declarations but not its files,
-			/// such as a sandboxed Bazel action, or a `.safedi` file from another machine – it is reported where this
-			/// module refers to the construction, and names the module that must change.
-			var sourceDiagnostic: SourceDiagnostic {
+			/// How an error names the declaration that must widen (`subject`), says what the generated code cannot do
+			/// without it (`inability`), and names it in the fix (`fixedDeclaration`).
+			private var declarationPhrases: (subject: String, inability: String, fixedDeclaration: String) {
 				let constructedTypeName = "`\(constructedType.asSource)`"
 				func name(of member: AccessNeed.Member) -> String {
 					switch member {
@@ -1678,7 +1818,6 @@ public actor DependencyTreeGenerator {
 						"`\(constructedType.asSource).\(name)()`"
 					}
 				}
-				// What must widen, what the generated code cannot do without it, and how the fix names it.
 				let subject: String
 				let inability: String
 				let fixedDeclaration: String
@@ -1708,24 +1847,45 @@ public actor DependencyTreeGenerator {
 					inability = "call it"
 					fixedDeclaration = member == .initializer ? "the initializer" : name(of: member)
 				}
+				return (subject, inability, fixedDeclaration)
+			}
 
-				let emitter = emittingModule.moduleName.map { "module `\($0)`" } ?? "this module"
+			/// A single `error:` line, since Xcode drops notes from build-tool output. When the declaration's file can
+			/// be read, it is reported there, with a fix-it that gives the declaration the level the generated code
+			/// needs. Otherwise – in a build that hands SafeDITool another module's declarations but not its files,
+			/// such as a sandboxed Bazel action, or a `.safedi` file from another machine – it is reported where this
+			/// module refers to the construction, and names the module that must change.
+			var sourceDiagnostic: SourceDiagnostic {
+				let (subject, inability, fixedDeclaration) = declarationPhrases
+				let module = emittingModule.moduleName.map { "module `\($0)`" } ?? "this module"
+				// A mock's construction names the mock, whose tree the user did not write.
+				let emitter = mockRoot.map { "the mock of `\($0.type.asSource)`, generated in \(module)," } ?? "\(module),"
 				let reason = switch requirement {
 				case .internal:
-					"the code SafeDI generates in another file of \(emitter) cannot \(inability)"
+					if let mockRoot {
+						"the mock of `\(mockRoot.type.asSource)`, which SafeDI generates in another file of \(module), cannot \(inability)"
+					} else {
+						"the code SafeDI generates in another file of \(module) cannot \(inability)"
+					}
 				case .package:
-					"\(emitter), another module of the same package, cannot \(inability) in the code SafeDI generates"
+					"\(emitter) another module of the same package, cannot \(inability) in the code SafeDI generates"
 				case .public:
-					"\(emitter), in another package, cannot \(inability) in the code SafeDI generates"
+					"\(emitter) in another package, cannot \(inability) in the code SafeDI generates"
 				case .packageUnverified:
-					"\(emitter), which SafeDI cannot tell is in the same package, cannot \(inability) in the code SafeDI generates"
+					"\(emitter) which SafeDI cannot tell is in the same package, cannot \(inability) in the code SafeDI generates"
 				}
 				let level = AccessLevel.spelling(satisfying: requirement)
 				// Reported in this module, the error names the module whose declaration must change.
 				let declaringModuleName = readableDeclarationLocation == nil ? declaringModule.moduleName.map { " in module `\($0)`" } ?? "" : ""
+				// A type another module declares could have that module build its tree, which reaches the declaration.
+				let seamRemedyText = seamRemedy.map { ", or declare `\($0.type.asSource)` with `generateDependencyTree: true`, so that module `\($0.moduleName)` generates its tree and this module calls the initializer it generates" } ?? ""
 				// A mock could call a public mock of the type another module declares instead of building its tree.
-				let publicMockRemedy = if case let .withoutMock(type)? = publicMockCandidate {
-					", or give `\(type.asSource)` a public mock: `generateMock: .public`, or a hand-written public `mock`"
+				let publicMockRemedy = if case let .withoutMock(type, declaringModuleName, needsPublicDeclaration, isSeam)? = publicMockCandidate {
+					(needsPublicDeclaration
+						? ", or declare `\(type.asSource)` `public` with `generateMock: .public`"
+						: ", or give `\(type.asSource)` a public mock: `generateMock: .public`, or a hand-written public `mock`")
+						// A seam's tree is one a mock builds inline, which the user may not expect.
+						+ (isSeam ? ": mocks build a seam's tree inline, and this mock would call the mock \(declaringModuleName.map { "`\($0)`" } ?? "its module") generates instead" : "")
 				} else {
 					""
 				}
@@ -1745,9 +1905,9 @@ public actor DependencyTreeGenerator {
 				}
 				let fix = switch requirement {
 				case .internal, .package, .public:
-					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix\(publicMockRemedy)."
+					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix\(seamRemedyText)\(publicMockRemedy)."
 				case .packageUnverified:
-					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix, or `\(AccessLevel.public.spelling)` if the two modules are in different packages\(publicMockRemedy)."
+					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix, or `\(AccessLevel.public.spelling)` if the two modules are in different packages\(seamRemedyText)\(publicMockRemedy)."
 				}
 				let message = "\(subject) is `\(accessNeed.level.spelling)`\(declaringModuleName), so \(reason). \(fix)"
 
@@ -1958,6 +2118,8 @@ public actor DependencyTreeGenerator {
 				let message: String
 				let receivers: [Receiver]
 				var location = seam.declarationLocation
+				// The plain declarations that keep a parameter's type narrower than its tier, each with a fix-it.
+				var declarationNotes = [SourceDiagnostic]()
 				switch kind {
 				case let .parameters(.parametersShareLabel(label, labelReceivers, remedy)):
 					receivers = labelReceivers
@@ -2016,9 +2178,10 @@ public actor DependencyTreeGenerator {
 						parameterKind: parameterKind,
 					)
 					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(parameter.asSource)`, which \(takers), and cannot pass `nil` for it, since it is required.\(causeText) \(remedies)"
+					declarationNotes = SeamAccessExplanation.declarationNotes(for: cause, neededLevel: tier)
 				case let .moduleInfoMissing(moduleName, missingModuleName):
 					receivers = []
-					message = "SafeDI cannot generate a call to the initializer SafeDI generated for \(seamName) in module `\(moduleName)`: that initializer takes what the type's dependency tree needs from the declarations `\(moduleName)` sees, which include module `\(missingModuleName)`'s, and this run was not given `\(missingModuleName)`'s SafeDI module info. Give this run every module `\(moduleName)` depends on: add `\(missingModuleName)` (the target that compiles it) to this target's `deps` under Bazel, or to its `dependencies` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`."
+					message = "SafeDI cannot generate a call to the initializer SafeDI generated for \(seamName) in module `\(moduleName)`: that initializer takes what the type's dependency tree needs from the declarations `\(moduleName)` sees, which include module `\(missingModuleName)`'s, and this run was not given `\(missingModuleName)`'s SafeDI module info. Give this run every module `\(moduleName)` depends on: add `\(missingModuleName)`'s `\(missingModuleName)_safedi` target to this target's `safedi_deps` under Bazel (the `deps` of a hand-written `safedi_compile`), add `\(missingModuleName)` to the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`."
 				case let .signaturesDidNotSettle(seams):
 					receivers = []
 					message = "SafeDI cannot generate the dependency tree of \(seamName): the generated initializers of \(seams.map { "`\($0.asSource)`" }.joined(separator: ", ")), which reach one another, took a parameter from one another on every pass up to the limit. This is a defect in SafeDI; report it with these types' declarations."
@@ -2049,6 +2212,7 @@ public actor DependencyTreeGenerator {
 						parameterKind: .builder(fulfilledType: hole.instantiatedType, seamModuleName: seam.moduleName, isPassedUp: hole.innerSeamType != nil),
 					)
 					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(hole.builderLabel): \(hole.builderType(qualifiedBy: hole.scopeSeamType).asSource)`, the builder for `\(hole.ownerType.asSource)`'s `\(hole.property.asSource)`, which no @Instantiable declaration \(module) can see fulfills.\(causeText) \(remedies)"
+					declarationNotes = SeamAccessExplanation.declarationNotes(for: hole.accessCause, neededLevel: tier)
 				case let .parameters(.initializerRedeclared(parameters, handWrittenInitializer)):
 					receivers = []
 					let signature = "init(\(parameters.map(\.asSource).joined(separator: ", ")))"
@@ -2057,6 +2221,7 @@ public actor DependencyTreeGenerator {
 				}
 				// The notes follow the receivers in the order the tree declares them, which no name decides.
 				return [SourceDiagnostic(severity: .error, location: location, message: message)]
+					+ declarationNotes
 					+ receivers.map { receiver in
 						SourceDiagnostic(
 							severity: .note,
@@ -2583,6 +2748,7 @@ public actor DependencyTreeGenerator {
 					extendedTypes: extendedTypeDeclarations,
 				),
 				from: emittingModule,
+				extendedTypes: extendedTypeDeclarations,
 			)
 		}
 		for rootScope in rootScopes {
@@ -2599,6 +2765,7 @@ public actor DependencyTreeGenerator {
 							extendedTypes: extendedTypeDeclarations,
 						),
 						from: emittingModule,
+						extendedTypes: extendedTypeDeclarations,
 					)
 				}
 				rootScopesToGenerate.append(rootScope)
@@ -2678,27 +2845,41 @@ public actor DependencyTreeGenerator {
 			.allSatisfy { $0.level.satisfies(.public) }
 	}
 
-	/// A type the generated code constructs, with how it constructs it.
 	/// The outermost `public` type another module declares on the path to a construction in a mock's tree, which a
 	/// mock of this module builds inline (see `Construction.publicMockCandidate`).
 	enum PublicMockCandidate: Hashable {
 		/// The type has neither a hand-written nor a public mock: one would spare this module building its tree.
-		case withoutMock(TypeDescription)
+		/// - `declaringModuleName`: The module that declares the type and would generate its public mock.
+		/// - `needsPublicDeclaration`: Whether the type is narrower than `public`, which a public mock requires.
+		/// - `isSeam`: Whether the type is a seam (`generateDependencyTree: true`), whose tree a mock builds inline.
+		case withoutMock(TypeDescription, declaringModuleName: String?, needsPublicDeclaration: Bool, isSeam: Bool)
 		/// The type has a public mock, but its module is unknown to SafeDI, which therefore cannot call it: under the
 		/// Xcode project plugin, which names no module, or from a module info file written without a module name.
 		case publicMockOfUnknownModule(TypeDescription, emittingModuleIsUnknown: Bool)
 	}
 
+	/// A type the generated code constructs, with how it constructs it.
 	private struct Construction {
 		/// - Parameter extendedTypes: The declarations the module reads, among which the declaration of a type an
 		///   extension extends bounds the types declared in or by that extension.
-		init(instantiable: Instantiable, usesMockMethod: Bool, referenceLocation: Dependency.DeclarationLocation?, isSeamLeaf: Bool, extendedTypes: ExtendedTypeDeclarations, publicMockCandidate: PublicMockCandidate? = nil) {
+		init(
+			instantiable: Instantiable,
+			usesMockMethod: Bool,
+			referenceLocation: Dependency.DeclarationLocation?,
+			isSeamLeaf: Bool,
+			extendedTypes: ExtendedTypeDeclarations,
+			publicMockCandidate: PublicMockCandidate? = nil,
+			seamCandidateOnPaths: SeamCandidateOnPaths = .agreed(nil),
+			inlineSeam: DependencyTreeGeneratorError.InaccessibleConstruction.InlineSeam? = nil,
+		) {
 			self.instantiable = instantiable
 			self.usesMockMethod = usesMockMethod
 			self.referenceLocation = referenceLocation
 			self.isSeamLeaf = isSeamLeaf
 			self.publicMockCandidate = publicMockCandidate
 			extendedTypeAccessNeeds = DependencyTreeGenerator.extendedTypeAccessNeeds(of: instantiable, in: extendedTypes)
+			self.seamCandidateOnPaths = seamCandidateOnPaths
+			self.inlineSeam = inlineSeam
 		}
 
 		/// In a mock's tree, what the outermost type on the path to the construction that another module declares
@@ -2719,6 +2900,15 @@ public actor DependencyTreeGenerator {
 		/// The declarations of the type an extension extends that bound the constructed type, when it is declared in or
 		/// by that extension (`extendedTypeAccessNeeds(of:in:)`): code that names the type names the extended type too.
 		let extendedTypeAccessNeeds: [AccessNeed]
+
+		/// In a production tree, what the paths to the construction decide about the type whose generated initializer
+		/// the tree could call instead of building the type's tree, were the type declared with
+		/// `generateDependencyTree: true`: see `SeamCandidateOnPaths`.
+		let seamCandidateOnPaths: SeamCandidateOnPaths
+		/// In a production tree of a module SafeDI cannot name, the outermost seam on the path to the construction that
+		/// another module declares, which the tree builds inline because it cannot call the seam's generated initializer.
+		/// The path with the earliest reference location decides it, as it decides `referenceLocation`.
+		let inlineSeam: DependencyTreeGeneratorError.InaccessibleConstruction.InlineSeam?
 
 		/// The declarations whose access decides whether the construction compiles, which both the check of every
 		/// construction and the decision to generate a root another module declares read.
@@ -2781,6 +2971,100 @@ public actor DependencyTreeGenerator {
 		}
 	}
 
+	/// What the paths from a production tree's root to a construction decide about its seam candidate: on each path,
+	/// the outermost type – the first met from the root, the construction's own type included – that a module SafeDI
+	/// knows, other than this one, declares. Declaring that type with `generateDependencyTree: true` has its module
+	/// build the type's tree, and this module call the initializer generated for it, so it keeps the construction out
+	/// of this module only when every path passes through it. That initializer's widest tier is at the candidate type's
+	/// access, and it builds the tree, calls the candidate's own initializer, and takes each property the tree receives
+	/// from above the candidate as a parameter as visible as the types it names, capped at the candidate's type, so
+	/// every initializer of the tree, the one of a type that receives such a property included, is called inside the
+	/// candidate's module (`seamRemedy(offeredBy:toWiden:declaredIn:extendedTypes:)`). Nothing beneath a type is
+	/// constructed unless the type instantiates it, which neither a seam whose module SafeDI knows (this module calls its
+	/// generated initializer and builds none of its tree), a leaf, nor a type an extension declares (whose dependencies
+	/// are all received) does, so none of them is ever a candidate for another construction, and none needs excluding,
+	/// though the macro rejects `generateDependencyTree` on an extension. A leaf or a type an extension declares can be
+	/// its own construction's candidate, but it builds no tree, so SafeDI would generate no initializer for it, and its
+	/// construction's errors offer no remedy. A `mockOnly` declaration is in no production tree. Mocks build every tree
+	/// inline, so a mock's constructions have no candidate.
+	private enum SeamCandidateOnPaths: Equatable {
+		/// Every path walked so far has this candidate, or none has one (`nil`).
+		case agreed(Instantiable?)
+		/// Two paths have different candidates, or one has a candidate and another none.
+		case disagreed
+
+		/// The candidate every path has, if any.
+		var candidate: Instantiable? {
+			switch self {
+			case let .agreed(candidate):
+				candidate
+			case .disagreed:
+				nil
+			}
+		}
+
+		/// What the paths through a scope decide for its child `child`, which is a candidate on a path that has none
+		/// above it when `childIsCandidate` is set.
+		func extended(to child: Instantiable, childIsCandidate: Bool) -> SeamCandidateOnPaths {
+			switch self {
+			case .agreed(.some):
+				self
+			case .agreed(.none):
+				.agreed(childIsCandidate ? child : nil)
+			case .disagreed:
+				.disagreed
+			}
+		}
+
+		/// What the paths of this and of `other` together decide. Candidates compare as declarations, so two map entries
+		/// of one type would disagree, which withholds the remedy and never offers a wrong one.
+		func merged(with other: SeamCandidateOnPaths) -> SeamCandidateOnPaths {
+			switch (self, other) {
+			case let (.agreed(candidate), .agreed(otherCandidate)) where candidate == otherCandidate:
+				.agreed(candidate)
+			case (.agreed, .agreed), (.agreed, .disagreed), (.disagreed, .agreed), (.disagreed, .disagreed):
+				.disagreed
+			}
+		}
+	}
+
+	/// The seam an error about `accessNeed`, declared in `declaringModule`, offers when `candidate` is the seam candidate
+	/// of every construction that needs it, or `nil` when declaring the candidate a seam would not let this module
+	/// leave the declaration alone. That is so when the declaration is one a call of the initializer generated for the
+	/// candidate relies on, as `Construction.accessNeeds` reads it for a seam leaf: the candidate's type, a type
+	/// enclosing it, an extension one of those takes its level from, or the type an extension that declares the
+	/// candidate extends, of which the generated initializer is no more visible. It is so for any declaration when the
+	/// candidate builds no tree (`buildsTree(_:)`): SafeDI then generates no initializer for it, and its callers call its
+	/// own; such a candidate, a leaf or a type an extension declares, is the candidate of its own construction alone. And
+	/// it is so for a declaration outside the candidate's module, or one the candidate's module cannot reach: SafeDI does
+	/// not know which modules the candidate's module sees, and a type of a module it does not see, such as an
+	/// implementation of a protocol that a module depending on it provides, is still built in this module, which fills
+	/// the builder the seam would take for it. Any other
+	/// declaration – the candidate's own initializer, or one of a type in its tree, including one that receives a
+	/// property from above the candidate – is called only inside the candidate's module. A required parameter whose type
+	/// is narrower than the candidate's type makes the declared seam an error in its own module
+	/// (`tierOmitsRequiredParameter`), which says what to narrow or widen, never at this declaration.
+	/// - Parameter extendedTypes: The declarations the module reads, among which the declaration of a type an extension
+	///   extends bounds the types declared in or by that extension.
+	private static func seamRemedy(
+		offeredBy candidate: Instantiable,
+		toWiden accessNeed: AccessNeed,
+		declaredIn declaringModule: ModuleIdentity,
+		extendedTypes: ExtendedTypeDeclarations,
+	) -> DependencyTreeGeneratorError.InaccessibleConstruction.SeamRemedy? {
+		guard buildsTree(candidate),
+		      let moduleName = candidate.moduleName,
+		      declaringModule.moduleName == moduleName,
+		      !(seamLeafAccessNeeds(of: candidate) + extendedTypeAccessNeeds(of: candidate, in: extendedTypes)).contains(where: { $0.access == accessNeed.access }),
+		      accessNeed.level.satisfies(AccessLevel.required(
+		      	toConstructFrom: ModuleIdentity(moduleName: moduleName, packageName: candidate.packageName),
+		      	declaredIn: declaringModule,
+		      	isOwnFile: false,
+		      ))
+		else { return nil }
+		return .init(type: candidate.concreteInstantiable, moduleName: moduleName)
+	}
+
 	/// What identifies a construction while walking a tree: the scope that builds it, and how it builds it.
 	private struct ConstructionKey: Hashable {
 		let scope: ObjectIdentifier
@@ -2788,7 +3072,8 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// The constructions the code generated for the tree rooted at `rootScope` emits: the root's own, and each scope
-	/// the tree instantiates, transitively, once each, in no particular order.
+	/// the tree instantiates, transitively – the trees of the fills of each seam call it makes included – once each, in
+	/// no particular order.
 	/// - Parameters:
 	///   - rootIsConstructedWithMockMethod: Whether the root is constructed with its hand-written mock method.
 	///   - rootReferenceLocation: Where this module refers to the root.
@@ -2809,48 +3094,113 @@ public actor DependencyTreeGenerator {
 	) -> [Construction] {
 		var constructionsByKey = [ConstructionKey: Construction]()
 		// A scope can be reached along several paths, and the first reference location in source order is kept,
-		// whichever path is walked first. A scope is walked again only when it is reached with an earlier reference
-		// location, so the walk ends, and a worklist rather than recursion walks it, since a tree can be as deep as the
-		// module has types.
-		/// What a `public` type another module declares, `instantiable`, offers a mock of this module that builds its tree:
-		/// `nil` for a type with a hand-written mock, which the mock calls, or one this module declares.
+		// whichever path is walked first, with that path's public mock candidate, while every path has its say in the
+		// seam candidate. A scope is walked again only when it is reached with an earlier reference location or what its
+		// paths decide about the seam candidate changes, which only narrows, so the walk ends, and a worklist rather than
+		// recursion walks it, since a tree can be as deep as the module has types.
+		/// Whether `instantiable` is a seam candidate on a path that has none above it: see `SeamCandidateOnPaths`.
+		func isSeamCandidate(_ instantiable: Instantiable) -> Bool {
+			guard !isMock, let moduleName = instantiable.moduleName else { return false }
+			return moduleName != emittingModule.identity.moduleName
+		}
+		/// The seam that `scope` builds inline, referred to at `referenceLocation`, when the tree is a production tree of a
+		/// module SafeDI cannot name and another module declares the seam: see `Construction.inlineSeam`.
+		func inlineSeam(builtBy scope: Scope, referencedAt referenceLocation: Dependency.DeclarationLocation?) -> DependencyTreeGeneratorError.InaccessibleConstruction.InlineSeam? {
+			// A reason exactly when the module's name is unknown.
+			guard !isMock,
+			      let unnamedReason = emittingModule.unnamedReason,
+			      scope.instantiable.generatesDependencyTree,
+			      scope.seamCall == nil,
+			      !(scope.instantiable.sourceFilePath.map(emittingModule.isOwnFile) ?? false)
+			else { return nil }
+			return .init(type: scope.instantiable.concreteInstantiable, referenceLocation: referenceLocation, unnamedReason: unnamedReason)
+		}
+		/// What a type another module declares, `instantiable`, offers a mock of this module that builds its tree: `nil`
+		/// for a type with a hand-written mock, which the mock calls, one this module declares, or one that cannot have a
+		/// public mock as it is declared: an extension's, which the macro rejects `generateMock: .public` on, or one an
+		/// enclosing type, or the type an enclosing extension extends, keeps narrower than `public`.
 		func candidate(of instantiable: Instantiable) -> PublicMockCandidate? {
 			guard isMock,
-			      AccessLevel.effective(ofTypeDeclaredBy: instantiable).satisfies(.public),
+			      !instantiable.declarationType.isExtension,
 			      instantiable.mockInitializer == nil,
-			      !(instantiable.sourceFilePath.map(emittingModule.isOwnFile) ?? false)
+			      !(instantiable.sourceFilePath.map(emittingModule.isOwnFile) ?? false),
+			      instantiable.enclosingTypeAccess.enumerated().allSatisfy({ enclosingType in
+			      	AccessLevel.ownLevel(of: enclosingType.element, directlyInside: enclosingType.offset == 0 ? instantiable.enclosingExtensionAccess : nil).satisfies(.public)
+			      }),
+			      Self.extendedTypeAccessNeeds(of: instantiable, in: extendedTypes).allSatisfy({ $0.level.satisfies(.public) })
 			else { return nil }
+			let isPublic = AccessLevel.effective(ofTypeDeclaredBy: instantiable).satisfies(.public)
 			if let moduleName = instantiable.moduleName {
-				// A public mock of a type of a module SafeDI knows is called wherever the tree cannot be built.
+				// A public mock of a type of a module SafeDI knows is called wherever the tree cannot be built; a type narrower
+				// than `public` – a seam under adoption is usually `package` – needs that declaration widened too.
 				return moduleName != emittingModule.identity.moduleName && instantiable.generateMock != .public
-					? .withoutMock(instantiable.concreteInstantiable)
+					? .withoutMock(instantiable.concreteInstantiable, declaringModuleName: moduleName, needsPublicDeclaration: !isPublic, isSeam: instantiable.generatesDependencyTree)
 					: nil
 			} else {
+				guard isPublic else { return nil }
 				return instantiable.generateMock == .public
 					? .publicMockOfUnknownModule(instantiable.concreteInstantiable, emittingModuleIsUnknown: emittingModule.identity.moduleName == nil)
-					: .withoutMock(instantiable.concreteInstantiable)
+					: .withoutMock(instantiable.concreteInstantiable, declaringModuleName: nil, needsPublicDeclaration: false, isSeam: instantiable.generatesDependencyTree)
 			}
 		}
-		var scopesToWalk = [(scope: rootScope, usesMockMethod: rootIsConstructedWithMockMethod, referenceLocation: rootReferenceLocation, publicMockCandidate: candidate(of: rootScope.instantiable))]
-		while let (scope, usesMockMethod, referenceLocation, publicMockCandidate) = scopesToWalk.popLast() {
+		// The root is the module's own, or is not reported, so it is neither a seam candidate nor a seam built inline.
+		var scopesToWalk = [(scope: rootScope, usesMockMethod: rootIsConstructedWithMockMethod, referenceLocation: rootReferenceLocation, seamCandidateOnPaths: SeamCandidateOnPaths.agreed(nil), inlineSeamOnPath: DependencyTreeGeneratorError.InaccessibleConstruction.InlineSeam?.none, publicMockCandidate: candidate(of: rootScope.instantiable))]
+		while let (scope, usesMockMethod, referenceLocation, seamCandidateOnPaths, inlineSeamOnPath, publicMockCandidate) = scopesToWalk.popLast() {
 			let key = ConstructionKey(scope: ObjectIdentifier(scope), usesMockMethod: usesMockMethod)
-			guard constructionsByKey[key].map({ Dependency.DeclarationLocation.precedesInSourceOrder(referenceLocation, $0.referenceLocation) }) ?? true else {
+			let walkedConstruction = constructionsByKey[key]
+			let isEarliestPath = walkedConstruction.map { Dependency.DeclarationLocation.precedesInSourceOrder(referenceLocation, $0.referenceLocation) } ?? true
+			let mergedSeamCandidateOnPaths = walkedConstruction.map { $0.seamCandidateOnPaths.merged(with: seamCandidateOnPaths) } ?? seamCandidateOnPaths
+			guard isEarliestPath || mergedSeamCandidateOnPaths != walkedConstruction?.seamCandidateOnPaths else {
 				continue
 			}
-			constructionsByKey[key] = Construction(instantiable: scope.instantiable, usesMockMethod: usesMockMethod, referenceLocation: referenceLocation, isSeamLeaf: scope.seamCall != nil, extendedTypes: extendedTypes, publicMockCandidate: publicMockCandidate)
+			constructionsByKey[key] = Construction(
+				instantiable: scope.instantiable,
+				usesMockMethod: usesMockMethod,
+				referenceLocation: isEarliestPath ? referenceLocation : walkedConstruction?.referenceLocation,
+				isSeamLeaf: scope.seamCall != nil,
+				extendedTypes: extendedTypes,
+				publicMockCandidate: isEarliestPath ? publicMockCandidate : walkedConstruction?.publicMockCandidate,
+				seamCandidateOnPaths: mergedSeamCandidateOnPaths,
+				inlineSeam: isEarliestPath ? inlineSeamOnPath : walkedConstruction?.inlineSeam,
+			)
 			let isDeclaredInOwnFile = scope.instantiable.sourceFilePath.map(emittingModule.isOwnFile) ?? false
 			for case let .instantiated(property, childScope, _) in scope.propertiesToGenerate
 				where !typesLeftOut.contains(childScope.instantiable.concreteInstantiable)
 			{
+				// A dependency the mock promotes to its root, or retypes there, is declared by no type of the tree.
+				let childReferenceLocation = isDeclaredInOwnFile
+					? scope.instantiable.dependencies.first(where: { $0.property == property })?.declarationLocation ?? referenceLocation
+					: referenceLocation
 				scopesToWalk.append((
 					scope: childScope,
 					usesMockMethod: isMock && childScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType),
-					// A dependency the mock promotes to its root, or retypes there, is declared by no type of the tree.
-					referenceLocation: isDeclaredInOwnFile
-						? scope.instantiable.dependencies.first(where: { $0.property == property })?.declarationLocation ?? referenceLocation
-						: referenceLocation,
+					referenceLocation: childReferenceLocation,
+					// Every path to the child through this scope extends a path to this scope.
+					seamCandidateOnPaths: mergedSeamCandidateOnPaths.extended(to: childScope.instantiable, childIsCandidate: isSeamCandidate(childScope.instantiable)),
+					inlineSeamOnPath: inlineSeamOnPath ?? inlineSeam(builtBy: childScope, referencedAt: childReferenceLocation),
 					publicMockCandidate: publicMockCandidate ?? candidate(of: childScope.instantiable),
 				))
+			}
+			// A seam call's fills are constructions of this module's code: the fulfilling type and its tree, built with
+			// their initializers as the type's own module builds them, reached where the call is. A mock's tree calls no
+			// seam's generated initializer, and fills another module's public mock's builder only where every construction
+			// of the fill is one this module can reach (`holesFilled(byCallsOf:in:)`), so only a production tree's fills
+			// are walked. A fill starts a path of its own, whose candidate is the fill's type when another module SafeDI
+			// knows declares it: declared a seam, that module builds the type's tree and the fill calls the initializer
+			// generated for it. No candidate above the seam reaches the fill: a type above the seam declared a seam would
+			// pass the builder up to this module whenever its own module cannot see the fulfilling type, so it would keep
+			// the fill out of this module for no path.
+			if !isMock {
+				for case let .fill(_, fillScope) in scope.holeArguments {
+					scopesToWalk.append((
+						scope: fillScope,
+						usesMockMethod: false,
+						referenceLocation: referenceLocation,
+						seamCandidateOnPaths: SeamCandidateOnPaths.agreed(nil).extended(to: fillScope.instantiable, childIsCandidate: isSeamCandidate(fillScope.instantiable)),
+						inlineSeamOnPath: inlineSeamOnPath ?? inlineSeam(builtBy: fillScope, referencedAt: referenceLocation),
+						publicMockCandidate: nil,
+					))
+				}
 			}
 		}
 		return Array(constructionsByKey.values)
@@ -2903,7 +3253,7 @@ public actor DependencyTreeGenerator {
 					leavingOut: typesLeftOut,
 				)
 			}
-			guard !Self.inaccessibleConstructions(constructions, from: emittingModule).isEmpty else { continue }
+			guard !Self.inaccessibleConstructions(constructions, from: emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty else { continue }
 			if let moduleName = foreignPublicMock.declaringModule.moduleName, let missingModuleName = foreignPublicMock.missingDependencyModuleName {
 				// The mock must be called, and its signature cannot be computed without the module this run lacks.
 				let referenceLocation = typeDescriptionToFulfillingInstantiableMap.values
@@ -2928,7 +3278,21 @@ public actor DependencyTreeGenerator {
 					case let .forwarded(property):
 						PublicMockCall.PassedParameter(name: parameter.name, type: parameter.type, dependency: Dependency(property: property, source: .forwarded, declarationLocation: ownPlan.instantiable.declarationLocation), isBuiltWhenNil: false, hole: nil)
 					case let .received(property, isRequired):
-						PublicMockCall.PassedParameter(name: parameter.name, type: parameter.type, dependency: Dependency(property: property, source: .received(onlyIfAvailable: !isRequired), declarationLocation: ownPlan.instantiable.declarationLocation), isBuiltWhenNil: parameter.isBuiltWhenNil, hole: parameter.hole)
+						// A required parameter the declaring module named apart from another of its label – a builder it passes
+						// up, or a dependency it cannot build – has no default to leave it to, so the leaf receives it under the
+						// parameter's name, which the calling mock then takes it by.
+						PublicMockCall.PassedParameter(
+							name: parameter.name,
+							type: parameter.type,
+							dependency: Dependency(
+								property: isRequired && parameter.name != property.label ? Property(label: parameter.name, typeDescription: property.typeDescription) : property,
+								source: .received(onlyIfAvailable: !isRequired),
+								declarationLocation: ownPlan.instantiable.declarationLocation,
+							),
+							isBuiltWhenNil: parameter.isBuiltWhenNil,
+							builtWrapper: parameter.builtWrapper,
+							hole: parameter.hole,
+						)
 					case .constructionDefault, .overrides:
 						nil
 					}
@@ -2984,6 +3348,8 @@ public actor DependencyTreeGenerator {
 					isOwnFile: { _ in false },
 					isReadableFile: { _ in false },
 					additionalMocksToGenerateLocation: nil,
+					// The guard above found the declaring module's name.
+					unnamedReason: nil,
 				),
 				// The public mocks of the modules the declaring module sees, which its mock trees call in turn.
 				seams: SeamResolution(
@@ -2995,7 +3361,7 @@ public actor DependencyTreeGenerator {
 						entry.value.declaringModule.moduleName != moduleName && foreignPublicMock.visibleInstantiables[entry.key] != nil
 					},
 				),
-				plainTypeDeclarations: plainTypeDeclarations,
+				plainTypeDeclarations: foreignPublicMock.visiblePlainTypeDeclarations,
 			)
 			publicMockGeneratorsByModuleName[moduleName] = generator
 		}
@@ -3021,7 +3387,7 @@ public actor DependencyTreeGenerator {
 			aliasDeclarationReferences: aliasDeclarationReferences,
 			emittingModule: emittingModule,
 			seams: seams,
-			plainTypeDeclarations: plainTypeDeclarations,
+			plainTypeDeclarations: seams.callersVisiblePlainTypeDeclarations,
 		)
 		// A computation over the callers' view that fails reports its own error, as the callers' generation would.
 		let callersPlan = try await callersGenerator.publicMockPlan(ofOwnType: type)
@@ -3111,15 +3477,16 @@ public actor DependencyTreeGenerator {
 	/// The instantiable of the leaf scope through which a mock tree calls `publicMockCall`: `instantiable`, declaring
 	/// the whole signature as its dependencies – the parameters of the tier the call reaches as the dependencies they
 	/// stand for, and each parameter that tier omits as a receive only if available – and built by a mock method that
-	/// takes the tier's parameters. One parameter per label: a second form of a label the call leaves to its default.
+	/// takes the tier's parameters. One dependency per label: a required parameter the declaring module named apart is
+	/// declared under its name (`publicMockCalls(in:)`), and a second form of a label that has a default is left to it.
 	private static func publicMockLeafInstantiable(of instantiable: Instantiable, calling publicMockCall: PublicMockCall) -> Instantiable {
 		var dependencies = [Dependency]()
 		var arguments = [Initializer.Argument]()
 		var labels = Set<String>()
-		let filledBuilderLabels = Set(publicMockCall.filledHoles.map(\.builderLabel))
+		let filledSites = Set(publicMockCall.filledHoles.map(\.site))
 		for parameter in publicMockCall.passedParameters where labels.insert(parameter.dependency.property.label).inserted {
 			// A builder the call fills is passed the fill (`ScopeGenerator.HoleCallArgument`), so the leaf receives nothing for it.
-			if !filledBuilderLabels.contains(parameter.name) {
+			if !(parameter.hole.map { filledSites.contains($0.site) } ?? false) {
 				dependencies.append(parameter.dependency)
 			}
 			arguments.append(Initializer.Argument(outerLabel: parameter.name, innerLabel: parameter.dependency.property.label, typeDescription: parameter.type))
@@ -3157,9 +3524,16 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// An error for each declaration that keeps one of `constructions` from compiling in `emittingModule`.
+	/// - Parameters:
+	///   - extendedTypes: The declarations the module reads, among which the declaration of a type an extension
+	///     extends bounds the types declared in or by that extension.
+	///   - mockRoot: The type whose mock makes the constructions, which the error names, or `nil` for production
+	///     code.
 	private static func inaccessibleConstructions(
 		_ constructions: [Construction],
 		from emittingModule: EmittingModule,
+		extendedTypes: ExtendedTypeDeclarations,
+		mockRoot: DependencyTreeGeneratorError.InaccessibleConstruction.MockRoot? = nil,
 	) -> [DependencyTreeGeneratorError.InaccessibleConstruction] {
 		var inaccessibleConstructions = [DependencyTreeGeneratorError.InaccessibleConstruction]()
 		for construction in constructions {
@@ -3182,7 +3556,12 @@ public actor DependencyTreeGenerator {
 					},
 					referenceLocation: construction.referenceLocation,
 					constructedTypeDeclarationLocation: instantiable.declarationLocation,
+					seamRemedy: construction.seamCandidateOnPaths.candidate.flatMap { candidate in
+						Self.seamRemedy(offeredBy: candidate, toWiden: accessNeed, declaredIn: declaringModule, extendedTypes: extendedTypes)
+					},
+					inlineSeam: construction.inlineSeam,
 					publicMockCandidate: construction.publicMockCandidate,
+					mockRoot: mockRoot,
 				))
 			}
 		}
@@ -3190,12 +3569,16 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// The comments the code generated in this module ends the lines that construct `instantiable` with, one for
-	/// each way it can be constructed: a note that the generated code assumes `package` access suffices, where
-	/// SafeDITool cannot tell whether the module that declares the type is in this module's package and the
-	/// construction relies on a `package` declaration.
-	private func constructionComments(for instantiable: Instantiable) -> Scope.ConstructionComments {
-		guard let emittingModule = emittingModuleToCheck else { return Scope.ConstructionComments() }
+	/// each way it can be constructed: a note that the tree builds a seam inline because SafeDI does not know which
+	/// module declares it (`builtInlineSeamComment(for:)`), then, joined by a space, a note that the generated code
+	/// assumes `package` access suffices, where SafeDITool cannot tell whether the module that declares the type is in
+	/// this module's package and the construction relies on a `package` declaration. The first note is for production
+	/// constructions alone: a mock (`forMock`) builds every seam's tree inline whether or not SafeDI knows the seam's
+	/// module, so the cause the note gives would be wrong there.
+	private func constructionComments(for instantiable: Instantiable, forMock: Bool = false) -> Scope.ConstructionComments {
+		let inlineSeamComment = forMock ? nil : builtInlineSeamComment(for: instantiable)
 		func assumedPackageAccessComment(withMockMethod: Bool) -> String? {
+			guard let emittingModule = emittingModuleToCheck else { return nil }
 			let accessNeeds = instantiable.accessNeeds(constructingWithMockMethod: withMockMethod) + Self.extendedTypeAccessNeeds(of: instantiable, in: extendedTypeDeclarations)
 			// Only a `package` declaration relies on the assumption.
 			guard accessNeeds.contains(where: { $0.level == .package }) else { return nil }
@@ -3205,10 +3588,33 @@ public actor DependencyTreeGenerator {
 			else { return nil }
 			return "// SafeDI could not verify that \(instantiable.concreteInstantiable.asSource) is in this package; `package` access is assumed."
 		}
+		func comment(withMockMethod: Bool) -> String? {
+			let comments = [inlineSeamComment, assumedPackageAccessComment(withMockMethod: withMockMethod)].compactMap(\.self)
+			return comments.isEmpty ? nil : comments.joined(separator: " ")
+		}
 		return Scope.ConstructionComments(
-			initializer: assumedPackageAccessComment(withMockMethod: false),
-			mockMethod: instantiable.mockInitializer == nil ? nil : assumedPackageAccessComment(withMockMethod: true),
+			initializer: comment(withMockMethod: false),
+			mockMethod: instantiable.mockInitializer == nil ? nil : comment(withMockMethod: true),
 		)
+	}
+
+	/// The comment on a construction of `instantiable` when it is a seam that every tree of this run builds inline
+	/// because SafeDI does not know which module declares it – one neither this module generates nor another module's
+	/// run generated the initializer of (`SeamResolution.foreignSeams`) – so the initializer SafeDI generates for the
+	/// seam is called only by hand-written code; `nil` otherwise. A target the Xcode project plugin builds knows no
+	/// module, which the comment names.
+	private func builtInlineSeamComment(for instantiable: Instantiable) -> String? {
+		guard instantiable.generatesDependencyTree,
+		      seams.foreignSeams[instantiable.concreteInstantiable] == nil,
+		      !seams.generatedSeams.contains(instantiable.concreteInstantiable)
+		else { return nil }
+		let xcodeProjectPluginNote = switch emittingModule?.unnamedReason {
+		case .xcodeProjectPlugin:
+			" (a target the Xcode project plugin builds names no module; see the Manual's \"Limits of the Xcode project plugin\")"
+		case .noModuleName, nil:
+			""
+		}
+		return "// Built inline: SafeDI does not know which module declares `\(instantiable.concreteInstantiable.asSource)`, so this tree cannot call the initializer SafeDI generates for it\(xcodeProjectPluginNote)."
 	}
 
 	// MARK: Seams
@@ -3360,6 +3766,7 @@ public actor DependencyTreeGenerator {
 			let computation = try Self.seamSignatures(
 				forSeams: Set(module.seams.map(\.type)),
 				in: moduleSeam.visibleInstantiables,
+				plainTypeDeclarations: moduleSeam.visiblePlainTypeDeclarations,
 				aliasDeclarationReferences: aliasDeclarationReferences,
 				fixedSignatures: seamRoots.compactMapValues(\.self),
 				callerModule: moduleSeam.declaringModule,
@@ -3401,6 +3808,7 @@ public actor DependencyTreeGenerator {
 		let ownComputation = try Self.seamSignatures(
 			forSeams: generatedSeamTypes,
 			in: typeDescriptionToFulfillingInstantiableMap,
+			plainTypeDeclarations: plainTypeDeclarations,
 			aliasDeclarationReferences: aliasDeclarationReferences,
 			fixedSignatures: seamRoots.compactMapValues(\.self),
 			callerModule: seams.currentModule,
@@ -3425,6 +3833,7 @@ public actor DependencyTreeGenerator {
 			let callersComputation = try Self.seamSignatures(
 				forSeams: generatedSeamTypes,
 				in: callersVisibleInstantiables,
+				plainTypeDeclarations: seams.callersVisiblePlainTypeDeclarations,
 				aliasDeclarationReferences: aliasDeclarationReferences,
 				fixedSignatures: seamRoots.compactMapValues(\.self),
 				callerModule: seams.currentModule,
@@ -3726,6 +4135,7 @@ public actor DependencyTreeGenerator {
 	private static func seamSignatures(
 		forSeams seamTypes: Set<TypeDescription>,
 		in instantiables: [TypeDescription: Instantiable],
+		plainTypeDeclarations: [PlainTypeDeclaration],
 		aliasDeclarationReferences: AliasDeclarationReferences,
 		fixedSignatures: [TypeDescription: ScopeGenerator.SeamRoot],
 		callerModule: ModuleIdentity,
@@ -3735,7 +4145,7 @@ public actor DependencyTreeGenerator {
 	) throws -> SeamSignatureComputation {
 		let seamInstantiables = seamTypes.sorted().compactMap { instantiables[$0] }.filter(\.generatesDependencyTree)
 		// One proof of every type's access per declaration map, which every seam of the computation reads.
-		let proof = TypeAccessProof(instantiables: instantiables, isOwnFile: isOwnFile)
+		let proof = TypeAccessProof(instantiables: instantiables, plainTypeDeclarations: plainTypeDeclarations, isOwnFile: isOwnFile)
 		guard !seamInstantiables.isEmpty else { return SeamSignatureComputation(seamRoots: [:], errors: [], failedSeams: [], proof: proof) }
 		let ownSeamTypes = Set(seamInstantiables.map(\.concreteInstantiable))
 		func initialSeamRoot(of seam: Instantiable) -> ScopeGenerator.SeamRoot {
@@ -3922,6 +4332,20 @@ public actor DependencyTreeGenerator {
 		return components
 	}
 
+	/// Whether a seam declared as `instantiable` builds a tree: it instantiates or renames a dependency. A seam that
+	/// builds none passes nothing through either, so SafeDI generates no initializer for it, and its callers call its
+	/// own, which both the seam's signature and the seam remedy of an error about that initializer read.
+	private static func buildsTree(_ instantiable: Instantiable) -> Bool {
+		instantiable.dependencies.contains { dependency in
+			switch dependency.source {
+			case .instantiated, .aliased:
+				true
+			case .received, .forwarded:
+				false
+			}
+		}
+	}
+
 	/// The parameters that pass a seam's own `@Received` and `@Forwarded` properties, in declaration order, each as
 	/// visible as `proof` shows its type to be – the seam's own initializer, which takes it, among the members that
 	/// prove it – and capped at the seam's type. One received only if available defaults to `nil`, like a property the
@@ -3944,12 +4368,12 @@ public actor DependencyTreeGenerator {
 	}
 
 	private static func ownParameter(_ property: Property, of seam: Instantiable, typeLevel: AccessLevel, defaultsToNil: Bool, proof: TypeAccessProof) -> SeamSignature.Parameter {
-		let access = proof.access(ofParameterTyped: property.typeDescription, admittedModules: [seam.moduleName])
+		let access = proof.access(ofParameterTyped: property.typeDescription, mentionedFrom: .declaration(seam), admittedModules: [seam.moduleName])
 		// Widening the seam's own initializer, which a remedy may offer, needs each of its other arguments' types to be as
 		// visible.
 		let otherInitializerArgumentsAccess = (seam.initializer?.arguments ?? [])
 			.filter { $0.innerLabel != property.label }
-			.map { proof.access(ofParameterTyped: $0.typeDescription, admittedModules: [seam.moduleName]).level }
+			.map { proof.access(ofParameterTyped: $0.typeDescription, mentionedFrom: .declaration(seam), admittedModules: [seam.moduleName]).level }
 			.min() ?? .public
 		return SeamSignature.Parameter(property: property, isPassThrough: false, access: access.level, tierAccess: min(access.level, typeLevel), defaultsToNil: defaultsToNil, accessCause: access.cause, otherInitializerArgumentsAccess: otherInitializerArgumentsAccess)
 	}
@@ -4052,6 +4476,9 @@ public actor DependencyTreeGenerator {
 				// can be weaker than the call's: a type whose module's package the caller cannot tell from its own is
 				// assumed to be reachable with `package` access (`AccessRequirement.packageUnverified`). No construction can
 				// be checked where the caller runs no check.
+				// A module whose package is unknown assumes `package` and builds another module's tree inline rather than
+				// calling a tier or a public mock; from outside that package the generated code does not compile (row 4b's
+				// B4.10b, M8.35b): a stated limit, never pinned.
 				let unreachableTierIsReported: Bool = if reachedTier == nil, let checkingModule {
 					!Self.seamLeafAccessNeeds(of: leafInstantiable).allSatisfy { $0.level.satisfies(checkingModule.requirement(toConstructWithInitializer: leafInstantiable)) }
 				} else {
@@ -4278,7 +4705,7 @@ public actor DependencyTreeGenerator {
 					case .received:
 						guard !isProvided(dependency.property, by: providedProperties) else { continue }
 						// A nested seam's pass-through stands for the receives inside that seam, which its signature
-						// carries, so an error names the receiver that caps the parameter rather than the seam.
+						// carries, so an error notes the receives inside the nested seam rather than the seam.
 						if let omitted = omittedByCall[dependency.property.label] {
 							let noTierReceivers = omitted.receivers.isEmpty
 								? [SeamReceiver(property: dependency.property, instantiable: instantiable, declarationLocation: dependency.declarationLocation, access: omitted.access, isFromReportedSeamCall: callsReportedSeam)]
@@ -4405,7 +4832,7 @@ public actor DependencyTreeGenerator {
 			let labelReceivers = receivers(ofLabel: label)
 			if !ownLabels.contains(label), !labelReceivers.isEmpty, labelReceivers.allSatisfy(\.isNoTier), let form = forms.first {
 				let property = form.typeDescription.isOptional ? form : form.asOptionalProperty
-				let access = proof.access(ofParameterTyped: property.typeDescription, admittedModules: Set([seam.moduleName] + labelReceivers.map(\.moduleName)))
+				let access = proof.access(ofParameterTyped: property.typeDescription, mentionedFrom: .declaration(seam), admittedModules: Set([seam.moduleName] + labelReceivers.map(\.moduleName)))
 				// A parameter on no tier is taken by none, so its tier access records the level of the nested seam's tier that
 				// omits it instead: what that seam would have to take it at, which a caller holding a value is told.
 				// Of the nested calls that omit it, the one an error names is one at the widest tier, the first by seam type.
@@ -4470,7 +4897,7 @@ public actor DependencyTreeGenerator {
 			// its receivers' modules prove it; each receiver records that access, at which a seam that reaches this one
 			// passes it on.
 			let parameterReceivers = receivers(of: forms)
-			let access = proof.access(ofParameterTyped: parameterProperty.typeDescription, admittedModules: Set([seam.moduleName] + parameterReceivers.map(\.moduleName)))
+			let access = proof.access(ofParameterTyped: parameterProperty.typeDescription, mentionedFrom: .declaration(seam), admittedModules: Set([seam.moduleName] + parameterReceivers.map(\.moduleName)))
 			passThroughs.append(SeamSignature.Parameter(
 				property: parameterProperty,
 				isPassThrough: true,
@@ -4482,18 +4909,10 @@ public actor DependencyTreeGenerator {
 		}
 		passThroughs.sort { $0.property.label < $1.property.label }
 
-		let hasTree = seam.dependencies.contains { dependency in
-			switch dependency.source {
-			case .instantiated, .aliased:
-				true
-			case .received, .forwarded:
-				false
-			}
-		}
 		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
 			throw error
 		}
-		guard hasTree || !passThroughs.isEmpty || !noTierParameters.isEmpty else {
+		guard Self.buildsTree(seam) || !passThroughs.isEmpty || !noTierParameters.isEmpty else {
 			return nil
 		}
 		// No tier is wider than the seam's type, so each parameter's access is capped there. The widest tier is at the
@@ -4753,7 +5172,6 @@ public actor DependencyTreeGenerator {
 		// What the calls of other modules' public mocks in the tree and in the promoted scopes' trees pass, and, of that,
 		// how many calls pass each the called mock builds when passed `nil`.
 		var passedByPublicMockCalls = initialReceivedProperties.passedByPublicMockCalls
-		var passedByPublicMockCallCounts = initialReceivedProperties.passedByPublicMockCallCounts
 		var builtWhenNilByPublicMockCalls = initialReceivedProperties.builtWhenNilByPublicMockCalls
 
 		// Worklist: promoted scopes may introduce additional transitive received properties.
@@ -4822,16 +5240,13 @@ public actor DependencyTreeGenerator {
 					worklist.append(newProperty)
 				}
 				passedByPublicMockCalls.formUnion(scopeReceivedProperties.passedByPublicMockCalls)
-				passedByPublicMockCallCounts.merge(scopeReceivedProperties.passedByPublicMockCallCounts, uniquingKeysWith: +)
 				builtWhenNilByPublicMockCalls.formUnion(scopeReceivedProperties.builtWhenNilByPublicMockCalls)
 			}
 			// A dependency the public mock another module generated builds when its call passes `nil` is built once here
-			// and passed to every receiver that shares it – another call, or a receiver that receives it only if available –
-			// as the tree built inline shares the one the public mock's tree requires, where this module can build it
-			// (M8.8b). One that only one call receives is that mock's to build, as is one this module cannot build.
-			for property in builtWhenNilByPublicMockCalls.sorted()
-				where !allRequired.contains(property) && (passedByPublicMockCallCounts[property, default: 0] > 1 || allOnlyIfAvailable.contains(property))
-			{
+			// and passed to every call – each call an `Instantiator` makes included – and every receiver that receives it
+			// only if available, as the inline mock promotes it, where this module can build it (M8.8b). One this module
+			// cannot build is each called mock's to build.
+			for property in builtWhenNilByPublicMockCalls.sorted() where !allRequired.contains(property) {
 				guard !isForwarded(property), let promotedScope = scopeToPromote(for: property)?.scope else { continue }
 				if let accessCheck {
 					let constructions = Self.constructions(
@@ -4842,7 +5257,7 @@ public actor DependencyTreeGenerator {
 						emittingModule: accessCheck.emittingModule,
 						extendedTypes: extendedTypeDeclarations,
 					)
-					guard Self.inaccessibleConstructions(constructions, from: accessCheck.emittingModule).isEmpty else { continue }
+					guard Self.inaccessibleConstructions(constructions, from: accessCheck.emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty else { continue }
 				}
 				allReceived.insert(property)
 				allRequired.insert(property)
@@ -4852,7 +5267,8 @@ public actor DependencyTreeGenerator {
 		// A public mock takes what the calls of other modules' public mocks in its tree pass and nothing else in its tree
 		// receives, as a parameter that defaults to `nil`, which it passes on.
 		if instantiable.generateMock == .public {
-			let surfacedByPublicMockCalls = passedByPublicMockCalls.subtracting(allReceived)
+			// A wrapper promoted for them stands for its instance too.
+			let surfacedByPublicMockCalls = passedByPublicMockCalls.subtracting(allReceived).subtracting(allReceived.compactMap(\.asLazilyInstantiatedInstanceProperty))
 			allReceived.formUnion(surfacedByPublicMockCalls)
 			allOnlyIfAvailable.formUnion(surfacedByPublicMockCalls)
 		}
@@ -4861,7 +5277,7 @@ public actor DependencyTreeGenerator {
 		// Promote all received properties that have scopes.
 		// onlyIfAvailable dependencies are NOT promoted — they become optional
 		// mock parameters with no default. Nor are forwarded properties.
-		let mockRootScope = Scope(instantiable: instantiable, constructionComments: constructionComments(for: instantiable))
+		let mockRootScope = Scope(instantiable: instantiable, constructionComments: constructionComments(for: instantiable, forMock: true))
 		// A property the tree creates is the instance of a `LazilyInstantiated` of its label that the tree receives, as in
 		// production: the mocked type's own `x: X` and an `x: LazilyInstantiated<X>` its tree receives are one instance. The
 		// mock builds that child as the `LazilyInstantiated`, whose instance it passes the mocked type. A forwarded `x: X`
@@ -5106,7 +5522,12 @@ public actor DependencyTreeGenerator {
 						Construction(instantiable: forwardedInstantiable, usesMockMethod: true, referenceLocation: dependency.declarationLocation, isSeamLeaf: false, extendedTypes: extendedTypeDeclarations)
 					}
 				}
-			let inaccessibleConstructions = Self.inaccessibleConstructions(constructions, from: emittingModule)
+			let inaccessibleConstructions = Self.inaccessibleConstructions(
+				constructions,
+				from: emittingModule,
+				extendedTypes: extendedTypeDeclarations,
+				mockRoot: DependencyTreeGeneratorError.InaccessibleConstruction.MockRoot(type: instantiable.concreteInstantiable, declarationLocation: instantiable.declarationLocation),
+			)
 			guard inaccessibleConstructions.isEmpty else {
 				throw DependencyTreeGeneratorError.inaccessibleConstructions(inaccessibleConstructions)
 			}
@@ -6446,10 +6867,8 @@ public actor DependencyTreeGenerator {
 		/// which are in none of the other sets: a mock that is itself public takes them as parameters (see
 		/// `ScopeGenerator.receivedOnlyByPublicMockCallsLeftOut`).
 		let passedByPublicMockCalls: Set<Property>
-		/// How many calls in the subtree pass each of `passedByPublicMockCalls`.
-		let passedByPublicMockCallCounts: [Property: Int]
-		/// Those of `passedByPublicMockCalls` some called mock builds when passed `nil`, which a mock builds once and
-		/// passes to every receiver when more than one shares it (M8.8b).
+		/// Those of `passedByPublicMockCalls` some called mock builds when passed `nil`, which a mock that can build one
+		/// builds once and passes to every call, as the inline mock promotes it (M8.8b).
 		let builtWhenNilByPublicMockCalls: Set<Property>
 	}
 
@@ -6548,7 +6967,7 @@ public actor DependencyTreeGenerator {
 		} else if let unfinishedWalkDepth = cache.unfinishedWalkDepths[id] {
 			// A cycle re-entered this scope. Its unfinished walk accounts for what it receives.
 			return .walked(WalkedReceivedProperties(
-				receivedProperties: ReceivedProperties(received: [], onlyIfAvailable: [], requiredOnlyIfAvailableAliases: [], passedByPublicMockCalls: [], passedByPublicMockCallCounts: [:], builtWhenNilByPublicMockCalls: []),
+				receivedProperties: ReceivedProperties(received: [], onlyIfAvailable: [], requiredOnlyIfAvailableAliases: [], passedByPublicMockCalls: [], builtWhenNilByPublicMockCalls: []),
 				shallowestUnfinishedWalkDepth: unfinishedWalkDepth,
 			))
 		} else if let incomplete = cache.incomplete[id] {
@@ -6595,7 +7014,6 @@ public actor DependencyTreeGenerator {
 		// fulfilled by `x: X` — and a required receive wins.
 		var required = Set<Property>()
 		var passedByPublicMockCalls = Set<Property>()
-		var passedByPublicMockCallCounts = [Property: Int]()
 		var builtWhenNilByPublicMockCalls = Set<Property>()
 		// Properties the instantiated children's subtrees require, including those this scope declares.
 		var childRequiredReceived = Set<Property>()
@@ -6636,8 +7054,11 @@ public actor DependencyTreeGenerator {
 				where !propertiesToDeclare.contains(property.asUnwrappedProperty) && !forwardedProperties.contains(property.asUnwrappedProperty)
 			{
 				passedByPublicMockCalls.insert(property)
-				passedByPublicMockCallCounts[property, default: 0] += walkedChild.receivedProperties.passedByPublicMockCallCounts[property, default: 0]
-				if walkedChild.receivedProperties.builtWhenNilByPublicMockCalls.contains(property) {
+			}
+			// A wrapper a called mock builds is passed by the instance it holds.
+			for property in walkedChild.receivedProperties.builtWhenNilByPublicMockCalls {
+				let passedForm = (property.asLazilyInstantiatedInstanceProperty ?? property).asUnwrappedProperty
+				if !propertiesToDeclare.contains(passedForm), !forwardedProperties.contains(passedForm) {
 					builtWhenNilByPublicMockCalls.insert(property)
 				}
 			}
@@ -6663,9 +7084,10 @@ public actor DependencyTreeGenerator {
 			if let publicMockCall = scope.publicMockCall {
 				for parameter in publicMockCall.passedParameters where parameter.dependency.source == .received(onlyIfAvailable: true) {
 					passedByPublicMockCalls.insert(parameter.dependency.property)
-					passedByPublicMockCallCounts[parameter.dependency.property, default: 0] += 1
 					if parameter.isBuiltWhenNil {
-						builtWhenNilByPublicMockCalls.insert(parameter.dependency.property)
+						// A lazily instantiated dependency is built as the wrapper the called mock builds, as the inline mock
+						// promotes it, and the call is passed its instance.
+						builtWhenNilByPublicMockCalls.insert(parameter.builtWrapper ?? parameter.dependency.property)
 					}
 				}
 			}
@@ -6714,7 +7136,6 @@ public actor DependencyTreeGenerator {
 				onlyIfAvailable: onlyIfAvailable.subtracting(required),
 				requiredOnlyIfAvailableAliases: requiredOnlyIfAvailableAliases,
 				passedByPublicMockCalls: passedByPublicMockCalls,
-				passedByPublicMockCallCounts: passedByPublicMockCallCounts,
 				builtWhenNilByPublicMockCalls: builtWhenNilByPublicMockCalls,
 			)
 			if let shallowestUnfinishedWalkDepth, shallowestUnfinishedWalkDepth < walkDepth {
@@ -6821,8 +7242,8 @@ public actor DependencyTreeGenerator {
 			.reduce(into: [TypeDescription: Scope]()) { partialResult, instantiable in
 				let scope = visitedConcreteTypeToScope[instantiable.concreteInstantiable] ?? publicMockCalls[instantiable.concreteInstantiable].map { publicMockCall in
 					let leafInstantiable = Self.publicMockLeafInstantiable(of: instantiable, calling: publicMockCall)
-					return Scope(instantiable: leafInstantiable, constructionComments: constructionComments(for: leafInstantiable), publicMockCall: publicMockCall)
-				} ?? Scope(instantiable: instantiable, constructionComments: constructionComments(for: instantiable))
+					return Scope(instantiable: leafInstantiable, constructionComments: constructionComments(for: leafInstantiable, forMock: true), publicMockCall: publicMockCall)
+				} ?? Scope(instantiable: instantiable, constructionComments: constructionComments(for: instantiable, forMock: true))
 				visitedConcreteTypeToScope[instantiable.concreteInstantiable] = scope
 				for instantiableType in instantiable.instantiableTypes {
 					guard let existingScope = partialResult[instantiableType] else {
@@ -6835,7 +7256,7 @@ public actor DependencyTreeGenerator {
 						   instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiableType),
 						   scope.instantiable.mockInitializer == nil
 						{
-							partialResult[instantiableType] = Scope(instantiable: instantiable, constructionComments: constructionComments(for: instantiable))
+							partialResult[instantiableType] = Scope(instantiable: instantiable, constructionComments: constructionComments(for: instantiable, forMock: true))
 						} else {
 							partialResult[instantiableType] = scope
 						}
@@ -6945,7 +7366,7 @@ public actor DependencyTreeGenerator {
 			}
 			// A leaf that fills a builder passes a function that builds the hole's property as the type that fulfills it.
 			for hole in scope.publicMockCall?.filledHoles ?? [] {
-				if let fulfillingScope = Self.fulfillingInstantiable(of: hole, in: typeDescriptionToFulfillingInstantiableMap).flatMap({ typeDescriptionToScopeMap[$0.concreteInstantiable] }) {
+				if let fulfillingScope = Self.fulfillingMockScope(of: hole, in: typeDescriptionToScopeMap) {
 					scope.holeArguments.append(.fill(hole, fulfillingScope))
 				}
 			}
@@ -6953,10 +7374,19 @@ public actor DependencyTreeGenerator {
 		return typeDescriptionToScopeMap
 	}
 
+	/// The scope a mock builds `hole`'s property with, in `typeDescriptionToScopeMap`, a mock scope map: the one the mock's
+	/// tree built inline would build it with (`createMockTypeDescriptionToScopeMapping`, which prefers the declared type of
+	/// a property erased with `fulfilledByType:`), so a hand-written mock, or a `mockOnly` fake that alone fulfills the
+	/// hole, builds it. `nil` when no declaration the module sees fulfills the hole.
+	private static func fulfillingMockScope(of hole: SeamSignature.Hole, in typeDescriptionToScopeMap: [TypeDescription: Scope]) -> Scope? {
+		typeDescriptionToScopeMap[hole.property.typeDescription.asInstantiatedType] ?? typeDescriptionToScopeMap[hole.instantiatedType]
+	}
+
 	/// The holes of the calls in `publicMockCalls` that this module fills, by called type, decided over
-	/// `typeDescriptionToScopeMap`, in which every call passes every builder up. A module fills a hole when a production
-	/// declaration it sees fulfills it, as a seam's caller does, and the fill builds that declaration's tree as the
-	/// type's module would – every construction in it one this module can reach – from the values the hole's scope struct
+	/// `typeDescriptionToScopeMap`, in which every call passes every builder up. A module fills a hole when a declaration
+	/// it sees fulfills it, as the mock's tree built inline would build it (`fulfillingMockScope(of:in:)`: a hand-written
+	/// mock or a `mockOnly` fake included), and the fill builds that tree as the inline mock would – every construction
+	/// in it one this module can reach, hand-written mock methods included – from the values the hole's scope struct
 	/// carries and the fills of the other holes it fills alone. Every other builder is passed up: the calling mock takes
 	/// it, as a parameter its caller passes.
 	private func holesFilled(
@@ -6977,20 +7407,19 @@ public actor DependencyTreeGenerator {
 		for calledType in publicMockCalls.keys.sorted() {
 			for parameter in publicMockCalls[calledType]?.passedParameters ?? [] {
 				guard let hole = parameter.hole,
-				      let fulfillingInstantiable = Self.fulfillingInstantiable(of: hole, in: typeDescriptionToFulfillingInstantiableMap),
-				      let fulfillingScope = typeDescriptionToScopeMap[fulfillingInstantiable.concreteInstantiable],
-				      fulfillingScope.dependenciesLeftOut.isEmpty,
+				      let fulfillingScope = Self.fulfillingMockScope(of: hole, in: typeDescriptionToScopeMap),
 				      Self.inaccessibleConstructions(
 				      	Self.constructions(
 				      		inTreeRootedAt: fulfillingScope,
-				      		rootIsConstructedWithMockMethod: false,
+				      		rootIsConstructedWithMockMethod: fulfillingScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: hole.property.typeDescription.asInstantiatedType),
 				      		rootReferenceLocation: nil,
-				      		isMock: false,
+				      		isMock: true,
 				      		emittingModule: emittingModule,
 				      		extendedTypes: extendedTypeDeclarations,
 				      		leavingOut: Set(publicMockCalls.keys),
 				      	),
 				      	from: emittingModule,
+				      	extendedTypes: extendedTypeDeclarations,
 				      ).isEmpty
 				else { continue }
 				// A field is read by value, only if available, and as a lazily instantiated property's instance too.
@@ -7003,7 +7432,8 @@ public actor DependencyTreeGenerator {
 				}
 				candidates.append(Candidate(
 					calledType: calledType,
-					hole: hole,
+					// The fill is passed, and named, as the parameter that takes its builder.
+					hole: hole.takenUnder(parameterName: parameter.name),
 					builder: parameter.dependency.property,
 					receivedBesideFields: Self.collectReceivedProperties(from: fulfillingScope, cache: &receivedPropertiesCache).received.subtracting(fieldForms),
 				))
@@ -7070,8 +7500,9 @@ public actor DependencyTreeGenerator {
 			return reached
 		}
 		var typesToReport = typesReached(from: rootInstantiables)
-		// A seam whose module SafeDI does not know cannot take a builder: what its callers see is unknown.
-		if seams.currentModule.moduleName == nil {
+		// A seam whose module SafeDI does not know cannot take a builder: what its callers see is unknown. A reason exactly
+		// when the module's name is unknown.
+		if let unnamedReason = emittingModule?.unnamedReason {
 			var holes = [DependencyTreeGeneratorError.HoleInSeamOfUnnamedModule]()
 			var reportedLocations = Set<String>()
 			for seamType in generatedSeamTypes.sorted() {
@@ -7083,7 +7514,7 @@ public actor DependencyTreeGenerator {
 						&& typeDescriptionToFulfillingInstantiableMap[dependency.asInstantiatedType]?.mockOnly != false
 						&& reportedLocations.insert(dependency.declarationLocation.map { "\($0.filePath):\($0.line):\($0.column)" } ?? "\(typeDescription.asSource).\(dependency.property.label)").inserted
 					{
-						holes.append(.init(seam: seam.concreteInstantiable, owner: instantiable.concreteInstantiable, dependency: dependency))
+						holes.append(.init(seam: seam.concreteInstantiable, owner: instantiable.concreteInstantiable, dependency: dependency, reason: unnamedReason))
 					}
 				}
 			}
@@ -7637,6 +8068,11 @@ public actor DependencyTreeGenerator {
 		/// For each label in `closestDeclarationByLabel`, how many scopes the declaring scope is built inside: `0` for the
 		/// root of the tree.
 		let closestDeclarationDepthByLabel: [String: Int]
+		/// For each of `receivableProperties` that a scope the root's tree builds made receivable, how many scopes that
+		/// scope is built inside, as `closestDeclarationDepthByLabel` counts them: the scope since which the property has
+		/// been receivable on this path. A property the root's own scope offers has no entry. Empty in the validation of
+		/// mocks, which never reads it.
+		let receivableDepthByProperty: [Property: Int]
 		/// The property `scope` is built for, as cycle validation sees it. `nil` at the root of the tree.
 		let property: Property?
 		/// The properties of the scopes `scope` is built inside, innermost first.
@@ -7645,6 +8081,47 @@ public actor DependencyTreeGenerator {
 		let parentTypeStack: [TypeDescription]
 		/// The lazily instantiated properties on the instantiation stack, keyed by the constant each is validated as.
 		let lazilyInstantiatedDeclarations: [Property: Property]
+	}
+
+	/// A scope of a tree that a cycle-closing scope builds again, which `validateTreeBuiltAgainByCycle` has yet to walk, with
+	/// what the scopes it is built inside give it there.
+	private struct ScopeBuiltAgain {
+		let scope: Scope
+		/// The property `scope` is built for, as cycle validation sees it.
+		let property: Property
+		/// The properties of the scopes `scope` is built inside, innermost first: those the function built again builds, then
+		/// those the cycle-closing scope that calls it is built inside.
+		let propertyStack: [Property]
+		/// The concrete types of the scopes `scope` is built inside, innermost first, beside `propertyStack`.
+		let parentTypeStack: [TypeDescription]
+		/// The property each label names in `scope`.
+		let closestDeclarationByLabel: [String: DependencyTreeGeneratorError.LabelDeclaration]
+		/// The properties the scopes `scope` is built inside make available to it.
+		let receivableProperties: Set<Property>
+		/// The labels whose closest declaration here the tree's first build did not see: declarations between the scope the
+		/// cycle closes on and the cycle-closing scope, which bind the parameters of the function the cycle closes on,
+		/// that no scope the function builds above `scope` declares again.
+		let newLabels: Set<String>
+		/// Those of `receivableProperties` that were not receivable where `scope` was first built: provided by a scope
+		/// between, and by no scope the function builds above `scope`.
+		let newReceivableProperties: Set<Property>
+		/// How many of the properties on `propertyStack` belong to the first build of the scope the cycle closes on and the
+		/// scopes it is built inside: the properties before them are being built inside that first build.
+		let closedOnStackCount: Int
+	}
+
+	/// A tree that `validateTreeBuiltAgainByCycle` walks: where a cycle-closing scope builds the function it closes on
+	/// again, and what is new to that function's tree there. Two cycle-closing scopes of one function beneath one scope,
+	/// with the same new declarations and receivable properties, build the same tree again.
+	private struct TreeBuiltAgain: Hashable {
+		/// The scope the cycle-closing scope is a child of.
+		let cycleClosingScopeParent: Scope
+		/// The property the cycle closes on, as cycle validation sees it.
+		let closedOnProperty: Property
+		/// The closest declarations of the labels new to the tree.
+		let newDeclarationByLabel: [String: DependencyTreeGeneratorError.LabelDeclaration]
+		/// The properties receivable at the cycle-closing scope that were not where the tree was first built.
+		let newReceivableProperties: Set<Property>
 	}
 
 	/// The property that `validateNoCycleInReceivedProperties` walked for a required receive of an `onlyIfAvailable`
@@ -7896,6 +8373,7 @@ public actor DependencyTreeGenerator {
 				receivableAliases: [:],
 				closestDeclarationByLabel: [:],
 				closestDeclarationDepthByLabel: [:],
+				receivableDepthByProperty: [:],
 				property: nil,
 				propertyStack: [],
 				parentTypeStack: [],
@@ -7922,6 +8400,9 @@ public actor DependencyTreeGenerator {
 		///   - receivableProperties: What the scopes `scope` is built inside make available to it.
 		///   - propertyStack: The properties of the scopes `scope` is built inside, innermost first.
 		///   - parentTypeStack: The concrete types of those scopes, beside `propertyStack`.
+		///   - changedContext: For a scope of a tree a cycle-closing scope builds again, what is new there to the tree (see
+		///     `ScopeBuiltAgain`): only a receive whose hiding declaration is new, or that only a new receivable property
+		///     provides, is recorded, since the tree's first build judged every other receive as this one would.
 		func recordHiddenReceives(
 			of scope: Scope,
 			closestDeclarationByLabel: [String: DependencyTreeGeneratorError.LabelDeclaration],
@@ -7929,7 +8410,14 @@ public actor DependencyTreeGenerator {
 			propertyStack: [Property],
 			parentTypeStack: [TypeDescription],
 			root: TypeDescription,
+			changedContext: (newLabels: Set<String>, newReceivableProperties: Set<Property>)? = nil,
 		) {
+			// What the tree's first build received here.
+			let firstBuildReceivableProperties = if let changedContext, !changedContext.newReceivableProperties.isEmpty {
+				receivableProperties.subtracting(changedContext.newReceivableProperties)
+			} else {
+				receivableProperties
+			}
 			for dependency in scope.instantiable.dependencies {
 				let receivedProperty: Property
 				switch dependency.source {
@@ -7955,6 +8443,13 @@ public actor DependencyTreeGenerator {
 				else {
 					continue
 				}
+				if let changedContext {
+					// A declaration between the function and the cycle-closing scope hides the receive; or the function's
+					// own tree hides it, as on its first build, which passed it `nil`, since only a scope between provides it.
+					guard changedContext.newLabels.contains(receivedProperty.label)
+						|| !cyclesOnly && acceptedProperties.isDisjoint(with: firstBuildReceivableProperties)
+					else { continue }
+				}
 				hiddenReceivedProperties[.init(
 					property: receivedProperty,
 					declarationLocation: dependency.declarationLocation,
@@ -7965,61 +8460,156 @@ public actor DependencyTreeGenerator {
 				), default: []].insert(parentTypeStack)
 			}
 		}
-		/// Validates the tree that a cycle-closing scope builds again – `scope`'s, built for `property` beneath the scopes
-		/// of `propertyStack` – against the declarations the scopes between it and the scope it closes on make, at
-		/// `closedOnIndex` in `propertyStack`. The tree is the body of the builder function the cycle closes on, which
-		/// takes those labels as parameters (see `CycleParameter`), so each receive of a label the tree receives from
-		/// above that function is passed the nearest declaration of the label above the cycle-closing scope. A receive
-		/// whose nearest declaration is of another type is hidden by it exactly as on any other path
-		/// (`recordHiddenReceives`): an error where a scope above provides the receive, which `receivableProperties` – those
-		/// the cycle-closing scope's tree is given – says, and otherwise passed `nil` when it is only if available. A
-		/// required receive whose nearest declaration is still being built around the cycle-closing scope closes a cycle.
-		/// The walk mirrors the function's body: it stops where the scope the cycle closes on stops, at a property
-		/// already on that scope's stack.
+		/// Enters each property `scope` creates in `closestDeclarationByLabel` as the closest declaration of its label for the
+		/// scopes `scope` builds, calling `entering` with each label. One rule for the walk of a tree and the walk of a tree a
+		/// cycle-closing scope builds again.
+		func enterDeclarations(
+			of scope: Scope,
+			into closestDeclarationByLabel: inout [String: DependencyTreeGeneratorError.LabelDeclaration],
+			entering: (String) -> Void,
+		) {
+			for dependency in scope.instantiable.dependencies where scope.createdProperties.contains(dependency.property) {
+				closestDeclarationByLabel[dependency.property.label] = .init(
+					property: dependency.property,
+					lazilyInstantiatedInstanceProperty: dependency.lazilyInstantiatedInstanceProperty,
+					declarationLocation: dependency.declarationLocation,
+					declaringType: scope.instantiable.concreteInstantiable,
+				)
+				entering(dependency.property.label)
+			}
+		}
+		/// Inserts into `properties` what `scope` makes available to the scopes it builds, given `receivableProperties`, what
+		/// the scopes `scope` is built inside make available to it, and calls `inserted` with each property `properties` did
+		/// not hold. One rule for the walk of a tree and the walk of a tree a cycle-closing scope builds again.
+		/// - Parameter instantiationStack: The properties of `scope` and of the scopes it is built inside, innermost first.
+		func insertProperties(
+			madeAvailableBy scope: Scope,
+			given receivableProperties: Set<Property>,
+			instantiationStack: [Property],
+			into properties: inout Set<Property>,
+			inserted: (Property) -> Void,
+		) {
+			// An `onlyIfAvailable` receive that is unavailable here is passed `nil`, so it provides nothing to the
+			// scopes below. Availability mirrors `Scope.createScopeGenerator`'s: in a mock, only a property that is
+			// still being built is unavailable.
+			func isAvailable(_ onlyIfAvailableProperty: Property) -> Bool {
+				// The instantiation stack holds a lazily instantiated property as the constant it stands for.
+				if cyclesOnly {
+					![onlyIfAvailableProperty, onlyIfAvailableProperty.asUnwrappedProperty].contains {
+						instantiationStack.contains($0.asValidatedForDependencyCycles)
+					}
+				} else {
+					[onlyIfAvailableProperty, onlyIfAvailableProperty.asUnwrappedProperty].contains {
+						receivableProperties.contains($0) && !instantiationStack.contains($0.asValidatedForDependencyCycles)
+					}
+				}
+			}
+			func insert(_ property: Property) {
+				if properties.insert(property).inserted {
+					inserted(property)
+				}
+			}
+			for dependency in scope.instantiable.dependencies {
+				switch dependency.source {
+				case let .received(onlyIfAvailable):
+					if !onlyIfAvailable || isAvailable(dependency.property) {
+						insert(dependency.property)
+					}
+				case .instantiated, .forwarded, .aliased:
+					insert(dependency.property)
+					// A lazily instantiated property can also be received by value, as the instance it creates.
+					if let instanceProperty = dependency.lazilyInstantiatedInstanceProperty {
+						insert(instanceProperty)
+					}
+				}
+			}
+			// A mock root also provides the received dependencies it promotes.
+			for providedProperty in scope.providedProperties {
+				insert(providedProperty)
+			}
+		}
+		/// Validates the tree that a cycle-closing scope, a child of `cycleClosingScopeParent`, builds again – `scope`'s,
+		/// built for `property` beneath the scopes of `propertyStack` – where it can differ from the tree's first build, at
+		/// `closedOnIndex` in `propertyStack`. The tree is the body of the builder function the cycle closes on, which takes
+		/// the labels the scopes between declare as parameters (see `CycleParameter`), so each receive of such a label is
+		/// passed the nearest declaration above the cycle-closing scope, as on every other path.
+		///
+		/// The tree built again is the same code as its first build, which the walk of the tree validated. So only two
+		/// things can change what a receive in it resolves to: the bindings of the function's parameters – the declarations
+		/// between the scope the cycle closes on and the cycle-closing scope, until a scope the function builds declares the
+		/// label again – and the providers above – the properties receivable at the cycle-closing scope that were not where
+		/// the tree was first built. The walk threads that context through the tree as the walk of a tree threads its own,
+		/// and judges each receive by the rule of every other path (`recordHiddenReceives`), only where the context changes
+		/// the judgment: a receive hidden by a new declaration is the hidden-label error where a scope above provides it,
+		/// required or only if available; one hidden by a declaration of the tree's own, as on its first build, is the
+		/// error where only a new provider provides it, which the first build passed `nil`; and a required receive whose new
+		/// nearest declaration is still being built is the dependency cycle error.
+		///
+		/// A cycle-closing scope the walk meets – of the function built again, of a function nested in it or around it, or a
+		/// scope the stack holds already – calls its function with the bindings in scope there, so the walk goes on into that
+		/// tree built again whenever anything is new to it there, once for each parent of a cycle-closing scope and context
+		/// (`TreeBuiltAgain`), so nested cycles end.
 		func validateTreeBuiltAgainByCycle(
 			of scope: Scope,
 			for property: Property,
 			closedOnIndex: Int,
+			cycleClosingScopeParent: Scope,
 			propertyStack: [Property],
 			parentTypeStack: [TypeDescription],
 			closestDeclarationByLabel: [String: DependencyTreeGeneratorError.LabelDeclaration],
 			closestDeclarationDepthByLabel: [String: Int],
 			receivableProperties: Set<Property>,
+			receivableDepthByProperty: [Property: Int],
 			validatesCycles: Bool,
 			validatesHiddenProperties: Bool,
 			root: TypeDescription,
 		) throws {
 			// The scope the cycle closes on is built inside the scopes after it on the stack.
 			let closedOnDepth = propertyStack.count - closedOnIndex
-			var declarationsBetweenByLabel = [String: DependencyTreeGeneratorError.LabelDeclaration]()
-			for (label, depth) in closestDeclarationDepthByLabel where depth > closedOnDepth {
-				declarationsBetweenByLabel[label] = closestDeclarationByLabel[label]
+			// The declarations between that bind the function's parameters. The property the cycle closes on is no
+			// parameter: the cycle-closing scope's own declaration of its label is that property, which the tree built again
+			// is passed `nil` for, as its first build is.
+			var newDeclarationByLabel = [String: DependencyTreeGeneratorError.LabelDeclaration]()
+			for (label, depth) in closestDeclarationDepthByLabel where depth > closedOnDepth && label != property.label {
+				newDeclarationByLabel[label] = closestDeclarationByLabel[label]
 			}
-			// Nearly every cycle-closing scope has no declaration between it and the scope it closes on.
-			guard !declarationsBetweenByLabel.isEmpty else { return }
-			let closedOnPropertyStack = Array(propertyStack[closedOnIndex...])
-			var scopesToWalk = [(
+			// Nearly every cycle-closing scope has no declaration between it and the scope it closes on but its own.
+			guard !newDeclarationByLabel.isEmpty else { return }
+			// The properties a scope between made receivable. The validation of mocks, which judges a hidden receive whatever
+			// provides it, records no depths and so finds none.
+			var newReceivableProperties = Set<Property>()
+			for (receivableProperty, depth) in receivableDepthByProperty where depth > closedOnDepth && receivableProperties.contains(receivableProperty) {
+				newReceivableProperties.insert(receivableProperty)
+			}
+			var treesBuiltAgain: Set<TreeBuiltAgain> = [TreeBuiltAgain(
+				cycleClosingScopeParent: cycleClosingScopeParent,
+				closedOnProperty: property,
+				newDeclarationByLabel: newDeclarationByLabel,
+				newReceivableProperties: newReceivableProperties,
+			)]
+			var scopesToWalk = [ScopeBuiltAgain(
 				scope: scope,
 				property: property,
-				// The scopes this one is built inside: below the scope the cycle closes on, those the function's body builds;
-				// above it, those the cycle-closing scope is built inside.
 				propertyStack: propertyStack,
 				parentTypeStack: parentTypeStack,
-				closedOnPropertyStack: closedOnPropertyStack,
-				declaredLabels: Set<String>(),
+				closestDeclarationByLabel: closestDeclarationByLabel,
+				receivableProperties: receivableProperties,
+				newLabels: Set(newDeclarationByLabel.keys),
+				newReceivableProperties: newReceivableProperties,
+				closedOnStackCount: closedOnDepth,
 			)]
 			while let scopeToWalk = scopesToWalk.popLast() {
 				let walkedScope = scopeToWalk.scope
-				// The declarations between that the function's body declares no label of above this scope.
-				let nearestDeclarationsBetweenByLabel = declarationsBetweenByLabel.filter { !scopeToWalk.declaredLabels.contains($0.key) }
+				let instantiationStack = [scopeToWalk.property] + scopeToWalk.propertyStack
 				if validatesHiddenProperties {
 					recordHiddenReceives(
 						of: walkedScope,
-						closestDeclarationByLabel: nearestDeclarationsBetweenByLabel,
-						receivableProperties: receivableProperties,
+						closestDeclarationByLabel: scopeToWalk.closestDeclarationByLabel,
+						receivableProperties: scopeToWalk.receivableProperties,
 						propertyStack: scopeToWalk.propertyStack,
 						parentTypeStack: scopeToWalk.parentTypeStack,
 						root: root,
+						changedContext: (scopeToWalk.newLabels, scopeToWalk.newReceivableProperties),
 					)
 				}
 				for dependency in walkedScope.instantiable.dependencies where validatesCycles {
@@ -8035,13 +8625,15 @@ public actor DependencyTreeGenerator {
 						continue
 					}
 					let acceptedProperties: Set<Property> = [receivedProperty, receivedProperty.asUnwrappedProperty]
-					let instantiationStack = [scopeToWalk.property] + scopeToWalk.propertyStack
-					// A declaration of another type is the hidden-label error, recorded above.
-					if let declaration = nearestDeclarationsBetweenByLabel[receivedProperty.label],
+					// A new nearest declaration: the first build judged one it saw. One of another type is the hidden-label
+					// error, recorded above.
+					if scopeToWalk.newLabels.contains(receivedProperty.label),
+					   let declaration = scopeToWalk.closestDeclarationByLabel[receivedProperty.label],
 					   acceptedProperties.contains(declaration.property) || declaration.lazilyInstantiatedInstanceProperty.map(acceptedProperties.contains) == true,
 					   let beingBuiltIndex = instantiationStack.firstIndex(of: declaration.property.asValidatedForDependencyCycles),
-					   // The scopes between are those above the function's body and below the scope it builds again.
-					   beingBuiltIndex < instantiationStack.count - closedOnPropertyStack.count
+					   // The scopes being built inside the first build of the scope the cycle closes on are those before it on
+					   // the stack.
+					   beingBuiltIndex < instantiationStack.count - scopeToWalk.closedOnStackCount
 					{
 						// The nearest declaration is still being built around the cycle-closing scope.
 						throw invalidCycleError(
@@ -8055,24 +8647,88 @@ public actor DependencyTreeGenerator {
 						)
 					}
 				}
-				var childDeclaredLabels = scopeToWalk.declaredLabels
-				for createdProperty in walkedScope.createdProperties {
-					childDeclaredLabels.insert(createdProperty.label)
+				// What the scopes the walked scope builds see: a label it declares again names its own declaration there, as
+				// on the first build, and a property it provides on the first build too is receivable there on both.
+				var childClosestDeclarationByLabel = scopeToWalk.closestDeclarationByLabel
+				var childNewLabels = scopeToWalk.newLabels
+				enterDeclarations(of: walkedScope, into: &childClosestDeclarationByLabel) {
+					childNewLabels.remove($0)
 				}
-				let childClosedOnPropertyStack = [scopeToWalk.property] + scopeToWalk.closedOnPropertyStack
+				var childReceivableProperties = scopeToWalk.receivableProperties
+				var childNewReceivableProperties = Set<Property>()
+				if scopeToWalk.newReceivableProperties.isEmpty {
+					insertProperties(madeAvailableBy: walkedScope, given: scopeToWalk.receivableProperties, instantiationStack: instantiationStack, into: &childReceivableProperties) { _ in }
+				} else {
+					// A receive only if available that only a new property makes available provides a new property too.
+					childNewReceivableProperties = scopeToWalk.newReceivableProperties
+					insertProperties(madeAvailableBy: walkedScope, given: scopeToWalk.receivableProperties, instantiationStack: instantiationStack, into: &childReceivableProperties) {
+						childNewReceivableProperties.insert($0)
+					}
+					var firstBuildProvidedProperties = Set<Property>()
+					insertProperties(
+						madeAvailableBy: walkedScope,
+						given: scopeToWalk.receivableProperties.subtracting(scopeToWalk.newReceivableProperties),
+						instantiationStack: instantiationStack,
+						into: &firstBuildProvidedProperties,
+					) { _ in }
+					childNewReceivableProperties.subtract(firstBuildProvidedProperties)
+				}
+				let childParentTypeStack = [walkedScope.instantiable.concreteInstantiable] + scopeToWalk.parentTypeStack
 				let firstChildIndex = scopesToWalk.endIndex
-				for case let .instantiated(declaredChildProperty, childScope, _) in walkedScope.propertiesToGenerate {
-					let childProperty = declaredChildProperty.asValidatedForDependencyCycles
-					// The function's body stops where the scope it builds again stops.
-					guard !childClosedOnPropertyStack.contains(childProperty) else { continue }
-					scopesToWalk.append((
-						scope: childScope,
-						property: childProperty,
-						propertyStack: [scopeToWalk.property] + scopeToWalk.propertyStack,
-						parentTypeStack: [walkedScope.instantiable.concreteInstantiable] + scopeToWalk.parentTypeStack,
-						closedOnPropertyStack: childClosedOnPropertyStack,
-						declaredLabels: childDeclaredLabels,
-					))
+				for childPropertyToGenerate in walkedScope.propertiesToGenerate {
+					switch childPropertyToGenerate {
+					case let .instantiated(declaredChildProperty, childScope, _):
+						// A lazily instantiated property is validated as the constant it stands for.
+						let childProperty = declaredChildProperty.asValidatedForDependencyCycles
+						if let childClosedOnIndex = instantiationStack.firstIndex(of: childProperty) {
+							// A cycle-closing scope, whose function's tree built again here sees what it saw where it was built
+							// unless something here is new to it.
+							guard !childNewLabels.isEmpty || !childNewReceivableProperties.isEmpty else { continue }
+							var childNewDeclarationByLabel = [String: DependencyTreeGeneratorError.LabelDeclaration]()
+							for label in childNewLabels {
+								childNewDeclarationByLabel[label] = childClosestDeclarationByLabel[label]
+							}
+							guard treesBuiltAgain.insert(TreeBuiltAgain(
+								cycleClosingScopeParent: walkedScope,
+								closedOnProperty: childProperty,
+								newDeclarationByLabel: childNewDeclarationByLabel,
+								newReceivableProperties: childNewReceivableProperties,
+							)).inserted else { continue }
+							scopesToWalk.append(ScopeBuiltAgain(
+								scope: childScope,
+								property: childProperty,
+								propertyStack: instantiationStack,
+								parentTypeStack: childParentTypeStack,
+								closestDeclarationByLabel: childClosestDeclarationByLabel,
+								// As the tree of any child is given them, without the property it builds.
+								receivableProperties: childReceivableProperties.subtracting(childPropertyToGenerate.receivableProperties),
+								newLabels: childNewLabels,
+								newReceivableProperties: childNewReceivableProperties,
+								closedOnStackCount: instantiationStack.count - childClosedOnIndex,
+							))
+						} else {
+							// Neither the child nor, when it is lazily instantiated, its instance can be received in the tree it
+							// creates.
+							var receivablePropertiesInChildTree = childReceivableProperties
+							receivablePropertiesInChildTree.remove(declaredChildProperty)
+							if let instanceProperty = childPropertyToGenerate.lazilyInstantiatedInstanceProperty {
+								receivablePropertiesInChildTree.remove(instanceProperty)
+							}
+							scopesToWalk.append(ScopeBuiltAgain(
+								scope: childScope,
+								property: childProperty,
+								propertyStack: instantiationStack,
+								parentTypeStack: childParentTypeStack,
+								closestDeclarationByLabel: childClosestDeclarationByLabel,
+								receivableProperties: receivablePropertiesInChildTree,
+								newLabels: childNewLabels,
+								newReceivableProperties: childNewReceivableProperties,
+								closedOnStackCount: scopeToWalk.closedOnStackCount,
+							))
+						}
+					case .aliased, .hole:
+						break
+					}
 				}
 				// The scope walked next is the last one on the stack, so the first child goes last.
 				scopesToWalk[firstChildIndex...].reverse()
@@ -8421,14 +9077,8 @@ public actor DependencyTreeGenerator {
 
 			var childClosestDeclarationByLabel = closestDeclarationByLabel
 			var childClosestDeclarationDepthByLabel = scopeToValidate.closestDeclarationDepthByLabel
-			for dependency in scope.instantiable.dependencies where scope.createdProperties.contains(dependency.property) {
-				childClosestDeclarationByLabel[dependency.property.label] = .init(
-					property: dependency.property,
-					lazilyInstantiatedInstanceProperty: dependency.lazilyInstantiatedInstanceProperty,
-					declarationLocation: dependency.declarationLocation,
-					declaringType: scope.instantiable.concreteInstantiable,
-				)
-				childClosestDeclarationDepthByLabel[dependency.property.label] = instantiationStack.count
+			enterDeclarations(of: scope, into: &childClosestDeclarationByLabel) {
+				childClosestDeclarationDepthByLabel[$0] = instantiationStack.count
 			}
 			// A property this scope provides shadows an alias of it declared above, unless this scope's alias of it is
 			// never created.
@@ -8439,41 +9089,19 @@ public actor DependencyTreeGenerator {
 			for (aliasProperty, alias) in declaredAliases {
 				childReceivableAliases[aliasProperty] = alias
 			}
-			lazy var childReceivableProperties: Set<Property> = {
-				// An `onlyIfAvailable` receive that is unavailable here is passed `nil`, so it provides nothing to the
-				// scopes below. Availability mirrors `Scope.createScopeGenerator`'s: in a mock, only a property that is
-				// still being built is unavailable.
-				func isAvailable(_ onlyIfAvailableProperty: Property) -> Bool {
-					// The instantiation stack holds a lazily instantiated property as the constant it stands for.
-					if cyclesOnly {
-						![onlyIfAvailableProperty, onlyIfAvailableProperty.asUnwrappedProperty].contains {
-							instantiationStack.contains($0.asValidatedForDependencyCycles)
-						}
-					} else {
-						[onlyIfAvailableProperty, onlyIfAvailableProperty.asUnwrappedProperty].contains {
-							receivableProperties.contains($0) && !instantiationStack.contains($0.asValidatedForDependencyCycles)
-						}
+			// What the scopes this scope builds receive, found only for a scope that builds one, with the depth since which each
+			// has been receivable, which the validation of mocks never reads.
+			var childReceivableProperties = Set<Property>()
+			var childReceivableDepthByProperty = [Property: Int]()
+			if scope.propertiesToGenerate.contains(where: { $0.builtScope != nil }) {
+				childReceivableProperties = receivableProperties
+				childReceivableDepthByProperty = scopeToValidate.receivableDepthByProperty
+				insertProperties(madeAvailableBy: scope, given: receivableProperties, instantiationStack: instantiationStack, into: &childReceivableProperties) {
+					if !cyclesOnly {
+						childReceivableDepthByProperty[$0] = instantiationStack.count
 					}
 				}
-				var childReceivableProperties = receivableProperties
-				for dependency in scope.instantiable.dependencies {
-					switch dependency.source {
-					case let .received(onlyIfAvailable):
-						if !onlyIfAvailable || isAvailable(dependency.property) {
-							childReceivableProperties.insert(dependency.property)
-						}
-					case .instantiated, .forwarded, .aliased:
-						childReceivableProperties.insert(dependency.property)
-						// A lazily instantiated property can also be received by value, as the instance it creates.
-						if let instanceProperty = dependency.lazilyInstantiatedInstanceProperty {
-							childReceivableProperties.insert(instanceProperty)
-						}
-					}
-				}
-				// A mock root also provides the received dependencies it promotes.
-				childReceivableProperties.formUnion(scope.providedProperties)
-				return childReceivableProperties
-			}()
+			}
 			let firstChildIndex = scopesToValidate.endIndex
 			for childPropertyToGenerate in scope.propertiesToGenerate {
 				switch childPropertyToGenerate {
@@ -8488,12 +9116,14 @@ public actor DependencyTreeGenerator {
 							of: childScope,
 							for: childProperty,
 							closedOnIndex: closedOnIndex,
+							cycleClosingScopeParent: scope,
 							propertyStack: childPropertyStack,
 							parentTypeStack: childParentTypeStack,
 							closestDeclarationByLabel: childClosestDeclarationByLabel,
 							closestDeclarationDepthByLabel: childClosestDeclarationDepthByLabel,
 							// As the tree of any child is given them, without the property it builds.
 							receivableProperties: childReceivableProperties.subtracting(childPropertyToGenerate.receivableProperties),
+							receivableDepthByProperty: childReceivableDepthByProperty,
 							validatesCycles: validatesCycles,
 							validatesHiddenProperties: validatesHiddenProperties,
 							root: root,
@@ -8512,6 +9142,7 @@ public actor DependencyTreeGenerator {
 						receivableAliases: childReceivableAliases,
 						closestDeclarationByLabel: childClosestDeclarationByLabel,
 						closestDeclarationDepthByLabel: childClosestDeclarationDepthByLabel,
+						receivableDepthByProperty: childReceivableDepthByProperty,
 						property: childProperty,
 						propertyStack: childPropertyStack,
 						parentTypeStack: childParentTypeStack,
@@ -8774,10 +9405,15 @@ extension DependencyTreeGenerator {
 
 		/// The plain declaration of `type` in the module named `moduleName`: the one in the file at `sourceFilePath`
 		/// when that file declares one, as a `private` type of one file can share its name with a type of another,
-		/// and otherwise the first in the order of the module's files.
+		/// and otherwise the first in the order of the module's files that is visible outside its file
+		/// (`PlainTypeDeclaration.isVisibleOutsideItsFile`): a `private` type of another file cannot be what the
+		/// extension extends, while an imported type of its name can. `nil` when none is, which leaves the extended type
+		/// to the compiler, as an unrecorded one is.
 		func plainTypeDeclaration(of type: TypeDescription, inModuleNamed moduleName: String, preferringFileAt sourceFilePath: String?) -> PlainTypeDeclaration? {
 			let candidates = plainTypeDeclarationsByModuleAndType[ModuleAndType(moduleName: moduleName, typeDescription: type)] ?? []
-			return candidates.first { $0.sourceFilePath == sourceFilePath } ?? candidates.first
+			// Two declarations whose files are unknown are not known to share one.
+			return sourceFilePath.flatMap { sourceFilePath in candidates.first { $0.sourceFilePath == sourceFilePath } }
+				?? candidates.first(where: \.isVisibleOutsideItsFile)
 		}
 
 		private struct ModuleAndType: Hashable {

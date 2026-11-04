@@ -2130,6 +2130,49 @@ struct FileVisitorTests {
 	}
 
 	@Test
+	func walk_recordsProtocolDeclarations_whenNoIfBlockOrExtensionEnclosesThem() {
+		let syntaxTree = Parser.parse(source: """
+		package protocol FeedService {}
+		public enum Outer {
+		    protocol Nested {}
+		}
+		#if DEBUG
+		protocol Guarded {}
+		#endif
+		extension Outer {
+		    protocol Extended {}
+		}
+		""")
+		let fileVisitor = FileVisitor(sourceLocationConverter: SourceLocationConverter(fileName: "File.swift", tree: syntaxTree))
+		fileVisitor.walk(syntaxTree)
+		let outerAccess = AccessDeclaration(
+			level: .public,
+			modifierRange: Dependency.SourceRange(startLine: 2, startColumn: 1, endLine: 2, endColumn: 7),
+			declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 2, column: 1),
+		)
+		#expect(fileVisitor.plainTypeDeclarations == [
+			PlainTypeDeclaration(
+				typeDescription: .simple(name: "FeedService"),
+				access: AccessDeclaration(
+					level: .package,
+					modifierRange: Dependency.SourceRange(startLine: 1, startColumn: 1, endLine: 1, endColumn: 8),
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 1, column: 1),
+				),
+				enclosingTypeAccess: [],
+			),
+			PlainTypeDeclaration(typeDescription: .simple(name: "Outer"), access: outerAccess, enclosingTypeAccess: []),
+			PlainTypeDeclaration(
+				typeDescription: .nested(name: "Nested", parentType: .simple(name: "Outer")),
+				access: AccessDeclaration(
+					level: .internal,
+					declarationStartLocation: Dependency.DeclarationLocation(filePath: "File.swift", line: 3, column: 5),
+				),
+				enclosingTypeAccess: [outerAccess],
+			),
+		])
+	}
+
+	@Test
 	func walk_recordsOutermostNameOfEachTypeExtendedByExtensionThatIsOrHoldsInstantiable_inEveryClause() {
 		let syntaxTree = Parser.parse(source: """
 		@Instantiable

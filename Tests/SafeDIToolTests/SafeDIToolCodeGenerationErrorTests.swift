@@ -45,7 +45,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["RootViewController.swift"]):5:5: error: No @Instantiable type or extension fulfills `DoesNotExist`, which @Instantiated property `networkService: NetworkService` instantiates. Decorate `DoesNotExist`, or an extension of it, with @Instantiable; list `DoesNotExist` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
+				\(fixtures["RootViewController.swift"]):5:5: error: No @Instantiable type or extension fulfills `DoesNotExist`, which @Instantiated property `networkService: NetworkService` instantiates. Decorate `DoesNotExist`, or an extension of it, with @Instantiable; list `DoesNotExist` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 				"""
 			},
 		) {
@@ -243,7 +243,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["DefaultNetworkService.swift"]):7:5: error: No @Instantiable type or extension fulfills `URLSession`, which @Instantiated property `urlSession: URLSession` instantiates. Decorate `URLSession`, or an extension of it, with @Instantiable; list `URLSession` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
+				\(fixtures["DefaultNetworkService.swift"]):7:5: error: No @Instantiable type or extension fulfills `URLSession`, which @Instantiated property `urlSession: URLSession` instantiates. Decorate `URLSession`, or an extension of it, with @Instantiable; list `URLSession` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 				"""
 			},
 		) {
@@ -5326,9 +5326,9 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):7:5: error: No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `missing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable; list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
-				\(fixtures["Root.swift"]):7:5: error: No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `missing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable; list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
-				\(fixtures["Root.swift"]):9:5: error: No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `otherMissing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable; list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; or, if such a declaration is in another module, make that module one SafeDI reads for this target.
+				\(fixtures["Child.swift"]):7:5: error: No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `missing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable; list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+				\(fixtures["Root.swift"]):7:5: error: No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `missing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable; list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+				\(fixtures["Root.swift"]):9:5: error: No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `otherMissing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable; list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
 				"""
 			},
 		) {

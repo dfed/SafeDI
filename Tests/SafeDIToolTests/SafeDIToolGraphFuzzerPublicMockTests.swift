@@ -54,6 +54,9 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		let results = try await publicMockSmokeResults.value
 		let passingResults = results.filter { $0.isAccepted && $0.failure == nil }
 		#expect(passingResults.allSatisfy(\.isComparedByValueOracle) || !compileVerificationIsEnabled)
+		// Every graph is split across modules, with every package name given, so the SwiftPM plugin flow agreed on each with
+		// the module-info flow.
+		#expect(passingResults.filter { !$0.isComparedAcrossIntegrations }.map(\.fixture.seed) == [])
 		let outputFeatures = passingResults.reduce(into: Set<GraphFuzzerPublicMockOutputFeature>()) { features, result in
 			if case let .accepted(generatedFiles, _) = result.outcome {
 				features.formUnion(GraphFuzzerPublicMockDraw.outputFeatures(of: result.fixture, generatedFiles: generatedFiles))
@@ -188,6 +191,33 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 			"FuzzFeature/S1_Service+SafeDIMock.swift: `public let shelf: S1_Space.S1_Shelf?` is `public`, but `S1_Space.S1_Shelf` is `internal`.",
 			"FuzzFeature/S1_Service+SafeDIMock.swift: `@MainActor public static func mock( theme: S1_Theme? = nil, session: S1_Session? = nil, safeDIOverrides: SafeDIOverrides = .init() ) -> S1_Service` is `public`, but `S1_Session` is `package`.",
 			"FuzzFeature/S1_Service+SafeDIMock.swift: `package static func mock(policy: S1_Policy? = nil) -> S1_Service` is `package`, but `S1_Policy` is `internal`.",
+		])
+	}
+
+	@Test
+	func declarationsWiderThanNamedTypes_ignoresDefaultValueOfPackageDeclaration_whenItNamesInternalType() {
+		// Swift checks the names in a default argument's value only for a `public` declaration: a `package` initializer's
+		// default may name an `internal` type's provider, as a module-level configuration's does once its member's type is
+		// proven `package`, while its parameter types, and a `public` declaration's defaults, are still checked.
+		let generatedFile = """
+		public struct __safeDI_FuzzFeature_S1_T4_MockConfiguration {
+		    package init(
+		        policy: S1_Policy? = S1_T4.__safeDI_mockDefault_policy(),
+		        tag: S1_Tag? = nil
+		    ) {
+		        self.policy = policy
+		    }
+
+		    public init(capacity: Int = S1_T4.defaultCapacity()) {}
+		}
+		"""
+		let findings = GraphFuzzerOracle.declarationsWiderThanNamedTypes(
+			in: ["FuzzFeature/SafeDIMockConfiguration.swift": generatedFile],
+			typeAccess: ["S1_Policy": .package, "S1_Tag": .internal, "S1_T4": .internal],
+		)
+		#expect(findings == [
+			"FuzzFeature/SafeDIMockConfiguration.swift: `package init( policy: S1_Policy? = S1_T4.__safeDI_mockDefault_policy(), tag: S1_Tag? = nil )` is `package`, but `S1_Tag` is `internal`.",
+			"FuzzFeature/SafeDIMockConfiguration.swift: `public init(capacity: Int = S1_T4.defaultCapacity())` is `public`, but `S1_T4` is `internal`.",
 		])
 	}
 

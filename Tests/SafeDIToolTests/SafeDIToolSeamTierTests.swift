@@ -24,13 +24,12 @@ import Testing
 @testable import SafeDITool
 
 /// How a seam's tiers are formed from its parameters' access levels and what a caller that reaches none is told. A tier
-/// is generated for every distinct parameter access level, and for the seam's own initializer's level when that is wider
-/// than every parameter's; of two candidates that would take the same parameters, the wider is generated, so a same-package
-/// caller reaches the package tier and passes the value it holds. The narrowest tier builds the tree and calls the seam's
-/// own initializer, which may be narrower than it. A caller that reaches no tier is reported at the declarations whose
-/// widening makes a tier reachable – the receivers that cap the tier, and the seam's own initializer when nothing caps or
-/// the seam has an own parameter – never at a generated initializer, and never without a location. The omission error
-/// names a seam's own only-if-available receive as what it is.
+/// is generated at the seam's type's level and at each narrower level the proof gives a parameter, never at the seam's
+/// own initializer's level, so a same-package caller reaches the package tier and passes the value it holds. The
+/// narrowest tier builds the tree and calls the seam's own initializer, which may be narrower than it. A caller that
+/// reaches no tier cannot construct the seam's type, and is reported at that type and the types enclosing it, never at a
+/// generated or own initializer, and never without a location. The omission error names a seam's own only-if-available
+/// receive as what it is.
 struct SafeDIToolSeamTierTests: ~Copyable {
 	// MARK: Initialization
 
@@ -181,9 +180,11 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 					    @Received(onlyIfAvailable: true) public let theme: Theme?
 					}
 
+					#if canImport(Foundation)
 					public struct Theme: Sendable {
 					    public init() {}
 					}
+					#endif
 					""",
 					"""
 					@Instantiable
@@ -360,9 +361,11 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 					    @Received(onlyIfAvailable: true) public let theme: Theme?
 					}
 
+					#if canImport(Foundation)
 					public struct Theme: Sendable {
 					    public init() {}
 					}
+					#endif
 					""",
 					"""
 					@Instantiable
@@ -539,9 +542,11 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 					    @Received(onlyIfAvailable: true) public let theme: Theme?
 					}
 
+					#if canImport(Foundation)
 					public struct Theme: Sendable {
 					    public init() {}
 					}
+					#endif
 					""",
 					"""
 					@Instantiable
@@ -720,9 +725,11 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 					    @Received(onlyIfAvailable: true) public let theme: Theme?
 					}
 
+					#if canImport(Foundation)
 					public struct Theme: Sendable {
 					    public init() {}
 					}
+					#endif
 					""",
 					"""
 					@Instantiable
@@ -734,9 +741,11 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 					    @Received(onlyIfAvailable: true) let color: Color?
 					}
 
+					#if canImport(Foundation)
 					public struct Color: Sendable {
 					    public init() {}
 					}
+					#endif
 					""",
 					"""
 					@Instantiable(generateDependencyTree: true)
@@ -1296,9 +1305,11 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 	    @Received(onlyIfAvailable: true) public let theme: Theme?
 	}
 
+	#if canImport(Foundation)
 	public struct Theme: Sendable {
 	    public init() {}
 	}
+	#endif
 	"""
 	private static let header = """
 	@Instantiable
