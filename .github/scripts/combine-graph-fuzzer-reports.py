@@ -12,6 +12,7 @@ that ci.yml splits each corpus into. Each shard's long run ends its report with
     spellings <corpus> <spellings to draw, comma-separated> <spellings drawn in accepted graphs>
     outputs <corpus> <feature>=<accepted graphs showing it>,… <feature>=<pinned minimum percent>,…
     public-mock-errors <corpus> <graphs each public mock error rejects>,… <pinned counts>,…
+    value-oracle <corpus> <key>=<value>,… <key>=<pinned value>,…
 
 where <corpus> names the corpus the shard fuzzed: `base`, or a generator
 feature's name. For each corpus the shards must cover 0..<seed count exactly
@@ -21,10 +22,12 @@ pinned count wherever the corpus pins them (`features`), the graphs the value or
 inspected and the graphs rejected for an omitted value must add up to their pins, every spelling the corpus draws must be
 drawn in some accepted graph of some shard, each output feature with a pinned minimum must show in at least that
 percentage of the corpus's accepted graphs (the public mock corpus reports `outputs`), the graphs each public mock
-error rejects must add up to their pins (`public-mock-errors`), and no shard may report a failure,
-a stale known issue, or a problem. Every long run writes `features` and `inspected` for its corpus, so a
-complete report that names a corpus without one of them is a problem: a run that stopped writing the line
-would otherwise skip that line's check silently. Writes a Markdown summary to
+error rejects must add up to their pins (`public-mock-errors`), what the base corpus's value oracle compares and
+skips must add up to its pins (`value-oracle`: counts, and set sums whose keys end in `Sum`, which add up wrapping
+like the accepted seed-set sum), and no shard may report a failure,
+a stale known issue, or a problem. Every long run writes `features` and `inspected` for its corpus, and
+`value-oracle` for the base corpus, so a complete report that names a corpus without one of them is a problem: a
+run that stopped writing the line would otherwise skip that line's check silently. Writes a Markdown summary to
 SUMMARY and the job summary, and exits non-zero when anything is missing or
 does not match.
 """
@@ -51,6 +54,19 @@ output_counts_by_corpus = {}
 output_minimums_by_corpus = {}
 error_counts_by_corpus = {}
 error_pins_by_corpus = {}
+value_oracle_by_corpus = {}
+value_oracle_pins_by_corpus = {}
+
+
+def value_oracle_fields(field):
+    """The `key=value` pairs of a `value-oracle` field, each value an integer (a set sum is hexadecimal)."""
+    values = {}
+    for item in filter(None, field.split(",")):
+        key, value = item.split("=")
+        values[key] = int(value, 0)
+    return values
+
+
 # Every corpus the long run knows, from the `corpora` line each report carries: a corpus whose shards all left no
 # report would otherwise go unchecked.
 expected_corpora = set()
@@ -60,6 +76,7 @@ for path in report_paths:
     reported_corpora = set()
     featured_corpora = set()
     inspected_corpora = set()
+    value_oracle_corpora = set()
     with open(path) as report:
         for line in report:
             fields = line.split()
@@ -104,6 +121,12 @@ for path in report_paths:
                 totals = error_counts_by_corpus.setdefault(fields[1], [0] * len(counts))
                 error_counts_by_corpus[fields[1]] = [total + count for total, count in zip(totals, counts)] if len(totals) == len(counts) else counts
                 error_pins_by_corpus.setdefault(fields[1], set()).add(fields[3] if len(fields) > 3 else "")
+            elif fields[0] == "value-oracle" and len(fields) == 4:
+                value_oracle_corpora.add(fields[1])
+                totals = value_oracle_by_corpus.setdefault(fields[1], {})
+                for key, value in value_oracle_fields(fields[2]).items():
+                    totals[key] = (totals.get(key, 0) + value) % (1 << 64)
+                value_oracle_pins_by_corpus.setdefault(fields[1], set()).add(fields[3])
             elif fields[0] == "completed":
                 completed = True
             elif fields[0] in ("failure", "stale", "problem"):
@@ -115,6 +138,9 @@ for path in report_paths:
             problems.append(f"The {corpus} corpus reported no per-feature counts in {path}.")
         for corpus in sorted(reported_corpora - inspected_corpora):
             problems.append(f"The {corpus} corpus reported no count of the graphs the value oracle inspected in {path}.")
+        # Only the base corpus has a value oracle of its own, which every long run of it reports.
+        if "base" in reported_corpora and "base" not in value_oracle_corpora:
+            problems.append(f"The base corpus reported nothing its value oracle compared in {path}.")
     for corpus, starting_seed, count, accepted_count, accepted_sum in shard_lines:
         shards_by_corpus.setdefault(corpus, []).append((starting_seed, count, accepted_count, accepted_sum))
 
@@ -205,6 +231,22 @@ if not problems:
                         f"The generated code of {output_counts.get(feature, 0)} of the {accepted_count} accepted graphs of the {corpus} "
                         f"corpus shows {feature}, fewer than the pinned {minimum} percent."
                     )
+        value_oracle_pins = value_oracle_pins_by_corpus.get(corpus, set())
+        if len(value_oracle_pins) > 1:
+            problems.append(f"The shards of the {corpus} corpus disagree about its value oracle's pins: {sorted(value_oracle_pins)}.")
+        elif value_oracle_pins:
+            pinned_value_oracle = value_oracle_fields(next(iter(value_oracle_pins)))
+            value_oracle = value_oracle_by_corpus.get(corpus, {})
+            mismatches = [
+                f"{key} {value_oracle.get(key, 0):#x} (pinned {pinned:#x})" if key.endswith("Sum") else f"{key} {value_oracle.get(key, 0)} (pinned {pinned})"
+                for key, pinned in sorted(pinned_value_oracle.items())
+                if value_oracle.get(key, 0) != pinned
+            ]
+            if mismatches:
+                problems.append(
+                    f"The value oracle of the {corpus} corpus compared and skipped other pairs than its pins "
+                    f"(`corpusValueOracleCounts`): {'; '.join(mismatches)}."
+                )
         if (accepted_count, accepted_sum) != (pinned_accepted_count, pinned_accepted_sum):
             problems.append(
                 f"The tool accepted {accepted_count} of seeds 0..<{seed_count} of the {corpus} corpus (sum 0x{accepted_sum:X}), but "

@@ -854,16 +854,26 @@ jobs:
       # has pins of its own (fixture hash, accepted count
       # and seed-set sum, known issues); the combine job checks each corpus's shards against its pins, that the
       # shards cover it exactly once, and that every corpus the long run names has a report.
+      # The base corpus runs in four shards: its value oracle compiles every accepted graph's root mocks and mirrors
+      # again, which the smoke batch suggests about doubles a base shard's time (not yet measured on CI).
       matrix:
         include:
           - corpus: base
             features: ""
             starting-seed: 0
-            iterations: 2500
+            iterations: 1250
+          - corpus: base
+            features: ""
+            starting-seed: 1250
+            iterations: 1250
           - corpus: base
             features: ""
             starting-seed: 2500
-            iterations: 2500
+            iterations: 1250
+          - corpus: base
+            features: ""
+            starting-seed: 3750
+            iterations: 1250
           - corpus: generateDependencyTree
             features: generateDependencyTree
             starting-seed: 0
@@ -911,9 +921,10 @@ jobs:
 
   # Checks the pins over each whole corpus, which no one shard sees: that a
   # report arrived for every corpus, that the shards covered each exactly
-  # once, that together they accepted exactly its pinned set of seeds, and
+  # once, that together they accepted exactly its pinned set of seeds,
   # that the base corpus's accepted graphs show each feature the pinned
-  # number of times.
+  # number of times, and that what the base corpus's value oracle compared
+  # and skipped adds up to its pins (`value-oracle`).
   # This is the one check to require for the fuzzer.
   graph-fuzzer-corpus:
     name: Check Graph Fuzzer Corpus on Linux

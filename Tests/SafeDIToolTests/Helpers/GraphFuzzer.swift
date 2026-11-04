@@ -6163,6 +6163,23 @@ struct GraphFuzzerFailure: Equatable {
 		/// The differential value comparator describes other values for a probe of a `generateMockPublic` graph than for
 		/// the same probe of its known-right path, beyond the stated divergences.
 		case publicMockBuildsOtherValuesThanKnownRight = "the graph builds other values than its known-right path"
+		/// A base corpus graph's generated `mock()` – a root's, or a mocked type's beside its mirror – builds other values
+		/// than the production build of the same tree (`GraphFuzzerValueOraclePlan`).
+		case mockBuildsOtherValuesThanProduction = "a generated mock builds other values than the production build of the same tree"
+		/// The tool rejects the value-oracle fixture of a base corpus graph it accepts: a mirror the model got wrong, a mock
+		/// accepting a tree production rejects, or a root's mock rejected where the root is accepted.
+		case valueOracleFixtureRejected = "the tool rejects the value-oracle fixture of a graph it accepts"
+		/// The value-oracle fixture of a base corpus graph does not compile, or its probes do not run.
+		case valueOracleFixtureDoesNotCompile = "the value-oracle fixture does not compile or run"
+		/// The mirror model disagrees with a generated mock about what it builds beside the mocked type: a model left behind
+		/// by a change to what a mock promotes, or a mock that promotes another set than the rules state.
+		case mirrorModelDisagreesWithMock = "the mirror model disagrees with a generated mock about what it builds"
+		/// The value-oracle run generates another mock for a type the graph mocks than the corpus run does, so the oracle
+		/// would judge other code than the corpus's.
+		case valueOracleFixtureChangesDrawnMocks = "the value-oracle fixture changes a mock the graph generates"
+		/// A root's generated `mock()` takes a parameter: a root receives nothing and forwards nothing, so its mock takes
+		/// none but its overrides.
+		case rootMockTakesParameter = "a root's generated mock takes a parameter"
 	}
 
 	let seed: UInt64
@@ -6171,6 +6188,9 @@ struct GraphFuzzerFailure: Equatable {
 	/// For `seamBuildsOtherValuesThanInline`, each difference's description: a known issue of that kind documents
 	/// the failure only when every one of them matches one of its signatures.
 	var valueDifferences: [String] = []
+	/// For `valueOracleFixtureRejected`, each line of the tool's diagnostics that reports an error: a known issue of that
+	/// kind documents the failure only when every one of them contains the text of one of its rejection signatures.
+	var rejectionErrorLines: [String] = []
 
 	static func reproductionCommand(forSeed seed: UInt64, features: Set<GraphFuzzerGeneratorFeature>) -> String {
 		let featuresVariable = features.isEmpty ? "" : "SAFEDI_GRAPH_FUZZER_FEATURES=\(features.sorted().map(\.rawValue).joined(separator: ",")) "
@@ -6200,6 +6220,7 @@ struct GraphFuzzerResult {
 		isInspectedByValueOracle: Bool = false,
 		isComparedByValueOracle: Bool = false,
 		isComparedAcrossIntegrations: Bool = false,
+		valueOracle: GraphFuzzerValueOracleRun? = nil,
 	) {
 		self.fixture = fixture
 		self.outcome = outcome
@@ -6210,6 +6231,7 @@ struct GraphFuzzerResult {
 		self.isInspectedByValueOracle = isInspectedByValueOracle
 		self.isComparedByValueOracle = isComparedByValueOracle
 		self.isComparedAcrossIntegrations = isComparedAcrossIntegrations
+		self.valueOracle = valueOracle
 	}
 
 	let fixture: GraphFuzzerFixture
@@ -6219,7 +6241,8 @@ struct GraphFuzzerResult {
 	/// modules gives other results under one multi-module integration than under the other, or, failing none of those
 	/// ways, a renamed graph gives other results.
 	let failure: GraphFuzzerFailure?
-	/// The ways the graph fails after `failure` in the oracle's chain, which a known value failure does not mask.
+	/// The ways the graph fails after `failure` in the oracle's chain, which a known value failure, or a known failure
+	/// of a base corpus graph's value-oracle fixture, does not mask.
 	let laterFailures: [GraphFuzzerFailure]
 	/// How each renamed graph that gives other results differs, in the order of `GraphFuzzerRenaming.all`, whether
 	/// or not the graph also fails another way.
@@ -6231,12 +6254,15 @@ struct GraphFuzzerResult {
 	/// graph with its seam and without it.
 	let isInspectedByValueOracle: Bool
 	/// Whether the comparator did compare the two builds: the graph is inspected, its runs agree, and its generated
-	/// code compiles cleanly, since `results(of:)` hands the comparator no graph with a compilation failure.
+	/// code compiles cleanly, since `results(of:)` hands the comparator no graph with a compilation failure. A base
+	/// corpus graph is compared when, besides, its value-oracle fixture is accepted as planned and its comparison ran.
 	let isComparedByValueOracle: Bool
 	/// Whether the oracle ran the graph as the SwiftPM plugin runs the tool too, and compared the two flows
 	/// (`GraphFuzzerToolRuns.integrationsDisagreeFailure`): the graph is split across modules, and no module of it is run
 	/// without its package's name.
 	let isComparedAcrossIntegrations: Bool
+	/// A base corpus graph's value-oracle run, whose pairs and skips the long run counts.
+	let valueOracle: GraphFuzzerValueOracleRun?
 
 	/// How each partitioned run that gives other results under the two multi-module integrations differs, whether or
 	/// not the graph also fails another way.
@@ -6296,12 +6322,36 @@ struct GraphFuzzerKnownIssue: Equatable {
 		/// A `generateMockPublic` graph builds other values than its known-right path, with a difference whose
 		/// description contains this text.
 		case publicMockBuildsOtherValuesThanKnownRight(containing: String)
+		/// A base corpus graph's generated mock builds other values than the production build of the same tree, with a
+		/// difference whose description contains this text.
+		case mockBuildsOtherValuesThanProduction(containing: String)
+		/// A base corpus graph's value-oracle fixture does not compile, with an error containing this text, such as the
+		/// error a root's generated mock reproduces of a mock shape the corpus run lists. A seed listed with this
+		/// signature is compared on its own, outside the value batch, so that its known failure does not make the batch
+		/// compile every graph again on its own.
+		case valueOracleFixtureDoesNotCompile(containing: String)
+		/// The tool rejects a base corpus graph's value-oracle fixture, with errors each of whose text contains this or the
+		/// text of another of the shape's rejection signatures, and accepts the graph.
+		case valueOracleFixtureRejected(containing: String)
 	}
 
 	let reason: String
 	let signatures: [Signature]
 	/// In increasing order. The ordinary suite checks the first; the long run checks every one it reaches.
 	let seeds: [UInt64]
+
+	/// Whether only the base corpus's value oracle shows the shape, which no other corpus runs, so that the seam corpus
+	/// inherits no such shape.
+	var isBaseCorpusValueOracleShape: Bool {
+		signatures.allSatisfy { signature in
+			switch signature {
+			case .mockBuildsOtherValuesThanProduction, .valueOracleFixtureDoesNotCompile, .valueOracleFixtureRejected:
+				true
+			case .compilerError, .compilerWarning, .compilerCrashInGeneratedMock, .renamedGraphDiffers, .integrationsDiffer, .macroRejectsFixture, .seamRejectsGraphInlineAccepts, .seamAcceptsGraphInlineRejects, .integrationsDisagree, .seamPassesNilWhereInlinePassesValue, .seamBuildsOtherValuesThanInline, .valueComparatorCouldNotDescribeGraph, .publicMockRejectsGraphKnownRightAccepts, .publicMockBuildsOtherValuesThanKnownRight:
+				false
+			}
+		}
+	}
 
 	/// Whether `failure` is the failure this issue documents.
 	func matches(_ failure: GraphFuzzerFailure) -> Bool {
@@ -6349,6 +6399,31 @@ struct GraphFuzzerKnownIssue: Equatable {
 					signatures.contains { signature in
 						if case let .publicMockBuildsOtherValuesThanKnownRight(text) = signature {
 							difference.contains(text)
+						} else {
+							false
+						}
+					}
+				}
+			case .mockBuildsOtherValuesThanProduction:
+				// As for the seam's value signatures, every difference must match one.
+				failure.kind == .mockBuildsOtherValuesThanProduction && !failure.valueDifferences.isEmpty && failure.valueDifferences.allSatisfy { difference in
+					signatures.contains { signature in
+						if case let .mockBuildsOtherValuesThanProduction(text) = signature {
+							difference.contains(text)
+						} else {
+							false
+						}
+					}
+				}
+			case let .valueOracleFixtureDoesNotCompile(text):
+				failure.kind == .valueOracleFixtureDoesNotCompile && failure.details.contains(text)
+			case .valueOracleFixtureRejected:
+				// As for the value signatures, every error the tool reports must match one: a documented rejection beside
+				// an undocumented error is a new failure.
+				failure.kind == .valueOracleFixtureRejected && !failure.rejectionErrorLines.isEmpty && failure.rejectionErrorLines.allSatisfy { errorLine in
+					signatures.contains { signature in
+						if case let .valueOracleFixtureRejected(text) = signature {
+							errorLine.contains(text)
 						} else {
 							false
 						}
@@ -6405,7 +6480,10 @@ enum GraphFuzzerFinding: Equatable {
 	case failure(GraphFuzzerFailure)
 
 	/// - Parameter laterFailures: The ways the graph fails after `failure` in the oracle's chain. A known value
-	///   failure masks none of them: the first the known issue does not document is the finding.
+	///   failure masks none of them: the first the known issue does not document is the finding. Nor does a known
+	///   rejection of a base corpus graph's value-oracle fixture, or a known failure of it to compile, of each of which
+	///   every later failure is independent: the value comparison does not run, and the wrapper, multi-module and
+	///   rename oracles judge the drawn graph.
 	init(failure: GraphFuzzerFailure?, laterFailures: [GraphFuzzerFailure] = [], knownIssue: GraphFuzzerKnownIssue?) {
 		switch (failure, knownIssue) {
 		case (nil, nil):
@@ -6413,7 +6491,7 @@ enum GraphFuzzerFinding: Equatable {
 		case let (nil, knownIssue?):
 			self = .staleKnownIssue(knownIssue)
 		case let (failure?, knownIssue?) where knownIssue.matches(failure):
-			if failure.kind == .seamBuildsOtherValuesThanInline || failure.kind == .publicMockBuildsOtherValuesThanKnownRight, let unmasked = laterFailures.first(where: { !knownIssue.matches($0) }) {
+			if [.seamBuildsOtherValuesThanInline, .publicMockBuildsOtherValuesThanKnownRight, .mockBuildsOtherValuesThanProduction, .valueOracleFixtureRejected, .valueOracleFixtureDoesNotCompile].contains(failure.kind), let unmasked = laterFailures.first(where: { !knownIssue.matches($0) }) {
 				self = .failure(unmasked)
 			} else {
 				self = .knownIssue(knownIssue, failure)
@@ -6444,9 +6522,19 @@ struct GraphFuzzerSeedSetSum {
 	private(set) var value: UInt64 = 0
 
 	mutating func add(_ seed: UInt64) {
+		add(member: String(seed))
+	}
+
+	/// Adds a member named by a string, such as `<seed>:<type>`.
+	mutating func add(member: String) {
 		var hash = GraphFuzzerHash()
-		hash.combine(String(seed))
+		hash.combine(member)
 		value &+= hash.value
+	}
+
+	/// A sum whose value is pinned.
+	init(value: UInt64 = 0) {
+		self.value = value
 	}
 }
 
@@ -6475,6 +6563,7 @@ struct GraphFuzzerToolRuns {
 	///   - multiModuleRuns: What the two multi-module integrations produced for the graph split across modules.
 	///   - pluginOutcome: The outcome of a graph split across modules as the SwiftPM plugin runs the tool, when no module
 	///     of it is run without its package's name: `firstOutcome` is how Bazel runs it.
+	///   - valueOracle: The value oracle's run of a base corpus graph the tool accepts.
 	init(
 		fixture: GraphFuzzerFixture,
 		firstOutcome: GraphFuzzerToolOutcome,
@@ -6485,6 +6574,7 @@ struct GraphFuzzerToolRuns {
 		knownRightOutcome: GraphFuzzerToolOutcome? = nil,
 		multiModuleRuns: [GraphFuzzerMultiModuleRuns] = [],
 		pluginOutcome: GraphFuzzerToolOutcome? = nil,
+		valueOracle: GraphFuzzerValueOracleRun? = nil,
 	) {
 		self.fixture = fixture
 		self.firstOutcome = firstOutcome
@@ -6495,6 +6585,7 @@ struct GraphFuzzerToolRuns {
 		self.knownRightOutcome = knownRightOutcome
 		self.multiModuleRuns = multiModuleRuns
 		self.pluginOutcome = pluginOutcome
+		self.valueOracle = valueOracle
 	}
 
 	let fixture: GraphFuzzerFixture
@@ -6506,6 +6597,52 @@ struct GraphFuzzerToolRuns {
 	let knownRightOutcome: GraphFuzzerToolOutcome?
 	let multiModuleRuns: [GraphFuzzerMultiModuleRuns]
 	let pluginOutcome: GraphFuzzerToolOutcome?
+	let valueOracle: GraphFuzzerValueOracleRun?
+
+	/// The failure of a base corpus graph's value oracle before anything is compiled, or `nil`: the mirror model
+	/// disagrees with a generated mock, the tool rejects the value-oracle fixture, the fixture changes a mock the graph
+	/// generates, or a root's mock takes a parameter. Such a graph is not compared.
+	var valueOracleFixtureFailure: GraphFuzzerFailure? {
+		guard let valueOracle else { return nil }
+		let plan = valueOracle.plan
+		guard plan.modelFailures.isEmpty else {
+			return GraphFuzzerFailure(seed: fixture.seed, kind: .mirrorModelDisagreesWithMock, details: "\(plan.modelFailures.joined(separator: "\n"))\nThis graph:\n\(firstOutcome.description)")
+		}
+		guard let outcome = valueOracle.outcome else { return nil }
+		let fixtureDescription = "The value-oracle fixture:\n\(plan.valueOracleFixture(storingEveryParameter: false).description)"
+		switch outcome {
+		case let .rejected(diagnostics):
+			return GraphFuzzerFailure(
+				seed: fixture.seed,
+				kind: .valueOracleFixtureRejected,
+				details: "\(diagnostics)\n\(fixtureDescription)",
+				rejectionErrorLines: diagnostics.split(separator: "\n").filter { $0.contains(": error: ") }.map(String.init),
+			)
+		case let .accepted(valueOracleFiles, _):
+			guard plan.mirrorNamesSortingBeforeTypeNames.isEmpty else {
+				return GraphFuzzerFailure(seed: fixture.seed, kind: .valueOracleFixtureChangesDrawnMocks, details: "The graph declares \(plan.mirrorNamesSortingBeforeTypeNames), which sort after a mirror's name, so a mirror can change the order of the tool's alphabetical walks.\n\(fixtureDescription)")
+			}
+			// A mocked type's file also holds the configuration of the type for the mocks that build it, which the root
+			// mocks the fixture adds can need where no mock of the graph did, and a root mock can make a configuration
+			// `@Sendable`-typed: neither is compared (`GraphFuzzerMockOverrides.comparableWithAnotherRunsMocks`), and the
+			// files that differ only so are counted and pinned.
+			let mockFileSuffix = "+SafeDIMock.swift"
+			let changedMocks = valueOracle.drawnMockFileNamesChanged
+			guard changedMocks.isEmpty else {
+				let changes = changedMocks.map { "\($0) as the corpus run generates it:\n\(plan.drawnMockFiles[$0] ?? "")\nAs the value-oracle run generates it:\n\(valueOracleFiles[$0] ?? "(none)")" }
+				return GraphFuzzerFailure(seed: fixture.seed, kind: .valueOracleFixtureChangesDrawnMocks, details: "\(changes.joined(separator: "\n"))\n\(fixtureDescription)")
+			}
+			let rootMocksTakingParameters = plan.rootTypeNames.compactMap { rootTypeName -> String? in
+				let parameters = GraphFuzzerMockOverrides.mockParameters(valueOracleFiles[rootTypeName + mockFileSuffix] ?? "")
+					.filter { !$0.hasPrefix("safeDIOverrides: ") }
+				return parameters.isEmpty ? nil : "`\(rootTypeName).mock` takes \(parameters.joined(separator: " "))"
+			}
+			guard rootMocksTakingParameters.isEmpty else {
+				return GraphFuzzerFailure(seed: fixture.seed, kind: .rootMockTakesParameter, details: "\(rootMocksTakingParameters.joined(separator: "\n"))\n\(fixtureDescription)")
+			}
+			return nil
+		}
+	}
 
 	/// The failure of each partitioned run whose two integrations give other results, in the order the runs were made.
 	var multiModuleFailures: [GraphFuzzerFailure] {
@@ -6718,9 +6855,11 @@ struct GraphFuzzerToolRuns {
 	}
 
 	/// Whether the value oracle inspected the graph: the tool accepts it with the seam and without it, or accepts a
-	/// `generateMockPublic` graph and its known-right path.
+	/// `generateMockPublic` graph and its known-right path, or accepts a base corpus graph, whose value-oracle run then
+	/// judges it.
 	var isInspectedByValueOracle: Bool {
 		guard case .accepted = firstOutcome else { return false }
+		guard valueOracle == nil else { return true }
 		switch (inlineOutcome, knownRightOutcome) {
 		case (.accepted?, _), (_, .accepted?):
 			return true
@@ -6857,9 +6996,12 @@ enum GraphFuzzerOracle {
 	///
 	/// - Parameter willRunSeed: Called before the tool first runs a seed's graph, so that a long run can record
 	///   which seed was running if the tool crashes the process.
+	/// - Parameter isolatedValueOracleSeeds: The base corpus seeds whose value-oracle fixture is known not to compile
+	///   (`GraphFuzzerKnownIssue.Signature.valueOracleFixtureDoesNotCompile`), each compared on its own.
 	static func results(
 		forSeeds seeds: [UInt64],
 		features: Set<GraphFuzzerGeneratorFeature> = [],
+		isolatingValueOracleGraphsOf isolatedValueOracleSeeds: Set<UInt64> = [],
 		willRunSeed: @Sendable (UInt64) -> Void = { _ in },
 	) async throws -> [GraphFuzzerResult] {
 		var toolRuns = [GraphFuzzerToolRuns]()
@@ -6867,18 +7009,21 @@ enum GraphFuzzerOracle {
 			willRunSeed(seed)
 			await toolRuns.append(try self.toolRuns(of: GraphFuzzerGenerator.fixture(forSeed: seed, features: features)))
 		}
-		return try results(of: toolRuns)
+		return try results(of: toolRuns, isolatingValueOracleGraphsOf: isolatedValueOracleSeeds)
 	}
 
 	/// The oracle's verdict on graphs the tool already ran.
-	static func results(of toolRuns: [GraphFuzzerToolRuns]) throws -> [GraphFuzzerResult] {
+	/// - Parameter isolatedValueOracleSeeds: The base corpus seeds whose value-oracle graph is compared on its own.
+	static func results(of toolRuns: [GraphFuzzerToolRuns], isolatingValueOracleGraphsOf isolatedValueOracleSeeds: Set<UInt64> = []) throws -> [GraphFuzzerResult] {
 		let compilationFailures = compileVerificationIsEnabled
 			? try compilationFailures(of: toolRuns.filter { $0.runsDifferFailure == nil })
 			: [:]
-		let valueFailures = try valueFailures(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil })
+		let valueComparisons = try valueComparisons(of: toolRuns.filter { $0.runsDifferFailure == nil && compilationFailures[$0.fixture.seed] == nil }, isolatingValueOracleGraphsOf: isolatedValueOracleSeeds)
 		return toolRuns.map { runs in
 			let renamedGraphFailures = runs.renamedGraphFailures
-			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.uncreatedAliasRejectionFailure, runs.nilArgumentFailure, runs.uncreatedAliasReadFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], valueFailures[runs.fixture.seed], runs.wrapperParameterFailure, runs.multiModuleFailures.first, renamedGraphFailures.first].compactMap(\.self)
+			let failures = [runs.runsDifferFailure, runs.differentialFailure, runs.acceptanceDifferentialFailure, runs.integrationsDisagreeFailure, runs.visibleBuildFailure, runs.publicMockAcceptanceFailure, runs.uncreatedAliasRejectionFailure, runs.nilArgumentFailure, runs.uncreatedAliasReadFailure, runs.tierAccessFailure, runs.publicMockAccessFailure, runs.omittedValueFailure, compilationFailures[runs.fixture.seed], runs.valueOracleFixtureFailure, valueComparisons.failures[runs.fixture.seed], runs.wrapperParameterFailure, runs.multiModuleFailures.first, renamedGraphFailures.first].compactMap(\.self)
+			// A base corpus graph is compared once its value-oracle graph is.
+			let isValueOracleGraphCompared = runs.valueOracle == nil || valueComparisons.comparedValueOracleSeeds.contains(runs.fixture.seed)
 			return GraphFuzzerResult(
 				fixture: runs.fixture,
 				outcome: runs.firstOutcome,
@@ -6887,8 +7032,9 @@ enum GraphFuzzerOracle {
 				renamedGraphFailures: renamedGraphFailures,
 				multiModuleRuns: runs.multiModuleRuns,
 				isInspectedByValueOracle: runs.isInspectedByValueOracle,
-				isComparedByValueOracle: compileVerificationIsEnabled && runs.isInspectedByValueOracle && runs.runsDifferFailure == nil && compilationFailures[runs.fixture.seed] == nil,
+				isComparedByValueOracle: compileVerificationIsEnabled && runs.isInspectedByValueOracle && runs.runsDifferFailure == nil && compilationFailures[runs.fixture.seed] == nil && isValueOracleGraphCompared,
 				isComparedAcrossIntegrations: runs.pluginOutcome != nil,
+				valueOracle: runs.valueOracle,
 			)
 		}
 	}
@@ -6902,13 +7048,30 @@ enum GraphFuzzerOracle {
 	/// the tool generates. Each graph exempts its documented divergences (`documentedSeamValueDivergences`). The graphs
 	/// of one call are compared in one batch. Nothing is compared when `compileVerificationIsEnabled` is `false`.
 	static func valueFailures(of toolRuns: [GraphFuzzerToolRuns]) throws -> [UInt64: GraphFuzzerFailure] {
+		try valueComparisons(of: toolRuns).failures
+	}
+
+	/// `valueFailures(of:)`, with the base corpus seeds whose value-oracle graph the comparator compared, failing or
+	/// not. A base corpus graph is compared by its value-oracle graph (`GraphFuzzerValueOracleRun.valueGraph`): each
+	/// root's mock and each mirrored mock with its production build, in one path, with no exemption. A seed of
+	/// `isolatedValueOracleSeeds` is compared on its own, outside the batch, so that its known compile failure does not
+	/// make the batch compile each graph again on its own.
+	static func valueComparisons(
+		of toolRuns: [GraphFuzzerToolRuns],
+		isolatingValueOracleGraphsOf isolatedValueOracleSeeds: Set<UInt64> = [],
+	) throws -> (failures: [UInt64: GraphFuzzerFailure], comparedValueOracleSeeds: Set<UInt64>) {
 		let inspectedRuns = toolRuns.filter(\.isInspectedByValueOracle)
 		// A graph with a hole is compared with its visible build too, in which the seam builds the fulfilling type.
 		let visibleRuns = toolRuns.filter { runs in
 			guard case .accepted = runs.firstOutcome, case .accepted = runs.visibleOutcome else { return false }
 			return true
 		}
-		guard !inspectedRuns.isEmpty || !visibleRuns.isEmpty, compileVerificationIsEnabled else { return [:] }
+		// A base corpus graph whose value-oracle fixture the tool accepts as planned.
+		let valueOracleGraphs = toolRuns.compactMap { runs -> (runs: GraphFuzzerToolRuns, graph: DifferentialValueGraph)? in
+			guard runs.valueOracleFixtureFailure == nil, let graph = runs.valueOracle?.valueGraph else { return nil }
+			return (runs, graph)
+		}
+		guard !inspectedRuns.isEmpty || !visibleRuns.isEmpty, compileVerificationIsEnabled else { return ([:], []) }
 		var filesToDelete = [URL]()
 		defer {
 			for fileToDelete in filesToDelete {
@@ -6941,8 +7104,38 @@ enum GraphFuzzerOracle {
 				probes: storingFixture.differentialValueProbes(generatedFiles: holeFiles),
 			)
 		}
-		guard let comparisons = try DifferentialValueOracle.compare(graphs: graphs.map(\.graph) + visibleGraphs, filesToDelete: &filesToDelete) else { return [:] }
+		let batchedValueOracleGraphs = valueOracleGraphs.filter { !isolatedValueOracleSeeds.contains($0.runs.fixture.seed) }
+		let isolatedValueOracleGraphs = valueOracleGraphs.filter { isolatedValueOracleSeeds.contains($0.runs.fixture.seed) }
+		guard let comparisons = try DifferentialValueOracle.compare(graphs: graphs.map(\.graph) + visibleGraphs + batchedValueOracleGraphs.map(\.graph), filesToDelete: &filesToDelete) else { return ([:], []) }
+		var valueOracleComparisons = Array(zip(batchedValueOracleGraphs.map(\.runs), comparisons.suffix(batchedValueOracleGraphs.count)))
+		for (runs, graph) in isolatedValueOracleGraphs {
+			if let comparison = try DifferentialValueOracle.compare(graphs: [graph], filesToDelete: &filesToDelete)?.first {
+				valueOracleComparisons.append((runs, comparison))
+			}
+		}
 		var failures = [UInt64: GraphFuzzerFailure]()
+		var comparedValueOracleSeeds = Set<UInt64>()
+		for (runs, comparison) in valueOracleComparisons {
+			let builds = "The value-oracle fixture:\n\(runs.valueOracle?.plan.valueOracleFixture(storingEveryParameter: true).description ?? "")\nWhat the tool generated for it:\n\(runs.valueOracle?.outcome?.description ?? "")"
+			switch comparison.result {
+			case let .success(valueComparison):
+				comparedValueOracleSeeds.insert(runs.fixture.seed)
+				let differences = valueComparison.differences
+				guard !differences.isEmpty else { continue }
+				failures[runs.fixture.seed] = GraphFuzzerFailure(
+					seed: runs.fixture.seed,
+					kind: .mockBuildsOtherValuesThanProduction,
+					details: "\(differences.map(\.description).joined(separator: "\n"))\n\(valueComparison.report)\(builds)",
+					valueDifferences: differences.map(\.description),
+				)
+			case let .failure(error):
+				failures[runs.fixture.seed] = GraphFuzzerFailure(
+					seed: runs.fixture.seed,
+					kind: .valueOracleFixtureDoesNotCompile,
+					details: "\(error)\n\(builds)",
+				)
+			}
+		}
 		for (runs, comparison) in zip(visibleRuns, comparisons.dropFirst(graphs.count)) {
 			switch comparison.result {
 			case let .success(valueComparison):
@@ -6990,7 +7183,7 @@ enum GraphFuzzerOracle {
 				)
 			}
 		}
-		return failures
+		return (failures, comparedValueOracleSeeds)
 	}
 
 	/// The differences between a seam build and its inline build that the Manual documents, stated exactly, which the
@@ -7382,6 +7575,16 @@ enum GraphFuzzerOracle {
 		let pluginOutcome: GraphFuzzerToolOutcome? = fixture.modules != nil && fixture.modulesOmittingPackageName.isEmpty
 			? try await toolOutcome(of: fixture, integration: .swiftPackagePlugin)
 			: nil
+		// A base corpus graph the tool accepts is run again as its value-oracle fixture, whose root mocks and mirrors the
+		// value oracle compares with their production builds (`valueFailures`).
+		var valueOracle: GraphFuzzerValueOracleRun?
+		if compileVerificationIsEnabled, GraphFuzzerGeneratorFeature.features(drawnIn: fixture).isEmpty, fixture.modules == nil, case let .accepted(generatedFiles, _) = firstOutcome {
+			let plan = GraphFuzzerValueOraclePlan(fixture: fixture, generatedFiles: generatedFiles)
+			valueOracle = try await GraphFuzzerValueOracleRun(
+				plan: plan,
+				outcome: plan.modelFailures.isEmpty ? toolOutcome(of: plan.valueOracleFixture(storingEveryParameter: false)) : nil,
+			)
+		}
 		return try await GraphFuzzerToolRuns(
 			fixture: fixture,
 			firstOutcome: firstOutcome,
@@ -7392,6 +7595,7 @@ enum GraphFuzzerOracle {
 			knownRightOutcome: knownRightOutcome,
 			multiModuleRuns: multiModuleRuns,
 			pluginOutcome: pluginOutcome,
+			valueOracle: valueOracle,
 		)
 	}
 

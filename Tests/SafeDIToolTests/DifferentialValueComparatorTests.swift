@@ -2192,6 +2192,39 @@ struct DifferentialValueComparatorTests: ~Copyable {
 
 	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func compare_comparesEachPairInOnePath_whenGraphsHoldProbePairs() throws {
+		let graphs = [
+			Self.pairedGraph(named: "PairedFirst", featureSharesInstance: true),
+			Self.pairedGraph(named: "PairedSecond", featureSharesInstance: false),
+		]
+
+		let comparisons = try #require(try DifferentialValueOracle.compare(graphs: graphs, filesToDelete: &filesToDelete))
+
+		// The two graphs share a layout and hold both ways in one path, so the batch is one compile of that path and one
+		// probe executable, in one directory.
+		#expect(filesToDelete.count == 1)
+		#expect(try comparisons.map { try $0.result.get().differences } == [
+			[],
+			[DifferentialValueDifference(probe: "PairedSecondRoot.feature()", path: ["<1> PairedSecondRoot", "e"], feature: "e: nil", knownRight: "e: <2> PairedSecondA (seen, first at <1> PairedSecondRoot > a)")],
+		])
+		#expect(try comparisons[1].result.get().featureDescription == """
+		probe PairedSecondRoot.feature()
+		<1> PairedSecondRoot
+		  a: <2> PairedSecondA
+		  e: nil
+
+		""")
+		#expect(try comparisons[1].result.get().knownRightDescription == """
+		probe PairedSecondRoot.feature()
+		<1> PairedSecondRoot
+		  a: <2> PairedSecondA
+		  e: <2> PairedSecondA (seen)
+
+		""")
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, Self.compilesGeneratedCode))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func compare_comparesEachGraphOfABatchOnItsOwn_whenOneGraphOfTheBatchDoesNotCompile() throws {
 		let broken = Self.batchGraph(named: "Broken", featureSharesInstance: true)
 		let graphs = [
@@ -2851,6 +2884,42 @@ struct DifferentialValueComparatorTests: ~Copyable {
 			)
 		}
 		return DifferentialValueGraph(name: name, feature: path(sharingInstance: featureSharesInstance), knownRight: path(sharingInstance: true), probes: [DifferentialValueProbe("\(name)Root()")])
+	}
+
+	/// A graph of one path that builds its root two ways, `feature()` and `knownRight()`, the second sharing one
+	/// instance between two properties and the first sharing it or passing `nil`, compared as one probe pair.
+	private static func pairedGraph(named name: String, featureSharesInstance: Bool) -> DifferentialValueGraph {
+		let fixture = """
+		public final class \(name)Root {
+		    public init(a: \(name)A, e: \(name)A?) {
+		        self.a = a
+		        self.e = e
+		    }
+		    public let a: \(name)A
+		    public let e: \(name)A?
+		}
+		public final class \(name)A {
+		    public init() {}
+		}
+		"""
+		let generated = """
+		extension \(name)Root {
+		    static func feature() -> \(name)Root {
+		        let a = \(name)A()
+		        return \(name)Root(a: a, e: \(featureSharesInstance ? "a" : "nil"))
+		    }
+
+		    static func knownRight() -> \(name)Root {
+		        let a = \(name)A()
+		        return \(name)Root(a: a, e: a)
+		    }
+		}
+		"""
+		return DifferentialValueGraph(
+			name: name,
+			path: DifferentialValuePath(fixtureFiles: ["Graph.swift": fixture], generatedFiles: ["Generated.swift": generated]),
+			probePairs: [DifferentialValueProbePair(name: "\(name)Root.feature()", featureExpression: "\(name)Root.feature()", knownRightExpression: "\(name)Root.knownRight()")],
+		)
 	}
 
 	/// The lines of a fuzzer file that SafeDI reads: attributes, type and extension declarations, `instantiate`

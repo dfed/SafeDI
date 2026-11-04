@@ -46,6 +46,23 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(Set(GraphFuzzerFeature.baseCases).subtracting(features).sorted() == [])
 	}
 
+	@Test(.enabled(if: compileVerificationIsEnabled, "The value oracle compiles generated code only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func smokeSeeds_compareRootAndMirroredPairsShowingEveryShape_whenRunThroughValueOracle() async throws {
+		// The base smoke batch's graphs that pass compare a root's mock and a mocked type's mock with their production
+		// builds, and between them show every shape the corpus's compared pairs show.
+		var counts = GraphFuzzerValueOracleCounts()
+		for result in try await smokeResults.value where result.failure == nil {
+			if let valueOracle = result.valueOracle {
+				counts.add(valueOracle, isCompared: result.isComparedByValueOracle)
+			}
+		}
+		#expect(counts.rootPairCount > 0)
+		#expect(counts.mirroredPairCount > 0)
+		let shapesTheCorpusShows = GraphFuzzerValueOracleShape.allCases.filter { Self.corpusValueOracleCounts.shapeCounts[$0, default: 0] > 0 }
+		#expect(shapesTheCorpusShows.filter { counts.shapeCounts[$0, default: 0] == 0 } == [])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	func seamSmokeSeeds_produceNoFailures_whenRunThroughToolAndCompiler() async throws {
@@ -675,6 +692,42 @@ struct SafeDIToolGraphFuzzerTests {
 
 		#expect(GraphFuzzerFinding(failure: known, laterFailures: [renamed], knownIssue: knownIssue) == .failure(renamed))
 		#expect(GraphFuzzerFinding(failure: known, laterFailures: [], knownIssue: knownIssue) == .knownIssue(knownIssue, known))
+	}
+
+	@Test
+	func finding_isFailure_whenKnownValueOracleRejectionIsFollowedByRenameFailureTheKnownIssueDoesNotDocument() {
+		// A known rejection of the value-oracle fixture masks nothing: the comparison does not run, and the wrapper and
+		// rename oracles judge the drawn graph, so a renamed graph that gives other results is reported as it would be alone.
+		let knownIssue = Self.valueOracleRejectionKnownIssue
+		let rejection = Self.valueOracleRejection(errorLines: [Self.hiddenInChainError])
+		let renamed = GraphFuzzerFailure(seed: 47, kind: .renamedGraphDiffers, details: "Reversing its labels changes its generated mock code, in S47_Root0+SafeDIMock.swift.\nThis graph:\n…")
+
+		#expect(GraphFuzzerFinding(failure: rejection, laterFailures: [renamed], knownIssue: knownIssue) == .failure(renamed))
+		#expect(GraphFuzzerFinding(failure: rejection, laterFailures: [], knownIssue: knownIssue) == .knownIssue(knownIssue, rejection))
+	}
+
+	@Test
+	func finding_isKnownIssue_whenKnownIssueDocumentsTheValueOracleRejectionAndTheRenameFailure() {
+		let knownIssue = GraphFuzzerKnownIssue(
+			reason: "A root's mock rejects a receive of a hidden label, in a graph whose mock code changes under a renaming",
+			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain"), .renamedGraphDiffers(containing: "changes its generated mock code")],
+			seeds: [47],
+		)
+		let rejection = Self.valueOracleRejection(errorLines: [Self.hiddenInChainError])
+		let renamed = GraphFuzzerFailure(seed: 47, kind: .renamedGraphDiffers, details: "Reversing its labels changes its generated mock code, in S47_Root0+SafeDIMock.swift.\nThis graph:\n…")
+
+		#expect(GraphFuzzerFinding(failure: rejection, laterFailures: [renamed], knownIssue: knownIssue) == .knownIssue(knownIssue, rejection))
+	}
+
+	@Test
+	func knownIssue_matchesValueOracleRejection_onlyWhenEveryErrorLineMatchesASignature() {
+		// The first error is the documented one; a second error of another shape is a new failure, not a known one.
+		let knownIssue = Self.valueOracleRejectionKnownIssue
+		let unfulfillableError = "/F/S47_T2.swift:5:2: error: @Received property `t4: S47_T4` is not @Instantiated or @Forwarded in chain: S47_Root0 -> S47_T2"
+
+		#expect(knownIssue.matches(Self.valueOracleRejection(errorLines: [Self.hiddenInChainError, Self.hiddenInChainError])))
+		#expect(!knownIssue.matches(Self.valueOracleRejection(errorLines: [Self.hiddenInChainError, unfulfillableError])))
+		#expect(!knownIssue.matches(Self.valueOracleRejection(errorLines: [unfulfillableError, Self.hiddenInChainError])))
 	}
 
 	@Test(.enabled(if: compileVerificationIsEnabled, "The value comparator compiles generated code only when compile verification is enabled"))
@@ -2388,6 +2441,7 @@ struct SafeDIToolGraphFuzzerTests {
 		var omittedValueGraphCount = 0
 		var publicMockOutputFeatureCounts = [GraphFuzzerPublicMockOutputFeature: Int]()
 		var publicMockOnlyErrorCounts = [String: Int]()
+		var valueOracleCounts = GraphFuzzerValueOracleCounts()
 		var knownIssueCount = 0
 		var failureCount = 0
 		// Batches run concurrently, one per core, but their findings are recorded in seed order, so the report and
@@ -2405,7 +2459,7 @@ struct SafeDIToolGraphFuzzerTests {
 						.map { configuration.startingSeed &+ UInt64($0) }
 					nextBatchIndex += 1
 					group.addTask {
-						var results = try await GraphFuzzerOracle.results(forSeeds: seeds, features: corpus.features) { seed in
+						var results = try await GraphFuzzerOracle.results(forSeeds: seeds, features: corpus.features, isolatingValueOracleGraphsOf: corpus.isolatedValueOracleSeeds) { seed in
 							report.append("seed \(seed)")
 						}
 						for index in results.indices where results[index].failure == nil
@@ -2421,6 +2475,7 @@ struct SafeDIToolGraphFuzzerTests {
 								isInspectedByValueOracle: results[index].isInspectedByValueOracle,
 								isComparedByValueOracle: results[index].isComparedByValueOracle,
 								isComparedAcrossIntegrations: results[index].isComparedAcrossIntegrations,
+								valueOracle: results[index].valueOracle,
 							)
 						}
 						for result in results {
@@ -2473,6 +2528,9 @@ struct SafeDIToolGraphFuzzerTests {
 							}
 							if result.isComparedByValueOracle {
 								valueOracleComparedCount += 1
+							}
+							if let valueOracle = result.valueOracle {
+								valueOracleCounts.add(valueOracle, isCompared: result.isComparedByValueOracle)
 							}
 							// Counted whether or not the graph also fails another way.
 							for renamedGraphFailure in result.renamedGraphFailures {
@@ -2537,6 +2595,10 @@ struct SafeDIToolGraphFuzzerTests {
 			let errorCounts = GraphFuzzerOracle.publicMockOnlyErrorMarkers.map { publicMockOnlyErrorCounts[$0, default: 0] }
 			report.append("public-mock-errors \(corpus.name) \(errorCounts.map(String.init).joined(separator: ",")) \(corpus.publicMockErrorGraphCounts.map(String.init).joined(separator: ","))")
 		}
+		// What the base corpus's value oracle compared and skipped, with the pins, which ci.yml's combine job adds up.
+		if let pinnedValueOracleCounts = corpus.valueOracleCounts {
+			report.append("value-oracle \(corpus.name) \(valueOracleCounts.reportField) \(pinnedValueOracleCounts.reportField)")
+		}
 		// Every corpus that exists, so the combine job can tell a corpus whose shards left no report from none.
 		report.append("corpora \(([Self.baseCorpus] + GraphFuzzerGeneratorFeature.allCases.map { Self.corpus(for: [$0]) }).map(\.name).joined(separator: " "))")
 		if configuration.startingSeed == 0, configuration.iterations == corpus.seedCount,
@@ -2560,6 +2622,9 @@ struct SafeDIToolGraphFuzzerTests {
 			if valueOracleInspectedCount != corpus.valueOracleInspectedGraphCount {
 				reportProblem("The value oracle inspected \(valueOracleInspectedCount) graphs of the \(corpus.name) corpus, but \(corpus.valueOracleInspectedGraphCount) are pinned.")
 			}
+			if let pinnedValueOracleCounts = corpus.valueOracleCounts, valueOracleCounts != pinnedValueOracleCounts {
+				reportProblem("The value oracle compared and skipped, over the \(corpus.name) corpus, \(valueOracleCounts.reportField), but \(pinnedValueOracleCounts.reportField) is pinned (`corpusValueOracleCounts`).")
+			}
 			if omittedValueGraphCount != corpus.omittedValueGraphCount {
 				reportProblem("The tool rejected \(omittedValueGraphCount) graphs of the \(corpus.name) corpus because a caller holds a value its tier omits, but \(corpus.omittedValueGraphCount) are pinned.")
 			}
@@ -2581,27 +2646,32 @@ struct SafeDIToolGraphFuzzerTests {
 
 	// MARK: Seeds
 
-	/// The ordinary suite's batch: seeds 12, 25, 62, 582, 691, 705, 731, 930, 2420, and 2611, whose graphs the tool accepts,
+	/// The ordinary suite's batch: seeds 12, 25, 62, 99, 304, 582, 691, 705, 731, 930, 2420, 2611, and 3360, whose graphs the tool accepts,
 	/// with the same results under every `GraphFuzzerRenaming`, and which between them exercise every feature (seed 25's
 	/// graph has a chain of aliases through an `onlyIfAvailable` alias; seed 731's has a chain through an
 	/// `onlyIfAvailable` alias of a sibling's optional form; seed 2420's has such a chain through a child scope; the graphs of
 	/// seeds 582 and 705 receive a constant of a type that is not `@Instantiable` beneath the type that instantiates it;
 	/// the mocked owner of such a constant in seed 2611 receives a type that receives it as a `LazilyInstantiated`, and
 	/// in seed 12 lazily instantiates it as one wrapper while the type it receives receives the other kind), and
-	/// seeds 14, 4224, and 4516, whose graphs it rejects (seed 4224's with the dependency cycle through a chain through a
+	/// seeds 14, 40, 4224, and 4516, whose graphs it rejects (seed 4224's with the dependency cycle through a chain through a
 	/// child scope, because the sibling's type receives the other sibling; seed 4516's because a declaration in the tree
-	/// of a dependency a mock builds beside the mocked type hides a receive beneath it). It is small because compiling
-	/// generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on every pull request. Compiling the batch
-	/// is one `swiftc` invocation when nothing fails.
-	static let smokeSeeds: [UInt64] = [12, 14, 25, 62, 582, 691, 705, 731, 930, 2_420, 2_611, 4_224, 4_516]
+	/// of a dependency a mock builds beside the mocked type hides a receive beneath it; seed 40's for an unfulfillable
+	/// receive, which keeps the rejected share at the quarter, rounded down, that
+	/// `smokeSeeds_includeAcceptedAndRejectedGraphs_whenRunThroughTool` requires). Seeds 99, 304 and 3360 complete what
+	/// the base corpus's value oracle must show in passing graphs: a label declared at two depths of a root's tree above
+	/// a receiver of it (99), an `onlyIfAvailable` alias of a dependency a mock promotes (304), and a promoted wrapper
+	/// whose label the tree also receives by value, as the mocked type does (3360). It is small because compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on
+	/// every pull request. Compiling the batch is one `swiftc` invocation when nothing fails, and comparing its values
+	/// one compile and one link.
+	static let smokeSeeds: [UInt64] = [12, 14, 25, 40, 62, 99, 304, 582, 691, 705, 731, 930, 2_420, 2_611, 3_360, 4_224, 4_516]
 
-	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x36C0529696F414
+	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x96D40F1B1C4917B9
 
 	/// The `GraphFuzzerPartition` of the smoke and known-issue seeds' graphs, as `partitionHash(forSeeds:)` hashes
 	/// them; `corpusPartitionHash` pins the whole corpus's. The partition draws nothing from the seed, so changing it
 	/// changes neither the graphs nor the pins on them: these pins make a change to the partition deliberate. They
 	/// move with the generator and, this one, with the smoke and known-issue seeds too, as the fixture hashes do.
-	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x23FBF493D5BD0528
+	static let smokeAndKnownIssuePartitionHash: UInt64 = 0x6009E7DD49278D76
 
 	/// The corpus, seeds `0..<corpusSeedCount`, which ci.yml fuzzes on every pull request and push to main and
 	/// `SAFEDI_GRAPH_FUZZER_ITERATIONS=corpus` selects. `knownIssues` lists every one that fails.
@@ -2696,6 +2766,14 @@ struct SafeDIToolGraphFuzzerTests {
 		/// How many graphs the tool rejects with each of a public mock's own errors, in the order of
 		/// `GraphFuzzerOracle.publicMockOnlyErrorMarkers`.
 		var publicMockErrorGraphCounts = [Int]()
+		/// What the base corpus's value oracle compares and skips over the whole corpus, or `nil` for a corpus that has
+		/// no such oracle.
+		var valueOracleCounts: GraphFuzzerValueOracleCounts?
+
+		/// The seeds whose value-oracle fixture is known not to compile, which the value oracle compares each on its own.
+		var isolatedValueOracleSeeds: Set<UInt64> {
+			SafeDIToolGraphFuzzerTests.isolatedValueOracleSeeds(of: knownIssues)
+		}
 	}
 
 	static let baseCorpus = Corpus(
@@ -2709,10 +2787,52 @@ struct SafeDIToolGraphFuzzerTests {
 		knownIssues: knownIssues,
 		knownIssuesName: "knownIssues",
 		staleSeedRemedy: { _, _ in "remove it from `knownIssues`, and from `seamCorpusSeedsOfOtherShapes` when it is listed there" },
-		valueOracleInspectedGraphCount: 0,
+		valueOracleInspectedGraphCount: corpusValueOracleInspectedGraphCount,
 		spellingDrawFeatures: [],
 		omittedValueGraphCount: 0,
+		valueOracleCounts: corpusValueOracleCounts,
 	)
+
+	/// How many of the corpus's graphs the base corpus's value oracle inspects: every graph the tool accepts.
+	static let corpusValueOracleInspectedGraphCount = corpusAcceptedSeedCount
+
+	/// What the base corpus's value oracle compares and skips over the whole corpus (`GraphFuzzerValueOracleCounts`).
+	static let corpusValueOracleCounts = GraphFuzzerValueOracleCounts(
+		rootPairCount: 4_499,
+		rootPairsSum: GraphFuzzerSeedSetSum(value: 0x56D28094AB155BF1),
+		mirroredPairCount: 2_096,
+		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0xC87FF3DE4030879),
+		skipCounts: [
+			.requiredParameter: 1_877,
+			.twoFormsOfOneLabel: 23,
+			.requiredOptionalReceiveOfNonOptionalDeclaration: 8,
+			.requiredReceiveOfUncreatedAlias: 12,
+		],
+		shapeCounts: [
+			.rootTreePropertyReceivedByTwoOrMoreTypes: 827,
+			.rootTreeLabelDeclaredAtTwoDepthsAboveReceiver: 108,
+			.promotedDependencyReceivedByTwoOrMoreTypes: 160,
+			.onlyIfAvailableAliasOfPromotedDependency: 59,
+			.requiredAliasOfPromotedDependency: 216,
+			.promotedWrapperReceivedInAnotherForm: 3,
+			.instanceOfPromotedWrapperPassedToMockedType: 1,
+			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 176,
+		],
+		drawnMocksMatchingOnlyAfterNormalizationCount: 483,
+	)
+
+	/// The seeds of `knownIssues` whose value-oracle fixture is known not to compile.
+	static func isolatedValueOracleSeeds(of knownIssues: [GraphFuzzerKnownIssue]) -> Set<UInt64> {
+		Set(knownIssues.filter { knownIssue in
+			knownIssue.signatures.contains { signature in
+				if case .valueOracleFixtureDoesNotCompile = signature {
+					true
+				} else {
+					false
+				}
+			}
+		}.flatMap(\.seeds))
+	}
 
 	/// The corpus drawn with the `generateDependencyTree` feature: seeds `0..<seamCorpusSeedCount`, each graph with
 	/// one type a root reaches declared as a seam. Smaller than the base corpus while the feature settles.
@@ -2765,7 +2885,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// hole rolls and the seam tests' draws were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 92, 98, 180, 196, 277, 605, 609, 743]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x9F5CC38FDE161121
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xD97E8B376A10CA63
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -2944,6 +3064,8 @@ struct SafeDIToolGraphFuzzerTests {
 	/// adjustments, a shape left with no seed dropped, so that a fix there is a fix here, and the long run reports a
 	/// seed that diverges as stale or new. The seam's own shape follows them. Each seed is listed once.
 	static let seamKnownIssues: [GraphFuzzerKnownIssue] = knownIssues.compactMap { knownIssue in
+		// The base corpus's value oracle runs in no other corpus.
+		guard !knownIssue.isBaseCorpusValueOracleShape else { return nil }
 		let seeds = (knownIssue.seeds.filter { $0 < UInt64(seamCorpusSeedCount) && !seamCorpusSeedsOfOtherShapes.contains($0) }
 			+ (seamCorpusSeedsAddedToInheritedShapes[knownIssue.reason] ?? [])).sorted()
 		return seeds.isEmpty ? nil : GraphFuzzerKnownIssue(reason: knownIssue.reason, signatures: knownIssue.signatures, seeds: seeds)
@@ -2966,20 +3088,24 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.seamBuildsOtherValuesThanInline(containing: "> aliasSeam > aliasAuth:\n  feature:     aliasAuth: nil")],
 			seeds: [698],
 		),
-		// A seed `knownIssues` lists under another shape, whose graph the seam's draw changes so that it fails this one.
+		// A seed `knownIssues` lists under another shape, whose graph the seam's draw changes so that it fails this one, or
+		// whose base entry also documents a failure of the base corpus's value oracle, which the seam corpus does not run
+		// (471).
 		GraphFuzzerKnownIssue(
 			reason: "SafeDIMockConfiguration.swift declares its extensions in the order of the roots that reach them, in a graph the base corpus lists under another shape",
 			signatures: [.renamedGraphDiffers(containing: "changes its generated mock configuration code")],
-			seeds: [311],
+			seeds: [311, 471],
 		),
 	]
 
 	private static let labelSortedPassThroughReason = "A seam's pass-through parameters are sorted by label, so reversing the labels reorders its generated initializer and the calls of it"
 
 	/// Seeds of `knownIssues` that the seam corpus's run observed failing with the seam's own shape, or not failing
-	/// at all, since the seam's draw changed their graphs; the inherited lists leave them out. Observed, not
-	/// derived: a seed here that a run finds failing its inherited shape again is a new failure, and goes back.
-	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 309, 310, 311, 364, 371, 381, 393, 431, 434, 448, 476, 545, 632, 714, 728, 768, 774, 786, 808, 847, 903, 975]
+	/// at all, since the seam's draw changed their graphs, and 471, whose base entry also documents a failure of the base
+	/// corpus's value oracle, which the seam corpus does not run, so the seam's own shape lists it; the inherited lists
+	/// leave them out. Observed, not derived: a seed here that a run finds failing its inherited shape again is a new
+	/// failure, and goes back.
+	private static let seamCorpusSeedsOfOtherShapes: Set<UInt64> = [35, 45, 107, 114, 309, 310, 311, 364, 371, 381, 393, 431, 434, 448, 471, 476, 545, 632, 714, 728, 768, 774, 786, 808, 847, 903, 975]
 
 	/// Seeds that `knownIssues` does not list under an inherited shape, whose graphs the seam's draw changes so that
 	/// they fail it, by the shape's reason. Observed, not derived, as `seamCorpusSeedsOfOtherShapes` is.
@@ -3257,18 +3383,18 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(containing: "changes its generated mock code")],
 			seeds: [
 				3, 35, 36, 45, 55, 77, 107, 114, 131, 157, 168, 209, 223, 233, 241, 281,
-				309, 311, 364, 371, 380, 381, 383, 390, 431, 448, 450, 473, 476, 515, 545, 548,
+				311, 364, 371, 380, 381, 383, 390, 431, 448, 450, 473, 476, 515, 545, 548,
 				567, 593, 617, 630, 632, 680, 714, 728, 732, 751, 768, 774, 785, 786, 808, 833,
 				836, 847, 886, 903, 912, 940, 948, 975, 987, 1_004, 1_029, 1_035, 1_042, 1_044, 1_061, 1_064,
 				1_072, 1_075, 1_084, 1_092, 1_139, 1_140, 1_145, 1_147, 1_215, 1_236, 1_289, 1_300, 1_322, 1_329, 1_335, 1_352,
 				1_362, 1_369, 1_372, 1_432, 1_433, 1_441, 1_453, 1_464, 1_492, 1_496, 1_504, 1_524, 1_525, 1_531, 1_535, 1_563,
 				1_567, 1_602, 1_633, 1_646, 1_664, 1_675, 1_695, 1_742, 1_781, 1_784, 1_804, 1_817, 1_853, 1_857, 1_867, 1_896,
-				1_938, 1_970, 1_972, 2_017, 2_051, 2_057, 2_083, 2_084, 2_123, 2_149, 2_152, 2_165, 2_201, 2_211, 2_234, 2_249,
+				1_938, 1_970, 1_972, 2_017, 2_051, 2_057, 2_083, 2_084, 2_123, 2_149, 2_152, 2_165, 2_211, 2_234, 2_249,
 				2_270, 2_277, 2_287, 2_296, 2_316, 2_325, 2_335, 2_337, 2_348, 2_389, 2_403, 2_430, 2_432, 2_437, 2_444, 2_456,
 				2_484, 2_518, 2_553, 2_555, 2_577, 2_630, 2_637, 2_667, 2_704, 2_731, 2_741, 2_791, 2_808, 2_835, 2_841, 2_845,
-				2_874, 2_902, 2_914, 2_916, 3_004, 3_023, 3_064, 3_074, 3_075, 3_091, 3_132, 3_134, 3_180, 3_183, 3_215, 3_221,
+				2_874, 2_902, 2_914, 2_916, 3_004, 3_023, 3_064, 3_074, 3_075, 3_091, 3_134, 3_180, 3_183, 3_215, 3_221,
 				3_225, 3_241, 3_252, 3_298, 3_306, 3_329, 3_344, 3_361, 3_397, 3_430, 3_439, 3_470, 3_491, 3_504, 3_506, 3_513,
-				3_526, 3_533, 3_534, 3_537, 3_577, 3_582, 3_588, 3_596, 3_600, 3_602, 3_620, 3_645, 3_648, 3_661, 3_692, 3_699,
+				3_526, 3_533, 3_534, 3_537, 3_577, 3_582, 3_588, 3_596, 3_600, 3_602, 3_620, 3_645, 3_648, 3_661, 3_699,
 				3_707, 3_715, 3_723, 3_741, 3_750, 3_775, 3_776, 3_805, 3_823, 3_843, 3_894, 3_915, 3_994, 4_044, 4_068, 4_102,
 				4_107, 4_110, 4_117, 4_122, 4_125, 4_156, 4_177, 4_191, 4_192, 4_196, 4_206, 4_213, 4_217, 4_227, 4_254, 4_260,
 				4_266, 4_281, 4_304, 4_344, 4_371, 4_378, 4_393, 4_404, 4_420, 4_424, 4_428, 4_496, 4_515, 4_534, 4_541, 4_545,
@@ -3280,7 +3406,7 @@ struct SafeDIToolGraphFuzzerTests {
 			reason: "SafeDIMockConfiguration.swift declares its extensions in the order of the roots that reach them",
 			signatures: [.renamedGraphDiffers(containing: "changes its generated mock configuration code")],
 			seeds: [
-				69, 170, 173, 310, 348, 393, 434, 471, 497, 595, 790, 929, 1_138, 1_185, 1_202, 1_400,
+				69, 170, 173, 310, 348, 393, 434, 497, 595, 790, 929, 1_138, 1_185, 1_202, 1_400,
 				1_560, 1_571, 1_650, 1_660, 1_691, 1_730, 1_769, 1_786, 1_790, 1_836, 1_992, 2_011, 2_054, 2_186, 2_254, 2_937,
 				3_028, 3_482, 3_510, 3_702, 3_789, 3_847, 3_931, 3_966, 4_535, 4_602, 4_613, 4_631, 4_643, 4_974, 4_975,
 			],
@@ -3300,9 +3426,47 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.compilerWarning(containing: "was never used")],
 			seeds: [916],
 		),
+		GraphFuzzerKnownIssue(
+			reason: "A root with generateMock: true has its mock's tree rejected for a receive, only if available, of a label a closer declaration holds with another type, which production accepts for the same tree",
+			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain")],
+			seeds: [
+				47, 598, 939, 1_028, 1_116, 1_323, 1_499, 1_614, 1_687, 1_793, 2_147, 2_775, 3_089, 3_208, 3_698, 3_761,
+				3_813, 4_311, 4_388,
+			],
+		),
+		// A known rejection masks no later failure, so a graph that also changes under a renaming documents both.
+		GraphFuzzerKnownIssue(
+			reason: "A root with generateMock: true has its mock's tree rejected for a receive, only if available, of a label a closer declaration holds with another type, in a graph that also changes its generated mock code under a renaming (listed under that shape once the rejection is fixed)",
+			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain"), .renamedGraphDiffers(containing: "changes its generated mock code")],
+			seeds: [309, 2_201, 3_132, 3_692],
+		),
+		GraphFuzzerKnownIssue(
+			reason: "A root with generateMock: true has its mock's tree rejected for a receive, only if available, of a label a closer declaration holds with another type, in a graph that also changes its generated mock configuration code under a renaming (listed under that shape once the rejection is fixed)",
+			signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain"), .renamedGraphDiffers(containing: "changes its generated mock configuration code")],
+			seeds: [471],
+		),
 	]
 
 	/// Known issues for the tests of `GraphFuzzerFinding`, which must not depend on what `knownIssues` lists today.
+	private static let valueOracleRejectionKnownIssue = GraphFuzzerKnownIssue(
+		reason: "A root's mock rejects a receive of a hidden label",
+		signatures: [.valueOracleFixtureRejected(containing: "is hidden in chain")],
+		seeds: [47],
+	)
+	private static let hiddenInChainError = "/F/S47_T1.swift:7:2: error: @Received property `t1: S47_T3?` is hidden in chain: S47_Root0 -> S47_T0 -> S47_T1. `S47_T0` declares `t1: S47_T1` with the same label, so the types below `S47_T0` receive `t1: S47_T1` instead. Give `t1: S47_T1` on `S47_T0` a different label to fix."
+
+	/// The failure of a value-oracle fixture the tool rejects with `errorLines`, each followed by a note, as the tool
+	/// reports a hidden label.
+	private static func valueOracleRejection(errorLines: [String]) -> GraphFuzzerFailure {
+		let diagnostics = errorLines.map { "\($0)\n/F/S47_T0.swift:8:2: note: `t1: S47_T1` is declared here" }
+		return GraphFuzzerFailure(
+			seed: 47,
+			kind: .valueOracleFixtureRejected,
+			details: (diagnostics + ["The value-oracle fixture:", "…"]).joined(separator: "\n"),
+			rejectionErrorLines: errorLines,
+		)
+	}
+
 	private static let valueDivergenceKnownIssue = GraphFuzzerKnownIssue(
 		reason: "A documented divergence",
 		signatures: [.seamBuildsOtherValuesThanInline(containing: "known right: aliasAuth: nil")],
@@ -3440,7 +3604,7 @@ struct SafeDIToolGraphFuzzerTests {
 
 /// The smoke batch's results, computed once per process and shared by the tests that check them.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *) private let smokeResults = Task {
-	try await GraphFuzzerOracle.results(forSeeds: SafeDIToolGraphFuzzerTests.smokeSeeds)
+	try await GraphFuzzerOracle.results(forSeeds: SafeDIToolGraphFuzzerTests.smokeSeeds, isolatingValueOracleGraphsOf: SafeDIToolGraphFuzzerTests.baseCorpus.isolatedValueOracleSeeds)
 }
 
 /// The seam smoke batch's results, drawn with the `generateDependencyTree` feature, computed once per process.
