@@ -5,6 +5,7 @@ that ci.yml splits each corpus into. Each shard's long run ends its report with
 
     shard <starting seed> <count> <accepted count> <accepted seed-set sum> <corpus>
     corpus <seed count> <pinned accepted count> <pinned accepted seed-set sum> <corpus>
+    features <corpus> <feature>=<accepted graphs showing it>,… <feature>=<pinned count>,…
     inspected <graphs the value oracle inspected> <pinned count> <corpus>
     compared <graphs the value comparator compared> <corpus>
     omitted-values <graphs rejected because a caller holds a value its tier omits> <pinned count> <corpus>
@@ -15,12 +16,15 @@ that ci.yml splits each corpus into. Each shard's long run ends its report with
 where <corpus> names the corpus the shard fuzzed: `base`, or a generator
 feature's name. For each corpus the shards must cover 0..<seed count exactly
 once, and the accepted counts and seed-set sums (a wrapping sum of per-seed
-hashes, so parts add up) must add up to the pins, the graphs the value oracle
+hashes, so parts add up) must add up to the pins, the accepted graphs that show each feature must add up to its
+pinned count wherever the corpus pins them (`features`), the graphs the value oracle
 inspected and the graphs rejected for an omitted value must add up to their pins, every spelling the corpus draws must be
 drawn in some accepted graph of some shard, each output feature with a pinned minimum must show in at least that
 percentage of the corpus's accepted graphs (the public mock corpus reports `outputs`), the graphs each public mock
 error rejects must add up to their pins (`public-mock-errors`), and no shard may report a failure,
-a stale known issue, or a problem. Writes a Markdown summary to
+a stale known issue, or a problem. Every long run writes `features` and `inspected` for its corpus, so a
+complete report that names a corpus without one of them is a problem: a run that stopped writing the line
+would otherwise skip that line's check silently. Writes a Markdown summary to
 SUMMARY and the job summary, and exits non-zero when anything is missing or
 does not match.
 """
@@ -41,6 +45,8 @@ omitted_values_by_corpus = {}
 omitted_values_pins_by_corpus = {}
 required_spellings_by_corpus = {}
 accepted_spellings_by_corpus = {}
+feature_counts_by_corpus = {}
+feature_pins_by_corpus = {}
 output_counts_by_corpus = {}
 output_minimums_by_corpus = {}
 error_counts_by_corpus = {}
@@ -51,6 +57,9 @@ expected_corpora = set()
 for path in report_paths:
     shard_lines = []
     completed = False
+    reported_corpora = set()
+    featured_corpora = set()
+    inspected_corpora = set()
     with open(path) as report:
         for line in report:
             fields = line.split()
@@ -60,9 +69,11 @@ for path in report_paths:
                 shard_lines.append((fields[5], int(fields[1]), int(fields[2]), int(fields[3]), int(fields[4], 16)))
             elif fields[0] == "corpus" and len(fields) == 5:
                 pins_by_corpus.setdefault(fields[4], set()).add((int(fields[1]), int(fields[2]), int(fields[3], 16)))
+                reported_corpora.add(fields[4])
             elif fields[0] == "corpora":
                 expected_corpora.update(fields[1:])
             elif fields[0] == "inspected" and len(fields) == 4:
+                inspected_corpora.add(fields[3])
                 inspected_by_corpus[fields[3]] = inspected_by_corpus.get(fields[3], 0) + int(fields[1])
                 inspected_pins_by_corpus.setdefault(fields[3], set()).add(int(fields[2]))
             elif fields[0] == "compared" and len(fields) == 3:
@@ -74,6 +85,14 @@ for path in report_paths:
                 # An empty list is an absent field, so a corpus that draws no spelling reports two fields.
                 required_spellings_by_corpus.setdefault(fields[1], set()).update(filter(None, (fields[2] if len(fields) > 2 else "").split(",")))
                 accepted_spellings_by_corpus.setdefault(fields[1], set()).update(filter(None, (fields[3] if len(fields) > 3 else "").split(",")))
+            elif fields[0] == "features" and len(fields) >= 3:
+                featured_corpora.add(fields[1])
+                counts = feature_counts_by_corpus.setdefault(fields[1], {})
+                for item in filter(None, fields[2].split(",")):
+                    feature, count = item.split("=")
+                    counts[feature] = counts.get(feature, 0) + int(count)
+                # An empty list is an absent field, so a corpus that pins no feature reports three fields.
+                feature_pins_by_corpus.setdefault(fields[1], set()).add(fields[3] if len(fields) > 3 else "")
             elif fields[0] == "outputs" and len(fields) >= 3:
                 counts = output_counts_by_corpus.setdefault(fields[1], {})
                 for item in filter(None, fields[2].split(",")):
@@ -91,6 +110,11 @@ for path in report_paths:
                 problems.append(f"{path}: {line.strip()}")
     if len(shard_lines) != 1 or not completed:
         problems.append(f"{path} has no complete shard result; that shard failed or did not finish.")
+    else:
+        for corpus in sorted(reported_corpora - featured_corpora):
+            problems.append(f"The {corpus} corpus reported no per-feature counts in {path}.")
+        for corpus in sorted(reported_corpora - inspected_corpora):
+            problems.append(f"The {corpus} corpus reported no count of the graphs the value oracle inspected in {path}.")
     for corpus, starting_seed, count, accepted_count, accepted_sum in shard_lines:
         shards_by_corpus.setdefault(corpus, []).append((starting_seed, count, accepted_count, accepted_sum))
 
@@ -150,6 +174,25 @@ if not problems:
                     f"The tool rejected {error_counts_by_corpus.get(corpus)} graphs of the {corpus} corpus with each of a public "
                     f"mock's own errors, but {pinned_errors} are pinned."
                 )
+        feature_pins = feature_pins_by_corpus.get(corpus, set())
+        if len(feature_pins) > 1:
+            problems.append(f"The shards of the {corpus} corpus disagree about its per-feature pins: {sorted(feature_pins)}.")
+        elif feature_pins and next(iter(feature_pins)):
+            pinned_features = dict(item.split("=") for item in next(iter(feature_pins)).split(","))
+            feature_counts = feature_counts_by_corpus.get(corpus, {})
+            mismatches = []
+            for feature in sorted(set(feature_counts) | set(pinned_features)):
+                count = feature_counts.get(feature, 0)
+                if feature not in pinned_features:
+                    mismatches.append(f"{feature} {count} (no pin)")
+                elif count != int(pinned_features[feature]):
+                    mismatches.append(f"{feature} {count} (pinned {pinned_features[feature]})")
+            if mismatches:
+                problems.append(
+                    f"The accepted graphs of the {corpus} corpus show these features in other numbers than pinned: "
+                    f"{', '.join(mismatches)}. A generator or tool change that draws or accepts other graphs must update "
+                    "the per-feature pins deliberately, with the hashes and the accepted-seed pins."
+                )
         output_minimums = output_minimums_by_corpus.get(corpus, set())
         if len(output_minimums) > 1:
             problems.append(f"The shards of the {corpus} corpus disagree about its output features' minimum shares: {sorted(output_minimums)}.")
@@ -176,6 +219,8 @@ with open(summary_path, "w") as summary:
     else:
         for corpus, shards in sorted(shards_by_corpus.items()):
             summary.write(f"{len(shards)} shards covered the whole {corpus} corpus, and the accepted set matches its pins.\n")
+            if any(feature_pins_by_corpus.get(corpus, set())):
+                summary.write(f"The accepted graphs of the {corpus} corpus show each feature the pinned number of times.\n")
             if inspected_by_corpus.get(corpus, 0) > 0:
                 summary.write(
                     f"The value oracle inspected {inspected_by_corpus[corpus]} graphs of the {corpus} corpus and compared "
