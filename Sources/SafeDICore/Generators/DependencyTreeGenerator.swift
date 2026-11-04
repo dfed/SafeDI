@@ -1655,6 +1655,9 @@ public actor DependencyTreeGenerator {
 			let requirement: AccessRequirement
 			/// The module the generated code compiles in.
 			let emittingModule: ModuleIdentity
+			/// Why SafeDITool does not know the name of the module the generated code compiles in, or `nil` when it knows
+			/// it, which decides how the error names that module.
+			let emittingModuleUnnamedReason: DependencyTreeGenerator.EmittingModule.UnnamedReason?
 			/// The module that declares the declaration.
 			let declaringModule: ModuleIdentity
 			/// Where the declaration begins, when its file can be read where it is recorded, so an editor can open it.
@@ -1821,8 +1824,9 @@ public actor DependencyTreeGenerator {
 			}
 
 			/// How an error names the declaration that must widen (`subject`), says what the generated code cannot do
-			/// without it (`inability`), and names it in the fix (`fixedDeclaration`).
-			private var declarationPhrases: (subject: String, inability: String, fixedDeclaration: String) {
+			/// without it (`inability`), names it in the fix (`fixedDeclaration`), and names the constructed type after the
+			/// subject (`constructedTypeReference`): `it` where the subject is the type itself.
+			private var declarationPhrases: (subject: String, inability: String, fixedDeclaration: String, constructedTypeReference: String) {
 				let constructedTypeName = "`\(constructedType.asSource)`"
 				func name(of member: AccessNeed.Member) -> String {
 					switch member {
@@ -1837,12 +1841,14 @@ public actor DependencyTreeGenerator {
 				let subject: String
 				let inability: String
 				let fixedDeclaration: String
+				var constructedTypeReference = constructedTypeName
 				switch accessNeed.declaration {
 				case let .type(type):
 					if type == constructedType {
 						subject = constructedTypeName
 						inability = "construct it"
 						fixedDeclaration = constructedTypeName
+						constructedTypeReference = "it"
 					} else {
 						subject = "`\(type.asSource)`, which encloses \(constructedTypeName),"
 						inability = "construct \(constructedTypeName)"
@@ -1863,7 +1869,7 @@ public actor DependencyTreeGenerator {
 					inability = "call it"
 					fixedDeclaration = member == .initializer ? "the initializer" : name(of: member)
 				}
-				return (subject, inability, fixedDeclaration)
+				return (subject, inability, fixedDeclaration, constructedTypeReference)
 			}
 
 			/// A single `error:` line, since Xcode drops notes from build-tool output. When the declaration's file can
@@ -1872,10 +1878,14 @@ public actor DependencyTreeGenerator {
 			/// such as a sandboxed Bazel action, or a `.safedi` file from another machine – it is reported where this
 			/// module refers to the construction, and names the module that must change.
 			var sourceDiagnostic: SourceDiagnostic {
-				let (subject, inability, fixedDeclaration) = declarationPhrases
+				let (subject, inability, fixedDeclaration, constructedTypeReference) = declarationPhrases
 				let module = emittingModule.moduleName.map { "module `\($0)`" } ?? "this module"
 				// A mock's construction names the mock, whose tree the user did not write.
 				let emitter = mockRoot.map { "the mock of `\($0.type.asSource)`, generated in \(module)," } ?? "\(module),"
+				// Under the Xcode project plugin, the error is reported at a declaration another target compiles, where "this
+				// module" reads as that target, so it names the target the generated code compiles in as the Manual's "Limits of
+				// the Xcode project plugin" does: the target that builds the type, or the mock.
+				let xcodeProjectPluginEmitter = mockRoot.map { "the mock of `\($0.type.asSource)`, generated in the target that builds `\($0.type.asSource)`," } ?? "the target that builds \(constructedTypeReference),"
 				let reason = switch requirement {
 				case .internal:
 					if let mockRoot {
@@ -1888,7 +1898,12 @@ public actor DependencyTreeGenerator {
 				case .public:
 					"\(emitter) in another package, cannot \(inability) in the code SafeDI generates"
 				case .packageUnverified:
-					"\(emitter) which SafeDI cannot tell is in the same package, cannot \(inability) in the code SafeDI generates"
+					switch emittingModuleUnnamedReason {
+					case .xcodeProjectPlugin:
+						"\(xcodeProjectPluginEmitter) which the Xcode project plugin cannot tell is in the same package, cannot \(inability) in the code SafeDI generates"
+					case .noModuleName, .none:
+						"\(emitter) which SafeDI cannot tell is in the same package, cannot \(inability) in the code SafeDI generates"
+					}
 				}
 				let level = AccessLevel.spelling(satisfying: requirement)
 				// Reported in this module, the error names the module whose declaration must change.
@@ -2241,7 +2256,7 @@ public actor DependencyTreeGenerator {
 						receivers: [],
 						parameterKind: .builder(fulfilledType: hole.instantiatedType, seamModuleName: seam.moduleName, isPassedUp: hole.innerSeamType != nil),
 					)
-					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(hole.builderLabel): \(hole.builderType(qualifiedBy: hole.scopeSeamType).asSource)`, the builder for `\(hole.ownerType.asSource)`'s `\(hole.property.asSource)`, which no @Instantiable declaration \(module) can see fulfills.\(causeText) \(remedies)"
+					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(hole.builderLabel): \(hole.builderType(qualifiedBy: hole.scopeSeamType).asSource)`, the builder for `\(hole.ownerType.asSource)`'s `\(hole.property.asSource)`, which no @Instantiable declaration that \(module) can see fulfills.\(causeText) \(remedies)"
 					declarationNotes = SeamAccessExplanation.declarationNotes(for: hole.accessCause, neededLevel: tier)
 				case let .parameters(.initializerRedeclared(parameters, handWrittenInitializer)):
 					receivers = []
@@ -3598,6 +3613,7 @@ public actor DependencyTreeGenerator {
 					accessNeed: accessNeed,
 					requirement: requirement,
 					emittingModule: emittingModule.identity,
+					emittingModuleUnnamedReason: emittingModule.unnamedReason,
 					declaringModule: declaringModule,
 					readableDeclarationLocation: accessNeed.access.declarationStartLocation.flatMap { declarationStartLocation in
 						emittingModule.isReadableFile(declarationStartLocation.filePath) ? declarationStartLocation : nil

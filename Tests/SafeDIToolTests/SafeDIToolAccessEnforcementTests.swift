@@ -2073,14 +2073,28 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			let rootPath = NormalizedFilePath(fixtures.compilerPath(of: "Root.swift")).path
 			let featureViewPath = fixtures["AdditionalDirectory/FeatureView.swift"]
 			let inlineSeamError = "\(rootPath):9:5: error: \(Self.inlineSeamMessage(reaching: "`Formatter` is `internal`", unnamedReason: unnamedReason))"
-			let featureViewErrors = """
-			\(featureViewPath):5:5: error: `FeatureView`’s initializer is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
-			\(featureViewPath):5:5-5:5: fixit: package\(" ")
-			\(featureViewPath):15:1: error: `Formatter` is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Formatter` `package` to fix, or `public` if the two modules are in different packages.
-			\(featureViewPath):15:1-15:1: fixit: package\(" ")
-			\(featureViewPath):16:5: error: `Formatter`’s initializer is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
-			\(featureViewPath):16:5-16:5: fixit: package\(" ")
-			"""
+			// Each error is at a declaration the target reads from another directory, so under the Xcode project plugin it
+			// names the target by what it builds, since "this module" would read as the declaration's own.
+			let featureViewErrors = switch unnamedReason {
+			case .xcodeProjectPlugin:
+				"""
+				\(featureViewPath):5:5: error: `FeatureView`’s initializer is `internal`, so the target that builds `FeatureView`, which the Xcode project plugin cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
+				\(featureViewPath):5:5-5:5: fixit: package\(" ")
+				\(featureViewPath):15:1: error: `Formatter` is `internal`, so the target that builds it, which the Xcode project plugin cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Formatter` `package` to fix, or `public` if the two modules are in different packages.
+				\(featureViewPath):15:1-15:1: fixit: package\(" ")
+				\(featureViewPath):16:5: error: `Formatter`’s initializer is `internal`, so the target that builds `Formatter`, which the Xcode project plugin cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
+				\(featureViewPath):16:5-16:5: fixit: package\(" ")
+				"""
+			case .noModuleName:
+				"""
+				\(featureViewPath):5:5: error: `FeatureView`’s initializer is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
+				\(featureViewPath):5:5-5:5: fixit: package\(" ")
+				\(featureViewPath):15:1: error: `Formatter` is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Formatter` `package` to fix, or `public` if the two modules are in different packages.
+				\(featureViewPath):15:1-15:1: fixit: package\(" ")
+				\(featureViewPath):16:5: error: `Formatter`’s initializer is `internal`, so this module, which SafeDI cannot tell is in the same package, cannot call it in the code SafeDI generates. Make the initializer `package` to fix, or `public` if the two modules are in different packages.
+				\(featureViewPath):16:5-16:5: fixit: package\(" ")
+				"""
+			}
 			return rootPath < featureViewPath ? "\(inlineSeamError)\n\(featureViewErrors)" : "\(featureViewErrors)\n\(inlineSeamError)"
 		}) {
 			try await executeSafeDIToolTest(
@@ -2093,6 +2107,64 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 				additionalDirectorySwiftFileContent: [
 					Self.featureViewFile(formatterDeclaration: Self.internalFormatter),
 					Self.packageNetworkClient,
+				],
+				pluginInvocation: .scanWhilePlanning(reportsFixtureDirectoryThroughSymbolicLink: false),
+				filesToDelete: &filesToDelete,
+				buildSettingArguments: buildSettingArguments,
+			)
+		}
+	}
+
+	@Test(arguments: [DependencyTreeGenerator.EmittingModule.UnnamedReason.xcodeProjectPlugin, .noModuleName])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsConstructionNamingMockAndItsTarget_whenTargetThatNamesNoModuleCannotConstructTypeItsMockBuilds(unnamedReason: DependencyTreeGenerator.EmittingModule.UnnamedReason) async {
+		// The mock of `Screen`, a type of the target's own, builds `Formatter`, which the target reads from another
+		// directory: under the Xcode project plugin the error names the target by what it builds, since "this module"
+		// would read as the declaration's own.
+		let buildSettingArguments: [String] = switch unnamedReason {
+		case .xcodeProjectPlugin:
+			["--build-setting-product-module-name=[App]"]
+		case .noModuleName:
+			[]
+		}
+		await assertThrowsError(diagnostics: { fixtures in
+			let formatterPath = fixtures["AdditionalDirectory/Formatter.swift"]
+			return switch unnamedReason {
+			case .xcodeProjectPlugin:
+				"""
+				\(formatterPath):2:1: error: `Formatter` is `internal`, so the mock of `Screen`, generated in the target that builds `Screen`, which the Xcode project plugin cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Formatter` `package` to fix, or `public` if the two modules are in different packages.
+				\(formatterPath):2:1-2:1: fixit: package\(" ")
+				"""
+			case .noModuleName:
+				"""
+				\(formatterPath):2:1: error: `Formatter` is `internal`, so the mock of `Screen`, generated in this module, which SafeDI cannot tell is in the same package, cannot construct it in the code SafeDI generates. Make `Formatter` `package` to fix, or `public` if the two modules are in different packages.
+				\(formatterPath):2:1-2:1: fixit: package\(" ")
+				"""
+			}
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					struct Screen: Instantiable {
+					    init(formatter: Formatter) {
+					        self.formatter = formatter
+					    }
+
+					    @Instantiated let formatter: Formatter
+					}
+					""",
+					"""
+					#SafeDIConfiguration(additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"])
+					""",
+				],
+				additionalDirectorySwiftFileContent: [
+					"""
+					@Instantiable
+					struct Formatter: Instantiable {
+					    package init() {}
+					}
+					""",
 				],
 				pluginInvocation: .scanWhilePlanning(reportsFixtureDirectoryThroughSymbolicLink: false),
 				filesToDelete: &filesToDelete,
