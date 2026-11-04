@@ -624,13 +624,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// type builds it, reads. The fields are declared here, so a receive they provide is not received from the scopes
 	/// enclosing the call.
 	init(fill hole: SeamSignature.Hole, key: String, functionName: String, child: ScopeGenerator) {
-		var fieldForms = Set<Property>()
-		for field in hole.stages.joined() {
-			fieldForms.insert(field.property)
-			if let instanceProperty = field.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
-				fieldForms.insert(instanceProperty)
-			}
-		}
 		self.init(
 			instantiable: Instantiable(
 				instantiableType: hole.property.typeDescription.asInstantiatedType,
@@ -643,7 +636,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			),
 			property: nil,
 			propertiesToGenerate: [child],
-			propertiesToDeclare: fieldForms,
+			propertiesToDeclare: Self.fieldForms(of: hole),
 			unavailableOptionalProperties: [],
 			lazilyInstantiatedInstanceProperties: [],
 			forwardedLazilyInstantiatedInstanceProperties: [],
@@ -652,6 +645,19 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			constructionComments: Scope.ConstructionComments(),
 			fill: (hole, key, functionName),
 		)
+	}
+
+	/// The properties a fill of `hole` declares: the property of each field of the site's scope struct and, for a lazily
+	/// instantiated field, the instance a receive reads by value.
+	static func fieldForms(of hole: SeamSignature.Hole) -> Set<Property> {
+		var fieldForms = Set<Property>()
+		for field in hole.stages.joined() {
+			fieldForms.insert(field.property)
+			if let instanceProperty = field.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
+				fieldForms.insert(instanceProperty)
+			}
+		}
+		return fieldForms
 	}
 
 	/// The name of the function a caller generates to fill `hole`'s builder, unless a fill enclosing it, or a builder the
@@ -2974,10 +2980,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// function, whose own parameters hide the declarations of their labels where it is called.
 			let argumentList = if publicMockCall != nil, let mockInitializer = instantiable.mockInitializer {
 				// A call of another module's public mock in a fill a mock declares, which passes each parameter of the tier
-				// in signature order, a builder it fills among them, and no `safeDIOverrides`: no override reaches a fill.
+				// in signature order, a builder it fills among them, and no `safeDIOverrides`: no override reaches a fill. A
+				// by-value parameter whose label the tree holds as a lazily instantiated property is passed its instance, as
+				// a call outside a fill is (`dependencyArgument`).
 				mockInitializer.arguments.map { argument in
 					let value = holeArgumentValuesByLabel[argument.innerLabel] ?? instantiable.dependencies.first(where: { $0.property.label == argument.innerLabel }).map { dependency in
-						unavailableProperties.contains(dependency.property) ? "nil" : argument.innerLabel
+						if unavailableProperties.contains(dependency.property) {
+							"nil"
+						} else if dependency.source.isReceived, lazilyInstantiatedInstanceProperties.contains(dependency.property.asUnwrappedProperty) {
+							"\(argument.innerLabel).\(Dependency.lazilyInstantiatedInstancePropertyName)"
+						} else {
+							argument.innerLabel
+						}
 					} ?? argument.innerLabel
 					return "\(argument.label.spelledAsArgumentLabel): \(value)"
 				}.joined(separator: ", ")

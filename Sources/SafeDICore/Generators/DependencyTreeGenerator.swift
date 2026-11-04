@@ -5812,15 +5812,19 @@ public actor DependencyTreeGenerator {
 	/// meets a receive of each. The walk visits the mock root's own dependencies in declaration order, then the tree of
 	/// each child it instantiates, depth first, each type's dependencies before its children's trees, all in
 	/// declaration order. It then walks, in the order it first met them, the trees of the dependencies the mock builds
-	/// for what its receivers require, which are where the mock tree receives the rest. A receive of a promoted child is
-	/// one of its property, of the property's optional form, or of the instance of a lazily instantiated property.
+	/// for what its receivers require, which are where the mock tree receives the rest, and, once those are walked, the
+	/// trees of the fills the calls of other modules' public mocks it met pass, in the order it met the calls: a call
+	/// inside a fill can be the only receiver of a dependency its called mock builds when passed `nil`, which the mock
+	/// promotes (`builtWhenNilByPublicMockCalls`). A receive of a promoted child is one of its property, of the property's
+	/// optional form, or of the instance of a lazily instantiated property.
 	///
 	/// The order depends only on where properties are declared and how they are nested, never on their labels or type
 	/// names: when two promoted children receive each other only if available, the one received first is built second,
 	/// as the property declared first is in production.
 	/// - Parameters:
 	///   - promotedChildren: The children the mock root promotes. The walk meets a receive of each, since each is a
-	///     dependency that the mock root's tree, or the tree of a dependency the mock builds for a receiver, receives.
+	///     dependency that the mock root's tree, the tree of a dependency the mock builds for a receiver, or the tree of a
+	///     fill in either, receives.
 	///   - mockRootScope: The scope of the mocked type, without the promoted children.
 	///   - scopesBuiltForRequiredProperties: The scope from which the mock builds each received property that a
 	///     receiver requires, when it builds one: the scopes whose trees the promotion worklist walks.
@@ -5841,6 +5845,8 @@ public actor DependencyTreeGenerator {
 		// Every receive the walk meets, in order. The trees of the dependencies the mock builds for them are walked in
 		// that order once the trees met before are walked, and only while a promoted child is left to order.
 		var receivedProperties = [Property]()
+		// The fills of the calls of other modules' public mocks the walk meets, in order, whose trees are walked last.
+		var fillScopes = [Scope]()
 		/// Walks the tree of `rootScope` depth first, each scope's dependencies before its children's trees, with a
 		/// stack of the scopes left to walk, since a tree can be as deep as the module has types.
 		func walk(_ rootScope: Scope) {
@@ -5873,15 +5879,28 @@ public actor DependencyTreeGenerator {
 				}
 				// The scope walked next is the last one on the stack, so the first child goes last.
 				scopesToWalk[firstChildIndex...].reverse()
+				if scope.publicMockCall != nil {
+					for case let .fill(_, fillScope) in scope.holeArguments {
+						fillScopes.append(fillScope)
+					}
+				}
 			}
 		}
 		walk(mockRootScope)
 		var receivedPropertyIndex = 0
-		while orderedIndices.count < promotedChildren.count, receivedPropertyIndex < receivedProperties.count {
-			if let builtScope = scopesBuiltForRequiredProperties[receivedProperties[receivedPropertyIndex]] {
-				walk(builtScope)
+		var fillScopeIndex = 0
+		while orderedIndices.count < promotedChildren.count,
+		      receivedPropertyIndex < receivedProperties.count || fillScopeIndex < fillScopes.count
+		{
+			if receivedPropertyIndex < receivedProperties.count {
+				if let builtScope = scopesBuiltForRequiredProperties[receivedProperties[receivedPropertyIndex]] {
+					walk(builtScope)
+				}
+				receivedPropertyIndex += 1
+			} else {
+				walk(fillScopes[fillScopeIndex])
+				fillScopeIndex += 1
 			}
-			receivedPropertyIndex += 1
 		}
 		return orderedIndices.map { promotedChildren[$0] }
 	}
@@ -6967,9 +6986,9 @@ public actor DependencyTreeGenerator {
 		/// provides in the alias's place, as `ScopeDeclarations.requirements(recordedFrom:ofChild:)` cuts a requirement
 		/// at the alias whose property a scope in the subtree provides.
 		let requiredOnlyIfAvailableAliases: Set<OnlyIfAvailableAliasRequirement>
-		/// The properties the calls of other modules' public mocks in the subtree receive only if available and pass,
-		/// which are in none of the other sets: a mock that is itself public takes them as parameters (see
-		/// `ScopeGenerator.receivedOnlyByPublicMockCallsLeftOut`).
+		/// The properties the calls of other modules' public mocks in the subtree, and in the trees of the fills its calls
+		/// pass, receive only if available and pass, which are in none of the other sets: a mock that is itself public takes
+		/// them as parameters (see `ScopeGenerator.receivedOnlyByPublicMockCallsLeftOut`).
 		let passedByPublicMockCalls: Set<Property>
 		/// Those of `passedByPublicMockCalls` some called mock builds when passed `nil`, which a mock that can build one
 		/// builds once and passes to every call, as the inline mock promotes it (M8.8b).
@@ -7015,8 +7034,9 @@ public actor DependencyTreeGenerator {
 		walkReceivedProperties(from: scope, cache: &cache).receivedProperties
 	}
 
-	/// Walks the tree `scope` creates, children before the scopes that create them, with a stack of the scopes whose
-	/// walk is unfinished, since a tree can be as deep as the module has types.
+	/// Walks the tree `scope` creates, children before the scopes that create them, and the trees of the fills a call of
+	/// another module's public mock passes after its children, with a stack of the scopes whose walk is unfinished, since
+	/// a tree can be as deep as the module has types.
 	private static func walkReceivedProperties(
 		from scope: Scope,
 		cache: inout ReceivedPropertiesCache,
@@ -7041,6 +7061,15 @@ public actor DependencyTreeGenerator {
 					case let .unfinished(childWalk):
 						walks.append(childWalk)
 					}
+				}
+			} else if walks[walkIndex].nextFillIndex < walks[walkIndex].fills.count {
+				let fillScope = walks[walkIndex].fills[walks[walkIndex].nextFillIndex].scope
+				walks[walkIndex].nextFillIndex += 1
+				switch startWalkingReceivedProperties(from: fillScope, cache: &cache) {
+				case let .walked(walkedFill):
+					walks[walkIndex].record(walkedFill)
+				case let .unfinished(fillWalk):
+					walks.append(fillWalk)
 				}
 			} else {
 				var finishedWalk = walks.removeLast()
@@ -7091,6 +7120,14 @@ public actor DependencyTreeGenerator {
 			self.walkDepth = walkDepth
 			propertiesToGenerate = scope.propertiesToGenerate
 			declarations = ScopeDeclarations(scope: scope)
+			// A seam call's fills, in a production tree, call no public mock, so only a public mock call's are walked.
+			var fills = [(scope: Scope, fieldForms: Set<Property>)]()
+			if scope.publicMockCall != nil {
+				for case let .fill(hole, fillScope) in scope.holeArguments {
+					fills.append((fillScope, ScopeGenerator.fieldForms(of: hole)))
+				}
+			}
+			self.fills = fills
 		}
 
 		let scope: Scope
@@ -7098,6 +7135,11 @@ public actor DependencyTreeGenerator {
 		let propertiesToGenerate: [Scope.PropertyToGenerate]
 		/// The index in `propertiesToGenerate` of the next property whose tree to walk.
 		var nextPropertyIndex = 0
+		/// The fills of the builders this scope's call of another module's public mock fills, each with the properties
+		/// it declares (`ScopeGenerator.fieldForms(of:)`), whose trees are walked after every child's.
+		let fills: [(scope: Scope, fieldForms: Set<Property>)]
+		/// The index in `fills` of the next fill whose tree to walk.
+		var nextFillIndex = 0
 
 		let declarations: ScopeDeclarations
 		// Properties declared at this scope (instantiated/aliased children). A lazily instantiated
@@ -7132,6 +7174,11 @@ public actor DependencyTreeGenerator {
 		/// fulfillingProperty, making the child-path subtraction/filter redundant.
 		mutating func record(_ walkedChild: WalkedReceivedProperties) {
 			shallowestUnfinishedWalkDepth = [shallowestUnfinishedWalkDepth, walkedChild.shallowestUnfinishedWalkDepth].compactMap(\.self).min()
+			// Fills are walked after every child, so the tree walked last is a fill's once one is walked.
+			guard nextFillIndex == 0 else {
+				recordFill(walkedChild, fieldForms: fills[nextFillIndex - 1].fieldForms)
+				return
+			}
 			let childReceived = walkedChild.receivedProperties.received
 			let childOnlyIfAvailable = walkedChild.receivedProperties.onlyIfAvailable
 			childRequiredReceived.formUnion(childReceived.subtracting(childOnlyIfAvailable))
@@ -7175,7 +7222,27 @@ public actor DependencyTreeGenerator {
 			)
 		}
 
-		/// Ends the walk once every child's tree is walked, recording its result in `cache`.
+		/// Collects from the tree of a fill this scope's call passes what the calls of other modules' public mocks in it pass,
+		/// as `ScopeGenerator`'s fill, which declares `fieldForms`, collects it: a mock binds what it passes them, as it binds
+		/// what such a call outside a fill passes. Nothing else the tree receives reaches this scope: the scope struct
+		/// carries the fields, and the call passes the fills of the builders inside it that it fills
+		/// (`holesFilled(byCallsOf:in:)`).
+		private mutating func recordFill(_ walkedFill: WalkedReceivedProperties, fieldForms: Set<Property>) {
+			func isProvidedByFields(_ property: Property) -> Bool {
+				fieldForms.contains(property) || fieldForms.contains(property.asUnwrappedProperty)
+			}
+			for property in walkedFill.receivedProperties.passedByPublicMockCalls where !isProvidedByFields(property) {
+				passedByPublicMockCalls.insert(property)
+			}
+			// A wrapper a called mock builds is passed by the instance it holds.
+			for property in walkedFill.receivedProperties.builtWhenNilByPublicMockCalls
+				where !isProvidedByFields(property.asLazilyInstantiatedInstanceProperty ?? property)
+			{
+				builtWhenNilByPublicMockCalls.insert(property)
+			}
+		}
+
+		/// Ends the walk once every child's tree and every fill's is walked, recording its result in `cache`.
 		mutating func finished(cache: inout ReceivedPropertiesCache) -> WalkedReceivedProperties {
 			// This scope's own received/aliased dependencies.
 			// Store exact properties (not unwrapped) in onlyIfAvailable. This avoids
