@@ -8,7 +8,8 @@
 // chain pulls it in for the `SafeDIGenerator` plugin.
 //
 // The `SafeDITuist` plugin's script reads the unpacked binary directly
-// from SPM's cache:
+// from SPM's cache, beside this manifest, from any project of the
+// workspace (it looks from the project's directory up):
 //
 //   Tuist/.build/artifacts/safedi/SafeDIToolBinary/
 //       SafeDITool.artifactbundle/<host-variant>/bin/SafeDITool

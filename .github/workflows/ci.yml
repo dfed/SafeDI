@@ -660,6 +660,11 @@ jobs:
         run: pushd Examples/ExampleTuistIntegration && tuist install && popd
       - name: Tuist Generate
         run: pushd Examples/ExampleTuistIntegration && tuist generate --no-open && popd
+      # The `Subproject` framework's project is in `Projects/Subproject`, a
+      # subdirectory of the workspace, so the plugin's script must find
+      # `SafeDITool` above its `$SRCROOT`, in the directory that holds
+      # `Tuist/Package.swift`, or the build below fails at the framework.
+      #
       # `EventLogger.swift` in the app target declares a different
       # `@Instantiable` under `#if DEBUG` and `#else`. If the plugin did not
       # forward `SWIFT_ACTIVE_COMPILATION_CONDITIONS`, SafeDI would wire
