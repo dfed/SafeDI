@@ -911,7 +911,9 @@ jobs:
 
   # Checks the pins over each whole corpus, which no one shard sees: that a
   # report arrived for every corpus, that the shards covered each exactly
-  # once, and that together they accepted exactly its pinned set of seeds.
+  # once, that together they accepted exactly its pinned set of seeds, and
+  # that the base corpus's accepted graphs show each feature the pinned
+  # number of times.
   # This is the one check to require for the fuzzer.
   graph-fuzzer-corpus:
     name: Check Graph Fuzzer Corpus on Linux

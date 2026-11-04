@@ -2381,6 +2381,7 @@ struct SafeDIToolGraphFuzzerTests {
 		var graphCount = 0
 		var acceptedCount = 0
 		var acceptedSeedsSum = GraphFuzzerSeedSetSum()
+		var acceptedFeatureCounts = [GraphFuzzerFeature: Int]()
 		var valueOracleInspectedCount = 0
 		var valueOracleComparedCount = 0
 		var acceptedSpellingDrawFeatures = Set<GraphFuzzerSeamDrawFeature>()
@@ -2444,6 +2445,11 @@ struct SafeDIToolGraphFuzzerTests {
 							if result.isAccepted {
 								acceptedCount += 1
 								acceptedSeedsSum.add(seed)
+								// Counted whether or not the graph fails, as the accepted-seed pins are, so fixing a
+								// known issue changes no count.
+								for feature in GraphFuzzerFeature.features(of: result.fixture) {
+									acceptedFeatureCounts[feature, default: 0] += 1
+								}
 								if result.failure == nil {
 									acceptedSpellingDrawFeatures.formUnion(GraphFuzzerFeature.seamDrawFeatures(of: result.fixture).intersection(corpus.spellingDrawFeatures))
 									if corpus.features.contains(.generateMockPublic), case let .accepted(generatedFiles, _) = result.outcome {
@@ -2507,6 +2513,11 @@ struct SafeDIToolGraphFuzzerTests {
 		// adds up, and a run of the whole corpus checks the pins itself.
 		report.append("shard \(configuration.startingSeed) \(configuration.iterations) \(acceptedCount) \(Self.hexadecimal(acceptedSeedsSum.value)) \(corpus.name)")
 		report.append("corpus \(corpus.seedCount) \(corpus.acceptedSeedCount) \(Self.hexadecimal(corpus.acceptedSeedsSum)) \(corpus.name)")
+		// The accepted graphs that show each feature, with the pinned counts, which ci.yml's combine job adds up and
+		// checks for a corpus that pins them.
+		let featureCounts = GraphFuzzerFeature.allCases.map { "\($0.rawValue)=\(acceptedFeatureCounts[$0, default: 0])" }.joined(separator: ",")
+		let featurePins = GraphFuzzerFeature.allCases.compactMap { feature in corpus.acceptedFeatureCounts[feature].map { "\(feature.rawValue)=\($0)" } }.joined(separator: ",")
+		report.append("features \(corpus.name) \(featureCounts) \(featurePins)")
 		// The value oracle's inspected graphs and the spellings drawn in accepted graphs, which ci.yml's combine job adds
 		// up across shards: a draw that stops landing in accepted graphs, or an oracle that stops inspecting, fails it.
 		report.append("inspected \(valueOracleInspectedCount) \(corpus.valueOracleInspectedGraphCount) \(corpus.name)")
@@ -2534,6 +2545,18 @@ struct SafeDIToolGraphFuzzerTests {
 			reportProblem("The tool accepted \(acceptedCount) of seeds 0..<\(corpus.seedCount) of the \(corpus.name) corpus (sum \(Self.hexadecimal(acceptedSeedsSum.value))), but \(corpus.acceptedSeedCount) are pinned (sum \(Self.hexadecimal(corpus.acceptedSeedsSum))). A tool change that rejects or accepts different graphs must update the pinned values deliberately.")
 		}
 		if configuration.startingSeed == 0, configuration.iterations == corpus.seedCount {
+			if !corpus.acceptedFeatureCounts.isEmpty {
+				let mismatches = GraphFuzzerFeature.allCases.compactMap { feature -> String? in
+					let count = acceptedFeatureCounts[feature, default: 0]
+					guard let pinnedCount = corpus.acceptedFeatureCounts[feature] else {
+						return "\(feature.rawValue) \(count) (no pin)"
+					}
+					return count == pinnedCount ? nil : "\(feature.rawValue) \(count) (pinned \(pinnedCount))"
+				}
+				if !mismatches.isEmpty {
+					reportProblem("The accepted graphs of the \(corpus.name) corpus show these features in other numbers than pinned: \(mismatches.joined(separator: ", ")). A generator or tool change that draws or accepts other graphs must update the per-feature pins deliberately, with the hashes and the accepted-seed pins.")
+				}
+			}
 			if valueOracleInspectedCount != corpus.valueOracleInspectedGraphCount {
 				reportProblem("The value oracle inspected \(valueOracleInspectedCount) graphs of the \(corpus.name) corpus, but \(corpus.valueOracleInspectedGraphCount) are pinned.")
 			}
@@ -2593,6 +2616,53 @@ struct SafeDIToolGraphFuzzerTests {
 	static let corpusAcceptedSeedCount = 2_299
 	static let corpusAcceptedSeedsSum: UInt64 = 0x62F41F76B0229D38
 
+	/// How many of the corpus's graphs the tool accepts show each `GraphFuzzerFeature`, read from their source as the
+	/// smoke batch reads them, which shards of the corpus add up. Unit tests leave the siblings of a shape to the
+	/// corpus, so a generator change that stops drawing a feature, or a tool change that stops accepting the graphs that
+	/// draw it, changes these and must update them deliberately, with the hashes and the accepted-seed pins.
+	static let corpusAcceptedFeatureCounts: [GraphFuzzerFeature: Int] = [
+		.constantProperty: 2_092,
+		.erasedConstantProperty: 379,
+		.instantiatorProperty: 1_842,
+		.sendableInstantiatorProperty: 776,
+		.erasedInstantiatorProperty: 940,
+		.sendableErasedInstantiatorProperty: 326,
+		.lazilyInstantiatedProperty: 334,
+		.sendableLazilyInstantiatedProperty: 126,
+		.erasedLazilyInstantiatedProperty: 180,
+		.forwardedLazilyInstantiatedProperty: 283,
+		.receivedLazilyInstantiatedInstance: 216,
+		.forwardedProperty: 1_150,
+		.optionalForwardedProperty: 573,
+		.requiredReceive: 1_923,
+		.requiredOptionalReceive: 493,
+		.onlyIfAvailableReceive: 1_522,
+		.requiredAlias: 989,
+		.onlyIfAvailableAlias: 803,
+		.aliasOfOnlyIfAvailableAlias: 157,
+		.aliasOfOptionalFormOfProperty: 11,
+		.erasedAlias: 196,
+		.multipleRoots: 1_514,
+		.generateMock: 1_924,
+		.lazyCycle: 1_033,
+		.sameLabelWithDifferentTypes: 1_098,
+		.labelSpelledAsGeneratedName: 523,
+		.dependencyMockCannotBuild: 1_404,
+		.dependencyMockCannotBuildReceivedBeneathItsOwner: 278,
+		.dependencyMockCannotBuildReceivedLazilyBesideItsMockedOwner: 67,
+		.dependencyMockCannotBuildLazilyInstantiatedReceivedAsOtherKindBesideItsMockedOwner: 10,
+		.sendableAndNonSendableWrappers: 472,
+		.mockedTypeOnLazyCycle: 477,
+		.typesReceivingEachOtherOnlyIfAvailable: 241,
+		.labelReceivedAsInstanceAndAsInstantiator: 126,
+		.sameLabelReceivedAsDifferentUnbuildableWrappers: 125,
+		.receivedErasedInstantiator: 476,
+		.forwardedErasedInstantiator: 142,
+		.defaultValuedInstantiateParameter: 547,
+		.nonSendableValuesInsideSendableBuilder: 129,
+		.generateDependencyTree: 0,
+	]
+
 	/// The graphs of seeds `0..<seedCount` drawn with `features`, and what is pinned about them. Each generator
 	/// feature has a corpus of its own, so that turning a feature on changes no graph of the corpus drawn without it.
 	struct Corpus {
@@ -2603,6 +2673,9 @@ struct SafeDIToolGraphFuzzerTests {
 		let fixtureHash: UInt64
 		let acceptedSeedCount: Int
 		let acceptedSeedsSum: UInt64
+		/// How many of the graphs the tool accepts show each `GraphFuzzerFeature`, read from their source as the smoke
+		/// batch reads them, for a corpus that pins them; empty for a corpus that does not.
+		var acceptedFeatureCounts = [GraphFuzzerFeature: Int]()
 		let knownIssues: [GraphFuzzerKnownIssue]
 		/// The name of the list `knownIssues` is read from, which a stale entry's message names.
 		let knownIssuesName: String
@@ -2632,6 +2705,7 @@ struct SafeDIToolGraphFuzzerTests {
 		fixtureHash: corpusFixtureHash,
 		acceptedSeedCount: corpusAcceptedSeedCount,
 		acceptedSeedsSum: corpusAcceptedSeedsSum,
+		acceptedFeatureCounts: corpusAcceptedFeatureCounts,
 		knownIssues: knownIssues,
 		knownIssuesName: "knownIssues",
 		staleSeedRemedy: { _, _ in "remove it from `knownIssues`, and from `seamCorpusSeedsOfOtherShapes` when it is listed there" },
