@@ -62,7 +62,7 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(help: "The package of the module this run generates code for, as the compiler's '-package-name' names it, recorded as '--module-name' is. Omit it when the compiler receives no '-package-name'.") var packageName: String?
 
-	@Flag(help: "States that the compiler is handed every input Swift file, including the files behind dependent module info, at exactly the path this tool is handed. Generated code then wraps each `@Received(fulfilledByDependencyNamed:ofType:)` assignment in a `#sourceLocation` directive naming that path, so the compiler reports a type mismatch at the declaration. Without this flag, and without a build tool plugin’s manifest, the assignment names the declaration in a comment instead, because the compiler warns at a directive whose path differs from the one it was handed.") var compilerReceivesInputPathsUnchanged = false
+	@Flag(help: "States that the compiler is handed every input Swift file, including the files behind dependent module info, at exactly the path this tool is handed. Generated code then wraps each `@Received(fulfilledByDependencyNamed:ofType:)` assignment in a `#sourceLocation` directive naming that path, so the compiler reports a type mismatch at the declaration. Without a build tool plugin’s manifest, this tool also prints each error and warning at the path it was handed, as the compiler prints its own. Without this flag, and without a build tool plugin’s manifest, the assignment names the declaration in a comment instead, because the compiler warns at a directive whose path differs from the one it was handed, and errors and warnings name each file by its absolute path.") var compilerReceivesInputPathsUnchanged = false
 
 	// MARK: Internal
 
@@ -82,25 +82,55 @@ struct Generate: AsyncParsableCommand {
 		}
 	}
 
-	/// How `run()` prints diagnostics, which `generate` tells it as soon as it knows how the project spells its files.
+	/// How `run()` prints diagnostics, which `generate` tells it as soon as it knows how the build system spells its files.
 	final class BuildLog {
 		/// `diagnostics` formatted for the build log, each file named as the build system spells it, so an IDE maps
-		/// the diagnostic to the file it has open and a reader finds it wherever the log is read. Build systems hand
-		/// the tool paths relative to its working directory, so a relative path is made absolute against it first.
+		/// the diagnostic to the file it has open and a reader finds it wherever the log is read. The compiler prints
+		/// each path as it was handed, so when the build system hands the compiler every path unchanged, so does this.
+		/// Otherwise build systems hand the tool paths relative to its working directory, so a relative path is made
+		/// absolute against it first.
 		func formatted(_ diagnostics: [SourceDiagnostic]) -> String {
 			let workingDirectory = FileManager.default.currentDirectoryPath
 			return diagnostics
 				.map { diagnostic in
-					diagnostic.respellingFilePath { [projectFilePaths] filePath in
-						let absolutePath = NormalizedFilePath(filePath, relativeTo: workingDirectory)
-						return projectFilePaths.map { $0.buildSystemPath(of: $0.projectFilePath(of: absolutePath)) } ?? absolutePath.path
+					diagnostic.respellingFilePath { [buildSystemFilePaths] filePath in
+						switch buildSystemFilePaths {
+						case let .underProjectRoot(projectFilePaths):
+							projectFilePaths.buildSystemPath(of: projectFilePaths.projectFilePath(of: NormalizedFilePath(filePath, relativeTo: workingDirectory)))
+						case .unchanged:
+							filePath
+						case nil:
+							NormalizedFilePath(filePath, relativeTo: workingDirectory).path
+						}
 					}.formatted
 				}
 				.joined(separator: "\n")
 		}
 
-		/// How the project `generate` runs for spells its files, or `nil` before `generate` knows or without a project root.
-		fileprivate(set) var projectFilePaths: ProjectFilePaths?
+		/// How the build system spells the files `generate` runs for, or `nil` before `generate` knows or when it does not.
+		fileprivate(set) var buildSystemFilePaths: BuildSystemFilePaths?
+	}
+
+	/// How the build system spells the files a run of `generate` was handed, which is how the compiler and an IDE
+	/// name them.
+	enum BuildSystemFilePaths {
+		/// A build tool plugin's manifest records the project root, under which the build system spells each file
+		/// inside the project as it reported the root.
+		case underProjectRoot(ProjectFilePaths)
+		/// The integration passed `--compiler-receives-input-paths-unchanged`: it hands the compiler every input path,
+		/// including those behind dependent module info, exactly as it handed this tool.
+		case unchanged
+
+		/// The spelling a run with these options knows, or `nil` when it does not.
+		init?(projectFilePaths: ProjectFilePaths?, compilerReceivesInputPathsUnchanged: Bool) {
+			if let projectFilePaths {
+				self = .underProjectRoot(projectFilePaths)
+			} else if compilerReceivesInputPathsUnchanged {
+				self = .unchanged
+			} else {
+				return nil
+			}
+		}
 	}
 
 	/// What a run of `generate` read and reported.
@@ -179,7 +209,11 @@ struct Generate: AsyncParsableCommand {
 
 		// A manifest without a project root, which only a hand-written manifest lacks, names files as written.
 		let projectFilePaths = scannedProjectFilePaths ?? manifest?.projectRoot.map(ProjectFilePaths.init(projectRoot:))
-		buildLog.projectFilePaths = projectFilePaths
+		let buildSystemFilePaths = BuildSystemFilePaths(
+			projectFilePaths: projectFilePaths,
+			compilerReceivesInputPathsUnchanged: compilerReceivesInputPathsUnchanged,
+		)
+		buildLog.buildSystemFilePaths = buildSystemFilePaths
 		let inputFilePaths = try await findGenerateSwiftFiles()
 		let suppliedCompilationConditions = buildSettingConditions
 			?? Set(activeCompilationConditions).union(manifest?.activeCompilationConditions ?? [])
@@ -307,7 +341,7 @@ struct Generate: AsyncParsableCommand {
 						}
 					}
 				}),
-				compilerFilePaths: compilerFilePaths(manifest: manifest, projectFilePaths: projectFilePaths, inputFilePaths: inputFilePaths),
+				compilerFilePaths: compilerFilePaths(manifest: manifest, buildSystemFilePaths: buildSystemFilePaths, inputFilePaths: inputFilePaths),
 				// A plugin's paths relative to its project root, and any other integration's paths as it wrote them.
 				commentFilePath: { [projectFilePaths] filePath in
 					projectFilePaths.map { $0.manifestPath(of: $0.projectFilePath(of: filePath)) } ?? filePath
@@ -1284,10 +1318,11 @@ struct Generate: AsyncParsableCommand {
 	/// then does not know how the compiler spells any path.
 	private func compilerFilePaths(
 		manifest: SafeDIToolManifest?,
-		projectFilePaths: ProjectFilePaths?,
+		buildSystemFilePaths: BuildSystemFilePaths?,
 		inputFilePaths: Set<String>,
 	) -> AliasDeclarationReferences.CompilerFilePaths? {
-		if let manifest, let projectFilePaths {
+		switch buildSystemFilePaths {
+		case let .underProjectRoot(projectFilePaths):
 			guard projectFilePaths.reportsResolvedProjectRoot else { return nil }
 			let compilerFilePath = { (filePath: String) in projectFilePaths.buildSystemPath(of: projectFilePaths.projectFilePath(of: filePath)) }
 			if swiftManifest == nil, !mockScopedFiles.isEmpty {
@@ -1295,13 +1330,14 @@ struct Generate: AsyncParsableCommand {
 			} else {
 				return .init(
 					filePath: compilerFilePath,
-					moduleFilePaths: manifest.mockScopedFilePaths.map(Set.init) ?? inputFilePaths,
+					// A project root comes from a manifest, so `manifest` is present here.
+					moduleFilePaths: manifest?.mockScopedFilePaths.map(Set.init) ?? inputFilePaths,
 					moduleFilePath: compilerFilePath,
 				)
 			}
-		} else if compilerReceivesInputPathsUnchanged {
+		case .unchanged:
 			return .init(filePath: { $0 }, moduleFilePaths: inputFilePaths, moduleFilePath: { $0 })
-		} else {
+		case nil:
 			return nil
 		}
 	}

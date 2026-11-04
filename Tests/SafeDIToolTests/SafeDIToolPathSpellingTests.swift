@@ -150,6 +150,31 @@ struct SafeDIToolPathSpellingTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func buildLog_namesDiagnosticFilesAsTheyWereHanded_whenCompilerReceivesInputPathsUnchanged() async throws {
+		// The compiler prints its own diagnostics at the path it was handed, which under Bazel is relative to the
+		// execution root, so an editor resolves it against the workspace. SafeDITool's working directory there is a
+		// sandbox that Bazel deletes after the action, so a path made absolute against it names no file.
+		let module = try makeModuleWithUnfulfillableOptionalReceive()
+
+		await assertThrowsError(Self.unfulfillableOptionalReceiveDiagnostics(childPath: module.handedChildPath)) {
+			try await module.generate(additionalArguments: ["--compiler-receives-input-paths-unchanged"])
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func buildLog_namesDiagnosticFilesByAbsolutePath_whenCompilerMayReceiveInputPathsChanged() async throws {
+		// Without a manifest's project root, and without the integration stating that the compiler is handed every
+		// path unchanged, the path made absolute against the working directory names the file wherever the log is read.
+		let module = try makeModuleWithUnfulfillableOptionalReceive()
+
+		await assertThrowsError(Self.unfulfillableOptionalReceiveDiagnostics(childPath: NormalizedFilePath(module.childFile.path).path)) {
+			try await module.generate(additionalArguments: [])
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -199,6 +224,101 @@ struct SafeDIToolPathSpellingTests: ~Copyable {
 	/// A diagnostic formatted for the build log, thrown so `assertThrowsError` compares it.
 	private struct BuildLogError: Error, CustomStringConvertible {
 		let description: String
+	}
+
+	/// What `run()` prints for the module `makeModuleWithUnfulfillableOptionalReceive()` makes, a diagnostic and its
+	/// fix-it, with the child's file named as `childPath`.
+	private static func unfulfillableOptionalReceiveDiagnostics(childPath: String) -> String {
+		"""
+		\(childPath):5:5: error: @Received property `thing: Thing?` is not @Instantiated or @Forwarded in chain: Root -> Child. The non-optional `thing: Thing` is available in chain. Did you mean to decorate this property with `@Received(onlyIfAvailable: true)`?
+		\(childPath):5:5-5:14: fixit: @Received(onlyIfAvailable: true)
+		"""
+	}
+
+	/// A module run without a manifest, as the Bazel rule runs `generate`: its input CSV names each file relative to
+	/// the working directory, which is not the directory that holds the files.
+	private struct HandedPathModule {
+		/// The file whose diagnostic `generate` reports.
+		let childFile: URL
+		let swiftFileCSV: URL
+		let combinedOutput: URL
+
+		/// The child's path as the input CSV names it.
+		var handedChildPath: String {
+			currentDirectoryRelativePath(to: childFile)
+		}
+
+		/// Runs `generate` as the Bazel rule runs it, with `additionalArguments`, and throws the diagnostics it reports
+		/// as `run()` prints them.
+		func generate(additionalArguments: [String]) async throws {
+			let buildLog = Generate.BuildLog()
+			do {
+				try await Generate.parse([
+					swiftFileCSV.path,
+					"--combined-output", combinedOutput.path,
+				] + additionalArguments).generate(buildLog: buildLog)
+			} catch let error as any SourceLocatedError {
+				throw BuildLogError(description: buildLog.formatted(error.sourceDiagnostics))
+			}
+		}
+	}
+
+	/// A module whose child receives an optional property that only its non-optional form fulfills, which
+	/// `generate` reports with a fix-it.
+	private mutating func makeModuleWithUnfulfillableOptionalReceive() throws -> HandedPathModule {
+		let moduleDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+		let sourceDirectory = moduleDirectory.appendingPathComponent("Module")
+		try FileManager.default.createDirectory(at: sourceDirectory, withIntermediateDirectories: true)
+		filesToDelete.append(moduleDirectory)
+
+		let rootFile = sourceDirectory.appendingPathComponent("Root.swift")
+		try """
+		import SafeDI
+
+		@Instantiable(isRoot: true)
+		public final class Root: Instantiable {
+		    public init(thing: Thing, child: Child) {
+		        self.thing = thing
+		        self.child = child
+		    }
+
+		    @Instantiated let thing: Thing
+		    @Instantiated let child: Child
+		}
+		""".write(to: rootFile, atomically: true, encoding: .utf8)
+		let thingFile = sourceDirectory.appendingPathComponent("Thing.swift")
+		try """
+		import SafeDI
+
+		@Instantiable
+		public final class Thing: Instantiable {
+		    public init() {}
+		}
+		""".write(to: thingFile, atomically: true, encoding: .utf8)
+		let childFile = sourceDirectory.appendingPathComponent("Child.swift")
+		try """
+		import SafeDI
+
+		@Instantiable
+		public final class Child: Instantiable {
+		    @Received let thing: Thing?
+
+		    public init(thing: Thing?) {
+		        self.thing = thing
+		    }
+		}
+		""".write(to: childFile, atomically: true, encoding: .utf8)
+
+		let swiftFileCSV = moduleDirectory.appendingPathComponent("Sources.csv")
+		try [rootFile, thingFile, childFile]
+			.map(currentDirectoryRelativePath(to:))
+			.joined(separator: ",")
+			.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+		return HandedPathModule(
+			childFile: childFile,
+			swiftFileCSV: swiftFileCSV,
+			combinedOutput: moduleDirectory.appendingPathComponent("Module.swift"),
+		)
 	}
 
 	private struct Project {
