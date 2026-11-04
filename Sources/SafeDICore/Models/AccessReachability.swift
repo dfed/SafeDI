@@ -94,7 +94,13 @@ extension AccessLevel {
 	///     are one whatever their recorded names say, even two different names: the module compiles each of its own
 	///     files, so it reaches a declaration in one with `internal` access whatever name is recorded for it, and a
 	///     recorded name can be missing.
+	@inline(never)
 	public static func required(toConstructFrom emitter: ModuleIdentity, declaredIn declarer: ModuleIdentity, isOwnFile: Bool) -> AccessRequirement {
+		// Never inlined, for Swift 6.3.3: inlined into `DependencyTreeGenerator.createSeamScopeMapping`, this function
+		// crashes the compiler with `-Osize` (signal 11, a SIL verification error on a `borrowed from` instruction
+		// before ownership is lowered), because the copy-to-borrow optimization mishandles the borrow of
+		// `emitter.moduleName` that the comparison below makes. Binding `declarer.moduleName` too does not avoid it.
+		// Remove the attribute once SafeDI's minimum Swift is past 6.3.3.
 		if isOwnFile {
 			.internal
 		} else if let emitterModuleName = emitter.moduleName, emitterModuleName == declarer.moduleName {
