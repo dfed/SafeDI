@@ -261,26 +261,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		// whose hole `routerBuilder` `App` fills with `Router`, which declares an `onlyIfAvailable` alias `renamed` of its `x`.
 		// The fill is declared inside the function, but its parameter does not keep `Router`'s alias from being created, as
 		// nothing above the function provides `renamed`, so the fill builds what `Router` built inline builds.
-		let core = """
-		public protocol Routing {}
-
-		public struct AnyRouting {
-		    public init(_ routing: any Routing) {
-		        self.routing = routing
-		    }
-
-		    public let routing: any Routing
-		}
-
-		@Instantiable(generateDependencyTree: true)
-		public final class Service: Instantiable {
-		    public init(routerBuilder: ErasedInstantiator<(), AnyRouting>) {
-		        self.routerBuilder = routerBuilder
-		    }
-
-		    @Instantiated(fulfilledByType: "Router", erasedToConcreteExistential: true) let routerBuilder: ErasedInstantiator<(), AnyRouting>
-		}
-		"""
+		let core = Self.routingServiceCore
 		let aliasOfX = #"@Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let renamed: X?"#
 		let app = [
 			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
@@ -383,6 +364,118 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		            __safeDI_aBuilder(renamed: nil)
 		        }
 		        self.init(aBuilder: aBuilder)
+		    }
+		}
+		"""])
+		// An `ErasedInstantiator` is not traversed, so the probe holds the `Router` each `A` – the first, and the one `Mid`
+		// builds again – builds.
+		try expectDifferentialValuesAgree(
+			feature: Self.differentialValuePath(of: output, modules: modules),
+			knownRight: Self.differentialValuePath(of: inlineOutput, modules: inlineModules),
+			probes: [DifferentialValueProbe(#"{ () -> (Router, Router) in let a = Root().aBuilder.instantiate(); let aBuiltAgain = a.midBuilder.instantiate().aBuilder.instantiate(); return (a.service.routerBuilder.instantiate().routing as! Router, aBuiltAgain.service.routerBuilder.instantiate().routing as! Router) }()"#)],
+			filesToDelete: &filesToDelete,
+		)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesNilInFillAsInlineDoes_whenFillInsideLazyCyclesFunctionBuildsTypeAsLabelFunctionTakes() async throws {
+		// `A`'s builder function takes `renamed`, which `Mid` declares again before building `A` again, and `A` calls `Service`,
+		// whose hole `routerBuilder` `App` fills with `Router`, which instantiates `renamed: X`, whose `X` receives `renamed`
+		// only if available. The fill is declared inside the function, but the parameter does not stand in for `renamed`
+		// while `Router`'s is still being built, so the fill passes `X` `nil`, as `Router` built inline does.
+		let core = Self.routingServiceCore
+		let app = [
+			seamFixtureType(named: "Root", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let renamed: X", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "A", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let renamed: X?", "@Instantiated let service: Service", "@Instantiated let midBuilder: Instantiator<Mid>"]),
+			seamFixtureType(named: "Mid", isFinalClass: true, declarations: ["@Instantiated let renamed: X", "@Instantiated let aBuilder: Instantiator<A>"]),
+			seamFixtureType(named: "Router", isFinalClass: true, declarations: ["@Instantiated let renamed: X"], conformances: ", Routing"),
+			seamFixtureType(named: "X", isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let renamed: X?"]),
+		]
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": core]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContent: app.map { "import Core\n\n" + $0 }, dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let appOutput = try #require(output.modules["App"])
+		#expect(appOutput.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+
+		extension Root {
+		    public convenience init() {
+		        let renamed = X(renamed: nil)
+		        func __safeDI_aBuilder(renamed: X?) -> A {
+		            func __safeDI_service() -> Service {
+		                _ = Service.__safeDI_Service_7694E1E05E0EF717.self
+		                func __safeDI_routerBuilderBuilder(_ scope: Service.SafeDIScope_Service_routerBuilder) -> ErasedInstantiator<(), AnyRouting> {
+		                    func __safeDI_routerBuilder() -> Router {
+		                        let renamed = X(renamed: nil)
+		                        return Router(renamed: renamed)
+		                    }
+		                    let routerBuilder = ErasedInstantiator<(), AnyRouting> {
+		                        AnyRouting(__safeDI_routerBuilder())
+		                    }
+		                    return routerBuilder
+		                }
+		                return Service(routerBuilderBuilder: __safeDI_routerBuilderBuilder)
+		            }
+		            let service: Service = __safeDI_service()
+		            func __safeDI_midBuilder() -> Mid {
+		                let renamed = X(renamed: nil)
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return Mid(renamed: renamed, aBuilder: aBuilder)
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return A(renamed: renamed, service: service, midBuilder: midBuilder)
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: renamed)
+		        }
+		        self.init(renamed: renamed, aBuilder: aBuilder)
+		    }
+		}
+		"""])
+		if compileVerificationIsEnabled {
+			let compilation = try #require(output.compilation)
+			#expect(compilation.modules.map(\.exitCode) == output.moduleNames.map { _ in 0 })
+		}
+		let inlineModules = [ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Service.swift": inlineFixture([core])[0]].merging(Self.fixtureFiles(app)) { first, _ in first })]
+		let inlineOutput = try await executeSafeDIToolMultiModuleTest(modules: inlineModules, integration: .moduleInfo, filesToDelete: &filesToDelete)
+		let inlineAppOutput = try #require(inlineOutput.modules["App"])
+		#expect(inlineAppOutput.generatedFiles == ["App.swift": generatedFileHeader + """
+		extension Root {
+		    public convenience init() {
+		        let renamed = X(renamed: nil)
+		        func __safeDI_aBuilder(renamed: X?) -> A {
+		            func __safeDI_service() -> Service {
+		                func __safeDI_routerBuilder() -> Router {
+		                    let renamed = X(renamed: nil)
+		                    return Router(renamed: renamed)
+		                }
+		                let routerBuilder = ErasedInstantiator<(), AnyRouting> {
+		                    AnyRouting(__safeDI_routerBuilder())
+		                }
+		                return Service(routerBuilder: routerBuilder)
+		            }
+		            let service: Service = __safeDI_service()
+		            func __safeDI_midBuilder() -> Mid {
+		                let renamed = X(renamed: nil)
+		                let aBuilder = Instantiator<A> {
+		                    __safeDI_aBuilder(renamed: renamed)
+		                }
+		                return Mid(renamed: renamed, aBuilder: aBuilder)
+		            }
+		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
+		            return A(renamed: renamed, service: service, midBuilder: midBuilder)
+		        }
+		        let aBuilder = Instantiator<A> {
+		            __safeDI_aBuilder(renamed: renamed)
+		        }
+		        self.init(renamed: renamed, aBuilder: aBuilder)
 		    }
 		}
 		"""])
@@ -1597,6 +1690,28 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: (any Theme)?` here.
 		"""
 	}
+
+	/// `Core`'s `Service`, a seam whose hole `routerBuilder` is an `ErasedInstantiator` of `AnyRouting` that `Router` fills.
+	private static let routingServiceCore = """
+	public protocol Routing {}
+
+	public struct AnyRouting {
+	    public init(_ routing: any Routing) {
+	        self.routing = routing
+	    }
+
+	    public let routing: any Routing
+	}
+
+	@Instantiable(generateDependencyTree: true)
+	public final class Service: Instantiable {
+	    public init(routerBuilder: ErasedInstantiator<(), AnyRouting>) {
+	        self.routerBuilder = routerBuilder
+	    }
+
+	    @Instantiated(fulfilledByType: "Router", erasedToConcreteExistential: true) let routerBuilder: ErasedInstantiator<(), AnyRouting>
+	}
+	"""
 
 	/// The path the differential value comparator builds from `output`, the run of `modules`: each module's files as the
 	/// harness wrote them, and the files the tool generated for it.

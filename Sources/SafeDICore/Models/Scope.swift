@@ -462,6 +462,8 @@ final class Scope: Hashable {
 			cycleParameterContexts: [:],
 			cycleParameterProvidedForms: [],
 			cycleParameterFormsNotProvidedAboveFunction: [],
+			cycleParameterFormsNoDeclarationCreates: [],
+			cycleParameterLabelsBeingBuilt: [],
 		)]
 		while true {
 			let index = scopeGeneratorsUnderConstruction.count - 1
@@ -530,14 +532,23 @@ private struct ScopeGeneratorUnderConstruction {
 		cycleParameterContexts: [Property: CycleParameterContext],
 		cycleParameterProvidedForms: Set<Property>,
 		cycleParameterFormsNotProvidedAboveFunction: Set<Property>,
+		cycleParameterFormsNoDeclarationCreates: Set<Property>,
+		cycleParameterLabelsBeingBuilt: Set<String>,
 	) {
 		var childPropertyStack = propertyStack
 		let isPropertyCycle: Bool
+		// The labels of the parameters with a form no declaration creates that a scope in the body of the innermost function
+		// taking them is built as, this one included (see `childCycleParameterLabelsBeingBuilt`): found here, as
+		// `childPropertyStack` is.
+		var cycleParameterLabelsBeingBuilt = cycleParameterLabelsBeingBuilt
 		if let property {
 			isPropertyCycle = propertyStack.contains(property)
 			childPropertyStack.insert(property, at: 0)
 			if let instanceProperty = property.asLazilyInstantiatedInstanceProperty {
 				childPropertyStack.insert(instanceProperty, at: 0)
+			}
+			if cycleParameterFormsNoDeclarationCreates.contains(where: { $0.label == property.label }) {
+				cycleParameterLabelsBeingBuilt.insert(property.label)
 			}
 		} else {
 			isPropertyCycle = false
@@ -563,6 +574,10 @@ private struct ScopeGeneratorUnderConstruction {
 		// function provides (see `cycleParameterFormsNotProvidedAboveFunction`): those enclosing this scope, joined below by
 		// those of this scope's own function.
 		var parameterFormsNotProvidedAboveFunction = cycleParameterFormsNotProvidedAboveFunction
+		// The forms of the parameters of the functions enclosing this scope that no declaration creates (see
+		// `childCycleParameterFormsNoDeclarationCreates`): those enclosing the scope declaring this scope's own function,
+		// joined below, for the function's body, by those of its own function's parameters.
+		var cycleParameterFormsNoDeclarationCreates = cycleParameterFormsNoDeclarationCreates
 		// The function's body reads each parameter's label from the parameter, which hides every other declaration of the
 		// label above it, as a forwarded property does.
 		let callSiteLazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
@@ -633,10 +648,14 @@ private struct ScopeGeneratorUnderConstruction {
 				// such a property only where the tree provides it, as production would, and `nil` elsewhere. The instance of
 				// a wrapper the tree holds – one the mock root promotes, or a scope above declares – is provided: the call
 				// passes it by reading the wrapper's instance, as the arguments read it (`lazilyInstantiatedInstanceProperties`).
+				// A form only a parameter provides is not, while a form of its label is still being built inside the
+				// function's body (see `cycleParameterFormsBeingBuilt`).
 				func isReceivable(_ property: Property) -> Bool {
-					receivableProperties.contains(property)
-						|| (forMockGeneration && boundProperties.contains(property))
-						|| lazilyInstantiatedInstanceProperties.contains(property)
+					(
+						receivableProperties.contains(property)
+							|| (forMockGeneration && boundProperties.contains(property))
+							|| lazilyInstantiatedInstanceProperties.contains(property),
+					) && !(cycleParameterLabelsBeingBuilt.contains(property.label) && cycleParameterFormsNoDeclarationCreates.contains(property))
 				}
 				let propertyIsAvailableInParentStack = isReceivable(property) && !childPropertyStack.contains(property)
 				let unwrappedPropertyIsAvailableInParentStack = isReceivable(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty)
@@ -666,10 +685,15 @@ private struct ScopeGeneratorUnderConstruction {
 			// the binding the scope declaring the function passes would be one: otherwise the alias is created as it is
 			// where the function takes no parameter of its label.
 			parameterFormsNotProvidedAboveFunction = parameterFormsNotProvidedAboveFunction.filter { !ownCycleParameterLabels.contains($0.label) }
+			let callSiteHiddenCycleParameterForms = Self.formsBeingBuilt(
+				ofCycleParameterFormsNoDeclarationCreates: cycleParameterFormsNoDeclarationCreates,
+				labelsBeingBuilt: cycleParameterLabelsBeingBuilt,
+			)
 			for parameter in ownCycleParameters where !Self.isProvided(
 				parameter.property,
 				byEnclosingScopeReceivableProperties: enclosingScopeReceivableProperties,
 				exceptCycleParameterForms: cycleParameterFormsNotProvidedAboveFunction,
+				andCycleParameterFormsBeingBuilt: callSiteHiddenCycleParameterForms,
 				orBoundProperties: boundProperties,
 				exceptOnlyIfAvailableOverrides: onlyIfAvailableOverrideProperties,
 				lazilyInstantiatedInstanceProperties: callSiteLazilyInstantiatedInstanceProperties,
@@ -680,6 +704,23 @@ private struct ScopeGeneratorUnderConstruction {
 			receivableProperties = receivableProperties
 				.filter { !ownCycleParameterLabels.contains($0.label) }
 				.union(ownCycleParameters.flatMap(\.providedForms))
+			// Inside the function's body, a form a parameter provides that nothing where the function is called creates or
+			// binds – a declaration, a lazily instantiated instance, or what a mock binds other than its override of a receive
+			// only if available, which provides no form (see `isProvided`) – is a form no declaration creates. A form of an
+			// enclosing function's parameter that no declaration creates stays one.
+			let enclosingFormsNoDeclarationCreates = cycleParameterFormsNoDeclarationCreates
+			cycleParameterFormsNoDeclarationCreates = enclosingFormsNoDeclarationCreates.filter { !ownCycleParameterLabels.contains($0.label) }
+			for parameter in ownCycleParameters {
+				for form in parameter.providedForms where enclosingFormsNoDeclarationCreates.contains(form) || !(
+					enclosingScopeReceivableProperties.contains(form)
+						|| (boundProperties.contains(form) && !onlyIfAvailableOverrideProperties.contains(form))
+						|| callSiteLazilyInstantiatedInstanceProperties.contains(form)
+				) {
+					cycleParameterFormsNoDeclarationCreates.insert(form)
+				}
+			}
+			// Nothing in the body is built yet.
+			cycleParameterLabelsBeingBuilt.subtract(ownCycleParameterLabels)
 		}
 		unavailableOptionalProperties = Set<Property>(scope.instantiable.dependencies.flatMap { dependency in
 			switch dependency.source {
@@ -734,6 +775,15 @@ private struct ScopeGeneratorUnderConstruction {
 			parameterProvidedForms = parameterProvidedForms.filter { !ownCycleParameterLabels.contains($0.label) }.union(ownCycleParameters.flatMap(\.providedForms))
 		}
 		self.cycleParameterFormsNotProvidedAboveFunction = cycleParameterFormsNotProvidedAboveFunction
+		cycleParameterFormsBeingBuilt = Self.formsBeingBuilt(
+			ofCycleParameterFormsNoDeclarationCreates: cycleParameterFormsNoDeclarationCreates,
+			labelsBeingBuilt: cycleParameterLabelsBeingBuilt,
+		)
+		childCycleParameterLabelsBeingBuilt = cycleParameterLabelsBeingBuilt
+		// A form this scope declares is created beneath it. Nearly every scope is beneath no function a lazy cycle closes on.
+		childCycleParameterFormsNoDeclarationCreates = cycleParameterFormsNoDeclarationCreates.isEmpty
+			? cycleParameterFormsNoDeclarationCreates
+			: cycleParameterFormsNoDeclarationCreates.subtracting(scope.createdProperties.union(scope.propertiesToDeclare))
 		if parameterProvidedForms.isEmpty || isPropertyCycle {
 			childCycleParameterProvidedForms = parameterProvidedForms
 			childCycleParameterFormsNotProvidedAboveFunction = parameterFormsNotProvidedAboveFunction
@@ -866,6 +916,8 @@ private struct ScopeGeneratorUnderConstruction {
 			// The fill reads the parameters of the functions enclosing the call that a field does not hide, as the call's
 			// tree built inline reads them.
 			cycleParameterFormsNotProvidedAboveFunction: childCycleParameterFormsNotProvidedAboveFunction.filter { !fieldLabels.contains($0.label) },
+			cycleParameterFormsNoDeclarationCreates: childCycleParameterFormsNoDeclarationCreates.filter { !fieldLabels.contains($0.label) },
+			cycleParameterLabelsBeingBuilt: childCycleParameterLabelsBeingBuilt.subtracting(fieldLabels),
 		)
 	}
 
@@ -915,6 +967,8 @@ private struct ScopeGeneratorUnderConstruction {
 				cycleParameterContexts: childCycleParameterContexts,
 				cycleParameterProvidedForms: childCycleParameterProvidedForms,
 				cycleParameterFormsNotProvidedAboveFunction: childCycleParameterFormsNotProvidedAboveFunction,
+				cycleParameterFormsNoDeclarationCreates: childCycleParameterFormsNoDeclarationCreates,
+				cycleParameterLabelsBeingBuilt: childCycleParameterLabelsBeingBuilt,
 			)
 		}
 	}
@@ -1090,6 +1144,24 @@ private struct ScopeGeneratorUnderConstruction {
 	/// `cycleParameterFormsNotProvidedAboveFunction` as the scopes this scope builds see them, with those of this scope's
 	/// own function's parameters.
 	private let childCycleParameterFormsNotProvidedAboveFunction: Set<Property>
+	/// The forms the parameters of the functions enclosing this scope that lazy cycles close on put in
+	/// `receivableProperties` that no declaration creates – none where the scope declaring the function calls it, and
+	/// none between the function and this scope – whose label this scope, or a scope between the function and it, is
+	/// built as: they are unavailable here. Such a form stands for a declaration of another form: a parameter made
+	/// optional stands for the non-optional declaration it is made from, which, where the label is still being built,
+	/// is unavailable to a receive only if available of either form, as it is where the function takes no such
+	/// parameter. A form of its label still being built above the function does not count: what the scope declaring
+	/// the function, and each cycle-closing scope, finds unavailable there it passes `nil`. Empty for nearly every scope.
+	private let cycleParameterFormsBeingBuilt: Set<Property>
+	/// The forms the parameters of the functions enclosing the scopes this scope builds put in `receivableProperties`
+	/// that no declaration creates – none where the scope declaring the function calls it, and none between the
+	/// function and the scopes this one builds – each a form of a declaration of another form. Empty for nearly every
+	/// scope.
+	private let childCycleParameterFormsNoDeclarationCreates: Set<Property>
+	/// The labels of the parameters of the functions enclosing the scopes this scope builds that have a form no
+	/// declaration creates, which this scope, or a scope between the innermost function taking the label and this scope,
+	/// is built as. Empty for nearly every scope.
+	private let childCycleParameterLabelsBeingBuilt: Set<String>
 	/// `receivableProperties` as the scopes this scope builds see them: without the forms of a parameter of an enclosing
 	/// function that this scope's declaration of the parameter's label hides.
 	private let childReceivableProperties: Set<Property>
@@ -1208,6 +1280,7 @@ private struct ScopeGeneratorUnderConstruction {
 			property,
 			byEnclosingScopeReceivableProperties: enclosingScopeReceivableProperties,
 			exceptCycleParameterForms: cycleParameterFormsNotProvidedAboveFunction,
+			andCycleParameterFormsBeingBuilt: cycleParameterFormsBeingBuilt,
 			orBoundProperties: boundProperties,
 			exceptOnlyIfAvailableOverrides: countingOnlyIfAvailableOverrides ? [] : onlyIfAvailableOverrideProperties,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
@@ -1216,14 +1289,15 @@ private struct ScopeGeneratorUnderConstruction {
 	}
 
 	/// Whether `property`, or its unwrapped form, is in `enclosingScopeReceivableProperties` but not among
-	/// `cycleParameterFormsNotProvidedAboveFunction`, or in `boundProperties` but not among
-	/// `onlyIfAvailableOverrideProperties`, and is neither among `lazilyInstantiatedInstanceProperties` nor on
+	/// `cycleParameterFormsNotProvidedAboveFunction` or `cycleParameterFormsBeingBuilt`, or in `boundProperties` but not
+	/// among `onlyIfAvailableOverrideProperties`, and is neither among `lazilyInstantiatedInstanceProperties` nor on
 	/// `childPropertyStack`: what `isProvidedByEnclosingScope` asks of the scopes enclosing a scope, and what the scope
 	/// declaring a function a lazy cycle closes on asks of the binding it passes each of the function's parameters.
 	private static func isProvided(
 		_ property: Property,
 		byEnclosingScopeReceivableProperties enclosingScopeReceivableProperties: Set<Property>,
 		exceptCycleParameterForms cycleParameterFormsNotProvidedAboveFunction: Set<Property>,
+		andCycleParameterFormsBeingBuilt cycleParameterFormsBeingBuilt: Set<Property>,
 		orBoundProperties boundProperties: Set<Property>,
 		exceptOnlyIfAvailableOverrides onlyIfAvailableOverrideProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
@@ -1231,12 +1305,24 @@ private struct ScopeGeneratorUnderConstruction {
 	) -> Bool {
 		func isReceivable(_ property: Property) -> Bool {
 			(
-				(enclosingScopeReceivableProperties.contains(property) && !cycleParameterFormsNotProvidedAboveFunction.contains(property))
+				(
+					enclosingScopeReceivableProperties.contains(property)
+						&& !cycleParameterFormsNotProvidedAboveFunction.contains(property)
+						&& !cycleParameterFormsBeingBuilt.contains(property)
+				)
 					|| (boundProperties.contains(property) && !onlyIfAvailableOverrideProperties.contains(property)),
 			) && !lazilyInstantiatedInstanceProperties.contains(property)
 		}
 		return (isReceivable(property) && !childPropertyStack.contains(property))
 			|| (isReceivable(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty))
+	}
+
+	/// The forms of `formsNoDeclarationCreates` whose label is among `labelsBeingBuilt` (see `cycleParameterFormsBeingBuilt`).
+	private static func formsBeingBuilt(
+		ofCycleParameterFormsNoDeclarationCreates formsNoDeclarationCreates: Set<Property>,
+		labelsBeingBuilt: Set<String>,
+	) -> Set<Property> {
+		formsNoDeclarationCreates.filter { labelsBeingBuilt.contains($0.label) }
 	}
 }
 
