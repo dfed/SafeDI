@@ -828,6 +828,30 @@ jobs:
           os: linux
           flags: linux
 
+  # Builds SafeDITool exactly as publish.yml's Linux jobs build the release
+  # binary, so a compiler crash that only that build meets fails a pull
+  # request rather than a publish: Swift 6.3.3 crashed compiling SafeDICore
+  # with -Osize while publishing 2.3.0-alpha-1, on x86_64 and arm64 alike,
+  # though the same commit had passed the test job's release build under
+  # Swift 6.2. It therefore runs in publish's container, swift:6.3, not the
+  # test job's swift:6.2; keep it in step with publish.yml. It caches nothing,
+  # so every module is compiled from scratch, as publish compiles it.
+  linux-release-build:
+    name: Build Release SafeDITool on Linux
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.source != 'false' }}
+    runs-on: ubuntu-latest
+    container: swift:6.3
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v7
+      - name: Build SafeDITool
+        run: swift build -c release --product SafeDITool --static-swift-stdlib -Xswiftc -Osize
+      - name: Smoke test
+        run: .build/release/SafeDITool --version
+
   # Fuzzes each of the graph fuzzer's corpora whole – the base corpus, seeds
   # 0..<corpusSeedCount, the seam corpus, seeds 0..<seamCorpusSeedCount
   # drawn with the generateDependencyTree feature, and the public mock corpus,
