@@ -24,8 +24,8 @@ import Testing
 @testable import SafeDITool
 
 /// How the check that every construction compiles in the module that emits it meets seams: a module that knows a seam
-/// generates each construction in a world where the seam is called, so what it says about each construction – the
-/// comment where `package` access is assumed, the error where no tier can be reached – is said about that world.
+/// generates each construction in a world where the seam is called, so what it says about each construction – that
+/// `package` access is assumed, the error where no tier can be reached – is said about that world.
 struct SafeDIToolSeamAccessTests: ~Copyable {
 	// MARK: Initialization
 
@@ -39,13 +39,14 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 		}
 	}
 
-	// MARK: The comment where package access is assumed
+	// MARK: Modules SafeDI is not told the package of
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_assumesPackageAccessWithComment_whenCallingModuleDeclaresSeamWithoutTargetGraph() async throws {
-		// `App` declares a seam, so it generates in the world where seams are called; `Feature`'s `Service` is still
-		// constructed with the comment, since without the target graph the tool cannot tell which module declares it.
+	mutating func generate_assumesPackageAccess_whenCallingModuleDeclaresSeamWithoutTargetGraph() async throws {
+		// `App` declares a seam, so it generates in the world where seams are called; `Feature`'s `package` `Service` is
+		// still constructed, since without the target graph the tool cannot tell which module declares it, and the line
+		// says nothing about it.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [Self.packageService]),
@@ -88,7 +89,7 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 
 			extension Root {
 			    public convenience init() {
-			        let service = Service() // SafeDI could not verify that Service is in this package; `package` access is assumed.
+			        let service = Service()
 			        func __safeDI_panel() -> Panel {
 			            _ = Panel.__safeDI_Panel_CBF29CE484222325.self
 			            return Panel()
@@ -104,234 +105,181 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_assumesPackageAccessWithComment_whenOnlyDependencyDeclaresSeamWithoutPackageNames() async throws {
+	mutating func generate_throwsErrorOfferingToPassPackages_whenOnlyDependencyDeclaresSeamAndNeitherModuleIsToldItsPackage() async {
 		// `Feature` declares a seam no tree reaches, which `App` knows from `Feature`'s module info, so `App` generates in
-		// the world where seams are called; without package names, its construction of `Service` keeps the comment.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: [
-				ModuleFixture(
-					name: "Feature",
-					packageName: "Shop",
-					swiftFileContent: [
-						Self.packageService,
-						seamFixtureType(named: "Widget", isSeam: true, declarations: ["@Instantiated let gauge: Gauge"]),
-						seamFixtureType(named: "Gauge", declarations: []),
-					],
-					omitsPackageName: true,
-				),
-				ModuleFixture(
-					name: "App",
-					packageName: "Shop",
-					swiftFileContent: [Self.appRoot(declarations: ["@Instantiated let service: Service"])],
-					dependencies: ["Feature"],
-					omitsPackageName: true,
-				),
-			],
-			integration: .moduleInfo,
-			filesToDelete: &filesToDelete,
-		)
-		#expect(output.modules["App"]?.generatedFiles == [
-			"App.swift": generatedFileHeader + """
-			#if canImport(Feature)
-			import Feature
-			#endif
-
-			extension Root {
-			    public convenience init() {
-			        let service = Service() // SafeDI could not verify that Service is in this package; `package` access is assumed.
-			        self.init(service: service)
-			    }
-			}
-			""",
-		])
-		try expectEveryModuleCompiled(output)
+		// the world where seams are called; neither run is told a package, so its construction of `Service` needs `public`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let servicePath = fixtures["Feature"]!["Service.swift"]
+			return """
+			\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+			\(servicePath):2:1-2:8: fixit: public
+			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+			\(servicePath):3:5-3:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Feature",
+						packageName: "Shop",
+						swiftFileContent: [
+							Self.packageService,
+							seamFixtureType(named: "Widget", isSeam: true, declarations: ["@Instantiated let gauge: Gauge"]),
+							seamFixtureType(named: "Gauge", declarations: []),
+						],
+						omitsPackageName: true,
+						compilerReceivesOmittedPackageName: true,
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContent: [Self.appRoot(declarations: ["@Instantiated let service: Service"])],
+						dependencies: ["Feature"],
+						omitsPackageName: true,
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
 	}
 
 	@Test(arguments: [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_assumesPackageAccessWithComment_whenCallingPackageTierOfDependencysSeamWithoutPackageNames(seam: Bool) async throws {
-		// `Panel` is `package`, so its one tier is: `App` calls it with the comment, as inline it constructs `Panel` with
-		// the comment.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: [
-				ModuleFixture(
-					name: "Feature",
-					packageName: "Shop",
-					swiftFileContent: [
-						Self.packageService,
-						seamFixtureType(named: "Engine", isFinalClass: true, declarations: []),
-						"""
-						@Instantiable\(seam ? "(generateDependencyTree: true)" : "")
-						package struct Panel: Instantiable {
-						    package init(service: Service, engine: Engine) {
-						        self.service = service
-						        self.engine = engine
-						    }
+	mutating func generate_throwsErrorAtSeamType_whenCallerReachesNoTierOfDependencysPackageSeamAndNeitherModuleIsToldItsPackage(seam: Bool) async {
+		// `Panel` is `package`, so its one tier is, which `App`, told no package, cannot call: the check of every
+		// construction reports `Panel` itself – its type alone, since the call reaches no tier of it – as it reports
+		// `Panel` and its initializer where `App` builds `Panel`'s tree inline.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let panelPath = fixtures["Feature"]!["Panel.swift"]
+			let servicePath = fixtures["Feature"]!["Service.swift"]
+			return seam
+				? """
+			\(panelPath):2:1: error: `Panel` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Panel` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+			\(panelPath):2:1-2:8: fixit: public
+			\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+			\(servicePath):2:1-2:8: fixit: public
+			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+			\(servicePath):3:5-3:12: fixit: public
+			"""
+				: """
+			\(panelPath):2:1: error: `Panel` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Panel` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+			\(panelPath):2:1-2:8: fixit: public
+			\(panelPath):3:5: error: `Panel`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`, or declare `Panel` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
+			\(panelPath):3:5-3:12: fixit: public
+			\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+			\(servicePath):2:1-2:8: fixit: public
+			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+			\(servicePath):3:5-3:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Feature",
+						packageName: "Shop",
+						swiftFileContent: [
+							Self.packageService,
+							seamFixtureType(named: "Engine", isFinalClass: true, declarations: []),
+							"""
+							@Instantiable\(seam ? "(generateDependencyTree: true)" : "")
+							package struct Panel: Instantiable {
+							    package init(service: Service, engine: Engine) {
+							        self.service = service
+							        self.engine = engine
+							    }
 
-						    @Received let service: Service
-						    @Instantiated let engine: Engine
-						}
-						""",
-					],
-					omitsPackageName: true,
-				),
-				ModuleFixture(
-					name: "App",
-					packageName: "Shop",
-					swiftFileContent: [Self.appRoot(declarations: ["@Instantiated let service: Service", "@Instantiated let panel: Panel"])],
-					dependencies: ["Feature"],
-					omitsPackageName: true,
-				),
-			],
-			integration: .moduleInfo,
-			filesToDelete: &filesToDelete,
-		)
-		if seam {
-			#expect(output.modules["App"]?.generatedFiles == [
-				"App.swift": generatedFileHeader + """
-				#if canImport(Feature)
-				import Feature
-				#endif
-
-				extension Root {
-				    public convenience init() {
-				        let service = Service() // SafeDI could not verify that Service is in this package; `package` access is assumed.
-				        func __safeDI_panel() -> Panel {
-				            _ = Panel.__safeDI_Panel_F0C17F5BF000CB21.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-				            return Panel(service: service) // SafeDI could not verify that Panel is in this package; `package` access is assumed.
-				        }
-				        let panel: Panel = __safeDI_panel()
-				        self.init(service: service, panel: panel)
-				    }
-				}
-				""",
-			])
-		} else {
-			#expect(output.modules["App"]?.generatedFiles == [
-				"App.swift": generatedFileHeader + """
-				#if canImport(Feature)
-				import Feature
-				#endif
-
-				extension Root {
-				    public convenience init() {
-				        let service = Service() // SafeDI could not verify that Service is in this package; `package` access is assumed.
-				        func __safeDI_panel() -> Panel {
-				            let engine = Engine()
-				            return Panel(service: service, engine: engine) // SafeDI could not verify that Panel is in this package; `package` access is assumed.
-				        }
-				        let panel: Panel = __safeDI_panel()
-				        self.init(service: service, panel: panel)
-				    }
-				}
-				""",
-			])
+							    @Received let service: Service
+							    @Instantiated let engine: Engine
+							}
+							""",
+						],
+						omitsPackageName: true,
+						compilerReceivesOmittedPackageName: true,
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContent: [Self.appRoot(declarations: ["@Instantiated let service: Service", "@Instantiated let panel: Panel"])],
+						dependencies: ["Feature"],
+						omitsPackageName: true,
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
 		}
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_assumesPackageAccessWithComment_whenCallerWithoutPackageNameCallsPackageTierOfSeamInNamedPackage() async throws {
+	mutating func generate_throwsErrorOfferingToPassPackage_whenCallerToldNoPackageReachesOnlyPublicTierOfSeamThatOmitsItsValue() async {
 		// `Feature`, in package `Shop`, generates `Service` with a `public` tier and a `package` one that passes `theme`,
-		// which `Badge`'s `package` initializer receives. `App` runs with its module's name and no package name, so
-		// `package` access is assumed of `Feature`'s declarations: `App` calls the `package` tier, and says so on the
-		// line, as it does where it constructs a `package` declaration inline. `App` is compiled in `Shop`, so the call
-		// compiles; were it not, the compiler would report the `package` initializer the comment names.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: [
-				ModuleFixture(
-					name: "Feature",
-					packageName: "Shop",
-					swiftFileContent: [
-						"""
-						package struct Theme {
-						    package init() {}
-						}
-						""",
-						"""
-						@Instantiable
-						public struct Badge: Instantiable {
-						    package init(theme: Theme?) {
-						        self.theme = theme
-						    }
+		// which `Badge`'s `package` initializer receives. `App` runs with its module's name and no package name, so it has
+		// no package: it calls the `public` tier, which would drop the `theme` `Shell` holds. `App` is compiled in `Shop`
+		// here, so the error says how to tell SafeDI so.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let themePath = fixtures["Feature"]!["Theme.swift"]
+			return """
+			\(fixtures["App"]!["Shell.swift"]):10:5: error: `Shell` provides `theme: Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is declared `package`. Declare `Theme` `public`; pass module `App`'s package to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if it is compiled with `-package-name`; or stop providing `theme` on this path.
+			\(themePath):1:1: note: `Theme` is declared `package` here.
+			\(themePath):1:1-1:8: fixit: public
+			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: Theme?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Feature",
+						packageName: "Shop",
+						swiftFileContent: [
+							"""
+							package struct Theme {
+							    package init() {}
+							}
+							""",
+							"""
+							@Instantiable
+							public struct Badge: Instantiable {
+							    package init(theme: Theme?) {
+							        self.theme = theme
+							    }
 
-						    @Received(onlyIfAvailable: true) let theme: Theme?
-						}
-						""",
-						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
-					],
-				),
-				ModuleFixture(
-					name: "App",
-					packageName: "Shop",
-					swiftFileContent: [
-						"""
-						import Feature
+							    @Received(onlyIfAvailable: true) let theme: Theme?
+							}
+							""",
+							seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+						],
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContent: [
+							"""
+							import Feature
 
-						@Instantiable
-						package struct Shell: Instantiable {
-						    package init(theme: Theme, service: Service) {
-						        self.theme = theme
-						        self.service = service
-						    }
+							@Instantiable
+							package struct Shell: Instantiable {
+							    package init(theme: Theme, service: Service) {
+							        self.theme = theme
+							        self.service = service
+							    }
 
-						    @Forwarded let theme: Theme
-						    @Instantiated let service: Service
-						}
-						""",
-						Self.appRoot(declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"]).replacingOccurrences(of: "public init(", with: "package init("),
-					],
-					dependencies: ["Feature"],
-					omitsPackageName: true,
-				),
-			],
-			integration: .moduleInfo,
-			filesToDelete: &filesToDelete,
-		)
-		#expect(output.modules["Feature"]?.generatedFiles == [
-			"Feature.swift": generatedFileHeader + """
-			extension Service {
-			    public init() {
-			        self.init(theme: nil)
-			    }
-
-			    package init(theme: Theme?) {
-			        let badge = Badge(theme: theme)
-			        self.init(badge: badge)
-			    }
-			}
-
-			extension Service {
-			    public enum __safeDI_Service_27F6F01DC5D0EF8E {}
-			}
-			""",
-		])
-		#expect(output.modules["App"]?.generatedFiles == [
-			"App.swift": generatedFileHeader + """
-			#if canImport(Feature)
-			import Feature
-			#endif
-
-			extension Root {
-			    public convenience init() {
-			        func __safeDI_shellBuilder(theme: Theme) -> Shell {
-			            func __safeDI_service() -> Service {
-			                _ = Service.__safeDI_Service_27F6F01DC5D0EF8E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
-			                return Service(theme: theme) // SafeDI could not verify that Service is in this package; `package` access is assumed.
-			            }
-			            let service: Service = __safeDI_service()
-			            return Shell(theme: theme, service: service)
-			        }
-			        let shellBuilder = Instantiator<Shell> {
-			            __safeDI_shellBuilder(theme: $0)
-			        }
-			        self.init(shellBuilder: shellBuilder)
-			    }
-			}
-			""",
-		])
-		try expectEveryModuleCompiled(output)
+							    @Forwarded let theme: Theme
+							    @Instantiated let service: Service
+							}
+							""",
+							Self.appRoot(declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"]).replacingOccurrences(of: "public init(", with: "package init("),
+						],
+						dependencies: ["Feature"],
+						omitsPackageName: true,
+						compilerReceivesOmittedPackageName: true,
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
 	}
 
 	// MARK: A caller of a seam whose own initializer it cannot call

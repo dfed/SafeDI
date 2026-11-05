@@ -73,13 +73,13 @@ struct SafeDIToolSeamHarnessOptionTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenCallerWithoutPackageNameHoldsValueTheTierItReachesOmits() async {
-		// Neither module knows a package, so only `public` and `internal` exist: `Badge`'s `internal` initializer
-		// receives `theme` only if available, so the `public` tier `App` reaches omits it, and `App`'s `Shell` provides
-		// it. Built inline, `Badge` would be handed `theme`.
+	mutating func generate_throwsErrorOfferingToPassPackages_whenCallerToldNoPackageHoldsValueTheTierItReachesOmits() async {
+		// Neither module is told a package, so neither has one, and only `public` and `internal` exist: `Badge`'s
+		// `internal` initializer receives `theme` only if available, so the `public` tier `App` reaches omits it, and
+		// `App`'s `Shell` provides it. Built inline, `Badge` would be handed `theme`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Shell.swift"]):11:5: error: `Shell` provides `theme: [3 of Int]`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App`, which SafeDI cannot tell is in the same package, can call, does not take it: `Service` takes `theme` only on its `internal` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `package`, or `public` if the two modules are in different packages; mention `[3 of Int]` in a `package` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
+			\(fixtures["App"]!["Shell.swift"]):11:5: error: `Shell` provides `theme: [3 of Int]`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `internal` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`; or stop providing `theme` on this path.
 			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: [3 of Int]?` here.
 			"""
 		}) {

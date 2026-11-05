@@ -89,6 +89,7 @@ struct ModuleFixture {
 		deletesSwiftFilesAfterRunning: Bool = false,
 		omitsModuleName: Bool = false,
 		omitsPackageName: Bool = false,
+		compilerReceivesOmittedPackageName: Bool = false,
 		isReleaseConfiguration: Bool = false,
 		runsSafeDI: Bool = true,
 		compilerSettings: VerificationCompilerSettings = VerificationCompilerSettings(),
@@ -99,6 +100,7 @@ struct ModuleFixture {
 		self.isReleaseConfiguration = isReleaseConfiguration
 		self.omitsModuleName = omitsModuleName
 		self.omitsPackageName = omitsPackageName
+		self.compilerReceivesOmittedPackageName = compilerReceivesOmittedPackageName
 		self.packageName = packageName
 		self.swiftFileContent = swiftFileContent
 		self.swiftFileContentByFilePath = swiftFileContentByFilePath
@@ -125,10 +127,14 @@ struct ModuleFixture {
 	/// Whether `.moduleInfo` runs the module's `generate` without `--module-name`, as a custom script might, so its
 	/// `.safedi` names no module.
 	let omitsModuleName: Bool
-	/// Whether `.moduleInfo` runs the module's `generate` without `--package-name`, as an integration that does not
-	/// know packages does, so the tool cannot verify that two modules share one. The module still compiles in its
-	/// package.
+	/// Whether the module has no package under `.moduleInfo`: its `generate` runs without `--package-name` and its compile
+	/// passes no `-package-name`, as Bazel builds a library without `package_name` and Tuist a target without
+	/// `SWIFT_PACKAGE_NAME`. `.swiftPackagePlugin` reads the package from the target graph and compiles the module in it,
+	/// since SwiftPM gives every module a package.
 	let omitsPackageName: Bool
+	/// Whether a module that `omitsPackageName` is still compiled with `-package-name`, as a hand-wired build that does not
+	/// tell SafeDI the package it compiles the module in.
+	let compilerReceivesOmittedPackageName: Bool
 	/// Whether the module is built as a release build is: see `init`.
 	let isReleaseConfiguration: Bool
 	/// Whether the tool runs for the module: see `init`.
@@ -569,7 +575,7 @@ func executeSafeDIToolMultiModuleTest(
 			writtenModules.map { module in
 				ModuleCompileSources(
 					moduleName: module.fixture.name,
-					packageName: module.fixture.packageName,
+					packageName: integration == .moduleInfo && module.fixture.omitsPackageName && !module.fixture.compilerReceivesOmittedPackageName ? nil : module.fixture.packageName,
 					dependencyModuleNames: module.transitiveDependencies,
 					inputSwiftFiles: module.swiftFiles,
 					generatedFiles: outputs[module.fixture.name]!.generatedFiles,
