@@ -280,6 +280,96 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		try expectEveryModuleCompiled(viewOutput)
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_computesSeamOnce_whenOwnTreeAndAnotherModulesSeamBothReachIt() async throws {
+		// Cell 6b: `Session`'s seam is reached by `App`'s own tree, through `App`'s own `Session.safedi`, and by `Feed`'s seam,
+		// through `Feed`'s view: one signature, the same call in both places.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.seamChain(appDependencies: ["Feed", "Session"], sessionIsSeam: true, rootAlsoBuildsSession: true),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feed") + "\n" + Self.importBlock("Session") + "\n\n" + """
+		extension Root {
+		    public init() {
+		        func __safeDI_feedScreen() -> FeedScreen {
+		            _ = FeedScreen.__safeDI_FeedScreen_029593DA1BB2FBD5.self
+		            return FeedScreen(token: nil)
+		        }
+		        let feedScreen: FeedScreen = __safeDI_feedScreen()
+		        func __safeDI_session() -> Session {
+		            _ = Session.__safeDI_Session_029593DA1BB2FBD5.self
+		            return Session(token: nil)
+		        }
+		        let session: Session = __safeDI_session()
+		        self.init(feedScreen: feedScreen, session: session)
+		    }
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_qualifiesNestedTypeAsSeamsModuleDoes_whenCallerDeclaresTopLevelTypeOfItsName(integration: MultiModuleIntegration) async throws {
+		// Cell 30: `Core`'s seam `CoreScreen` builds `Settings`, its nested type, spelled unqualified; `App` declares a
+		// top-level `Settings` too. A view holds `Core`'s declarations unnormalized, so `App`'s computation of
+		// `CoreScreen`'s signature, through `Feed`, qualifies `Settings` among `Core`'s declarations, as `Core`'s own run did.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(name: "Core", packageName: "Base", swiftFileContent: [
+					"""
+					@Instantiable(generateDependencyTree: true)
+					public struct CoreScreen: Instantiable {
+					    public init(settings: Settings) {
+					        self.settings = settings
+					    }
+
+					    @Instantiated let settings: Settings
+
+					    @Instantiable
+					    public struct Settings: Instantiable {
+					        public init(theme: Theme?) {
+					            self.theme = theme
+					        }
+
+					        @Received(onlyIfAvailable: true) let theme: Theme?
+					    }
+					}
+
+					public struct Theme {
+					    public init() {}
+					}
+					""",
+				]),
+				ModuleFixture(name: "Feed", packageName: "Base", swiftFileContent: ["import Core\n\n" + seamFixtureType(named: "FeedScreen", isSeam: true, declarations: ["@Instantiated let coreScreen: CoreScreen"])], dependencies: ["Core"]),
+				ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+					seamFixtureType(named: "Settings", declarations: []),
+					"import Feed\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let feedScreen: FeedScreen", "@Instantiated let settings: Settings"]),
+				], dependencies: ["Feed"]),
+			],
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		let fileName = integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift"
+		let pluginComment = integration == .moduleInfo ? "" : " // If this line does not compile, add the SafeDI plugin to the target that declares FeedScreen."
+		#expect(output.modules["App"]?.generatedFiles == [fileName: generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feed") + "\n\n" + """
+		extension Root {
+		    public init() {
+		        func __safeDI_feedScreen() -> FeedScreen {
+		            _ = FeedScreen.__safeDI_FeedScreen_717280493A095F31.self\(pluginComment)
+		            return FeedScreen(theme: nil)
+		        }
+		        let feedScreen: FeedScreen = __safeDI_feedScreen()
+		        let settings = Settings()
+		        self.init(feedScreen: feedScreen, settings: settings)
+		    }
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
 	// MARK: Tests – Names
 
 	@Test
@@ -461,6 +551,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		sessionRunsSafeDI: Bool = true,
 		sessionIsSeam: Bool = false,
 		rootAlsoBuildsClock: Bool = false,
+		rootAlsoBuildsSession: Bool = false,
 		clockLeadingLines: Int = 0,
 		clockReceivesDate: Bool = false,
 	) -> [ModuleFixture] {
@@ -504,10 +595,10 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 				"import Session\n\n" + seamFixtureType(named: "FeedScreen", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let session: Session"]),
 			], dependencies: sessionIsSeam ? ["Session"] : ["Core", "Session"]),
 			ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
-				"import Feed\n" + (rootAlsoBuildsClock ? "import Core\n" : "") + "\n" + seamFixtureType(
+				"import Feed\n" + (rootAlsoBuildsClock ? "import Core\n" : "") + (rootAlsoBuildsSession ? "import Session\n" : "") + "\n" + seamFixtureType(
 					named: "Root",
 					isRoot: true,
-					declarations: ["@Instantiated let feedScreen: FeedScreen"] + (rootAlsoBuildsClock ? ["@Instantiated let clock: Clock"] : []),
+					declarations: ["@Instantiated let feedScreen: FeedScreen"] + (rootAlsoBuildsClock ? ["@Instantiated let clock: Clock"] : []) + (rootAlsoBuildsSession ? ["@Instantiated let session: Session"] : []),
 				),
 			], dependencies: appDependencies),
 		]
