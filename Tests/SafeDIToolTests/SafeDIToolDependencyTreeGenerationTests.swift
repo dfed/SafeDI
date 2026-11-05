@@ -110,14 +110,16 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		#expect(output.dependencyTreeFiles.keys.sorted() == ["Root+SafeDI.swift", "Screen+SafeDI.swift"])
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: User, database: Database, logger: Logger?) {
-		        let cache = Cache(database: database, logger: logger)
+		    public init(user: User, database __safeDI_database: @autoclosure @escaping () -> Database, logger __safeDI_logger: @autoclosure @escaping () -> Logger?) {
+		        let database = LazilyInstantiated<Database>(__safeDI_database)
+		        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
+		        let cache = Cache(database: database.instance, logger: logger.instance)
 		        self.init(user: user, cache: cache)
 		    }
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_B835980A9E07DFB3 {}
+		    public enum __safeDI_Screen_3192EA1C03ABD98F {}
 		}
 		""")
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
@@ -126,7 +128,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        let user = User()
 		        let database = Database()
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_B835980A9E07DFB3.self
+		            _ = Screen.__safeDI_Screen_3192EA1C03ABD98F.self
 		            return Screen(user: user, database: database, logger: nil)
 		        }
 		        let screen: Screen = __safeDI_screen()
@@ -218,15 +220,17 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: User, database: Database, logger: Logger?, session: Session) {
-		        let cache = Cache(database: database, logger: logger)
-		        let tracker = Tracker(session: session, user: user)
+		    public init(user: User, database: Database, logger __safeDI_logger: @autoclosure @escaping () -> Logger?, session __safeDI_session: @autoclosure @escaping () -> Session) {
+		        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
+		        let session = LazilyInstantiated<Session>(__safeDI_session)
+		        let cache = Cache(database: database, logger: logger.instance)
+		        let tracker = Tracker(session: session.instance, user: user)
 		        self.init(user: user, database: database, cache: cache, tracker: tracker)
 		    }
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_460DB201FCB5C762 {}
+		    public enum __safeDI_Screen_48A3FE2395219B46 {}
 		}
 		""")
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
@@ -235,7 +239,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        let database = Database()
 		        let session = Session()
 		        func __safeDI_screenBuilder(user: User) -> Screen {
-		            _ = Screen.__safeDI_Screen_460DB201FCB5C762.self
+		            _ = Screen.__safeDI_Screen_48A3FE2395219B46.self
 		            return Screen(user: user, database: database, logger: nil, session: session)
 		        }
 		        let screenBuilder = Instantiator<Screen> {
@@ -1232,7 +1236,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_FA729A99D3C18DD1 {}
+		    public enum __safeDI_Screen_75FDE4A4CAE60A7D {}
 		}
 		""")
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
@@ -1240,7 +1244,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    public init() {
 		        let session = Session()
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_FA729A99D3C18DD1.self
+		            _ = Screen.__safeDI_Screen_75FDE4A4CAE60A7D.self
 		            return Screen(session: session)
 		        }
 		        let screen: Screen = __safeDI_screen()
@@ -1839,7 +1843,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			    public init() {
 			        let `default` = Token()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_44EA33C409AE0123.self
+			            _ = Screen.__safeDI_Screen_5085CCAFD3943AE3.self
 			            return Screen(default: `default`, token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -1849,7 +1853,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(`default`: Token?, token: Token?) {
+			    public init(default __safeDI_default: @autoclosure @escaping () -> Token?, token __safeDI_token: @autoclosure @escaping () -> Token?) {
+			        let `default` = LazilyInstantiated<Token?>(__safeDI_default)
+			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        func __safeDI_session() -> Session {
 			            #sourceLocation(file: "\(output.fixtures["Session.swift"])", line: 8)
 			            let current: Token? = `default`.instance
@@ -1864,7 +1870,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_44EA33C409AE0123 {}
+			    public enum __safeDI_Screen_5085CCAFD3943AE3 {}
 			}
 			""",
 		])
@@ -2431,7 +2437,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    public init() {
 		        let database = Database()
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_0514A8D5AAB19F68.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Screen", declaringModule: "Feature"))
+		            _ = Screen.__safeDI_Screen_0A823A049433550C.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Screen", declaringModule: "Feature"))
 		            return Screen(database: database, logger: nil)
 		        }
 		        let screen: Screen = __safeDI_screen()
@@ -2799,14 +2805,16 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		// its own computation of the seam's signature, name one enum and pass each parameter.
 		let seamCode = """
 		extension Screen {
-		    public init(user: User, database: Database, logger: Logger?) {
-		        let cache = Cache(database: database, logger: logger)
+		    public init(user: User, database __safeDI_database: @autoclosure @escaping () -> Database, logger __safeDI_logger: @autoclosure @escaping () -> Logger?) {
+		        let database = LazilyInstantiated<Database>(__safeDI_database)
+		        let logger = LazilyInstantiated<Logger?>(__safeDI_logger)
+		        let cache = Cache(database: database.instance, logger: logger.instance)
 		        self.init(user: user, cache: cache)
 		    }
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_B835980A9E07DFB3 {}
+		    public enum __safeDI_Screen_3192EA1C03ABD98F {}
 		}
 		"""
 		// The call says what to do when it does not compile: under the SwiftPM plugin, apply the plugin to the seam's
@@ -2820,7 +2828,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        let database = Database()
 		        let logger = Logger()
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_B835980A9E07DFB3.self\(callComment)
+		            _ = Screen.__safeDI_Screen_3192EA1C03ABD98F.self\(callComment)
 		            return Screen(user: user, database: database, logger: logger)
 		        }
 		        let screen: Screen = __safeDI_screen()
@@ -2984,12 +2992,12 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    public init() {
 		        let database = Database()
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_FF5D0A1F23864D36.self\(integration.seamCallComment(type: "Screen", declaringModule: "Feature"))
+		            _ = Screen.__safeDI_Screen_699FBEB932A6412E.self\(integration.seamCallComment(type: "Screen", declaringModule: "Feature"))
 		            return Screen(database: database)
 		        }
 		        let screen: Screen = __safeDI_screen()
 		        func __safeDI_panel() -> Panel {
-		            _ = Panel.__safeDI_Panel_FF5D0A1F23864D36.self\(integration.seamCallComment(type: "Panel", declaringModule: "Feature"))
+		            _ = Panel.__safeDI_Panel_699FBEB932A6412E.self\(integration.seamCallComment(type: "Panel", declaringModule: "Feature"))
 		            return Panel(database: database)
 		        }
 		        let panel: Panel = __safeDI_panel()
@@ -3354,8 +3362,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    public init(database __safeDI_database: @autoclosure @escaping () -> Database) {
 		        let database = LazilyInstantiated<Database>(__safeDI_database)
 		        func __safeDI_vault() -> Vault {
-		            _ = Vault.__safeDI_Vault_FF5D0A1F23864D36.self\(integration.seamCallComment(type: "Vault", declaringModule: "Storage"))
-		            return Vault(database: database)
+		            _ = Vault.__safeDI_Vault_699FBEB932A6412E.self\(integration.seamCallComment(type: "Vault", declaringModule: "Storage"))
+		            return Vault(database: database.instance)
 		        }
 		        let vault: Vault = __safeDI_vault()
 		        self.init(vault: vault)
@@ -3371,12 +3379,12 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    public init() {
 		        let database = Database()
 		        func __safeDI_dashboard() -> Dashboard {
-		            _ = Dashboard.__safeDI_Dashboard_FF5D0A1F23864D36.self\(integration.seamCallComment(type: "Dashboard", declaringModule: "Analytics"))
+		            _ = Dashboard.__safeDI_Dashboard_699FBEB932A6412E.self\(integration.seamCallComment(type: "Dashboard", declaringModule: "Analytics"))
 		            return Dashboard(database: database)
 		        }
 		        let dashboard: Dashboard = __safeDI_dashboard()
 		        func __safeDI_vault() -> Vault {
-		            _ = Vault.__safeDI_Vault_FF5D0A1F23864D36.self\(integration.seamCallComment(type: "Vault", declaringModule: "Storage"))
+		            _ = Vault.__safeDI_Vault_699FBEB932A6412E.self\(integration.seamCallComment(type: "Vault", declaringModule: "Storage"))
 		            return Vault(database: database)
 		        }
 		        let vault: Vault = __safeDI_vault()
@@ -3508,7 +3516,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_C70D9378A6E61F91.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Screen", declaringModule: "Feature"))
+		            _ = Screen.__safeDI_Screen_37EE64D5CE97F78B.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Screen", declaringModule: "Feature"))
 		            return Screen(database: nil)
 		        }
 		        let screen: Screen = __safeDI_screen()
@@ -4024,7 +4032,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_7C25DC5AF72A295E {}
+		    public enum __safeDI_Screen_71C706F9FE9BEAFE {}
 		}
 		""")
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
@@ -4035,7 +4043,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        }
 		        let user = SendableLazilyInstantiated<User>(__safeDI_user)
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_7C25DC5AF72A295E.self
+		            _ = Screen.__safeDI_Screen_71C706F9FE9BEAFE.self
 		            return Screen(user: nil)
 		        }
 		        let screen: Screen = __safeDI_screen()
@@ -4055,14 +4063,15 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let output = try await labelFormsOutput(Self.labelFormsFixture(detail: .onlyIfAvailable, summary: nil, caller: .optionalWrapper))
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: User?) {
-		        let detail = Detail(user: user)
+		    public init(user __safeDI_user: @autoclosure @escaping () -> User?) {
+		        let user = LazilyInstantiated<User?>(__safeDI_user)
+		        let detail = Detail(user: user.instance)
 		        self.init(detail: detail)
 		    }
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_EC87C7D62747BEAB {}
+		    public enum __safeDI_Screen_B61C3DC8DD996187 {}
 		}
 		""")
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
@@ -4070,7 +4079,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    public init() {
 		        func __safeDI_featureBuilder(user: LazilyInstantiated<User>?) -> Feature {
 		            func __safeDI_screen() -> Screen {
-		                _ = Screen.__safeDI_Screen_EC87C7D62747BEAB.self
+		                _ = Screen.__safeDI_Screen_B61C3DC8DD996187.self
 		                return Screen(user: nil)
 		            }
 		            let screen: Screen = __safeDI_screen()
@@ -4092,14 +4101,15 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let output = try await labelFormsOutput(Self.labelFormsFixture(detail: .onlyIfAvailable, summary: nil, caller: .instanceWhoseTreeBuildsScreen))
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(user: User?) {
-		        let detail = Detail(user: user)
+		    public init(user __safeDI_user: @autoclosure @escaping () -> User?) {
+		        let user = LazilyInstantiated<User?>(__safeDI_user)
+		        let detail = Detail(user: user.instance)
 		        self.init(detail: detail)
 		    }
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_EC87C7D62747BEAB {}
+		    public enum __safeDI_Screen_B61C3DC8DD996187 {}
 		}
 		""")
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
@@ -4107,7 +4117,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    public init() {
 		        func __safeDI_user() -> User {
 		            func __safeDI_screen() -> Screen {
-		                _ = Screen.__safeDI_Screen_EC87C7D62747BEAB.self
+		                _ = Screen.__safeDI_Screen_B61C3DC8DD996187.self
 		                return Screen(user: nil)
 		            }
 		            let screen: Screen = __safeDI_screen()
@@ -4754,7 +4764,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			        let authToken = Token()
 			        let token = Token()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_C344335BA3B56D03.self
+			            _ = Screen.__safeDI_Screen_F046DCFB1718557F.self
 			            return Screen(token: token)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -4764,7 +4774,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token: Token?) {
+			    public init(token __safeDI_token: @autoclosure @escaping () -> Token?) {
+			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        func __safeDI_first() -> First {
 			            #sourceLocation(file: "\(output.fixtures["First.swift"])", line: 8)
 			            let authToken: Token? = token.instance
@@ -4785,7 +4796,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_C344335BA3B56D03 {}
+			    public enum __safeDI_Screen_F046DCFB1718557F {}
 			}
 			""",
 		])
@@ -4869,7 +4880,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			    public init() {
 			        let anyToken = AnyToken(Token())
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_C344335BA3B56D03.self
+			            _ = Screen.__safeDI_Screen_F046DCFB1718557F.self
 			            return Screen(token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -4879,7 +4890,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token: Token?) {
+			    public init(token __safeDI_token: @autoclosure @escaping () -> Token?) {
+			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        func __safeDI_session() -> Session {
 			            #sourceLocation(file: "\(output.fixtures["Session.swift"])", line: 8)
 			            let anyToken: AnyToken? = (token.instance as Token?).map { AnyToken($0) }
@@ -4893,7 +4905,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_C344335BA3B56D03 {}
+			    public enum __safeDI_Screen_F046DCFB1718557F {}
 			}
 			""",
 		])
@@ -5034,21 +5046,23 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 		#expect(output.dependencyTreeFiles["Panel+SafeDI.swift"] == generatedFileHeader + """
 		extension Internals.Panel {
-		    internal init(session: Session?) {
-		        let detail = Detail(session: session)
+		    internal init(session __safeDI_session: @autoclosure @escaping () -> Session?) {
+		        let session = LazilyInstantiated<Session?>(__safeDI_session)
+		        let detail = Detail(session: session.instance)
 		        self.init(detail: detail)
 		    }
 		}
 
 		extension Internals.Panel {
-		    public enum __safeDI_Internals_Panel_3D6B90C570A1A307 {}
+		    public enum __safeDI_Internals_Panel_4E17DBED249DA99B {}
 		}
 		""")
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(session: Session?) {
+		    public init(session __safeDI_session: @autoclosure @escaping () -> Session?) {
+		        let session = LazilyInstantiated<Session?>(__safeDI_session)
 		        func __safeDI_panel() -> Internals.Panel {
-		            _ = Internals.Panel.__safeDI_Internals_Panel_3D6B90C570A1A307.self
+		            _ = Internals.Panel.__safeDI_Internals_Panel_4E17DBED249DA99B.self
 		            return Internals.Panel(session: session.instance)
 		        }
 		        let panel = AnyPanel(__safeDI_panel())
@@ -5057,7 +5071,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_F1140D3DA1A35FCB {}
+		    public enum __safeDI_Screen_23887EC7D88CECA7 {}
 		}
 		""")
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
@@ -5065,7 +5079,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    public init() {
 		        let session = Session()
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_F1140D3DA1A35FCB.self
+		            _ = Screen.__safeDI_Screen_23887EC7D88CECA7.self
 		            return Screen(session: session)
 		        }
 		        let screen: Screen = __safeDI_screen()
@@ -5237,7 +5251,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_5F3FDE2D827DABB3.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Service", declaringModule: "Core"))
+		            _ = Service.__safeDI_Service_20C0E63A654A9D89.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Service", declaringModule: "Core"))
 		            return Service(logger: nil)
 		        }
 		        let service: any ServiceProtocol = __safeDI_service()
@@ -7604,9 +7618,10 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Panel+SafeDI.swift": generatedFileHeader + """
 			extension Panel {
-			    public init(token: Token?) {
+			    public init(token __safeDI_token: @autoclosure @escaping () -> Token?) {
+			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        func __safeDI_screenBuilder() -> Screen {
-			            _ = Screen.__safeDI_Screen_C344335BA3B56D03.self
+			            _ = Screen.__safeDI_Screen_F046DCFB1718557F.self
 			            return Screen(token: token.instance)
 			        }
 			        let screenBuilder = Instantiator<Screen>(__safeDI_screenBuilder)
@@ -7615,7 +7630,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			}
 
 			extension Panel {
-			    public enum __safeDI_Panel_C344335BA3B56D03 {}
+			    public enum __safeDI_Panel_F046DCFB1718557F {}
 			}
 			""",
 			"Root+SafeDI.swift": generatedFileHeader + """
@@ -7623,7 +7638,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			    public init() {
 			        let token = Token()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_C344335BA3B56D03.self
+			            _ = Screen.__safeDI_Screen_F046DCFB1718557F.self
 			            return Screen(token: token)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -7633,7 +7648,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token: Token?) {
+			    public init(token __safeDI_token: @autoclosure @escaping () -> Token?) {
+			        let token = LazilyInstantiated<Token?>(__safeDI_token)
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
 			            let authToken: Token? = token.instance
@@ -7643,7 +7659,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			        }
 			        let detail: Detail = __safeDI_detail()
 			        func __safeDI_panelBuilder() -> Panel {
-			            _ = Panel.__safeDI_Panel_C344335BA3B56D03.self
+			            _ = Panel.__safeDI_Panel_F046DCFB1718557F.self
 			            return Panel(token: token.instance)
 			        }
 			        let panelBuilder = Instantiator<Panel>(__safeDI_panelBuilder)
@@ -7652,7 +7668,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_C344335BA3B56D03 {}
+			    public enum __safeDI_Screen_F046DCFB1718557F {}
 			}
 			""",
 		])
@@ -8438,7 +8454,8 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let detailPath = output.fixtures["Detail.swift"]
 		#expect(output.dependencyTreeFiles["Screen+SafeDI.swift"] == generatedFileHeader + """
 		extension Screen {
-		    public init(token: Token?) {
+		    public init(token __safeDI_token: @autoclosure @escaping () -> Token?) {
+		        let token = LazilyInstantiated<Token?>(__safeDI_token)
 		        func __safeDI_detail() -> Detail {
 		            #sourceLocation(file: "\(detailPath)", line: 7)
 		            let authToken: Token? = token.instance
@@ -8451,7 +8468,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_C344335BA3B56D03 {}
+		    public enum __safeDI_Screen_F046DCFB1718557F {}
 		}
 		""")
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
@@ -8459,7 +8476,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    public init() {
 		        func __safeDI_featureBuilder(token: Token?) -> Feature {
 		            func __safeDI_screen() -> Screen {
-		                _ = Screen.__safeDI_Screen_C344335BA3B56D03.self
+		                _ = Screen.__safeDI_Screen_F046DCFB1718557F.self
 		                return Screen(token: token)
 		            }
 		            let screen: Screen = __safeDI_screen()

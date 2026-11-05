@@ -2784,7 +2784,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_40A2FB101D2CA51A {}
+		    public enum __safeDI_Service_BF0D39F5BAEB8EC2 {}
 		}
 
 		extension Tray {
@@ -2997,7 +2997,8 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		        self.init(theme: nil, userServiceBuilder: __safeDI_userServiceBuilder)
 		    }
 
-		    package init(theme: Theme?, userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+		    package init(theme __safeDI_theme: @autoclosure @escaping () -> Theme?, userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
+		        let theme = LazilyInstantiated<Theme?>(__safeDI_theme)
 		        let session = Session()
 		        let badge = Badge()
 		        let banner = Banner(theme: theme.instance)
@@ -3011,7 +3012,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_5C79F878EBDCCED8 {}
+		    public enum __safeDI_Service_47D6617578E4D618 {}
 		}
 		"""])
 		expectGeneratedFiles(output.modules["Same"]?.generatedFiles, ["Same.swift": generatedFileHeader + """
@@ -3022,7 +3023,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_B4D4F4AEEBDE5D00.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Service.__safeDI_Service_47D6617578E4D618.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
 		                let session = scope.session
 		                let userService: any UserService = SessionUserService(session: session)
@@ -3043,7 +3044,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_B4D4F4AEEBDE5D00.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		            _ = Service.__safeDI_Service_47D6617578E4D618.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Profile_userService) -> any UserService {
 		                let badge = scope.badge
 		                let userService: any UserService = BadgeUserService(badge: badge)

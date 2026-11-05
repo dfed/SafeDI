@@ -173,7 +173,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_8E2073A8FADADC31.self
+			            _ = Screen.__safeDI_Screen_0A0B087775B360DD.self
 			            return Screen(user: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -195,7 +195,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_8E2073A8FADADC31 {}
+			    public enum __safeDI_Screen_0A0B087775B360DD {}
 			}
 			""",
 		])
@@ -305,7 +305,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			    public init() {
 			        let token = Secret()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_B4509263952C7814.self
+			            _ = Screen.__safeDI_Screen_8763BEDE3E51EBC4.self
 			            return Screen(token: token)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -315,7 +315,8 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token: Secret?) {
+			    public init(token __safeDI_token_: @autoclosure @escaping () -> Secret?) {
+			        let token = LazilyInstantiated<Secret?>(__safeDI_token_)
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
 			            let token: (any Auth)? = token.instance
@@ -328,7 +329,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_B4509263952C7814 {}
+			    public enum __safeDI_Screen_8763BEDE3E51EBC4 {}
 			}
 			""",
 		])
@@ -368,7 +369,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_B4509263952C7814.self
+			            _ = Screen.__safeDI_Screen_8763BEDE3E51EBC4.self
 			            return Screen(token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -378,7 +379,8 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token: Secret?) {
+			    public init(token __safeDI_token_: @autoclosure @escaping () -> Secret?) {
+			        let token = LazilyInstantiated<Secret?>(__safeDI_token_)
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
 			            let token: (any Auth)? = token.instance
@@ -391,7 +393,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_B4509263952C7814 {}
+			    public enum __safeDI_Screen_8763BEDE3E51EBC4 {}
 			}
 			""",
 		])
@@ -494,7 +496,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			    public init() {
 			        let token = Secret()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_B4509263952C7814.self
+			            _ = Screen.__safeDI_Screen_8763BEDE3E51EBC4.self
 			            return Screen(token: token)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -504,7 +506,8 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token: Secret?) {
+			    public init(token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
 			            let auth: (any Auth)? = token.instance
@@ -517,7 +520,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_B4509263952C7814 {}
+			    public enum __safeDI_Screen_8763BEDE3E51EBC4 {}
 			}
 			""",
 		])

@@ -735,7 +735,7 @@ extension Screen {
 }
 
 extension Screen {
-    public enum __safeDI_Screen_B835980A9E07DFB3 {}
+    public enum __safeDI_Screen_3192EA1C03ABD98F {}
 }
 ```
 
@@ -744,7 +744,7 @@ The generated initializer takes the seam’s own `@Received` and `@Forwarded` pr
 ```swift
 // Generated in module App, whose root instantiates Screen.
 func __safeDI_screen() -> Screen {
-    _ = Screen.__safeDI_Screen_B835980A9E07DFB3.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
+    _ = Screen.__safeDI_Screen_3192EA1C03ABD98F.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
     return Screen(user: user, database: database, logger: nil)
 }
 ```

@@ -1876,10 +1876,11 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		let unreadTypeComment = integration == .moduleInfo ? "    // SafeDI counts `Window` as `public`: no module it reads declares it narrower. If `Window` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n" : ""
 		return """
 		extension Screen {
-		\(unreadTypeComment)    public init(window: Window) {
+		\(unreadTypeComment)    public init(window __safeDI_window: @autoclosure @escaping () -> Window) {
+		        let window = LazilyInstantiated<Window>(__safeDI_window)
 		        func __safeDI_session() -> Session {
-		            _ = Session.__safeDI_Session_564C5E6539CF6AA0.self\(pluginComment)
-		            return Session(window: window)
+		            _ = Session.__safeDI_Session_48814468D463AD3C.self\(pluginComment)
+		            return Session(window: window.instance)
 		        }
 		        let session: Session = __safeDI_session()
 		        self.init(session: session)
@@ -1887,7 +1888,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_564C5E6539CF6AA0 {}
+		    public enum __safeDI_Screen_48814468D463AD3C {}
 		}
 		"""
 	}

@@ -114,7 +114,8 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"List+SafeDI.swift": generatedFileHeader + """
 			extension List {
-			    public init(onTap: (() -> Void)?) {
+			    public init(onTap __safeDI_onTap: @autoclosure @escaping () -> (() -> Void)?) {
+			        let onTap = LazilyInstantiated<(() -> Void)?>(__safeDI_onTap)
 			        func __safeDI_row() -> Row {
 			            #sourceLocation(file: "\(output.fixtures["Row.swift"])", line: 7)
 			            let action: (() -> Void)? = onTap.instance
@@ -127,7 +128,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 			}
 
 			extension List {
-			    public enum __safeDI_List_B78B8D98AE78457A {}
+			    public enum __safeDI_List_22CE6BCF5C548242 {}
 			}
 			""",
 			"Root+SafeDI.swift": generatedFileHeader + """
@@ -135,7 +136,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 			    public init() {
 			        func __safeDI_screenBuilder(onTap: @escaping () -> Void) -> Screen {
 			            func __safeDI_list() -> List {
-			                _ = List.__safeDI_List_B78B8D98AE78457A.self
+			                _ = List.__safeDI_List_22CE6BCF5C548242.self
 			                return List(onTap: onTap)
 			            }
 			            let list: List = __safeDI_list()
@@ -242,8 +243,8 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 	/// A closure names no type but `Void`, which every module can name, so the seam's `public` initializer takes it
 	/// whatever access the initializer that receives it has: required, or only if available.
 	@Test(arguments: [
-		(forwarded: "onSelect: () -> Void", received: "@Received let onSelect: () -> Void", parameter: "onSelect: @escaping () -> Void", guardHash: "6E4AFC77A9D161A1"),
-		(forwarded: "onSelect: (() -> Void)?", received: "@Received(onlyIfAvailable: true) let onSelect: (() -> Void)?", parameter: "onSelect: (() -> Void)?", guardHash: "AD44EC4607D4311B"),
+		(forwarded: "onSelect: () -> Void", received: "@Received let onSelect: () -> Void", parameter: "onSelect __safeDI_onSelect: @autoclosure @escaping () -> () -> Void", guardHash: "8ED7A2F109F4271B"),
+		(forwarded: "onSelect: (() -> Void)?", received: "@Received(onlyIfAvailable: true) let onSelect: (() -> Void)?", parameter: "onSelect __safeDI_onSelect: @autoclosure @escaping () -> (() -> Void)?", guardHash: "D08067D77A00E631"),
 	])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesClosureOnPublicTier_whenInternalInitializerReceivesIt(forwarded: String, received: String, parameter: String, guardHash: String) async throws {
@@ -299,14 +300,15 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"List+SafeDI.swift": generatedFileHeader + """
 			extension List {
-			    public init(onSelect: (@Sendable () -> Void)?) {
-			        let row = Row(onSelect: onSelect)
+			    public init(onSelect __safeDI_onSelect: @autoclosure @escaping () -> (@Sendable () -> Void)?) {
+			        let onSelect = LazilyInstantiated<(@Sendable () -> Void)?>(__safeDI_onSelect)
+			        let row = Row(onSelect: onSelect.instance)
 			        self.init(row: row)
 			    }
 			}
 
 			extension List {
-			    public enum __safeDI_List_24C030398BD78FFB {}
+			    public enum __safeDI_List_EBAF9A4AFD3E8E37 {}
 			}
 			""",
 			"Root+SafeDI.swift": generatedFileHeader + """
@@ -314,7 +316,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 			    public init() {
 			        func __safeDI_screenBuilder(onSelect: (@Sendable () -> Void)?) -> Screen {
 			            func __safeDI_list() -> List {
-			                _ = List.__safeDI_List_24C030398BD78FFB.self
+			                _ = List.__safeDI_List_EBAF9A4AFD3E8E37.self
 			                return List(onSelect: onSelect)
 			            }
 			            let list: List = __safeDI_list()
@@ -772,7 +774,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					    public init() {
 					        func __safeDI_screenBuilder(value: Settings) -> Screen {
 					            func __safeDI_list() -> List {
-					                _ = List.__safeDI_List_799D68846C7AF168.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+					                _ = List.__safeDI_List_5DF9410E13DA7AA4.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 					                return List(value: value)
 					            }
 					            let list: List = __safeDI_list()
@@ -799,7 +801,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					    public init() {
 					        func __safeDI_screenBuilder(value: @escaping (Settings) -> Void) -> Screen {
 					            func __safeDI_list() -> List {
-					                _ = List.__safeDI_List_CA5CD86521ED15DA.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+					                _ = List.__safeDI_List_1CF56C421D2B4D82.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 					                return List(value: value)
 					            }
 					            let list: List = __safeDI_list()
@@ -826,7 +828,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					    public init() {
 					        func __safeDI_screenBuilder(value: any Logging) -> Screen {
 					            func __safeDI_list() -> List {
-					                _ = List.__safeDI_List_86EFB7C4B110B9DE.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+					                _ = List.__safeDI_List_053C98621D8F3B16.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 					                return List(value: value)
 					            }
 					            let list: List = __safeDI_list()
@@ -853,7 +855,7 @@ struct SafeDIToolSeamSpellingTests: ~Copyable {
 					    public init() {
 					        func __safeDI_screenBuilder(value: Catalog.Entry) -> Screen {
 					            func __safeDI_list() -> List {
-					                _ = List.__safeDI_List_9FC0BE131CCF7636.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+					                _ = List.__safeDI_List_4105B217AA7A4C2E.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 					                return List(value: value)
 					            }
 					            let list: List = __safeDI_list()

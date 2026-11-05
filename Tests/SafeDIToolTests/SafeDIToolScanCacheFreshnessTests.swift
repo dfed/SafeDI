@@ -651,7 +651,7 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 	}
 
 	extension Badge {
-	    public enum __safeDI_Badge_1BE3C7357CBE03C2 {}
+	    public enum __safeDI_Badge_16885A1AAD60582A {}
 	}
 	"""
 
@@ -665,7 +665,7 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 	}
 
 	extension Badge {
-	    public enum __safeDI_Badge_6CA63B0294769A69 {}
+	    public enum __safeDI_Badge_029593DA1BB2FBD5 {}
 	}
 	"""
 

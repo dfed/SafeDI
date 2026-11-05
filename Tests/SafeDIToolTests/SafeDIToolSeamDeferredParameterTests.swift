@@ -139,7 +139,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		}
 
 		extension Screen {
-		    public enum __safeDI_Screen_EC87C7D62747BEAB {}
+		    public enum __safeDI_Screen_B61C3DC8DD996187 {}
 		}
 		""")
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
@@ -150,7 +150,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		        }
 		        let user = LazilyInstantiated<User>(__safeDI_user)
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_EC87C7D62747BEAB.self
+		            _ = Screen.__safeDI_Screen_B61C3DC8DD996187.self
 		            return Screen(user: user.instance)
 		        }
 		        let screen: Screen = __safeDI_screen()
@@ -1218,7 +1218,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			}
 
 			extension Service {
-			    public enum __safeDI_Service_D2D90E046FE2B3CB {}
+			    public enum __safeDI_Service_9BAF4200A1BAA28B {}
 			}
 			""",
 		]))
@@ -1235,7 +1235,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        }
 			        let title = LazilyInstantiated<Title>(__safeDI_title)
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_D2D90E046FE2B3CB.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
+			            _ = Service.__safeDI_Service_9BAF4200A1BAA28B.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
 			            return Service(theme: theme.instance, title: title.instance)
 			        }
 			        let service: Service = __safeDI_service()
@@ -1253,7 +1253,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			        }
 			        let title = LazilyInstantiated<Title>(__safeDI_title)
 			        func __safeDI_service() -> Service {
-			            _ = Service.__safeDI_Service_D2D90E046FE2B3CB.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
+			            _ = Service.__safeDI_Service_9BAF4200A1BAA28B.self\(SafeDIToolSeamBuilderParameterTests.pluginComment(integration, seam: "Service"))
 			            return Service(title: title.instance)
 			        }
 			        let service: Service = __safeDI_service()
@@ -1273,7 +1273,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		// each deferred parameter, under either flow.
 		let sendablePrefix = sendable ? "Sendable" : ""
 		let sendableAttribute = sendable ? "@Sendable " : ""
-		let guardName = sendable ? "__safeDI_Screen_95E69D2C4CEEDA6F" : "__safeDI_Screen_B835980A9E07DFB3"
+		let guardName = sendable ? "__safeDI_Screen_E3C8CCA558CCA81B" : "__safeDI_Screen_3192EA1C03ABD98F"
 		let output = try await executeSafeDIToolMultiModuleTest(modules: [
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
 				seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Received let user: User", "@Instantiated let cacheBuilder: \(sendablePrefix)Instantiator<Cache>"]),
@@ -1522,7 +1522,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		let output = try await executeSafeDIToolTest(swiftFileContent: files, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		let binding = erased ? "(__safeDI_token_() as Secret?).map { AnyAuth($0) }" : "__safeDI_token_()"
 		#expect(output.dependencyTreeFiles == [
-			"Root+SafeDI.swift": Self.rootPassingTokenInstance(toScreenGuardedBy: "__safeDI_Screen_B4509263952C7814"),
+			"Root+SafeDI.swift": Self.rootPassingTokenInstance(toScreenGuardedBy: "__safeDI_Screen_8763BEDE3E51EBC4"),
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
 			    public init(token __safeDI_token_: @autoclosure @escaping () -> Secret?) {
@@ -1538,7 +1538,7 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_B4509263952C7814 {}
+			    public enum __safeDI_Screen_8763BEDE3E51EBC4 {}
 			}
 			""",
 		])
