@@ -744,11 +744,11 @@ jobs:
       #
       # The time limit stops a test that hangs rather than letting it hold
       # the runner for GitHub's six-hour default. It is twice the longest
-      # successful run of this step over the 200 completed CI runs from
-      # 2026-10-29 to 2026-11-02: 83 runs took 6.9 to 19.4 minutes
-      # (median 12.4, 95th percentile 17.6).
+      # successful run of this step over the 177 completed CI runs from
+      # 2026-11-02 to 2026-11-05: 63 runs took 9.9 to 37.2 minutes
+      # (median 24.1, 95th percentile 32.3).
       - name: Build and Test Framework
-        timeout-minutes: 40
+        timeout-minutes: 75
         run: |
           xcrun swift test -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
           for _ in {1..4}; do
@@ -795,10 +795,10 @@ jobs:
           command: swift package resolve
       # Atomic coverage counter updates, for the reason the macOS job gives.
       # A time limit for the macOS job's reason: twice the longest
-      # successful run of this step over the same 200 CI runs, in which 97
-      # runs took 5.2 to 17.4 minutes (median 8.8, 95th percentile 14.8).
+      # successful run of this step over the same 177 CI runs, in which 84
+      # runs took 5.8 to 26.4 minutes (median 14.8, 95th percentile 24.1).
       - name: Build and Test Framework
-        timeout-minutes: 35
+        timeout-minutes: 55
         run: swift test -c release --enable-code-coverage -Xswiftc -enable-testing -Xswiftc -Xllvm -Xswiftc -instrprof-atomic-counter-update-all --traits sourceBuild
       # The graph fuzzer's shards run this job's test bundle rather than
       # building their own: the bundle, SafeDITool and the macro plugin (which
@@ -1009,12 +1009,11 @@ jobs:
         uses: ./.github/actions/retry
         with:
           command: swift package resolve
-      # A time limit for the macOS job's reason. Over the same 200 CI runs,
-      # 102 runs of this step took 2.4 to 5.0 minutes (median 3.6, 95th
-      # percentile 4.4), the longest with an empty build cache, so thirty
-      # minutes is far more than twice the longest.
+      # A time limit for the macOS job's reason: twice the longest
+      # successful run of this step over the same 177 CI runs, in which 88
+      # runs took 2.8 to 15.9 minutes (median 8.2, 95th percentile 13.0).
       - name: Build and Test Framework
-        timeout-minutes: 30
+        timeout-minutes: 35
         run: swift test --traits sourceBuild
 
   bazel:
