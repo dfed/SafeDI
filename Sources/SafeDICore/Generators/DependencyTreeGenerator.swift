@@ -1636,7 +1636,7 @@ public actor DependencyTreeGenerator {
 			let reference = "`\(typeName)`, which @\(Dependency.Source.instantiatedRawValue) property `\(referencingProperty.asSource)` instantiates"
 			if let viewDeclaringModule {
 				// A module info's view names the module, though it fulfills no type of this module's trees: list it.
-				return "No @\(InstantiableVisitor.macroName) declaration of a module this module lists fulfills \(reference). `\(typeName)` is declared in `\(viewDeclaringModule.moduleName)`, which this module depends on through `\(viewDeclaringModule.throughModuleName)` but does not list; list `\(viewDeclaringModule.moduleName)` where this module lists `\(viewDeclaringModule.throughModuleName)`: add its target to this target's `dependencies` in `Package.swift`, list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, or list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist."
+				return "No @\(InstantiableVisitor.macroName) declaration of a module this module lists fulfills \(reference). `\(typeName)` is declared in `\(viewDeclaringModule.moduleName)`, which this module depends on through `\(viewDeclaringModule.throughModuleName)` but does not list; list `\(viewDeclaringModule.moduleName)` where this module lists `\(viewDeclaringModule.throughModuleName)`: list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` with `--dependent-module-info-file-path` in another build."
 			}
 			guard !fulfilledByMockOnlyDeclaration else {
 				return "No production @\(InstantiableVisitor.macroName) declaration fulfills \(reference). A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @\(InstantiableVisitor.macroName) declaration that fulfills `\(typeName)`."
@@ -3475,6 +3475,10 @@ public actor DependencyTreeGenerator {
 					foreignPublicMocks: seams.foreignDeclarations(seenByModuleNamed: moduleName).publicMocks.filter { entry in
 						entry.value.declaringModule.moduleName != moduleName && foreignPublicMock.visibleInstantiables[entry.key] != nil
 					},
+					// The views of every module, so that the plans this one computes in turn read what each of those modules
+					// saw, never what this module's filter left: under module info a public mock two modules beneath this one
+					// is not among the public mocks this module sees.
+					foreignDeclarationsSeenByModule: seams.foreignDeclarationsSeenByModule,
 				),
 				plainTypeDeclarations: foreignPublicMock.visiblePlainTypeDeclarations,
 			)

@@ -180,11 +180,41 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		// Cell 3: `App` builds `Clock`, which only `Feed`'s view carries: the view never fulfills a type of `App`'s trees.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Root.swift"]):12:5: error: No @Instantiable declaration of a module this module lists fulfills `Clock`, which @Instantiated property `clock: Clock` instantiates. `Clock` is declared in `Core`, which this module depends on through `Feed` but does not list; list `Core` where this module lists `Feed`: add its target to this target's `dependencies` in `Package.swift`, list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, or list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist.
+			\(fixtures["App"]!["Root.swift"]):12:5: error: No @Instantiable declaration of a module this module lists fulfills `Clock`, which @Instantiated property `clock: Clock` instantiates. `Clock` is declared in `Core`, which this module depends on through `Feed` but does not list; list `Core` where this module lists `Feed`: list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` with `--dependent-module-info-file-path` in another build.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.seamChain(appDependencies: ["Feed"], rootAlsoBuildsClock: true),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorNamingModuleWhoseConfigurationAddsDirectory_whenOnlyAViewCarriesTypeFromThatDirectory() async {
+		// Cell 27: `Clock` is declared in a directory `Core`'s `#SafeDIConfiguration` adds, which records no module, and
+		// only `Feed`'s view carries it. `Core`'s `.safedi` carries the declarations that directory holds, so `App` is told
+		// to list `Core`, which fulfills `Clock` as it would a type `Core`'s own files declare.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Root.swift"]):11:5: error: No @Instantiable declaration of a module this module lists fulfills `Clock`, which @Instantiated property `clock: Clock` instantiates. `Clock` is declared in `Core`, which this module depends on through `Feed` but does not list; list `Core` where this module lists `Feed`: list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` with `--dependent-module-info-file-path` in another build.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Extra", packageName: "Base", swiftFileContent: [Self.clock], runsSafeDI: false),
+					ModuleFixture(name: "Core", packageName: "Base", swiftFileContentByFilePath: [
+						"SafeDIConfiguration.swift": "#SafeDIConfiguration(additionalDirectoriesToInclude: [\"$FIXTURE_ROOT/Base/Sources/Extra\"])\n",
+					]),
+					ModuleFixture(name: "Feed", packageName: "Base", swiftFileContent: [
+						"import Core\n\n" + seamFixtureType(named: "FeedScreen", isSeam: true, isFinalClass: true, declarations: ["@Received(onlyIfAvailable: true) let token: Token?"]) + "\n\npublic struct Token {\n    public init() {}\n}",
+					], dependencies: ["Core"]),
+					ModuleFixture(name: "App", packageName: "App", swiftFileContent: [
+						"import Feed\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let feedScreen: FeedScreen", "@Instantiated let clock: Clock"]),
+					], dependencies: ["Feed"]),
+				],
 				integration: .moduleInfo,
 				filesToDelete: &filesToDelete,
 			)
@@ -217,6 +247,23 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		// `Session`'s seam takes `token: Token?`, which `FeedScreen` passes on: the same signature as when `Session` is built
 		// inline.
 		#expect(appFiles == (integration == .moduleInfo ? ["App.swift": Self.appCallingFeedScreen] : ["Root+SafeDI.swift": Self.appCallingFeedScreenFromPlugin]))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: [(MultiModuleIntegration.moduleInfo, false), (.moduleInfo, true), (.swiftPackagePlugin, false)])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsPublicMockAsItsModuleGeneratedIt_whenPublicMocksChainThreeModulesBeneathIt(integration: MultiModuleIntegration, listsClosure: Bool) async throws {
+		// Cell 5b: `Feed`'s public mock calls `Session`'s, which calls `Core`'s, which builds `Base`'s `BaseThing`. `App`
+		// computes each signature as its module did, from the declarations that module saw, so its call names the enum
+		// `Feed` generated, whether it lists `Feed` alone or every module.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.publicMockChain(appDependencies: listsClosure ? ["Base", "Core", "Feed", "Session"] : ["Feed"]),
+			integration: integration,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == (integration == .moduleInfo
+				? ["App.swift": Self.appCallingFeedServiceMock(carriesPluginComment: false)]
+				: ["AppFeature+SafeDIMock.swift": Self.appCallingFeedServiceMock(carriesPluginComment: true), "SafeDIMockConfiguration.swift": Self.publicMockChainImports + "\n\n"]))
 		try expectEveryModuleCompiled(output)
 	}
 
@@ -384,7 +431,9 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorNamingBothNames_whenListedModuleInfoRecordsAnotherModule() async throws {
-		// Cell 29: a renamed module's stale `.safedi` under the old name.
+		// Cell 29: a listed `.safedi` that records another module than the one `--dependent-module-name` names, which only
+		// a custom build that names its files apart from their modules writes: the vended scripts name each file after the
+		// module it records.
 		let renamed = try await executeSafeDIToolTest(
 			swiftFileContent: [Self.clock],
 			filesToDelete: &filesToDelete,
@@ -602,6 +651,80 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 				),
 			], dependencies: appDependencies),
 		]
+	}
+
+	/// `Base` declares `BaseThing`; `Core`, `Session` and `Feed` each declare a public mock with an `internal` initializer,
+	/// `CoreService` building a `BaseThing`, `SessionService` a `CoreService` and `FeedService` a `SessionService`, each
+	/// module listing the one beneath it; `App`'s mocked `AppFeature` builds a `FeedService`.
+	private static func publicMockChain(appDependencies: [String]) -> [ModuleFixture] {
+		func publicMockType(named name: String, building dependency: (label: String, type: String)) -> String {
+			"""
+			@Instantiable(generateMock: .public)
+			public final class \(name): Instantiable {
+			    init(\(dependency.label): \(dependency.type)) {
+			        self.\(dependency.label) = \(dependency.label)
+			    }
+
+			    @Instantiated private let \(dependency.label): \(dependency.type)
+			}
+			"""
+		}
+		return [
+			ModuleFixture(name: "Base", packageName: "Base", swiftFileContent: [
+				"""
+				@Instantiable
+				public final class BaseThing: Instantiable {
+				    public init() {}
+				}
+				""",
+			]),
+			ModuleFixture(name: "Core", packageName: "Core", swiftFileContent: ["import Base\n\n" + publicMockType(named: "CoreService", building: ("baseThing", "BaseThing"))], dependencies: ["Base"]),
+			ModuleFixture(name: "Session", packageName: "Session", swiftFileContent: ["import Core\n\n" + publicMockType(named: "SessionService", building: ("coreService", "CoreService"))], dependencies: ["Core"]),
+			ModuleFixture(name: "Feed", packageName: "Feed", swiftFileContent: ["import Session\n\n" + publicMockType(named: "FeedService", building: ("sessionService", "SessionService"))], dependencies: ["Session"]),
+			ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppFeature.swift": """
+			import Feed
+
+			@Instantiable(generateMock: true)
+			public final class AppFeature: Instantiable {
+			    public init(feedService: FeedService) {
+			        self.feedService = feedService
+			    }
+
+			    @Instantiated private let feedService: FeedService
+			}
+			"""], dependencies: appDependencies),
+		]
+	}
+
+	/// The header and imports of `App`'s generated files: what the files of `Feed`, `Session`, `Core` and `Base` import.
+	private static let publicMockChainImports = generatedFileHeader + importBlock("Base") + "\n" + importBlock("Core") + "\n" + importBlock("Feed") + "\n" + importBlock("Session")
+
+	/// `App`'s mock of `AppFeature`, which calls `FeedService`'s public mock under the enum `Feed` generated.
+	private static func appCallingFeedServiceMock(carriesPluginComment: Bool) -> String {
+		publicMockChainImports + "\n\n" + """
+		#if DEBUG
+		extension AppFeature {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            feedService: FeedService.SafeDIOverrides = .init()
+		        ) {
+		            self.feedService = feedService
+		        }
+
+		        let feedService: FeedService.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> AppFeature {
+		        _ = FeedService.__safeDI_FeedService_mock_51799E6AA5E7B634.self\(carriesPluginComment ? " // If this line does not compile, add the SafeDI plugin to the target that declares FeedService." : "")
+		        let feedService = FeedService.mock(safeDIOverrides: safeDIOverrides.feedService)
+		        return AppFeature(feedService: feedService)
+		    }
+		}
+		#endif
+		"""
 	}
 
 	/// `Feed` and `Bar` each declare a seam that builds `Core`'s type named `coreTypeName`; `App` lists both.

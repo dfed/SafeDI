@@ -195,11 +195,10 @@ struct QueryNeeds: AsyncParsableCommand {
 	/// finished in, which is the order their declarations are combined in.
 	func readIncludedModules() async throws -> [ParsedQueryModule] {
 		// A module info file names the module it describes.
-		var recordedModuleNames = [String: String]()
-		for path in moduleInfo {
-			recordedModuleNames[path] = try ParsedQueryModule.readModuleInfoFile(at: path).moduleName
+		let moduleInfoFiles = try moduleInfo.map { path in
+			(path: path, recordedModuleName: try ParsedQueryModule.readModuleInfoFile(at: path).moduleName)
 		}
-		let includedModules = try IncludedModule.modules(including: include, moduleInfo: moduleInfo, recordedModuleNames: recordedModuleNames)
+		let includedModules = try IncludedModule.modules(including: include, moduleInfo: moduleInfoFiles)
 		guard !includedModules.isEmpty else {
 			throw QueryError.noModuleIncluded
 		}
@@ -257,10 +256,10 @@ struct IncludedModule: Equatable {
 	}
 
 	/// The modules the arguments name, ordered by name. Arguments naming one directory, or one file, are one module.
-	/// - Parameter recordedModuleNames: The module each `--module-info` argument's file records, by argument.
+	/// - Parameter moduleInfoFiles: Each `--module-info` argument, with the module its file records.
 	/// - Throws: When two module info files record one module, or a directory's module is named like a module a module
 	///   info file records: one module included twice.
-	static func modules(including directoryPaths: [String], moduleInfo moduleInfoPaths: [String], recordedModuleNames: [String: String]) throws(QueryError) -> [IncludedModule] {
+	static func modules(including directoryPaths: [String], moduleInfo moduleInfoFiles: [(path: String, recordedModuleName: String)]) throws(QueryError) -> [IncludedModule] {
 		struct Entry {
 			let source: Source
 			var paths: [String]
@@ -283,13 +282,13 @@ struct IncludedModule: Equatable {
 				directoryEntries.append(Entry(source: source, paths: [path], nameComponents: directory.path.split(separator: "/").map(String.init)))
 			}
 		}
-		for path in moduleInfoPaths {
+		for (path, recordedModuleName) in moduleInfoFiles {
 			let source = Source.moduleInfo(NormalizedFilePath(path))
 			if let index = entryIndexesBySource[source] {
 				moduleInfoEntries[index].paths.append(path)
 			} else {
 				entryIndexesBySource[source] = moduleInfoEntries.count
-				moduleInfoEntries.append(Entry(source: source, paths: [path], nameComponents: [recordedModuleNames[path] ?? path]))
+				moduleInfoEntries.append(Entry(source: source, paths: [path], nameComponents: [recordedModuleName]))
 			}
 		}
 		// Two layouts need more than the last component: `Modules/Home/Sources` and `Modules/Settings/Sources`

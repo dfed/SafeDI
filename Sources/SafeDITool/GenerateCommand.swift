@@ -40,7 +40,7 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(help: "A path to a CSV file containing paths of SafeDI representations of other modules to parse: the `.safedi` file of each module this module imports. Each carries what a seam or public mock of a module it depends on needs, so a module this one reaches only through another is not listed.") var dependentModuleInfoFilePath: String?
 
-	@Option(help: "The name of a module whose `.safedi` file '--dependent-module-info-file-path' lists, as the build system names it; repeat it for each. When given, a listed file that records another module's name, such as a renamed module's stale file, is an error naming both names.") var dependentModuleName: [String] = []
+	@Option(help: "The name of a module whose `.safedi` file '--dependent-module-info-file-path' lists, as the build system names it; repeat it for each. When given, a listed file that records another module's name is an error naming both names.") var dependentModuleName: [String] = []
 
 	@Option(help: "A path to the JSON manifest `scan` writes, describing the desired Swift output files. A manifest written by hand is deprecated, and SafeDI 3.0 rejects one: pass `--output-directory`, which runs `scan` for you, or `--combined-output`, which writes every output to one file.") var swiftManifest: String?
 
@@ -56,7 +56,7 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(name: .customLong(BuildSettingCompilationConditions.otherSwiftFlagsOptionName), help: "The target's `OTHER_SWIFT_FLAGS` build setting wrapped in square brackets, written as the literal `[${OTHER_SWIFT_FLAGS}]`. Its `-D` flags are active conditions. Used only together with `--build-setting-active-compilation-conditions`.") var buildSettingOtherSwiftFlags: String?
 
-	@Option(help: "When set, SafeDITool concatenates every generated Swift file (dependency trees + mocks + mock configuration) into this one path — one header, bodies joined in source-file order, deterministic for stable inputs. Intended for build systems that need rule outputs statically declared at analysis time (Bazel, Buck2). Requires 'swift-sources-file-path' or '--include'. Cannot be combined with '--output-directory' or '--swift-manifest' — those are per-file emission modes. May be combined with '--module-info-output'. The combined file is written only when its bytes change, so a build that compares modification times recompiles only what changed.") var combinedOutput: String?
+	@Option(help: "When set, SafeDITool concatenates every generated Swift file (dependency trees + mocks + mock configuration) into this one path — one header, bodies joined in source-file order, deterministic for stable inputs. Intended for build systems that need rule outputs statically declared at analysis time (Bazel). Requires 'swift-sources-file-path' or '--include'. Cannot be combined with '--output-directory' or '--swift-manifest' — those are per-file emission modes. May be combined with '--module-info-output'. The combined file is written only when its bytes change, so a build that compares modification times recompiles only what changed.") var combinedOutput: String?
 
 	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project’s root module.") var dotFileOutput: String?
 
@@ -1159,6 +1159,8 @@ struct Generate: AsyncParsableCommand {
 			visitIndex += 1
 			for dependencyModuleName in moduleInfoView.identitiesByModuleName[moduleName]?.dependencyModuleNames ?? [] where reachedModuleNames.insert(dependencyModuleName).inserted {
 				modulesToVisit.append((moduleName: dependencyModuleName, throughModuleName: throughModuleName))
+				// A declaration in a directory the module's `#SafeDIConfiguration` adds records no module, but the module's
+				// `.safedi` carries it, so listing the module fulfills it as well.
 				for instantiable in moduleInfoView.declarationsByModuleName[dependencyModuleName]?.instantiables ?? [] where !instantiable.mockOnly {
 					for instantiableType in instantiable.instantiableTypes {
 						viewDeclaringModules[instantiableType] = DependencyTreeGenerator.ViewDeclaringModule(moduleName: dependencyModuleName, throughModuleName: throughModuleName)
