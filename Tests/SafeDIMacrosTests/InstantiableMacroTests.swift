@@ -572,7 +572,7 @@ import Testing
 					),
 					DiagnosticSpec(
 						message: """
-						`Root` is declared with `isRoot: true`, so no other type passes it dependencies, but it needs `other: Service?` from outside it. Declare each as @Instantiated, or as `@Received(fulfilledByDependencyNamed:ofType:)` naming an @Instantiated property of `Root`, or remove `isRoot: true` and instantiate `Root` from another type.
+						`Root` is declared with `isRoot: true`, so no other type passes it dependencies, but it needs `other: Service?` from outside it. Declare each as @Instantiated, or as `@Received(fulfilledByDependencyNamed:ofType:)` naming an @Instantiated property of `Root`, or remove `isRoot: true` and instantiate `Root` from another type, or replace `isRoot: true` with `generateDependencyTree: true`, so its generated initializer takes them.
 						""",
 						line: 1,
 						column: 1,
@@ -620,7 +620,7 @@ import Testing
 				diagnostics: [
 					DiagnosticSpec(
 						message: """
-						`Foo` is declared with `isRoot: true`, so no other type passes it dependencies, but it needs `dependency: Dependency` from outside it. Declare each as @Instantiated, or as `@Received(fulfilledByDependencyNamed:ofType:)` naming an @Instantiated property of `Foo`, or remove `isRoot: true` and instantiate `Foo` from another type.
+						`Foo` is declared with `isRoot: true`, so no other type passes it dependencies, but it needs `dependency: Dependency` from outside it. Declare each as @Instantiated, or as `@Received(fulfilledByDependencyNamed:ofType:)` naming an @Instantiated property of `Foo`, or remove `isRoot: true` and instantiate `Foo` from another type, or replace `isRoot: true` with `generateDependencyTree: true`, so its generated initializer takes them.
 						""",
 						line: 1,
 						column: 1,
@@ -656,7 +656,7 @@ import Testing
 				diagnostics: [
 					DiagnosticSpec(
 						message: """
-						`Foo` is declared with `isRoot: true`, so no other type passes it dependencies, but it needs `dependency: Dependency` from outside it. Declare each as @Instantiated, or as `@Received(fulfilledByDependencyNamed:ofType:)` naming an @Instantiated property of `Foo`, or remove `isRoot: true` and instantiate `Foo` from another type.
+						`Foo` is declared with `isRoot: true`, so no other type passes it dependencies, but it needs `dependency: Dependency` from outside it. Declare each as @Instantiated, or as `@Received(fulfilledByDependencyNamed:ofType:)` naming an @Instantiated property of `Foo`, or remove `isRoot: true` and instantiate `Foo` from another type, or replace `isRoot: true` with `generateDependencyTree: true`, so its generated initializer takes them.
 						""",
 						line: 1,
 						column: 1,
