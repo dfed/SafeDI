@@ -325,7 +325,7 @@ enum GraphFuzzerModule: String, CaseIterable, Comparable {
 		Self.allCases.filter { module in
 			var pending = dependencies
 			while let dependency = pending.popLast() {
-				if dependency == module {
+				guard dependency != module else {
 					return true
 				}
 				pending += dependency.dependencies
