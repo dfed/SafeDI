@@ -752,10 +752,53 @@ struct SafeDIToolGraphFuzzerTests {
 		let eagerRead = DifferentialValueDifference(probe: "S1_Root0()", path: ["<13>.instance"], feature: "<13>.instance: <11> S1_User (built before the probe's value) (seen)", knownRight: "<13>.instance: <11> S1_User (seen)")
 		let otherInstance = DifferentialValueDifference(probe: "S1_Root0()", path: ["<13>.instance"], feature: "<13>.instance: <12> S1_User (built before the probe's value)", knownRight: "<13>.instance: <11> S1_User (seen)")
 		let otherValue = DifferentialValueDifference(probe: "S1_Root0()", path: ["<1> S1_Root0", "user"], feature: "user: <2> S1_User (built before the probe's value)", knownRight: "user: <2> S1_User")
-		#expect(GraphFuzzerOracle.isEagerInstanceRead(eagerRead))
-		#expect(!GraphFuzzerOracle.isEagerInstanceRead(otherInstance))
-		#expect(!GraphFuzzerOracle.isEagerInstanceRead(otherValue))
+		#expect(GraphFuzzerOracle.isEagerInstanceRead(eagerRead, inGraphWhoseSeamGenerated: Self.seamFilesDeclaringHoleStruct))
+		#expect(GraphFuzzerOracle.isEagerInstanceRead(eagerRead, inGraphWhoseSeamGenerated: Self.seamFilesDeclaringStagedHole))
+		#expect(!GraphFuzzerOracle.isEagerInstanceRead(otherInstance, inGraphWhoseSeamGenerated: Self.seamFilesDeclaringHoleStruct))
+		#expect(!GraphFuzzerOracle.isEagerInstanceRead(otherValue, inGraphWhoseSeamGenerated: Self.seamFilesDeclaringHoleStruct))
 	}
+
+	@Test
+	func isEagerInstanceRead_exemptsNothing_whenSeamDeclaresNoHoleStruct() {
+		// A seam call reads nothing early, so the marked read in a graph without a hole is a pass-through taken by
+		// value again, which the oracle reports.
+		let eagerRead = DifferentialValueDifference(probe: "S1_Root0()", path: ["<13>.instance"], feature: "<13>.instance: <11> S1_User (built before the probe's value) (seen)", knownRight: "<13>.instance: <11> S1_User (seen)")
+		let seamFilesWithoutHole = ["S1_Seam+SafeDI.swift": """
+		extension S1_Seam {
+		    public init(user __safeDI_user: @autoclosure @escaping () -> S1_User) {
+		        let user = LazilyInstantiated<S1_User>(__safeDI_user)
+		        self.init(user: user.instance)
+		    }
+		}
+		"""]
+		#expect(!GraphFuzzerOracle.isEagerInstanceRead(eagerRead, inGraphWhoseSeamGenerated: seamFilesWithoutHole))
+	}
+
+	/// A seam's file declaring a hole's struct, as the tool generates it.
+	private static let seamFilesDeclaringHoleStruct = ["S1_Seam+SafeDI.swift": """
+	extension S1_Seam {
+	    public struct SafeDIScope_S1_Profile_userService {
+	        public let user: S1_User
+	    }
+
+	    public init(user __safeDI_user: @autoclosure @escaping () -> S1_User, userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_S1_Profile_userService) -> S1_UserService) {
+	        let user = LazilyInstantiated<S1_User>(__safeDI_user)
+	        let userService = __safeDI_userServiceBuilder(SafeDIScope_S1_Profile_userService(user: user.instance))
+	        self.init(userService: userService)
+	    }
+	}
+	"""]
+
+	/// A seam's file declaring a staged hole's enum of structs, as the tool generates it.
+	private static let seamFilesDeclaringStagedHole = ["S1_Seam+SafeDI.swift": """
+	extension S1_Seam {
+	    public enum SafeDIScope_S1_Profile_userService {
+	        public struct Outer {
+	            public let user: S1_User
+	        }
+	    }
+	}
+	"""]
 
 	@Test
 	func omittedValueFailure_reportsNothing_whenOuterSeamThatTakesValueFromItsCallersReportsOmission() {
