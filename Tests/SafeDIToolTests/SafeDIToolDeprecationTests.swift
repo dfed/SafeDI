@@ -257,6 +257,52 @@ struct SafeDIToolDeprecationTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == Self.expectedOutput)
 	}
 
+	// MARK: Tests – order
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsOptionThenManifestDeprecationBeforeModuleWarnings_whenModuleAlsoDrawsWarning() async throws {
+		let project = try makeProject(rootFileContent: """
+		import SafeDI
+
+		@Instantiable(isRoot: true)
+		public struct Root: Instantiable {
+		    public init(analytics: LazilyInstantiated<Analytics>, home: Home) {
+		        self.analytics = analytics
+		        self.home = home
+		    }
+
+		    @Instantiated let analytics: LazilyInstantiated<Analytics>
+		    @Instantiated let home: Home
+		}
+
+		@Instantiable
+		public struct Analytics: Instantiable {
+		    public init() {}
+		}
+
+		@Instantiable
+		public struct Home: Instantiable {
+		    public init(analytics: Analytics) {
+		        self.analytics = analytics
+		    }
+
+		    @Received let analytics: Analytics
+		}
+		""")
+		try await project.scan()
+		// Without a project root, `generate` names files as the input CSV spells them, which locates the module's warning.
+		try project.editManifest { $0.projectRoot = nil }
+
+		let generateOutput = try await project.generate(additionalArguments: ["--additional-imported-modules", "AnalyticsKit"])
+
+		#expect(generateOutput.warnings.map(\.formatted) == [
+			"warning: `--additional-imported-modules` is deprecated and will be removed in SafeDI 3.0: list its modules in the module’s `#SafeDIConfiguration` instead, as `#SafeDIConfiguration(additionalImportedModules: [\"AnalyticsKit\"])`.",
+			project.handWrittenManifestWarning.formatted,
+			"\(project.rootFileInputPath):10:5: warning: @Instantiated property `analytics: LazilyInstantiated<Analytics>` is instantiated whenever `Root` is created: `Home` is created with `Root` and receives the instance as `analytics: Analytics`. To instantiate it lazily, receive `analytics: LazilyInstantiated<Analytics>` on `Home`.",
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
@@ -304,6 +350,8 @@ struct SafeDIToolDeprecationTests: ~Copyable {
 	private struct Project {
 		let swiftFileCSV: URL
 		let rootFile: URL
+		/// The root file's path as the input CSV lists it, which `generate` locates the file's diagnostics at.
+		let rootFileInputPath: String
 		let outputDirectory: URL
 		let manifestFile: URL
 
@@ -334,12 +382,12 @@ struct SafeDIToolDeprecationTests: ~Copyable {
 			try JSONEncoder().encode(manifest).write(to: manifestFile)
 		}
 
-		/// Runs `generate` with the manifest.
-		func generate() async throws -> Generate.Output {
+		/// Runs `generate` with the manifest, and with `additionalArguments` after it.
+		func generate(additionalArguments: [String] = []) async throws -> Generate.Output {
 			try await Generate.parse([
 				swiftFileCSV.path,
 				"--swift-manifest", manifestFile.path,
-			]).generate()
+			] + additionalArguments).generate()
 		}
 
 		/// The Swift files `generate` wrote, keyed by file name.
@@ -352,7 +400,7 @@ struct SafeDIToolDeprecationTests: ~Copyable {
 		}
 	}
 
-	private mutating func makeProject() throws -> Project {
+	private mutating func makeProject(rootFileContent: String = Self.rootFileContent) throws -> Project {
 		// The plugin's paths are relative to the project root, which is `generate`'s working directory.
 		let projectDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
 			.appendingPathComponent(".build")
@@ -363,13 +411,15 @@ struct SafeDIToolDeprecationTests: ~Copyable {
 		filesToDelete.append(projectDirectory)
 
 		let rootFile = projectDirectory.appendingPathComponent("Root.swift")
-		try Self.rootFileContent.write(to: rootFile, atomically: true, encoding: .utf8)
+		try rootFileContent.write(to: rootFile, atomically: true, encoding: .utf8)
+		let rootFileInputPath = currentDirectoryRelativePath(to: rootFile)
 		let swiftFileCSV = projectDirectory.appendingPathComponent("InputSwiftFiles.csv")
-		try currentDirectoryRelativePath(to: rootFile).write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+		try rootFileInputPath.write(to: swiftFileCSV, atomically: true, encoding: .utf8)
 
 		return Project(
 			swiftFileCSV: swiftFileCSV,
 			rootFile: rootFile,
+			rootFileInputPath: rootFileInputPath,
 			outputDirectory: outputDirectory,
 			manifestFile: projectDirectory.appendingPathComponent("SafeDIManifest.json"),
 		)
