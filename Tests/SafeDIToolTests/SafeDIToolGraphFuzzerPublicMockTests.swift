@@ -123,8 +123,12 @@ struct SafeDIToolGraphFuzzerPublicMockTests {
 		let conditionMismatch = "/F/Screen.swift:3:2: error: `Service.mock()` is generated under `#if DEBUG` in `Core`, but this module's mocks are unconditional. Give both modules one `mockConditionalCompilation`."
 		let inaccessible = "/F/Session.swift:4:12: error: `Session` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Session` `public` to fix."
 		let narrowerEnclosingType = "/F/X.swift:2:33: error: `Internals.X` cannot have a public mock because `Internals` is `internal`. Make `Internals` `public`, or use `generateMock: .internal`."
+		let notCallableFromRunNamingNoModule = "/F/Service.swift:4:1: error: `Service` has a public `mock()`, but SafeDI does not know which module declares `Service`, so this run cannot call it, and `TokenCache` is `internal`. Build these mocks in a Swift package target, or give this run the module info of the module that declares `Service`, written with `--module-name`."
+		let notCallableFromNamedModule = "/F/Service.swift:4:1: error: `Service` has a public `mock()`, but it cannot be called from a module whose module info names no module, and `TokenCache` is `internal`. Generate the module info of the module that declares `Service` with `--module-name`."
 		#expect(GraphFuzzerOracle.isPublicMockOnlyRejection(diagnostics: omittedRequired))
 		#expect(GraphFuzzerOracle.isPublicMockOnlyRejection(diagnostics: narrowerEnclosingType))
+		#expect(GraphFuzzerOracle.isPublicMockOnlyRejection(diagnostics: notCallableFromRunNamingNoModule))
+		#expect(GraphFuzzerOracle.isPublicMockOnlyRejection(diagnostics: notCallableFromNamedModule))
 		#expect(GraphFuzzerOracle.isPublicMockOnlyRejection(diagnostics: "\(omittedRequired)\n\(omittedProvided)"))
 		#expect(GraphFuzzerOracle.isPublicMockOnlyRejection(diagnostics: omittedNested))
 		#expect(GraphFuzzerOracle.isPublicMockOnlyRejection(diagnostics: conditionMismatch))

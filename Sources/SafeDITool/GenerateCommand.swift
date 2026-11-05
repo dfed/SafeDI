@@ -52,8 +52,6 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(name: .customLong(BuildSettingCompilationConditions.otherSwiftFlagsOptionName), help: "The target's `OTHER_SWIFT_FLAGS` build setting wrapped in square brackets, written as the literal `[${OTHER_SWIFT_FLAGS}]`. Its `-D` flags are active conditions. Used only together with `--build-setting-active-compilation-conditions`.") var buildSettingOtherSwiftFlags: String?
 
-	@Option(name: .customLong(BuildSettingProductModuleName.optionName), help: "The target's `PRODUCT_MODULE_NAME` build setting wrapped in square brackets, written as the literal `[${PRODUCT_MODULE_NAME}]`, which the Xcode project plugin passes. Names the module that compiles this run's files for the imports generated code copies; it is not `--module-name`: the plugin cannot say which module declares the files a `#SafeDIConfiguration`'s `additionalDirectoriesToInclude` adds, so a run given only this option still knows no module.") var buildSettingProductModuleName: String?
-
 	@Option(help: "When set, SafeDITool concatenates every generated Swift file (dependency trees + mocks + mock configuration) into this one path — one header, bodies joined in source-file order, deterministic for stable inputs. Intended for build systems that need rule outputs statically declared at analysis time (Bazel, Buck2). Requires 'swift-sources-file-path' or '--include'. Cannot be combined with '--output-directory' or '--swift-manifest' — those are per-file emission modes. May be combined with '--module-info-output'. The combined file is always rewritten on every run, even when content would be unchanged.") var combinedOutput: String?
 
 	@Option(help: "The desired output location of the DOT file expressing the Swift dependency injection tree. Only include this option when running on a project’s root module.") var dotFileOutput: String?
@@ -170,9 +168,6 @@ struct Generate: AsyncParsableCommand {
 			activeCompilationConditions: buildSettingActiveCompilationConditions,
 			otherSwiftFlags: buildSettingOtherSwiftFlags,
 		)
-		// The module that compiles this run's files when the Xcode project plugin's build expanded it, which names no
-		// module for `moduleMembership` and serves only to keep generated code from importing that module.
-		let productModuleName = try BuildSettingProductModuleName.moduleName(buildSettingProductModuleName)
 
 		// When --output-directory is provided without --swift-manifest, run an
 		// inline scan to discover roots/mocks and build the manifest automatically.
@@ -303,20 +298,12 @@ struct Generate: AsyncParsableCommand {
 		let typeDescriptionToFulfillingInstantiableMap = try resolveSafeDIFulfilledTypes(instantiables: normalizedInstantiables)
 		// Generated code never imports the module it compiles in, which the compiler warns at: a file read from a module
 		// above this one, through `additionalDirectoriesToInclude`, can import it. The `.safedi` keeps every import,
-		// since a module that reads it imports this one rightly.
-		let ownModuleName = module.moduleName ?? productModuleName
+		// since a module that reads it imports this one rightly. A run that names no module keeps the import, so a target
+		// the Xcode project plugin builds that reads such a file gets the compiler's "ignoring import" warning in generated
+		// code, as in 2.2.0: a warning SafeDI could foresee, accepted by ruling for a shape no adopter has, and stated in
+		// the Manual's "Limits of the Xcode project plugin".
 		func importingOtherModules(_ importStatements: [ImportStatement]) -> [ImportStatement] {
-			importStatements.filter { $0.moduleName != ownModuleName }
-		}
-		// Why this run knows no module, which decides the remedy a diagnostic or comment about a seam built inline leads
-		// with. Only the Xcode project plugin passes the product module name, expanded or not; the SwiftPM plugin writes
-		// a target graph instead.
-		let unnamedReason: DependencyTreeGenerator.EmittingModule.UnnamedReason? = if module.moduleName != nil {
-			nil
-		} else if buildSettingProductModuleName != nil {
-			.xcodeProjectPlugin
-		} else {
-			.noModuleName
+			importStatements.filter { $0.moduleName != module.moduleName }
 		}
 		// The seams this run generates are those its own files declare; a seam another module declares is called
 		// with the signature that module computed, from the declarations it saw. Which files are the module's own is
@@ -377,7 +364,6 @@ struct Generate: AsyncParsableCommand {
 					FileManager.default.isReadableFile(atPath: comparisonFilePaths.projectFilePath(of: filePath).path)
 				},
 				additionalMocksToGenerateLocation: sourceConfiguration?.declarationLocation,
-				unnamedReason: unnamedReason,
 				moduleNamesReadByRunOfModule: { [membership] moduleName in
 					Self.moduleNamesRead(byRunOfModuleNamed: moduleName, dependencyModuleNamesByModuleName: dependencyModuleNamesByModuleName, membership: membership)
 				},

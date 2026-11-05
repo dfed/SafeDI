@@ -3374,10 +3374,11 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsHoleInSeamOfUnnamedModule_whenSeamsModuleIsNotNamed() async {
 		// C9.4a, H12 (i): SafeDI does not know which module declares `Service`, a seam this run generates, so it cannot know
-		// what that module's callers see. The run can be given its module's name, which the error leads with.
+		// what that module's callers see. The error leads with the remedies every build can apply, and names the module
+		// last, for a build that can name it.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Profile.swift"]):8:5: error: `Service` generates its dependency tree, and `Profile`'s @Instantiated property `userService: any UserService` in it instantiates `UserService`, which no @Instantiable declaration this module reads fulfills. SafeDI does not know which module declares `Service`, so it cannot know what that module's callers see, and the initializer it generates cannot take a builder for `userService`. Run SafeDITool with this module's name (`--module-name`, Bazel's `module_name`), or declare an @Instantiable type that fulfills `UserService` in this module or in a module it depends on.
+			\(fixtures["Feature"]!["Profile.swift"]):8:5: error: \(Self.holeInSeamOfUnnamedModuleMessage)
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -3393,19 +3394,18 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsHoleInSeamOfXcodeProjectTarget_whenTargetNamesNoModule() async {
-		// A target the Xcode project plugin builds can never name its module, so the error leads with declaring `Service`
-		// without `generateDependencyTree: true`, never with reading a module that depends on this one.
+	mutating func generate_throwsHoleInSeamOfUnnamedModule_whenRunNamesNoModule() async {
+		// A run with no target graph and no module name – as the Xcode project plugin runs the tool for a target – gets the
+		// error every run without a module name gets, never one that reads a module that depends on this one.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Profile.swift"]):8:5: error: `Service` generates its dependency tree, and `Profile`'s @Instantiated property `userService: any UserService` in it instantiates `UserService`, which no @Instantiable declaration this target reads fulfills. A target the Xcode project plugin builds knows no module, so the initializer SafeDI generates for `Service` cannot take a builder for `userService`, and the targets that reach `Service` build its tree inline. Declare `Service` without `generateDependencyTree: true`, so each tree builds `userService` where its implementation is visible, or declare an @Instantiable type that fulfills `UserService` in this target or in one it depends on.
+			\(fixtures["Profile.swift"]):8:5: error: \(Self.holeInSeamOfUnnamedModuleMessage)
 			"""
 		}) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: Self.canonicalFeature,
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
-				buildSettingArguments: ["--build-setting-product-module-name=[Feature]"],
 				moduleMembershipArguments: [],
 			)
 		}
@@ -3417,18 +3417,14 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// C9.4b, H12 (ii): no run generates the initializer of a seam in a directory a `#SafeDIConfiguration` adds, so it
 		// takes no builder and has no hole, named module or not (the Xcode project plugin names none): every tree builds it
 		// inline, here with the fulfiller its module sees. With no builder and no fill, this code is the visible build.
-		// Each construction of `Service` says so; a run without a module name is the Xcode project plugin's here.
+		// Each construction of `Service` says so, in the same words whether or not the run names its module.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: Self.seamInAdditionalDirectoryModule + [Self.fulfillingType(named: "DefaultUserService", fulfilling: "UserService", declarations: [])],
 			additionalDirectorySwiftFileContent: Self.seamInAdditionalDirectory,
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
-			buildSettingArguments: moduleMembershipArguments.isEmpty ? ["--build-setting-product-module-name=[App]"] : [],
 			moduleMembershipArguments: moduleMembershipArguments,
 		)
-		let xcodeProjectPluginNote = moduleMembershipArguments.isEmpty
-			? " (a target the Xcode project plugin builds names no module; see the Manual's \"Limits of the Xcode project plugin\")"
-			: ""
 		#expect(output.dependencyTreeFiles.keys.sorted() == ["Root+SafeDI.swift"])
 		#expect(output.dependencyTreeFiles["Root+SafeDI.swift"] == generatedFileHeader + """
 		extension Root {
@@ -3439,7 +3435,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		                return Profile(userService: userService)
 		            }
 		            let profile: Profile = __safeDI_profile()
-		            return Service(profile: profile) // Built inline: SafeDI does not know which module declares `Service`, so this tree cannot call the initializer SafeDI generates for it\(xcodeProjectPluginNote).
+		            return Service(profile: profile) // Built inline: SafeDI does not know which module declares `Service`, so this tree cannot call the initializer SafeDI generates for it.
 		        }
 		        let service: Service = __safeDI_service()
 		        self.init(service: service)
@@ -3855,6 +3851,10 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 
 	/// The source of `UserService`, a public protocol.
 	private static let userServiceProtocol = "public protocol UserService {}"
+
+	/// The error at the canonical hole when the run that generates `Service` names no module: one wording for every such
+	/// run, the Xcode project plugin's included.
+	private static let holeInSeamOfUnnamedModuleMessage = "`Service` generates its dependency tree, and `Profile`'s @Instantiated property `userService: any UserService` in it instantiates `UserService`, which no @Instantiable declaration this module reads fulfills. SafeDI does not know which module declares `Service`, so it cannot know what that module's callers see, and the initializer it generates cannot take a builder for `userService`. Declare an @Instantiable type that fulfills `UserService` in this module or in a module it depends on, declare `Service` without `generateDependencyTree: true`, or, in a build that can name this module, run SafeDITool with its name (`--module-name`, Bazel's `module_name`)."
 
 	/// The canonical hole (`h01`): `Service`, the seam, instantiates `analytics` then `profile`; `Profile` instantiates
 	/// `userService: any UserService` and receives `analytics`.

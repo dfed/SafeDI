@@ -107,8 +107,6 @@ public actor DependencyTreeGenerator {
 		///   - additionalMocksToGenerateLocation: Where the `#SafeDIConfiguration` that lists the module's
 		///     `additionalMocksToGenerate` is declared, at which an error about a construction in a listed type's
 		///     generated mock is reported when the declaration that must change cannot be read.
-		///   - unnamedReason: Why SafeDITool does not know the module's name, exactly when `identity` names no module,
-		///     or `nil` when it knows the name.
 		///   - moduleNamesReadByRunOfModule: The modules whose declarations the run of `generate` for the named module
 		///     reads, itself included, from which it would build the tree of a seam it declares: a seam candidate's
 		///     module keeps a construction out of this module only when it reads the declaration of every type on the
@@ -118,35 +116,19 @@ public actor DependencyTreeGenerator {
 			isOwnFile: @escaping @Sendable (String) -> Bool,
 			isReadableFile: @escaping @Sendable (String) -> Bool,
 			additionalMocksToGenerateLocation: Dependency.DeclarationLocation?,
-			unnamedReason: UnnamedReason?,
 			moduleNamesReadByRunOfModule: @escaping @Sendable (_ moduleName: String) -> Set<String>,
 		) {
 			self.identity = identity
 			self.isOwnFile = isOwnFile
 			self.isReadableFile = isReadableFile
 			self.additionalMocksToGenerateLocation = additionalMocksToGenerateLocation
-			self.unnamedReason = unnamedReason
 			self.moduleNamesReadByRunOfModule = moduleNamesReadByRunOfModule
-		}
-
-		/// Why SafeDITool does not know the name of the module the generated code compiles in, which decides the remedy
-		/// a diagnostic or comment about a seam built inline leads with.
-		public enum UnnamedReason: Sendable {
-			/// The run carries `--build-setting-product-module-name`, expanded or not: a target the Xcode project plugin
-			/// builds, which knows no module. The option's presence is the only positive signal of the Xcode project
-			/// plugin, since only that plugin passes it; the SwiftPM plugin writes a target graph instead, which names
-			/// the module.
-			case xcodeProjectPlugin
-			/// The run was given no module name by any other means: a custom integration, or a hand-written run,
-			/// without `--module-name`.
-			case noModuleName
 		}
 
 		let identity: ModuleIdentity
 		let isOwnFile: @Sendable (String) -> Bool
 		let isReadableFile: @Sendable (String) -> Bool
 		let additionalMocksToGenerateLocation: Dependency.DeclarationLocation?
-		let unnamedReason: UnnamedReason?
 		let moduleNamesReadByRunOfModule: @Sendable (_ moduleName: String) -> Set<String>
 	}
 
@@ -1765,9 +1747,6 @@ public actor DependencyTreeGenerator {
 			let requirement: AccessRequirement
 			/// The module the generated code compiles in.
 			let emittingModule: ModuleIdentity
-			/// Why SafeDITool does not know the name of the module the generated code compiles in, or `nil` when it knows
-			/// it, which decides how the error names that module.
-			let emittingModuleUnnamedReason: DependencyTreeGenerator.EmittingModule.UnnamedReason?
 			/// The module that declares the declaration.
 			let declaringModule: ModuleIdentity
 			/// Where the declaration begins, when its file can be read where it is recorded, so an editor can open it.
@@ -1798,13 +1777,12 @@ public actor DependencyTreeGenerator {
 			}
 
 			/// A seam another module declares that a production tree builds inline because SafeDI cannot name the module
-			/// the tree is generated in – a target the Xcode project plugin builds, or a run given no module name – so the
-			/// tree cannot call the initializer generated for the seam, with where the module refers to what leads to the
-			/// seam, and why SafeDI cannot name the module.
+			/// the tree is generated in – a run given no module name, as a target the Xcode project plugin builds is – so
+			/// the tree cannot call the initializer generated for the seam, with where the module refers to what leads to
+			/// the seam.
 			struct InlineSeam: Hashable {
 				let type: TypeDescription
 				let referenceLocation: Dependency.DeclarationLocation?
-				let unnamedReason: DependencyTreeGenerator.EmittingModule.UnnamedReason
 			}
 
 			/// The type whose mock makes a construction.
@@ -1819,20 +1797,18 @@ public actor DependencyTreeGenerator {
 			/// inline and names the first declaration in source order in the seam's tree that keeps it from compiling, of
 			/// a type other than the seam where there is one. Neither depends on the order of `inaccessibleConstructions`.
 			static func sourceDiagnosticGroups(of inaccessibleConstructions: [InaccessibleConstruction]) -> [[SourceDiagnostic]] {
-				// One run names no module for one reason, so every inline seam of a type carries the same one.
-				var inlineSeamErrors = [TypeDescription: (referenceLocation: Dependency.DeclarationLocation?, namedConstruction: InaccessibleConstruction, unnamedReason: DependencyTreeGenerator.EmittingModule.UnnamedReason)]()
+				var inlineSeamErrors = [TypeDescription: (referenceLocation: Dependency.DeclarationLocation?, namedConstruction: InaccessibleConstruction)]()
 				for case let (inaccessibleConstruction, inlineSeam?) in inaccessibleConstructions.map({ ($0, $0.inlineSeam) }) {
 					inlineSeamErrors[inlineSeam.type] = inlineSeamErrors[inlineSeam.type].map { error in
 						(
 							referenceLocation: Dependency.DeclarationLocation.precedesInSourceOrder(inlineSeam.referenceLocation, error.referenceLocation) ? inlineSeam.referenceLocation : error.referenceLocation,
 							namedConstruction: inaccessibleConstruction.isNamedBefore(error.namedConstruction, inTreeOf: inlineSeam.type) ? inaccessibleConstruction : error.namedConstruction,
-							unnamedReason: error.unnamedReason,
 						)
-					} ?? (referenceLocation: inlineSeam.referenceLocation, namedConstruction: inaccessibleConstruction, unnamedReason: inlineSeam.unnamedReason)
+					} ?? (referenceLocation: inlineSeam.referenceLocation, namedConstruction: inaccessibleConstruction)
 				}
 				return merging(inaccessibleConstructions).map { [$0.sourceDiagnostic] }
 					+ inlineSeamErrors.map { seamType, error in
-						[error.namedConstruction.inlineSeamDiagnostic(of: seamType, at: error.referenceLocation, unnamedReason: error.unnamedReason)]
+						[error.namedConstruction.inlineSeamDiagnostic(of: seamType, at: error.referenceLocation)]
 					}
 			}
 
@@ -1859,29 +1835,21 @@ public actor DependencyTreeGenerator {
 			/// The error about the seam `seamType`, which a production tree builds inline because SafeDI cannot name the
 			/// module the tree is generated in, at `referenceLocation`, where this module refers to what leads to the seam,
 			/// naming the declaration this construction needs to widen and the level it has, in a sentence of its own, since
-			/// the declaration's subject phrase can be an enclosing type's or an extension's. It leads with the remedy that
-			/// works where `unnamedReason` puts the run: a target the Xcode project plugin builds can call a root declared in
-			/// a Swift package target, and otherwise the seam can be declared in a module whose run is given its name, since
-			/// a tree builds a seam inline only where SafeDI does not know the seam's module – a `.safedi` written without
-			/// a name, or a directory a `#SafeDIConfiguration` adds. A single `error:` line, since Xcode drops notes from
-			/// build-tool output.
+			/// the declaration's subject phrase can be an enclosing type's or an extension's. It leads with the remedy every
+			/// build can apply, making the tree's types `public`, and then, for a build that can name modules, declaring the
+			/// seam in a module whose run is given its name, since a tree builds a seam inline only where SafeDI does not
+			/// know the seam's module – a `.safedi` written without a name, or a directory a `#SafeDIConfiguration` adds. A
+			/// single `error:` line, since Xcode drops notes from build-tool output.
 			private func inlineSeamDiagnostic(
 				of seamType: TypeDescription,
 				at referenceLocation: Dependency.DeclarationLocation?,
-				unnamedReason: DependencyTreeGenerator.EmittingModule.UnnamedReason,
 			) -> SourceDiagnostic {
 				let seamName = "`\(seamType.asSource)`"
 				let reachedDeclaration = "\(declarationPhrases.subject) is `\(accessNeed.level.spelling)`, so that tree cannot be built here."
-				let message = switch unnamedReason {
-				case .xcodeProjectPlugin:
-					"\(seamName) is declared with `generateDependencyTree: true`, but a target the Xcode project plugin builds cannot call the initializer SafeDI generates for it, so this target builds its tree inline. \(reachedDeclaration) Declare a root in a Swift package target that depends on \(seamName)'s module and call it from this target, or make the types in \(seamName)'s tree `public`."
-				case .noModuleName:
-					"\(seamName) is declared with `generateDependencyTree: true`, but SafeDI does not know which module declares \(seamName), so this run builds \(seamName)'s tree inline. \(reachedDeclaration) Declare \(seamName) in a module whose SafeDITool run is given its name (`--module-name`), so that this module calls the initializer SafeDI generates for \(seamName), or make the types in \(seamName)'s tree `public`."
-				}
 				return SourceDiagnostic(
 					severity: .error,
 					location: referenceLocation,
-					message: message,
+					message: "\(seamName) is declared with `generateDependencyTree: true`, but SafeDI does not know which module declares \(seamName), so this run builds \(seamName)'s tree inline. \(reachedDeclaration) Make the types in \(seamName)'s tree `public`, or, in a build that can name modules, declare \(seamName) in a module whose SafeDITool run is given its name (`--module-name`, Bazel's `module_name`), so that this module calls the initializer SafeDI generates for \(seamName).",
 				)
 			}
 
@@ -1934,9 +1902,8 @@ public actor DependencyTreeGenerator {
 			}
 
 			/// How an error names the declaration that must widen (`subject`), says what the generated code cannot do
-			/// without it (`inability`), names it in the fix (`fixedDeclaration`), and names the constructed type after the
-			/// subject (`constructedTypeReference`): `it` where the subject is the type itself.
-			private var declarationPhrases: (subject: String, inability: String, fixedDeclaration: String, constructedTypeReference: String) {
+			/// without it (`inability`), and names it in the fix (`fixedDeclaration`).
+			private var declarationPhrases: (subject: String, inability: String, fixedDeclaration: String) {
 				let constructedTypeName = "`\(constructedType.asSource)`"
 				func name(of member: AccessNeed.Member) -> String {
 					switch member {
@@ -1951,14 +1918,12 @@ public actor DependencyTreeGenerator {
 				let subject: String
 				let inability: String
 				let fixedDeclaration: String
-				var constructedTypeReference = constructedTypeName
 				switch accessNeed.declaration {
 				case let .type(type):
 					if type == constructedType {
 						subject = constructedTypeName
 						inability = "construct it"
 						fixedDeclaration = constructedTypeName
-						constructedTypeReference = "it"
 					} else {
 						subject = "`\(type.asSource)`, which encloses \(constructedTypeName),"
 						inability = "construct \(constructedTypeName)"
@@ -1979,7 +1944,7 @@ public actor DependencyTreeGenerator {
 					inability = "call it"
 					fixedDeclaration = member == .initializer ? "the initializer" : name(of: member)
 				}
-				return (subject, inability, fixedDeclaration, constructedTypeReference)
+				return (subject, inability, fixedDeclaration)
 			}
 
 			/// A single `error:` line, since Xcode drops notes from build-tool output. When the declaration's file can
@@ -1988,14 +1953,10 @@ public actor DependencyTreeGenerator {
 			/// such as a sandboxed Bazel action, or a `.safedi` file from another machine – it is reported where this
 			/// module refers to the construction, and names the module that must change.
 			var sourceDiagnostic: SourceDiagnostic {
-				let (subject, inability, fixedDeclaration, constructedTypeReference) = declarationPhrases
+				let (subject, inability, fixedDeclaration) = declarationPhrases
 				let module = emittingModule.moduleName.map { "module `\($0)`" } ?? "this module"
 				// A mock's construction names the mock, whose tree the user did not write.
 				let emitter = mockRoot.map { "the mock of `\($0.type.asSource)`, generated in \(module)," } ?? "\(module),"
-				// Under the Xcode project plugin, the error is reported at a declaration another target compiles, where "this
-				// module" reads as that target, so it names the target the generated code compiles in as the Manual's "Limits of
-				// the Xcode project plugin" does: the target that builds the type, or the mock.
-				let xcodeProjectPluginEmitter = mockRoot.map { "the mock of `\($0.type.asSource)`, generated in the target that builds `\($0.type.asSource)`," } ?? "the target that builds \(constructedTypeReference),"
 				let reason = switch requirement {
 				case .internal:
 					if let mockRoot {
@@ -2008,12 +1969,7 @@ public actor DependencyTreeGenerator {
 				case .public:
 					"\(emitter) in another package, cannot \(inability) in the code SafeDI generates"
 				case .packageUnverified:
-					switch emittingModuleUnnamedReason {
-					case .xcodeProjectPlugin:
-						"\(xcodeProjectPluginEmitter) which the Xcode project plugin cannot tell is in the same package, cannot \(inability) in the code SafeDI generates"
-					case .noModuleName, .none:
-						"\(emitter) which SafeDI cannot tell is in the same package, cannot \(inability) in the code SafeDI generates"
-					}
+					"\(emitter) which SafeDI cannot tell is in the same package, cannot \(inability) in the code SafeDI generates"
 				}
 				let level = AccessLevel.spelling(satisfying: requirement)
 				// Reported in this module, the error names the module whose declaration must change.
@@ -2032,16 +1988,17 @@ public actor DependencyTreeGenerator {
 				}
 				if case let .publicMockOfUnknownModule(type, emittingModuleIsUnknown)? = publicMockCandidate {
 					// `publicMockNotCallableFromThisView`: the type's public mock is the fix, which SafeDI cannot call here.
-					let view = emittingModuleIsUnknown
-						? "a target the Xcode project plugin builds"
-						: "a module whose module info names no module"
-					let remedy = emittingModuleIsUnknown
-						? "Build this target's mocks in a SwiftPM package target."
-						: "Generate the module info of the module that declares `\(type.asSource)` with `--module-name`."
+					let access = "\(subject.hasPrefix("The ") ? "the " + subject.dropFirst(4) : subject) is `\(accessNeed.level.spelling)`"
+					// Whether a mock can call the public mock depends on the declaring module's name alone: a run that names no
+					// module calls the public mock of a module whose module info names it, and naming this run would not name
+					// the declaring module. A Swift package target's run reads that name from the target graph.
+					let message = emittingModuleIsUnknown
+						? "`\(type.asSource)` has a public `mock()`, but SafeDI does not know which module declares `\(type.asSource)`, so this run cannot call it, and \(access). Build these mocks in a Swift package target, or give this run the module info of the module that declares `\(type.asSource)`, written with `--module-name`."
+						: "`\(type.asSource)` has a public `mock()`, but it cannot be called from a module whose module info names no module, and \(access). Generate the module info of the module that declares `\(type.asSource)` with `--module-name`."
 					return SourceDiagnostic(
 						severity: .error,
 						location: readableDeclarationLocation ?? referenceLocation,
-						message: "`\(type.asSource)` has a public `mock()`, but it cannot be called from \(view), and \(subject.hasPrefix("The ") ? "the " + subject.dropFirst(4) : subject) is `\(accessNeed.level.spelling)`. \(remedy)",
+						message: message,
 					)
 				}
 				let fix = switch requirement {
@@ -3053,8 +3010,10 @@ public actor DependencyTreeGenerator {
 		/// - `needsPublicDeclaration`: Whether the type is narrower than `public`, which a public mock requires.
 		/// - `isSeam`: Whether the type is a seam (`generateDependencyTree: true`), whose tree a mock builds inline.
 		case withoutMock(TypeDescription, declaringModuleName: String?, needsPublicDeclaration: Bool, isSeam: Bool)
-		/// The type has a public mock, but its module is unknown to SafeDI, which therefore cannot call it: under the
-		/// Xcode project plugin, which names no module, or from a module info file written without a module name.
+		/// The type has a public mock, but SafeDI does not know which module declares it, and therefore cannot call it: the
+		/// type was read from a file no target graph or module name assigns to a module – as a target the Xcode project
+		/// plugin builds reads every other target's types – or from module info written without a module name.
+		/// `emittingModuleIsUnknown`, whether this run names no module, decides only the error's wording.
 		case publicMockOfUnknownModule(TypeDescription, emittingModuleIsUnknown: Bool)
 	}
 
@@ -3311,14 +3270,13 @@ public actor DependencyTreeGenerator {
 		/// The seam that `scope` builds inline, referred to at `referenceLocation`, when the tree is a production tree of a
 		/// module SafeDI cannot name and another module declares the seam: see `Construction.inlineSeam`.
 		func inlineSeam(builtBy scope: Scope, referencedAt referenceLocation: Dependency.DeclarationLocation?) -> DependencyTreeGeneratorError.InaccessibleConstruction.InlineSeam? {
-			// A reason exactly when the module's name is unknown.
 			guard !isMock,
-			      let unnamedReason = emittingModule.unnamedReason,
+			      emittingModule.identity.moduleName == nil,
 			      scope.instantiable.generatesDependencyTree,
 			      scope.seamCall == nil,
 			      !(scope.instantiable.sourceFilePath.map(emittingModule.isOwnFile) ?? false)
 			else { return nil }
-			return .init(type: scope.instantiable.concreteInstantiable, referenceLocation: referenceLocation, unnamedReason: unnamedReason)
+			return .init(type: scope.instantiable.concreteInstantiable, referenceLocation: referenceLocation)
 		}
 		/// What a type another module declares, `instantiable`, offers a mock of this module that builds its tree: `nil`
 		/// for a type with a hand-written mock, which the mock calls, one this module declares, or one that cannot have a
@@ -3558,8 +3516,6 @@ public actor DependencyTreeGenerator {
 					isOwnFile: { _ in false },
 					isReadableFile: { _ in false },
 					additionalMocksToGenerateLocation: nil,
-					// The guard above found the declaring module's name.
-					unnamedReason: nil,
 					moduleNamesReadByRunOfModule: moduleNamesReadByRunOfModule,
 				),
 				// The public mocks of the modules the declaring module sees, which its mock trees call in turn.
@@ -3768,7 +3724,6 @@ public actor DependencyTreeGenerator {
 					accessNeed: accessNeed,
 					requirement: requirement,
 					emittingModule: emittingModule.identity,
-					emittingModuleUnnamedReason: emittingModule.unnamedReason,
 					declaringModule: declaringModule,
 					readableDeclarationLocation: accessNeed.access.declarationStartLocation.flatMap { declarationStartLocation in
 						emittingModule.isReadableFile(declarationStartLocation.filePath) ? declarationStartLocation : nil
@@ -3820,20 +3775,13 @@ public actor DependencyTreeGenerator {
 	/// The comment on a construction of `instantiable` when it is a seam that every tree of this run builds inline
 	/// because SafeDI does not know which module declares it – one neither this module generates nor another module's
 	/// run generated the initializer of (`SeamResolution.foreignSeams`) – so the initializer SafeDI generates for the
-	/// seam is called only by hand-written code; `nil` otherwise. A target the Xcode project plugin builds knows no
-	/// module, which the comment names.
+	/// seam is called only by hand-written code; `nil` otherwise.
 	private func builtInlineSeamComment(for instantiable: Instantiable) -> String? {
 		guard instantiable.generatesDependencyTree,
 		      seams.foreignSeams[instantiable.concreteInstantiable] == nil,
 		      !seams.generatedSeams.contains(instantiable.concreteInstantiable)
 		else { return nil }
-		let xcodeProjectPluginNote = switch emittingModule?.unnamedReason {
-		case .xcodeProjectPlugin:
-			" (a target the Xcode project plugin builds names no module; see the Manual's \"Limits of the Xcode project plugin\")"
-		case .noModuleName, nil:
-			""
-		}
-		return "// Built inline: SafeDI does not know which module declares `\(instantiable.concreteInstantiable.asSource)`, so this tree cannot call the initializer SafeDI generates for it\(xcodeProjectPluginNote)."
+		return "// Built inline: SafeDI does not know which module declares `\(instantiable.concreteInstantiable.asSource)`, so this tree cannot call the initializer SafeDI generates for it."
 	}
 
 	// MARK: Seams
@@ -7859,9 +7807,8 @@ public actor DependencyTreeGenerator {
 			return reached
 		}
 		var typesToReport = typesReached(from: rootInstantiables)
-		// A seam whose module SafeDI does not know cannot take a builder: what its callers see is unknown. A reason exactly
-		// when the module's name is unknown.
-		if let unnamedReason = emittingModule?.unnamedReason {
+		// A seam whose module SafeDI does not know cannot take a builder: what its callers see is unknown.
+		if let emittingModule, emittingModule.identity.moduleName == nil {
 			var holes = [DependencyTreeGeneratorError.HoleInSeamOfUnnamedModule]()
 			var reportedLocations = Set<String>()
 			for seamType in generatedSeamTypes.sorted() {
@@ -7873,7 +7820,7 @@ public actor DependencyTreeGenerator {
 						&& typeDescriptionToFulfillingInstantiableMap[dependency.asInstantiatedType]?.mockOnly != false
 						&& reportedLocations.insert(dependency.declarationLocation.map { "\($0.filePath):\($0.line):\($0.column)" } ?? "\(typeDescription.asSource).\(dependency.property.label)").inserted
 					{
-						holes.append(.init(seam: seam.concreteInstantiable, owner: instantiable.concreteInstantiable, dependency: dependency, reason: unnamedReason))
+						holes.append(.init(seam: seam.concreteInstantiable, owner: instantiable.concreteInstantiable, dependency: dependency))
 					}
 				}
 			}

@@ -208,14 +208,6 @@ let buildSettingCompilationConditionArguments = [
 	"--build-setting-other-swift-flags=[${OTHER_SWIFT_FLAGS}]",
 ]
 
-/// Arguments that let SafeDITool read the name of the module an Xcode project target compiles, which the build expands
-/// as it does `buildSettingCompilationConditionArguments`, so that generated code never imports that module. Only the
-/// Xcode project plugin passes them, never a Swift package target's plugin, which writes a target graph instead, so
-/// that the option's presence tells SafeDITool which plugin runs it.
-let xcodeProjectTargetArguments = [
-	"--build-setting-product-module-name=[${PRODUCT_MODULE_NAME}]",
-]
-
 /// Writes `swiftFiles` to `inputSourcesFile` as SafeDITool reads its input CSV, each spelled as
 /// `inputSwiftFilePaths(of:relativeTo:)` spells it.
 func writeInputSwiftFilesCSV(
@@ -467,8 +459,7 @@ extension Target {
 						inputSourcesFile.path(percentEncoded: false),
 						"--swift-manifest",
 						manifestFile.path(percentEncoded: false),
-					] + buildSettingCompilationConditionArguments
-						+ xcodeProjectTargetArguments,
+					] + buildSettingCompilationConditionArguments,
 					environment: [:],
 					inputFiles: inputSwiftFiles + additionalInputFiles,
 					outputFiles: outputFiles,
@@ -501,8 +492,7 @@ extension Target {
 						"--output-directory", outputDirectory.path(percentEncoded: false),
 						"--mock-scoped-files",
 					] + inputSwiftFiles.map { $0.path(percentEncoded: false) }
-						+ buildSettingCompilationConditionArguments
-						+ xcodeProjectTargetArguments,
+						+ buildSettingCompilationConditionArguments,
 					environment: [:],
 					inputFiles: inputSwiftFiles + scanResult.additionalInputFiles,
 					outputFiles: scanResult.outputFiles,

@@ -519,34 +519,25 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_omitsImportOfModuleItself_whenXcodeProjectTargetReadsFileImportingIt() async throws {
-		// The Xcode project plugin writes no target graph, so the product module name is all this run knows.
-		let output = try await generateReadingFileThatImportsVerifiedModule(
-			buildSettingArguments: ["--build-setting-product-module-name=[\(standaloneVerificationModuleName)]"],
-		)
-
-		#expect(output.generatedFiles == Self.generatedFiles(importing: ["SafeDI"]))
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_keepsImportOfModuleItself_whenProductModuleNameIsUnexpanded() async throws {
-		// SwiftPM's native build system passes build tool plugin arguments through unexpanded, and no module is known.
-		let output = try await generateReadingFileThatImportsVerifiedModule(
-			buildSettingArguments: ["--build-setting-product-module-name=[${PRODUCT_MODULE_NAME}]"],
-			skipCompileVerification: true,
-		)
+	mutating func generate_keepsImportOfModuleItself_whenRunNamesNoModule() async throws {
+		// A run that names no module – a target the Xcode project plugin builds among them – cannot tell that the file it
+		// reads from another directory imports the module the generated code compiles in, so the generated code copies
+		// the import and the compiler warns at it ("ignoring import"), as in 2.2.0. That warning is accepted by ruling for
+		// a shape no adopter has, and the Manual's "Limits of the Xcode project plugin" says so; the compile check, which
+		// fails a test on any warning in generated code, is therefore skipped.
+		let output = try await generateReadingFileThatImportsVerifiedModule(skipCompileVerification: true)
 
 		#expect(output.generatedFiles == Self.generatedFiles(importing: ["SafeDI", standaloneVerificationModuleName]))
 	}
 
 	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenProductModuleNameIsNotBracketed() async {
-		await assertThrowsError("--build-setting-product-module-name must be wrapped in square brackets, e.g. `--build-setting-product-module-name=[${PRODUCT_MODULE_NAME}]`.") {
-			try await generateReadingFileThatImportsVerifiedModule(
-				buildSettingArguments: ["--build-setting-product-module-name=\(standaloneVerificationModuleName)"],
-			)
+	func parse_rejectsCommandLine_whenGivenProductModuleNameBuildSetting() {
+		// No integration passes the target's product module name: the Xcode project plugin's run names no module.
+		do {
+			_ = try Generate.parse(["Sources.csv", "--build-setting-product-module-name=[App]"])
+			Issue.record("Did not throw error!")
+		} catch {
+			#expect(Generate.message(for: error) == "Unknown option '--build-setting-product-module-name'")
 		}
 	}
 
@@ -633,7 +624,6 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 	/// reads a directory holding a file that imports the module the compile verifier compiles everything as: a module
 	/// above it, whose files a configuration's `additionalDirectoriesToInclude` can name.
 	private mutating func generateReadingFileThatImportsVerifiedModule(
-		buildSettingArguments: [String] = [],
 		moduleMembershipArguments: [String] = [],
 		skipCompileVerification: Bool = false,
 	) async throws -> TestOutput {
@@ -675,7 +665,6 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 			skipCompileVerification: skipCompileVerification,
-			buildSettingArguments: buildSettingArguments,
 			moduleMembershipArguments: moduleMembershipArguments,
 		)
 	}
