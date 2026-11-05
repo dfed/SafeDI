@@ -567,6 +567,23 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func queryNeeds_readsOneModule_whenTwoArgumentsSpellOneModuleInfoFile() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.instantiableContent(named: "Engine")],
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Engines"],
+		)
+		let path = try output.writtenModuleInfoOutputPath
+		let otherSpelling = (path as NSString).deletingLastPathComponent + "/./" + (path as NSString).lastPathComponent
+
+		let parsedModules = try await QueryNeeds.parse(["Engine", "--module-info", path, otherSpelling]).readIncludedModules()
+
+		#expect(parsedModules.map(\.includedModule.name) == ["Engines"])
+		#expect(parsedModules.map(\.includedModule.paths) == [[path, otherSpelling]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func queryNeeds_throwsError_whenTwoModuleInfoFilesRecordOneModule() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [Self.instantiableContent(named: "Engine")],
