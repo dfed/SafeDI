@@ -367,12 +367,6 @@ final class Scope: Hashable {
 	///     tree, a seam's parameters (see `NearestDeclarations.replacing(_:)`), and the received properties a mock root
 	///     binds (see `NearestDeclarations.binding(_:)`). Each scope judges whether what it receives only if available is
 	///     available against the nearest declaration of its label (see `ScopeGeneratorUnderConstruction`).
-	///   - runtimeOptionalProperties: The forms of a seam's optional parameters that are in scope wherever the tree
-	///     is built but may be `nil` where inline they would be unavailable – both forms of a parameter the callers
-	///     may pass `nil` for, the unwrapped form of a required optional parameter – each by its exact form: an
-	///     `onlyIfAvailable` alias of one is bound from it as an optional value, as a mock binds an alias from an
-	///     optional override. Each scope prunes the set it hands the scopes it builds, and its own aliases, by what it
-	///     declares (see `ScopeGeneratorUnderConstruction.runtimeOptionalProperties(declaredBy:enclosedBy:)`).
 	///   - seamRoot: What the root generator emits when the tree is a seam's: its signature and the hand-written
 	///     initializer's arguments. `nil` for a root of the dependency tree and for a mock root.
 	///   - startsCodeGeneration: Whether each generator of a dependency tree starts generating its code as soon as
@@ -392,7 +386,6 @@ final class Scope: Hashable {
 		propertyStack: [Property],
 		nearestDeclarations: NearestDeclarations = [:],
 		lazilyInstantiatedInstanceProperties: Set<Property>,
-		runtimeOptionalProperties: Set<Property> = [],
 		seamRoot: ScopeGenerator.SeamRoot? = nil,
 		mockHoles: [SeamSignature.Hole] = [],
 		erasedToConcreteExistential: Bool,
@@ -407,7 +400,6 @@ final class Scope: Hashable {
 				propertyStack: propertyStack,
 				nearestDeclarations: nearestDeclarations,
 				lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
-				runtimeOptionalProperties: runtimeOptionalProperties,
 				seamRoot: seamRoot,
 				mockHoles: mockHoles,
 				erasedToConcreteExistential: erasedToConcreteExistential,
@@ -427,7 +419,6 @@ final class Scope: Hashable {
 		propertyStack: [Property],
 		nearestDeclarations: NearestDeclarations,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
-		runtimeOptionalProperties: Set<Property>,
 		seamRoot: ScopeGenerator.SeamRoot?,
 		mockHoles: [SeamSignature.Hole],
 		erasedToConcreteExistential: Bool,
@@ -442,7 +433,6 @@ final class Scope: Hashable {
 			concreteTypeStack: propertyStack.map { _ in nil },
 			nearestDeclarations: nearestDeclarations,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
-			runtimeOptionalProperties: runtimeOptionalProperties,
 			seamRoot: seamRoot,
 			seamHoles: seamRoot.map { SeamHoles(seamType: instantiable.concreteInstantiable, holes: $0.signature.holes) }
 				?? (mockHoles.isEmpty ? SeamHoles() : SeamHoles(seamType: instantiable.concreteInstantiable, holes: mockHoles)),
@@ -507,7 +497,6 @@ private struct ScopeGeneratorUnderConstruction {
 		concreteTypeStack: [TypeDescription?],
 		nearestDeclarations inheritedNearestDeclarations: NearestDeclarations,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
-		runtimeOptionalProperties: Set<Property>,
 		seamRoot: ScopeGenerator.SeamRoot?,
 		seamHoles: SeamHoles,
 		sitePath: [Property],
@@ -566,7 +555,6 @@ private struct ScopeGeneratorUnderConstruction {
 		// label above it, as a forwarded property does.
 		let callSiteLazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
 		var lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
-		var runtimeOptionalProperties = runtimeOptionalProperties
 		// The parameters this scope passes the builder function a lazy cycle closes on that are unavailable where it
 		// passes them, which it passes `nil`: a cycle-closing scope passes each its nearest declaration of the label, and
 		// the scope that declares the function the declaration in scope where it calls it. Both are judged against the
@@ -587,16 +575,6 @@ private struct ScopeGeneratorUnderConstruction {
 				.union(ownCycleParameters.compactMap(\.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding))
 			for parameter in ownCycleParameters {
 				nearestDeclarations.replace(parameter.property, providing: parameter.providedForms)
-				runtimeOptionalProperties = runtimeOptionalProperties.filter { $0.label != parameter.property.label }
-				if parameter.property.typeDescription.isOptional {
-					// A parameter that may be `nil` is read as a seam's optional parameter is: an `onlyIfAvailable` alias of
-					// its unwrapped form, or of the parameter itself when a caller may pass `nil`, is bound from it as an
-					// optional value.
-					runtimeOptionalProperties.insert(parameter.property.asUnwrappedProperty)
-					if !parameter.isRequired {
-						runtimeOptionalProperties.insert(parameter.property)
-					}
-				}
 			}
 		}
 		// The properties this scope’s children receive by reading the instance of a `LazilyInstantiated` property.
@@ -679,9 +657,6 @@ private struct ScopeGeneratorUnderConstruction {
 			childCycleParameterContexts[ScopeGenerator.BuiltDeclaration(property: property, concreteType: scope.instantiable.concreteInstantiable)] = CycleParameterContext(parameters: ownCycleParameters)
 		}
 		self.childCycleParameterContexts = childCycleParameterContexts
-		self.runtimeOptionalProperties = runtimeOptionalProperties.isEmpty
-			? runtimeOptionalProperties
-			: Self.runtimeOptionalProperties(declaredBy: scope, enclosedBy: runtimeOptionalProperties)
 		self.seamRoot = seamRoot
 		self.seamHoles = seamHoles
 		// The path is kept only where a hole needs it: a site, and the stage calls of a staged builder, are found by it.
@@ -768,7 +743,6 @@ private struct ScopeGeneratorUnderConstruction {
 			concreteTypeStack: hole.fillPropertyStack.map { _ in nil },
 			nearestDeclarations: fillNearestDeclarations,
 			lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties.filter { !fieldLabels.contains($0.label) }.union(fieldInstanceProperties),
-			runtimeOptionalProperties: runtimeOptionalProperties.filter { !fieldLabels.contains($0.label) },
 			seamRoot: nil,
 			seamHoles: seamHoles,
 			sitePath: sitePath,
@@ -819,7 +793,6 @@ private struct ScopeGeneratorUnderConstruction {
 				concreteTypeStack: childConcreteTypeStack,
 				nearestDeclarations: childNearestDeclarations,
 				lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
-				runtimeOptionalProperties: runtimeOptionalProperties,
 				seamRoot: nil,
 				seamHoles: seamHoles,
 				sitePath: sitePath,
@@ -876,10 +849,6 @@ private struct ScopeGeneratorUnderConstruction {
 			// parameter made optional, a seam's optional parameter, or an optional property the alias reads in place of
 			// its fulfilling property's non-optional form.
 			fulfillingBindingIsOptional: aliasBindings[property]?.typeDescription.isOptional ?? false,
-			// The exact form of a seam parameter that may be `nil`, which no declaration hides: validation reports a
-			// receive beneath a declaration of its label. An alias of a form the set lacks – exactly a required optional
-			// parameter – is created wherever the tree is built.
-			fulfillingPropertyIsRuntimeOptional: runtimeOptionalProperties.contains(fulfillingProperty),
 			declarationReference: declarationReference,
 		))
 	}
@@ -996,57 +965,6 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The declared property each `onlyIfAvailable` alias this scope declares is bound from, where its fulfilling property
 	/// is available. An alias absent here is bound to `nil`.
 	private let aliasBindings: [Property: Property]
-	/// The properties that may be `nil` where this scope's aliases and the scopes it builds read them, each by its
-	/// exact form: both forms of a seam parameter the seam's callers may pass `nil` for, the unwrapped form of a required
-	/// optional parameter, and both forms of an `onlyIfAvailable` alias of one, which no declaration on the path from
-	/// the seam's root down to and including this scope declares otherwise. See `createScopeGenerator`.
-	private let runtimeOptionalProperties: Set<Property>
-
-	/// `enclosingRuntimeOptionalProperties`, the properties that may be `nil` above `scope`, as the aliases `scope`
-	/// declares and the scopes it builds see them. The closest declaration of a property's label decides: one `scope`
-	/// instantiates, or forwards – a seam's root's own forwarded properties included – or declares by an alias that is
-	/// created whenever `scope` is, is not `nil` there, so every form of its label leaves the set, while an
-	/// `onlyIfAvailable` alias of a property in the set may be `nil` itself, so both of its forms join it. No alias of
-	/// `scope` renames another (SafeDITool rejects that before it validates a tree that builds the scope). A received
-	/// property declares nothing. Each property is held by its exact form, so that an alias of exactly a required
-	/// optional parameter, which the set never holds, is created.
-	private static func runtimeOptionalProperties(
-		declaredBy scope: Scope,
-		enclosedBy enclosingRuntimeOptionalProperties: Set<Property>,
-	) -> Set<Property> {
-		var runtimeOptionalProperties = enclosingRuntimeOptionalProperties
-		var aliases = [(property: Property, fulfillingProperty: Property, onlyIfAvailable: Bool)]()
-		func removeEveryForm(ofLabel label: String) {
-			runtimeOptionalProperties = runtimeOptionalProperties.filter { $0.label != label }
-		}
-		for dependency in scope.instantiable.dependencies {
-			switch dependency.source {
-			case .instantiated, .forwarded:
-				removeEveryForm(ofLabel: dependency.property.label)
-			case let .aliased(fulfillingProperty, _, onlyIfAvailable):
-				aliases.append((dependency.property, fulfillingProperty, onlyIfAvailable))
-			case .received:
-				break
-			}
-		}
-		guard !aliases.isEmpty else { return runtimeOptionalProperties }
-		// An alias that keeps the label it retypes is not in scope where its own value is read, so the forms of its
-		// fulfilling property stay in the set, which `addAliasGenerator` judges the alias by; a read of those forms
-		// beneath the alias is the hidden-label error, reported before any alias is judged.
-		for alias in aliases {
-			let formsTheAliasReads: Set<Property> = alias.property.label == alias.fulfillingProperty.label
-				? [alias.fulfillingProperty, alias.fulfillingProperty.asUnwrappedProperty]
-				: []
-			runtimeOptionalProperties = runtimeOptionalProperties.filter { $0.label != alias.property.label || formsTheAliasReads.contains($0) }
-		}
-		let enclosingAndRetypedRuntimeOptionalProperties = runtimeOptionalProperties
-		for alias in aliases where alias.onlyIfAvailable && enclosingAndRetypedRuntimeOptionalProperties.contains(alias.fulfillingProperty) {
-			runtimeOptionalProperties.insert(alias.property)
-			runtimeOptionalProperties.insert(alias.property.asUnwrappedProperty)
-		}
-		return runtimeOptionalProperties
-	}
-
 	private let seamRoot: ScopeGenerator.SeamRoot?
 	/// The holes of the seam whose tree is generated, by site, which the sites and the stage calls of staged builders
 	/// read. Empty outside a seam's tree, and in a seam's tree without holes.

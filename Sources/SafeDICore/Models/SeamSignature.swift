@@ -94,12 +94,13 @@ public struct SeamSignature: Sendable {
 
 	/// A parameter of the generated initializer.
 	public struct Parameter: Sendable {
-		public init(property: Property, isPassThrough: Bool, access: AccessLevel, tierAccess: AccessLevel? = nil, isOnlyIfAvailable: Bool, receivers: [Receiver] = [], accessCause: TypeAccessProof.Cause? = nil, nestedSeamCall: NestedSeamCall? = nil, otherInitializerArgumentsAccess: AccessLevel = .public) {
+		public init(property: Property, isPassThrough: Bool, access: AccessLevel, tierAccess: AccessLevel? = nil, isOnlyIfAvailable: Bool, requiredThroughAlias: Bool = false, receivers: [Receiver] = [], accessCause: TypeAccessProof.Cause? = nil, nestedSeamCall: NestedSeamCall? = nil, otherInitializerArgumentsAccess: AccessLevel = .public) {
 			self.property = property
 			self.isPassThrough = isPassThrough
 			self.access = access
 			self.tierAccess = tierAccess ?? access
 			self.isOnlyIfAvailable = isOnlyIfAvailable
+			self.requiredThroughAlias = isOnlyIfAvailable && requiredThroughAlias
 			self.receivers = receivers
 			self.accessCause = accessCause
 			self.nestedSeamCall = nestedSeamCall
@@ -134,6 +135,11 @@ public struct SeamSignature: Sendable {
 		/// pass-through some receiver requires, an own required `@Received` and an own `@Forwarded` are not, optional
 		/// type or not: a caller must hold a value for each.
 		public let isOnlyIfAvailable: Bool
+		/// Whether a receiver in the seam's tree requires an `onlyIfAvailable` alias that is bound from this pass-through,
+		/// which is received only if available: the alias is `nil` where the caller holds nothing, but where the caller
+		/// builds the property, it builds it before calling the seam, as it would build it before the receiver's tree
+		/// inline. Never `true` for a parameter that is not received only if available, which every caller passes.
+		public let requiredThroughAlias: Bool
 		/// The receives inside the seam's tree that a pass-through fulfills, in tree order, each with the access the
 		/// proof gives the parameter; a seam that passes the parameter on names them in its notes, and admits their
 		/// modules' mentions to the proof. Empty for one of the seam's own properties, which its own initializer
@@ -411,10 +417,11 @@ public struct SeamSignature: Sendable {
 	}
 
 	/// What a call of the generated initializer depends on: each parameter's label, type spelled without `any`, tier
-	/// access and whether it is received only if available, and the tiers. Two signatures with one call shape generate
-	/// the same guard and the same calls, whatever their receivers and uncapped access. The guard hashes the parameters'
-	/// fields and not the tiers: both sides derive the tiers from the parameters' tier accesses, which it hashes, and
-	/// from the level of the seam's own initializer, which both read from the seam's declaration.
+	/// access, whether it is received only if available and whether the caller builds it first
+	/// (`requiredThroughAlias`), and the tiers. Two signatures with one call shape generate the same guard and the same
+	/// calls, whatever their receivers and uncapped access. The guard hashes the parameters' fields and not the tiers:
+	/// both sides derive the tiers from the parameters' tier accesses, which it hashes, and from the level of the seam's
+	/// own initializer, which both read from the seam's declaration.
 	public struct CallShape: Hashable, Sendable {
 		public struct Parameter: Hashable, Sendable {
 			public init(_ parameter: SeamSignature.Parameter) {
@@ -422,12 +429,14 @@ public struct SeamSignature: Sendable {
 				type = parameter.property.typeDescription.withoutAny.asSource
 				tierAccess = parameter.tierAccess
 				isOnlyIfAvailable = parameter.isOnlyIfAvailable
+				requiredThroughAlias = parameter.requiredThroughAlias
 			}
 
 			public let label: String
 			public let type: String
 			public let tierAccess: AccessLevel
 			public let isOnlyIfAvailable: Bool
+			public let requiredThroughAlias: Bool
 		}
 
 		/// A builder the call passes: its label, its type spelled without `any`, its tier access, and each field of
@@ -475,6 +484,7 @@ public struct SeamSignature: Sendable {
 			public let access: AccessLevel
 			public let tierAccess: AccessLevel
 			public let isOnlyIfAvailable: Bool
+			public let requiredThroughAlias: Bool
 			public let receivers: Set<Receiver>
 		}
 
@@ -507,6 +517,7 @@ public struct SeamSignature: Sendable {
 					access: parameter.access,
 					tierAccess: parameter.tierAccess,
 					isOnlyIfAvailable: parameter.isOnlyIfAvailable,
+					requiredThroughAlias: parameter.requiredThroughAlias,
 					receivers: Set(parameter.receivers.map { receiver in
 						SettledContent.Receiver(property: receiver.property, declaringType: receiver.declaringType, access: receiver.access)
 					}),
@@ -523,9 +534,10 @@ public struct SeamSignature: Sendable {
 
 	/// The name of the empty enum the seam's module generates in an extension of the seam, which every generated
 	/// call refers to. It hashes each parameter's fields of `callShape` – label, type spelled without `any` (as the
-	/// compiler and `TypeDescription ==` treat `any P` and `P` as one type), tier access, and whether it is received
-	/// only if available – so a call generated from another computation of the signature names an enum the seam's
-	/// module did not generate. The receivers are not hashed: they name declarations, and change nothing a call passes.
+	/// compiler and `TypeDescription ==` treat `any P` and `P` as one type), tier access, whether it is received only
+	/// if available, and whether it is required through an alias – so a call generated from another computation of the
+	/// signature names an enum the seam's module did not generate. The receivers are not hashed: they name
+	/// declarations, and change nothing a call passes.
 	public var guardTypeName: String {
 		var hash = SeamSignatureHash()
 		for parameter in callShape.parameters {
@@ -535,6 +547,11 @@ public struct SeamSignature: Sendable {
 			// The flag's hash input is spelled as the default the generated initializer once gave the parameter: another
 			// spelling would rename every guard of a seam with a parameter received only if available.
 			hash.combine(parameter.isOnlyIfAvailable ? "= nil" : "")
+			// Only where it is set, so a seam without it hashes what it always hashed, and a caller that computed the
+			// signature without it names an enum the seam's module did not generate.
+			if parameter.requiredThroughAlias {
+				hash.combine("required through alias")
+			}
 		}
 		// Each builder after every parameter, so a seam without one hashes what it always hashed. A field is hashed,
 		// since a caller that computed the struct without it would resolve the label from its own scope instead.
@@ -578,6 +595,13 @@ struct SeamSignatureHash {
 /// the comment the call carries saying what to do when it does not compile. A seam whose module SafeDI does not know
 /// is built inline and gets no call.
 public struct SeamCall: Sendable {
+	/// The properties of the parameters a receiver in the seam's tree requires through an `onlyIfAvailable` alias
+	/// (`SeamSignature.Parameter.requiredThroughAlias`), which the calling tree builds before the call where it builds
+	/// them, as it would build them before the receiver's tree inline.
+	public var requiredThroughAliasProperties: Set<Property> {
+		Set(parameters.filter(\.requiredThroughAlias).map(\.property))
+	}
+
 	public init(
 		parameters: [SeamSignature.Parameter],
 		holes: [SeamSignature.Hole] = [],

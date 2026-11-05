@@ -178,7 +178,6 @@ public actor DependencyTreeGenerator {
 
 	public func generatePerRootCodeTrees() async throws -> [GeneratedRoot] {
 		let rootScopeGenerators = try rootScopeGenerators
-		try await validateNoUncreatedAliasIsRead(inTreesRootedAt: rootScopeGenerators)
 		try Self.validateFills(
 			inTreesRootedAt: rootScopeGenerators.map(\.scopeGenerator),
 			callerModule: seams.currentModule,
@@ -2186,12 +2185,6 @@ public actor DependencyTreeGenerator {
 				/// a parameter they would take otherwise: without it, they count the type as one SafeDI reads no declaration
 				/// of, which is `public`. Reported at the declaration.
 				case treeReachesPlainDeclarationCallersCannotSee(declaration: PlainTypeDeclaration, viaTargetGraph: Bool)
-				/// A dependency in the seam's tree reads an `onlyIfAvailable` alias that may not be created, or the type that
-				/// builds the alias's declaring type also declares the alias's property: built inline, that read finds
-				/// whatever declaration of the alias's label encloses the alias where the alias is not created, which
-				/// depends on what encloses the seam. Reported at the reading declaration, or at the alias. See
-				/// `ScopeGenerator.uncreatedAliasReads(ofTreeRootedAt:)`.
-				case uncreatedAliasRead(ScopeGenerator.UncreatedAliasRead)
 				/// A tier of the generated initializer is wider than `hole`'s builder, which every tier takes, as far as the
 				/// proof of the builder's type (`Hole.accessCause`) goes. Not a `ParameterKind`: a builder is no member of
 				/// `SeamSignature.parameters`, whose labels are what `parameterLabels(namedBy:about:)` names.
@@ -2208,46 +2201,6 @@ public actor DependencyTreeGenerator {
 					(true, "", " " + SeamAccessExplanation.publicMockRequirementSentence(seam: seam.concreteInstantiable))
 				} else {
 					(false, ", which `\(seam.concreteInstantiable.asSource)`'s `\(tier.spelledOnGeneratedDeclaration)` access requires,", "")
-				}
-			}
-
-			/// What `read` is, why a seam cannot give it inline's value, and what to do instead.
-			private static func message(for read: ScopeGenerator.UncreatedAliasRead) -> String {
-				let alias = read.uncreatedAlias
-				let aliasLabel = "`\(alias.property.label)`"
-				let declaringType = "`\(alias.declaringType.asSource)`"
-				let unavailableProperty = "`\(alias.unavailableProperty.asSource)`"
-				// An alias whose fulfilling property is still being built, or is generated later, cannot be made
-				// required: a required alias of such a property is a cycle.
-				let (whereNotCreated, canBeRequired) = switch alias.reason {
-				case .fulfillingPropertyMayBeNil:
-					("where \(unavailableProperty) is unavailable", true)
-				case .fulfillingPropertyIsBeingBuilt:
-					("where \(unavailableProperty) is still being built", false)
-				case .fulfillingPropertyIsGeneratedLater:
-					("where \(unavailableProperty) is generated later", false)
-				}
-				// An alias that keeps the label of the property whose absence leaves it uncreated – a label-keeping alias
-				// of a parameter that may be `nil` – offers no receive or alias of that property beneath it: that would
-				// be the hidden-label error, and receiving the alias under another label would be this shape again. The
-				// remedy renames the alias and receives, or aliases, the property itself.
-				let keepsUnavailablePropertysLabel = alias.property.label == alias.unavailableProperty.label
-				let renameAlias = "Give \(declaringType)'s alias a label other than \(aliasLabel) and "
-				let makeRequired = canBeRequired ? ", or make the alias required" : ""
-				switch read.kind {
-				case let .receive(property, readerType):
-					let reader = "`\(readerType.asSource)`"
-					let remedy = "`@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true) let \(alias.unavailableProperty.asUnwrappedProperty.asOptionalProperty.asSource)`"
-					return "\(reader) receives `\(property.asSource)` beneath the `onlyIfAvailable` alias \(aliasLabel) that \(declaringType) declares, which is not created \(whereNotCreated); built inline, \(reader) would then read whatever property named \(aliasLabel) is declared above \(declaringType), or `nil`, depending on what encloses it. \(keepsUnavailablePropertysLabel ? "\(renameAlias)receive" : "Receive") \(remedy) on \(reader) instead\(makeRequired)."
-				case let .alias(aliasProperty, fulfillingProperty, readerType):
-					let reader = "`\(readerType.asSource)`"
-					let newAlias = "`\(aliasProperty.label)`"
-					// The type that declares the alias is named where it is not the reader.
-					let aliasDescription = readerType == alias.declaringType ? "alias that is" : "alias that \(declaringType) declares, which is"
-					return "\(reader) aliases `\(fulfillingProperty.asSource)` as \(newAlias), and \(aliasLabel) is an `onlyIfAvailable` \(aliasDescription) not created \(whereNotCreated); built inline, \(newAlias) would then be created from whatever property named \(aliasLabel) is declared above \(declaringType), or not at all, depending on what encloses it. \(keepsUnavailablePropertysLabel ? "\(renameAlias)alias" : "Alias") `\(alias.unavailableProperty.label)` as \(newAlias) with `onlyIfAvailable: true` instead\(canBeRequired ? ", or make \(aliasLabel) required" : "")."
-				case let .sameProperty(builderType, siblingProperty):
-					let builder = "`\(builderType.asSource)`"
-					return "the `onlyIfAvailable` alias `\(alias.property.asSource)` that \(declaringType) declares is not created \(whereNotCreated), and \(builder), which builds \(declaringType), also declares `\(siblingProperty.asSource)`; built inline, \(declaringType) is then passed \(builder)'s \(aliasLabel) when \(builder) builds it first. Give the alias a label \(builder) does not declare\(canBeRequired ? ", or make the alias required" : "")."
 				}
 			}
 
@@ -2339,10 +2292,6 @@ public actor DependencyTreeGenerator {
 					} else {
 						"SafeDI cannot generate the dependency tree of \(seamName): the initializer SafeDI generates for it takes its parameters at the access this declaration of \(typeName) proves, which is in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see it, so they would count \(typeName) as `public`, and their calls would not match the initializer. Generate that module's module info with `--module-name`."
 					}
-				case let .uncreatedAliasRead(read):
-					receivers = []
-					location = read.declarationLocation
-					message = "SafeDI cannot generate the dependency tree of \(seamName): \(Self.message(for: read))"
 				case let .tierOmitsBuilder(hole, tier):
 					// Explained as a required parameter's omission is, by the shared formatter, with the builder's remedy in
 					// the place of a pass-through's.
@@ -2849,7 +2798,7 @@ public actor DependencyTreeGenerator {
 				// The roots' trees and the generated seams' trees build exactly the reachable types, the foreign seams
 				// their trees call included. First, before any seam signature is computed: a seam's parameters are keyed
 				// by property, so a seam that repeats a label is reported here rather than generating a tier that
-				// repeats it, or trapping where the uncreated-alias walk keys a seam call's parameters.
+				// repeats it.
 				try Self.validateDependencyLabelsAreDistinct(in: reachableTypeDescriptions.compactMap { typeDescriptionToFulfillingInstantiableMap[$0] })
 				try Self.validateRenamesAreSpelledAsTheMacroAccepts(in: reachableTypeDescriptions.compactMap { typeDescriptionToFulfillingInstantiableMap[$0] })
 				// A foreign seam whose module's files this run read under another mock condition is reported before
@@ -4796,7 +4745,6 @@ public actor DependencyTreeGenerator {
 	) throws -> ScopeGenerator {
 		var nearestDeclarations = NearestDeclarations()
 		var lazilyInstantiatedInstanceProperties = Set<Property>()
-		var runtimeOptionalProperties = Set<Property>()
 		for parameter in seamRoot.signature.parameters {
 			let property = parameter.property
 			// Each parameter is the nearest declaration of its label in the seam's tree. An optional one also stands for the
@@ -4808,27 +4756,12 @@ public actor DependencyTreeGenerator {
 			if let instanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding {
 				lazilyInstantiatedInstanceProperties.insert(instanceProperty)
 			}
-			// Which forms of an optional parameter may be `nil` where inline they would be unavailable, so that an
-			// `onlyIfAvailable` alias of that form is bound from the parameter as an optional value: (a) both forms of a
-			// parameter received only if available, which the seam's callers may pass `nil` for – a pass-through every
-			// receiver receives only if available, or the seam's own `onlyIfAvailable` receive – because inline such an
-			// alias is not created for a caller holding nothing; (b) only the unwrapped form of a required optional
-			// parameter, which every caller holds a value for: an alias of exactly `x: X?` is created from it wherever
-			// the tree is built, as inline creates it from the caller's `x: X?`, while a caller's `x: X?` never provides
-			// `x: X`.
-			if property.typeDescription.isOptional {
-				runtimeOptionalProperties.insert(property.asUnwrappedProperty)
-				if parameter.isOnlyIfAvailable {
-					runtimeOptionalProperties.insert(property)
-				}
-			}
 		}
 		return try rootScope.createScopeGenerator(
 			for: nil,
 			propertyStack: [],
 			nearestDeclarations: nearestDeclarations,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
-			runtimeOptionalProperties: runtimeOptionalProperties,
 			seamRoot: seamRoot,
 			erasedToConcreteExistential: false,
 			startsCodeGeneration: startsCodeGeneration,
@@ -4963,9 +4896,8 @@ public actor DependencyTreeGenerator {
 			}
 		}
 		// A property required only through an `onlyIfAvailable` alias of it (`requiredAliasFulfillingProperties`) is
-		// not required of the caller: the alias receives it only if available, and every receiver that requires the
-		// alias is rejected (`ScopeGenerator.uncreatedAliasReads`), so in an accepted seam only the alias reads the
-		// parameter.
+		// not required of the caller: the alias binds `nil` where the caller holds nothing. The caller must still build
+		// it first where it holds it, so the parameter carries `requiredThroughAlias`.
 		let requiredProperties = generator.requiredReceivedProperties
 		let treeReceivers = Self.receivers(in: generator, of: seam, instantiables: instantiables)
 		func receivers(ofLabel label: String) -> [SeamReceiver] {
@@ -5084,11 +5016,18 @@ public actor DependencyTreeGenerator {
 			// passes it on.
 			let parameterReceivers = receivers(of: forms)
 			let access = proof.access(ofParameterTyped: parameterProperty.typeDescription, mentionedFrom: .declaration(seam), admittedModules: Set([seam.moduleName] + parameterReceivers.map(\.moduleName)))
+			// A requirement through an `onlyIfAvailable` alias that reaches the seam's root – no scope in the tree declares
+			// its label – is satisfied by this parameter, the tree's nearest declaration of the label, where the parameter
+			// provides a form the alias reads; otherwise the alias is `nil`, and nothing is required.
+			let requiredThroughAlias = !isRequired && generator.requiredAliasFulfillingProperties.contains { requiredProperty in
+				requiredProperty.label == label && ScopeGenerator.provides(parameterProperty, aFormReadBy: requiredProperty)
+			}
 			passThroughs.append(SeamSignature.Parameter(
 				property: parameterProperty,
 				isPassThrough: true,
 				access: access.level,
 				isOnlyIfAvailable: !isRequired,
+				requiredThroughAlias: requiredThroughAlias,
 				receivers: parameterReceivers.map { $0.with(access: access.level).asSignatureReceiver },
 				accessCause: access.cause,
 			))
@@ -5108,7 +5047,7 @@ public actor DependencyTreeGenerator {
 		// omitted by the widest tier, which cannot pass `nil` for it: reported once, at the widest tier.
 		let seamTypeAccess = parameterAccess(seam.effectiveTypeAccess)
 		let parameters = (ownParameters + passThroughs).map { parameter in
-			SeamSignature.Parameter(property: parameter.property, isPassThrough: parameter.isPassThrough, access: parameter.access, tierAccess: min(parameter.access, seamTypeAccess), isOnlyIfAvailable: parameter.isOnlyIfAvailable, receivers: parameter.receivers, accessCause: parameter.accessCause, otherInitializerArgumentsAccess: parameter.otherInitializerArgumentsAccess)
+			SeamSignature.Parameter(property: parameter.property, isPassThrough: parameter.isPassThrough, access: parameter.access, tierAccess: min(parameter.access, seamTypeAccess), isOnlyIfAvailable: parameter.isOnlyIfAvailable, requiredThroughAlias: parameter.requiredThroughAlias, receivers: parameter.receivers, accessCause: parameter.accessCause, otherInitializerArgumentsAccess: parameter.otherInitializerArgumentsAccess)
 		}
 		let holes = Self.holes(of: seam, generator: generator, parameters: parameters, proof: proof, instantiables: instantiables)
 		let tiers = Self.tiers(of: seam, parameters: parameters)
@@ -6442,6 +6381,15 @@ public actor DependencyTreeGenerator {
 				}
 			}) {
 				receiver = RequiredReceiver(dependency: dependency, requiredOnlyIfAvailableAliases: requiredOnlyIfAvailableAliases)
+			} else if let seamCall = scope.seamCall,
+			          let dependency = scope.instantiable.dependencies.first(where: { dependency in
+			          	// A call of a seam whose tree requires a pass-through through an `onlyIfAvailable` alias requires it, at the
+			          	// seam's declaration.
+			          	dependency.property.asUnwrappedProperty == property.asUnwrappedProperty
+			          		&& seamCall.requiredThroughAliasProperties.contains(dependency.property)
+			          })
+			{
+				receiver = RequiredReceiver(dependency: dependency, requiredOnlyIfAvailableAliases: requiredOnlyIfAvailableAliases)
 			} else if let requiredAlias = declarations.onlyIfAvailableAliases.first(where: { alias in
 				// An alias bound from a property the scope declares or forwards is bound from that declaration.
 				alias.fulfillingProperty.label == property.label
@@ -7026,9 +6974,11 @@ public actor DependencyTreeGenerator {
 			}
 			// What this scope's tree requires through `onlyIfAvailable` aliases of the scopes enclosing it, through any chain
 			// of aliases, given what the children's trees require.
+			// A seam call requires what the seam's tree requires through an `onlyIfAvailable` alias of a pass-through, as
+			// `ScopeGenerator` has it.
 			let requiredAliasFulfillingProperties = declarations.requiredAliasFulfillingProperties(
 				childRequiredReceived: childRequiredReceived,
-				childRequiredAliasFulfillingProperties: childRequiredAliasFulfillingProperties,
+				childRequiredAliasFulfillingProperties: childRequiredAliasFulfillingProperties.union(scope.seamCall?.requiredThroughAliasProperties ?? []),
 			)
 
 			let id = ObjectIdentifier(scope)
@@ -9201,25 +9151,6 @@ public actor DependencyTreeGenerator {
 			}
 		}
 		return reported
-	}
-
-	/// Validates that nothing in the tree of a seam this module generates reads an `onlyIfAvailable` alias that may not
-	/// be created, which built inline reads whatever declaration of the alias's label encloses the alias where it is
-	/// not created, so its value depends on what encloses the seam. See
-	/// `ScopeGenerator.uncreatedAliasReads(ofTreeRootedAt:)`. Reported in source order, each reading declaration once
-	/// per seam.
-	private func validateNoUncreatedAliasIsRead(inTreesRootedAt roots: [RootScopeInfo]) async throws {
-		// A module that holds no seam generates none.
-		guard !seams.isEmpty else { return }
-		var errors = [DependencyTreeGeneratorError]()
-		for root in roots {
-			for read in await root.scopeGenerator.uncreatedAliasReads(ofTreeRootedAt: root.instantiable) {
-				errors.append(.seam(.init(seam: root.instantiable, kind: .uncreatedAliasRead(read))))
-			}
-		}
-		if let error = DependencyTreeGeneratorError.reportingAll(of: errors) {
-			throw error
-		}
 	}
 
 	/// Validates that no `@Sendable` builder function in the trees rooted at `roots` would capture an
