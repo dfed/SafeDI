@@ -88,6 +88,9 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 		Required parameters of `Feature.mock()` that no @Instantiable declaration removes:
 		  (none)
+
+		Defaulted parameters of `Feature.mock()` that no @Instantiable declaration removes:
+		  (none)
 		""")
 	}
 
@@ -204,6 +207,9 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 		Required parameters of `Feature.mock()` that no @Instantiable declaration removes:
 		  (none)
+
+		Defaulted parameters of `Feature.mock()` that no @Instantiable declaration removes:
+		  (none)
 		""")
 	}
 
@@ -280,6 +286,9 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 		Required parameters of `Feature.mock()` that no @Instantiable declaration removes:
 		  (none)
+
+		Defaulted parameters of `Feature.mock()` that no @Instantiable declaration removes:
+		  (none)
 		""")
 	}
 
@@ -339,6 +348,9 @@ struct SafeDIToolQueryTests: ~Copyable {
 		  (none)
 
 		Required parameters of `Feature.mock()` that no @Instantiable declaration removes:
+		  (none)
+
+		Defaulted parameters of `Feature.mock()` that no @Instantiable declaration removes:
 		  (none)
 		""")
 	}
@@ -421,8 +433,8 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 		// `Widget` and `Gauge` have no `@Instantiable` declaration, so the project provides them, as a root would reject them.
 		#expect(output.result.unfulfilledDependencies == [
-			TypeReport.UnfulfilledDependency(label: "widget", type: "Widget", reasonKind: .noInstantiableFulfillsType, reason: "No @Instantiable declaration fulfills `Widget`."),
-			TypeReport.UnfulfilledDependency(label: "gauge", type: "Instantiator<Gauge>", reasonKind: .noInstantiableFulfillsType, reason: "No @Instantiable declaration fulfills `Gauge`."),
+			TypeReport.UnfulfilledDependency(label: "widget", type: "Widget", defaultExpression: nil, reasonKind: .noInstantiableFulfillsType, reason: "No @Instantiable declaration fulfills `Widget`."),
+			TypeReport.UnfulfilledDependency(label: "gauge", type: "Instantiator<Gauge>", defaultExpression: nil, reasonKind: .noInstantiableFulfillsType, reason: "No @Instantiable declaration fulfills `Gauge`."),
 		])
 	}
 
@@ -460,7 +472,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 		// `Panel` receives the `Widget` that `Feature` instantiates, so the project provides one `Widget`.
 		#expect(output.result.unfulfilledDependencies == [
-			TypeReport.UnfulfilledDependency(label: "widget", type: "Widget", reasonKind: .noInstantiableFulfillsType, reason: "No @Instantiable declaration fulfills `Widget`."),
+			TypeReport.UnfulfilledDependency(label: "widget", type: "Widget", defaultExpression: nil, reasonKind: .noInstantiableFulfillsType, reason: "No @Instantiable declaration fulfills `Widget`."),
 		])
 	}
 
@@ -517,6 +529,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 			TypeReport.UnfulfilledDependency(
 				label: "editor",
 				type: "AnyEditor",
+				defaultExpression: nil,
 				reasonKind: .typeHasForwardedProperties,
 				reason: "`DefaultEditor` declares @Forwarded properties (`draft: Draft`), so only an `Instantiator` handed their values can build it.",
 			),
@@ -551,6 +564,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 			TypeReport.UnfulfilledDependency(
 				label: "userService",
 				type: "AnyUserService",
+				defaultExpression: nil,
 				reasonKind: .noInstantiableFulfillsType,
 				reason: "No @Instantiable declaration fulfills `MissingUserService`.",
 			),
@@ -602,6 +616,9 @@ struct SafeDIToolQueryTests: ~Copyable {
 		Required parameters of `Feature.mock()` that no @Instantiable declaration removes:
 		  analytics: Analytics
 		    No @Instantiable declaration fulfills `Analytics`.
+
+		Defaulted parameters of `Feature.mock()` that no @Instantiable declaration removes:
+		  (none)
 		""")
 	}
 
@@ -664,6 +681,9 @@ struct SafeDIToolQueryTests: ~Copyable {
 		Required parameters of `Feature.mock()` that no @Instantiable declaration removes:
 		  editor: Editor
 		    `Editor` declares @Forwarded properties (`draft: Draft`, `revision: Int`), so only an `Instantiator` handed their values can build it.
+
+		Defaulted parameters of `Feature.mock()` that no @Instantiable declaration removes:
+		  (none)
 		""")
 	}
 
@@ -703,6 +723,7 @@ struct SafeDIToolQueryTests: ~Copyable {
 			TypeReport.UnfulfilledDependency(
 				label: "editor",
 				type: "Editor",
+				defaultExpression: nil,
 				reasonKind: .typeHasForwardedProperties,
 				reason: "`Editor` declares @Forwarded properties (`draft: Draft`), so only an `Instantiator` handed their values can build it.",
 			),
@@ -766,6 +787,9 @@ struct SafeDIToolQueryTests: ~Copyable {
 		Required parameters of `Screen.mock()` that no @Instantiable declaration removes:
 		  session: Session
 		    No @Instantiable declaration fulfills `Session`.
+
+		Defaulted parameters of `Screen.mock()` that no @Instantiable declaration removes:
+		  (none)
 		""")
 	}
 
@@ -829,6 +853,9 @@ struct SafeDIToolQueryTests: ~Copyable {
 		  (none)
 
 		Required parameters of `Feature.mock()` that no @Instantiable declaration removes:
+		  (none)
+
+		Defaulted parameters of `Feature.mock()` that no @Instantiable declaration removes:
 		  (none)
 		""")
 	}
@@ -946,6 +973,9 @@ struct SafeDIToolQueryTests: ~Copyable {
 		Required parameters of `Feature.mock()` that no @Instantiable declaration removes:
 		  userService: AnyUserService
 		    `AnyUserService` is erased from more than one concrete type (`DefaultUserService`, `OfflineUserService`), so nothing says which one to build.
+
+		Defaulted parameters of `Feature.mock()` that no @Instantiable declaration removes:
+		  (none)
 		""")
 	}
 
@@ -1037,6 +1067,9 @@ struct SafeDIToolQueryTests: ~Copyable {
 		  (none)
 
 		Required parameters of `Feature.mock()` that no @Instantiable declaration removes:
+		  (none)
+
+		Defaulted parameters of `Feature.mock()` that no @Instantiable declaration removes:
 		  (none)
 		""")
 	}
@@ -1175,6 +1208,9 @@ struct SafeDIToolQueryTests: ~Copyable {
 		  (none)
 
 		Required parameters of `Feature.preview()` that no @Instantiable declaration removes:
+		  (none)
+
+		Defaulted parameters of `Feature.preview()` that no @Instantiable declaration removes:
 		  (none)
 		""")
 	}
@@ -2023,6 +2059,9 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 		Required parameters of `Feature.mock()` that no @Instantiable declaration removes:
 		  (none)
+
+		Defaulted parameters of `Feature.mock()` that no @Instantiable declaration removes:
+		  (none)
 		""")
 		#expect(output.result.mock?.kind == .wouldBeGenerated)
 		#expect(output.result.mock?.generatedIn == nil)
@@ -2251,6 +2290,9 @@ struct SafeDIToolQueryTests: ~Copyable {
 		Required parameters of `Service.mock()` that no @Instantiable declaration removes:
 		  (none)
 
+		Defaulted parameters of `Service.mock()` that no @Instantiable declaration removes:
+		  (none)
+
 		`Feature` is built from declarations in 3 modules:
 
 		FeatureModule
@@ -2278,6 +2320,9 @@ struct SafeDIToolQueryTests: ~Copyable {
 		  (none)
 
 		Required parameters of `Feature.mock()` that no @Instantiable declaration removes:
+		  (none)
+
+		Defaulted parameters of `Feature.mock()` that no @Instantiable declaration removes:
 		  (none)
 		""")
 	}
@@ -2458,6 +2503,9 @@ struct SafeDIToolQueryTests: ~Copyable {
 		  (none)
 
 		Required parameters of `Feature.mock()` that no @Instantiable declaration removes:
+		  (none)
+
+		Defaulted parameters of `Feature.mock()` that no @Instantiable declaration removes:
 		  (none)
 		""")
 		#expect(output.result.modules == [

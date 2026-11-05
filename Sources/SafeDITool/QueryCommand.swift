@@ -789,6 +789,8 @@ struct TypeReport: Encodable, Equatable {
 		let label: String
 		/// The value's type as `mock()` spells it.
 		let type: String
+		/// The parameter's default, a call of the hand-written mock of its type, or `nil` when the caller passes it.
+		let defaultExpression: String?
 		let reasonKind: ReasonKind
 		/// The reason as the text report states it.
 		let reason: String
@@ -845,7 +847,12 @@ struct TypeReport: Encodable, Equatable {
 			}))
 			lines.append("")
 			lines.append("Required parameters of \(mockName) that no @\(InstantiableVisitor.macroName) declaration removes:")
-			lines.append(contentsOf: Self.formattedList(mock.unfulfilledDependencies.flatMap { ["\($0.label): \($0.type)", "  \($0.reason)"] }))
+			lines.append(contentsOf: Self.formattedList(mock.unfulfilledDependencies.filter { $0.defaultExpression == nil }.flatMap { ["\($0.label): \($0.type)", "  \($0.reason)"] }))
+			lines.append("")
+			lines.append("Defaulted parameters of \(mockName) that no @\(InstantiableVisitor.macroName) declaration removes:")
+			lines.append(contentsOf: Self.formattedList(mock.unfulfilledDependencies.compactMap { dependency in
+				dependency.defaultExpression.map { ["\(dependency.label): \(dependency.type) = \($0)", "  \(dependency.reason)"] }
+			}.flatMap(\.self)))
 		case let .none(noMock):
 			lines.append(noMock.reason)
 		}
@@ -925,6 +932,7 @@ extension TypeReport.UnfulfilledDependency {
 		self.init(
 			label: requiredParameter.label,
 			type: requiredParameter.typeSource,
+			defaultExpression: requiredParameter.defaultExpression,
 			reasonKind: requiredParameter.reason.kind,
 			reason: requiredParameter.reason.description,
 		)

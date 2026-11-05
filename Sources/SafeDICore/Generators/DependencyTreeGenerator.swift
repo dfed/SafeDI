@@ -259,12 +259,7 @@ public actor DependencyTreeGenerator {
 		var receivedPropertiesCache = ReceivedPropertiesCache()
 		let mockScopes = try await mockScopes(additionalMocksToGenerate: additionalMocksToGenerate, receivedPropertiesCache: &receivedPropertiesCache)
 		let typeDescriptionToScopeMap = mockScopes.typeDescriptionToScopeMap
-		let forwardedParameterMockDefaults = mockScopes.forwardedParameterMockDefaults
-		// A forwarded parameter's default constructs its type with the type's hand-written mock, as the access check
-		// of each mock root reads that type.
-		let forwardedParameterMockDefaultComments = forwardedParameterMockDefaults.keys.reduce(into: [TypeDescription: String]()) { result, typeDescription in
-			result[typeDescription] = typeDescriptionToFulfillingInstantiableMap[typeDescription].flatMap { constructionComments(for: $0, forMock: true).mockMethod }
-		}
+		let flatParameterMockDefaults = mockScopes.flatParameterMockDefaults
 
 		// The public mocks of the module share one context, built only when the module declares one.
 		let publicMockContext = typeDescriptionToFulfillingInstantiableMap.values.contains(where: { $0.generateMock == .public }) ? publicMockContext : nil
@@ -314,7 +309,7 @@ public actor DependencyTreeGenerator {
 					promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 				)
 				if instantiable.generateMock == .public, let publicMockContext {
-					var findings = await mockRoot.publicMockFindings(of: instantiable, context: publicMockContext, forwardedTypesWithMockDefaults: Set(mockScopes.forwardedParameterMockDefaults.keys))
+					var findings = await mockRoot.publicMockFindings(of: instantiable, context: publicMockContext, mockDefaults: flatParameterMockDefaults)
 					if findings.isEmpty, let finding = try await callersViewFinding(of: instantiable) {
 						findings.append(finding)
 					}
@@ -418,8 +413,7 @@ public actor DependencyTreeGenerator {
 					async let code = mockRoot.generateCode(
 						codeGeneration: .mock(ScopeGenerator.MockContext(
 							mockConditionalCompilation: mockConditionalCompilation,
-							forwardedParameterMockDefaults: forwardedParameterMockDefaults,
-							forwardedParameterMockDefaultComments: forwardedParameterMockDefaultComments,
+							flatParameterMockDefaults: flatParameterMockDefaults,
 							cycleEdges: cycleEdges,
 							handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 							sendableConfigurationTypeNames: sendableConfigurationTypeNames,
@@ -632,12 +626,12 @@ public actor DependencyTreeGenerator {
 		// Whether a public mock can be generated is decided for one root and needs no emitting module, as
 		// `generateMockCode` decides it, so the query reports it too.
 		if generatesMock, instantiable.generateMock == .public {
-			let findings = await mockRoot.publicMockFindings(of: instantiable, context: publicMockContext, forwardedTypesWithMockDefaults: Set(mockScopes.forwardedParameterMockDefaults.keys))
+			let findings = await mockRoot.publicMockFindings(of: instantiable, context: publicMockContext, mockDefaults: mockScopes.flatParameterMockDefaults)
 			guard findings.isEmpty else {
 				throw DependencyTreeGeneratorError.publicMockCannotBeGenerated(findings)
 			}
 		}
-		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable)
+		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable, mockDefaults: mockScopes.flatParameterMockDefaults)
 
 		// The declarations the mock calls, each once, in the order the mock reaches them.
 		var declarations = [TypeRequirements.Declaration]()
@@ -697,34 +691,26 @@ public actor DependencyTreeGenerator {
 			))
 		}
 
-		// Forwarded parameters default as `generateMockRootCode` defaults them: from the construction
-		// initializer, else from a hand-written mock of the forwarded type that takes no arguments.
-		var constructionDefaults = [String: String]()
-		for argument in parameters.rootConstructionInitializer?.arguments ?? [] {
-			if let defaultExpression = argument.defaultValueExpression {
-				constructionDefaults[argument.innerLabel] = defaultExpression
-			}
+		// Flat parameters default as `generateMockRootCode` defaults them (`MockRootParameters`), and the mock calls the
+		// hand-written mock each defaults to.
+		func recordHandWrittenMock(of mockDefault: ScopeGenerator.FlatParameterMockDefault) {
+			record(TypeRequirements.Declaration(
+				typeDescription: mockDefault.concreteType,
+				sourceFilePath: mockDefault.mockFilePath,
+				kind: .handWrittenMock(methodName: mockDefault.methodName),
+			))
 		}
 		var forwardedParameters = [TypeRequirements.ForwardedParameter]()
 		for dependency in parameters.forwardedDependencies {
 			let property = dependency.property
-			let defaultExpression: String?
-			if let constructionDefault = constructionDefaults[property.label] {
-				defaultExpression = constructionDefault
-			} else if let mockMethodName = mockScopes.forwardedParameterMockDefaults[property.typeDescription] {
-				defaultExpression = "\(property.typeDescription.asSource).\(mockMethodName)()"
-				record(TypeRequirements.Declaration(
-					typeDescription: property.typeDescription,
-					sourceFilePath: handWrittenMockFilePath(of: property.typeDescription),
-					kind: .handWrittenMock(methodName: mockMethodName),
-				))
-			} else {
-				defaultExpression = nil
+			let forwardedParameterDefault = parameters.forwardedParameterDefaults[property.label]
+			if case let .handWrittenMock(mockDefault) = forwardedParameterDefault {
+				recordHandWrittenMock(of: mockDefault)
 			}
 			forwardedParameters.append(TypeRequirements.ForwardedParameter(
 				label: property.label,
 				typeDescription: property.typeDescription,
-				defaultExpression: defaultExpression,
+				defaultExpression: forwardedParameterDefault?.expression,
 			))
 		}
 
@@ -757,9 +743,14 @@ public actor DependencyTreeGenerator {
 		}
 		var requiredParameters = [TypeRequirements.RequiredParameter]()
 		for property in parameters.flatReceivedProperties {
+			let mockDefault = parameters.flatReceivedParameterMockDefaults[property]
+			if let mockDefault {
+				recordHandWrittenMock(of: mockDefault)
+			}
 			requiredParameters.append(TypeRequirements.RequiredParameter(
 				label: property.label,
 				typeSource: property.typeDescription.asFunctionParameter.asSource,
+				defaultExpression: mockDefault?.expression,
 				reason: reason(forReceived: property),
 			))
 		}
@@ -767,6 +758,7 @@ public actor DependencyTreeGenerator {
 			requiredParameters.append(TypeRequirements.RequiredParameter(
 				label: uncoveredParameter.label,
 				typeSource: uncoveredParameter.typeSource,
+				defaultExpression: nil,
 				reason: .noInstantiableFulfillsType(uncoveredParameter.instantiatedType),
 			))
 		}
@@ -778,15 +770,6 @@ public actor DependencyTreeGenerator {
 			forwardedParameters: forwardedParameters,
 			requiredParameters: requiredParameters,
 		)
-	}
-
-	/// The file that declares the hand-written mock of `concreteType`, which every map entry for the type carries.
-	private func handWrittenMockFilePath(of concreteType: TypeDescription) -> String? {
-		typeDescriptionToFulfillingInstantiableMap.values
-			.lazy
-			.filter { $0.concreteInstantiable == concreteType }
-			.compactMap(\.mockDeclarationLocation?.filePath)
-			.min()
 	}
 
 	/// What every mock root is built from: the scope of each type a mock can build, and what completes a mock
@@ -812,8 +795,8 @@ public actor DependencyTreeGenerator {
 		/// `@Instantiated` property's type has no declaration (`createMockTypeDescriptionToScopeMapping`). `nil` when the
 		/// module declares no public mock.
 		var publicMockTypeDescriptionToScopeMap: [TypeDescription: Scope]?
-		/// The name of the hand-written mock that can be called with no arguments, by concrete type.
-		let forwardedParameterMockDefaults: [TypeDescription: String]
+		/// The hand-written mock a flat parameter of `mock()` of each type defaults to (`flatParameterMockDefaults(in:)`).
+		let flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault]
 		/// Where each concrete type's hand-written methods named `mock` are declared.
 		let handWrittenMockLocationsByConcreteType: [TypeDescription: Set<Dependency.DeclarationLocation?>]
 	}
@@ -913,22 +896,6 @@ public actor DependencyTreeGenerator {
 			cyclesOnly: true,
 		)
 
-		// Compute types with hand-written mocks that can be called with zero arguments,
-		// suitable for use as default values in forwarded mock parameters. This includes
-		// standalone mockOnly types AND merged entries where a mockOnly declaration's mock
-		// was copied onto a production entry (which may also have generateMock). Types
-		// whose mock method has required parameters are excluded. The mock return type
-		// must be compatible with the concrete type — extension mocks returning a
-		// protocol type are not valid defaults for concrete-type forwarded parameters.
-		let forwardedParameterMockDefaults: [TypeDescription: String] = typeDescriptionToFulfillingInstantiableMap.values
-			.reduce(into: [TypeDescription: String]()) { result, instantiable in
-				guard let mockInitializer = instantiable.mockInitializer,
-				      mockInitializer.arguments.allSatisfy(\.hasDefaultValue),
-				      instantiable.mockReturnTypeIsCompatible(withPropertyType: instantiable.concreteInstantiable)
-				else { return }
-				result[instantiable.concreteInstantiable] = instantiable.customMockName ?? InstantiableVisitor.mockMethodName
-			}
-
 		// Locate the hand-written methods named `mock` (no `customMockName`) for
 		// each concrete type. Several map entries can carry the same method
 		// (merged and unmerged mockOnly slots), so locations are deduplicated.
@@ -947,9 +914,48 @@ public actor DependencyTreeGenerator {
 			publicMockTypeDescriptionToScopeMap: typeDescriptionToFulfillingInstantiableMap.values.contains(where: { $0.generateMock == .public })
 				? createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCalls, buildsHoles: true)
 				: nil,
-			forwardedParameterMockDefaults: forwardedParameterMockDefaults,
+			flatParameterMockDefaults: flatParameterMockDefaults(in: typeDescriptionToScopeMap),
 			handWrittenMockLocationsByConcreteType: handWrittenMockLocationsByConcreteType,
 		)
+	}
+
+	/// The hand-written mock a flat parameter of `mock()` – a `@Forwarded` property of the mocked type, or a received
+	/// dependency the mock cannot build – defaults to, by the parameter's type: the one a mock tree builds a property of
+	/// the type with, the scope map's hand-written mock for the type (the type's own, or a `mockOnly` declaration's that
+	/// holds the slot), when it takes no required argument and this module can call it, which is the check of every
+	/// construction of a mock (`inaccessibleConstructions`), asked rather than reported. Another module's public mock that
+	/// a tree calls in place of building the type is not hand-written, so no parameter defaults to it.
+	/// - Parameter typeDescriptionToScopeMap: The mock scope map.
+	private func flatParameterMockDefaults(in typeDescriptionToScopeMap: [TypeDescription: Scope]) -> [TypeDescription: ScopeGenerator.FlatParameterMockDefault] {
+		var flatParameterMockDefaults = [TypeDescription: ScopeGenerator.FlatParameterMockDefault]()
+		// Each type's default is decided by its own scope, so the order of the map decides nothing.
+		for (type, scope) in typeDescriptionToScopeMap {
+			let instantiable = scope.instantiable
+			guard scope.publicMockCall == nil,
+			      let mockInitializer = instantiable.mockInitializer,
+			      mockInitializer.arguments.allSatisfy(\.hasDefaultValue),
+			      instantiable.mockReturnTypeIsCompatible(withPropertyType: type),
+			      canConstructWithMockMethod(instantiable)
+			else { continue }
+			flatParameterMockDefaults[type] = ScopeGenerator.FlatParameterMockDefault(
+				concreteType: instantiable.concreteInstantiable,
+				methodName: instantiable.customMockName ?? InstantiableVisitor.mockMethodName,
+				comment: scope.constructionComments.mockMethod,
+				mockFilePath: instantiable.mockDeclarationLocation?.filePath,
+			)
+		}
+		return flatParameterMockDefaults
+	}
+
+	/// Whether the module this generator emits code for can construct `instantiable` with its hand-written mock method,
+	/// as `inaccessibleConstructions` judges every construction: always, when no construction needs checking.
+	private func canConstructWithMockMethod(_ instantiable: Instantiable) -> Bool {
+		guard let emittingModule = emittingModuleToCheck else { return true }
+		return Self.inaccessibleConstructions(
+			[Construction(instantiable: instantiable, usesMockMethod: true, referenceLocation: nil, isSeamLeaf: false, extendedTypes: extendedTypeDeclarations)],
+			from: emittingModule,
+			extendedTypes: extendedTypeDeclarations,
+		).isEmpty
 	}
 
 	/// The instantiable a mock root is built from: the entry of `scope`'s concrete type, declaring only the
@@ -1045,19 +1051,11 @@ public actor DependencyTreeGenerator {
 			scope: scope,
 			typeDescriptionToScopeMap: mockScopes.typeDescriptionToScopeMap,
 			erasedToConcreteTypeMap: mockScopes.erasedToConcreteTypeMap,
-			accessCheck: emittingModule.map { MockRootAccessCheck(emittingModule: $0, forwardedParameterMockDefaults: mockScopes.forwardedParameterMockDefaults) },
+			emittingModule: emittingModule,
 			receivedPropertiesCache: &receivedPropertiesCache,
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 		)
-	}
-
-	/// What a mock root's constructions are checked against: the module its code compiles in, and the hand-written
-	/// mocks `mock()` calls for the default values of its forwarded parameters.
-	private struct MockRootAccessCheck {
-		let emittingModule: EmittingModule
-		/// The name of the hand-written mock that can be called with no arguments, by concrete type.
-		let forwardedParameterMockDefaults: [TypeDescription: String]
 	}
 
 	/// Rejects a type that generated mocks build both with its hand-written mock and without it, when the two
@@ -3613,14 +3611,13 @@ public actor DependencyTreeGenerator {
 			promotedScopesValidatedForHiddenReceives: &promotedScopesValidatedForHiddenReceives,
 		)
 		let context = publicMockContext
-		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable)
+		let parameters = await mockRoot.mockRootParameters(instantiable: instantiable, mockDefaults: mockScopes.flatParameterMockDefaults)
 		return OwnPublicMockPlan(
 			instantiable: instantiable,
 			plan: ScopeGenerator.publicMockPlan(
 				of: instantiable,
 				parameters: parameters,
 				parameterNames: ScopeGenerator.mockRootParameterNames(of: parameters),
-				forwardedParameterMockDefaults: mockScopes.forwardedParameterMockDefaults,
 				context: context,
 			),
 			receiversByLabel: ScopeGenerator.receivers(in: parameters.parameterTree, mockedType: instantiable),
@@ -5358,13 +5355,14 @@ public actor DependencyTreeGenerator {
 	/// - Parameter promotedScopesValidatedForHiddenReceives: The scopes of `typeDescriptionToScopeMap` whose trees are
 	///   already known to hide no received dependency, shared across mock roots: a scope's tree is validated the same
 	///   way whichever mock root promotes it.
-	/// - Parameter accessCheck: What the mock's constructions are checked against, or `nil` to check none.
+	/// - Parameter emittingModule: The module the mock's code compiles in, whose access to each type the mock constructs
+	///   is checked, or `nil` to check none.
 	private func createMockRootScopeGenerator(
 		for instantiable: Instantiable,
 		scope: Scope,
 		typeDescriptionToScopeMap: [TypeDescription: Scope],
 		erasedToConcreteTypeMap: [TypeDescription: TypeDescription],
-		accessCheck: MockRootAccessCheck?,
+		emittingModule: EmittingModule?,
 		receivedPropertiesCache cache: inout ReceivedPropertiesCache,
 		childrenRequiringEachOtherValidation: inout ChildrenRequiringEachOtherValidation,
 		promotedScopesValidatedForHiddenReceives: inout Set<ObjectIdentifier>,
@@ -5457,16 +5455,16 @@ public actor DependencyTreeGenerator {
 			// cannot build is each called mock's to build.
 			for property in builtWhenNilByPublicMockCalls.sorted() where !allRequired.contains(property) {
 				guard !isForwarded(property), let promotedScope = scopeToPromote(for: property)?.scope else { continue }
-				if let accessCheck {
+				if let emittingModule {
 					let constructions = Self.constructions(
 						inTreeRootedAt: promotedScope,
 						rootIsConstructedWithMockMethod: promotedScope.instantiable.mockReturnTypeIsCompatible(withPropertyType: property.typeDescription.asInstantiatedType),
 						rootReferenceLocation: nil,
 						isMock: true,
-						emittingModule: accessCheck.emittingModule,
+						emittingModule: emittingModule,
 						extendedTypes: extendedTypeDeclarations,
 					)
-					guard Self.inaccessibleConstructions(constructions, from: accessCheck.emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty else { continue }
+					guard Self.inaccessibleConstructions(constructions, from: emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty else { continue }
 				}
 				allReceived.insert(property)
 				allRequired.insert(property)
@@ -5705,15 +5703,16 @@ public actor DependencyTreeGenerator {
 			promotedScopesValidatedForHiddenReceives.formUnion(promotedScopeIdentifiersToValidate)
 		}
 
-		if let accessCheck {
-			let emittingModule = accessCheck.emittingModule
+		// `mock()` defaults a flat parameter only to a hand-written mock this module can call (`flatParameterMockDefaults(in:)`),
+		// so the defaults construct nothing that is checked here.
+		if let emittingModule {
 			// The mock of a type declared in this module refers to its tree from the type's declaration; the mock of a
 			// type this module lists in `additionalMocksToGenerate`, from the `#SafeDIConfiguration` that lists it.
 			let rootReferenceLocation = instantiable.sourceFilePath.map(emittingModule.isOwnFile) ?? false
 				? instantiable.declarationLocation
 				: emittingModule.additionalMocksToGenerateLocation
 			// A mock constructs its root with the root's hand-written mock whenever it has one.
-			var constructions = Self.constructions(
+			let constructions = Self.constructions(
 				inTreeRootedAt: mockRootScope,
 				rootIsConstructedWithMockMethod: instantiable.mockInitializer != nil,
 				rootReferenceLocation: rootReferenceLocation,
@@ -5721,20 +5720,6 @@ public actor DependencyTreeGenerator {
 				emittingModule: emittingModule,
 				extendedTypes: extendedTypeDeclarations,
 			)
-			// `mock()` defaults a forwarded parameter that the root's construction gives no default to the type's
-			// hand-written mock that takes no arguments, when it has one, as `ScopeGenerator.generateMockRootCode` does.
-			let constructionDefaultLabels = Set(((instantiable.mockInitializer ?? instantiable.initializer)?.arguments ?? []).filter(\.hasDefaultValue).map(\.innerLabel))
-			constructions += instantiable.dependencies
-				.filter { dependency in
-					dependency.isForwarded
-						&& !constructionDefaultLabels.contains(dependency.property.label)
-						&& accessCheck.forwardedParameterMockDefaults[dependency.property.typeDescription] != nil
-				}
-				.compactMap { dependency in
-					typeDescriptionToFulfillingInstantiableMap[dependency.property.typeDescription].map { forwardedInstantiable in
-						Construction(instantiable: forwardedInstantiable, usesMockMethod: true, referenceLocation: dependency.declarationLocation, isSeamLeaf: false, extendedTypes: extendedTypeDeclarations)
-					}
-				}
 			let inaccessibleConstructions = Self.inaccessibleConstructions(
 				constructions,
 				from: emittingModule,

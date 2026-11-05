@@ -2750,39 +2750,47 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsErrorAtMockMethod_whenMockDefaultsForwardedParameterToInternalHandWrittenMockOfAnotherModule() async {
-		// `mock()` defaults `user` to `User.mock()`, which `App` cannot call.
-		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			"""
-			\(fixtures["Feature"]!["User.swift"]):4:5: error: `User.mock()` is `internal`, so the mock of `Profile`, generated in module `App`, another module of the same package, cannot call it in the code SafeDI generates. Make `User.mock()` `package` to fix.
-			\(fixtures["Feature"]!["User.swift"]):4:5-4:5: fixit: package\(" ")
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					Self.feature(inPackage: "Shop", declaring: """
-					@Instantiable
-					public final class User: Instantiable {
-					    public init() {}
-					    static func mock() -> User { User() }
-					}
-					"""),
-					Self.app(inPackage: "Shop", declaring: """
-					import Feature
+	mutating func generate_takesForwardedParameterWithoutDefault_whenItsHandWrittenMockIsInternalToAnotherModule() async throws {
+		// `App` cannot call `User.mock()`, so `mock()` does not default `user` to it, and nothing is reported.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.feature(inPackage: "Shop", declaring: """
+				@Instantiable
+				public final class User: Instantiable {
+				    public init() {}
+				    static func mock() -> User { User() }
+				}
+				"""),
+				Self.app(inPackage: "Shop", declaring: """
+				import Feature
 
-					@Instantiable(generateMock: true)
-					final class Profile: Instantiable {
-					    init(user: User) {
-					        self.user = user
-					    }
-					    @Forwarded let user: User
-					}
-					"""),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
+				@Instantiable(generateMock: true)
+				final class Profile: Instantiable {
+				    init(user: User) {
+				        self.user = user
+				    }
+				    @Forwarded let user: User
+				}
+				"""),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(output.modules["App"]).generatedFiles == [
+			"App.swift": generatedFileHeader + Self.importBlock("Feature") + "\n\n" + """
+			#if DEBUG
+			extension Profile {
+			    static func mock(
+			        user: User
+			    ) -> Profile {
+			        return Profile(user: user)
+			    }
+			}
+			#endif
+			""",
+		])
+		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
