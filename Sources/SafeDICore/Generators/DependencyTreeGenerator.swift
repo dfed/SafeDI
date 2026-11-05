@@ -2497,6 +2497,34 @@ public actor DependencyTreeGenerator {
 			/// The `@Received(onlyIfAvailable: true)` alias that declares `property` where `instantiable` receives it,
 			/// when that alias is not created because its fulfilling property is unavailable. `nil` otherwise.
 			let uncreatedAlias: UncreatedAlias?
+			/// Whether an `@Instantiated` declaration of `property` could fulfill it, which decides whether the hint
+			/// suggests one.
+			let instantiatedDeclaration: InstantiatedDeclaration
+
+			/// Whether an `@Instantiated` declaration of a received property's non-optional form could fulfill it. The
+			/// macro rejects an optional `@Instantiated` property, and a declaration of the non-optional form provides
+			/// a receive of the optional one, so the hint always suggests the non-optional form.
+			enum InstantiatedDeclaration: Hashable {
+				/// It could, as far as SafeDI checks: the non-optional form is not a constant, or a declaration without
+				/// `@Forwarded` properties fulfills its type.
+				case possible
+				/// The non-optional form is a constant of a type whose declaration has `@Forwarded` properties, which only
+				/// an `Instantiator` can build.
+				case typeHasForwardedProperties
+				/// The non-optional form is a constant of a type no `@Instantiable` declaration fulfills.
+				case typeIsNotInstantiable
+
+				/// Whether an `@Instantiated` declaration of `property`'s non-optional form could fulfill it, among the
+				/// declarations of `fulfillingInstantiables`.
+				static func of(_ property: Property, among fulfillingInstantiables: [TypeDescription: Instantiable]) -> Self {
+					let suggestedProperty = property.asUnwrappedProperty
+					guard suggestedProperty.propertyType.isConstant else { return .possible }
+					guard let fulfillingInstantiable = fulfillingInstantiables[suggestedProperty.typeDescription.asInstantiatedType] else {
+						return .typeIsNotInstantiable
+					}
+					return fulfillingInstantiable.dependencies.contains { $0.source == .forwarded } ? .typeHasForwardedProperties : .possible
+				}
+			}
 
 			/// An `@Received(onlyIfAvailable: true)` alias that is not created because its fulfilling property is unavailable.
 			struct UncreatedAlias: Hashable {
@@ -2538,11 +2566,23 @@ public actor DependencyTreeGenerator {
 						[]
 					}
 				} else if suggestedAlternatives.isEmpty {
-					hint = if property.propertyType.isErasedInstantiator {
+					// The macro rejects an optional `@Instantiated` property, and a declaration of the non-optional form
+					// provides a receive of the optional one (`ScopeGenerator.provides`).
+					let suggestedProperty = property.asUnwrappedProperty
+					let typeName = suggestedProperty.typeDescription.asSource
+					let forwardingRemedy = "Declare `@\(Dependency.Source.forwardedRawValue) let \(suggestedProperty.asSource)` on a type below `\(root.asSource)` in the chain, and pass the value to the `Instantiator` that builds that type"
+					hint = if suggestedProperty.propertyType.isErasedInstantiator {
 						// The `@Instantiated` macro requires an erased instantiator to name the type it builds.
-						"Declare `@\(Dependency.Source.instantiatedRawValue)(fulfilledByType:) let \(property.asSource)`, naming the type it builds, on `\(root.asSource)` or on another type in the chain to fix."
+						"Declare `@\(Dependency.Source.instantiatedRawValue)(fulfilledByType:) let \(suggestedProperty.asSource)`, naming the type it builds, on `\(root.asSource)` or on another type in the chain to fix."
 					} else {
-						"Declare `@\(Dependency.Source.instantiatedRawValue) let \(property.asSource)` on `\(root.asSource)` or on another type in the chain to fix."
+						switch instantiatedDeclaration {
+						case .possible:
+							"Declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain to fix."
+						case .typeHasForwardedProperties:
+							"`\(typeName)` has @\(Dependency.Source.forwardedRawValue) properties, so SafeDI builds it only through an `Instantiator`, never as an @\(Dependency.Source.instantiatedRawValue) constant. \(forwardingRemedy), to fix."
+						case .typeIsNotInstantiable:
+							"No @\(InstantiableVisitor.macroName) declaration fulfills `\(typeName)`, so SafeDI cannot instantiate it. \(forwardingRemedy); or decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName) and declare `@\(Dependency.Source.instantiatedRawValue) let \(suggestedProperty.asSource)` on `\(root.asSource)` or on another type in the chain, to fix."
+						}
 					}
 					fixIts = []
 				} else if suggestedAlternatives.count == 1 {
@@ -9232,6 +9272,8 @@ public actor DependencyTreeGenerator {
 								declaringType: alias.declaringType,
 								fulfillingProperty: fulfillingProperty,
 							),
+							// The hint names the uncreated alias instead.
+							instantiatedDeclaration: .possible,
 						))
 					}
 				} else if alias.onlyIfAvailable,
@@ -9317,6 +9359,7 @@ public actor DependencyTreeGenerator {
 								|| receivedProperty.label == $0.label
 						}.sorted(),
 						uncreatedAlias: nil,
+						instantiatedDeclaration: .of(receivedProperty, among: typeDescriptionToFulfillingInstantiableMap),
 					))
 				}
 			}
