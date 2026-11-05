@@ -972,9 +972,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A seam's generated initializer declares its parameters outside every builder function, so a `@Sendable`
 		// builder inside the tree that reads a parameter that is a wrapper, or the instance of a non-optional one,
 		// captures it, as it captures a declaration of the tree. An optional wrapper parameter offers no instance.
-		// A deferred parameter is declared as the `LazilyInstantiated` its body holds it in, whose instance the tree reads, so
-		// a read inside a `@Sendable` builder function of a parameter held in a wrapper that is not `Sendable` is reported
-		// here rather than failing to compile; the signature makes every such parameter `@Sendable`, so none is.
+		// A deferred parameter is declared as the `LazilyInstantiated` its body holds it in, whose instance the tree reads.
+		// The signature holds a parameter a `@Sendable` function reads in a `SendableLazilyInstantiated`, so this reports
+		// nothing unless that decision misses a read, which is then reported here rather than failing to compile.
 		var declarationsByLabel = [String: [VisibleDeclaration]]()
 		if case let .root(seamInstantiable, seamRoot?) = scopeData {
 			let autoclosureCallByLabel = seamRoot.autoclosureCallByLabel(of: seamInstantiable)
