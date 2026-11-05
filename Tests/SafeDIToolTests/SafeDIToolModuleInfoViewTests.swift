@@ -24,8 +24,9 @@ import SafeDICore
 import Testing
 @testable import SafeDITool
 
-/// What a module lists under a build system that runs `generate` once per module: the modules it imports, whose
-/// `.safedi` files carry, in their views, what a seam or public mock of a module they depend on needs.
+/// What a module lists under a build system that runs `generate` once per module: the modules it depends on, whose
+/// `.safedi` files carry, in their views, what a seam or public mock of a module they depend on needs, so that none
+/// is listed only for that.
 struct SafeDIToolModuleInfoViewTests: ~Copyable {
 	// MARK: Initialization
 

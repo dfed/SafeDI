@@ -1311,7 +1311,7 @@ Under Bazel, Tuist and a [custom build](#custom-build-system-integration), each 
 
 Neither the compiler nor Bazel asks for these entries – a Bazel target compiles generated code that builds a type of a module it reaches only through another module’s `deps` – so only SafeDI notices a missing one:
 
-- When a root’s tree reaches a type declared in a module this module does not list, generation fails at the property that instantiates it. When a module this one lists depends on the declaring module, the error names the module to list; otherwise it reports that no `@Instantiable` declaration fulfills the type.
+- When a root’s tree reaches a type declared in a module this module does not list, generation fails at the property that instantiates it. When a listed module’s `.safedi` carries the declaring module’s declarations – it declares a seam or public mock, or is listed by a module that does – the error names the module to list and the listed module this one reaches it through; otherwise it reports that no `@Instantiable` declaration fulfills the type, and says how to make the declaring module one SafeDI reads.
 - When a generated mock’s tree reaches such a type, the mock cannot build it, so `mock()` takes it as a required parameter, as [Dependency kinds in the generated mock](#dependency-kinds-in-the-generated-mock) describes, and SafeDI reports nothing.
 
 A module that uses types another module re-exports with `@_exported import` lists the module that declares them too: SafeDI reads only the modules listed, and does not follow the re-export. The [Swift package](#swift-package) plugin needs no list: it reads the modules the target depends on itself.

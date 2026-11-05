@@ -24,12 +24,14 @@ import SafeDICore
 /// What a `.safedi` module info file holds: the module's own declarations, under the name of the module it describes,
 /// and its view of the modules it depends on.
 ///
-/// A module is given the `.safedi` of each module it imports and no other, under every integration that runs
-/// `generate` once per module. A seam or public mock another module declares is called with the signature that
-/// module's run computed, from the declarations it read, so each file carries in its `view` what a module that
-/// depends on it needs to compute any such signature in its closure: the name, package, dependencies and mock
-/// condition of every module in the closure, and the declarations – without positions – of each module in it that
-/// declares a seam or a public mock and of the modules those depend on directly.
+/// Under every integration that runs `generate` once per module, a module is given the `.safedi` of each module it
+/// depends on – each module whose types its own trees build, so a module that declares a root lists every module
+/// beneath it – and never one only for another module's seam or public mock. A seam or public mock another module
+/// declares is called with the signature that module's run computed, from the declarations it read, so each file
+/// carries in its `view` what a module that depends on it needs to compute any such signature in its closure: the
+/// name, package, dependencies and mock condition of every module in the closure, and the declarations – without
+/// positions – of each module in it that declares a seam or a public mock and of the modules those depend on
+/// directly.
 struct ModuleInfoFile: Codable {
 	init(
 		moduleName: String,
