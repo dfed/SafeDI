@@ -17000,6 +17000,254 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_mapsRequiredErasedRenameOverOptional_whenMockTakesFulfillingDependencyAsParameter() async throws {
+		// `Secret` forwards a value, so the mock cannot build it and takes `token: Secret?` as a parameter.
+		let output = try await executeSafeDIToolTest(swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(sessionBuilder: Instantiator<Session>) {
+			        self.sessionBuilder = sessionBuilder
+			    }
+
+			    @Instantiated let sessionBuilder: Instantiator<Session>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Session: Instantiable {
+			    public init(token: Secret?, feature: Feature) {
+			        self.token = token
+			        self.feature = feature
+			    }
+
+			    @Forwarded let token: Secret?
+			    @Instantiated let feature: Feature
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public final class Feature: Instantiable {
+			    public init(auth: AnyAuth?) {
+			        self.auth = auth
+			    }
+
+			    @Received(fulfilledByDependencyNamed: "token", ofType: Secret?.self, erasedToConcreteExistential: true) let auth: AnyAuth?
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Secret: Instantiable, Auth {
+			    public init(seed: Int) {
+			        self.seed = seed
+			    }
+
+			    @Forwarded let seed: Int
+			}
+
+			public protocol Auth {}
+
+			public struct AnyAuth: Auth {
+			    public init(_ auth: any Auth) {
+			        self.auth = auth
+			    }
+
+			    public let auth: any Auth
+			}
+			""",
+		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.mockFiles == [
+			"Feature+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Feature {
+			    static func mock(
+			        token: Secret?
+			    ) -> Feature {
+			        #sourceLocation(file: "\(output.fixtures["Feature.swift"])", line: 7)
+			        let auth: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
+			        #sourceLocation()
+			        return Feature(auth: auth)
+			    }
+			}
+			#endif
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_mapsRequiredErasedRenameOverOptional_whenEnclosingMockForwardsFulfillingDependency() async throws {
+		let output = try await executeSafeDIToolTest(swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(sessionBuilder: Instantiator<Session>) {
+			        self.sessionBuilder = sessionBuilder
+			    }
+
+			    @Instantiated let sessionBuilder: Instantiator<Session>
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public final class Session: Instantiable {
+			    public init(token: Secret?, feature: Feature) {
+			        self.token = token
+			        self.feature = feature
+			    }
+
+			    @Forwarded let token: Secret?
+			    @Instantiated let feature: Feature
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Feature: Instantiable {
+			    public init(auth: AnyAuth?) {
+			        self.auth = auth
+			    }
+
+			    @Received(fulfilledByDependencyNamed: "token", ofType: Secret?.self, erasedToConcreteExistential: true) let auth: AnyAuth?
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Secret: Instantiable, Auth {
+			    public init() {}
+			}
+
+			public protocol Auth {}
+
+			public struct AnyAuth: Auth {
+			    public init(_ auth: any Auth) {
+			        self.auth = auth
+			    }
+
+			    public let auth: any Auth
+			}
+			""",
+		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.mockFiles == [
+			"Session+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Session {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            feature: ((AnyAuth?) -> Feature)? = nil
+			        ) {
+			            self.feature = feature
+			        }
+
+			        let feature: ((AnyAuth?) -> Feature)?
+			    }
+
+			    static func mock(
+			        token: Secret?,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Session {
+			        func __safeDI_feature() -> Feature {
+			            #sourceLocation(file: "\(output.fixtures["Feature.swift"])", line: 7)
+			            let auth: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
+			            #sourceLocation()
+			            return if let safeDIBuilder = safeDIOverrides.feature { safeDIBuilder(auth) } else { Feature(auth: auth) }
+			        }
+			        let feature: Feature = __safeDI_feature()
+			        return Session(token: token, feature: feature)
+			    }
+			}
+			#endif
+			""",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_mapsRequiredErasedRenameOverOptional_whenMockBuildsFulfillingDependency() async throws {
+		// The mock builds a non-optional `Secret` for the required `token: Secret?`; the rename is declared optional, so it
+		// is mapped over that value as over an optional one.
+		let output = try await executeSafeDIToolTest(swiftFileContent: [
+			"""
+			@Instantiable(isRoot: true)
+			public final class Root: Instantiable {
+			    public init(sessionBuilder: Instantiator<Session>) {
+			        self.sessionBuilder = sessionBuilder
+			    }
+
+			    @Instantiated let sessionBuilder: Instantiator<Session>
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Session: Instantiable {
+			    public init(token: Secret?, feature: Feature) {
+			        self.token = token
+			        self.feature = feature
+			    }
+
+			    @Forwarded let token: Secret?
+			    @Instantiated let feature: Feature
+			}
+			""",
+			"""
+			@Instantiable(generateMock: true)
+			public final class Feature: Instantiable {
+			    public init(auth: AnyAuth?) {
+			        self.auth = auth
+			    }
+
+			    @Received(fulfilledByDependencyNamed: "token", ofType: Secret?.self, erasedToConcreteExistential: true) let auth: AnyAuth?
+			}
+			""",
+			"""
+			@Instantiable
+			public final class Secret: Instantiable, Auth {
+			    public init() {}
+			}
+
+			public protocol Auth {}
+
+			public struct AnyAuth: Auth {
+			    public init(_ auth: any Auth) {
+			        self.auth = auth
+			    }
+
+			    public let auth: any Auth
+			}
+			""",
+		], buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.mockFiles == [
+			"Feature+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Feature {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            token: (() -> Secret)? = nil
+			        ) {
+			            self.token = token
+			        }
+
+			        let token: (() -> Secret)?
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Feature {
+			        let token = if let safeDIBuilder = safeDIOverrides.token { safeDIBuilder() } else { Secret() }
+			        #sourceLocation(file: "\(output.fixtures["Feature.swift"])", line: 7)
+			        let auth: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
+			        #sourceLocation()
+			        return Feature(auth: auth)
+			    }
+			}
+			#endif
+			""",
+		])
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
