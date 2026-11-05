@@ -46,6 +46,8 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(parsing: .upToNextOption, help: "Swift file paths scoped to the current target for mock generation. Only used when --output-directory is provided without --swift-manifest.") var mockScopedFiles: [String] = []
 
+	@Option(help: "The root directory of the project as the build system reports it, which the input CSV's relative paths are relative to and under which '--mock-scoped-files' names the target's files. Defaults to the working directory. Only used when --output-directory is provided without --swift-manifest.") var projectRoot: String?
+
 	@Option(parsing: .upToNextOption, help: "The compilation conditions that are active for this build, matching the compiler's -D flags, in addition to any recorded in the manifest by `scan`, unless the build-setting options arrive expanded. SafeDI declarations in `#if` blocks are scanned only when the block's condition evaluates to true, and the generated code asserts each such evaluation at compile time.") var activeCompilationConditions: [String] = []
 
 	@Option(name: .customLong(BuildSettingCompilationConditions.activeCompilationConditionsOptionName), help: "The target's `SWIFT_ACTIVE_COMPILATION_CONDITIONS` build setting wrapped in square brackets, written as the literal `[${SWIFT_ACTIVE_COMPILATION_CONDITIONS}]` for the build system to expand when it runs the command. When both build-setting options arrive expanded, their conditions replace those from `--active-compilation-conditions` and the manifest. When either arrives unexpanded, as SwiftPM's native build system passes them, both are ignored.") var buildSettingActiveCompilationConditions: String?
@@ -179,7 +181,7 @@ struct Generate: AsyncParsableCommand {
 				throw ValidationError("--output-directory requires 'swift-sources-file-path'.")
 			}
 			let manifestPath = (outputDirectory as NSString).appendingPathComponent("SafeDIManifest.json")
-			let projectFilePaths = ProjectFilePaths(projectRoot: FileManager.default.currentDirectoryPath)
+			let projectFilePaths = ProjectFilePaths(projectRoot: projectRoot ?? FileManager.default.currentDirectoryPath)
 			scannedProjectFilePaths = projectFilePaths
 			try await performScan(
 				inputSourcesFile: swiftSourcesFilePath,
