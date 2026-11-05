@@ -2457,6 +2457,47 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorWithoutOfferingToPassPackages_whenNeitherModuleIsToldItsPackageAndInitializerIsInternal() async {
+		// Bazel's commonest slip: a `public` type whose initializer spells no access. Passing the packages would make
+		// `package` access enough, which an `internal` initializer still lacks, so the error offers only `public`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let servicePath = fixtures["Feature"]!["Service.swift"]
+			return """
+			\(servicePath):3:5: error: `Service`’s initializer is `internal`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix.
+			\(servicePath):3:5-3:5: fixit: public\(" ")
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Feature",
+						packageName: "Shop",
+						swiftFileContent: [
+							"""
+							@Instantiable
+							public final class Service: Instantiable {
+							    init() {}
+							}
+							""",
+						],
+						omitsPackageName: true,
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Shop",
+						swiftFileContent: [Self.rootInstantiating("Service")],
+						dependencies: ["Feature"],
+						omitsPackageName: true,
+					),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_constructsPublicTypeWithoutComment_whenNeitherModuleIsToldItsPackage() async throws {
 		// Both modules are compiled without `-package-name`, so `public` is what reaches across, and the construction
 		// says nothing about packages.

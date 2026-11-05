@@ -7891,12 +7891,13 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsErrorOfferingToPassPackages_whenConsumerToldNoPackageProvidesValueThatReachedTierOmits() async {
+	mutating func generate_throwsErrorWithoutOfferingToPassPackages_whenNeitherModuleIsToldItsPackageAndOmittedValueIsInternal() async {
 		// M8.35: neither module is told a package, so neither has one, nothing is `package`, and `App` reaches the public
-		// tier, which omits `filter`.
+		// tier, which omits `filter`. Its tier is `internal`, which a `package` caller could not call either, so the error
+		// does not offer to pass the packages.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Screen.swift"]):11:5: error: `Screen` provides `filter: [3 of Int]`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `internal` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `internal` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; pass the packages of modules `App` and `Core` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`; or stop providing `filter` on this path.
+			\(fixtures["App"]!["Screen.swift"]):11:5: error: `Screen` provides `filter: [3 of Int]`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `internal` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `internal` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
 			\(fixtures["Core"]!["Service.swift"]):9:5: note: `TokenCache` receives `filter: [3 of Int]?` here.
 			"""
 		}) {
@@ -7945,6 +7946,62 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 	}
 
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingToPassPackage_whenConsumerToldNoPackageProvidesValueThatPackageTierTakes() async {
+		// `App` is compiled in `Core`'s package `Shop` but runs without its package, so it has none and reaches only the
+		// public tier, which omits `filter`. The `package` tier takes it, so telling SafeDI `App`'s package would do.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			"""
+			\(fixtures["App"]!["Screen.swift"]):11:5: error: `Screen` provides `filter: [3 of Int]`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; pass module `App`'s package to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if it is compiled with `-package-name`; or stop providing `filter` on this path.
+			\(fixtures["Core"]!["Service.swift"]):9:5: note: `TokenCache` receives `filter: [3 of Int]?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: ["Service.swift": """
+					import SafeDI
+
+					@Instantiable
+					package struct TokenCache: Instantiable {
+					    package init(filter: [3 of Int]?) {
+					        self.filter = filter
+					    }
+
+					    @Received(onlyIfAvailable: true) let filter: [3 of Int]?
+					}
+
+					@Instantiable(generateMock: .public)
+					public struct Service: Instantiable {
+					    package init(tokenCache: TokenCache) {
+					        self.tokenCache = tokenCache
+					    }
+
+					    @Instantiated let tokenCache: TokenCache
+					}
+					"""]),
+					ModuleFixture(name: "App", packageName: "Shop", swiftFileContentByFilePath: ["Screen.swift": """
+					import Core
+					import SafeDI
+
+					@Instantiable(generateMock: true)
+					public struct Screen: Instantiable {
+					    public init(filter: [3 of Int], service: Service) {
+					        self.filter = filter
+					        self.service = service
+					    }
+
+					    @Forwarded let filter: [3 of Int]
+					    @Received let service: Service
+					}
+					"""], dependencies: ["Core"], omitsPackageName: true),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsPublicMockFirst_whenProviderOfOmittedValueIsDeclaredFirstAndReceivesItOnlyIfAvailable() async throws {
