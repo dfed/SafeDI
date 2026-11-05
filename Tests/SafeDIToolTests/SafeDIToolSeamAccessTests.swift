@@ -478,7 +478,7 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 			#expect(output.modules["Feature"]?.generatedFiles == [
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public init(logger: Logger? = nil) {
+				    public init(logger: Logger?) {
 				        let detail = Detail(logger: logger)
 				        self.init(detail: detail)
 				    }
@@ -512,7 +512,7 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 			#expect(output.modules["Feature"]?.generatedFiles == [
 				"Screen+SafeDI.swift": generatedFileHeader + """
 				extension Screen {
-				    public init(logger: Logger? = nil) {
+				    public init(logger: Logger?) {
 				        let detail = Detail(logger: logger)
 				        self.init(detail: detail)
 				    }
