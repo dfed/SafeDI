@@ -5021,6 +5021,11 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 	case multipleRoots
 	case generateMock
 	case lazyCycle
+	/// A constant or lazily instantiated dependency that closes a cycle an instantiator along it defers, which calls,
+	/// or hands its wrapper, the builder function of the declaration it repeats. Which dependency closes a cycle depends
+	/// on where a tree enters it, so it is read from an accepted graph's generated code
+	/// (`features(of:outcome:)`), and never from the fixture alone.
+	case constantCycleCloser
 	case sameLabelWithDifferentTypes
 	/// An instantiated property labeled as a name a generated mock gives a binding of its own, such as `t1_S0_T1`.
 	case labelSpelledAsGeneratedName
@@ -5068,6 +5073,100 @@ enum GraphFuzzerFeature: String, CaseIterable, Comparable {
 
 	static func < (lhs: GraphFuzzerFeature, rhs: GraphFuzzerFeature) -> Bool {
 		lhs.rawValue < rhs.rawValue
+	}
+
+	/// The features of `fixture`, run through the tool with `outcome`: those its source shows, and, when the tool accepted
+	/// it, those only its generated code shows.
+	static func features(of fixture: GraphFuzzerFixture, outcome: GraphFuzzerToolOutcome) -> Set<GraphFuzzerFeature> {
+		var features = features(of: fixture)
+		if case let .accepted(generatedFiles, _) = outcome,
+		   generatedFiles.keys.sorted().contains(where: { closesCycleWithConstantOrLazilyInstantiatedDependency(generatedFiles[$0, default: ""]) })
+		{
+			features.insert(.constantCycleCloser)
+		}
+		return features
+	}
+
+	/// Whether `generatedCode` holds a constant or a lazily instantiated dependency that closes a cycle: a binding that
+	/// calls a builder function, or hands one to a `LazilyInstantiated` or `SendableLazilyInstantiated` wrapper, that its
+	/// own body does not declare – one declared at the same indentation above it, in the body it is in. A constant or
+	/// lazily instantiated dependency with a tree of its own declares its function just before its binding; an
+	/// instantiator that closes a cycle hands its wrapper the enclosing function as these do, and is `lazyCycle`'s. A
+	/// reserved name that is a value rather than a function – a binding (`let __safeDI_x = …`) or a parameter
+	/// (`__safeDI_x: …`), such as a `@Sendable` autoclosure a mock reads or a builder a seam's initializer takes – is
+	/// never a builder function, and neither is a member called on a type (`X.__safeDI_init(…)`).
+	static func closesCycleWithConstantOrLazilyInstantiatedDependency(_ generatedCode: String) -> Bool {
+		let builderFunctionNamePrefix = "__safeDI_"
+		let lazilyInstantiatedWrapperPrefixes = ["LazilyInstantiated<", "SendableLazilyInstantiated<"]
+		let instantiatorPrefixes = ["Instantiator<", "SendableInstantiator<", "ErasedInstantiator<", "SendableErasedInstantiator<"]
+		/// The name of the builder function `text` calls or passes, when it starts with one.
+		func builderFunctionName(startingWith text: Substring) -> Substring? {
+			guard text.hasPrefix(builderFunctionNamePrefix) else { return nil }
+			return text.prefix { $0.isLetter || $0.isNumber || $0 == "_" }
+		}
+		var valueNames = Set<Substring>()
+		for line in generatedCode.split(separator: "\n") {
+			var rest = line[...]
+			while let range = rest.range(of: builderFunctionNamePrefix) {
+				let name = builderFunctionName(startingWith: rest[range.lowerBound...]) ?? ""
+				let after = rest[range.lowerBound...].dropFirst(name.count)
+				if after.hasPrefix(":") || after.hasPrefix(" =") && rest[..<range.lowerBound].hasSuffix("let ") {
+					valueNames.insert(name)
+				}
+				rest = after
+			}
+		}
+		// The builder functions declared at each indentation of the bodies the line being read is in.
+		var declaredFunctionNamesByIndentation = [Int: Set<Substring>]()
+		// The indentation of a binding to a lazily instantiated wrapper whose closure, on the lines that follow, calls the
+		// function.
+		var wrapperClosureBindingIndentation: Int?
+		for line in generatedCode.split(separator: "\n") {
+			let indentation = line.prefix { $0 == " " }.count
+			let content = line.dropFirst(indentation)
+			declaredFunctionNamesByIndentation = declaredFunctionNamesByIndentation.filter { $0.key <= indentation }
+			if let bindingIndentation = wrapperClosureBindingIndentation {
+				wrapperClosureBindingIndentation = nil
+				let call = content.range(of: builderFunctionNamePrefix).map { content[$0.lowerBound...] }
+				if let name = call.flatMap(builderFunctionName(startingWith:)), !valueNames.contains(name), !declaredFunctionNamesByIndentation[bindingIndentation, default: []].contains(name) {
+					return true
+				}
+			}
+			if let declaration = content.range(of: "func \(builderFunctionNamePrefix)"), content[..<declaration.lowerBound].allSatisfy({ $0 != "=" }) {
+				if let name = builderFunctionName(startingWith: content[content.index(declaration.lowerBound, offsetBy: "func ".count)...]) {
+					declaredFunctionNamesByIndentation[indentation, default: []].insert(name)
+				}
+				continue
+			}
+			guard content.hasPrefix("let "), let assignment = content.range(of: " = ") else { continue }
+			let value = content[assignment.upperBound...]
+			let calledName: Substring? = if lazilyInstantiatedWrapperPrefixes.contains(where: value.hasPrefix) {
+				if value.hasSuffix(" {") {
+					// The closure on the following lines calls the function, with the cycle's parameters.
+					nil
+				} else {
+					value.lastIndex(of: "(").flatMap { builderFunctionName(startingWith: value[value.index(after: $0)...]) }
+				}
+			} else if instantiatorPrefixes.contains(where: value.hasPrefix) {
+				nil
+			} else if let callStart = value.range(of: builderFunctionNamePrefix),
+			          value[..<callStart.lowerBound].isEmpty || value[..<callStart.lowerBound].hasSuffix("("),
+			          value[..<callStart.lowerBound].allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" || $0 == "." || $0 == "(" })
+			{
+				// A call of the function, or an erased type built from one: a constant.
+				builderFunctionName(startingWith: value[callStart.lowerBound...]).flatMap { name in
+					value[callStart.lowerBound...].dropFirst(name.count).hasPrefix("(") ? name : nil
+				}
+			} else {
+				nil
+			}
+			if lazilyInstantiatedWrapperPrefixes.contains(where: value.hasPrefix), value.hasSuffix(" {") {
+				wrapperClosureBindingIndentation = indentation
+			} else if let calledName, !valueNames.contains(calledName), !declaredFunctionNamesByIndentation[indentation, default: []].contains(calledName) {
+				return true
+			}
+		}
+		return false
 	}
 
 	static func features(of fixture: GraphFuzzerFixture) -> Set<GraphFuzzerFeature> {
