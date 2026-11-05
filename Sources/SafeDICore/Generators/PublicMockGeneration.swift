@@ -1449,6 +1449,11 @@ extension ScopeGenerator.PublicMockTierOmission {
 			remedies.append("widen \(first.name) to `\(neededLevel.spelledOnGeneratedDeclaration)`\(unverifiedPackage)")
 		}
 		remedies += SeamAccessExplanation.causeRemedies(parameter.accessCause, neededLevel: neededLevel)
+		// A caller that needs `public` across a module SafeDI is told no package of needs only `package` if that module
+		// has one. A parameter on no tier is omitted by a call in the mock's tree, whose modules this call does not decide.
+		if parameter.nestedOmission == nil, let packageRemedy = ModuleIdentity.passingPackageRemedy(forModulesNamed: ModuleIdentity.namesOfModulesWithoutPackage(emitter: call.callerModule, declarer: call.declaringModule, requirement: call.requirement)) {
+			remedies.append(packageRemedy)
+		}
 		remedies.append("stop providing \(label) on this path")
 		let what: String
 		if let nested = parameter.nestedOmission {

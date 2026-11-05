@@ -20,7 +20,9 @@
 
 /// A module, as far as SafeDITool knows it: the name the compiler gives it, and the package it is compiled in, as
 /// `-package-name` names it (under SwiftPM, the package's identity, of which `-package-name` carries the C99-mangled
-/// form). Either is `nil` when SafeDITool does not know it.
+/// form). The name is `nil` when SafeDITool does not know it. The package is `nil` when SafeDITool is not told one: a
+/// named module is then in no package, as a module the compiler receives no `-package-name` for is, and a module whose
+/// name SafeDITool does not know may be in any package.
 public struct ModuleIdentity: Hashable, Sendable {
 	public init(moduleName: String?, packageName: String?) {
 		self.moduleName = moduleName
@@ -29,6 +31,35 @@ public struct ModuleIdentity: Hashable, Sendable {
 
 	public let moduleName: String?
 	public let packageName: String?
+
+	/// The names, in order, of the modules among `emitter` and `declarer` SafeDITool was not told the package of, when
+	/// that is why the code `emitter` generates needs `public` access to `declarer`'s declarations: `requirement`, which
+	/// `AccessLevel.required(toConstructFrom:declaredIn:isOwnFile:)` gave for the two, is `public`, and one of them has no
+	/// package, so both are named. Empty otherwise. A module compiled with `-package-name` whose run is not told it is the
+	/// one case where the requirement is wrong, which a diagnostic that asks for `public` names as its other remedy
+	/// (`passingPackageRemedy(forModulesNamed:)`).
+	public static func namesOfModulesWithoutPackage(emitter: ModuleIdentity, declarer: ModuleIdentity, requirement: AccessRequirement) -> [String] {
+		switch requirement {
+		case .public:
+			[emitter, declarer].filter { $0.packageName == nil }.compactMap(\.moduleName).sorted()
+		case .internal, .package, .packageUnverified:
+			[]
+		}
+	}
+
+	/// The remedy a diagnostic that asks for `public` access across the modules `moduleNames` names, which SafeDITool
+	/// was not told the package of, offers beside it: telling SafeDITool the package each is compiled in, should one be.
+	/// `nil` for no module.
+	public static func passingPackageRemedy(forModulesNamed moduleNames: [String]) -> String? {
+		let ways = "(`package_name` on `safedi_swift_library`, `--package-name`)"
+		if moduleNames.count == 1, let moduleName = moduleNames.first {
+			return "pass module `\(moduleName)`'s package to SafeDI \(ways) if it is compiled with `-package-name`"
+		} else if moduleNames.isEmpty {
+			return nil
+		} else {
+			return "pass the packages of modules \(moduleNames.map { "`\($0)`" }.joined(separator: " and ")) to SafeDI \(ways) if they are compiled with `-package-name`"
+		}
+	}
 }
 
 /// The access a declaration needs for the code SafeDI generates in one module to use it.
@@ -40,7 +71,8 @@ public enum AccessRequirement: Hashable, Sendable {
 	/// The code is in a module of another package: only `public` or `open` access suffices.
 	case `public`
 	/// The code is in another module, and SafeDITool does not know whether that module is in the declaration's package,
-	/// because it does not know the package of one of the two. `package` access is assumed to suffice.
+	/// because it does not know the name of one of the two, and the package of one of the two. `package` access is
+	/// assumed to suffice; the compiler reports the construction when the two modules are in different packages.
 	case packageUnverified
 }
 
@@ -107,6 +139,10 @@ extension AccessLevel {
 			.internal
 		} else if let emitterPackageName = emitter.packageName, let declarerPackageName = declarer.packageName {
 			emitterPackageName == declarerPackageName ? .package : .public
+		} else if emitter.moduleName != nil, declarer.moduleName != nil {
+			// Two named modules, one of which SafeDITool is told no package of: that module has none, and `package`
+			// access never reaches across it.
+			.public
 		} else {
 			.packageUnverified
 		}

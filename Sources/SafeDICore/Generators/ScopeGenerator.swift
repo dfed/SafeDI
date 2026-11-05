@@ -43,7 +43,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		erasedToConcreteExistential: Bool,
 		isPropertyCycle: Bool,
 		closedOnDeclaration: BuiltDeclaration? = nil,
-		constructionComments: Scope.ConstructionComments,
+		builtInlineSeamComment: String?,
 		seamCall: SeamCall? = nil,
 		publicMockCall: PublicMockCall? = nil,
 		seamRoot: SeamRoot? = nil,
@@ -57,7 +57,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		cycleParameterUnavailableProperties: Set<Property> = [],
 		callSiteLazilyInstantiatedInstanceProperties: Set<Property>? = nil,
 	) {
-		self.constructionComments = constructionComments
+		self.builtInlineSeamComment = builtInlineSeamComment
 		self.constructsWithHandWrittenMock = constructsWithHandWrittenMock
 		self.closedOnDeclaration = closedOnDeclaration
 		self.cycleParameters = cycleParameters
@@ -519,7 +519,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		declaredLazilyInstantiatedInstanceProperty = property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding
 		self.property = property
 		// An alias constructs nothing.
-		constructionComments = Scope.ConstructionComments()
+		builtInlineSeamComment = nil
 		publicMockCall = nil
 		ownerPropertyStack = []
 		holeCallArguments = []
@@ -580,7 +580,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		fulfillingBindingIsOptional = false
 		declaredLazilyInstantiatedInstanceProperty = holeProperty.asLazilyInstantiatedInstanceProperty
 		property = holeProperty
-		constructionComments = Scope.ConstructionComments()
+		builtInlineSeamComment = nil
 		publicMockCall = nil
 		holeCallArguments = []
 		passedUpHoles = []
@@ -618,7 +618,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			forwardedLazilyInstantiatedInstanceProperties: [],
 			erasedToConcreteExistential: false,
 			isPropertyCycle: false,
-			constructionComments: Scope.ConstructionComments(),
+			builtInlineSeamComment: nil,
 			fill: (hole, key, functionName),
 		)
 	}
@@ -1882,8 +1882,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// seam's optional parameter. `false` for every other scope.
 	private let fulfillingBindingIsOptional: Bool
 	let property: Property?
-	/// The comments the generated code ends the lines that construct this scope's type with.
-	private let constructionComments: Scope.ConstructionComments
+	/// The comment that ends each line that constructs this scope's type (`Scope.builtInlineSeamComment`).
+	private let builtInlineSeamComment: String?
 	/// Whether this scope, in the tree of a fill a mock declares for another module's public mock, builds its type with
 	/// its hand-written mock, as the mock's tree built inline would (`Scope.createScopeGenerator`).
 	private let constructsWithHandWrittenMock: Bool
@@ -2748,7 +2748,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			// made before the function is declared.
 			let stageCallLines = stageCalls.map { "\($0)\n" }.joined()
 			// What ends the line that constructs the type, after the construction.
-			let constructionLineEnd = (constructsWithHandWrittenMock ? constructionComments.mockMethod : constructionComments.initializer).map { " \($0)" } ?? ""
+			let constructionLineEnd = builtInlineSeamComment.map { " \($0)" } ?? ""
 			// A call to a seam's generated initializer refers to the enum the seam's module generated for the
 			// signature the call was generated from, on the line before the call, so a call generated from another
 			// signature fails to compile here rather than pass `nil` where the initializer expects a value. The
@@ -3256,9 +3256,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let concreteType: TypeDescription
 		/// The name of the hand-written mock: `customMockName`, or `mock`.
 		let methodName: String
-		/// The comment that ends the parameter's line, as `Scope.ConstructionComments.mockMethod` ends each line that
-		/// constructs a type with its hand-written mock, or `nil` for none.
-		let comment: String?
 		/// The file that declares the hand-written mock.
 		let mockFilePath: String?
 
@@ -3897,7 +3894,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				"""
 				extension \(typeName) {
 				    \(mockAttributesPrefix)public static func mock() -> \(mockMethodReturnType) {
-				        \(construction)\(mockRootConstructionLineEnd(instantiable: instantiable))
+				        \(construction)
 				    }
 				}
 
@@ -3909,7 +3906,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				"""
 				extension \(typeName) {
 				    \(mockAttributesPrefix)static func mock() -> \(mockMethodReturnType) {
-				        \(construction)\(mockRootConstructionLineEnd(instantiable: instantiable))
+				        \(construction)
 				    }
 				}
 				"""
@@ -3964,16 +3961,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 
 		// Build mock() signature.
 		var mockParameters = [String]()
-		// The comment that ends the line of the parameter at each index, after its comma: a default that calls a
-		// hand-written mock ends with the comment that ends every line constructing a type with that mock.
-		var mockParameterComments = [Int: String]()
 		for dependency in forwardedDependencies {
 			let typeSource = dependency.property.typeDescription.asFunctionParameter.asSource
 			switch parameters.forwardedParameterDefaults[dependency.property.label] {
 			case let .constructionDefault(defaultExpression):
 				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource) = \(defaultExpression)")
 			case let .handWrittenMock(mockDefault):
-				mockParameterComments[mockParameters.count] = mockDefault.comment
 				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource) = \(mockDefault.expression)")
 			case nil:
 				mockParameters.append("\(bodyIndent)\(dependency.property.label): \(typeSource)")
@@ -3984,7 +3977,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		for (property, flatReceived) in zip(flatReceivedProperties, flatReceivedParameters) {
 			if let mockDefault = parameters.flatReceivedParameterMockDefaults[property] {
-				mockParameterComments[mockParameters.count] = mockDefault.comment
 				mockParameters.append("\(bodyIndent)\(flatReceived.label): \(flatReceived.typeSource) = \(mockDefault.expression)")
 			} else {
 				mockParameters.append("\(bodyIndent)\(flatReceived.label): \(flatReceived.typeSource)")
@@ -4024,10 +4016,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A public mock's tiers are emitted around its body once the body is generated.
 		if publicMockPlan == nil {
 			lines.append("\(indent)\(mockAttributesPrefix)static func mock(")
-			lines.append(mockParameters.enumerated().map { index, mockParameter in
-				let separator = index < mockParameters.count - 1 ? "," : ""
-				return mockParameter + separator + (mockParameterComments[index].map { " \($0)" } ?? "")
-			}.joined(separator: "\n"))
+			lines.append(mockParameters.joined(separator: ",\n"))
 			lines.append("\(indent)) -> \(mockMethodReturnType) {")
 		}
 		let bodyStartIndex = lines.count
@@ -4206,7 +4195,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		} else {
 			"\(typeName)(\(returnArgumentList))"
 		}
-		lines.append("\(bodyIndent)return \(returnConstruction)\(mockRootConstructionLineEnd(instantiable: instantiable))")
+		lines.append("\(bodyIndent)return \(returnConstruction)")
 		if let publicMockPlan {
 			let body = Array(lines[bodyStartIndex...])
 			lines.removeSubrange(bodyStartIndex...)
@@ -4477,8 +4466,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let sourceFilePath: String?
 		/// Where the hand-written mock `useMockInitializer` selects is declared, when the type has one.
 		let mockDeclarationLocation: Dependency.DeclarationLocation?
-		/// The comment that ends the line that constructs this node, or `nil` for none.
-		let constructionComment: String?
 		/// How the node calls the public mock another module generated for its type, which the tree cannot build
 		/// itself, or `nil` for a node built as its type's own module would build it.
 		let publicMockCall: PublicMockCall?
@@ -4498,11 +4485,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The names of the fills of enclosing calls that calls in this node's subtree refer to (see
 		/// `ScopeGenerator.referencedFillNamesByKey`), which no builder function declared around them may share.
 		let referencedFillNames: Set<String>
-		/// What ends the line that constructs this node, after the construction.
-		var constructionLineEnd: String {
-			constructionComment.map { " \($0)" } ?? ""
-		}
-
 		/// Forwarded properties on this type (relevant for Instantiator edges).
 		let forwardedProperties: Set<Property>
 		/// Set when this property's label repeats in the ancestor stack during
@@ -5225,7 +5207,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					concreteType: childInstantiable.concreteInstantiable,
 					sourceFilePath: childInstantiable.sourceFilePath,
 					mockDeclarationLocation: childInstantiable.mockDeclarationLocation,
-					constructionComment: useMockInitializer ? childGenerator.constructionComments.mockMethod : childGenerator.constructionComments.initializer,
 					publicMockCall: childGenerator.publicMockCall,
 					stageCalls: childGenerator.stageCallsBeforeBuilderFunction,
 					fillingGenerator: childGenerator.holeArgumentValuesByLabel.isEmpty ? nil : childGenerator,
@@ -6252,7 +6233,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					lines.append(contentsOf: receiverBindings)
 					lines.append(contentsOf: sendableAutoclosureBindings)
 					lines.append(contentsOf: childBindings)
-					lines.append("\(innerIndent)return \(functionConstructionExpression)\(node.constructionLineEnd)")
+					lines.append("\(innerIndent)return \(functionConstructionExpression)")
 					lines.append("\(indent)}")
 					if let promotedParameterName {
 						lines.append("\(indent)let \(outerBindingName): \(propertyTypeName) = \(passing(promotedParameterName, orBuilding: "\(functionName)(\(callArguments))"))")
@@ -6261,11 +6242,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					}
 				} else if let promotedParameterName {
 					// Both branches give the property's type, which the default construction may not without the annotation.
-					lines.append("\(indent)let \(outerBindingName)\(node.overriddenBindingTypeAnnotation) = \(passing(promotedParameterName, orBuilding: constructionExpression))\(node.constructionLineEnd)")
+					lines.append("\(indent)let \(outerBindingName)\(node.overriddenBindingTypeAnnotation) = \(passing(promotedParameterName, orBuilding: constructionExpression))")
 				} else {
 					// Leaf constant node — flat binding, no scoping needed.
 					let typeAnnotation = overrideExpression == nil ? "" : node.overriddenBindingTypeAnnotation
-					lines.append("\(indent)let \(outerBindingName)\(typeAnnotation) = \(constructionExpression)\(node.constructionLineEnd)")
+					lines.append("\(indent)let \(outerBindingName)\(typeAnnotation) = \(constructionExpression)")
 				}
 			}
 		}
@@ -6761,7 +6742,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else {
 				builtConstructionExpression
 			}
-			lines.append("\(innerIndent)\(returnKeyword)\(constructionExpression)\(node.constructionLineEnd)")
+			lines.append("\(innerIndent)\(returnKeyword)\(constructionExpression)")
 			lines.append("\(indent)}")
 		}
 
@@ -6859,14 +6840,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				handWrittenMockDefaultParameters: handWrittenMockDefaultParameters,
 			)
 		}
-	}
-
-	/// What ends the line on which a mock root's `mock()` constructs the mocked type `instantiable`, after the
-	/// construction: the comment for its hand-written mock when it has one, which constructs it, and otherwise the
-	/// comment for its initializer or `instantiate()` method.
-	private func mockRootConstructionLineEnd(instantiable: Instantiable) -> String {
-		let comment = instantiable.mockInitializer != nil ? constructionComments.mockMethod : constructionComments.initializer
-		return comment.map { " \($0)" } ?? ""
 	}
 
 	private func wrapInConditionalCompilation(

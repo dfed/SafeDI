@@ -25,20 +25,22 @@ final class Scope: Hashable {
 	/// - Parameters:
 	///   - dependenciesLeftOut: The dependencies `instantiable` declared before a mock scope left them out because the
 	///     type's hand-written mock is not passed them.
-	///   - constructionComments: The comments the generated code ends the lines that construct the type with.
+	///   - builtInlineSeamComment: The comment that ends each line of a production tree that constructs the type: a
+	///     seam this run builds inline, because SafeDI does not know which module declares it. `nil` for every other
+	///     scope.
 	///   - seamCall: How a tree that reaches this scope calls it, when the scope stands for a seam whose generated
 	///     initializer another tree calls: `instantiable` then declares the initializer's parameters as its
 	///     dependencies and builds nothing. `nil` for every other scope.
 	init(
 		instantiable: Instantiable,
 		dependenciesLeftOut: [Dependency] = [],
-		constructionComments: ConstructionComments = ConstructionComments(),
+		builtInlineSeamComment: String? = nil,
 		seamCall: SeamCall? = nil,
 		publicMockCall: PublicMockCall? = nil,
 	) {
 		self.instantiable = instantiable
 		self.dependenciesLeftOut = dependenciesLeftOut
-		self.constructionComments = constructionComments
+		self.builtInlineSeamComment = builtInlineSeamComment
 		self.seamCall = seamCall
 		self.publicMockCall = publicMockCall
 	}
@@ -72,21 +74,8 @@ final class Scope: Hashable {
 	/// with a hand-written mock that is not passed them. Always empty in a scope of the dependency tree.
 	let dependenciesLeftOut: [Dependency]
 
-	/// The comments the generated code ends the lines that construct the type with.
-	let constructionComments: ConstructionComments
-
-	/// The comment the generated code ends a line that constructs a type with, for each way it can construct the type.
-	struct ConstructionComments: Sendable {
-		init(initializer: String? = nil, mockMethod: String? = nil) {
-			self.initializer = initializer
-			self.mockMethod = mockMethod
-		}
-
-		/// The comment for a construction with the type's initializer or `instantiate()` method, or `nil` for none.
-		let initializer: String?
-		/// The comment for a construction with the type's hand-written mock method, or `nil` for none.
-		let mockMethod: String?
-	}
+	/// The comment that ends each line of a production tree that constructs the type, or `nil` for none.
+	let builtInlineSeamComment: String?
 
 	/// How a tree that reaches this scope calls the seam it stands for, or `nil` for a scope that builds its type.
 	let seamCall: SeamCall?
@@ -869,7 +858,7 @@ private struct ScopeGeneratorUnderConstruction {
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			isPropertyCycle: isPropertyCycle,
 			closedOnDeclaration: closedOnDeclaration,
-			constructionComments: scope.constructionComments,
+			builtInlineSeamComment: scope.builtInlineSeamComment,
 			seamCall: scope.seamCall,
 			publicMockCall: scope.publicMockCall,
 			seamRoot: seamRoot,
