@@ -2956,54 +2956,54 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// How many of the corpus's graphs the tool accepts, and which ones, as a `GraphFuzzerSeedSetSum`, which
 	/// shards of the corpus can add up.
-	static let corpusAcceptedSeedCount = 2_332
-	static let corpusAcceptedSeedsSum: UInt64 = 0x67DB51BE5415ADC6
+	static let corpusAcceptedSeedCount = 2_337
+	static let corpusAcceptedSeedsSum: UInt64 = 0x560028B108533783
 
 	/// How many of the corpus's graphs the tool accepts show each `GraphFuzzerFeature`, read from their source as the
 	/// smoke batch reads them, which shards of the corpus add up. Unit tests leave the siblings of a shape to the
 	/// corpus, so a generator change that stops drawing a feature, or a tool change that stops accepting the graphs that
 	/// draw it, changes these and must update them deliberately, with the hashes and the accepted-seed pins.
 	static let corpusAcceptedFeatureCounts: [GraphFuzzerFeature: Int] = [
-		.constantProperty: 2_125,
+		.constantProperty: 2_129,
 		.erasedConstantProperty: 391,
-		.instantiatorProperty: 1_871,
-		.sendableInstantiatorProperty: 785,
-		.erasedInstantiatorProperty: 956,
-		.sendableErasedInstantiatorProperty: 330,
-		.lazilyInstantiatedProperty: 348,
-		.sendableLazilyInstantiatedProperty: 127,
-		.erasedLazilyInstantiatedProperty: 183,
+		.instantiatorProperty: 1_874,
+		.sendableInstantiatorProperty: 788,
+		.erasedInstantiatorProperty: 958,
+		.sendableErasedInstantiatorProperty: 329,
+		.lazilyInstantiatedProperty: 350,
+		.sendableLazilyInstantiatedProperty: 129,
+		.erasedLazilyInstantiatedProperty: 187,
 		.forwardedLazilyInstantiatedProperty: 285,
-		.receivedLazilyInstantiatedInstance: 217,
-		.forwardedProperty: 1_160,
+		.receivedLazilyInstantiatedInstance: 220,
+		.forwardedProperty: 1_164,
 		.optionalForwardedProperty: 582,
-		.requiredReceive: 1_949,
-		.requiredOptionalReceive: 500,
-		.onlyIfAvailableReceive: 1_542,
-		.requiredAlias: 998,
-		.onlyIfAvailableAlias: 815,
-		.aliasOfOnlyIfAvailableAlias: 159,
-		.aliasOfOptionalFormOfProperty: 11,
+		.requiredReceive: 1_954,
+		.requiredOptionalReceive: 498,
+		.onlyIfAvailableReceive: 1_545,
+		.requiredAlias: 956,
+		.onlyIfAvailableAlias: 786,
+		.aliasOfOnlyIfAvailableAlias: 58,
+		.aliasOfOptionalFormOfProperty: 12,
 		.erasedAlias: 198,
 		.multipleRoots: 1_537,
-		.generateMock: 1_953,
-		.lazyCycle: 1_065,
+		.generateMock: 1_957,
+		.lazyCycle: 1_062,
 		.constantCycleCloser: 28,
-		.sameLabelWithDifferentTypes: 1_115,
-		.labelSpelledAsGeneratedName: 540,
-		.dependencyMockCannotBuild: 1_418,
+		.sameLabelWithDifferentTypes: 1_119,
+		.labelSpelledAsGeneratedName: 541,
+		.dependencyMockCannotBuild: 1_426,
 		.dependencyMockCannotBuildReceivedBeneathItsOwner: 280,
-		.dependencyMockCannotBuildReceivedLazilyBesideItsMockedOwner: 68,
+		.dependencyMockCannotBuildReceivedLazilyBesideItsMockedOwner: 67,
 		.dependencyMockCannotBuildLazilyInstantiatedReceivedAsOtherKindBesideItsMockedOwner: 10,
-		.sendableAndNonSendableWrappers: 478,
-		.mockedTypeOnLazyCycle: 496,
-		.typesReceivingEachOtherOnlyIfAvailable: 245,
-		.labelReceivedAsInstanceAndAsInstantiator: 128,
-		.sameLabelReceivedAsDifferentUnbuildableWrappers: 127,
+		.sendableAndNonSendableWrappers: 481,
+		.mockedTypeOnLazyCycle: 495,
+		.typesReceivingEachOtherOnlyIfAvailable: 247,
+		.labelReceivedAsInstanceAndAsInstantiator: 127,
+		.sameLabelReceivedAsDifferentUnbuildableWrappers: 128,
 		.receivedErasedInstantiator: 478,
-		.forwardedErasedInstantiator: 142,
-		.defaultValuedInstantiateParameter: 556,
-		.nonSendableValuesInsideSendableBuilder: 131,
+		.forwardedErasedInstantiator: 144,
+		.defaultValuedInstantiateParameter: 559,
+		.nonSendableValuesInsideSendableBuilder: 133,
 		.generateDependencyTree: 0,
 	]
 
@@ -3075,27 +3075,27 @@ struct SafeDIToolGraphFuzzerTests {
 
 	/// What the base corpus's value oracle compares and skips over the whole corpus (`GraphFuzzerValueOracleCounts`).
 	static let corpusValueOracleCounts = GraphFuzzerValueOracleCounts(
-		rootPairCount: 4_566,
-		rootPairsSum: GraphFuzzerSeedSetSum(value: 0x474DDC609EAEDF4A),
-		mirroredPairCount: 2_138,
-		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0x4D93BCD73344933F),
+		rootPairCount: 4_568,
+		rootPairsSum: GraphFuzzerSeedSetSum(value: 0xEB2384EA7ED4B8FE),
+		mirroredPairCount: 2_142,
+		mirroredPairsSum: GraphFuzzerSeedSetSum(value: 0x0D26D1E44728576C),
 		skipCounts: [
-			.requiredParameter: 1_905,
+			.requiredParameter: 1_913,
 			.twoFormsOfOneLabel: 23,
 			.requiredOptionalReceiveOfNonOptionalDeclaration: 9,
-			.requiredReceiveOfUncreatedAlias: 12,
+			.requiredReceiveOfUncreatedAlias: 7,
 		],
 		shapeCounts: [
-			.rootTreePropertyReceivedByTwoOrMoreTypes: 854,
-			.rootTreeLabelDeclaredAtTwoDepthsAboveReceiver: 114,
-			.promotedDependencyReceivedByTwoOrMoreTypes: 163,
-			.onlyIfAvailableAliasOfPromotedDependency: 62,
-			.requiredAliasOfPromotedDependency: 220,
+			.rootTreePropertyReceivedByTwoOrMoreTypes: 851,
+			.rootTreeLabelDeclaredAtTwoDepthsAboveReceiver: 112,
+			.promotedDependencyReceivedByTwoOrMoreTypes: 164,
+			.onlyIfAvailableAliasOfPromotedDependency: 57,
+			.requiredAliasOfPromotedDependency: 217,
 			.promotedWrapperReceivedInAnotherForm: 3,
 			.instanceOfPromotedWrapperPassedToMockedType: 1,
-			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 177,
+			.onlyIfAvailableReceiveInMockedTypesTreeLeftUnbuilt: 175,
 		],
-		drawnMocksMatchingOnlyAfterNormalizationCount: 489,
+		drawnMocksMatchingOnlyAfterNormalizationCount: 492,
 	)
 
 	/// The seeds of `knownIssues` whose value-oracle fixture is known not to compile.
@@ -3141,11 +3141,11 @@ struct SafeDIToolGraphFuzzerTests {
 
 	static let seamCorpusSeedCount = 1_000
 	static let seamCorpusFixtureHash: UInt64 = 0x3F7D7D2813AEB6E7
-	static let seamCorpusAcceptedSeedCount = 274
-	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x820E3FB9812B2F0B
+	static let seamCorpusAcceptedSeedCount = 280
+	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x6EBE1899799860D7
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
 	/// oracle compares.
-	static let seamCorpusValueOracleInspectedGraphCount = 187
+	static let seamCorpusValueOracleInspectedGraphCount = 189
 	/// How many of the seam corpus's graphs the tool rejects because a caller holds a value the tier it calls omits.
 	static let seamCorpusOmittedValueGraphCount = 0
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
