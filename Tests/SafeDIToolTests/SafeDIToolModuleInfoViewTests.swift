@@ -454,6 +454,8 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		// Cell 7's twin: `App` in `Service`'s package calls its `package` tier, which takes `theme`, so `Screen`'s `theme`
 		// reaches `Badge`, as when `App` lists `Core` too.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.packageMentionChain(appPackage: "Shop"), integration: integration, filesToDelete: &filesToDelete)
+		let directOutput = try await executeSafeDIToolMultiModuleTest(modules: Self.packageMentionChain(appPackage: "Shop", appDependencies: ["Core", "Feed"]), integration: integration, filesToDelete: &filesToDelete)
+		#expect(output.modules["App"]?.generatedFiles == directOutput.modules["App"]?.generatedFiles)
 		let fileName = integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift"
 		let pluginComment = integration.seamCallComment(type: "Service", declaringModule: "Feed")
 		#expect(output.modules["App"]?.generatedFiles == [fileName: generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feed") + "\n" + Self.importBlock("SafeDI") + "\n\n" + """
