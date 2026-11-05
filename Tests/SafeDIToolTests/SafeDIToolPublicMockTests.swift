@@ -1014,7 +1014,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 
 		"""
-		let pluginComment = integration == .swiftPackagePlugin ? " // If this line does not compile, add the SafeDI plugin to the target that declares Holder." : ""
+		let pluginComment = integration.seamCallComment(type: "Holder", declaringModule: "Core")
 		let screenMock = """
 		#if DEBUG
 		extension Screen {
