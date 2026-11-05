@@ -40,8 +40,6 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(help: "A path to a CSV file containing paths of SafeDI representations of other modules to parse: the `.safedi` file of each module this module imports. Each carries what a seam or public mock of a module it depends on needs, so a module this one reaches only through another is not listed.") var dependentModuleInfoFilePath: String?
 
-	@Option(help: "The name of a module whose `.safedi` file '--dependent-module-info-file-path' lists, as the build system names it; repeat it for each. When given, a listed file that records another module's name is an error naming both names.") var dependentModuleName: [String] = []
-
 	@Option(help: "A path to the JSON manifest `scan` writes, describing the desired Swift output files. A manifest written by hand is deprecated, and SafeDI 3.0 rejects one: pass `--output-directory`, which runs `scan` for you, or `--combined-output`, which writes every output to one file.") var swiftManifest: String?
 
 	@Option(help: "An existing directory where generated output files will be written. When provided without --swift-manifest, the tool scans for roots and mocks, generates a manifest internally, and writes all output files.") var outputDirectory: String?
@@ -1654,7 +1652,7 @@ struct Generate: AsyncParsableCommand {
 
 	/// The dependent modules' info files, each with the path it was read from, in the order of `moduleInfoURLs` whatever
 	/// order the parallel reads finish in.
-	/// - Throws: When a file cannot be read, or records a module `--dependent-module-name` does not list.
+	/// - Throws: When a file cannot be read.
 	private func loadSafeDIModuleInfo() async throws -> [(file: ModuleInfoFile, path: String)] {
 		let moduleInfoURLs = try moduleInfoURLs
 		let moduleInfoFiles = try await withThrowingTaskGroup(
@@ -1677,12 +1675,6 @@ struct Generate: AsyncParsableCommand {
 			return indexedModuleInfoFiles
 				.sorted { $0.index < $1.index }
 				.map { (file: $0.file, path: moduleInfoURLs[$0.index].path) }
-		}
-		// An integration that names the files it lists, as the Tuist script does, finds a renamed module's stale file.
-		if !dependentModuleName.isEmpty,
-		   let mismatch = moduleInfoFiles.first(where: { !dependentModuleName.contains($0.file.moduleName) })
-		{
-			throw ModuleInfoNameMismatchError(filePath: mismatch.path, recordedModuleName: mismatch.file.moduleName, listedModuleNames: dependentModuleName.sorted())
 		}
 		return moduleInfoFiles
 	}

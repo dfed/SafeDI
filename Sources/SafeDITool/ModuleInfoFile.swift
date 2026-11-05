@@ -316,14 +316,3 @@ struct ModuleInfoDisagreementError: Error, CustomStringConvertible {
 		"SafeDI was given two module infos that describe module `\(moduleName)` differently: \(filePaths.map { "`\($0)`" }.joined(separator: " and ")) were written against two different builds of `\(moduleName)`. Build `\(moduleName)` and the modules that depend on it again, so that every module info is written against the current one."
 	}
 }
-
-/// A module info file listed under a module name it does not record: a renamed module's stale `.safedi`.
-struct ModuleInfoNameMismatchError: Error, CustomStringConvertible {
-	let filePath: String
-	let recordedModuleName: String
-	let listedModuleNames: [String]
-
-	var description: String {
-		"`\(filePath)` records module `\(recordedModuleName)`, which is not among the modules listed with `--dependent-module-name` (\(listedModuleNames.map { "`\($0)`" }.joined(separator: ", "))). Clean the build folder, or list `\(recordedModuleName)`."
-	}
-}

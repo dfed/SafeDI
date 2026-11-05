@@ -428,39 +428,6 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		}
 	}
 
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsErrorNamingBothNames_whenListedModuleInfoRecordsAnotherModule() async throws {
-		// Cell 29: a listed `.safedi` that records another module than the one `--dependent-module-name` names, which only
-		// a custom build that names its files apart from their modules writes: the vended scripts name each file after the
-		// module it records.
-		let renamed = try await executeSafeDIToolTest(
-			swiftFileContent: [Self.clock],
-			filesToDelete: &filesToDelete,
-			moduleMembershipArguments: ["--module-name", "Renamed"],
-		)
-		let renamedPath = try renamed.writtenModuleInfoOutputPath
-		await assertThrowsError("`\(URL(fileURLWithPath: renamedPath).path)` records module `Renamed`, which is not among the modules listed with `--dependent-module-name` (`Old`). Clean the build folder, or list `Renamed`.") {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [seamFixtureType(named: "Root", isRoot: true, declarations: [])],
-				dependentModuleInfoPaths: [renamedPath],
-				buildCombinedOutput: true,
-				filesToDelete: &filesToDelete,
-				skipCompileVerification: true,
-				moduleMembershipArguments: ["--dependent-module-name", "Old"],
-			)
-		}
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [seamFixtureType(named: "Root", isRoot: true, declarations: [])],
-			dependentModuleInfoPaths: [renamedPath],
-			buildCombinedOutput: true,
-			filesToDelete: &filesToDelete,
-			skipCompileVerification: true,
-			moduleMembershipArguments: ["--dependent-module-name", "Renamed"],
-		)
-		#expect(output.combinedOutput != nil)
-	}
-
 	// MARK: Tests – Writes
 
 	@Test

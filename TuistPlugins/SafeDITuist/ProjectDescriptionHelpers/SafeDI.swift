@@ -295,24 +295,6 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 			;;
 	esac
 
-	# Name each module `dependencies:` lists, so that a listed `.safedi` that
-	# records another module's name is an error. Each `.safedi` is named after
-	# the module it records, so a renamed module's old file still records its
-	# old name: delete it, or clean the build folder.
-	case "$generate_help" in
-		*--dependent-module-name*)
-			if [ -n "$dependency_names_csv" ]; then
-				old_ifs="$IFS"
-				IFS=','
-				# shellcheck disable=SC2086
-				for dependency_name in $dependency_names_csv; do
-					set -- "$@" --dependent-module-name "$dependency_name"
-				done
-				IFS="$old_ifs"
-			fi
-			;;
-	esac
-
 	"$safedi_tool" generate "$@"
 
 	echo "SafeDI: generated $module_info_output"
