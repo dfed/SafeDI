@@ -536,7 +536,7 @@ private struct ScopeGeneratorUnderConstruction {
 		fill: Fill? = nil,
 		buildsWithHandWrittenMocks: Bool = false,
 		previousPassGenerator: ScopeGenerator?,
-		cycleParameterContexts: [Property: CycleParameterContext],
+		cycleParameterContexts: [ScopeGenerator.BuiltDeclaration: CycleParameterContext],
 		cycleParameterProvidedForms: Set<Property>,
 		cycleParameterFormsNotProvidedAboveFunction: Set<Property>,
 		cycleParameterFormsNoDeclarationCreates: Set<Property>,
@@ -582,8 +582,12 @@ private struct ScopeGeneratorUnderConstruction {
 				cycleParameterLabelsBeingBuilt.insert(property.label)
 			}
 		}
-		let closedOnProperty = closedOnDeclarationIndex.map { propertyStack[$0] }
-		let isPropertyCycle = closedOnProperty != nil
+		// The declaration repeated is built for this scope's concrete type, which its entry records or, on a fill's stack,
+		// is taken to be.
+		let closedOnDeclaration = closedOnDeclarationIndex.map {
+			ScopeGenerator.BuiltDeclaration(property: propertyStack[$0], concreteType: scope.instantiable.concreteInstantiable)
+		}
+		let isPropertyCycle = closedOnDeclaration != nil
 		// The parameters of this scope's builder function that the pass before found, when a lazy cycle closes on it,
 		// or those of the function a cycle-closing scope refers to. Nearly every scope has neither.
 		let ownCycleParameters = if !isPropertyCycle, property != nil {
@@ -591,7 +595,7 @@ private struct ScopeGeneratorUnderConstruction {
 		} else {
 			[CycleParameter]()
 		}
-		let closedOnContext = closedOnProperty.flatMap { cycleParameterContexts[$0] }
+		let closedOnContext = closedOnDeclaration.flatMap { cycleParameterContexts[$0] }
 		let enclosingScopeReceivableProperties = receivableProperties
 		var receivableProperties = receivableProperties.union(scope.createdProperties)
 		// The parameters this scope passes the builder function a lazy cycle closes on that are unavailable where it
@@ -792,7 +796,7 @@ private struct ScopeGeneratorUnderConstruction {
 			childCycleParameterContexts = childCycleParameterContexts.mapValues { $0.declaring(declaredProperties) }
 		}
 		if let property, !ownCycleParameters.isEmpty {
-			childCycleParameterContexts[property] = CycleParameterContext(parameters: ownCycleParameters)
+			childCycleParameterContexts[ScopeGenerator.BuiltDeclaration(property: property, concreteType: scope.instantiable.concreteInstantiable)] = CycleParameterContext(parameters: ownCycleParameters)
 		}
 		self.childCycleParameterContexts = childCycleParameterContexts
 		// The forms the parameters of the functions enclosing this scope provide, which a declaration of their label here
@@ -844,7 +848,7 @@ private struct ScopeGeneratorUnderConstruction {
 		self.fill = fill
 		self.erasedToConcreteExistential = erasedToConcreteExistential
 		self.isPropertyCycle = isPropertyCycle
-		self.closedOnProperty = closedOnProperty
+		self.closedOnDeclaration = closedOnDeclaration
 		self.forMockGeneration = forMockGeneration
 		self.startsCodeGeneration = startsCodeGeneration
 		self.buildsWithHandWrittenMocks = buildsWithHandWrittenMocks
@@ -1074,7 +1078,7 @@ private struct ScopeGeneratorUnderConstruction {
 			forwardedLazilyInstantiatedInstanceProperties: scope.forwardedLazilyInstantiatedInstanceProperties,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			isPropertyCycle: isPropertyCycle,
-			closedOnProperty: closedOnProperty,
+			closedOnDeclaration: closedOnDeclaration,
 			constructionComments: scope.constructionComments,
 			seamCall: scope.seamCall,
 			publicMockCall: scope.publicMockCall,
@@ -1168,9 +1172,9 @@ private struct ScopeGeneratorUnderConstruction {
 	private let passedCycleParameters: [CycleParameter]
 	/// Those of `passedCycleParameters` that are unavailable where this scope passes them, which it passes `nil`.
 	private let cycleParameterUnavailableProperties: Set<Property>
-	/// For each function enclosing the scopes this scope builds that a lazy cycle closes on, by the property it builds,
+	/// For each function enclosing the scopes this scope builds that a lazy cycle closes on, by the declaration it builds,
 	/// its parameters with the nearest declaration of each label (see `CycleParameterContext`).
-	private let childCycleParameterContexts: [Property: CycleParameterContext]
+	private let childCycleParameterContexts: [ScopeGenerator.BuiltDeclaration: CycleParameterContext]
 	/// The forms the parameters of the functions enclosing the scopes this scope builds provide, which no declaration
 	/// between those functions and the scopes this one builds hides.
 	private let childCycleParameterProvidedForms: Set<Property>
@@ -1283,8 +1287,8 @@ private struct ScopeGeneratorUnderConstruction {
 	private var nextFillIndex = 0
 	private let erasedToConcreteExistential: Bool
 	private let isPropertyCycle: Bool
-	/// The declaration this scope repeats when it closes a cycle (see `ScopeGenerator.closedOnProperty`), or `nil`.
-	private let closedOnProperty: Property?
+	/// The declaration this scope repeats when it closes a cycle (see `ScopeGenerator.closedOnDeclaration`), or `nil`.
+	private let closedOnDeclaration: ScopeGenerator.BuiltDeclaration?
 	private let forMockGeneration: Bool
 	private let startsCodeGeneration: Bool
 

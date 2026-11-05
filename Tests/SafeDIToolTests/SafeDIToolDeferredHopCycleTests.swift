@@ -2135,6 +2135,409 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsOuterDeclarationsRenamedBuilder_whenDeclarationOfSameLabelAndTypeForAnotherTypeIsBetweenCloserAndDeclarationItRepeats() async throws {
+		// `SettingsFlow`'s `flow` repeats the root's, built for `LoggedInFlow`, past `Settings`' `flow`, built for
+		// `SettingsFlow`, whose function would otherwise have the name the closer calls.
+		let fixture = Self.flowFixture(
+			rootAttributes: "(isRoot: true)",
+			settingsAttributes: "",
+			settingsFlow: #"@Instantiated(fulfilledByType: "SettingsFlow") let flow: Flow"#,
+			settingsFlowDeclaration: #"@Instantiated(fulfilledByType: "LoggedInFlow") let flow: Flow"#,
+		)
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_flow() -> LoggedInFlow {
+			            func __safeDI_settingsBuilder() -> Settings {
+			                func __safeDI_flow_Flow() -> SettingsFlow {
+			                    let flow: Flow = __safeDI_flow()
+			                    return SettingsFlow(flow: flow)
+			                }
+			                let flow: Flow = __safeDI_flow_Flow()
+			                return Settings(flow: flow)
+			            }
+			            let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
+			            return LoggedInFlow(settingsBuilder: settingsBuilder)
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        self.init(flow: flow)
+			    }
+			}
+			""",
+		])
+		try expectValuesAgree(of: fixture, output: output, knownRight: [
+			"Root+SafeDI.swift": Self.shadowedClosedOnFlowKnownRight,
+		], probes: ["Root()"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_callsOuterDeclarationsRenamedBuilder_whenDeclarationOfSameLabelAndTypeForAnotherTypeIsBetweenCloserAndDeclarationItRepeats() async throws {
+		let fixture = Self.flowFixture(
+			rootAttributes: "(isRoot: true, generateMock: true)",
+			settingsAttributes: "",
+			settingsFlow: #"@Instantiated(fulfilledByType: "SettingsFlow") let flow: Flow"#,
+			settingsFlowDeclaration: #"@Instantiated(fulfilledByType: "LoggedInFlow") let flow: Flow"#,
+		)
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.mockFiles == [
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            flow: LoggedInFlow.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.flow = flow
+			        }
+
+			        let flow: LoggedInFlow.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_flow() -> Flow {
+			            func __safeDI_settingsBuilder() -> Settings {
+			                func __safeDI_flow_Flow() -> Flow {
+			                    let flow: Flow = __safeDI_flow()
+			                    return if let safeDIBuilder = safeDIOverrides.flow.settingsBuilder.flow.safeDIBuilder { safeDIBuilder(flow) } else { SettingsFlow(flow: flow) }
+			                }
+			                let flow: Flow = __safeDI_flow_Flow()
+			                return if let safeDIBuilder = safeDIOverrides.flow.settingsBuilder.safeDIBuilder { safeDIBuilder(flow) } else { Settings(flow: flow) }
+			            }
+			            let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
+			            return if let safeDIBuilder = safeDIOverrides.flow.safeDIBuilder { safeDIBuilder(settingsBuilder) } else { LoggedInFlow(settingsBuilder: settingsBuilder) }
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        return Root(flow: flow)
+			    }
+			}
+			#endif
+			""",
+		])
+		try expectValuesAgree(of: fixture, output: output, knownRight: [
+			"Root+SafeDI.swift": Self.shadowedClosedOnFlowKnownRight + """
+
+
+			extension Root {
+			    static func mock() -> Root {
+			        Root()
+			    }
+			}
+			""",
+		], probes: ["Root.mock()"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_callsOuterDeclarationsRenamedBuilder_whenMockedTypeIsBuiltAgainPastDeclarationOfSameLabelAndTypeForAnotherType() async throws {
+		// In `Settings.mock()`, the `flow` of the `Settings` that `settingsBuilder` builds repeats the mocked type's own,
+		// built for `SettingsFlow`, past `SettingsFlow`'s `flow`, built for `LoggedInFlow`.
+		let fixture = Self.flowFixture(
+			rootAttributes: "(isRoot: true)",
+			settingsAttributes: "(generateMock: true)",
+			settingsFlow: #"@Instantiated(fulfilledByType: "SettingsFlow") let flow: Flow"#,
+			settingsFlowDeclaration: #"@Instantiated(fulfilledByType: "LoggedInFlow") let flow: Flow"#,
+		)
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.mockFiles == [
+			"Settings+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Settings {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            flow: SettingsFlow.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.flow = flow
+			        }
+
+			        let flow: SettingsFlow.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Settings {
+			        func __safeDI_flow() -> Flow {
+			            func __safeDI_flow_Flow() -> Flow {
+			                func __safeDI_settingsBuilder() -> Settings {
+			                    let flow: Flow = __safeDI_flow()
+			                    return Settings(flow: flow)
+			                }
+			                let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
+			                return LoggedInFlow(settingsBuilder: settingsBuilder)
+			            }
+			            let flow: Flow = __safeDI_flow_Flow()
+			            return if let safeDIBuilder = safeDIOverrides.flow.safeDIBuilder { safeDIBuilder(flow) } else { SettingsFlow(flow: flow) }
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        return Settings(flow: flow)
+			    }
+			}
+			#endif
+
+			#if DEBUG
+			extension Settings {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            flow: SettingsFlow.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: ((Flow) -> Settings)? = nil
+			        ) {
+			            self.flow = flow
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let flow: SettingsFlow.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Flow) -> Settings)?
+			    }
+			}
+			#endif
+			""",
+		])
+		try expectValuesAgree(of: fixture, output: output, knownRight: [
+			"Root+SafeDI.swift": Self.shadowedClosedOnFlowKnownRight + """
+
+
+			extension Settings {
+			    static func mock() -> Settings {
+			        func makeSettingsFlow() -> SettingsFlow {
+			            SettingsFlow(flow: LoggedInFlow(settingsBuilder: Instantiator<Settings> { Settings(flow: makeSettingsFlow()) }))
+			        }
+			        return Settings(flow: makeSettingsFlow())
+			    }
+			}
+			""",
+		], probes: ["Settings.mock()"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsOuterDeclarationsRenamedBuilder_whenConstantOfSameLabelAndTypeForAnotherTypeHoldsInstantiatorThatClosesCycle() async throws {
+		// Before, `X`'s `flow`, named `LoggedInFlow`, was the `SettingsFlow` whose function encloses it.
+		let fixture = [
+			Self.type("Root", attributes: "(isRoot: true)", #"@Instantiated(fulfilledByType: "LoggedInFlow") let flow: Flow"#) + "\n\npublic protocol Flow: AnyObject {}",
+			Self.type("LoggedInFlow", #"@Instantiated(fulfilledByType: "SettingsFlow") let flow: Flow"#, conformances: ", Flow"),
+			Self.type("SettingsFlow", "@Instantiated let xBuilder: Instantiator<X>", conformances: ", Flow"),
+			Self.type("X", #"@Instantiated(fulfilledByType: "LoggedInFlow") let flow: Flow"#),
+		]
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_flow() -> LoggedInFlow {
+			            func __safeDI_flow_Flow() -> SettingsFlow {
+			                func __safeDI_xBuilder() -> X {
+			                    let flow: Flow = __safeDI_flow()
+			                    return X(flow: flow)
+			                }
+			                let xBuilder = Instantiator<X>(__safeDI_xBuilder)
+			                return SettingsFlow(xBuilder: xBuilder)
+			            }
+			            let flow: Flow = __safeDI_flow_Flow()
+			            return LoggedInFlow(flow: flow)
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        self.init(flow: flow)
+			    }
+			}
+			""",
+		])
+		try expectValuesAgree(of: fixture, output: output, knownRight: [
+			"Root+SafeDI.swift": """
+			extension Root {
+			    public convenience init() {
+			        func makeLoggedInFlow() -> LoggedInFlow {
+			            LoggedInFlow(flow: SettingsFlow(xBuilder: Instantiator<X> { X(flow: makeLoggedInFlow()) }))
+			        }
+			        self.init(flow: makeLoggedInFlow())
+			    }
+			}
+			""",
+		], probes: ["Root()"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsOuterDeclarationsRenamedBuilderToWrapper_whenLazilyInstantiatedDependencyClosesCyclePastDeclarationOfSameLabelForAnotherType() async throws {
+		let fixture = Self.flowFixture(
+			rootAttributes: "(isRoot: true)",
+			settingsAttributes: "",
+			settingsFlow: #"@Instantiated(fulfilledByType: "SettingsFlow") let flow: Flow"#,
+			settingsFlowDeclaration: #"@Instantiated(fulfilledByType: "LoggedInFlow") let flow: LazilyInstantiated<Flow>"#,
+		)
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_flow() -> LoggedInFlow {
+			            func __safeDI_settingsBuilder() -> Settings {
+			                func __safeDI_flow_Flow() -> SettingsFlow {
+			                    let flow = LazilyInstantiated<Flow>(__safeDI_flow)
+			                    return SettingsFlow(flow: flow)
+			                }
+			                let flow: Flow = __safeDI_flow_Flow()
+			                return Settings(flow: flow)
+			            }
+			            let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
+			            return LoggedInFlow(settingsBuilder: settingsBuilder)
+			        }
+			        let flow: Flow = __safeDI_flow()
+			        self.init(flow: flow)
+			    }
+			}
+			""",
+		])
+		try expectValuesAgree(of: fixture, output: output, knownRight: [
+			"Root+SafeDI.swift": """
+			extension Root {
+			    public convenience init() {
+			        func makeLoggedInFlow() -> LoggedInFlow {
+			            LoggedInFlow(settingsBuilder: Instantiator<Settings> {
+			                Settings(flow: SettingsFlow(flow: LazilyInstantiated<Flow> { makeLoggedInFlow() }))
+			            })
+			        }
+			        self.init(flow: makeLoggedInFlow())
+			    }
+			}
+			""",
+		], probes: ["Root()"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_handsOuterDeclarationsRenamedBuilderToInstantiator_whenErasedInstantiatorClosesCyclePastDeclarationOfSameLabelForAnotherType() async throws {
+		let erasedFlowBuilder = { (type: String) in #"@Instantiated(fulfilledByType: ""# + type + #"", erasedToConcreteExistential: true) let flowBuilder: ErasedInstantiator<(), AnyFlow>"# }
+		let fixture = [
+			Self.type("Root", attributes: "(isRoot: true)", erasedFlowBuilder("LoggedInFlow")) + """
+
+
+			public protocol Flow: AnyObject {}
+
+			public final class AnyFlow: Flow {
+			    public init(_ flow: Flow) {
+			        self.flow = flow
+			    }
+
+			    public let flow: Flow
+			}
+			""",
+			Self.type("LoggedInFlow", "@Instantiated let settingsBuilder: Instantiator<Settings>", conformances: ", Flow"),
+			Self.type("Settings", erasedFlowBuilder("SettingsFlow")),
+			Self.type("SettingsFlow", erasedFlowBuilder("LoggedInFlow"), conformances: ", Flow"),
+		]
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_flowBuilder() -> LoggedInFlow {
+			            func __safeDI_settingsBuilder() -> Settings {
+			                func __safeDI_flowBuilder_AnyFlow() -> SettingsFlow {
+			                    let flowBuilder = ErasedInstantiator<(), AnyFlow> {
+			                        AnyFlow(__safeDI_flowBuilder())
+			                    }
+			                    return SettingsFlow(flowBuilder: flowBuilder)
+			                }
+			                let flowBuilder = ErasedInstantiator<(), AnyFlow> {
+			                    AnyFlow(__safeDI_flowBuilder_AnyFlow())
+			                }
+			                return Settings(flowBuilder: flowBuilder)
+			            }
+			            let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
+			            return LoggedInFlow(settingsBuilder: settingsBuilder)
+			        }
+			        let flowBuilder = ErasedInstantiator<(), AnyFlow> {
+			            AnyFlow(__safeDI_flowBuilder())
+			        }
+			        self.init(flowBuilder: flowBuilder)
+			    }
+			}
+			""",
+		])
+		try expectValuesAgree(of: fixture, output: output, knownRight: [
+			"Root+SafeDI.swift": """
+			extension Root {
+			    public convenience init() {
+			        func makeLoggedInFlow() -> LoggedInFlow {
+			            LoggedInFlow(settingsBuilder: Instantiator<Settings> {
+			                Settings(flowBuilder: ErasedInstantiator<(), AnyFlow> {
+			                    AnyFlow(SettingsFlow(flowBuilder: ErasedInstantiator<(), AnyFlow> { AnyFlow(makeLoggedInFlow()) }))
+			                })
+			            })
+			        }
+			        self.init(flowBuilder: ErasedInstantiator<(), AnyFlow> { AnyFlow(makeLoggedInFlow()) })
+			    }
+			}
+			""",
+		], probes: ["Root().flowBuilder.instantiate()"])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesCycleParametersToOuterDeclarationsRenamedBuilder_whenConstantClosesCyclePastDeclarationOfSameLabelForAnotherType() async throws {
+		// `LoggedInFlow` receives `session`, which `Settings` declares again between the closer and the root's `flow`: the
+		// root's function takes it, and `Settings`' `flow`, built for `SettingsFlow`, takes nothing.
+		let fixture = [
+			Self.type("Root", attributes: "(isRoot: true)", "@Instantiated let session: Session", #"@Instantiated(fulfilledByType: "LoggedInFlow") let flow: Flow"#) + "\n\npublic protocol Flow: AnyObject {}",
+			Self.type("LoggedInFlow", "@Received let session: Session", "@Instantiated let settingsBuilder: Instantiator<Settings>", conformances: ", Flow"),
+			Self.type("Session"),
+			Self.type("Settings", "@Instantiated let session: Session", #"@Instantiated(fulfilledByType: "SettingsFlow") let flow: Flow"#),
+			Self.type("SettingsFlow", #"@Instantiated(fulfilledByType: "LoggedInFlow") let flow: Flow"#, conformances: ", Flow"),
+		]
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        let session = Session()
+			        func __safeDI_flow(session: Session) -> LoggedInFlow {
+			            func __safeDI_settingsBuilder() -> Settings {
+			                let session = Session()
+			                func __safeDI_flow_Flow() -> SettingsFlow {
+			                    let flow: Flow = __safeDI_flow(session: session)
+			                    return SettingsFlow(flow: flow)
+			                }
+			                let flow: Flow = __safeDI_flow_Flow()
+			                return Settings(session: session, flow: flow)
+			            }
+			            let settingsBuilder = Instantiator<Settings>(__safeDI_settingsBuilder)
+			            return LoggedInFlow(session: session, settingsBuilder: settingsBuilder)
+			        }
+			        let flow: Flow = __safeDI_flow(session: session)
+			        self.init(session: session, flow: flow)
+			    }
+			}
+			""",
+		])
+		// The `LoggedInFlow` built again receives the `Session` its `Settings` holds.
+		try expectValuesAgree(of: fixture, output: output, knownRight: [
+			"Root+SafeDI.swift": """
+			extension Root {
+			    public convenience init() {
+			        func makeLoggedInFlow(session: Session) -> LoggedInFlow {
+			            LoggedInFlow(session: session, settingsBuilder: Instantiator<Settings> {
+			                let settingsSession = Session()
+			                return Settings(session: settingsSession, flow: SettingsFlow(flow: makeLoggedInFlow(session: settingsSession)))
+			            })
+			        }
+			        let session = Session()
+			        self.init(session: session, flow: makeLoggedInFlow(session: session))
+			    }
+			}
+			""",
+		], probes: ["Root()"])
+	}
+
 	// MARK: Tests – A receive resolves to the nearest declaration of its label
 
 	@Test
@@ -2742,15 +3145,27 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 	}
 
 	/// A root whose `flow` is a `LoggedInFlow`, which holds an instantiator of `Settings`, whose own flow is
-	/// `settingsFlow`.
-	private static func flowFixture(rootAttributes: String, settingsAttributes: String, loggedInFlowAttributes: String = "", settingsFlow: String) -> [String] {
+	/// `settingsFlow`, with `settingsFlowDeclaration`, when given, declared by `SettingsFlow`.
+	private static func flowFixture(rootAttributes: String, settingsAttributes: String, loggedInFlowAttributes: String = "", settingsFlow: String, settingsFlowDeclaration: String? = nil) -> [String] {
 		[
 			Self.type("Root", attributes: rootAttributes, #"@Instantiated(fulfilledByType: "LoggedInFlow") let flow: Flow"#) + "\n\npublic protocol Flow: AnyObject {}",
 			Self.type("LoggedInFlow", attributes: loggedInFlowAttributes, "@Instantiated let settingsBuilder: Instantiator<Settings>", conformances: ", Flow"),
 			Self.type("Settings", attributes: settingsAttributes, settingsFlow),
-			Self.type("SettingsFlow", conformances: ", Flow"),
+			settingsFlowDeclaration.map { Self.type("SettingsFlow", $0, conformances: ", Flow") } ?? Self.type("SettingsFlow", conformances: ", Flow"),
 		]
 	}
+
+	/// What the flow family with `SettingsFlow`'s `flow` built again for `LoggedInFlow` builds from `Root()`, written by hand.
+	private static let shadowedClosedOnFlowKnownRight = """
+	extension Root {
+	    public convenience init() {
+	        func makeLoggedInFlow() -> LoggedInFlow {
+	            LoggedInFlow(settingsBuilder: Instantiator<Settings> { Settings(flow: SettingsFlow(flow: makeLoggedInFlow())) })
+	        }
+	        self.init(flow: makeLoggedInFlow())
+	    }
+	}
+	"""
 
 	/// The `A -> B -> Instantiator<C> -> C -> A` family with `C` also instantiating `D`, which receives `a`, entered by
 	/// `rootDeclaration`, and with `mockedType` generating a mock.
