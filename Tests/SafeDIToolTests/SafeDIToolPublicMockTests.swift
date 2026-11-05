@@ -7200,7 +7200,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        _ = Service.__safeDI_Service_mock_51799E6AA5E7B634.self
+		        _ = Service.__safeDI_Service_mock_51799E6AA5E7B634.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Service", declaringModule: "Core"))
 		        let service = Service.mock(safeDIOverrides: safeDIOverrides.service)
 		        return Screen(service: service)
 		    }

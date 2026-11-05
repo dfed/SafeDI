@@ -1869,7 +1869,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 	private static func screenTreeCallingMidsSession(integration: MultiModuleIntegration) -> String {
 		// A plugin's call carries the plugin comment, and a plugin's run reads every first-party module, so it names no
 		// type it reads no declaration of.
-		let pluginComment = integration == .swiftPackagePlugin ? " // If this line does not compile, add the SafeDI plugin to the target that declares Session." : ""
+		let pluginComment = integration.seamCallComment(type: "Session", declaringModule: "Mid")
 		let unreadTypeComment = integration == .moduleInfo ? "    // SafeDI counts `Window` as `public`: no module it reads declares it narrower. If `Window` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n" : ""
 		return """
 		extension Screen {
@@ -1893,7 +1893,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 	private static func screenMockCallingMidsService(integration: MultiModuleIntegration) -> String {
 		// A plugin's call carries the plugin comment, and a plugin's run reads every first-party module, so it names no
 		// type it reads no declaration of.
-		let pluginComment = integration == .swiftPackagePlugin ? " // If this line does not compile, add the SafeDI plugin to the target that declares Service." : ""
+		let pluginComment = integration.seamCallComment(type: "Service", declaringModule: "Mid")
 		let unreadTypeComment = integration == .moduleInfo ? "    // SafeDI counts `Window` as `public`: no module it reads declares it narrower. If `Window` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n" : ""
 		return """
 		#if DEBUG

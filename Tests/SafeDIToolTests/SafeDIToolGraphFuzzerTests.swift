@@ -3015,14 +3015,14 @@ struct SafeDIToolGraphFuzzerTests {
 	/// draws were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 92, 98, 153, 163, 180, 196, 277, 326, 605, 609, 743]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x9D453428B7158C47
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x8FD61029B58FF2FD
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
 	/// `seamCorpus_drawsEachShapeInThePinnedNumberOfGraphs_whenFixturesAreGeneratedWithoutTheTool`.
 	static let seamCorpusDrawFeatureCounts: [GraphFuzzerSeamDrawFeature: Int] = [
 		.collidingFormsBeneathSeam: 67,
-		.innerSeam: 342,
+		.innerSeam: 371,
 		.instanceHeldByCaller: 393,
 		.instanceReceiveBeneathSeam: 242,
 		.otherKindWrapperReceiveBeneathSeam: 32,
@@ -3076,7 +3076,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.seamTypeNarrowerThanPublic: 236,
 		.receiverNarrowerThanType: 301,
 		.receiverTypeNarrowerThanItsInitializer: 86,
-		.ownInitializerNarrowerWithNoPassThrough: 70,
+		.ownInitializerNarrowerWithNoPassThrough: 68,
 		.ownInitializerNarrowerWithOnlyOptionalNarrowerPassThroughs: 80,
 		.ownInitializerNarrowerThanTwoParameterLevels: 50,
 		.requiredParameterNarrowerThanSeamType: 51,

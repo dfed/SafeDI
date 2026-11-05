@@ -1291,12 +1291,9 @@ struct Generate: AsyncParsableCommand {
 			integration = .targetGraph
 			moduleNamesRead = targetGraphModuleNames
 		} else if writesModuleInfoWithoutTargetGraph || dependentModuleInfoFilePath != nil {
-			let readModuleNames = dependentModuleInfo.compactMap(\.moduleName)
-			guard readModuleNames.count == dependentModuleInfo.count else {
-				return nil
-			}
 			integration = .moduleInfo
-			moduleNamesRead = Set(readModuleNames)
+			// Every module info names its module (`--module-info-output` requires `--module-name`).
+			moduleNamesRead = Set(dependentModuleInfo.compactMap(\.moduleName))
 		} else {
 			return nil
 		}

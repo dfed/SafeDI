@@ -2402,7 +2402,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		    public init() {
 		        let database = Database()
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_0514A8D5AAB19F68.self
+		            _ = Screen.__safeDI_Screen_0514A8D5AAB19F68.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Screen", declaringModule: "Feature"))
 		            return Screen(database: database, logger: nil)
 		        }
 		        let screen: Screen = __safeDI_screen()
@@ -3456,7 +3456,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_screen() -> Screen {
-		            _ = Screen.__safeDI_Screen_C70D9378A6E61F91.self
+		            _ = Screen.__safeDI_Screen_C70D9378A6E61F91.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Screen", declaringModule: "Feature"))
 		            return Screen(database: nil)
 		        }
 		        let screen: Screen = __safeDI_screen()
@@ -5183,7 +5183,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_5F3FDE2D827DABB3.self
+		            _ = Service.__safeDI_Service_5F3FDE2D827DABB3.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Service", declaringModule: "Core"))
 		            return Service(logger: nil)
 		        }
 		        let service: any ServiceProtocol = __safeDI_service()

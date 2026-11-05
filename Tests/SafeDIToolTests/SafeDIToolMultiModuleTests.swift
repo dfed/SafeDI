@@ -1026,49 +1026,6 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 		}
 	}
 
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func multiModuleTest_offersEveryRemedy_whenModuleInfoTheRunReadsNamesNoModule() async {
-		// `Feed`'s `.safedi` was written without `--module-name`, so SafeDI cannot tell whether the `Feed` the file imports
-		// is a module it read, and names no import.
-		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			"\(fixtures["App"]!["Root.swift"]):6:5: error: No @Instantiable type or extension fulfills `Missing`, which @Instantiated property `missing: Missing` instantiates. Decorate `Missing`, or an extension of it, with @Instantiable; list `Missing` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)"
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(
-						name: "Feed",
-						packageName: "Shop",
-						swiftFileContentByFilePath: ["FeedScreen.swift": """
-						@Instantiable
-						public struct FeedScreen: Instantiable {
-						    public init() {}
-						}
-						"""],
-						omitsModuleName: true,
-					),
-					ModuleFixture(
-						name: "App",
-						packageName: "Shop",
-						swiftFileContentByFilePath: ["Root.swift": """
-						import Feed
-
-						@Instantiable(isRoot: true)
-						public struct Root: Instantiable {
-						    public init(missing: Missing) { self.missing = missing }
-						    @Instantiated let missing: Missing
-						}
-						"""],
-						dependencies: ["Feed"],
-					),
-				],
-				integration: .moduleInfo,
-				compileVerification: .skipped,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func multiModuleTest_offersOnlyDeclaringRemedies_whenFileThatInstantiatesUnfulfilledTypeImportsOnlyModulesSafeDIRead(integration: MultiModuleIntegration) async {

@@ -312,7 +312,8 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		let directOutput = try await executeSafeDIToolMultiModuleTest(modules: modules(["Core", "Feed"]), integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(viewOutput.modules["App"]?.generatedFiles == directOutput.modules["App"]?.generatedFiles)
 		// `Token` spelled `internal` keeps `CoreScreen`'s `public` tier from taking it; unspelled, it is `public`.
-		let call = spelling == "" ? "FeedScreen.__safeDI_FeedScreen_AB265D1ECB6CA342.self\n            return FeedScreen(token: nil)" : "FeedScreen.__safeDI_FeedScreen_CBF29CE484222325.self\n            return FeedScreen()"
+		let callComment = MultiModuleIntegration.moduleInfo.seamCallComment(type: "FeedScreen", declaringModule: "Feed")
+		let call = spelling == "" ? "FeedScreen.__safeDI_FeedScreen_AB265D1ECB6CA342.self\(callComment)\n            return FeedScreen(token: nil)" : "FeedScreen.__safeDI_FeedScreen_CBF29CE484222325.self\(callComment)\n            return FeedScreen()"
 		#expect(viewOutput.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feed") + "\n\n" + """
 		extension Root {
 		    public init() {
@@ -341,12 +342,12 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_feedScreen() -> FeedScreen {
-		            _ = FeedScreen.__safeDI_FeedScreen_029593DA1BB2FBD5.self
+		            _ = FeedScreen.__safeDI_FeedScreen_029593DA1BB2FBD5.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "FeedScreen", declaringModule: "Feed"))
 		            return FeedScreen(token: nil)
 		        }
 		        let feedScreen: FeedScreen = __safeDI_feedScreen()
 		        func __safeDI_session() -> Session {
-		            _ = Session.__safeDI_Session_029593DA1BB2FBD5.self
+		            _ = Session.__safeDI_Session_029593DA1BB2FBD5.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "Session", declaringModule: "Session"))
 		            return Session(token: nil)
 		        }
 		        let session: Session = __safeDI_session()
@@ -400,7 +401,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		let fileName = integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift"
-		let pluginComment = integration == .moduleInfo ? "" : " // If this line does not compile, add the SafeDI plugin to the target that declares FeedScreen."
+		let pluginComment = integration.seamCallComment(type: "FeedScreen", declaringModule: "Feed")
 		#expect(output.modules["App"]?.generatedFiles == [fileName: generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feed") + "\n\n" + """
 		extension Root {
 		    public init() {
@@ -454,7 +455,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		// reaches `Badge`, as when `App` lists `Core` too.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.packageMentionChain(appPackage: "Shop"), integration: integration, filesToDelete: &filesToDelete)
 		let fileName = integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift"
-		let pluginComment = integration == .moduleInfo ? "" : " // If this line does not compile, add the SafeDI plugin to the target that declares Service."
+		let pluginComment = integration.seamCallComment(type: "Service", declaringModule: "Feed")
 		#expect(output.modules["App"]?.generatedFiles == [fileName: generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feed") + "\n" + Self.importBlock("SafeDI") + "\n\n" + """
 		extension Root {
 		    public init() {
@@ -546,7 +547,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		let directOutput = try await executeSafeDIToolMultiModuleTest(modules: modules(["Core", "Feed", "Kit"]), integration: integration, filesToDelete: &filesToDelete)
 		#expect(viewOutput.modules["App"]?.generatedFiles == directOutput.modules["App"]?.generatedFiles)
 		let imports = generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feed") + "\n" + Self.importBlock("Kit")
-		let pluginComment = integration == .moduleInfo ? "" : " // If this line does not compile, add the SafeDI plugin to the target that declares FeedService."
+		let pluginComment = integration.seamCallComment(type: "FeedService", declaringModule: "Feed")
 		// `App`'s mock calls `FeedService`'s, which calls `Space.Panel`'s, under the enum `Feed` generated.
 		let appMock = imports + "\n\n" + """
 		#if DEBUG
@@ -620,7 +621,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		let directOutput = try await executeSafeDIToolMultiModuleTest(modules: modules(["Feed", "Mid", "Session"]), integration: integration, filesToDelete: &filesToDelete)
 		#expect(viewOutput.modules["App"]?.generatedFiles == directOutput.modules["App"]?.generatedFiles)
 		let fileName = integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift"
-		let pluginComment = integration == .moduleInfo ? "" : " // If this line does not compile, add the SafeDI plugin to the target that declares MidScreen."
+		let pluginComment = integration.seamCallComment(type: "MidScreen", declaringModule: "Mid")
 		// `token` passes through `MidScreen` and `FeedScreen` to `FeedScreen.Settings`, which receives it only if available.
 		#expect(viewOutput.modules["App"]?.generatedFiles == [fileName: generatedFileHeader + Self.importBlock("Feed") + "\n" + Self.importBlock("Mid") + "\n" + Self.importBlock("Session") + "\n\n" + """
 		extension Root {
@@ -742,7 +743,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_feedScreen() -> FeedScreen {
-			            _ = FeedScreen.__safeDI_FeedScreen_717280493A095F31.self
+			            _ = FeedScreen.__safeDI_FeedScreen_717280493A095F31.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "FeedScreen", declaringModule: "Feed"))
 			            return FeedScreen(theme: nil)
 			        }
 			        let feedScreen: FeedScreen = __safeDI_feedScreen()
@@ -921,7 +922,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> AppFeature {
-		        _ = FeedService.__safeDI_FeedService_mock_51799E6AA5E7B634.self\(carriesPluginComment ? " // If this line does not compile, add the SafeDI plugin to the target that declares FeedService." : "")
+		        _ = FeedService.__safeDI_FeedService_mock_51799E6AA5E7B634.self\((carriesPluginComment ? MultiModuleIntegration.swiftPackagePlugin : .moduleInfo).seamCallComment(type: "FeedService", declaringModule: "Feed"))
 		        let feedService = FeedService.mock(safeDIOverrides: safeDIOverrides.feedService)
 		        return AppFeature(feedService: feedService)
 		    }
@@ -957,7 +958,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 	extension Root {
 	    public init() {
 	        func __safeDI_feedScreen() -> FeedScreen {
-	            _ = FeedScreen.__safeDI_FeedScreen_029593DA1BB2FBD5.self
+	            _ = FeedScreen.__safeDI_FeedScreen_029593DA1BB2FBD5.self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "FeedScreen", declaringModule: "Feed"))
 	            return FeedScreen(token: nil)
 	        }
 	        let feedScreen: FeedScreen = __safeDI_feedScreen()
