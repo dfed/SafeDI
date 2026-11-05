@@ -396,6 +396,8 @@ With more than one `@Forwarded` property, `instantiate(_:)` takes them as one tu
 
 Forwarded property types do not need to be decorated with the `@Instantiable` macro. A forwarded value comes from outside the tree, so SafeDI does not follow the `@Received` dependencies of its type.
 
+Forwarding one of SafeDI’s wrappers – an [`Instantiator`](#instantiator), [`ErasedInstantiator`](#erasedinstantiator), or [`LazilyInstantiated`](#lazilyinstantiated), or one of their [`Sendable` twins](#sendable-wrappers) – is deprecated, and SafeDI 3.0 rejects it; the `@Forwarded` macro warns at such a property. Receive the wrapper with `@Received` from the ancestor that declares it, or forward the value it builds. A wrapper type of your own is a plain forwarded value, which the types beneath receive and read themselves.
+
 ### @Received
 
 Property declarations within `@Instantiable` types decorated with [`@Received`](../Sources/SafeDI/Decorators/Received.swift) are injected into the enclosing type’s initializer. A `@Received` property is fulfilled by the nearest `@Instantiated` or `@Forwarded` property above it with the same name and type; if there is none, the build fails.
@@ -514,7 +516,7 @@ public struct ParentView: View, Instantiable {
 }
 ```
 
-An `@Instantiated` erased instantiator must name the type it builds with `fulfilledByType`. An `@Received` or `@Forwarded` one is handed in rather than built, so it names no type: a type below `ParentView` can declare `@Received let childViewBuilder: ErasedInstantiator<(), AnyView>` to receive the instantiator `ParentView` creates. As with any received dependency, the label and the full type must match.
+An `@Instantiated` erased instantiator must name the type it builds with `fulfilledByType`. An `@Received` one is handed in rather than built, so it names no type (as is a `@Forwarded` one, which is [deprecated](#forwarded)): a type below `ParentView` can declare `@Received let childViewBuilder: ErasedInstantiator<(), AnyView>` to receive the instantiator `ParentView` creates. As with any received dependency, the label and the full type must match.
 
 An `ErasedInstantiator` is not `Sendable`. To share one across concurrency domains, use its [`Sendable` twin](#sendable-wrappers), `SendableErasedInstantiator`.
 
@@ -1341,9 +1343,9 @@ A build that neither the `SafeDIGenerator` plugin, the Bazel rule, nor the Tuist
 - **`generate`** (default): Parses Swift source files, builds a dependency graph, validates it, and generates the code of each root, of each type with `generateDependencyTree: true` the module declares, and of each mock. `--combined-output` concatenates every dependency-tree, mock, and mock-configuration body into one statically-known output file — a good fit for any build system that needs rule outputs declared up front. To write one `.swift` per source file instead, as the `SafeDIGenerator` plugin does, pass `--output-directory` an existing directory: `generate` runs `scan` itself, writes its manifest and cache there, and writes `<File>+SafeDI.swift` for each file that declares a root, or a type with `generateDependencyTree: true`, `<File>+SafeDIMock.swift` for each file that declares a mocked type, and `SafeDIMockConfiguration.swift` (pass `--mock-scoped-files` the module’s own files when the input CSV lists others). Or run `scan` yourself and pass `generate --swift-manifest` the manifest it wrote. `generate` writes every output the manifest lists, and writes one without code when its input declares no such type under the active compilation conditions. A manifest written by hand, in the [`SafeDIToolManifest`](../Sources/SafeDICore/Models/SafeDIToolManifest.swift) format, is deprecated: `generate` warns when a manifest lacks fields `scan` always writes, and SafeDI 3.0 rejects such a manifest. `--combined-output` cannot be combined with `--output-directory` or `--swift-manifest`. This is the default subcommand, making it backward compatible with existing prebuild scripts that invoke `SafeDITool` without an explicit subcommand.
 - **`scan`**: Scans Swift source files and produces a manifest JSON describing the `@Instantiable` types found. This is used by the `SafeDIGenerator` plugin to coordinate builds across modules, and is also useful for per-module scanning in custom build systems.
 
-Pass the target's active compilation conditions to `generate --active-compilation-conditions`, or its `SWIFT_ACTIVE_COMPILATION_CONDITIONS` and `OTHER_SWIFT_FLAGS` build settings to `generate --build-setting-active-compilation-conditions` and `--build-setting-other-swift-flags`, so SafeDITool scans the same `#if` clauses the compiler compiles; see [Conditional compilation](#conditional-compilation).
-
 `generate --additional-imported-modules` is deprecated, and SafeDI 3.0 removes it: `generate` warns when it is passed. List those modules in the module’s [`#SafeDIConfiguration`](#safediconfiguration) `additionalImportedModules` instead, which imports them whichever build runs SafeDI.
+
+Pass the target's active compilation conditions to `generate --active-compilation-conditions`, or its `SWIFT_ACTIVE_COMPILATION_CONDITIONS` and `OTHER_SWIFT_FLAGS` build settings to `generate --build-setting-active-compilation-conditions` and `--build-setting-other-swift-flags`, so SafeDITool scans the same `#if` clauses the compiler compiles; see [Conditional compilation](#conditional-compilation).
 
 `SafeDITool` can parse all of your Swift files at once, or, for even better performance, run on each module as part of the build. Add the `--module-info-output` flag so downstream modules can resolve `@Instantiable` types declared upstream without re-parsing the producer's sources. Each producer emits a `.safedi` sidecar; each consumer feeds the producer's `.safedi` back in through `--dependent-module-info-file-path`:
 

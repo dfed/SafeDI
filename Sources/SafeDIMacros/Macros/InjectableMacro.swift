@@ -139,6 +139,22 @@ public struct InjectableMacro: PeerMacro {
 			}
 		}
 
+		// Forwarding a SafeDI wrapper is deprecated in 2.3.0 and an error in 3.0. Asked of the attribute this expansion is
+		// for, so a property that also carries another SafeDI attribute, which the `@Instantiable` macro rejects, is
+		// warned about once.
+		if AttributeListSyntax.Element.attribute(node).forwardedMacro != nil {
+			for binding in variableDecl.bindings {
+				if let type = binding.typeAnnotation?.type,
+				   let wrapperTypeName = type.typeDescription.propertyType.wrapperTypeName
+				{
+					context.diagnose(Diagnostic(
+						node: type,
+						message: InjectableDeprecation.forwardedWrapper(wrapperTypeName: wrapperTypeName),
+					))
+				}
+			}
+		}
+
 		if variableDecl.bindingSpecifier.text != TokenSyntax.keyword(.let).text,
 		   // If there is only one attribute, we know the variable is not decorated with a property wrapper.
 		   variableDecl.attributes.count == 1
@@ -221,6 +237,34 @@ public struct InjectableMacro: PeerMacro {
 			.with(\.leadingTrivia, type.leadingTrivia)
 			.with(\.trailingTrivia, type.trailingTrivia)
 		return withoutOptionality(unwrappedType) ?? unwrappedType
+	}
+
+	// MARK: - InjectableDeprecation
+
+	/// A use of a SafeDI macro that still works and that SafeDI 3.0 rejects. A warning without a fix-it, since the
+	/// replacement changes how the value reaches the type.
+	private enum InjectableDeprecation: DiagnosticMessage {
+		/// `@Forwarded` on a property whose type is the SafeDI wrapper named `wrapperTypeName`, optional or not.
+		case forwardedWrapper(wrapperTypeName: String)
+
+		var message: String {
+			switch self {
+			case let .forwardedWrapper(wrapperTypeName):
+				let article = wrapperTypeName.first.map { "AEIOU".contains($0) } == true ? "an" : "a"
+				return "`@Forwarded` on \(article) `\(wrapperTypeName)` property is deprecated and will be an error in SafeDI 3.0: receive the `\(wrapperTypeName)` with `@Received` from the ancestor that declares it, or forward the value it builds."
+			}
+		}
+
+		var diagnosticID: MessageID {
+			switch self {
+			case .forwardedWrapper:
+				MessageID(domain: "\(Self.self)", id: "forwardedWrapper")
+			}
+		}
+
+		var severity: DiagnosticSeverity {
+			.warning
+		}
 	}
 
 	// MARK: - InjectableError
