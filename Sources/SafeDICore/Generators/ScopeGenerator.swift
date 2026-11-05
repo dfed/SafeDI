@@ -175,6 +175,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
 		fulfillingPropertyIsLazilyInstantiatedInstance = false
 		fulfillingBindingIsOptional = false
+		fulfillingExpression = nil
 		declaredLazilyInstantiatedInstanceProperty = property?.asLazilyInstantiatedInstanceProperty
 		onlyIfAvailableDependencies = instantiable.dependencies.compactMap { dependency in
 			switch dependency.source {
@@ -467,8 +468,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		erasedToConcreteExistential: Bool,
 		onlyIfAvailable: Bool,
 		fulfillingBindingIsOptional: Bool,
+		fulfillingExpression: String? = nil,
 		declarationReference: AliasDeclarationReferences.Reference?,
 	) {
+		self.fulfillingExpression = fulfillingExpression
 		scopeData = .alias(
 			property: property,
 			fulfillingProperty: fulfillingProperty,
@@ -578,6 +581,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		lazilyInstantiatedInstanceProperties = []
 		fulfillingPropertyIsLazilyInstantiatedInstance = false
 		fulfillingBindingIsOptional = false
+		fulfillingExpression = nil
 		declaredLazilyInstantiatedInstanceProperty = holeProperty.asLazilyInstantiatedInstanceProperty
 		property = holeProperty
 		builtInlineSeamComment = nil
@@ -712,6 +716,16 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	nonisolated var holeSite: (property: Property, erasedToConcreteExistential: Bool)? {
 		if case let .hole(property, erasedToConcreteExistential, _) = scopeData {
 			(property, erasedToConcreteExistential)
+		} else {
+			nil
+		}
+	}
+
+	/// The hole a site's generator binds, or `nil` for every generator that is no site, and for a site of a tree built
+	/// only to compute the seam's signature.
+	nonisolated var siteHole: SeamSignature.Hole? {
+		if case let .hole(_, _, site) = scopeData {
+			site
 		} else {
 			nil
 		}
@@ -930,6 +944,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		let sendableBuilder: Property
 		/// The type that declares `sendableBuilder`.
 		let sendableBuilderDeclaringType: TypeDescription
+		/// The seam whose generated initializer takes the received property as a `@Sendable` deferred parameter, when that
+		/// parameter is what captures the wrapper, or `nil` when a builder function does.
+		let capturingSeamType: TypeDescription?
 		/// The wrapper property the builder function would capture.
 		let wrapperProperty: Property
 		/// The type that declares `wrapperProperty`, or `nil` when a mock root's tree receives it
@@ -955,16 +972,37 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// A seam's generated initializer declares its parameters outside every builder function, so a `@Sendable`
 		// builder inside the tree that reads a parameter that is a wrapper, or the instance of a non-optional one,
 		// captures it, as it captures a declaration of the tree. An optional wrapper parameter offers no instance.
+		// A deferred parameter is declared as the `LazilyInstantiated` its body holds it in, whose instance the tree reads, so
+		// a read inside a `@Sendable` builder function of a parameter held in a wrapper that is not `Sendable` is reported
+		// here rather than failing to compile; the signature makes every such parameter `@Sendable`, so none is.
 		var declarationsByLabel = [String: [VisibleDeclaration]]()
-		if case let .root(_, seamRoot?) = scopeData {
+		if case let .root(seamInstantiable, seamRoot?) = scopeData {
+			let autoclosureCallByLabel = seamRoot.autoclosureCallByLabel(of: seamInstantiable)
 			for parameter in seamRoot.signature.parameters {
-				declarationsByLabel[parameter.property.label, default: []].append(VisibleDeclaration(
-					property: parameter.property,
-					instanceProperty: parameter.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding,
-					declaringType: nil,
-					declarationLocation: nil,
-					sendableBuilderDepth: 0,
-				))
+				let declaration = if case let .deferred(isSendable) = parameter.deferral, autoclosureCallByLabel[parameter.property.label] == nil {
+					VisibleDeclaration(
+						property: Property(
+							label: parameter.property.label,
+							typeDescription: .simple(
+								name: isSendable ? Dependency.sendableLazilyInstantiatedType : Dependency.lazilyInstantiatedType,
+								generics: [parameter.deferredValueType],
+							),
+						),
+						instanceProperty: parameter.property,
+						declaringType: nil,
+						declarationLocation: nil,
+						sendableBuilderDepth: 0,
+					)
+				} else {
+					VisibleDeclaration(
+						property: parameter.property,
+						instanceProperty: parameter.property.asLazilyInstantiatedInstancePropertyOfDeclaredBinding,
+						declaringType: nil,
+						declarationLocation: nil,
+						sendableBuilderDepth: 0,
+					)
+				}
+				declarationsByLabel[parameter.property.label, default: []].append(declaration)
 			}
 		}
 		return await nonSendableWrapperCaptures(
@@ -1413,10 +1451,13 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// A `@Sendable` builder function: the property it builds, and the type that declares that property.
+	/// A `@Sendable` builder function: the property it builds, and the type that declares that property. For a
+	/// seam's `@Sendable` deferred parameter, which a call of the seam's generated initializer hands what it passes,
+	/// the property the call builds and the seam (`seamType`).
 	private struct SendableBuilder {
 		let property: Property
 		let declaringType: TypeDescription
+		var seamType: TypeDescription?
 	}
 
 	/// - Parameters:
@@ -1477,6 +1518,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				chain: chain,
 				sendableBuilder: capturingBuilder.property,
 				sendableBuilderDeclaringType: capturingBuilder.declaringType,
+				capturingSeamType: capturingBuilder.seamType,
 				wrapperProperty: wrapperProperty,
 				wrapperDeclaringType: wrapperDeclaration?.declaringType,
 				wrapperDeclarationLocation: wrapperDeclaration?.declarationLocation,
@@ -1484,12 +1526,23 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 
 		var captures = [NonSendableWrapperCapture]()
-		// Outside every `@Sendable` builder function, nothing is captured.
-		if sendableBuilderDepth > 0 {
-			for dependency in instantiable.dependencies where dependency.source.isReceived && !unavailableProperties.contains(dependency.property) {
-				if let capture = capture(of: dependency.property, declaredAt: dependency.declarationLocation, among: declarationsByLabel) {
+		// A call of a seam's generated initializer hands each parameter the seam defers `@Sendable` to a `@Sendable`
+		// closure, which captures what the call passes, as a `@Sendable` builder function inside the seam's tree would
+		// built inline.
+		let sendableDeferredLabels = Set(seamCall?.parameters.filter { $0.deferral == .deferred(isSendable: true) }.map(\.property.label) ?? [])
+		for dependency in instantiable.dependencies where dependency.source.isReceived && !unavailableProperties.contains(dependency.property) {
+			if let property, sendableDeferredLabels.contains(dependency.property.label) {
+				if let capture = capture(
+					of: dependency.property,
+					declaredAt: dependency.declarationLocation,
+					among: declarationsByLabel,
+					inside: enclosingSendableBuilders + [SendableBuilder(property: property, declaringType: instantiable.concreteInstantiable, seamType: instantiable.concreteInstantiable)],
+				) {
 					captures.append(capture)
 				}
+			} else if sendableBuilderDepth > 0, let capture = capture(of: dependency.property, declaredAt: dependency.declarationLocation, among: declarationsByLabel) {
+				// Outside every `@Sendable` builder function, nothing is captured.
+				captures.append(capture)
 			}
 		}
 
@@ -1687,6 +1740,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		/// The comment the generated `public` declarations' file carries, naming the types they name that SafeDI reads
 		/// no declaration of, or `nil` when the run writes none.
 		var unreadTypeComment: UnreadTypeComment?
+
+		/// The call of each deferred parameter's autoclosure that an alias the seam declares, keeping the parameter's
+		/// label, is bound from, by label. Such an alias is the parameter's only reader – every declaration beneath it
+		/// reads the alias – and is bound where inline binds it, in the generated initializer's body, so the parameter is
+		/// read there and held in no `LazilyInstantiated`, which the alias's binding would redeclare.
+		func autoclosureCallByLabel(of seam: Instantiable) -> [String: String] {
+			var callByLabel = [String: String]()
+			for dependency in seam.dependencies {
+				guard case let .aliased(fulfillingProperty, _, _) = dependency.source,
+				      fulfillingProperty.label == dependency.property.label,
+				      let parameter = signature.parameters.first(where: { $0.isDeferred && $0.property.label == fulfillingProperty.label })
+				else { continue }
+				callByLabel[parameter.property.label] = "\(parameter.internalName)()"
+			}
+			return callByLabel
+		}
 	}
 
 	/// The code generation mode.
@@ -1780,7 +1849,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The parameters this scope passes the builder function a lazy cycle closes on (see `CycleParameter`): those of its
 	/// own function, which it declares, or, for a cycle-closing scope, those of the function it refers to. Empty for
 	/// nearly every scope, and for each scope of a tree created once.
-	private let cycleParameters: [CycleParameter]
+	let cycleParameters: [CycleParameter]
 	/// Those of `cycleParameters` that are unavailable where this scope passes them, given what the scopes enclosing it
 	/// create, before any sibling's ordering is known (see `unavailableProperties(isGeneratedBefore:propertiesGeneratedLater:)`).
 	private let cycleParameterUnavailableProperties: Set<Property>
@@ -1881,6 +1950,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// property it reads in place of its fulfilling property's non-optional form, a parameter made optional, or a
 	/// seam's optional parameter. `false` for every other scope.
 	private let fulfillingBindingIsOptional: Bool
+	/// For an alias the seam root declares that keeps the label of a deferred parameter it retypes, the call of the
+	/// parameter's autoclosure it is bound from (`SeamRoot.autoclosureCallByLabel`); `nil` for every other generator.
+	private let fulfillingExpression: String?
 	let property: Property?
 	/// The comment that ends each line that constructs this scope's type (`Scope.builtInlineSeamComment`).
 	private let builtInlineSeamComment: String?
@@ -3000,9 +3072,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				return Self.referencingDeclaration(
 					of: Self.aliasDeclaration(
 						of: property,
-						fulfilledBy: fulfillingPropertyIsLazilyInstantiatedInstance
+						fulfilledBy: fulfillingExpression ?? (fulfillingPropertyIsLazilyInstantiatedInstance
 							? "\(fulfillingProperty.label).\(Dependency.lazilyInstantiatedInstancePropertyName)"
-							: fulfillingProperty.label,
+							: fulfillingProperty.label),
 						ofType: fulfillingProperty.typeDescription,
 						erasedToConcreteExistential: erasedToConcreteExistential,
 						fulfillingValueMayBeOptional: fulfillingBindingIsOptional,
@@ -3042,7 +3114,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	static func buildSiteCode(of property: Property, at site: SeamSignature.Hole) -> String {
 		let lastStageIndex = site.stages.count - 1
 		let stageFunction = lastStageIndex == 0 ? site.internalName : "\(site.internalName)_\(SeamSignature.Hole.stageName(at: lastStageIndex))"
-		let arguments = site.stages[lastStageIndex].map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.label)" }.joined(separator: ", ")
+		let arguments = site.stages[lastStageIndex].map { "\($0.property.label.spelledAsArgumentLabel): \($0.boundValue)" }.joined(separator: ", ")
 		let declaration = property.propertyType.isConstant ? "let \(property.asSource)" : "let \(property.label)"
 		return "\(declaration) = \(stageFunction)(\(site.stageStructType(at: lastStageIndex, qualifiedBy: nil).asSource)(\(arguments)))"
 	}
@@ -3081,7 +3153,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			let returnType = stageIndex == lastStageIndex
 				? hole.property.typeDescription
 				: TypeDescription.attributed(hole.stageFunctionType(at: stageIndex + 1, qualifiedBy: hole.scopeSeamType), specifiers: [], attributes: ["Sendable"])
-			let decorator = stageIndex == 0 && !isSendable && !hole.isSendable ? "" : "@Sendable "
+			let decorator = Self.fillStageIsSendable(hole: hole, stageIndex: stageIndex, isSendable: isSendable) ? "@Sendable " : ""
 			let outerIndent = String(repeating: Self.standardIndent, count: stageIndex)
 			body = ["\(outerIndent)\(decorator)func \(stageFunctionName)(_ scope: \(hole.stageStructType(at: stageIndex, qualifiedBy: hole.scopeSeamType).asSource)) -> \(returnType.asSource) {"]
 				+ bindings
@@ -3093,6 +3165,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			}
 		}
 		return body.joined(separator: "\n")
+	}
+
+	/// Whether the function of the stage at `stageIndex` of a fill for `hole` is `@Sendable`: every stage after the first,
+	/// which an earlier stage returns as a `@Sendable` function, and the first when a `@Sendable` function that does not
+	/// enclose the fill refers to it (`isSendable`) or the seam takes the builder `@Sendable`. A fill's tree is built in
+	/// its last stage, so a read in it is inside a `@Sendable` function exactly when that stage is one.
+	static func fillStageIsSendable(hole: SeamSignature.Hole, stageIndex: Int, isSendable: Bool) -> Bool {
+		stageIndex > 0 || isSendable || hole.isSendable
 	}
 
 	/// The initializers a seam's module generates for the seam, one per tier of its signature, followed by the enum
@@ -3120,8 +3200,18 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		// No parameter has a default: every call writes every argument, so a hand-written call fails to compile when the
 		// tree comes to take another parameter, rather than passing `nil` for it.
 		func parameterList(of parameters: [SeamSignature.Parameter]) -> String {
-			(parameters.map(\.property.asFunctionParamterSyntax.description) + builderParameters)
-				.joined(separator: ", ")
+			(parameters.map(\.generatedSpelling) + builderParameters).joined(separator: ", ")
+		}
+		// The narrowest tier holds each deferred parameter in a `LazilyInstantiated` under its label, which the tree reads
+		// wherever it reads the label, in parameter order – except a parameter the seam's own alias of its label reads.
+		let autoclosureCallByLabel = seamRoot.autoclosureCallByLabel(of: instantiable)
+		let memoLines = signature.parameters.compactMap { parameter -> String? in
+			guard case let .deferred(isSendable) = parameter.deferral, autoclosureCallByLabel[parameter.property.label] == nil else { return nil }
+			let wrapperType = TypeDescription.simple(
+				name: isSendable ? Dependency.sendableLazilyInstantiatedType : Dependency.lazilyInstantiatedType,
+				generics: [parameter.deferredValueType],
+			)
+			return "\(bodyIndent)let \(parameter.property.label) = \(wrapperType.asSource)(\(parameter.internalName))"
 		}
 		let tierParameters = signature.tiers.map(signature.parameters(ofTierAt:))
 		var initializers = [String]()
@@ -3138,14 +3228,22 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				let argumentList = try instantiable.generateArgumentList(
 					unavailableProperties: unavailableProperties,
 				)
-				body = (generatedProperties + ["\(bodyIndent)self.init(\(argumentList))"]).joined(separator: "\n")
+				body = (memoLines + generatedProperties + ["\(bodyIndent)self.init(\(argumentList))"]).joined(separator: "\n")
 			} else {
 				// A wider tier passes `nil` for each parameter it omits: one whose type the tier's callers cannot
-				// see, which only a parameter received only if available can be.
+				// see, which only a parameter received only if available can be. It passes a deferred parameter it takes
+				// as its autoclosure's call, which the narrower tier's autoclosure defers in turn.
 				let tierParameterSet = Set(parameters.map(\.property))
 				let arguments = (tierParameters[index + 1]
 					.map { parameter in
-						"\(parameter.property.label.spelledAsArgumentLabel): \(tierParameterSet.contains(parameter.property) ? parameter.property.label : "nil")"
+						let value = if !tierParameterSet.contains(parameter.property) {
+							"nil"
+						} else if parameter.isDeferred {
+							"\(parameter.internalName)()"
+						} else {
+							parameter.property.label
+						}
+						return "\(parameter.property.label.spelledAsArgumentLabel): \(value)"
 					}
 					+ builderArguments)
 					.joined(separator: ", ")

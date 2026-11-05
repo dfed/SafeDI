@@ -838,6 +838,10 @@ private struct ScopeGeneratorUnderConstruction {
 			// parameter made optional, a seam's optional parameter, or an optional property the alias reads in place of
 			// its fulfilling property's non-optional form.
 			fulfillingBindingIsOptional: aliasBindings[property]?.typeDescription.isOptional ?? false,
+			// A seam's own alias that keeps the label of a deferred parameter is bound from the parameter's autoclosure.
+			fulfillingExpression: self.property == nil && fulfillingProperty.label == property.label
+				? seamRoot?.autoclosureCallByLabel(of: scope.instantiable)[property.label]
+				: nil,
 			declarationReference: declarationReference,
 		))
 	}
@@ -1129,7 +1133,7 @@ struct SeamHoles {
 			for (stageIndex, depth) in hole.stageBoundaryDepths.enumerated() {
 				let stageFunction = stageIndex == 0 ? hole.internalName : "\(hole.internalName)_\(SeamSignature.Hole.stageName(at: stageIndex))"
 				let nextStageFunction = "\(hole.internalName)_\(SeamSignature.Hole.stageName(at: stageIndex + 1))"
-				let arguments = hole.stages[stageIndex].map { "\($0.property.label.spelledAsArgumentLabel): \($0.property.label)" }.joined(separator: ", ")
+				let arguments = hole.stages[stageIndex].map { "\($0.property.label.spelledAsArgumentLabel): \($0.boundValue)" }.joined(separator: ", ")
 				stageCallsByPath[Array(hole.sitePath.prefix(depth)), default: []].append(
 					"let \(nextStageFunction) = \(stageFunction)(\(hole.stageStructType(at: stageIndex, qualifiedBy: nil).asSource)(\(arguments)))",
 				)
