@@ -1271,6 +1271,32 @@ import Testing
 		}
 
 		@Test
+		func declaration_doesNotGenerateRequiredInitializer_whenInitializerSpellsClosureAttributesInAnotherOrder() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService: Instantiable {
+				    public init(closure: @Sendable @escaping () -> Void) {
+				        self.closure = closure
+				    }
+				    @Forwarded let closure: @Sendable () -> Void
+				}
+				""",
+				expandedSource: """
+				public struct ExampleService: Instantiable {
+				    public init(closure: @Sendable @escaping () -> Void) {
+				        self.closure = closure
+				    }
+				    let closure: @Sendable () -> Void
+
+				    public typealias ForwardedProperties = @Sendable () -> Void
+				}
+				""",
+				macros: instantiableTestMacros,
+			)
+		}
+
+		@Test
 		func declaration_doesNotGenerateRequiredInitializerIfItAlreadyExistsWithTupleWrappedClosureDependency() {
 			assertMacroExpansion(
 				"""
