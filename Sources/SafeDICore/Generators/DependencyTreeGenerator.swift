@@ -2176,10 +2176,14 @@ public actor DependencyTreeGenerator {
 			let seam: Instantiable
 			let kind: Kind
 
-			/// Whether the seam's `generateMock: .public` requires `tier`, the tier an omission is reported at, to be
-			/// `public`, which no narrower seam removes.
-			private func publicMockRequires(_ tier: AccessLevel) -> Bool {
-				seam.generateMock == .public && tier == .public
+			/// What requires `tier`, the tier an omission is reported at: the seam's access, in a clause of the error's first
+			/// sentence, or its `generateMock: .public`, which no narrower seam removes, in a sentence of its own.
+			private func tierRequirement(_ tier: AccessLevel) -> (isRequiredByPublicMock: Bool, requiredByClause: String, publicMockSentence: String) {
+				if seam.generateMock == .public, tier == .public {
+					(true, "", " " + SeamAccessExplanation.publicMockRequirementSentence(seam: seam.concreteInstantiable))
+				} else {
+					(false, ", which `\(seam.concreteInstantiable.asSource)`'s `\(tier.spelledOnGeneratedDeclaration)` access requires,", "")
+				}
 			}
 
 			/// What `read` is, why a seam cannot give it inline's value, and what to do instead.
@@ -2275,10 +2279,7 @@ public actor DependencyTreeGenerator {
 					case .required:
 						.ownReceived
 					}
-					// What requires the tier: the seam's access, or its public mock, in a sentence of its own.
-					let isRequiredByPublicMock = publicMockRequires(tier)
-					let requiredBy = isRequiredByPublicMock ? "" : ", which \(seamName)'s `\(tier.spelledOnGeneratedDeclaration)` access requires,"
-					let publicMockRequirement = isRequiredByPublicMock ? " " + SeamAccessExplanation.publicMockRequirementSentence(seam: seam.concreteInstantiable) : ""
+					let (isRequiredByPublicMock, requiredBy, publicMockRequirement) = tierRequirement(tier)
 					let causeText = cause.map { " " + SeamAccessExplanation.causeSentence($0, receivers: treeReceivers.map(\.asExplanationReceiver)) } ?? ""
 					let remedies = SeamAccessExplanation.tierRemedies(
 						cause: cause,
@@ -2322,10 +2323,7 @@ public actor DependencyTreeGenerator {
 					// the place of a pass-through's.
 					receivers = []
 					let module = seam.moduleName.map { "module `\($0)`" } ?? "this module"
-					// What requires the tier: the seam's access, or its public mock, in a sentence of its own.
-					let isRequiredByPublicMock = publicMockRequires(tier)
-					let requiredBy = isRequiredByPublicMock ? "" : ", which \(seamName)'s `\(tier.spelledOnGeneratedDeclaration)` access requires,"
-					let publicMockRequirement = isRequiredByPublicMock ? " " + SeamAccessExplanation.publicMockRequirementSentence(seam: seam.concreteInstantiable) : ""
+					let (isRequiredByPublicMock, requiredBy, publicMockRequirement) = tierRequirement(tier)
 					let causeText = hole.accessCause.map { " " + SeamAccessExplanation.causeSentence($0, receivers: []) } ?? ""
 					let remedies = SeamAccessExplanation.tierRemedies(
 						cause: hole.accessCause,
