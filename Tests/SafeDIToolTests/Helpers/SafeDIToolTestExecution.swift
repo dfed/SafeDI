@@ -513,8 +513,9 @@ struct StubFileFinder: FileFinder {
 /// rather than relying on the order of its snippets. A file from `swiftFileContentByFilePath` is looked up by
 /// the path it was given there, such as `Module/SafeDIConfiguration.swift`, and a file from
 /// `additionalDirectorySwiftFileContent` under `AdditionalDirectory/`, by the path the tool found it at. Paths are exactly as they were written to the CSV
-/// the tool read: absolute by default, or relative to the current directory when the test passed
-/// `inputPathsRelativeToCurrentDirectory: true`.
+/// the tool read: absolute by default, relative to the current directory when the test passed
+/// `inputPathsRelativeToCurrentDirectory: true` or `.scanDuringGenerate`, and relative to the fixture directory
+/// when it passed `.scanWhilePlanning`.
 struct FixturePaths {
 	init(fileNames: [String], paths: [String], compilerPaths: [String]) {
 		pathsByFileName = Dictionary(uniqueKeysWithValues: zip(fileNames, paths))
@@ -534,9 +535,11 @@ struct FixturePaths {
 
 	/// The path a build system hands the compiler for the named fixture when a build tool plugin runs the tool:
 	/// absolute, beginning with the fixture directory as the build system reports it. `run()` prints a diagnostic at
-	/// this path, but a diagnostic `generate()` returns names the file as scan's cache does, normalized under the
-	/// resolved root, which `NormalizedFilePath(compilerPath(of:)).path` spells when the fixture directory is reported
-	/// resolved. The two differ on Apple platforms in a checkout under `/private/tmp`, since normalizing drops `/private`.
+	/// this path, but a diagnostic `generate()` returns cites the path the file was parsed under: this path normalized
+	/// (`NormalizedFilePath(compilerPath(of:)).path`) when the fixture directory is reported resolved. On Apple
+	/// platforms the two differ whenever the fixture directory lies under `/private/var` or `/private/tmp`, from which
+	/// normalizing drops `/private`. That is always the case for `.scanWhilePlanning`, whose fixtures are in the
+	/// temporary directory, and for `.scanDuringGenerate` it happens in a checkout under `/private/tmp`.
 	func compilerPath(of fileName: String, sourceLocation: SourceLocation = #_sourceLocation) -> String {
 		path(of: fileName, in: compilerPathsByFileName, sourceLocation: sourceLocation)
 	}
