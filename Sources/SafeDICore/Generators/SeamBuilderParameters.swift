@@ -554,8 +554,9 @@ extension DependencyTreeGenerator {
 			let carrierProperties = frame.orderedChildren.compactMap { $0.generator.containsBuildSite ? $0.generator.property : nil }
 			for (position, child) in frame.orderedChildren.enumerated() {
 				guard let property = child.generator.property else { continue }
-				let isCreated = child.generator.uncreatedAliasProperty(unavailableProperties: child.unavailableProperties) == nil
-				var pathDeclaration = declaration(of: property, isBoundBeforeSite: position < pathPosition && isCreated)
+				// An `onlyIfAvailable` alias is bound, to `nil` where its fulfilling property is unavailable, as every other
+				// child is.
+				var pathDeclaration = declaration(of: property, isBoundBeforeSite: position < pathPosition)
 				if position > pathPosition, let pathProperty, let childType = child.generator.builtInstantiable?.concreteInstantiable {
 					// A sibling built after the scope on the path depends on a carrier: the start order builds every other
 					// one first.
