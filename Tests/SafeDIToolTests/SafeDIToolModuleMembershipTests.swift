@@ -115,24 +115,25 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_recordsEachModuleDependentModuleInfoNamesOnce_whenDependentModuleInfoNamesModulesOrNone() async throws {
-		// Two files record `Zebra`, and one records no module, as a SafeDITool given no `--module-name` writes it.
+		// Two files record `Zebra`.
 		var dependentModuleInfoPaths = [String]()
-		for (index, moduleName) in ["Zebra", "Apple", "Zebra", nil].enumerated() {
+		for (index, moduleName) in ["Zebra", "Apple", "Zebra"].enumerated() {
 			let dependency = try await executeSafeDIToolTest(
 				swiftFileContent: [Self.instantiableContent(named: "Dependency\(index)")],
 				filesToDelete: &filesToDelete,
-				moduleMembershipArguments: moduleName.map { ["--module-name", $0] } ?? [],
+				moduleMembershipArguments: ["--module-name", moduleName],
 			)
-			dependentModuleInfoPaths.append(dependency.moduleInfoOutputPath)
+			try dependentModuleInfoPaths.append(dependency.writtenModuleInfoOutputPath)
 		}
 
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [Self.instantiableContent(named: "Consumer")],
 			dependentModuleInfoPaths: dependentModuleInfoPaths,
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Consumer"],
 		)
 
-		#expect(ModuleIdentity(output.moduleInfo) == ModuleIdentity(moduleName: nil, packageName: nil, dependencyModuleNames: ["Apple", "Zebra"]))
+		#expect(try ModuleIdentity(output.writtenModuleInfo) == ModuleIdentity(moduleName: "Consumer", packageName: nil, dependencyModuleNames: ["Apple", "Zebra"]))
 	}
 
 	@Test
@@ -166,7 +167,7 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 			moduleMembershipArguments: ["--module-name", "Target", "--package-name", "Application"],
 		)
 
-		#expect(Self.declaringModules(of: output.moduleInfo.instantiables) == [
+		#expect(try Self.declaringModules(of: output.writtenModuleInfo.instantiables) == [
 			"AdditionalType": DeclaringModule(moduleName: nil, packageName: nil),
 			"TargetType": DeclaringModule(moduleName: "Target", packageName: "Application"),
 		])
@@ -388,7 +389,7 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 			targets: [Self.appTarget, Self.coreTarget],
 		)
 		let dependentModuleInfoFileCSV = project.swiftFileCSV.deletingLastPathComponent().appendingPathComponent("Dependencies.csv")
-		try dependency.moduleInfoOutputPath.write(to: dependentModuleInfoFileCSV, atomically: true, encoding: .utf8)
+		try dependency.writtenModuleInfoOutputPath.write(to: dependentModuleInfoFileCSV, atomically: true, encoding: .utf8)
 
 		let generateOutput = try await project.scanAndGenerate(
 			reportingProjectRoot: .resolved,
@@ -551,12 +552,12 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 			moduleMembershipArguments: ["--module-name", "EngineModule"],
 		)
-		#expect(output.moduleInfo.moduleName == "EngineModule")
+		#expect(try output.writtenModuleInfo.moduleName == "EngineModule")
 
-		let report = try await QueryNeeds.parse(["Engine", "--module-info", output.moduleInfoOutputPath]).query()
+		let report = try await QueryNeeds.parse(["Engine", "--module-info", output.writtenModuleInfoOutputPath]).query()
 
 		// A module info file is named after its file, as before it recorded the name of its module.
-		let fileName = ((output.moduleInfoOutputPath as NSString).lastPathComponent as NSString).deletingPathExtension
+		let fileName = try ((output.writtenModuleInfoOutputPath as NSString).lastPathComponent as NSString).deletingPathExtension
 		#expect(report.types.map { $0.modules.map(\.name) } == [[fileName]])
 	}
 
@@ -569,34 +570,10 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 			moduleMembershipArguments: ["--module-name", "EngineModule", "--package-name", "Engines"],
 		)
 
-		let parsedModules = try await QueryNeeds.parse(["Engine", "--module-info", output.moduleInfoOutputPath]).readIncludedModules()
+		let parsedModules = try await QueryNeeds.parse(["Engine", "--module-info", output.writtenModuleInfoOutputPath]).readIncludedModules()
 
 		#expect(parsedModules.map { Self.declaringModules(of: $0.moduleInfo.instantiables) } == [
 			["Engine": DeclaringModule(moduleName: "EngineModule", packageName: "Engines")],
-		])
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func queryNeeds_recordsModuleNamedByModuleInfoFileWithoutPackage_whenModuleInfoRecordsNoModule() async throws {
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				Self.instantiableContent(named: "Engine"),
-				Self.instantiableContent(named: "Pump"),
-			],
-			filesToDelete: &filesToDelete,
-		)
-		#expect(output.moduleInfo.moduleName == nil)
-
-		let parsedModules = try await QueryNeeds.parse(["Engine", "--module-info", output.moduleInfoOutputPath]).readIncludedModules()
-
-		// A module info file is named after its file, without its extension.
-		let fileName = ((output.moduleInfoOutputPath as NSString).lastPathComponent as NSString).deletingPathExtension
-		#expect(parsedModules.map { Self.declaringModules(of: $0.moduleInfo.instantiables) } == [
-			[
-				"Engine": DeclaringModule(moduleName: fileName, packageName: nil),
-				"Pump": DeclaringModule(moduleName: fileName, packageName: nil),
-			],
 		])
 	}
 

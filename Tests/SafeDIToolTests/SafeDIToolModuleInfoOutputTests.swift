@@ -58,14 +58,15 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 			],
 			filesToDelete: &filesToDelete,
 			inputPathsRelativeToCurrentDirectory: true,
+			moduleMembershipArguments: ["--module-name", "Example", "--package-name", "Example"],
 		)
 
 		let leafPath = output.fixtures["Leaf.swift"].replacingOccurrences(of: "/", with: "\\/")
 		let encoder = JSONEncoder()
 		encoder.outputFormatting = [.sortedKeys]
-		let moduleInfo = try ModuleInfo(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.moduleInfoOutputPath)))
+		let moduleInfo = try ModuleInfo(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.writtenModuleInfoOutputPath)))
 		#expect(try String(decoding: encoder.encode(moduleInfo), as: UTF8.self) == """
-		{"conditionalCompilationDecisions":[],"configurations":[],"dependencyModuleNames":[],"imports":[{"attribute":"","kind":"","moduleName":"Alpha","type":""}],"instantiableTypeNamesInAnyClause":["Leaf"],"instantiables":[{"access":{"declarationStartLocation":{"column":1,"filePath":"\(leafPath)","line":4},"isExtension":false,"level":{"public":{}},"modifierRange":{"endColumn":7,"endLine":4,"startColumn":1,"startLine":4}},"declarationLocation":{"column":1,"filePath":"\(leafPath)","line":3},"declarationType":{"structType":{}},"dependencies":[],"enclosingTypeAccess":[],"generateMock":"none","generatedInitializerAttributes":"","generatesDependencyTree":false,"initializer":{"access":{"declarationStartLocation":{"column":5,"filePath":"\(leafPath)","line":5},"isExtension":false,"level":{"public":{}},"modifierRange":{"endColumn":11,"endLine":5,"startColumn":5,"startLine":5}},"arguments":[],"doesThrow":false,"hasGenericParameter":false,"hasGenericWhereClause":false,"isAsync":false,"isOptional":false},"instantiableTypes":[{"simple":{"generics":[],"name":"Leaf"}}],"isInsideCompilerDecidedBlock":false,"isRoot":false,"mockAttributes":"","mockOnly":false,"otherInitializers":[],"sourceFilePath":"\(leafPath)"}],"mockImports":[{"attribute":"","kind":"","moduleName":"Alpha","type":""}],"plainTypeDeclarations":[]}
+		{"conditionalCompilationDecisions":[],"configurations":[],"dependencyModuleNames":[],"imports":[{"attribute":"","kind":"","moduleName":"Alpha","type":""}],"instantiableTypeNamesInAnyClause":["Leaf"],"instantiables":[{"access":{"declarationStartLocation":{"column":1,"filePath":"\(leafPath)","line":4},"isExtension":false,"level":{"public":{}},"modifierRange":{"endColumn":7,"endLine":4,"startColumn":1,"startLine":4}},"declarationLocation":{"column":1,"filePath":"\(leafPath)","line":3},"declarationType":{"structType":{}},"dependencies":[],"enclosingTypeAccess":[],"generateMock":"none","generatedInitializerAttributes":"","generatesDependencyTree":false,"initializer":{"access":{"declarationStartLocation":{"column":5,"filePath":"\(leafPath)","line":5},"isExtension":false,"level":{"public":{}},"modifierRange":{"endColumn":11,"endLine":5,"startColumn":5,"startLine":5}},"arguments":[],"doesThrow":false,"hasGenericParameter":false,"hasGenericWhereClause":false,"isAsync":false,"isOptional":false},"instantiableTypes":[{"simple":{"generics":[],"name":"Leaf"}}],"isInsideCompilerDecidedBlock":false,"isRoot":false,"mockAttributes":"","mockOnly":false,"moduleName":"Example","otherInitializers":[],"packageName":"Example","sourceFilePath":"\(leafPath)"}],"mockImports":[{"attribute":"","kind":"","moduleName":"Alpha","type":""}],"moduleName":"Example","packageName":"Example","plainTypeDeclarations":[]}
 		""")
 	}
 
@@ -87,7 +88,7 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 				filesToDelete: &filesToDelete,
 				moduleMembershipArguments: ["--module-name", moduleName],
 			)
-			dependentModuleInfoPaths.append(dependency.moduleInfoOutputPath)
+			try dependentModuleInfoPaths.append(dependency.writtenModuleInfoOutputPath)
 		}
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
@@ -110,7 +111,7 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 		let leafPath = output.fixtures["Leaf.swift"].replacingOccurrences(of: "/", with: "\\/")
 		let encoder = JSONEncoder()
 		encoder.outputFormatting = [.sortedKeys]
-		let moduleInfo = try ModuleInfo(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.moduleInfoOutputPath)))
+		let moduleInfo = try ModuleInfo(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.writtenModuleInfoOutputPath)))
 		#expect(try String(decoding: encoder.encode(moduleInfo), as: UTF8.self) == """
 		{"conditionalCompilationDecisions":[],"configurations":[],"dependencyModuleNames":["Bark","Roots"],"imports":[],"instantiableTypeNamesInAnyClause":["Leaf"],"instantiables":[{"access":{"declarationStartLocation":{"column":1,"filePath":"\(leafPath)","line":2},"isExtension":false,"level":{"public":{}},"modifierRange":{"endColumn":7,"endLine":2,"startColumn":1,"startLine":2}},"declarationLocation":{"column":1,"filePath":"\(leafPath)","line":1},"declarationType":{"structType":{}},"dependencies":[],"enclosingTypeAccess":[],"generateMock":"none","generatedInitializerAttributes":"@MainActor","generatesDependencyTree":false,"initializer":{"access":{"declarationStartLocation":{"column":5,"filePath":"\(leafPath)","line":3},"isExtension":false,"level":{"public":{}},"modifierRange":{"endColumn":11,"endLine":3,"startColumn":5,"startLine":3}},"arguments":[],"doesThrow":false,"hasGenericParameter":false,"hasGenericWhereClause":false,"isAsync":false,"isOptional":false},"instantiableTypes":[{"simple":{"generics":[],"name":"Leaf"}}],"isInsideCompilerDecidedBlock":false,"isRoot":false,"mockAttributes":"@MainActor","mockDeclarationAccess":{"declarationStartLocation":{"column":1,"filePath":"\(leafPath)","line":2},"isExtension":false,"level":{"public":{}},"modifierRange":{"endColumn":7,"endLine":2,"startColumn":1,"startLine":2}},"mockDeclarationLocation":{"column":5,"filePath":"\(leafPath)","line":4},"mockDeclarationModuleName":"Tree","mockDeclarationPackageName":"Forest","mockInitializer":{"access":{"declarationStartLocation":{"column":5,"filePath":"\(leafPath)","line":4},"isExtension":false,"level":{"public":{}},"modifierRange":{"endColumn":11,"endLine":4,"startColumn":5,"startLine":4}},"arguments":[],"doesThrow":false,"hasGenericParameter":false,"hasGenericWhereClause":false,"isAsync":false,"isOptional":false},"mockOnly":false,"mockReturnType":{"simple":{"generics":[],"name":"Leaf"}},"moduleName":"Tree","otherInitializers":[],"packageName":"Forest","sourceFilePath":"\(leafPath)"}],"mockImports":[],"moduleName":"Tree","packageName":"Forest","plainTypeDeclarations":[]}
 		""")
@@ -294,10 +295,11 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Example", "--package-name", "Example"],
 		)
 
-		#expect(output.moduleInfo.imports == [ImportStatement(moduleName: "Shared")])
-		#expect(output.moduleInfo.mockImports == [ImportStatement(moduleName: "Shared")])
+		#expect(try output.writtenModuleInfo.imports == [ImportStatement(moduleName: "Shared")])
+		#expect(try output.writtenModuleInfo.mockImports == [ImportStatement(moduleName: "Shared")])
 	}
 
 	@Test
@@ -330,13 +332,14 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Example", "--package-name", "Example"],
 		)
 
-		#expect(output.moduleInfo.imports == [
+		#expect(try output.writtenModuleInfo.imports == [
 			ImportStatement(moduleName: "Alpha"),
 			ImportStatement(moduleName: "Zulu"),
 		])
-		#expect(output.moduleInfo.mockImports == [
+		#expect(try output.writtenModuleInfo.mockImports == [
 			ImportStatement(moduleName: "Alpha"),
 			ImportStatement(moduleName: "Zulu"),
 		])

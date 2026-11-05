@@ -1182,6 +1182,7 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			swiftFileContent: Self.clockFixture(rootImports: "import SafeDI\npublic import Foundation", clockImports: "import SafeDI\ninternal import Foundation"),
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Example", "--package-name", "Example"],
 			verificationCompilerSettings: ImportCompileMode.swift6.settings,
 		)
 		let rootFilePath = output.fixtures["Root.swift"]
@@ -1191,10 +1192,10 @@ struct SafeDIToolImportAccessLevelTests: ~Copyable {
 			ImportStatement(moduleName: "Foundation", accessLevel: .public, sourceFilePath: rootFilePath),
 			ImportStatement(moduleName: "SafeDI"),
 		]
-		#expect(output.moduleInfo.imports == expectedImports)
-		#expect(output.moduleInfo.mockImports == expectedImports)
+		#expect(try output.writtenModuleInfo.imports == expectedImports)
+		#expect(try output.writtenModuleInfo.mockImports == expectedImports)
 		// What `generate` wrote reads back the same.
-		let readModuleInfo = try ModuleInfo(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.moduleInfoOutputPath)))
+		let readModuleInfo = try ModuleInfo(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: output.writtenModuleInfoOutputPath)))
 		#expect(readModuleInfo.imports == expectedImports)
 	}
 

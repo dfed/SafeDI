@@ -65,7 +65,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(output.moduleInfo.instantiables.map(\.generateMock) == [mockGeneration])
+		#expect(output.generateOutput.module.instantiables.map(\.generateMock) == [mockGeneration])
 		#expect(output.mockFiles.keys.sorted() == (mockGeneration.generatesMock ? ["Service+SafeDIMock.swift"] : []))
 	}
 

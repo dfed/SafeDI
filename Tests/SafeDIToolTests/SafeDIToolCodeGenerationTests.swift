@@ -510,7 +510,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		#endif
 
 		""" + "\n"])
-		#expect(output.moduleInfo.instantiables == [])
+		#expect(output.generateOutput.module.instantiables == [])
 	}
 
 	@Test
@@ -2961,6 +2961,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			],
 			buildSwiftOutputDirectory: false,
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "GreatGrandchildModule", "--package-name", "Example"],
 		)
 
 		let grandchildModuleOutput = try await executeSafeDIToolTest(
@@ -3014,9 +3015,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 				""",
 			],
-			dependentModuleInfoPaths: [greatGrandchildModuleOutput.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [greatGrandchildModuleOutput.writtenModuleInfoOutputPath],
 			buildSwiftOutputDirectory: false,
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "GrandchildModule", "--package-name", "Example"],
 		)
 
 		let childModuleOutput = try await executeSafeDIToolTest(
@@ -3051,11 +3053,12 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 			],
 			dependentModuleInfoPaths: [
-				greatGrandchildModuleOutput.moduleInfoOutputPath,
-				grandchildModuleOutput.moduleInfoOutputPath,
+				greatGrandchildModuleOutput.writtenModuleInfoOutputPath,
+				grandchildModuleOutput.writtenModuleInfoOutputPath,
 			],
 			buildSwiftOutputDirectory: false,
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "ChildModule", "--package-name", "Example"],
 		)
 
 		let topLevelModuleOutput = try await executeSafeDIToolTest(
@@ -3076,9 +3079,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 			],
 			dependentModuleInfoPaths: [
-				greatGrandchildModuleOutput.moduleInfoOutputPath,
-				grandchildModuleOutput.moduleInfoOutputPath,
-				childModuleOutput.moduleInfoOutputPath,
+				greatGrandchildModuleOutput.writtenModuleInfoOutputPath,
+				grandchildModuleOutput.writtenModuleInfoOutputPath,
+				childModuleOutput.writtenModuleInfoOutputPath,
 			],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
@@ -3907,6 +3910,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "DependentModule", "--package-name", "Example"],
 		)
 
 		let output = try await executeSafeDIToolTest(
@@ -3924,7 +3928,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 				""",
 			],
-			dependentModuleInfoPaths: [dependentModuleOutput.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [dependentModuleOutput.writtenModuleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 			skipCompileVerification: true,
@@ -11003,6 +11007,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "DependentModule", "--package-name", "Example"],
 		)
 
 		let output = try await executeSafeDIToolTest(
@@ -11020,7 +11025,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 				""",
 			],
-			dependentModuleInfoPaths: [dependentModuleOutput.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [dependentModuleOutput.writtenModuleInfoOutputPath],
 			buildCombinedOutput: true,
 			filesToDelete: &filesToDelete,
 			compilerReceivesInputPathsUnchanged: true,
@@ -11072,6 +11077,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "DependentModule", "--package-name", "Example"],
 		)
 
 		let output = try await executeSafeDIToolTest(
@@ -11096,7 +11102,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				}
 				""",
 			],
-			dependentModuleInfoPaths: [dependentModuleOutput.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [dependentModuleOutput.writtenModuleInfoOutputPath],
 			buildCombinedOutput: true,
 			filesToDelete: &filesToDelete,
 			compilerReceivesInputPathsUnchanged: true,
@@ -11139,6 +11145,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "FirstDependentModule", "--package-name", "Example"],
 		)
 		let secondDependentModuleOutput = try await executeSafeDIToolTest(
 			swiftFileContent: [],
@@ -11155,6 +11162,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "SecondDependentModule", "--package-name", "Example"],
 		)
 
 		let output = try await executeSafeDIToolTest(
@@ -11181,8 +11189,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 				""",
 			],
 			dependentModuleInfoPaths: [
-				firstDependentModuleOutput.moduleInfoOutputPath,
-				secondDependentModuleOutput.moduleInfoOutputPath,
+				firstDependentModuleOutput.writtenModuleInfoOutputPath,
+				secondDependentModuleOutput.writtenModuleInfoOutputPath,
 			],
 			buildCombinedOutput: true,
 			filesToDelete: &filesToDelete,
@@ -11256,7 +11264,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		let child = try #require(output.moduleInfo.instantiables.first { $0.concreteInstantiable == .simple(name: "Child") })
+		let child = try #require(output.generateOutput.module.instantiables.first { $0.concreteInstantiable == .simple(name: "Child") })
 		#expect(child.dependencies.map(\.declarationLocation) == [
 			Dependency.DeclarationLocation(filePath: output.fixtures["Child.swift"], line: 9, column: 5),
 			Dependency.DeclarationLocation(filePath: output.fixtures["Child.swift"], line: 11, column: 5),
@@ -11296,7 +11304,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		// No roots are declared, so no dependency tree files. But mock files get the error stub.
 		#expect(output.dependencyTreeFiles == [:])
-		#expect(output.moduleInfo.filesWithUnexpectedNodes != nil)
+		#expect(output.generateOutput.module.filesWithUnexpectedNodes != nil)
 		// Mock outputs get the error stub so the build system has its expected outputs.
 		for (_, content) in output.mockFiles {
 			#expect(content.contains("#error"), "Mock outputs should contain #error stub")
@@ -12175,8 +12183,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(output.moduleInfo.configurations.count == 1)
-		let configuration = output.moduleInfo.configurations[0]
+		#expect(output.generateOutput.module.configurations.count == 1)
+		let configuration = output.generateOutput.module.configurations[0]
 		#expect(configuration.additionalImportedModules == [])
 		#expect(configuration.additionalDirectoriesToInclude == ["SomeDirectory"])
 		#expect(configuration.sourceFilePath != nil)
@@ -12354,7 +12362,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			skipCompileVerification: true,
 		)
 
-		let sourceFilePaths = output.moduleInfo.instantiables.compactMap(\.sourceFilePath)
+		let sourceFilePaths = output.generateOutput.module.instantiables.compactMap(\.sourceFilePath)
 		#expect(sourceFilePaths.count == 401)
 		#expect(sourceFilePaths == sourceFilePaths.sorted(), "Instantiables were not ordered by source file path: \(sourceFilePaths.prefix(5))")
 	}

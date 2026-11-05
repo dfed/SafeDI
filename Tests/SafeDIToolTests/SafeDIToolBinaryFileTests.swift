@@ -537,6 +537,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [Self.deepSource(forwarding: deeplyNestedType)],
 				filesToDelete: &filesToDelete,
+				moduleMembershipArguments: ["--module-name", "Example", "--package-name", "Example"],
 			)
 		}
 	}
@@ -577,13 +578,14 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		let upstream = try await executeSafeDIToolTest(
 			swiftFileContent: [Self.upstreamServiceSource],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Upstream", "--package-name", "Example"],
 		)
 
-		let json = try Dump.parse([upstream.moduleInfoOutputPath]).json()
+		let json = try Dump.parse([upstream.writtenModuleInfoOutputPath]).json()
 
 		let dumped = try JSONDecoder().decode(ModuleInfo.self, from: Data(json.utf8))
 		#expect(dumped.instantiables.map(\.concreteInstantiable) == [.simple(name: "UpstreamService")])
-		#expect(reflectedDescription(of: dumped) == reflectedDescription(of: upstream.moduleInfo))
+		#expect(try reflectedDescription(of: dumped) == reflectedDescription(of: upstream.writtenModuleInfo))
 	}
 
 	@Test
@@ -616,12 +618,12 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 				}
 				""",
 			],
-			dependentModuleInfoPaths: [upstream.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [upstream.writtenModuleInfoOutputPath],
 			filesToDelete: &filesToDelete,
 			moduleMembershipArguments: ["--module-name", "Kitchen", "--package-name", "Restaurant"],
 		)
 
-		#expect(reflectedDescription(of: output.moduleInfo) == reflectedDescription(of: output.generateOutput.module))
+		#expect(try reflectedDescription(of: output.writtenModuleInfo) == reflectedDescription(of: output.generateOutput.module))
 	}
 
 	@Test
@@ -630,15 +632,17 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		let upstream = try await executeSafeDIToolTest(
 			swiftFileContent: [Self.upstreamServiceSource],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Upstream", "--package-name", "Example"],
 		)
-		var moduleInfo = try Data(contentsOf: URL(fileURLWithPath: upstream.moduleInfoOutputPath))
+		var moduleInfo = try Data(contentsOf: URL(fileURLWithPath: upstream.writtenModuleInfoOutputPath))
 		moduleInfo[moduleInfo.endIndex - 1] ^= 0x01
-		try moduleInfo.write(to: URL(fileURLWithPath: upstream.moduleInfoOutputPath))
+		try moduleInfo.write(to: URL(fileURLWithPath: upstream.writtenModuleInfoOutputPath))
 
-		await assertThrowsError("Could not read the SafeDI module info file at \(URL(fileURLWithPath: upstream.moduleInfoOutputPath).path): The module info file’s body does not match the checksum in its header. A different version of SafeDI most likely wrote this file, or its write was interrupted. To fix this, clean your build (in Xcode: Product > Clean Build Folder) and build again, so that the module that wrote the file regenerates it.") {
+		let upstreamModuleInfoPath = try upstream.writtenModuleInfoOutputPath
+		await assertThrowsError("Could not read the SafeDI module info file at \(URL(fileURLWithPath: upstreamModuleInfoPath).path): The module info file’s body does not match the checksum in its header. A different version of SafeDI most likely wrote this file, or its write was interrupted. To fix this, clean your build (in Xcode: Product > Clean Build Folder) and build again, so that the module that wrote the file regenerates it.") {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [Self.downstreamRootSource],
-				dependentModuleInfoPaths: [upstream.moduleInfoOutputPath],
+				dependentModuleInfoPaths: [upstream.writtenModuleInfoOutputPath],
 				buildCombinedOutput: true,
 				filesToDelete: &filesToDelete,
 			)
@@ -651,13 +655,15 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		let upstream = try await executeSafeDIToolTest(
 			swiftFileContent: [Self.upstreamServiceSource],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Upstream", "--package-name", "Example"],
 		)
-		try JSONEncoder().encode(upstream.moduleInfo).write(to: URL(fileURLWithPath: upstream.moduleInfoOutputPath))
+		try JSONEncoder().encode(upstream.writtenModuleInfo).write(to: URL(fileURLWithPath: upstream.writtenModuleInfoOutputPath))
 
-		await assertThrowsError("Could not read the SafeDI module info file at \(URL(fileURLWithPath: upstream.moduleInfoOutputPath).path): The file is not a module info file: it does not begin with `SDMI`. A different version of SafeDI most likely wrote this file, or its write was interrupted. To fix this, clean your build (in Xcode: Product > Clean Build Folder) and build again, so that the module that wrote the file regenerates it.") {
+		let upstreamModuleInfoPath = try upstream.writtenModuleInfoOutputPath
+		await assertThrowsError("Could not read the SafeDI module info file at \(URL(fileURLWithPath: upstreamModuleInfoPath).path): The file is not a module info file: it does not begin with `SDMI`. A different version of SafeDI most likely wrote this file, or its write was interrupted. To fix this, clean your build (in Xcode: Product > Clean Build Folder) and build again, so that the module that wrote the file regenerates it.") {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [Self.downstreamRootSource],
-				dependentModuleInfoPaths: [upstream.moduleInfoOutputPath],
+				dependentModuleInfoPaths: [upstream.writtenModuleInfoOutputPath],
 				buildCombinedOutput: true,
 				filesToDelete: &filesToDelete,
 			)

@@ -450,6 +450,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "CrossModule", "--package-name", "Example"],
 		)
 
 		let output = try await executeSafeDIToolTest(
@@ -464,7 +465,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 				}
 				""",
 			],
-			dependentModuleInfoPaths: [crossModuleOutput.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [crossModuleOutput.writtenModuleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.
@@ -1105,6 +1106,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "CrossModule", "--package-name", "Example"],
 		)
 
 		// Current module uses additionalMocksToGenerate to request a mock for CrossModuleService.
@@ -1127,7 +1129,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 				}
 				""",
 			],
-			dependentModuleInfoPaths: [crossModuleOutput.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [crossModuleOutput.writtenModuleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.
@@ -1216,6 +1218,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 				""",
 			],
 			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "CrossModule", "--package-name", "Example"],
 		)
 
 		let output = try await executeSafeDIToolTest(
@@ -1228,7 +1231,7 @@ struct SafeDIToolMockGenerationConfigurationTests: ~Copyable {
 				)
 				""",
 			],
-			dependentModuleInfoPaths: [crossModuleOutput.moduleInfoOutputPath],
+			dependentModuleInfoPaths: [crossModuleOutput.writtenModuleInfoOutputPath],
 			buildSwiftOutputDirectory: true,
 			filesToDelete: &filesToDelete,
 			// Cross-module fixture — sibling module types aren't visible to the standalone compile verifier.

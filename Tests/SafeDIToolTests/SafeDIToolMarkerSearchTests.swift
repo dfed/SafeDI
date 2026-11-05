@@ -56,7 +56,7 @@ struct SafeDIToolMarkerSearchTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(output.moduleInfo.instantiables.map(\.concreteInstantiable) == [.simple(name: "Service")])
+		#expect(output.generateOutput.module.instantiables.map(\.concreteInstantiable) == [.simple(name: "Service")])
 	}
 
 	@Test
@@ -79,7 +79,7 @@ struct SafeDIToolMarkerSearchTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(output.moduleInfo.configurations.map(\.additionalImportedModules) == [["Shared"]])
+		#expect(output.generateOutput.module.configurations.map(\.additionalImportedModules) == [["Shared"]])
 	}
 
 	@Test
@@ -106,7 +106,7 @@ struct SafeDIToolMarkerSearchTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(output.moduleInfo.filesWithUnexpectedNodes == nil)
+		#expect(output.generateOutput.module.filesWithUnexpectedNodes == nil)
 	}
 
 	@Test
@@ -135,7 +135,7 @@ struct SafeDIToolMarkerSearchTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(output.moduleInfo.filesWithUnexpectedNodes == [output.fixtures["Broken.swift"]])
+		#expect(output.generateOutput.module.filesWithUnexpectedNodes == [output.fixtures["Broken.swift"]])
 	}
 
 	@Test(arguments: [
