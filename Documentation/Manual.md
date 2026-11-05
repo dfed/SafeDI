@@ -1395,7 +1395,7 @@ Your integration already has a `SafeDITool`; a [custom build system](#custom-bui
 
 - **Swift package:** `.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool` from the package’s directory, or `swift run SafeDITool` with the `sourceBuild` trait; writes no `.safedi` files.
 - **Xcode project:** `SourcePackages/artifacts/safedi/SafeDIToolBinary/…` in the project’s derived data, or `.safedi/<version>/safeditool` once [installed](#installing-the-prebuilt-safeditool-binary); writes no `.safedi` files.
-- **Bazel:** `bazel run @safedi//bazel:safeditool -- <arguments>` runs the `SafeDITool` your build runs, prebuilt or built from source, in the directory you run it from, so relative paths among the arguments work; writes `bazel-bin/<package>/<name>_safedi.safedi`.
+- **Bazel:** `bazel run @safedi//bazel:safeditool -- <arguments>` runs the `SafeDITool` your build runs, prebuilt or built from source, in the directory you run it from, so relative paths among the arguments work; writes `bazel-bin/<package>/<name>_safedi.safedi`, though when the action’s result comes from a cache, such as `--disk_cache`, only for a build passed `--remote_download_regex='.*\.safedi$'`.
 - **Tuist:** `Tuist/.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle/SafeDITool-macos-arm64/bin/SafeDITool` from the directory that holds `Tuist/Package.swift`; writes `$BUILT_PRODUCTS_DIR/SafeDI/<module>.safedi`.
 
 On an Intel Mac, the bundle’s directory is `SafeDITool-macos-x86_64`.

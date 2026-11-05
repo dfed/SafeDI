@@ -1113,11 +1113,16 @@ jobs:
       # `bazel run @safedi//bazel:safeditool` runs SafeDITool in the
       # directory it is run from, so a relative path among its arguments
       # resolves there rather than in the runfiles tree. Run from a
-      # subdirectory of the workspace, as a user may. Kept out of the
-      # retry wrapper: the build above fetched everything this runs.
+      # subdirectory of the workspace, as a user may. No target outputs a
+      # `.safedi` file at the top level, so Bazel writes one to bazel-bin
+      # from the disk cache only when `--remote_download_regex` asks for
+      # it. Kept out of the retry wrapper: the build above fetched
+      # everything this runs.
       - name: Run SafeDITool through bazel run with a relative path
         working-directory: Examples/ExampleBazelIntegration/Subproject
-        run: bazelisk run --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" @safedi//bazel:safeditool -- dump ../bazel-bin/Subproject/Subproject_safedi.safedi > /dev/null
+        run: |
+          bazelisk build --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" '--remote_download_regex=.*\.safedi$' //Subproject:Subproject
+          bazelisk run --disk_cache="$HOME/.cache/bazel-disk" --repository_cache="$HOME/.cache/bazel-repository" @safedi//bazel:safeditool -- dump ../bazel-bin/Subproject/Subproject_safedi.safedi > /dev/null
       # Optimized builds define `NDEBUG` and no `DEBUG`, so the rule must report the
       # former, withhold the latter, and SafeDI must wire the example's
       # `#elseif NDEBUG` logger. The `_safedi` target is listed so
