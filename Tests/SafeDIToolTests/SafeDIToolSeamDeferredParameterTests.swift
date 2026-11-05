@@ -544,6 +544,48 @@ struct SafeDIToolSeamDeferredParameterTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsError_whenSeamDeclaresInitializerWithLabelsOfItsOwnReceives() async {
+		// The generated initializer takes `user`, the seam's own receive, by value, so the error names no autoclosure.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: it declares `init(user:)` at line 8, which can be called with the argument labels of its generated initializer, `init(user:)`. A call with those labels would resolve to the hand-written initializer or be ambiguous. Rename the hand-written initializer's argument labels, or remove it.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let user: User", "@Instantiated let screen: Screen"]),
+					"""
+					@Instantiable(generateDependencyTree: true)
+					public struct Screen: Instantiable {
+					    public init(user: User, header: Header) {
+					        self.user = user
+					        self.header = header
+					    }
+
+					    public init(user: User) {
+					        self.init(user: user, header: Header())
+					    }
+
+					    @Received let user: User
+					    @Instantiated let header: Header
+					}
+					""",
+					seamFixtureType(named: "Header", declarations: []),
+					"""
+					@Instantiable
+					public final class User: Instantiable, Sendable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Deployment targets
 
 	#if os(macOS)
