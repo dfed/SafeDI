@@ -1297,5 +1297,114 @@ import Testing
 				""",
 			)
 		}
+
+		@Test
+		func expansion_producesDiagnosticWithFixItAddingOptionality_whenErasedRenameOfOptionalDependencyIsNotOptional() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService {
+					@Received(fulfilledByDependencyNamed: "token", ofType: Secret?.self, erasedToConcreteExistential: true) let auth: AnyAuth
+				}
+				""",
+				expandedSource: """
+				@Instantiable
+				public struct ExampleService {
+					let auth: AnyAuth
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "`ofType:` names an optional dependency, so a property that receives it with `erasedToConcreteExistential: true` is `nil` where the dependency is. Its type must be optional, spelled with `?`.",
+						line: 3,
+						column: 110,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Mark the type as optional using `?`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Mark the type as optional using `?`"],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService {
+					@Received(fulfilledByDependencyNamed: "token", ofType: Secret?.self, erasedToConcreteExistential: true) let auth: AnyAuth?
+				}
+				""",
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenErasedRenameOfOptionalDependencyIsOptional() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService {
+					@Received(fulfilledByDependencyNamed: "token", ofType: Secret?.self, erasedToConcreteExistential: true) let auth: AnyAuth?
+				}
+				""",
+				expandedSource: """
+				@Instantiable
+				public struct ExampleService {
+					let auth: AnyAuth?
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_expandsWithoutIssue_whenRenameOfOptionalDependencyIsNotErased() {
+			// Without erasure the property is bound to the dependency itself, so the compiler checks its type.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService {
+					@Received(fulfilledByDependencyNamed: "token", ofType: Secret?.self) let auth: any Auth
+				}
+				""",
+				expandedSource: """
+				@Instantiable
+				public struct ExampleService {
+					let auth: any Auth
+				}
+				""",
+				macros: injectableTestMacros,
+			)
+		}
+
+		@Test
+		func expansion_producesOnlyOnlyIfAvailableDiagnostic_whenErasedOnlyIfAvailableRenameOfOptionalDependencyIsNotOptional() {
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public struct ExampleService {
+					@Received(fulfilledByDependencyNamed: "token", ofType: Secret?.self, erasedToConcreteExistential: true, onlyIfAvailable: true) let auth: AnyAuth
+				}
+				""",
+				expandedSource: """
+				@Instantiable
+				public struct ExampleService {
+					let auth: AnyAuth
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The type of a property received with `onlyIfAvailable: true` must be optional, spelled with `?`.",
+						line: 3,
+						column: 133,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Mark the type as optional using `?`")],
+					),
+				],
+				macros: injectableTestMacros,
+				applyFixIts: ["Mark the type as optional using `?`"],
+				fixedSource: """
+				@Instantiable
+				public struct ExampleService {
+					@Received(fulfilledByDependencyNamed: "token", ofType: Secret?.self, erasedToConcreteExistential: true, onlyIfAvailable: true) let auth: AnyAuth?
+				}
+				""",
+			)
+		}
 	}
 #endif
