@@ -895,7 +895,7 @@ public actor DependencyTreeGenerator {
 		try Self.validateRenamesAreSpelledAsTheMacroAccepts(
 			inTreesRootedAt: validatedRootInstantiables.sorted().compactMap { typeDescriptionToScopeMap[$0] }
 				+ typeDescriptionToScopeMap.values.filter(\.instantiable.generatesMock)
-				+ additionalMockRootScopes,
+				+ Array(additionalMockRootScopes),
 			typeDescriptionToScopeMap: typeDescriptionToScopeMap,
 		)
 		// Validate mock scopes for cycles. Mock-only types (generateMock: true without
