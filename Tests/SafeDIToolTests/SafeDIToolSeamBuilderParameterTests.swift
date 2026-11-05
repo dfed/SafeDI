@@ -3832,7 +3832,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 	private var filesToDelete: [URL]
 
 	/// `Feature` (package `Shop`) and `App` (package `Other`), which depends on it.
-	private static func modules(feature: [String], app: [String]) -> [ModuleFixture] {
+	static func modules(feature: [String], app: [String]) -> [ModuleFixture] {
 		[
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: feature),
 			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: app.map { "import Feature\n\n" + $0 }, dependencies: ["Feature"]),
@@ -4081,19 +4081,19 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 	}
 
 	/// A public `@Instantiable` struct named `name` that fulfills `fulfilledType`, with `declarations`.
-	private static func fulfillingType(named name: String, fulfilling fulfilledType: String, declarations: [String]) -> String {
+	static func fulfillingType(named name: String, fulfilling fulfilledType: String, declarations: [String]) -> String {
 		seamFixtureType(named: name, declarations: declarations, conformances: ", \(fulfilledType)")
 			.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [\(fulfilledType).self])\n")
 	}
 
 	/// The comment a call to `seam`, a seam of `Feature`, carries under `integration`.
-	private static func pluginComment(_ integration: MultiModuleIntegration, seam: String) -> String {
+	static func pluginComment(_ integration: MultiModuleIntegration, seam: String) -> String {
 		integration.seamCallComment(type: seam, declaringModule: "Feature")
 	}
 
 	/// The files `integration` generates for `module`, whose roots and seams generate `rootFiles`' code, by type, each
 	/// file importing `imports`: one combined file under `.moduleInfo`, one file per type under `.swiftPackagePlugin`.
-	private static func generatedFiles(module: String, integration: MultiModuleIntegration, imports: [String], rootFiles: [String: String]) -> [String: String] {
+	static func generatedFiles(module: String, integration: MultiModuleIntegration, imports: [String], rootFiles: [String: String]) -> [String: String] {
 		let importLines = imports.isEmpty ? "" : imports.map { "#if canImport(\($0))\nimport \($0)\n#endif\n" }.joined() + "\n"
 		switch integration {
 		case .moduleInfo:
