@@ -33,15 +33,21 @@ public struct ModuleIdentity: Hashable, Sendable {
 	public let packageName: String?
 
 	/// The names, in order, of the modules among `emitter` and `declarer` SafeDITool was not told the package of, when
-	/// that is why the code `emitter` generates needs `public` access to `declarer`'s declarations: `requirement`, which
-	/// `AccessLevel.required(toConstructFrom:declaredIn:isOwnFile:)` gave for the two, is `public`, and one of them has no
-	/// package, so both are named. Empty otherwise. A module compiled with `-package-name` whose run is not told it is the
-	/// one case where the requirement is wrong, which a diagnostic that asks for `public` names as its other remedy
-	/// (`passingPackageRemedy(forModulesNamed:)`).
-	public static func namesOfModulesWithoutPackage(emitter: ModuleIdentity, declarer: ModuleIdentity, requirement: AccessRequirement) -> [String] {
+	/// that is why the code `emitter` generates cannot use a declaration of `declarer` at `declaredLevel`:
+	/// `requirement`, which `AccessLevel.required(toConstructFrom:declaredIn:isOwnFile:)` gave for the two, is `public`,
+	/// one of them has no package, and `declaredLevel` is `package`, which would suffice were the two in one package.
+	/// Empty otherwise, since a narrower declaration needs widening whatever the packages are. A module compiled with
+	/// `-package-name` whose run is not told it is the one case where the requirement is wrong, which a diagnostic that
+	/// asks for `public` names as its other remedy (`passingPackageRemedy(forModulesNamed:)`).
+	public static func namesOfModulesWithoutPackage(emitter: ModuleIdentity, declarer: ModuleIdentity, requirement: AccessRequirement, declaredLevel: AccessLevel) -> [String] {
 		switch requirement {
 		case .public:
-			[emitter, declarer].filter { $0.packageName == nil }.compactMap(\.moduleName).sorted()
+			switch declaredLevel {
+			case .package:
+				[emitter, declarer].filter { $0.packageName == nil }.compactMap(\.moduleName).sorted()
+			case .open, .public, .internal, .fileprivate, .private:
+				[]
+			}
 		case .internal, .package, .packageUnverified:
 			[]
 		}

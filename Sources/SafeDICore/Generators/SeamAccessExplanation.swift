@@ -270,11 +270,13 @@ enum SeamAccessExplanation {
 		}
 		remedies += causeRemedies(parameter.accessCause, neededLevel: neededLevel)
 		// A caller that needs `public` across a module SafeDI is told no package of needs only `package` if that module
-		// has one. A parameter on no tier is omitted by a nested call, whose modules this call does not decide.
+		// has one, which reaches the parameter only on a `package` initializer. A parameter on no tier is omitted by a
+		// nested call, whose modules this call does not decide.
 		if !omission.isNoTierParameter, let packageRemedy = ModuleIdentity.passingPackageRemedy(forModulesNamed: ModuleIdentity.namesOfModulesWithoutPackage(
 			emitter: ModuleIdentity(moduleName: seamCall.callerModuleName, packageName: seamCall.callerPackageName),
 			declarer: ModuleIdentity(moduleName: seamCall.seamModuleName, packageName: seamCall.seamPackageName),
 			requirement: seamCall.requirement,
+			declaredLevel: parameter.tierAccess,
 		)) {
 			remedies.append(packageRemedy)
 		}

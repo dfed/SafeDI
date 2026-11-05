@@ -2028,9 +2028,9 @@ public actor DependencyTreeGenerator {
 				case .internal, .package:
 					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix\(seamRemedyText)\(publicMockRemedy)."
 				case .public:
-					// Across a named module SafeDI is told no package of, `public` is needed unless the module is compiled
-					// with a package SafeDI was not told.
-					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix\(ModuleIdentity.passingPackageRemedy(forModulesNamed: ModuleIdentity.namesOfModulesWithoutPackage(emitter: emittingModule, declarer: declaringModule, requirement: requirement)).map { ", or \($0)" } ?? "")\(seamRemedyText)\(publicMockRemedy)."
+					// Across a named module SafeDI is told no package of, a `package` declaration needs `public` unless the
+					// module is compiled with a package SafeDI was not told.
+					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix\(ModuleIdentity.passingPackageRemedy(forModulesNamed: ModuleIdentity.namesOfModulesWithoutPackage(emitter: emittingModule, declarer: declaringModule, requirement: requirement, declaredLevel: accessNeed.level)).map { ", or \($0)" } ?? "")\(seamRemedyText)\(publicMockRemedy)."
 				case .packageUnverified:
 					"Make \(fixedDeclaration) `\(level)`\(declaringModuleName) to fix, or `\(AccessLevel.public.spelling)` if the two modules are in different packages\(seamRemedyText)\(publicMockRemedy)."
 				}
