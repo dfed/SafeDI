@@ -8335,6 +8335,104 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_buildsSharedDependencyOnceThroughItsPublicMock_whenCallingModuleCannotConstructIt() async throws {
+		// The Manual's remedy for a dependency the calling module cannot construct, which each public mock call would
+		// otherwise build: give it a public mock of its own, so the calling mock builds it once and passes it to every call.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": """
+			import SafeDI
+
+			@Instantiable(generateMock: .public)
+			public final class Analytics: Instantiable {
+			    package init() {}
+			}
+
+			@Instantiable(generateMock: .public)
+			public struct Service: Instantiable {
+			    package init(analytics: Analytics) {
+			        self.analytics = analytics
+			    }
+
+			    @Received let analytics: Analytics
+			}
+
+			@Instantiable(generateMock: .public)
+			public struct Vault: Instantiable {
+			    package init(analytics: Analytics) {
+			        self.analytics = analytics
+			    }
+
+			    @Received let analytics: Analytics
+			}
+			"""]),
+			ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Screen.swift": """
+			import Core
+			import SafeDI
+
+			@Instantiable(generateMock: true)
+			public struct Screen: Instantiable {
+			    public init(service: Service, vault: Vault) {
+			        self.service = service
+			        self.vault = vault
+			    }
+
+			    @Received let service: Service
+			    @Received let vault: Vault
+			}
+			"""], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: modules,
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            analytics: (() -> Analytics)? = nil,
+		            service: Service.SafeDIOverrides = .init(),
+		            vault: Vault.SafeDIOverrides = .init()
+		        ) {
+		            self.analytics = analytics
+		            self.service = service
+		            self.vault = vault
+		        }
+
+		        let analytics: (() -> Analytics)?
+		        let service: Service.SafeDIOverrides
+		        let vault: Vault.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        _ = Analytics.__safeDI_Analytics_mock_CBF29CE484222325.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let analytics = if let safeDIBuilder = safeDIOverrides.analytics { safeDIBuilder() } else { Analytics.mock() }
+		        _ = Service.__safeDI_Service_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let service = Service.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.service)
+		        _ = Vault.__safeDI_Vault_mock_81027395670D1D21.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
+		        let vault = Vault.mock(analytics: analytics, safeDIOverrides: safeDIOverrides.vault)
+		        return Screen(service: service, vault: vault)
+		    }
+		}
+		#endif
+		"""])
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [DifferentialValueProbe("Screen.mock()")])
+	}
+
 	// MARK: Tests – plain declarations prove a parameter's type
 
 	@Test(arguments: MultiModuleIntegration.allCases)
