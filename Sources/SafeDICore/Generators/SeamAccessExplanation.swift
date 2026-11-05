@@ -98,7 +98,8 @@ enum SeamAccessExplanation {
 	/// The remedies for a tier of `seam` at `neededLevel` that cannot take `parameter`, whose type `cause` proves at
 	/// `parameterLevel`, in the order a reader can follow them: the cause's own, the mention, declaring the seam
 	/// narrower, the receive's own, and declaring the tree on a narrower type. When `seamAccessIsRequiredByPublicMock`,
-	/// the seam cannot be narrower, so that remedy is left out, and receiving a pass-through only if available, the
+	/// the seam cannot be narrower, so that remedy is left out, the proof's receive on the seam says the compiler then
+	/// requires the type to be wider rather than the seam narrower, and receiving a pass-through only if available, the
 	/// cheaper of the receive's own, comes before building it inside the tree.
 	static func tierRemedies(
 		cause: TypeAccessProof.Cause?,
@@ -112,8 +113,12 @@ enum SeamAccessExplanation {
 	) -> String {
 		var remedies = [String]()
 		if case let .unproven(type)? = cause, case .passThrough = parameterKind {
-			// A receive on the seam puts the type in an initializer the compiler checks, which then proves it.
-			remedies.append("declare `@\(Dependency.Source.receivedRawValue) let \(parameter.label): \(type.asSource)` on \(name(seam)), so that its initializer, which the compiler checks, states how visible \(name(type)) is (the compiler may then require \(name(seam))'s initializer, and so the seam, to be narrower)")
+			// A receive on the seam puts the type in an initializer the compiler checks, which then proves it. A seam whose
+			// public mock requires it to be `public` cannot be narrower, so the compiler then requires the type to be wider.
+			let compilerRequirement = seamAccessIsRequiredByPublicMock
+				? "if \(name(type)) is narrower than `\(neededLevel.spelledOnGeneratedDeclaration)`, the compiler then requires it to be `\(neededLevel.spelledOnGeneratedDeclaration)`"
+				: "the compiler may then require \(name(seam))'s initializer, and so the seam, to be narrower"
+			remedies.append("declare `@\(Dependency.Source.receivedRawValue) let \(parameter.label): \(type.asSource)` on \(name(seam)), so that its initializer, which the compiler checks, states how visible \(name(type)) is (\(compilerRequirement))")
 		}
 		remedies += causeRemedies(cause, neededLevel: neededLevel)
 		let parameterLevelText = "`\(parameterLevel.spelledOnGeneratedDeclaration)`"

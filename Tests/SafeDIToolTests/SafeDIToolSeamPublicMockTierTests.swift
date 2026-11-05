@@ -201,6 +201,40 @@ struct SafeDIToolSeamPublicMockTierTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorOfferingNoNarrowerSeamInProofRemedy_whenPublicMockSeamsTreeRequiresTypeSafeDICannotProve() async {
+		// B2.14 of `SafeDIToolSeamAccessProofTests` with a public mock: SafeDI reads no access level of `Session`, so the
+		// first remedy asks the seam to receive it, which puts it in an initializer the compiler checks. The seam cannot be
+		// narrower, so the remedy says what the compiler then requires of `Session` instead.
+		await assertThrowsError(diagnostics: { fixtures in
+			"""
+			\(fixtures["Screen.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Screen`: its generated `public` initializer cannot take `session: Session`, which `Consumer` receives through its alias `auth` (`fulfilledByDependencyNamed: "session"`), and cannot pass `nil` for it, since it is required. `generateMock: .public` requires `Screen` to be `public`, so its generated initializer is `public` too. `Session` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and no initializer, `instantiate(…)` or mock method SafeDI records mentions it (`Consumer`'s initializer mentions only `any Auth`). Declare `@Received let session: Session` on `Screen`, so that its initializer, which the compiler checks, states how visible `Session` is (if `Session` is narrower than `public`, the compiler then requires it to be `public`); mention `Session` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Session` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Session { public static func mock() -> Session }`), which proves `Session` `public`; receive `auth` with `onlyIfAvailable: true` and an optional type; or declare the dependency tree on an `internal` type that instantiates `Screen`.
+			\(fixtures["Consumer.swift"]):7:5: note: `Consumer` receives `session: Session` here.
+			"""
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					seamFixtureType(named: "Screen", isSeam: true, declarations: ["@Instantiated let consumer: Consumer"])
+						.replacingOccurrences(of: "generateDependencyTree: true", with: "generateDependencyTree: true, generateMock: .public"),
+					unrecordedTypeDeclaration("public protocol Auth {}\n\npublic struct Session: Auth {\n    public init() {}\n}"),
+					"""
+					@Instantiable
+					public struct Consumer: Instantiable {
+					    public init(auth: any Auth) {
+					        self.auth = auth
+					    }
+
+					    @Received(fulfilledByDependencyNamed: "session", ofType: Session.self) let auth: any Auth
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: The seam's own properties
 
 	@Test
