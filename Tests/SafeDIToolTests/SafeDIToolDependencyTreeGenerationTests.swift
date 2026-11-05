@@ -6427,8 +6427,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 	enum AliasOfProvidedProperty {
 		/// `Detail`, a child of the seam, instantiates `user: User` and aliases it.
 		case onChild
-		/// As `onChild`, with a second alias, `primaryUser`, of `currentUser` on `Detail`.
-		case aliasOfAliasOnChild
 		/// The seam itself instantiates `user: User` and aliases it; `Detail` receives the alias.
 		case onSeamRoot
 	}
@@ -6449,11 +6447,11 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let rootHolding: String? = switch (alias, neighbor) {
 		case (_, .none), (.onSeamRoot, _):
 			nil
-		case (.onChild, .otherType), (.aliasOfAliasOnChild, .otherType):
+		case (.onChild, .otherType):
 			"user: Name"
-		case (.onChild, .instantiator), (.aliasOfAliasOnChild, .instantiator):
+		case (.onChild, .instantiator):
 			"user: Instantiator<User>"
-		case (.onChild, .optionalWrapper), (.aliasOfAliasOnChild, .optionalWrapper):
+		case (.onChild, .optionalWrapper):
 			"user: LazilyInstantiated<User>"
 		}
 		var files = [
@@ -6472,7 +6470,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let summaryAssignment = neighbor == .none ? "" : "\n        self.summary = summary"
 		let summaryDeclaration = neighbor == .none ? "" : "\n    @Instantiated let summary: Summary"
 		switch alias {
-		case .onChild, .aliasOfAliasOnChild:
+		case .onChild:
 			files.append("""
 			@Instantiable\(seam ? "(generateDependencyTree: true)" : "")
 			public struct Screen: Instantiable {
@@ -6511,21 +6509,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 			    @Instantiated let user: User
 			    @Received(fulfilledByDependencyNamed: "user", ofType: User.self) let currentUser: User
-			}
-			""")
-		case .aliasOfAliasOnChild:
-			files.append("""
-			@Instantiable
-			public struct Detail: Instantiable {
-			    public init(user: User, currentUser: User, primaryUser: User) {
-			        self.user = user
-			        self.currentUser = currentUser
-			        self.primaryUser = primaryUser
-			    }
-
-			    @Instantiated let user: User
-			    @Received(fulfilledByDependencyNamed: "user", ofType: User.self) let currentUser: User
-			    @Received(fulfilledByDependencyNamed: "currentUser", ofType: User.self) let primaryUser: User
 			}
 			""")
 		case .onSeamRoot:
@@ -6602,17 +6585,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			\(indent)let currentUser: User = user
 			\(indent)#sourceLocation()
 			\(indent)return Detail(user: user, currentUser: currentUser)
-			"""
-		case .aliasOfAliasOnChild:
-			"""
-			\(indent)let user = User()
-			\(indent)#sourceLocation(file: "<DETAIL-PATH>", line: 10)
-			\(indent)let currentUser: User = user
-			\(indent)#sourceLocation()
-			\(indent)#sourceLocation(file: "<DETAIL-PATH>", line: 11)
-			\(indent)let primaryUser: User = currentUser
-			\(indent)#sourceLocation()
-			\(indent)return Detail(user: user, currentUser: currentUser, primaryUser: primaryUser)
 			"""
 		case .onSeamRoot:
 			""
@@ -6717,15 +6689,12 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        }
 		        let user = LazilyInstantiated<User>(__safeDI_user)
 		"""
-		var cells = [AliasOfProvidedPropertyCell]()
-		for alias in [AliasOfProvidedProperty.onChild, .aliasOfAliasOnChild] {
-			cells += [
-				childCell(alias, .none, parameter: "", hash: noParameterHash, rootBinding: "", rootCall: "Screen()", rootInitializer: "self.init(screen: screen)"),
-				childCell(alias, .otherType, parameter: "user: Name", hash: "D6A7623E0B4490E2", rootBinding: nameBinding, rootCall: "Screen(user: user)", rootInitializer: "self.init(user: user, screen: screen)"),
-				childCell(alias, .instantiator, parameter: "user: Instantiator<User>", hash: "0C022EBEABB7BCBE", rootBinding: instantiatorBinding, rootCall: "Screen(user: user)", rootInitializer: "self.init(user: user, screen: screen)"),
-				childCell(alias, .optionalWrapper, parameter: "user: LazilyInstantiated<User>?", hash: "71C706F9FE9BEAFE", rootBinding: wrapperBinding, rootCall: "Screen(user: user)", rootInitializer: "self.init(user: user, screen: screen)"),
-			]
-		}
+		var cells = [
+			childCell(.onChild, .none, parameter: "", hash: noParameterHash, rootBinding: "", rootCall: "Screen()", rootInitializer: "self.init(screen: screen)"),
+			childCell(.onChild, .otherType, parameter: "user: Name", hash: "D6A7623E0B4490E2", rootBinding: nameBinding, rootCall: "Screen(user: user)", rootInitializer: "self.init(user: user, screen: screen)"),
+			childCell(.onChild, .instantiator, parameter: "user: Instantiator<User>", hash: "0C022EBEABB7BCBE", rootBinding: instantiatorBinding, rootCall: "Screen(user: user)", rootInitializer: "self.init(user: user, screen: screen)"),
+			childCell(.onChild, .optionalWrapper, parameter: "user: LazilyInstantiated<User>?", hash: "71C706F9FE9BEAFE", rootBinding: wrapperBinding, rootCall: "Screen(user: user)", rootInitializer: "self.init(user: user, screen: screen)"),
+		]
 		let seamRootCell = AliasOfProvidedPropertyCell(alias: .onSeamRoot, neighbor: .none, expectation: .generates(
 			seam: """
 			extension Screen {

@@ -23,6 +23,13 @@ import Testing
 
 struct FixableInstantiableErrorTests {
 	@Test
+	func renameOfRename_fixIt_namesNoProperty_whenTheRenamesStartFromNoPropertyTheFixItCanName() {
+		// The macro offers a fix-it only for `renameStart`; every other remedy has this message, which no fix-it shows.
+		let error = FixableInstantiableError.renameOfRename(label: "y", sourceLabel: "x", remedy: .renamesFulfillOneAnother)
+		#expect(error.fixIt.message == "Rename the property the renames start from instead")
+	}
+
+	@Test
 	func mockMethodMissingArguments_description_mentionsMockMethodAndProperties() {
 		let error = FixableInstantiableError.mockMethodMissingArguments(methodName: "mock", [
 			Property(label: "service", typeDescription: .simple(name: "Service")),

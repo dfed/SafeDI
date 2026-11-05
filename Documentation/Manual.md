@@ -656,7 +656,7 @@ To receive the renamed dependency inside a type-erasing wrapper, add `erasedToCo
 
 A renamed property declared with `onlyIfAvailable: true` is `nil` when its fulfilling dependency is [unavailable](#conditionally-receiving-dependencies), and so is that property for anything that receives it in turn with `onlyIfAvailable: true`. A type that receives the renamed property without `onlyIfAvailable` requires it, as with any dependency: an enclosing property of that name stands in when there is one, and otherwise the fulfilling dependency is built first. The build fails at the receiving declaration when neither is possible.
 
-A rename can also be fulfilled by another rename declared on the same type, as long as the renames do not form a cycle. The rename’s `ofType:` must name exactly the renamed property’s type, or a `LazilyInstantiated` property’s instance type. SafeDI does not check that the retyped property can be fulfilled by the original type; the Swift compiler checks the generated assignment and reports a mismatch.
+The rename’s `ofType:` must name exactly the renamed property’s type, or a `LazilyInstantiated` property’s instance type. SafeDI does not check that the retyped property can be fulfilled by the original type; the Swift compiler checks the generated assignment and reports a mismatch.
 
 The renamed property may keep the original label, but below it that label then names the renamed type. Give the renamed property a label of its own when anything below receives the original; the same holds for an `@Instantiated` or `@Forwarded` property that reuses a label from higher in the tree.
 

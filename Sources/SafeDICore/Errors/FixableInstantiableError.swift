@@ -88,6 +88,57 @@ public enum FixableInstantiableError: DiagnosticError {
 	/// A dependency's type names types declared inside the decorated declaration, each spelled as `spelling`, which code
 	/// SafeDI generates in another type's extension cannot resolve.
 	case unqualifiedNestedType(typeNames: [(spelling: String, qualifiedSpelling: String)], enclosingTypeName: String, dependencyLabel: String)
+	/// A `@Received(fulfilledByDependencyNamed:ofType:)` declaration, `label`, is fulfilled by `sourceLabel`, which the
+	/// same declaration also renames. `remedy` says what to rename instead.
+	case renameOfRename(label: String, sourceLabel: String, remedy: RenameOfRenameRemedy)
+	/// A `@Received(fulfilledByDependencyNamed:ofType:)` declaration, `label`, is fulfilled by its own label, spelled as
+	/// `spelling` says.
+	case renameOfItself(label: String, spelling: RenameOfItselfSpelling)
+
+	/// What a rename of another rename of the same declaration names instead: the property the renames start from.
+	public enum RenameOfRenameRemedy: Sendable {
+		/// Rename `start`, which a fix-it does.
+		case renameStart(String)
+		/// Rename `start`, wrapping it if needed: the rename `wrappingLabel` on the way wraps its value with
+		/// `erasedToConcreteExistential: true`, which renaming `start` directly would skip.
+		case renameStartAndWrap(start: String, wrappingLabel: String)
+		/// Rename `start` only if available: the rename `onlyIfAvailableLabel` on the way receives it only if
+		/// available, so the declaration, which is not optional, must be made optional.
+		case renameStartOnlyIfAvailable(start: String, onlyIfAvailableLabel: String)
+		/// The renames are fulfilled by one another, so none starts from a property.
+		case renamesFulfillOneAnother
+		/// The renames start from no property SafeDI can name: they pass through a rename that keeps its label, through
+		/// two renames of one label, or through a rename that names another type than the rename it is fulfilled by.
+		case renameUnnamedStart
+
+		/// The sentence that says what to rename instead of `label`'s source.
+		fileprivate func sentence(renaming label: String) -> String {
+			switch self {
+			case let .renameStart(start):
+				"Rename `\(start)`, the property the renames start from, instead."
+			case let .renameStartAndWrap(start, wrappingLabel):
+				"Rename `\(start)`, the property the renames start from, instead, wrapping it as `\(wrappingLabel)` does with `erasedToConcreteExistential: true` if `\(label)` needs the wrapper."
+			case let .renameStartOnlyIfAvailable(start, onlyIfAvailableLabel):
+				"Rename `\(start)`, the property the renames start from, instead; since `\(onlyIfAvailableLabel)` receives it only if available, declare `\(label)` optional and rename `\(start)` with `onlyIfAvailable: true`."
+			case .renamesFulfillOneAnother:
+				"These renames are fulfilled by one another, so none of them is ever created. Rename a property this declaration does not rename."
+			case .renameUnnamedStart:
+				"Rename the property the renames start from instead."
+			}
+		}
+	}
+
+	/// How a rename of a dependency to itself is spelled.
+	public enum RenameOfItselfSpelling: Sendable {
+		/// The rename keeps the dependency's type, which `@Received` alone receives.
+		case sameType
+		/// The rename keeps the dependency's type and wraps it with `erasedToConcreteExistential: true`, so it would
+		/// wrap the dependency in itself.
+		case sameTypeWrapped
+		/// The rename keeps the dependency's type, made optional, and receives it only if available, which
+		/// `@Received(onlyIfAvailable: true)` does.
+		case onlyIfAvailableOptional
+	}
 
 	public enum MissingInitializer: Sendable {
 		case hasOnlyInjectableProperties
@@ -210,6 +261,17 @@ public enum FixableInstantiableError: DiagnosticError {
 			} else {
 				"The generated code that builds or receives `\(dependencyLabel)` lives in another type’s extension, where \(typeNames.map { "`\($0.spelling)`" }.joinedAsList), declared in `\(enclosingTypeName)`, do not resolve. Write them as \(typeNames.map { "`\($0.qualifiedSpelling)`" }.joinedAsList)."
 			}
+		case let .renameOfRename(label, sourceLabel, remedy):
+			"`\(label)` is renamed from `\(sourceLabel)`, which this declaration also renames. \(remedy.sentence(renaming: label))"
+		case let .renameOfItself(label, spelling):
+			switch spelling {
+			case .sameType:
+				"`\(label)` is renamed from itself with the same type, which renames nothing. Receive it with `@\(Dependency.Source.receivedRawValue)`."
+			case .sameTypeWrapped:
+				"`\(label)` is renamed from itself with the same type, which renames nothing, and `erasedToConcreteExistential: true` would wrap it in itself. Receive it with `@\(Dependency.Source.receivedRawValue)`."
+			case .onlyIfAvailableOptional:
+				"`\(label)` is renamed from itself, made optional only if available, which is what `@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)` does. Receive it with `@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)`."
+			}
 		}
 	}
 
@@ -263,7 +325,9 @@ public enum FixableInstantiableError: DiagnosticError {
 			     .calleeScopeReferenceInDefaultExpression,
 			     .reservedName,
 			     .unnamedInstantiateDependency,
-			     .namesEncodedDifferently:
+			     .namesEncodedDifferently,
+			     .renameOfRename,
+			     .renameOfItself:
 				.error
 			case .mockAttributesOnMockOnly,
 			     .unqualifiedNestedType:
@@ -373,6 +437,21 @@ public enum FixableInstantiableError: DiagnosticError {
 				"Rename `\(laterName)`"
 			case let .unqualifiedNestedType(typeNames, _, _):
 				"Replace \(typeNames.map { "`\($0.spelling)` with `\($0.qualifiedSpelling)`" }.joinedAsList)"
+			case let .renameOfRename(_, _, remedy):
+				switch remedy {
+				case let .renameStart(start):
+					"Rename `\(start)` instead"
+				case .renameStartAndWrap, .renameStartOnlyIfAvailable, .renamesFulfillOneAnother, .renameUnnamedStart:
+					// The macro offers no fix-it for these.
+					"Rename the property the renames start from instead"
+				}
+			case let .renameOfItself(_, spelling):
+				switch spelling {
+				case .sameType, .sameTypeWrapped:
+					"Replace with `@\(Dependency.Source.receivedRawValue)`"
+				case .onlyIfAvailableOptional:
+					"Replace with `@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)`"
+				}
 			}
 			fixItID = MessageID(domain: "\(Self.self)", id: error.description)
 		}

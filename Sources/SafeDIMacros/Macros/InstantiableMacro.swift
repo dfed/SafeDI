@@ -165,6 +165,7 @@ public struct InstantiableMacro: MemberMacro {
 			for diagnostic in visitor.diagnostics {
 				context.diagnose(diagnostic)
 			}
+			Self.diagnoseRenamesOfRenamesAndOfThemselves(among: declaration.memberBlock.members, context: context)
 
 			let memberDeclarations = Self.declarations(in: declaration.memberBlock.members)
 			Self.diagnoseUnqualifiedNestedTypes(

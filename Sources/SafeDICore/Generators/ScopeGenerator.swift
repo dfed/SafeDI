@@ -160,24 +160,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		self.referencedFillNamesByKey = referencedFillNamesByKey.filter { !ownFillKeys.contains($0.key) }
 		self.fillKeysReferencedFromSendableFunction = fillKeysReferencedFromSendableFunction.subtracting(ownFillKeys)
 		self.propertiesToDeclare = propertiesToDeclare
-		// Nearly every scope declares no alias, and nearly every one that does declares no alias of another.
-		var aliasProperties = Set<Property>()
-		for child in propertiesToGenerate {
-			if case let .alias(property, _, _, _, _) = child.scopeData {
-				aliasProperties.insert(property)
-			}
-		}
-		onlyIfAvailableAliasesOfAliases = aliasProperties.isEmpty
-			? []
-			: Set(propertiesToGenerate.compactMap { child in
-				if case let .alias(property, fulfillingProperty, _, onlyIfAvailable: true, _) = child.scopeData,
-				   aliasProperties.contains(fulfillingProperty)
-				{
-					property
-				} else {
-					nil
-				}
-			})
 		self.unavailableOptionalProperties = unavailableOptionalProperties
 		self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
 		fulfillingPropertyIsLazilyInstantiatedInstance = false
@@ -233,19 +215,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				}
 			}
 		}
-		// A scope that closes a property cycle generates none of its type's dependencies. An alias of another alias
-		// its type declares must not be received from the siblings around it: one of those siblings is the alias's
-		// own fulfilling alias's fulfilling property, so the scope would be ordered after a sibling ordered after it.
-		let cycleClosingAliasProperties: Set<Property> = isPropertyCycle
-			? Set(instantiable.dependencies.compactMap {
-				switch $0.source {
-				case .aliased:
-					$0.property
-				case .instantiated, .forwarded, .received:
-					nil
-				}
-			})
-			: []
 		// The properties this scope's own dependencies receive.
 		var ownReceivedProperties = Set<Property>()
 		for dependency in instantiable.dependencies {
@@ -262,8 +231,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// (e.g., as an @Instantiated sibling) or forwarded, the alias
 				// binds against that local — it doesn't need to be received.
 				guard !propertiesToDeclare.contains(fulfillingProperty),
-				      !forwardedProperties.contains(fulfillingProperty),
-				      !cycleClosingAliasProperties.contains(fulfillingProperty)
+				      !forwardedProperties.contains(fulfillingProperty)
 				else { continue }
 				receivedProperty = fulfillingProperty
 				onlyIfAvailable = isOnlyIfAvailable
@@ -336,24 +304,17 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		var requiredOnlyIfAvailableAliasProperties = Set<Property>()
 		var requiredOnlyIfAvailableAliasFulfillingProperties = Set<Property>()
-		// An `onlyIfAvailable` alias of another `onlyIfAvailable` alias this scope declares is created from it, so
-		// one that is required requires the alias it renames in turn, which its own generator does not say: an
-		// `onlyIfAvailable` alias's generator requires nothing. The aliases are found until a pass finds no more. An alias
-		// whose property only a mock's override of an `onlyIfAvailable` receive provides is never required: a receiver
-		// that requires it is handed the override where it is not created.
-		var foundRequiredAlias = true
-		while foundRequiredAlias {
-			foundRequiredAlias = false
-			for case let (aliasProperty?, fulfillingProperty?) in propertiesToGenerate.lazy
-				.filter({ !$0.aliasPropertyIsProvidedOnlyByOnlyIfAvailableOverride })
-				.map({ ($0.property, $0.onlyIfAvailableAliasFulfillingProperty) })
-				where !requiredOnlyIfAvailableAliasProperties.contains(aliasProperty)
-				&& (isRequiredByChild(aliasProperty) || requiredOnlyIfAvailableAliasFulfillingProperties.contains(aliasProperty))
-			{
-				requiredOnlyIfAvailableAliasProperties.insert(aliasProperty)
-				requiredOnlyIfAvailableAliasFulfillingProperties.insert(fulfillingProperty)
-				foundRequiredAlias = true
-			}
+		// An `onlyIfAvailable` alias's generator requires nothing, so its scope finds which of its aliases a receiver
+		// requires. No alias of a scope renames another (SafeDITool rejects that before it builds scopes), so a child's
+		// requirement is the only way. An alias whose property only a mock's override of an `onlyIfAvailable` receive
+		// provides is never required: a receiver that requires it is handed the override where it is not created.
+		for case let (aliasProperty?, fulfillingProperty?) in propertiesToGenerate.lazy
+			.filter({ !$0.aliasPropertyIsProvidedOnlyByOnlyIfAvailableOverride })
+			.map({ ($0.property, $0.onlyIfAvailableAliasFulfillingProperty) })
+			where isRequiredByChild(aliasProperty)
+		{
+			requiredOnlyIfAvailableAliasProperties.insert(aliasProperty)
+			requiredOnlyIfAvailableAliasFulfillingProperties.insert(fulfillingProperty)
 		}
 		self.requiredOnlyIfAvailableAliasProperties = requiredOnlyIfAvailableAliasProperties
 		requiredAliasFulfillingProperties = Set(propertiesToGenerate.flatMap(\.requiredAliasFulfillingProperties))
@@ -362,12 +323,11 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			.filter(isReceivedFromAncestors)
 			// A receiver of an alias that may not be created and whose property an enclosing scope
 			// provides is handed the enclosing scope's property where the alias is not created, so it
-			// requires that property instead. A required `onlyIfAvailable` alias of such an alias
-			// requires it the same way.
+			// requires that property instead.
 			.union(
 				propertiesToGenerate
 					.compactMap(\.onlyIfAvailableAliasPropertyProvidedByEnclosingScope)
-					.filter { isRequiredByChild($0) || requiredOnlyIfAvailableAliasFulfillingProperties.contains($0) },
+					.filter(isRequiredByChild),
 			)
 		onlyIfAvailableAliasFulfillingProperty = nil
 		onlyIfAvailableAliasPropertyProvidedByEnclosingScope = nil
@@ -531,7 +491,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		description = property.asSource
 		propertiesToGenerate = []
 		propertiesToDeclare = []
-		onlyIfAvailableAliasesOfAliases = []
 		self.unavailableOptionalProperties = unavailableOptionalProperties
 		lazilyInstantiatedInstanceProperties = []
 		self.fulfillingPropertyIsLazilyInstantiatedInstance = fulfillingPropertyIsLazilyInstantiatedInstance
@@ -595,7 +554,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		description = holeProperty.asSource
 		propertiesToGenerate = []
 		propertiesToDeclare = []
-		onlyIfAvailableAliasesOfAliases = []
 		unavailableOptionalProperties = []
 		lazilyInstantiatedInstanceProperties = []
 		fulfillingPropertyIsLazilyInstantiatedInstance = false
@@ -1363,13 +1321,14 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The reads of `onlyIfAvailable` aliases that may not be created in the tree this generator roots, a seam's, as
 	/// code generation walks it, in tree order, each reading declaration once: what the path it is first met on says.
 	/// An alias may not be created when its fulfilling property may be `nil` on the path (`fulfillingPropertyIsRuntimeOptional`,
-	/// judged against the closest declaration of that property), when generation does not create it there – its
-	/// fulfilling property is still being built, or is generated later – or when it is an alias of such an alias. Its
-	/// declaring type is passed what inline passes it, but anything else that reads its label reads, inline, whatever
-	/// declaration of the label encloses the alias where the alias is not created, which the seam cannot see: every
-	/// other dependency that reads its property and finds the alias as the closest declaration of its label – a receive
-	/// in its declaring type's tree, a nested seam's parameter standing for the receives in that seam's tree, an alias
-	/// on its declaring type or in that type's tree – and, except for the seam type's own aliases, an alias whose
+	/// judged against the closest declaration of that property), or when generation does not create it there – its
+	/// fulfilling property is still being built, or is generated later. Its declaring type is passed what inline passes
+	/// it, but anything else that reads its label reads, inline, whatever declaration of the label encloses the alias
+	/// where the alias is not created, which the seam cannot see: every other dependency that reads its property and
+	/// finds the alias as the closest declaration of its label – a receive in its declaring type's tree, a nested seam's
+	/// parameter standing for the receives in that seam's tree, an alias in that type's tree (no alias of the declaring
+	/// type renames another of its aliases, which SafeDITool rejects before it builds scopes) – and, except for the seam
+	/// type's own aliases, an alias whose
 	/// declaring type's builder also declares the alias's property, exactly or unwrapped, other than the alias's
 	/// fulfilling property, which inline is what the parent's `isGeneratedBefore` hands the declaring type in the
 	/// alias's place. Empty for every tree that is not a seam's.
@@ -1478,13 +1437,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 		let orderedChildren = orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater)
 		// The `onlyIfAvailable` aliases this scope declares that may not be created, by property: those whose
-		// fulfilling property is unavailable or may be `nil`, then the aliases of those on this scope, which are not
-		// created where those are not, to a fixed point. An alias that reads one above takes what that one says.
+		// fulfilling property is unavailable or may be `nil`. An alias that reads one above takes what that one says.
 		var uncreatedAliases = [Property: UncreatedAlias]()
-		var aliasesToVisit = [(property: Property, fulfillingProperty: Property, declarationLocation: Dependency.DeclarationLocation?)]()
 		for child in orderedChildren {
 			guard case let .alias(property, fulfillingProperty, _, onlyIfAvailable: true, _) = child.generator.scopeData else { continue }
-			let declarationLocation = instantiable.dependencies.first { $0.property == property }?.declarationLocation
 			let reason: UncreatedAliasReason
 			if child.unavailableProperties.contains(fulfillingProperty) {
 				reason = child.generator.unavailableOptionalProperties.contains(fulfillingProperty)
@@ -1493,7 +1449,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			} else if child.generator.fulfillingPropertyIsRuntimeOptional {
 				reason = .fulfillingPropertyMayBeNil
 			} else {
-				aliasesToVisit.append((property, fulfillingProperty, declarationLocation))
 				continue
 			}
 			let enclosingAlias = enclosingUncreatedAlias(readBy: fulfillingProperty, declaredBy: property)
@@ -1501,45 +1456,15 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				property: property,
 				fulfillingProperty: fulfillingProperty,
 				declaringType: instantiable.concreteInstantiable,
-				declarationLocation: declarationLocation,
+				declarationLocation: instantiable.dependencies.first { $0.property == property }?.declarationLocation,
 				unavailableProperty: enclosingAlias?.unavailableProperty ?? fulfillingProperty,
 				reason: enclosingAlias?.reason ?? reason,
 			)
 		}
-		// An alias of another of this scope's uncreated aliases is not created where that one is not, and takes the
-		// property whose absence leaves that one so, to a fixed point: aliases of one scope never fulfill one another.
-		var foundAlias = !uncreatedAliases.isEmpty
-		while foundAlias {
-			foundAlias = false
-			for alias in aliasesToVisit + uncreatedAliases.values.map({ ($0.property, $0.fulfillingProperty, $0.declarationLocation) }) {
-				guard let readAlias = uncreatedAliases.values.first(where: { $0.property != alias.property && $0.property.asUnwrappedProperty == alias.fulfillingProperty.asUnwrappedProperty }),
-				      uncreatedAliases[alias.property]?.unavailableProperty != readAlias.unavailableProperty
-				else { continue }
-				uncreatedAliases[alias.property] = UncreatedAlias(
-					property: alias.property,
-					fulfillingProperty: alias.fulfillingProperty,
-					declaringType: instantiable.concreteInstantiable,
-					declarationLocation: alias.declarationLocation,
-					unavailableProperty: readAlias.unavailableProperty,
-					reason: readAlias.reason,
-				)
-				foundAlias = true
-			}
-		}
-		// An alias of one of this scope's uncreated aliases reads it, and so does the type built in its place where the
-		// scope that builds this one declares its property too. An alias reads no alias of its own: a type's own
-		// declaration of the label is not a declaration of the label the alias reads, so an alias that keeps its
-		// fulfilling property's label and only makes it optional is not an alias of itself.
+		// No alias reads another of this scope's aliases: SafeDITool rejects a rename of another rename of one declaration
+		// before it builds scopes. The type built in place of an uncreated alias reads it where the scope that builds this
+		// one declares its property too.
 		for dependency in instantiable.dependencies {
-			if case let .aliased(fulfillingProperty, _, _) = dependency.source,
-			   let readAlias = uncreatedAliases.values.first(where: { $0.property != dependency.property && $0.property.asUnwrappedProperty == fulfillingProperty.asUnwrappedProperty })
-			{
-				reads.append(UncreatedAliasRead(
-					kind: .alias(alias: dependency.property, fulfillingProperty: fulfillingProperty, readerType: instantiable.concreteInstantiable),
-					uncreatedAlias: readAlias,
-					declarationLocation: dependency.declarationLocation,
-				))
-			}
 			// Inline, the scope that builds this type passes it the property of an earlier child declaring the alias's
 			// property, exactly or unwrapped, where the alias is not created (its `isGeneratedBefore`), the only route by
 			// which the declaring type is passed anything but the alias or `nil`. A change to that route on main must
@@ -2144,9 +2069,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The fields the scope structs of the sites in this generator's subtree carry: a fill the seam generates binds
 	/// each of the filled seam's fields they carry, whether or not its own tree reads it.
 	let fieldsCarriedBySites: Set<Property>
-	/// The properties of this scope's `onlyIfAvailable` aliases that rename another alias this scope declares.
-	/// Each is not created where the alias it renames is not (see `uncreatedOnlyIfAvailableAliasesOfAliases`).
-	private let onlyIfAvailableAliasesOfAliases: Set<Property>
 	/// The received properties that are in scope only as the instance of a `LazilyInstantiated` property created
 	/// further up the tree. Passing one to this scope’s initializer reads that instance, which instantiates it.
 	private let lazilyInstantiatedInstanceProperties: Set<Property>
@@ -2597,21 +2519,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		}
 	}
 
-	/// The `onlyIfAvailableAliasesOfAliases` that are not created where this scope is generated with
-	/// `propertiesGeneratedLater`: an alias of an alias that is not created is not created either, and so on
-	/// down a chain (see `orderedChildren`). The scope that builds this one passes its construction `nil` for each
-	/// alias whose fulfilling property it finds unavailable, but cannot see which of this scope's aliases are
-	/// created, so the construction is passed `nil` for these too.
-	private func uncreatedOnlyIfAvailableAliasesOfAliases(propertiesGeneratedLater: Set<Property>) -> Set<Property> {
-		// Nearly every scope declares no alias of another of its aliases.
-		guard !onlyIfAvailableAliasesOfAliases.isEmpty else { return [] }
-		return Set(
-			orderedChildren(propertiesGeneratedLater: propertiesGeneratedLater)
-				.compactMap { $0.generator.uncreatedAliasProperty(unavailableProperties: $0.unavailableProperties) }
-				.filter(onlyIfAvailableAliasesOfAliases.contains),
-		)
-	}
-
 	/// The first receive of each of `labels` – labels the body of the builder function of the scope that builds
 	/// `builtType` for `builtProperty` receives from the scopes enclosing it – in the order a walk of the body meets
 	/// them: the type's own dependencies, `ownDependencies`, then each of `children`'s trees, depth first, each scope's
@@ -2985,7 +2892,6 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 			isPropertyCycle,
 			seamCall,
 		):
-			// This scope's own aliases that are not created although the scope building it cannot see it are passed `nil` too.
 			// A type built with its hand-written mock, as one built with its initializer, is constructed inside its builder
 			// function, whose own parameters hide the declarations of their labels where it is called.
 			let argumentList = if publicMockCall != nil, let mockInitializer = instantiable.mockInitializer {
@@ -3010,16 +2916,12 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				// initializer is; each other parameter of the mock keeps its default.
 				try mockInitializer.createInitializerArgumentList(
 					given: instantiable.dependencies,
-					unavailableProperties: bodyUnavailableProperties(
-						unavailableProperties.union(uncreatedOnlyIfAvailableAliasesOfAliases(propertiesGeneratedLater: bodyPropertiesGeneratedLater(propertiesGeneratedLater))),
-					),
+					unavailableProperties: bodyUnavailableProperties(unavailableProperties),
 					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 				)
 			} else {
 				try instantiable.generateArgumentList(
-					unavailableProperties: bodyUnavailableProperties(
-						unavailableProperties.union(uncreatedOnlyIfAvailableAliasesOfAliases(propertiesGeneratedLater: bodyPropertiesGeneratedLater(propertiesGeneratedLater))),
-					),
+					unavailableProperties: bodyUnavailableProperties(unavailableProperties),
 					lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 				)
 			}
@@ -3405,10 +3307,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					enclosingFunctionNames: builderFunctionNames.enclosingFunctionNames,
 					leadingMemberWhitespace: bodyIndent,
 				)
-				// The seam's own `onlyIfAvailable` aliases that are not created are passed `nil`, as a scope built
-				// by another is.
 				let argumentList = try instantiable.generateArgumentList(
-					unavailableProperties: unavailableProperties.union(uncreatedOnlyIfAvailableAliasesOfAliases(propertiesGeneratedLater: propertiesGeneratedLater)),
+					unavailableProperties: unavailableProperties,
 				)
 				body = (generatedProperties + ["\(bodyIndent)self.init(\(argumentList))"]).joined(separator: "\n")
 			} else {
@@ -5372,15 +5272,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 					insideSendableScope: childInsideSendable,
 					propertiesGeneratedLater: childBodyPropertiesGeneratedLater,
 				)
-				// The child's own aliases that are not created although this scope cannot see it are passed `nil` too.
-				// Nearly every child declares no alias of another of its aliases, so most are not asked.
-				let childConstructionUnavailableProperties = await childGenerator.bodyUnavailableProperties(
-					childGenerator.onlyIfAvailableAliasesOfAliases.isEmpty
-						? childUnavailableProperties
-						: childUnavailableProperties.union(
-							childGenerator.uncreatedOnlyIfAvailableAliasesOfAliases(propertiesGeneratedLater: childBodyPropertiesGeneratedLater),
-						),
-				)
+				let childConstructionUnavailableProperties = await childGenerator.bodyUnavailableProperties(childUnavailableProperties)
 
 				// Determine which initializer to use for construction arguments and defaults.
 				// When the child has a compatible mock method, it fully controls the

@@ -293,8 +293,8 @@ final class Scope: Hashable {
 		let bareAttributeRange: Dependency.SourceRange?
 	}
 
-	/// The properties this scope always creates: those it instantiates, is forwarded, or assigns to a required
-	/// alias. An `onlyIfAvailable` alias is left out, since it is not created while what it renames is unavailable.
+	/// The properties this scope always creates: those it instantiates or is forwarded. No alias of this scope renames
+	/// another (SafeDITool rejects that before it builds scopes), so no alias is among them.
 	private lazy var unconditionallyCreatedProperties = Set(
 		instantiable
 			.dependencies
@@ -302,9 +302,7 @@ final class Scope: Hashable {
 				switch $0.source {
 				case .instantiated, .forwarded:
 					true
-				case let .aliased(_, _, onlyIfAvailable):
-					!onlyIfAvailable
-				case .received:
+				case .aliased, .received:
 					false
 				}
 			}
@@ -313,8 +311,7 @@ final class Scope: Hashable {
 
 	/// The received properties this scope requires an ancestor to provide. An alias of a property this scope always
 	/// creates refers to that property, so it requires nothing of an ancestor: what that property needs, its own
-	/// declaration requires. An alias of an `onlyIfAvailable` alias this scope declares is listed, so that validation
-	/// can check the alias it refers to is created.
+	/// declaration requires.
 	private(set) lazy var requiredReceivedProperties: [RequiredReceivedProperty] = instantiable
 		.dependencies
 		.compactMap {
@@ -1181,9 +1178,10 @@ private struct ScopeGeneratorUnderConstruction {
 	/// declares and the scopes it builds see them. The closest declaration of a property's label decides: one `scope`
 	/// instantiates, or forwards – a seam's root's own forwarded properties included – or declares by an alias that is
 	/// created whenever `scope` is, is not `nil` there, so every form of its label leaves the set, while an
-	/// `onlyIfAvailable` alias of a property in the set may be `nil` itself, so both of its forms join it – a chain of
-	/// such aliases on `scope` included. A received property declares nothing. Each property is held by its exact
-	/// form, so that an alias of exactly a required optional parameter, which the set never holds, is created.
+	/// `onlyIfAvailable` alias of a property in the set may be `nil` itself, so both of its forms join it. No alias of
+	/// `scope` renames another (SafeDITool rejects that before it builds scopes). A received property declares nothing.
+	/// Each property is held by its exact form, so that an alias of exactly a required optional parameter, which the set
+	/// never holds, is created.
 	private static func runtimeOptionalProperties(
 		declaredBy scope: Scope,
 		enclosedBy enclosingRuntimeOptionalProperties: Set<Property>,
@@ -1204,25 +1202,19 @@ private struct ScopeGeneratorUnderConstruction {
 			}
 		}
 		guard !aliases.isEmpty else { return runtimeOptionalProperties }
-		// An alias is the closest declaration of its property for the aliases of the same scope too, so an alias of
-		// another of the scope's aliases may be `nil` exactly when that one may: found to a fixed point. An alias that
-		// keeps the label it retypes is not in scope where its own value is read, so the forms of its fulfilling
-		// property stay in the set, which `addAliasGenerator` judges the alias by; a read of those forms beneath the
-		// alias is the hidden-label error, reported before any alias is judged.
+		// An alias that keeps the label it retypes is not in scope where its own value is read, so the forms of its
+		// fulfilling property stay in the set, which `addAliasGenerator` judges the alias by; a read of those forms
+		// beneath the alias is the hidden-label error, reported before any alias is judged.
 		for alias in aliases {
 			let formsTheAliasReads: Set<Property> = alias.property.label == alias.fulfillingProperty.label
 				? [alias.fulfillingProperty, alias.fulfillingProperty.asUnwrappedProperty]
 				: []
 			runtimeOptionalProperties = runtimeOptionalProperties.filter { $0.label != alias.property.label || formsTheAliasReads.contains($0) }
 		}
-		var foundAlias = true
-		while foundAlias {
-			foundAlias = false
-			for alias in aliases where alias.onlyIfAvailable && !runtimeOptionalProperties.contains(alias.property) && runtimeOptionalProperties.contains(alias.fulfillingProperty) {
-				runtimeOptionalProperties.insert(alias.property)
-				runtimeOptionalProperties.insert(alias.property.asUnwrappedProperty)
-				foundAlias = true
-			}
+		let enclosingAndRetypedRuntimeOptionalProperties = runtimeOptionalProperties
+		for alias in aliases where alias.onlyIfAvailable && enclosingAndRetypedRuntimeOptionalProperties.contains(alias.fulfillingProperty) {
+			runtimeOptionalProperties.insert(alias.property)
+			runtimeOptionalProperties.insert(alias.property.asUnwrappedProperty)
 		}
 		return runtimeOptionalProperties
 	}
