@@ -1270,8 +1270,8 @@ struct Generate: AsyncParsableCommand {
 
 	/// What this run knows of the modules a file imports that it read nothing of: under the plugin's target graph, the
 	/// modules the graph does not hold; in a run that reads or writes module info, those whose module info it was not
-	/// given. `nil` for a run that does neither, as the Xcode project plugin's, and for a run given module info that
-	/// names no module, since either cannot tell which modules it read. `SafeDI` itself declares nothing SafeDI reads.
+	/// given. `nil` for a run that does neither, as the Xcode project plugin's, since it cannot tell which modules it
+	/// read. `SafeDI` itself declares nothing SafeDI reads.
 	/// It reads only the imports of the run's own files: another module's file may be out of the run's reach (Bazel's
 	/// sandbox gives `generate` only its own sources), and a path another project recorded may name a different file of
 	/// this one.
