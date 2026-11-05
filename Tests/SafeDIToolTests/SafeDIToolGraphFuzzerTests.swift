@@ -3177,12 +3177,12 @@ struct SafeDIToolGraphFuzzerTests {
 	)
 
 	static let seamCorpusSeedCount = 1_000
-	static let seamCorpusFixtureHash: UInt64 = 0xFF95D73FF94E3F72
+	static let seamCorpusFixtureHash: UInt64 = 0x3F7D7D2813AEB6E7
 	static let seamCorpusAcceptedSeedCount = 275
 	static let seamCorpusAcceptedSeedsSum: UInt64 = 0x905562851AB6E200
 	/// How many of the seam corpus's graphs the tool accepts with their seams and without them, which the value
 	/// oracle compares.
-	static let seamCorpusValueOracleInspectedGraphCount = 184
+	static let seamCorpusValueOracleInspectedGraphCount = 185
 	/// How many of the seam corpus's graphs the tool rejects because a caller holds a value the tier it calls omits.
 	static let seamCorpusOmittedValueGraphCount = 0
 	/// How many of the seam corpus's graphs name a type no declaration SafeDI reads declares, which the oracle compares
