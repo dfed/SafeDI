@@ -183,6 +183,15 @@ struct SafeDIToolGraphFuzzerTests {
 		// asserts in the caller's module too.
 		#expect(acceptedResults.contains { $0.isComparedAcrossIntegrations })
 		#expect(acceptedResults.contains { $0.isComparedAcrossIntegrations && GraphFuzzerFeature.seamDrawFeatures(of: $0.fixture).contains(.recordedInFlagClause) })
+		// Seams naming a type a block that guards mock-only declarations declares, with each way the block's other clauses,
+		// or another file's, declare it, and one in the seam's module, which the oracle compiles as a release build too.
+		#expect(Set([
+			GraphFuzzerSeamDrawFeature.mockOnlyBlockTypeElseSameLevel,
+			.mockOnlyBlockTypeElseWider,
+			.mockOnlyBlockTypeElseNarrower,
+			.mockOnlyBlockTypeRedeclaredWhereMockConditionIsInactive,
+			.mockOnlyBlockAcrossModules,
+		]).subtracting(drawFeatures).sorted() == [])
 		// A graph whose generated code carries the comment naming a type no declaration SafeDI reads declares, which agreed
 		// with its read twin.
 		#expect(acceptedResults.contains { result in
@@ -1276,6 +1285,22 @@ struct SafeDIToolGraphFuzzerTests {
 		#expect(failures.keys.sorted() == [unattributedErrorSeed, warningSeed])
 		#expect(failures[unattributedErrorSeed]?.kind == .fixtureDoesNotCompile)
 		#expect(failures[warningSeed]?.kind == .generatedCodeDrawsWarning)
+	}
+
+	@Test(.enabled(if: compileVerificationIsEnabled, "The oracle compiles generated code only when compile verification is enabled"))
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func compilationFailures_reportReleaseBuildFailure_whenGeneratedCodeCompilesOnlyWhereDebugIsDefined() throws {
+		// A graph the oracle compiles as a release build too (`GraphFuzzerFixture.compilesAsReleaseBuildToo`) fails there
+		// when its generated code does not compile without `DEBUG`, and the failure says which build it was.
+		let seed: UInt64 = 1_000_000_008
+		let toolRuns = [Self.probeGraph(seed: seed, generatedCode: "#if !DEBUG\nfunc brokenInRelease() -> Int { \"not an integer\" }\n#endif\n")]
+
+		#expect(try GraphFuzzerOracle.compilationFailures(of: toolRuns).isEmpty)
+		let failures = try GraphFuzzerOracle.compilationFailures(of: toolRuns, definesDebug: false)
+
+		#expect(failures.keys.sorted() == [seed])
+		#expect(failures[seed]?.kind == .generatedCodeDoesNotCompile)
+		#expect(failures[seed]?.details.hasPrefix("Compiled as a release build, without `DEBUG`:\n") == true)
 	}
 
 	/// A graph of one small type whose fixture also declares `fixtureDeclarations`, which the tool accepted with
@@ -3108,11 +3133,14 @@ struct SafeDIToolGraphFuzzerTests {
 	/// on once the plugin flow's assertions about that module's block are excused (seed 326); and a graph it rejects, which
 	/// `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` checks; and declarations moved beneath the seam's module
 	/// (seed 153) and a chain of seams through the three modules beneath it (seed 163), which a caller computes from the
-	/// seam's module's view (`GraphFuzzerSeamDependencyDraw`). The union of the batches the hole rolls and the seam tests'
-	/// draws were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 92, 98, 153, 163, 180, 196, 277, 326, 605, 609, 743]
+	/// seam's module's view (`GraphFuzzerSeamDependencyDraw`); and seams naming a type declared in a block that guards
+	/// mock-only declarations, whose other clauses declare it at the same level (seed 277), wider (seed 151) or narrower
+	/// (seed 298), or which has none while another file declares it where `DEBUG` is inactive (seeds 98 and 609, the
+	/// second in the seam's module), each compiled as a release build too. The union of the batches the hole rolls and the
+	/// seam tests' draws were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 92, 98, 151, 153, 163, 180, 196, 277, 298, 326, 605, 609, 743]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0xB31F7DA8CAEAC43A
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x6E474857AFD23C8C
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -3264,6 +3292,11 @@ struct SafeDIToolGraphFuzzerTests {
 		.unreadBoundaryInExtensionOfNestedType: 25,
 		.unreadBoundaryInternalTypealias: 28,
 		.unreadAcrossModules: 55,
+		.mockOnlyBlockTypeElseSameLevel: 22,
+		.mockOnlyBlockTypeElseWider: 31,
+		.mockOnlyBlockTypeElseNarrower: 24,
+		.mockOnlyBlockTypeRedeclaredWhereMockConditionIsInactive: 34,
+		.mockOnlyBlockAcrossModules: 27,
 		.formsAcrossModules: 145,
 		.formsSeam: 499,
 		.formsByValueReceive: 271,
