@@ -9645,7 +9645,6 @@ public actor DependencyTreeGenerator {
 					spelling = .renameOfRename(sourceLabel: fulfillingProperty.label, declaringType: instantiable.concreteInstantiable)
 				} else if onlyIfAvailable,
 				          !erasedToConcreteExistential,
-				          property.typeDescription.isOptional,
 				          fulfillingProperty.typeDescription == property.typeDescription
 				          || fulfillingProperty.typeDescription == property.typeDescription.unwrapped
 				{

@@ -1073,6 +1073,60 @@ import Testing
 		}
 
 		@Test
+		func declaration_fixit_receivesOnlyIfAvailable_whenRenameKeepsItsLabelAndItsNonOptionalTypeOnlyIfAvailable() {
+			// The @Received macro asks for an optional type; both fix-its together give `@Received(onlyIfAvailable: true)`.
+			assertMacroExpansion(
+				"""
+				@Instantiable
+				public final class Profile: Instantiable {
+				    public init(session: Session) {
+				        self.session = session
+				    }
+
+				    @Received(fulfilledByDependencyNamed: "session", ofType: Session.self, onlyIfAvailable: true) let session: Session
+				}
+				""",
+				expandedSource: """
+				public final class Profile: Instantiable {
+				    public init(session: Session) {
+				        self.session = session
+				    }
+
+				    let session: Session
+				}
+				""",
+				diagnostics: [
+					DiagnosticSpec(
+						message: "The type of a property received with `onlyIfAvailable: true` must be optional, spelled with `?`.",
+						line: 7,
+						column: 103,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Mark the type as optional using `?`")],
+					),
+					DiagnosticSpec(
+						message: "`session` is renamed from itself, made optional only if available, which is what `@Received(onlyIfAvailable: true)` does. Receive it with `@Received(onlyIfAvailable: true)`.",
+						line: 7,
+						column: 5,
+						severity: .error,
+						fixIts: [FixItSpec(message: "Replace with `@Received(onlyIfAvailable: true)`")],
+					),
+				],
+				macros: instantiableTestMacros,
+				applyFixIts: ["Mark the type as optional using `?`", "Replace with `@Received(onlyIfAvailable: true)`"],
+				fixedSource: """
+				@Instantiable
+				public final class Profile: Instantiable {
+				    public init(session: Session) {
+				        self.session = session
+				    }
+
+				    @Received(onlyIfAvailable: true) let session: Session?
+				}
+				""",
+			)
+		}
+
+		@Test
 		func declaration_fixit_receivesOnlyIfAvailable_whenRenameKeepsItsLabelAndItsOptionalTypeOnlyIfAvailable() {
 			assertMacroExpansion(
 				"""

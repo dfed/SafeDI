@@ -135,7 +135,7 @@ public enum FixableInstantiableError: DiagnosticError {
 		/// The rename keeps the dependency's type and wraps it with `erasedToConcreteExistential: true`, so it would
 		/// wrap the dependency in itself.
 		case sameTypeWrapped
-		/// The rename keeps the dependency's type, made optional, and receives it only if available, which
+		/// The rename keeps the dependency's type, or its optional form, and receives it only if available, which
 		/// `@Received(onlyIfAvailable: true)` does.
 		case onlyIfAvailableOptional
 	}

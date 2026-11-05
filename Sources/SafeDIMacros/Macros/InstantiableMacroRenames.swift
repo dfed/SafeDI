@@ -50,7 +50,8 @@ extension InstantiableMacro {
 
 	/// Reports `dependency`, whose `rename` is fulfilled by its own label, when it also keeps its type – or makes it
 	/// optional only if available, without wrapping it. A rename that keeps its label and changes its type is a
-	/// retyping, which stays.
+	/// retyping, which stays. An `onlyIfAvailable` rename whose type is not yet optional is offered
+	/// `@Received(onlyIfAvailable: true)` too, beside the `@Received` macro's fix-it that makes the type optional.
 	private static func diagnoseRenameOfItself(
 		_ dependency: DeclaredDependency,
 		rename: DeclaredDependency.Rename,
@@ -59,7 +60,6 @@ extension InstantiableMacro {
 		let spelling: FixableInstantiableError.RenameOfItselfSpelling
 		if rename.isOnlyIfAvailable,
 		   !rename.isErased,
-		   dependency.type.isOptional,
 		   rename.ofType == dependency.type || rename.ofType == dependency.type.unwrapped
 		{
 			spelling = .onlyIfAvailableOptional

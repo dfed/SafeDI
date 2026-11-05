@@ -568,6 +568,34 @@ struct SafeDIToolRenameSpellingTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_throwsPlainError_whenRenameKeepsItsLabelAndItsNonOptionalTypeOnlyIfAvailable() async {
+		// The @Received macro also rejects the non-optional type; SafeDITool offers the remedy the macro's fix-its give.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Profile.swift"]):4:5: error: `session: Session` is renamed from itself only if available. The @Instantiable macro rejects this spelling of @Received(onlyIfAvailable: true). Receive it with @Received(onlyIfAvailable: true) instead.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					Self.sessionRoot,
+					"""
+					@Instantiable
+					public struct Profile: Instantiable {
+					    public init(session: Session) { self.session = session }
+					    @Received(fulfilledByDependencyNamed: "session", ofType: Session.self, onlyIfAvailable: true) private let session: Session
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_throwsPlainError_whenRenameKeepsItsLabelAndItsType() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
