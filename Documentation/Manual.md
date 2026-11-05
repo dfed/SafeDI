@@ -820,7 +820,7 @@ The generated initializer passes each dependency to its receivers by label, as a
 - A receive whose label a type between the seam and the receiver, the seam included, declares with a property that does not provide it: the hidden-label error the tree gets inline once a caller provides the property.
 - An initializer in the seam’s body that takes the generated initializer’s parameters, which the generated one would redeclare.
 
-An `onlyIfAvailable` alias inside the seam whose fulfilling property is a parameter the seam’s callers may pass `nil` for – a pass-through received only if available, the seam’s own `onlyIfAvailable` receive, or the non-optional form of a parameter of optional type – is bound from that parameter as an optional value, and the type declaring it is passed that value. A read of such an alias, or of one the tree does not create, by anything but the type declaring it, and a declaration of the alias’s property by the type that builds the declaring type, are errors at the seam, which say what to change.
+An `onlyIfAvailable` alias inside the seam of one of its parameters is bound from that parameter, and is `nil` where the caller passes `nil`, as it is bound from the caller’s own declaration when the tree is built inline, so the type declaring it and every type beneath read the same value either way. When a type in the seam’s tree requires such an alias, the caller builds the alias’s dependency before it builds the seam, as inline builds it before that type’s branch.
 
 Two shapes differ from building the tree inline, because the seam cannot see its callers:
 
