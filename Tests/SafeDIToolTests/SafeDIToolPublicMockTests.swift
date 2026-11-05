@@ -741,7 +741,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    public static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Outer {
-		        _ = Screen.__safeDI_Screen_mock_68FAB8E0F700DD87.self
+		        _ = Screen.__safeDI_Screen_mock_68FAB8E0F700DD87.self // If this line does not compile, compile the code SafeDI generates for module Core into Core: under Bazel, add Core's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		        let screen = if let safeDIBuilder = safeDIOverrides.screen { safeDIBuilder() } else { Screen.mock() }
 		        return Outer(screen: screen)
 		    }
