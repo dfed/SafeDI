@@ -8034,6 +8034,32 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func run_offersEveryIntegrationsRemedy_whenRunNeitherReadsModuleInfoNorTargetGraph() async {
+		// As the Xcode project plugin runs the tool: `scan` while planning, then `generate` with the manifest, no target
+		// graph, and no module info. SafeDI cannot tell which modules it could have read, so it names no import.
+		await assertThrowsError(diagnostics: { fixtures in
+			"\(NormalizedFilePath(fixtures.compilerPath(of: "Root.swift")).path):6:5: error: No @Instantiable type or extension fulfills `FeedScreen`, which @Instantiated property `feedScreen: FeedScreen` instantiates. Decorate `FeedScreen`, or an extension of it, with @Instantiable; list `FeedScreen` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)"
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					import Feed
+
+					@Instantiable(isRoot: true)
+					public struct Root: Instantiable {
+					    public init(feedScreen: FeedScreen) { self.feedScreen = feedScreen }
+					    @Instantiated let feedScreen: FeedScreen
+					}
+					""",
+				],
+				pluginInvocation: .scanWhilePlanning(reportsFixtureDirectoryThroughSymbolicLink: false),
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete = [URL]()

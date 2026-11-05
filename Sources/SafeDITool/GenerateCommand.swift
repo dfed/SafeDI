@@ -382,6 +382,13 @@ struct Generate: AsyncParsableCommand {
 				importStatements: dependentModuleInfo.flatMap { $0.imports + $0.mockImports } + module.imports + module.mockImports,
 				isOwnFile: isOwnFile,
 			),
+			unreadImports: unreadImports(
+				membership: membership,
+				dependentModuleInfo: dependentModuleInfo,
+				isOwnFile: isOwnFile,
+				comparisonFilePaths: comparisonFilePaths,
+				conditionalCompilation: evaluator,
+			),
 		)
 		if let moduleInfoOutput {
 			try module.moduleInfoData.write(toPath: moduleInfoOutput)
@@ -1140,6 +1147,52 @@ struct Generate: AsyncParsableCommand {
 	private var writesModuleInfoWithoutTargetGraph: Bool {
 		moduleInfoOutput != nil && swiftManifest == nil
 	}
+
+	/// What this run knows of the modules a file imports that it read nothing of: under the plugin's target graph, the
+	/// modules the graph does not hold; in a run that reads or writes module info, those whose module info it was not
+	/// given. `nil` for a run that does neither, as the Xcode project plugin's, and for a run given module info that
+	/// names no module, since either cannot tell which modules it read. `SafeDI` itself declares nothing SafeDI reads.
+	/// It reads only the imports of the run's own files: another module's file may be out of the run's reach (Bazel's
+	/// sandbox gives `generate` only its own sources), and a path another project recorded may name a different file of
+	/// this one.
+	/// - Parameters:
+	///   - dependentModuleInfo: The module info this run read.
+	///   - isOwnFile: Whether a file is one of the run's own files.
+	private func unreadImports(
+		membership: ModuleMembership?,
+		dependentModuleInfo: [ModuleInfo],
+		isOwnFile: @escaping @Sendable (String) -> Bool,
+		comparisonFilePaths: ProjectFilePaths,
+		conditionalCompilation evaluator: ConditionalCompilationEvaluator,
+	) -> DependencyTreeGenerator.UnreadImports? {
+		let integration: DependencyTreeGenerator.UnreadImports.Integration
+		let moduleNamesRead: Set<String>
+		if let targetGraphModuleNames = membership?.targetGraphModuleNames {
+			integration = .targetGraph
+			moduleNamesRead = targetGraphModuleNames
+		} else if writesModuleInfoWithoutTargetGraph || dependentModuleInfoFilePath != nil {
+			let readModuleNames = dependentModuleInfo.compactMap(\.moduleName)
+			guard readModuleNames.count == dependentModuleInfo.count else {
+				return nil
+			}
+			integration = .moduleInfo
+			moduleNamesRead = Set(readModuleNames)
+		} else {
+			return nil
+		}
+		return DependencyTreeGenerator.UnreadImports(integration: integration) { filePath in
+			// A declaration records its file as this run named it: relative to the project root, or else to the working
+			// directory, or absolute.
+			isOwnFile(filePath)
+				? importedModuleNames(ofFileAt: comparisonFilePaths.projectFilePath(of: filePath).path, conditionalCompilation: evaluator)?
+				.subtracting(moduleNamesRead.union([Self.safeDIModuleName]))
+				.sorted()
+				: nil
+		}
+	}
+
+	/// The module SafeDI's macros and wrappers are declared in, which declares no `@Instantiable` type.
+	private static let safeDIModuleName = "SafeDI"
 
 	/// Loads the parsed `ModuleInfo` for this module. When scan ran earlier
 	/// (plugin-setup subprocess of this same build, or this command's own

@@ -3519,7 +3519,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		// seam's module reports `noInstantiableFound` as it does today.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Service.swift"]):7:5: error: No @Instantiable type or extension fulfills `[Handler]`, which @Instantiated property `handlers: [Handler]` instantiates. Decorate `[Handler]`, or an extension of it, with @Instantiable; list `[Handler]` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)
+			\(fixtures["Feature"]!["Service.swift"]):7:5: error: No @Instantiable type or extension fulfills `[Handler]`, which @Instantiated property `handlers: [Handler]` instantiates. Decorate `[Handler]`, or an extension of it, with @Instantiable, or list `[Handler]` in the `fulfillingAdditionalTypes` of an @Instantiable type that conforms to it.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
