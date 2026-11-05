@@ -198,7 +198,7 @@ public struct SeamSignature: Sendable {
 				case receivesPathScopeOnlyIfAvailable(type: TypeDescription)
 				/// Its type requires `carrier`, a sibling that holds another site.
 				case requiresOtherCarrier(type: TypeDescription, carrier: Property)
-				/// It is the scope on the site's path, still being built, the hole itself, or an alias not created there.
+				/// It is the scope on the site's path, still being built, or the hole itself.
 				case other
 				/// `seam`'s tree binds it on a path to a call of the seam whose hole `seam` passes up: inline, a receive
 				/// of its label would read it, and `seam`'s caller, which fills the builder, does not hold it.
