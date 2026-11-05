@@ -18,7 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-/// A manifest that describes the desired outputs of the SafeDITool.
+/// A manifest that describes the desired outputs of the SafeDITool, which `scan` writes. A manifest written by hand is
+/// deprecated in 2.3.0 and rejected in 3.0; `generate` warns about one (`lacksFieldsScanAlwaysWrites`).
 /// All input file paths are relative to the working directory where the tool is invoked.
 /// Output file paths may be absolute or relative to the working directory. Each output – every entry's
 /// `outputFilePath` and the `mockConfigurationOutputFilePath` – must name a different file: `generate`
@@ -90,6 +91,13 @@ public struct SafeDIToolManifest: Codable, Sendable {
 	/// and `inputFilePath`s, so `generate` can resolve its own input paths the same way.
 	/// `nil` in a hand-written manifest, where paths are taken as written.
 	public var projectRoot: String?
+
+	/// Whether the manifest lacks a field `scan` always writes – `activeCompilationConditions`, `mockScopedFilePaths`,
+	/// or `projectRoot` – which only a hand-written manifest does. Hand-written manifests are deprecated in 2.3.0 and
+	/// rejected in 3.0, when these fields stop being optional.
+	public var lacksFieldsScanAlwaysWrites: Bool {
+		activeCompilationConditions == nil || mockScopedFilePaths == nil || projectRoot == nil
+	}
 
 	public init(
 		dependencyTreeGeneration: [InputOutputMap],

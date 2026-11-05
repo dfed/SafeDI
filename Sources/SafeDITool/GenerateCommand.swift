@@ -34,13 +34,13 @@ struct Generate: AsyncParsableCommand {
 
 	@Option(parsing: .upToNextOption, help: "Directories containing Swift files to include, relative to the executing directory.") var include: [String] = []
 
-	@Option(parsing: .upToNextOption, help: "The names of modules to import in the generated dependency tree. This list is in addition to the import statements found in files that declare @Instantiable types.") var additionalImportedModules: [String] = []
+	@Option(parsing: .upToNextOption, help: "Deprecated, and removed in SafeDI 3.0: list these modules in the module’s `#SafeDIConfiguration(additionalImportedModules:)` instead. The names of modules to import in the generated code, in addition to the import statements found in files that declare @Instantiable types.") var additionalImportedModules: [String] = []
 
 	@Option(help: "The desired output location of a file a SafeDI representation of this module. Only include this option when running on a project’s non-root module. Must have a `.safedi` suffix.") var moduleInfoOutput: String?
 
 	@Option(help: "A path to a CSV file containing paths of SafeDI representations of other modules to parse.") var dependentModuleInfoFilePath: String?
 
-	@Option(help: "A path to a JSON manifest file describing the desired Swift output files. The manifest maps input file paths to output file paths. See SafeDIToolManifest for the expected format.") var swiftManifest: String?
+	@Option(help: "A path to the JSON manifest `scan` writes, describing the desired Swift output files. A manifest written by hand is deprecated, and SafeDI 3.0 rejects one: pass `--output-directory`, which runs `scan` for you, or `--combined-output`, which writes every output to one file.") var swiftManifest: String?
 
 	@Option(help: "The directory where generated output files will be written. When provided without --swift-manifest, the tool scans for roots and mocks, generates a manifest internally, and writes all output files.") var outputDirectory: String?
 
@@ -206,6 +206,14 @@ struct Generate: AsyncParsableCommand {
 		if let manifest {
 			try Self.validateEachOutputIsWrittenOnce(by: manifest)
 		}
+		// Uses SafeDI 3.0 removes, which still work. Reported first, since they concern the command rather than a file.
+		var deprecationWarnings = [SourceDiagnostic]()
+		if !additionalImportedModules.isEmpty {
+			deprecationWarnings.append(Self.additionalImportedModulesDeprecationWarning(modules: additionalImportedModules))
+		}
+		if let swiftManifest, manifest?.lacksFieldsScanAlwaysWrites == true {
+			deprecationWarnings.append(Self.handWrittenManifestDeprecationWarning(manifestPath: swiftManifest))
+		}
 
 		// A manifest without a project root, which only a hand-written manifest lacks, names files as written.
 		let projectFilePaths = scannedProjectFilePaths ?? manifest?.projectRoot.map(ProjectFilePaths.init(projectRoot:))
@@ -234,7 +242,8 @@ struct Generate: AsyncParsableCommand {
 		let evaluator = parsed.module.conditionalCompilationEvaluator
 		// Derived from the configuration rather than from how this run parsed, so a module loaded from
 		// scan's cache warns too. Only `generate` warns, so a build that runs `scan` first warns once.
-		var warnings = [sourceConfiguration?.placementWarning].compactMap(\.self)
+		var warnings = deprecationWarnings
+			+ [sourceConfiguration?.placementWarning].compactMap(\.self)
 			// Judged at the paths the module's additional files were found at: as scan resolved them when the module
 			// comes from scan's cache, and as this run resolved them otherwise.
 			+ (sourceConfiguration?.unreadableAdditionalDirectoryWarnings(for: parsed.module.additionalDirectories) ?? [])
@@ -740,6 +749,28 @@ struct Generate: AsyncParsableCommand {
 	}
 
 	// MARK: Private
+
+	/// The warning for `--additional-imported-modules`, deprecated in 2.3.0 and removed in 3.0, which names the
+	/// configuration that imports the same `modules`, in the order the option listed them.
+	private static func additionalImportedModulesDeprecationWarning(modules: [String]) -> SourceDiagnostic {
+		let moduleList = modules.map { "\"\($0)\"" }.joined(separator: ", ")
+		return SourceDiagnostic(
+			severity: .warning,
+			location: nil,
+			message: "`--additional-imported-modules` is deprecated and will be removed in SafeDI 3.0: list its modules in the module’s `#SafeDIConfiguration` instead, as `#SafeDIConfiguration(additionalImportedModules: [\(moduleList)])`.",
+		)
+	}
+
+	/// The warning for a manifest written by hand, deprecated in 2.3.0 and rejected in 3.0. `scan` writes every field
+	/// a hand-written manifest may omit, so a manifest that lacks one was written by hand; one that spells them all
+	/// cannot be told from `scan`'s and gets no warning.
+	private static func handWrittenManifestDeprecationWarning(manifestPath: String) -> SourceDiagnostic {
+		SourceDiagnostic(
+			severity: .warning,
+			location: nil,
+			message: "The manifest `\(manifestPath)` lacks fields `scan` always writes, so it was written by hand: hand-written manifests are deprecated and will be an error in SafeDI 3.0. Pass `--swift-manifest` a manifest `scan` wrote, or use `--output-directory`, which runs `scan` for you, or `--combined-output`, which writes every output to one file.",
+		)
+	}
 
 	/// The manifest names the files `generate` writes, and `scan` chose them before the build ran: a file for
 	/// each declaration that decides which files exist, in any clause of any `#if` block. `generate` writes a
