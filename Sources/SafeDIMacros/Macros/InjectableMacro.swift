@@ -243,28 +243,24 @@ public struct InjectableMacro: PeerMacro {
 
 	/// A use of a SafeDI macro that still works and that SafeDI 3.0 rejects. A warning without a fix-it, since the
 	/// replacement changes how the value reaches the type.
-	private enum InjectableDeprecation: DiagnosticMessage {
+	private struct InjectableDeprecation: DiagnosticMessage {
 		/// `@Forwarded` on a property whose type is the SafeDI wrapper named `wrapperTypeName`, optional or not.
-		case forwardedWrapper(wrapperTypeName: String)
-
-		var message: String {
-			switch self {
-			case let .forwardedWrapper(wrapperTypeName):
-				let article = wrapperTypeName.first.map { "AEIOU".contains($0) } == true ? "an" : "a"
-				return "`@Forwarded` on \(article) `\(wrapperTypeName)` property is deprecated and will be an error in SafeDI 3.0: receive the `\(wrapperTypeName)` with `@Received` from the ancestor that declares it, or forward the value it builds."
-			}
+		static func forwardedWrapper(wrapperTypeName: String) -> Self {
+			let article = wrapperTypeName.first.map { "AEIOU".contains($0) } == true ? "an" : "a"
+			return Self(
+				id: "forwardedWrapper",
+				message: "`@Forwarded` on \(article) `\(wrapperTypeName)` property is deprecated and will be an error in SafeDI 3.0: receive the `\(wrapperTypeName)` with `@Received` from the ancestor that declares it, or forward the value it builds.",
+			)
 		}
 
-		var diagnosticID: MessageID {
-			switch self {
-			case .forwardedWrapper:
-				MessageID(domain: "\(Self.self)", id: "forwardedWrapper")
-			}
+		private init(id: String, message: String) {
+			diagnosticID = MessageID(domain: "\(Self.self)", id: id)
+			self.message = message
 		}
 
-		var severity: DiagnosticSeverity {
-			.warning
-		}
+		let diagnosticID: MessageID
+		let message: String
+		let severity = DiagnosticSeverity.warning
 	}
 
 	// MARK: - InjectableError
