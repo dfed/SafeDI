@@ -3,7 +3,7 @@ load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
 # `safedi_swift_library` declares `Subproject`, a `swift_library`, and
 # `Subproject_safedi`, which runs SafeDITool over the same sources. The
 # host target reaches this module's `.safedi` module-info artifact via
-# `safedi_deps = ["//Subproject:Subproject_safedi"]`.
+# `"//Subproject:Subproject_safedi"` in its `safedi_deps`.
 #
 # `Subproject` and `Models` belong to one package, `package_name`, so
 # `Subproject` can name `Models`' `package` types, and lists

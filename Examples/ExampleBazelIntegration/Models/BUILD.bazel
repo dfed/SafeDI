@@ -5,8 +5,8 @@ load("@safedi//bazel:safedi.bzl", "safedi_swift_library")
 # SafeDI too, and `Subproject`, which imports it, lists `Models_safedi`
 # in `safedi_deps`: SafeDI counts a type it reads no declaration of as
 # `public`, and `WindowTitle`'s generated `public` initializer would then
-# take a `package` type, which does not compile. The modules that reach
-# `WindowTitle` read `Models`' declarations in `Subproject`'s `.safedi`.
+# take a `package` type, which does not compile. The app lists
+# `Models_safedi` too, because it declares the root.
 safedi_swift_library(
     name = "Models",
     srcs = glob(["*.swift"]),
