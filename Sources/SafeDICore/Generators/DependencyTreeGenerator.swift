@@ -2961,7 +2961,7 @@ public actor DependencyTreeGenerator {
 		}
 		for rootScope in rootScopes {
 			let rootInstantiable = rootScope.scope.instantiable
-			guard rootInstantiable.sourceFilePath.map(emittingModule.isOwnFile) ?? false else {
+			guard rootInstantiable.sourceFilePath.map(emittingModule.isOwnFile) == true else {
 				rootsOfOtherModules.append(rootInstantiable)
 				continue
 			}
