@@ -1369,6 +1369,57 @@ struct SafeDIToolGraphFuzzerTests {
 	// MARK: Rename invariance
 
 	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func toolRuns_reportNoRenamedGraphFailure_whenFixtureDirectoryLiesUnderPathHoldingALabelTheRenamingReverses() async throws {
+		// Seed 731 warns at a fixture file, so its warnings name the fixture directory's path, as a macOS runner's
+		// temporary directory spells it: `/var/folders/h5/t85nd…/T/…`, whose `t8` undoing a label reversal rewrites.
+		try await Self.expectNoRenamedGraphFailureUnderPathHoldingALabel(of: GraphFuzzerGenerator.fixture(forSeed: 731))
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	func toolRuns_reportNoRenamedGraphFailure_whenFixtureRootOfGraphSplitAcrossModulesLiesUnderPathHoldingALabelTheRenamingReverses() async throws {
+		// Seed 19 of the seam corpus is split across modules and warns at a fixture file, so its warnings name the
+		// fixture root's path.
+		try await Self.expectNoRenamedGraphFailureUnderPathHoldingALabel(of: GraphFuzzerGenerator.fixture(forSeed: 19, features: [.generateDependencyTree]))
+	}
+
+	@Test
+	func normalizer_reducesEachSpellingOfThePathToTheFixtureDirectory_withTheDirectoriesAboveIt() {
+		let directory = "/var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/0F6A3B4C-1D2E-4F50-8172-93A4B5C6D7E8"
+		let normalize = GraphFuzzerOracle.normalizer(fixtureDirectory: directory)
+
+		#expect(normalize("\(directory)/S12_T1.swift:8:2: warning: one") == "<fixture-directory>/S12_T1.swift:8:2: warning: one")
+		#expect(normalize("/private\(directory)/S12_T1.swift:8:2: warning: one") == "<fixture-directory>/S12_T1.swift:8:2: warning: one")
+		#expect(normalize("            #sourceLocation(file: \"\(directory)/shop/Sources/FuzzApp/S12_T1.swift\", line: 8)") == "            #sourceLocation(file: \"<fixture-directory>/shop/Sources/FuzzApp/S12_T1.swift\", line: 8)")
+		#expect(normalize("location: Optional(DeclarationLocation(filePath: \"\(directory)/S12_T1.swift\", line: 8") == "location: Optional(DeclarationLocation(filePath: \"<fixture-directory>/S12_T1.swift\", line: 8")
+		#expect(normalize("chain: S12_Root0 -> S12_T1 at `\(directory)/S12_T1.swift`") == "chain: S12_Root0 -> S12_T1 at `<fixture-directory>/S12_T1.swift`")
+		#expect(normalize("/var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/other/S12_T1.swift:8:2: warning: one") == "/var/folders/h5/t85nd63d71x27_8gl5gw3l_w0000gn/T/other/S12_T1.swift:8:2: warning: one")
+	}
+
+	/// Runs the oracle over `fixture` and the fixture with its labels reversed, with every fixture directory under a
+	/// directory named as a macOS runner's temporary directory is, and expects the two to agree.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private static func expectNoRenamedGraphFailureUnderPathHoldingALabel(of fixture: GraphFuzzerFixture, sourceLocation: SourceLocation = #_sourceLocation) async throws {
+		let parentDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("t85nd63d71x27_8gl5gw3l_w0000gn-\(UUID().uuidString)")
+		try FileManager.default.createDirectory(at: parentDirectory, withIntermediateDirectories: true)
+		defer {
+			try? FileManager.default.removeItem(at: parentDirectory)
+		}
+		let labelReversal = GraphFuzzerRenaming(reversesTypeNames: false, reversesLabels: true, reversesFileNames: false)
+		let toolRuns = try await TestFixtureLocation.$parentDirectory.withValue(parentDirectory) {
+			try await GraphFuzzerOracle.toolRuns(of: fixture, renamings: [labelReversal], multiModuleRenamings: [])
+		}
+
+		guard case let .accepted(_, warnings) = toolRuns.firstOutcome else {
+			Issue.record("The tool rejected seed \(fixture.seed):\n\(toolRuns.firstOutcome.description)", sourceLocation: sourceLocation)
+			return
+		}
+		#expect(warnings.contains { $0.contains("<fixture-directory>/") }, "No warning of seed \(fixture.seed) names a fixture file", sourceLocation: sourceLocation)
+		#expect(toolRuns.renamedGraphFailures.map(\.details) == [], sourceLocation: sourceLocation)
+	}
+
+	@Test
 	func renaming_reversesTypeNamesAndLabelsWhereverTheyAppear_andRestoresThem() {
 		let prefix = GraphFuzzerFixture.typeNamePrefix(forSeed: 12)
 		let text = "S12_T1 S12_T3Protocol S12_AnyT2 S12_Root0 S12_Missing1 S12_Value t1Builder __safeDI_t3Builder lazyAnyT2 anyT4 missing0 items t4_S12_T4"

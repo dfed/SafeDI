@@ -84,7 +84,7 @@ func executeSafeDIToolTest(
 			.appendingPathComponent("SafeDIToolTestFixtures")
 			.appendingPathComponent(UUID().uuidString)
 	case .scanWhilePlanning, nil:
-		URL.temporaryFile
+		TestFixtureLocation.parentDirectory?.appendingPathComponent(UUID().uuidString) ?? URL.temporaryFile
 	}
 	try FileManager.default.createDirectory(at: swiftFixtureDirectory, withIntermediateDirectories: true)
 
@@ -463,6 +463,14 @@ func performScanCheckingCache(
 		sourceLocation: sourceLocation,
 	)
 	return scannedModuleInfo
+}
+
+/// Where `executeSafeDIToolTest` and `executeSafeDIToolMultiModuleTest` create a fixture's directory.
+enum TestFixtureLocation {
+	/// The directory to create each fixture directory in instead of the temporary directory, or `nil` for the temporary
+	/// directory. A test binds it to place fixtures under a path that holds text an oracle must not rewrite, as a CI
+	/// runner's temporary directory may (`/var/folders/h5/t85nd…/T` holds `t8`, a label the rename oracle reverses).
+	@TaskLocal static var parentDirectory: URL?
 }
 
 extension URL {

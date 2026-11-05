@@ -8693,11 +8693,22 @@ enum GraphFuzzerOracle {
 		return directory
 	}
 
-	/// Replaces the fixture directory, whose last component is a fresh UUID each run, however the path is spelled.
-	/// It appears in generated code only in `#sourceLocation` paths and comments, so the code still compiles.
-	private static func normalizer(fixtureDirectory: String) -> (String) -> String {
+	/// Replaces each path to the fixture directory, from the path's start through the directory's last component, a fresh
+	/// UUID each run, with `<fixture-directory>`, however the path is spelled: as the harness wrote it, resolved, or with or
+	/// without a leading `/private`, since every spelling ends in that component. The directories above it are no part of
+	/// what the oracle compares, and a renaming must not rewrite them when it is undone: a macOS runner's temporary
+	/// directory, `/var/folders/h5/t85nd…/T`, holds `t8`, which undoing a label reversal reads as a label.
+	/// The path appears in generated code only in `#sourceLocation` paths and comments, so the code still compiles.
+	static func normalizer(fixtureDirectory: String) -> (String) -> String {
 		let uniqueComponent = (fixtureDirectory as NSString).lastPathComponent
-		return { $0.replacingOccurrences(of: uniqueComponent, with: "<fixture-directory>") }
+		guard !uniqueComponent.isEmpty else { return { $0 } }
+		// A path starts after whitespace, a quote, a backtick or an opening parenthesis, as the tool's diagnostics and
+		// `#sourceLocation` directives spell it.
+		let pattern = #"(?:[^\s"'`(]*/)?"# + NSRegularExpression.escapedPattern(for: uniqueComponent)
+		return { text in
+			guard text.contains(uniqueComponent) else { return text }
+			return text.replacingOccurrences(of: pattern, with: "<fixture-directory>", options: .regularExpression)
+		}
 	}
 
 	/// Compiles each graph's fixture, with the generated code when the tool accepted it, and returns the failure
