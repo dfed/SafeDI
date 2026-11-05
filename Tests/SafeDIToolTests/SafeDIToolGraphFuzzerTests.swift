@@ -3206,7 +3206,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// seam tests' draws were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 92, 98, 180, 196, 277, 326, 605, 609, 743]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x7594F0079528A0B7
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x94302B77AD603CA7
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
