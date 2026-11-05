@@ -2742,7 +2742,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(theme: nil)
 		    }
 
-		    package init(theme: Theme? = nil) {
+		    package init(theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
 		    }
@@ -2765,7 +2765,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.screenFiles(integration, comment: [], imports: ["Core"], tiers: """
-		    public init(theme: Theme? = nil) {
+		    public init(theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
 		    }
@@ -2792,7 +2792,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(theme: nil)
 		    }
 
-		    package init(theme: Theme? = nil) {
+		    package init(theme: Theme?) {
 		        let cache = Cache()
 		        self.init(theme: theme, cache: cache)
 		    }
