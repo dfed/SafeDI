@@ -2510,6 +2510,71 @@ struct SafeDIToolQueryTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_reportsNothingRequired_whenReceiverRequiresOnlyIfAvailableRenameOfDependencyNothingDeclares() async throws {
+		// Nothing builds `missing`, so `Child`'s `onlyIfAvailable` rename of it is `nil` in production and bound from the
+		// mock's optional `missing` override, and `Grand`, which requires the rename, is passed it: neither the type nor its
+		// mock requires anything, as `mock_bindsOnlyIfAvailableAliasRequiredByReceiverToOptionalOverride_whenNoTypeInTreeBuildsItsDependency`
+		// generates.
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Child",
+			modules: [
+				QueryTestModule("FeatureModule", [
+					"""
+					public protocol Greeter {}
+
+					@Instantiable
+					public final class DefaultGreeter: Instantiable, Greeter {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable(generateMock: true)
+					public final class Child: Instantiable {
+					    public init(maybe: Greeter?, grand: Grand) { self.maybe = maybe; self.grand = grand }
+					    @Received(fulfilledByDependencyNamed: "missing", ofType: DefaultGreeter.self, onlyIfAvailable: true) let maybe: Greeter?
+					    @Instantiated let grand: Grand
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Grand: Instantiable {
+					    public init(maybe: Greeter?) { self.maybe = maybe }
+					    @Received let maybe: Greeter?
+					}
+					""",
+				]),
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.formatted == """
+		`Child` is built from declarations in 1 module:
+
+		FeatureModule
+		  @Instantiable Child
+		  @Instantiable Grand
+
+		@Forwarded parameters of `Child`:
+		  (none)
+
+		Dependencies of `Child` no @Instantiable declaration fulfills:
+		  (none)
+
+		`Child.mock()` is generated in FeatureModule from the same declarations.
+
+		Required @Forwarded parameters of `Child.mock()`:
+		  (none)
+
+		Defaulted @Forwarded parameters of `Child.mock()`:
+		  (none)
+
+		Required parameters of `Child.mock()` that no @Instantiable declaration removes:
+		  (none)
+		""")
+	}
+
 	// MARK: Module info files
 
 	@Test

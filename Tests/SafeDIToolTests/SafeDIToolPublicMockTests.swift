@@ -868,6 +868,203 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		])
 	}
 
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_bindsOnlyIfAvailableRenameFromPublicMocksParameter_whenNothingInPublicMocksTreeDeclaresItsDependency(integration: MultiModuleIntegration) async throws {
+		// The public-mock twin of `mock_bindsAliasFromOverrideOfItsDependency_asProductionBindsItToNil_whenSiblingOfDeclaringTypeDeclaresItsLabel`:
+		// nothing in `Holder`'s tree declares `x`, so `Child`'s `onlyIfAvailable` rename of it is bound from the public mock's
+		// `x: X? = nil` parameter, and `Grand` reads the rename. `Screen`'s mock, in another module, which cannot build
+		// `Holder`'s internal tree, builds `x` and passes it to `Holder.mock`, so `Child` and `Grand` hold `Screen`'s `x`, as
+		// they do when the tree is built inline.
+		let modules = [
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Holder.swift": """
+			import SafeDI
+
+			@Instantiable
+			public final class X: Instantiable {
+			    public init() {}
+			}
+
+			@Instantiable(generateMock: .public)
+			public final class Holder: Instantiable {
+			    init(child: Child) {
+			        self.child = child
+			    }
+
+			    @Instantiated let child: Child
+			}
+
+			@Instantiable
+			final class Child: Instantiable {
+			    init(ax: X?, grand: Grand) {
+			        self.ax = ax
+			        self.grand = grand
+			    }
+
+			    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let ax: X?
+			    @Instantiated let grand: Grand
+			}
+
+			@Instantiable
+			final class Grand: Instantiable {
+			    init(ax: X?) {
+			        self.ax = ax
+			    }
+
+			    @Received let ax: X?
+			}
+			"""]),
+			ModuleFixture(name: "App", packageName: "apppkg", swiftFileContentByFilePath: ["Screen.swift": """
+			import Core
+			import SafeDI
+
+			@Instantiable(generateMock: true)
+			public final class Screen: Instantiable {
+			    public init(x: X, holder: Holder) {
+			        self.x = x
+			        self.holder = holder
+			    }
+
+			    @Instantiated let x: X
+			    @Instantiated let holder: Holder
+			}
+			"""], dependencies: ["Core"]),
+		]
+		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: integration, filesToDelete: &filesToDelete)
+		let holderPath = try #require(output.modules["Core"]).fixtures.compilerPath(of: "Holder.swift")
+		let coreImports = """
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+
+		"""
+		let holderMock = """
+		#if DEBUG
+		extension Holder {
+		    /// Overrides for the mock dependency tree.
+		    public struct SafeDIOverrides {
+		        public init(
+		            child: __safeDI_Core_Child_MockConfiguration = .init()
+		        ) {
+		            self.child = child
+		        }
+
+		        public let child: __safeDI_Core_Child_MockConfiguration
+		    }
+
+		    public static func mock(
+		        x: X? = nil,
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Holder {
+		        func __safeDI_child() -> Child {
+		            #sourceLocation(file: "\(holderPath)", line: 24)
+		            let ax: X? = x
+		            #sourceLocation()
+		            let grand = if let safeDIBuilder = safeDIOverrides.child.grand { safeDIBuilder(ax) } else { Grand(ax: ax) }
+		            return Child.__safeDI_init(ax: ax, grand: grand, safeDIBuilder: safeDIOverrides.child.safeDIBuilder)
+		        }
+		        let child: Child = __safeDI_child()
+		        return Holder(child: child)
+		    }
+		}
+
+		extension Holder {
+		    public enum __safeDI_Holder_mock_23D9BF4A31F0CAE5 {}
+		}
+		#endif
+		"""
+		let childConfiguration = """
+		#if DEBUG
+		/// Configuration for how `Child` is constructed within the public mock trees of module `Core`.
+		public struct __safeDI_Core_Child_MockConfiguration {
+		    public init() {
+		        self.grand = nil
+		        self.safeDIBuilder = nil
+		    }
+
+		    init(
+		        grand: ((X?) -> Grand)? = nil,
+		        _ safeDIBuilder: ((X?, Grand) -> Child)? = nil
+		    ) {
+		        self.grand = grand
+		        self.safeDIBuilder = safeDIBuilder
+		    }
+
+		    let grand: ((X?) -> Grand)?
+		    /// Overrides how `Child` is constructed. Parameters match the type’s initializer or custom mock method.
+		    let safeDIBuilder: ((X?, Grand) -> Child)?
+		}
+
+		extension Child {
+		    static func __safeDI_init(ax: X?, grand: Grand, safeDIBuilder: ((X?, Grand) -> Child)?) -> Child {
+		        if let safeDIBuilder { safeDIBuilder(ax, grand) } else { Child(ax: ax, grand: grand) }
+		    }
+		}
+		#endif
+
+		"""
+		let appImports = """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(SafeDI)
+		import SafeDI
+		#endif
+
+
+		"""
+		let pluginComment = integration == .swiftPackagePlugin ? " // If this line does not compile, add the SafeDI plugin to the target that declares Holder." : ""
+		let screenMock = """
+		#if DEBUG
+		extension Screen {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            x: (() -> X)? = nil,
+		            holder: Holder.SafeDIOverrides = .init()
+		        ) {
+		            self.x = x
+		            self.holder = holder
+		        }
+
+		        let x: (() -> X)?
+		        let holder: Holder.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> Screen {
+		        let x = if let safeDIBuilder = safeDIOverrides.x { safeDIBuilder() } else { X() }
+		        _ = Holder.__safeDI_Holder_mock_23D9BF4A31F0CAE5.self\(pluginComment)
+		        let holder = Holder.mock(x: x, safeDIOverrides: safeDIOverrides.holder)
+		        return Screen(x: x, holder: holder)
+		    }
+		}
+		#endif
+		"""
+		switch integration {
+		case .moduleInfo:
+			#expect(output.modules["Core"]?.generatedFiles == ["Core.swift": generatedFileHeader + coreImports + holderMock + "\n\n" + childConfiguration])
+			#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + appImports + screenMock])
+		case .swiftPackagePlugin:
+			#expect(output.modules["Core"]?.generatedFiles == [
+				"Holder+SafeDIMock.swift": generatedFileHeader + coreImports + holderMock,
+				"SafeDIMockConfiguration.swift": generatedFileHeader + coreImports + childConfiguration,
+			])
+			#expect(output.modules["App"]?.generatedFiles == [
+				"Screen+SafeDIMock.swift": generatedFileHeader + appImports + screenMock,
+				"SafeDIMockConfiguration.swift": generatedFileHeader + appImports,
+			])
+		}
+		try expectEveryModuleCompiled(output)
+		try await expectValuesAgreeWithInlineMocks(of: modules, output: output, probes: [
+			DifferentialValueProbe("Screen.mock()"),
+			DifferentialValueProbe("Holder.mock()"),
+			DifferentialValueProbe(name: "Holder.mock() passed an x", expression: "Holder.mock(x: X())", knownRightExpression: "Holder.mock(safeDIOverrides: .init(x: X()))"),
+		])
+	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_callsCustomMockThroughPublicMock_whenTypeNamesCustomMock() async throws {
