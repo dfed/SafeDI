@@ -601,6 +601,8 @@ extension PlainTypeDeclaration: BinarySchemaMember {
 				BinaryLayoutField("moduleName", \.moduleName),
 				BinaryLayoutField("packageName", \.packageName),
 				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
+				BinaryLayoutField("mockCondition", \.mockCondition),
+				BinaryLayoutField("levelWhereMockConditionIsInactive", \.levelWhereMockConditionIsInactive),
 			],
 			unwrittenProperties: [],
 		)
@@ -615,6 +617,8 @@ extension PlainTypeDeclaration: BinarySchemaMember {
 			moduleName: reader.read() as String?,
 			packageName: reader.read() as String?,
 			sourceFilePath: reader.read() as String?,
+			mockCondition: reader.read() as String?,
+			levelWhereMockConditionIsInactive: reader.read() as AccessLevel?,
 		)
 	}
 
@@ -633,6 +637,8 @@ extension PlainTypeDeclaration: BinarySchemaMember {
 			writer.write(moduleName)
 			writer.write(packageName)
 			writer.write(sourceFilePath)
+			writer.write(mockCondition)
+			writer.write(levelWhereMockConditionIsInactive)
 		}
 	}
 }

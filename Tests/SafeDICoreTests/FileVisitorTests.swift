@@ -2261,6 +2261,139 @@ struct FileVisitorTests {
 	}
 
 	@Test
+	func walk_recordsMockCondition_onPlainTypeDeclarationsInClausesTheMockConditionSelects() {
+		// IFM6: both blocks guard mock-only declarations. No condition up to `Shown`'s clause mentions `DEBUG`, so the
+		// compiler selects it whatever `DEBUG` is; `Token`'s clause is selected because `DEBUG` is taken to be active, and so
+		// is `Token.Flagged`, nested in a block of its own inside that clause, and `Hidden`, in the `#else` after `!DEBUG`.
+		let syntaxTree = Parser.parse(source: """
+		#if os(Linux)
+		@Instantiable(mockOnly: true)
+		extension Fake {
+		    public static func mock() -> Fake { Fake() }
+		}
+		public struct Shown {}
+		#elseif DEBUG
+		@Instantiable(mockOnly: true)
+		extension Fake {
+		    public static func mock() -> Fake { Fake() }
+		}
+		public struct Token {
+		    #if FLAG
+		    struct Flagged {}
+		    #endif
+		}
+		#endif
+		#if !DEBUG
+		public struct Visible {}
+		#else
+		@Instantiable(mockOnly: true)
+		extension Hidden {
+		    public static func mock() -> Hidden { Hidden() }
+		}
+		public struct Hidden {}
+		#endif
+		public struct After {}
+		""")
+		let fileVisitor = FileVisitor(conditionalCompilationEvaluator: ConditionalCompilationEvaluator(activeCompilationConditions: ["FLAG"]))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.plainTypeDeclarations.map { [$0.typeDescription.asSource, $0.mockCondition ?? "nil"] } == [
+			["Shown", "nil"],
+			["Token", "DEBUG"],
+			["Token.Flagged", "DEBUG"],
+			["Hidden", "DEBUG"],
+			["After", "nil"],
+		])
+	}
+
+	@Test
+	func walk_recordsNoMockCondition_whenModuleGeneratesMocksUnconditionally() {
+		// Without a mock condition, a block that guards mock-only declarations is read with the reported conditions, as
+		// production code is, so nothing is read under a condition the compiler may evaluate otherwise.
+		let syntaxTree = Parser.parse(source: """
+		#if DEBUG
+		@Instantiable(mockOnly: true)
+		extension Fake {
+		    public static func mock() -> Fake { Fake() }
+		}
+		public struct Token {}
+		#endif
+		""")
+		let fileVisitor = FileVisitor(conditionalCompilationEvaluator: ConditionalCompilationEvaluator(activeCompilationConditions: ["DEBUG"], mockConditionalCompilation: nil))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.plainTypeDeclarations.map { [$0.typeDescription.asSource, $0.mockCondition ?? "nil"] } == [
+			["Token", "nil"],
+		])
+	}
+
+	@Test
+	func walk_recordsLevelWhereMockConditionIsInactive_onPlainTypeDeclarationsInClausesTheMockConditionSelects() {
+		// IFM7: where `DEBUG` is inactive, the `#else` clause declares `Theme` as the `#if` clause does, `Wider` in each
+		// clause of a block of its own, at least `public`, and `Space` `package`, which caps `Space.Config`; `Missing` it
+		// declares `private`, which no other file can name, and `Absent` not at all. The `#else` clause's own declarations
+		// are not read where `DEBUG` is active, so they are not recorded.
+		let syntaxTree = Parser.parse(source: """
+		#if DEBUG
+		@Instantiable(mockOnly: true)
+		extension Fake {
+		    public static func mock() -> Fake { Fake() }
+		}
+		public struct Theme {}
+		package struct Wider {}
+		public enum Space {
+		    public struct Config {}
+		}
+		public struct Missing {}
+		public struct Absent {}
+		#else
+		public struct Theme {}
+		#if os(Linux)
+		open class Wider {}
+		#else
+		public struct Wider {}
+		#endif
+		package enum Space {
+		    public struct Config {}
+		}
+		private struct Missing {}
+		#endif
+		""")
+		let fileVisitor = FileVisitor(conditionalCompilationEvaluator: ConditionalCompilationEvaluator(activeCompilationConditions: []))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.plainTypeDeclarations.map { [$0.typeDescription.asSource, $0.mockCondition ?? "nil", $0.levelWhereMockConditionIsInactive?.spelling ?? "nil"] } == [
+			["Theme", "DEBUG", "public"],
+			["Wider", "DEBUG", "public"],
+			["Space", "DEBUG", "package"],
+			["Space.Config", "DEBUG", "package"],
+			["Missing", "DEBUG", "nil"],
+			["Absent", "DEBUG", "nil"],
+		])
+	}
+
+	@Test
+	func walk_consultsConditionsDecidingLevelWhereMockConditionIsInactive_whenOtherClausesOfMockOnlyBlockTestThem() {
+		// IFM14: where `DEBUG` is active, `FLAG` decides nothing, but where it is inactive, `FLAG` decides whether `Theme` is
+		// `public` or `package`, which the level recorded on the `#if` clause's `Theme` holds: a scan cached under one value
+		// of `FLAG` must not stand for the other.
+		let syntaxTree = Parser.parse(source: """
+		#if DEBUG
+		@Instantiable(mockOnly: true)
+		extension Fake {
+		    public static func mock() -> Fake { Fake() }
+		}
+		public struct Theme {}
+		#elseif FLAG
+		public struct Theme {}
+		#else
+		package struct Theme {}
+		#endif
+		""")
+		let fileVisitor = FileVisitor(conditionalCompilationEvaluator: ConditionalCompilationEvaluator(activeCompilationConditions: ["FLAG"]))
+		fileVisitor.walk(syntaxTree)
+		#expect(fileVisitor.plainTypeDeclarations.map { [$0.typeDescription.asSource, $0.levelWhereMockConditionIsInactive?.spelling ?? "nil"] } == [["Theme", "public"]])
+		#expect(fileVisitor.consultedCompilationConditions == ["FLAG"])
+	}
+
+	@Test
 	func walk_recordsPlainTypeDeclarationsOfSelectedClauseOnly_whenFlagDecidesBlock() {
 		// IF23: `FLAG` is active, so the `#if` clause is the one the compiler selects, and only its declaration is recorded.
 		let syntaxTree = Parser.parse(source: """

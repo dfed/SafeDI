@@ -62,6 +62,15 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 
 	// MARK: Internal
 
+	/// This evaluator as a build where the mock condition is inactive selects clauses: without that condition, and with
+	/// blocks that guard mock-only declarations read under the reported conditions, as production code is.
+	var whereMockConditionIsInactive: ConditionalCompilationEvaluator {
+		ConditionalCompilationEvaluator(
+			activeCompilationConditions: activeCompilationConditions.subtracting([mockConditionalCompilation].compactMap(\.self)),
+			mockConditionalCompilation: nil,
+		)
+	}
+
 	/// The clauses of `node` to scan, given what SafeDI would learn from its declarations.
 	func scannableClauses(in node: IfConfigDeclSyntax, guarding content: SafeDIContent) -> ScannableClauses {
 		switch content {
@@ -128,10 +137,17 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 		var selectedClauses = [IfConfigClauseSyntax]()
 		var decisions = [ConditionalCompilationDecision]()
 		var consultedConditions = Set<String>()
+		var clausesSelectedByIgnoredCondition = Set<SyntaxIdentifier>()
+		// Whether a condition up to the clause being decided mentions `ignoredCondition`: a clause is selected the same
+		// whatever that condition's value only when no condition before it, nor its own, mentions it.
+		var hasMentionedIgnoredCondition = false
 		var isSettled = false
 		for clause in node.clauses where !isSettled {
 			if let condition = clause.condition {
 				let mentionedConditions = mentionedCompilationConditions(in: condition)
+				if let ignoredCondition, mentionedConditions.contains(ignoredCondition) {
+					hasMentionedIgnoredCondition = true
+				}
 				consultedConditions.formUnion(mentionedConditions.subtracting([ignoredCondition].compactMap(\.self)))
 				switch evaluator.evaluate(condition) {
 				case let .known(isActive):
@@ -154,11 +170,15 @@ public struct ConditionalCompilationEvaluator: Equatable, Sendable {
 				// `#else` is active whenever no earlier clause was.
 				selectedClauses.append(clause)
 			}
+			if hasMentionedIgnoredCondition, selectedClauses.last?.id == clause.id {
+				clausesSelectedByIgnoredCondition.insert(clause.id)
+			}
 		}
 		return ScannableClauses(
 			clauses: selectedClauses,
 			decisions: decisions,
 			consultedConditions: consultedConditions,
+			clausesSelectedByMockCondition: clausesSelectedByIgnoredCondition,
 		)
 	}
 
@@ -264,9 +284,13 @@ struct ScannableClauses {
 	/// any set of supplied conditions selects the same clauses. A superset of the conditions
 	/// `decisions` mention, which omits those no compile-time assertion can check.
 	let consultedConditions: Set<String>
+	/// The clauses of a block guarding mock-only declarations that are selected because the mock condition is taken to be
+	/// active: a condition up to each, its own included, mentions it, so where the condition is inactive the compiler may
+	/// select another clause. Empty for any other block, and where the module generates mocks unconditionally.
+	let clausesSelectedByMockCondition: Set<SyntaxIdentifier>
 
 	/// These clauses, reporting no decision to assert.
 	var withoutDecisions: Self {
-		ScannableClauses(clauses: clauses, decisions: [], consultedConditions: consultedConditions)
+		ScannableClauses(clauses: clauses, decisions: [], consultedConditions: consultedConditions, clausesSelectedByMockCondition: clausesSelectedByMockCondition)
 	}
 }
