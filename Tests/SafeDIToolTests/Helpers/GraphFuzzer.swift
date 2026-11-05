@@ -134,7 +134,8 @@ struct GraphFuzzerFixture: Equatable {
 		return conditionsByModuleName
 	}
 
-	/// The modules of a split graph the tool runs over without their package's name, which their files' first lines say.
+	/// The modules of a split graph that have no package, which their files' first lines say: the tool runs over each
+	/// without `--package-name`, and the oracle compiles each without `-package-name`.
 	var modulesOmittingPackageName: Set<GraphFuzzerModule> {
 		Set(swiftFileContent.filter(GraphFuzzerModule.omitsPackageName(declaredIn:)).compactMap(GraphFuzzerModule.init(declaredIn:)))
 	}
@@ -189,12 +190,15 @@ struct GraphFuzzerFixture: Equatable {
 	/// The visible build of a graph with a hole: every file whose first line says it fills a hole declared in the seam's
 	/// module instead, which can then see the fulfilling type and builds it inline, so the seam takes no builder.
 	var withoutHoles: GraphFuzzerFixture {
-		let seamModuleHeader = GraphFuzzerModule.seamModule.fileHeader(omitsPackageName: modulesOmittingPackageName.contains(.seamModule))
+		let seamModuleHasNoPackage = modulesOmittingPackageName.contains(.seamModule)
+		let seamModuleHeader = GraphFuzzerModule.seamModule.fileHeader(omitsPackageName: seamModuleHasNoPackage)
 		return GraphFuzzerFixture(
 			seed: seed,
 			swiftFileContent: swiftFileContent.map { content in
 				guard GraphFuzzerModule.fillsHole(declaredIn: content), let headerEnd = content.range(of: "\n\n") else { return content }
-				return seamModuleHeader + content[headerEnd.upperBound...]
+				// A seam's module without a package declares nothing `package`, as its own files do not.
+				let body = String(content[headerEnd.upperBound...])
+				return seamModuleHeader + (seamModuleHasNoPackage ? GraphFuzzerModule.droppingPackageAccess(from: body) : body)
 			},
 		)
 	}
@@ -252,11 +256,13 @@ enum GraphFuzzerModule: String, CaseIterable, Comparable {
 
 	static let marker = "// module: "
 
-	/// What follows the module's name on a file's first line when the tool runs over the module without its package's
-	/// name, as Bazel without `package_name` and Tuist without `SWIFT_PACKAGE_NAME` do; the compiler still gets it.
-	static let packageNameOmittedMarker = ", run without its package name"
+	/// What follows the module's name on a file's first line when the module has no package: the tool runs over it
+	/// without `--package-name`, and the oracle compiles it without `-package-name`, as Bazel builds a library without
+	/// `package_name` and Tuist a target without `SWIFT_PACKAGE_NAME`. Its files spell `public` wherever the draw chose
+	/// `package` (`droppingPackageAccess(from:)`).
+	static let packageNameOmittedMarker = ", without a package"
 
-	/// Whether `content`'s first line names its module and says the tool runs over it without its package's name.
+	/// Whether `content`'s first line names its module and says the module has no package.
 	static func omitsPackageName(declaredIn content: String) -> Bool {
 		content.hasPrefix(marker) && content.prefix { $0 != "\n" }.contains(packageNameOmittedMarker)
 	}
@@ -308,6 +314,17 @@ enum GraphFuzzerModule: String, CaseIterable, Comparable {
 		case .otherPackageCaller:
 			2
 		}
+	}
+
+	/// `content`, a file of a module without a package, with each `package` access modifier spelled `public`: a module
+	/// compiled without `-package-name` can declare nothing `package`, and every declaration that names a `package`
+	/// declaration is `package` or narrower, so the file still compiles.
+	static func droppingPackageAccess(from content: String) -> String {
+		content.replacingOccurrences(
+			of: #"(?<![A-Za-z0-9_.`])package(?= (?:final|struct|class|enum|protocol|init|func|static|let|var|typealias|actor|extension|convenience|required|nonisolated|lazy|subscript|indirect|override)\b| @)"#,
+			with: "public",
+			options: .regularExpression,
+		)
 	}
 
 	/// The first lines of a file of this module: the marker, and the import of each module it depends on.
@@ -908,9 +925,9 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case moduleSplit
 	/// A second caller of the seam, in package `other`.
 	case otherPackageCaller
-	/// The caller in the seam's package run over without its package's name, which then cannot tell it shares one.
+	/// The caller beside the seam's module without a package, so it needs `public` of the seam's module.
 	case samePackageCallerRunWithoutPackageName
-	/// The seam's module run over without its package's name, which no caller can then tell it shares.
+	/// The seam's module without a package, so every caller needs `public` of it.
 	case seamModuleRunWithoutPackageName
 	/// A seam, `HoleSeam`, whose module cannot see `HoleImpl`, the type that fulfills `HoleService`, which a property of
 	/// its tree instantiates: the seam takes a builder for it, which the roots' module fills.
@@ -973,7 +990,7 @@ enum GraphFuzzerSeamDrawFeature: String, CaseIterable, Comparable {
 	case holeMocks
 	/// `HoleImpl` declared in an extension of a namespace enum, `HoleNamespace`.
 	case holeImplInNamespace
-	/// The seam's module run without its package name, every filler in the seam's package.
+	/// The seam's module without a package, every filler in the roots' module.
 	case holeSeamModuleWithoutPackageName
 	/// The type that re-enters `HoleSeam` also instantiates `HoleRelay`, which calls `HoleSeam` and passes its site up,
 	/// so the fill is passed to a seam that takes another copy of its hole.
@@ -1632,10 +1649,34 @@ enum GraphFuzzerGenerator {
 				let firstLine = header.prefix { $0 != "\n" }
 				return firstLine + "\n" + fileNameLine + header.dropFirst(firstLine.count) + file.declaration
 			}
-			let sources = finalDeclarations.map(source(of:))
+			// A module without a package declares nothing `package`. Nor does the seam's module beside a caller without one:
+			// the caller names the seam's module's declarations, which `package` would hide from it.
+			let modulesDeclaringNothingPackage = modulesOmittingPackageName.contains(.samePackageCaller)
+				? modulesOmittingPackageName.union([.seamModule])
+				: modulesOmittingPackageName
+			let drawnSources = finalDeclarations.map(source(of:))
 				+ [extensionSource.map { isSplit ? GraphFuzzerModule.samePackageCaller.fileHeader(omitsPackageName: modulesOmittingPackageName.contains(.samePackageCaller)) + $0 : $0 }].compactMap(\.self)
 				+ markerFreeSources
+			let declaresNothingPackage = { (source: String) in GraphFuzzerModule(declaredIn: source).map(modulesDeclaringNothingPackage.contains) == true }
+			raisingPackageTypeAccess(declaredIn: drawnSources.filter(declaresNothingPackage), notIn: drawnSources.filter { !declaresNothingPackage($0) })
+			let sources = drawnSources.map { declaresNothingPackage($0) ? GraphFuzzerModule.droppingPackageAccess(from: $0) : $0 }
 			return storesEveryParameter ? addingCreationStamps(to: sources) : sources
+		}
+
+		/// Records as `public` in `proofTypeAccess` each `package` type whose `package` declarations, and those of every
+		/// type it is nested in that is `package`, are all in `rewrittenSources` – files that spell `public` for `package`
+		/// (`GraphFuzzerModule.droppingPackageAccess(from:)`) – and none in `otherSources`.
+		private mutating func raisingPackageTypeAccess(declaredIn rewrittenSources: [String], notIn otherSources: [String]) {
+			guard !rewrittenSources.isEmpty else { return }
+			func declaresPackage(_ name: Substring, in sources: [String]) -> Bool {
+				sources.contains { $0.range(of: #"(?<![A-Za-z0-9_.`])package (?:final class|class|struct|enum|protocol|actor|typealias|extension) \#(name)\b"#, options: .regularExpression) != nil }
+			}
+			for (typeName, access) in proofTypeAccess where access == .package {
+				let packageComponents = typeName.split(separator: ".").filter { declaresPackage($0, in: rewrittenSources) || declaresPackage($0, in: otherSources) }
+				if !packageComponents.isEmpty, packageComponents.allSatisfy({ !declaresPackage($0, in: otherSources) }) {
+					proofTypeAccess[typeName] = nil
+				}
+			}
 		}
 
 		/// `sources` with the creation stamps of `DifferentialValueCreationStamp`: the counter, at the end of the first
@@ -1811,7 +1852,7 @@ enum GraphFuzzerGenerator {
 		/// spells it with (`S1_ProofSpace.S1_ProofShelf` for a nested type), which caps every initializer naming it.
 		private var proofTypeAccess = [String: AccessLevel]()
 
-		/// The modules of a split graph the tool runs over without their package's name.
+		/// The modules of a split graph that have no package.
 		private var modulesOmittingPackageName = Set<GraphFuzzerModule>()
 
 		/// `proofTypeAccess`, once `build()` has drawn the graph.
@@ -3426,9 +3467,9 @@ enum GraphFuzzerGenerator {
 		/// graphs whose seam is not `internal` are split across modules (`GraphFuzzerModule`): the seam's tree in
 		/// package `shop`, the host and the rest of the graph in a caller in the same package, and, when the seam is
 		/// `public`, a second root and host in package `other` holding the public values. A sixth of the split graphs
-		/// run their same-package caller, and another sixth their seam's module, without the package's name
-		/// (`ModuleFixture.omitsPackageName`), as Bazel without `package_name` does, so the caller cannot tell the two
-		/// share a package. `proofRandom` draws only for this pass.
+		/// give their same-package caller, and another sixth their seam's module, no package
+		/// (`ModuleFixture.omitsPackageName`), as Bazel without `package_name` does, so a `package` declaration of one
+		/// module never reaches the other. `proofRandom` draws only for this pass.
 		private mutating func addingAccessProofShapes(to declarations: [TypeDeclaration]) -> [TypeDeclaration] {
 			guard features.contains(.generateDependencyTree), proofRandom.percentChance(80) else { return declarations }
 			var declarations = declarations
@@ -3771,9 +3812,9 @@ enum GraphFuzzerGenerator {
 					? PropertyDeclaration(attribute: "@Instantiated", label: "proofHostBuilder", type: "\(instantiator)<\(host.name)>")
 					: PropertyDeclaration(attribute: "@Instantiated", label: "proofHost", type: host.name)
 			}
-			// A split graph's caller in the same package, or its seam's module, now and then run over without its
-			// package's name, so the caller cannot tell whether the two share a package and assumes they do (with the
-			// seam's module unnamed, there is then no caller in another package, for which that assumption is wrong).
+			// A split graph's caller in the same package, or its seam's module, now and then has no package, so the caller
+			// needs `public` of the seam's module. A caller in another package is drawn only beside a seam's module with a
+			// package, which keeps every other graph's draws as they were.
 			if isSplit {
 				let packageNameRoll = proofRandom.integer(in: 0...5)
 				if packageNameRoll == 0 {
@@ -3873,7 +3914,7 @@ enum GraphFuzzerGenerator {
 			let drawsNestedFill = holeRolls.nestedFill.percentChance(30)
 			let nestedFillWrapper = holeRolls.nestedFill.element(of: instantiators)
 			// The fillers and the root that reaches the seam are in another package than the seam's, unless the seam's module
-			// is run without its package name, which a caller in another package would assume it shares.
+			// has no package, which this draw keeps apart from a caller in another package, as every other graph's draws were.
 			let fillsFromOtherPackage = drawsCrossPackage && !modulesOmittingPackageName.contains(.seamModule)
 			let fillerModule: GraphFuzzerModule = fillsFromOtherPackage ? .otherPackageCaller : .samePackageCaller
 
@@ -4059,8 +4100,8 @@ enum GraphFuzzerGenerator {
 					impl.properties.append(PropertyDeclaration(attribute: "@Instantiated", label: "holeCache", type: cache.name))
 				}
 			}
-			// The seam's module run without its package name, with every filler in the seam's package: never beside a caller
-			// in another package, which would assume it shares one.
+			// The seam's module without a package, with every filler in the roots' module: never beside a caller in another
+			// package, which keeps every other graph's draws as they were.
 			if drawsSeamModuleWithoutPackageName, !fillsFromOtherPackage, !declarations.contains(where: { $0.module == .otherPackageCaller }) {
 				modulesOmittingPackageName.insert(.seamModule)
 			}
@@ -8494,7 +8535,8 @@ enum GraphFuzzerOracle {
 	/// invocation, as `verifyGeneratedCodeCompiles` compiles one test's fixture and output, as the module
 	/// `GraphFuzzerModule.seamModule` in its package; distinct type-name prefixes keep the graphs apart. The split
 	/// graphs' callers then compile by module, in dependency order, each module of every graph in one invocation
-	/// against the modules before it. When an invocation fails, each error is attributed to a graph by the prefix in
+	/// against the modules before it. The graphs whose modules without a package (`modulesOmittingPackageName`)
+	/// differ compile apart, each such module without `-package-name`. When an invocation fails, each error is attributed to a graph by the prefix in
 	/// its file name. Those graphs fail, and the rest are compiled again without them, because a type error stops the
 	/// compiler before the SIL passes that report errors such as a closure that captures a later local; a graph that
 	/// fails in one module is left out of the modules after it. A failing graph is then compiled without its
@@ -8518,10 +8560,19 @@ enum GraphFuzzerOracle {
 		try FileManager.default.createDirectory(at: fixtureDirectory, withIntermediateDirectories: true)
 		filesToDelete.append(fixtureDirectory)
 
-		var combinedUnitsByModule = [GraphFuzzerModule: [CompilationUnit]]()
+		// The graphs compiled together, keyed by their modules without a package, in the order each set is first met.
+		var packageConfigurations = [Set<GraphFuzzerModule>]()
+		var combinedUnitsByConfigurationAndModule = [Set<GraphFuzzerModule>: [GraphFuzzerModule: [CompilationUnit]]]()
 		var inputOnlyUnitsBySeed = [UInt64: [(module: GraphFuzzerModule, unit: CompilationUnit)]]()
+		var modulesWithoutPackageBySeed = [UInt64: Set<GraphFuzzerModule>]()
 		var seedsWithGeneratedCode = Set<UInt64>()
 		for runs in toolRuns {
+			let modulesWithoutPackage = runs.fixture.modulesOmittingPackageName
+			modulesWithoutPackageBySeed[runs.fixture.seed] = modulesWithoutPackage
+			if combinedUnitsByConfigurationAndModule[modulesWithoutPackage] == nil {
+				packageConfigurations.append(modulesWithoutPackage)
+				combinedUnitsByConfigurationAndModule[modulesWithoutPackage] = [:]
+			}
 			let fileModules = runs.fixture.modules ?? Array(repeating: .seamModule, count: runs.fixture.swiftFileContent.count)
 			for module in GraphFuzzerModule.allCases where fileModules.contains(module) {
 				let moduleDirectory = fixtureDirectory.appendingPathComponent(module.name)
@@ -8549,7 +8600,7 @@ enum GraphFuzzerOracle {
 					generatedFiles[stagedFileName] = contents
 				}
 				let combined = try stageCompileSources(inputSwiftFiles: fixtureFiles, generatedFiles: generatedFiles, filesToDelete: &filesToDelete)
-				combinedUnitsByModule[module, default: []].append(CompilationUnit(
+				combinedUnitsByConfigurationAndModule[modulesWithoutPackage, default: [:]][module, default: []].append(CompilationUnit(
 					seed: runs.fixture.seed,
 					inputFiles: combined.inputFiles,
 					generatedFiles: combined.generatedFiles.sorted { $0.path < $1.path },
@@ -8564,24 +8615,28 @@ enum GraphFuzzerOracle {
 		// Each module of every graph, in dependency order, each graph left out of the modules after one it fails in.
 		var combinedFailures = [UInt64: UnitDiagnostics]()
 		var generatedCodeWarnings = [UInt64: [String]]()
-		var moduleOutputDirectories = [GraphFuzzerModule: URL]()
-		let laterModulesAreCompiled = combinedUnitsByModule.keys.contains { $0 != .seamModule }
-		for module in GraphFuzzerModule.allCases {
-			let units = (combinedUnitsByModule[module] ?? []).filter { combinedFailures[$0.seed] == nil }
-			guard !units.isEmpty else { continue }
-			let outputDirectory = fixtureDirectory.appendingPathComponent("compiled-\(module.name)")
-			try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-			let moduleCompilation = try compilation(
-				of: units,
-				outputDirectory: outputDirectory,
-				artifacts: artifacts,
-				module: module,
-				emitsModule: laterModulesAreCompiled,
-				moduleSearchPaths: module.dependencies.compactMap { moduleOutputDirectories[$0] },
-			)
-			moduleOutputDirectories[module] = outputDirectory
-			combinedFailures.merge(moduleCompilation.failures) { first, _ in first }
-			generatedCodeWarnings.merge(moduleCompilation.generatedCodeWarnings) { $0 + $1 }
+		for (configurationIndex, modulesWithoutPackage) in packageConfigurations.enumerated() {
+			let combinedUnitsByModule = combinedUnitsByConfigurationAndModule[modulesWithoutPackage] ?? [:]
+			var moduleOutputDirectories = [GraphFuzzerModule: URL]()
+			let laterModulesAreCompiled = combinedUnitsByModule.keys.contains { $0 != .seamModule }
+			for module in GraphFuzzerModule.allCases {
+				let units = (combinedUnitsByModule[module] ?? []).filter { combinedFailures[$0.seed] == nil }
+				guard !units.isEmpty else { continue }
+				let outputDirectory = fixtureDirectory.appendingPathComponent("compiled-\(configurationIndex)-\(module.name)")
+				try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+				let moduleCompilation = try compilation(
+					of: units,
+					outputDirectory: outputDirectory,
+					artifacts: artifacts,
+					module: module,
+					hasPackage: !modulesWithoutPackage.contains(module),
+					emitsModule: laterModulesAreCompiled,
+					moduleSearchPaths: module.dependencies.compactMap { moduleOutputDirectories[$0] },
+				)
+				moduleOutputDirectories[module] = outputDirectory
+				combinedFailures.merge(moduleCompilation.failures) { first, _ in first }
+				generatedCodeWarnings.merge(moduleCompilation.generatedCodeWarnings) { $0 + $1 }
+			}
 		}
 		// Each failing graph's fixture alone, module by module. These units hold no generated code, so they record no
 		// warnings.
@@ -8597,6 +8652,7 @@ enum GraphFuzzerOracle {
 					outputDirectory: outputDirectory,
 					artifacts: artifacts,
 					module: module,
+					hasPackage: modulesWithoutPackageBySeed[seed]?.contains(module) != true,
 					emitsModule: true,
 					moduleSearchPaths: module.dependencies.compactMap { seedModuleDirectories[$0] },
 				)
@@ -8691,6 +8747,7 @@ enum GraphFuzzerOracle {
 		outputDirectory: URL,
 		artifacts: SafeDIBuildArtifacts,
 		module: GraphFuzzerModule,
+		hasPackage: Bool,
 		emitsModule: Bool,
 		moduleSearchPaths: [URL],
 	) throws -> UnitsCompilation {
@@ -8700,7 +8757,7 @@ enum GraphFuzzerOracle {
 				outputDirectory: outputDirectory,
 				artifacts: artifacts,
 				moduleName: module.name,
-				packageName: module.packageName,
+				packageName: hasPackage ? module.packageName : nil,
 				emitsModule: emitsModule,
 				moduleSearchPaths: moduleSearchPaths,
 			)

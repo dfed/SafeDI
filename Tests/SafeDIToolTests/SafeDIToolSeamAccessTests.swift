@@ -24,8 +24,8 @@ import Testing
 @testable import SafeDITool
 
 /// How the check that every construction compiles in the module that emits it meets seams: a module that knows a seam
-/// generates each construction in a world where the seam is called, so what it says about each construction – that
-/// `package` access is assumed, the error where no tier can be reached – is said about that world.
+/// generates each construction in a world where the seam is called, so what it decides about each construction –
+/// where it assumes `package` access reaches, the error where no tier can be reached – is decided about that world.
 struct SafeDIToolSeamAccessTests: ~Copyable {
 	// MARK: Initialization
 

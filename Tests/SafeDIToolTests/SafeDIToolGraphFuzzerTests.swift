@@ -156,9 +156,9 @@ struct SafeDIToolGraphFuzzerTests {
 			}
 		}
 		#expect(Set(GraphFuzzerHoleOutputFeature.allCases).subtracting(holeOutputFeatures).sorted() == [])
-		// Graphs split across modules – with a caller in another package, and with a caller or a seam's module run without
-		// its package's name – among those the tool accepts, so that the batch compiles each module of a split graph and
-		// the callers of each package configuration.
+		// Graphs split across modules – with a caller in another package, and with a caller or a seam's module without a
+		// package – among those the tool accepts, so that the batch compiles each module of a split graph and the callers
+		// of each package configuration.
 		let drawFeatures = acceptedResults.reduce(into: Set<GraphFuzzerSeamDrawFeature>()) { $0.formUnion(GraphFuzzerFeature.seamDrawFeatures(of: $1.fixture)) }
 		#expect(Set([GraphFuzzerSeamDrawFeature.moduleSplit, .otherPackageCaller, .samePackageCallerRunWithoutPackageName, .seamModuleRunWithoutPackageName]).subtracting(drawFeatures).sorted() == [])
 		// Every roll of `addingHoleShapes` beyond its base draw that draws a shape the tool accepts, in an accepted graph.
@@ -2982,7 +2982,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// every `GraphFuzzerSeamOutputFeature` – both kinds of pass-through, a call reading `.instance`, an `@escaping`
 	/// closure parameter, an `@escaping @Sendable` one, an optional closure, and the comment naming a type SafeDI reads no
 	/// declaration of (seeds 16 and 609) – graphs split across modules, with a caller in another package, a caller in the
-	/// same package run without its package's name and a seam's module run so (seeds 19, 31, 98, 180, 609 and 743 between
+	/// seam's package without a package and a seam's module without one (seeds 19, 31, 98, 180, 609 and 743 between
 	/// them), the last two also accepted inline, so the batch compiles every module, compares a split graph's values and
 	/// compares one across the two integrations;
 	/// graphs with a hole whose code, between them, shows every `GraphFuzzerHoleOutputFeature` – a passed-up builder whose
@@ -2995,7 +2995,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// seam tests' draws were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
 	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 92, 98, 180, 196, 277, 326, 605, 609, 743]
 
-	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x7D24C0D687363AFC
+	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x9D453428B7158C47
 
 	/// How many of the seam corpus's graphs each shape of `addingSeam` lands in, exactly, as the corpus run observed,
 	/// so a draw that stops landing, or a change in a shape's share, fails
@@ -3053,24 +3053,24 @@ struct SafeDIToolGraphFuzzerTests {
 		.uncreatedAliasExactFormAlias: 135,
 		.uncreatedAliasAcceptedTwin: 156,
 		.wrapperReceiveBeneathSeam: 581,
-		.seamTypeNarrowerThanPublic: 255,
-		.receiverNarrowerThanType: 316,
-		.receiverTypeNarrowerThanItsInitializer: 102,
-		.ownInitializerNarrowerWithNoPassThrough: 74,
-		.ownInitializerNarrowerWithOnlyOptionalNarrowerPassThroughs: 85,
+		.seamTypeNarrowerThanPublic: 236,
+		.receiverNarrowerThanType: 301,
+		.receiverTypeNarrowerThanItsInitializer: 86,
+		.ownInitializerNarrowerWithNoPassThrough: 70,
+		.ownInitializerNarrowerWithOnlyOptionalNarrowerPassThroughs: 80,
 		.ownInitializerNarrowerThanTwoParameterLevels: 50,
-		.requiredParameterNarrowerThanSeamType: 53,
+		.requiredParameterNarrowerThanSeamType: 51,
 		.ownOnlyIfAvailableParameter: 115,
-		.ownOnlyIfAvailableParameterNarrowerThanSeam: 39,
+		.ownOnlyIfAvailableParameterNarrowerThanSeam: 38,
 		.providedValueHeldByCaller: 96,
 		.providedValueHeldByNoCaller: 26,
-		.unprovenAliasType: 21,
+		.unprovenAliasType: 23,
 		.unprovenAliasTypeOnlyIfAvailable: 22,
-		.aliasOfNarrowerInstantiableType: 25,
+		.aliasOfNarrowerInstantiableType: 23,
 		.aliasFulfillingTypeAlsoReceived: 22,
 		.namespaceExtensionUnspelled: 64,
 		.namespaceExtensionSpelled: 37,
-		.publicNamespace: 20,
+		.publicNamespace: 30,
 		.namespaceInMarkerFreeFile: 50,
 		.namespaceTypeOnlyThroughExistential: 61,
 		.instantiableExtensionOfNarrowerType: 55,
@@ -3079,7 +3079,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.mockCapRaisedByUnreachedMention: 30,
 		.mockInInstantiableExtension: 25,
 		.typeInExtensionOfSeam: 41,
-		.typeInExtensionOfNarrowerRecordedType: 39,
+		.typeInExtensionOfNarrowerRecordedType: 38,
 		.valueDeclaredAfterSeam: 69,
 		.moduleSplit: 484,
 		.otherPackageCaller: 221,
@@ -3088,7 +3088,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.hole: 331,
 		.holeOwnedBySeam: 75,
 		.holeProtocolInMarkerFreeFile: 166,
-		.holeProtocolPackage: 79,
+		.holeProtocolPackage: 63,
 		.holeBeneathConstant: 60,
 		.holeBeneathInstantiator: 89,
 		.holeBeneathSendableInstantiator: 44,
@@ -3106,7 +3106,7 @@ struct SafeDIToolGraphFuzzerTests {
 		.holeCrossPackage: 93,
 		.holeCrossPackageFulfillerInitializerPackage: 11,
 		.holeCrossPackageFulfillerBuildsPackageInitializerOfSeamsPackage: 14,
-		.holeNarrowerField: 25,
+		.holeNarrowerField: 21,
 		.holeAliasOrOnlyIfAvailable: 63,
 		.holeReadOnlyIfAvailable: 34,
 		.holeOwnerAliasesField: 24,
