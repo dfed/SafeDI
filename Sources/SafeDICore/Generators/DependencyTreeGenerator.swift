@@ -1637,24 +1637,24 @@ public actor DependencyTreeGenerator {
 			if let viewDeclaringModule {
 				// A module info's view names the module, though it fulfills no type of this module's trees: list it.
 				return "No @\(InstantiableVisitor.macroName) declaration of a module this module lists fulfills \(reference). `\(typeName)` is declared in `\(viewDeclaringModule.moduleName)`, which this module depends on through `\(viewDeclaringModule.throughModuleName)` but does not list; list `\(viewDeclaringModule.moduleName)` where this module lists `\(viewDeclaringModule.throughModuleName)`: list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` with `--dependent-module-info-file-path` in another build."
-			}
-			guard !fulfilledByMockOnlyDeclaration else {
+			} else if fulfilledByMockOnlyDeclaration {
 				return "No production @\(InstantiableVisitor.macroName) declaration fulfills \(reference). A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @\(InstantiableVisitor.macroName) declaration that fulfills `\(typeName)`."
-			}
-			var message = "No @\(InstantiableVisitor.macroName) type or extension fulfills \(reference)."
-			// Declaring the type, or a type that fulfills it, where SafeDI reads it, after the verb that leads it.
-			let declaringRemedy = " `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName), or list `\(typeName)` in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it."
-			if let unreadImports {
-				if unreadImports.moduleNames.isEmpty {
-					message += " Decorate" + declaringRemedy
-				} else {
-					message += " " + unreadImportsCause(moduleNames: unreadImports.moduleNames, typeName: typeName, integration: unreadImports.integration)
-					message += " Otherwise, decorate" + declaringRemedy
-				}
 			} else {
-				message += " Decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName); list `\(typeName)` in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)"
+				var message = "No @\(InstantiableVisitor.macroName) type or extension fulfills \(reference)."
+				// Declaring the type, or a type that fulfills it, where SafeDI reads it, after the verb that leads it.
+				let declaringRemedy = " `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName), or list `\(typeName)` in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it."
+				if let unreadImports {
+					if unreadImports.moduleNames.isEmpty {
+						message += " Decorate" + declaringRemedy
+					} else {
+						message += " " + unreadImportsCause(moduleNames: unreadImports.moduleNames, typeName: typeName, integration: unreadImports.integration)
+						message += " Otherwise, decorate" + declaringRemedy
+					}
+				} else {
+					message += " Decorate `\(typeName)`, or an extension of it, with @\(InstantiableVisitor.macroName); list `\(typeName)` in the `fulfillingAdditionalTypes` of an @\(InstantiableVisitor.macroName) type that conforms to it; \(fulfillingDeclarationInAnotherModuleRemedy)"
+				}
+				return message
 			}
-			return message
 		}
 
 		/// The sentences that say a file imports `moduleNames`, which the run read nothing of, so that one of them may
