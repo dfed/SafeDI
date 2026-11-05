@@ -2560,10 +2560,10 @@ public actor DependencyTreeGenerator {
 				let hint: String
 				let fixIts: [SourceDiagnostic.FixIt]
 				if property.typeDescription.isOptional,
-				          let nonOptionalAlternative = suggestedAlternatives.first(where: { alternative in
-				          	alternative.label == property.label
-				          		&& alternative.typeDescription == property.typeDescription.unwrapped
-				          })
+				   let nonOptionalAlternative = suggestedAlternatives.first(where: { alternative in
+				   	alternative.label == property.label
+				   		&& alternative.typeDescription == property.typeDescription.unwrapped
+				   })
 				{
 					let onlyIfAvailableAttribute = "@\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true)"
 					hint = "The non-optional `\(nonOptionalAlternative.asSource)` is available in chain. Did you mean to decorate this property with `\(onlyIfAvailableAttribute)`?"
@@ -6163,7 +6163,7 @@ public actor DependencyTreeGenerator {
 				let fulfillingProperties = fulfillingProperty.typeDescription.isOptional
 					? [fulfillingProperty, fulfillingProperty.asUnwrappedProperty]
 					: [fulfillingProperty]
-				namedChild = fulfillingProperties.lazy.compactMap({ childByProperty[$0] }).first
+				namedChild = fulfillingProperties.lazy.compactMap { childByProperty[$0] }.first
 			}
 			if let namedChild {
 				aliasedChildByProperty[property] = NamedChild(index: namedChild.index, directness: 2 + aliasCount)
@@ -7939,6 +7939,7 @@ public actor DependencyTreeGenerator {
 			/// binds.
 			case handed
 		}
+
 		/// The type that declares the alias.
 		let declaringType: TypeDescription
 		/// The type that declares the alias the property the alias is ultimately created from fulfills: the last of
