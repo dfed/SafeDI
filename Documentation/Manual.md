@@ -631,7 +631,7 @@ A renamed dependency follows the same rules; see [Renaming and retyping dependen
 
 ## Renaming and retyping dependencies
 
-Use `@Received(fulfilledByDependencyNamed:ofType:)` to give a dependency an additional name and type. The dependency is the property of that name that the declaring type instantiates, forwards, or itself renames, or, when the declaring type has none, the one a type above it instantiates, forwards, or renames. Types further down the tree can then `@Received` the same instance under either name and type.
+Use `@Received(fulfilledByDependencyNamed:ofType:)` to give a dependency an additional name and type. The dependency is the property of that name that the declaring type instantiates or forwards, or, when the declaring type has none, the one a type above it instantiates, forwards, or renames. Types further down the tree can then `@Received` the same instance under either name and type.
 
 Here, a parent instantiates a read-write `UserManager` and also renames the object to make it available a `UserVendor`. A child receives the same instance as the read-only `UserVendor`:
 
@@ -655,6 +655,8 @@ public struct ProfileView: Instantiable {
 To receive the renamed dependency inside a type-erasing wrapper, add `erasedToConcreteExistential: true`, which wraps it as [`@Instantiated` erasure](#making-protocols-instantiable) does: a property `userVendor: AnyUserVendor` is assigned `AnyUserVendor(userManager)`. With `onlyIfAvailable: true` the property is optional, and the type it wraps does the wrapping: a property `userVendor: AnyUserVendor?` is assigned `AnyUserVendor(userManager)` too.
 
 A renamed property declared with `onlyIfAvailable: true` is `nil` when its fulfilling dependency is [unavailable](#conditionally-receiving-dependencies), and so is that property for anything that receives it in turn with `onlyIfAvailable: true`. A type that receives the renamed property without `onlyIfAvailable` requires it, as with any dependency: an enclosing property of that name stands in when there is one, and otherwise the fulfilling dependency is built first. The build fails at the receiving declaration when neither is possible.
+
+A rename is never fulfilled by another rename that the same type declares: rename the property the first rename starts from instead. SafeDI also reports such a pair where `#if` blocks that are active together hold the two renames, or where clauses of a condition only the compiler decides, such as `#if os(iOS)`, hold them, since it reads those clauses together; there, give the first rename another label.
 
 The rename’s `ofType:` must name exactly the renamed property’s type, or a `LazilyInstantiated` property’s instance type. SafeDI does not check that the retyped property can be fulfilled by the original type; the Swift compiler checks the generated assignment and reports a mismatch.
 
