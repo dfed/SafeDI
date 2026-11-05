@@ -40,7 +40,7 @@ import PackagePlugin
 		/// that accepts every option the Xcode project plugin passes
 		/// SafeDITool (see "Conditional compilation" in CLAUDE.md).
 		var safeDIVersion: String {
-			"2.2.0"
+			"2.3.0-alpha-1"
 		}
 
 		/// Hardcoded source repo (forks must update this to point at their
