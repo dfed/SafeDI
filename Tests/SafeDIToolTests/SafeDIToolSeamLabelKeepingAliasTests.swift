@@ -554,7 +554,7 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret? = nil) {
+			    public convenience init(token: Secret?) {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
@@ -841,7 +841,8 @@ struct SafeDIToolSeamLabelKeepingAliasTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsUncreatedAliasError_whenRequiredReaderBeneathAliasOfPassThroughReceivesIt() async throws {
 		// A reader that requires the alias's property is rejected as an `onlyIfAvailable` reader is: the parameter stays
-		// `T? = nil`, so no binding gives the reader inline's value, and the remedy is a required alias typed as the reader receives it.
+		// `T?`, received only if available, so no binding gives the reader inline's value, and the remedy is a required
+		// alias typed as the reader receives it.
 		let fixture = Self.fixture(rootHolds: ["@Instantiated let token: Secret"], detail: [Self.alias, "@Instantiated let reader: Reader"], reader: [Self.requiredReceive], secretConformances: ", Auth", otherTypes: [Self.authProtocol])
 		await assertThrowsError(diagnostics: { fixtures in
 			"""

@@ -64,7 +64,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 				        self.init(theme: nil, title: title)
 				    }
 
-				    package convenience init(theme: Theme? = nil, title: String) {
+				    package convenience init(theme: Theme?, title: String) {
 				        let badge = Badge(theme: theme)
 				        let header = Header(title: title)
 				        self.init(badge: badge, header: header)
@@ -83,7 +83,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 				        self.init(theme: nil, title: title)
 				    }
 
-				    package convenience init(theme: Theme? = nil, title: String) {
+				    package convenience init(theme: Theme?, title: String) {
 				        let badge = Badge(theme: theme)
 				        let header = Header(title: title)
 				        self.init(badge: badge, header: header)
@@ -252,7 +252,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 				        self.init(theme: nil, title: title)
 				    }
 
-				    package init(theme: Theme? = nil, title: String) {
+				    package init(theme: Theme?, title: String) {
 				        let badge = Badge(theme: theme)
 				        let header = Header(title: title)
 				        self.init(badge: badge, header: header)
@@ -271,7 +271,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 				        self.init(theme: nil, title: title)
 				    }
 
-				    package init(theme: Theme? = nil, title: String) {
+				    package init(theme: Theme?, title: String) {
 				        let badge = Badge(theme: theme)
 				        let header = Header(title: title)
 				        self.init(badge: badge, header: header)
@@ -429,7 +429,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 				        self.init(theme: nil, title: title)
 				    }
 
-				    internal convenience init(theme: Theme? = nil, title: String) {
+				    internal convenience init(theme: Theme?, title: String) {
 				        let badge = Badge(theme: theme)
 				        let header = Header(title: title)
 				        self.init(badge: badge, header: header)
@@ -448,7 +448,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 				        self.init(theme: nil, title: title)
 				    }
 
-				    internal convenience init(theme: Theme? = nil, title: String) {
+				    internal convenience init(theme: Theme?, title: String) {
 				        let badge = Badge(theme: theme)
 				        let header = Header(title: title)
 				        self.init(badge: badge, header: header)
@@ -610,7 +610,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 				        self.init(theme: nil, title: title)
 				    }
 
-				    package convenience init(theme: Theme? = nil, title: String) {
+				    package convenience init(theme: Theme?, title: String) {
 				        let badge = Badge(theme: theme)
 				        let header = Header(title: title)
 				        self.init(badge: badge, header: header)
@@ -629,7 +629,7 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 				        self.init(theme: nil, title: title)
 				    }
 
-				    package convenience init(theme: Theme? = nil, title: String) {
+				    package convenience init(theme: Theme?, title: String) {
 				        let badge = Badge(theme: theme)
 				        let header = Header(title: title)
 				        self.init(badge: badge, header: header)
@@ -793,11 +793,11 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 				        self.init(theme: nil)
 				    }
 
-				    package convenience init(theme: Theme? = nil) {
+				    package convenience init(theme: Theme?) {
 				        self.init(color: nil, theme: theme)
 				    }
 
-				    internal convenience init(color: Color? = nil, theme: Theme? = nil) {
+				    internal convenience init(color: Color?, theme: Theme?) {
 				        let badge = Badge(theme: theme)
 				        let tint = Tint(color: color)
 				        self.init(badge: badge, tint: tint)
@@ -813,11 +813,11 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 				        self.init(theme: nil)
 				    }
 
-				    package convenience init(theme: Theme? = nil) {
+				    package convenience init(theme: Theme?) {
 				        self.init(color: nil, theme: theme)
 				    }
 
-				    internal convenience init(color: Color? = nil, theme: Theme? = nil) {
+				    internal convenience init(color: Color?, theme: Theme?) {
 				        let badge = Badge(theme: theme)
 				        let tint = Tint(color: color)
 				        self.init(badge: badge, tint: tint)
@@ -836,11 +836,11 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 				        self.init(theme: nil)
 				    }
 
-				    package convenience init(theme: Theme? = nil) {
+				    package convenience init(theme: Theme?) {
 				        self.init(color: nil, theme: theme)
 				    }
 
-				    internal convenience init(color: Color? = nil, theme: Theme? = nil) {
+				    internal convenience init(color: Color?, theme: Theme?) {
 				        let badge = Badge(theme: theme)
 				        let tint = Tint(color: color)
 				        self.init(badge: badge, tint: tint)
@@ -857,11 +857,11 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 				        self.init(theme: nil)
 				    }
 
-				    package convenience init(theme: Theme? = nil) {
+				    package convenience init(theme: Theme?) {
 				        self.init(color: nil, theme: theme)
 				    }
 
-				    internal convenience init(color: Color? = nil, theme: Theme? = nil) {
+				    internal convenience init(color: Color?, theme: Theme?) {
 				        let badge = Badge(theme: theme)
 				        let tint = Tint(color: color)
 				        self.init(badge: badge, tint: tint)

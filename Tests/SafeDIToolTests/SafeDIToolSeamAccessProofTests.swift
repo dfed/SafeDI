@@ -109,7 +109,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			""",
 			"Service+SafeDI.swift": generatedFileHeader + """
 			extension Service {
-			    public init(analytics: Analytics? = nil) {
+			    public init(analytics: Analytics?) {
 			        let badge = Badge(analytics: analytics)
 			        self.init(badge: badge)
 			    }
@@ -150,7 +150,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        self.init(token: nil)
 			    }
 
-			    internal init(token: Token? = nil) {
+			    internal init(token: Token?) {
 			        let badge = Badge(token: token)
 			        self.init(badge: badge)
 			    }
@@ -696,7 +696,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        self.init(configuration: nil)
 			    }
 
-			    internal init(configuration: Configuration? = nil) {
+			    internal init(configuration: Configuration?) {
 			        let badge = Badge(configuration: configuration)
 			        self.init(badge: badge)
 			    }
@@ -826,15 +826,15 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == [
 			"Feature.swift": generatedFileHeader + """
 			extension Service {
-			    public init(flag: Flag? = nil) {
+			    public init(flag: Flag?) {
 			        self.init(flag: flag, session: nil, theme: nil)
 			    }
 
-			    package init(flag: Flag? = nil, session: Session? = nil, theme: Theme? = nil) {
+			    package init(flag: Flag?, session: Session?, theme: Theme?) {
 			        self.init(flag: flag, session: session, theme: theme, token: nil)
 			    }
 
-			    internal init(flag: Flag? = nil, session: Session? = nil, theme: Theme? = nil, token: Token? = nil) {
+			    internal init(flag: Flag?, session: Session?, theme: Theme?, token: Token?) {
 			        let badge = Badge(session: session, theme: theme)
 			        let tag = Tag(token: token)
 			        self.init(flag: flag, badge: badge, tag: tag)
@@ -1086,7 +1086,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		        self.init(theme: nil)
 		    }
 
-		    internal init(theme: Hub.Theme? = nil) {
+		    internal init(theme: Hub.Theme?) {
 		        let badge = Badge(theme: theme)
 		        self.init(badge: badge)
 		    }
@@ -1201,7 +1201,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        self.init(token: nil)
 			    }
 
-			    internal init(token: Token? = nil) {
+			    internal init(token: Token?) {
 			        let badge = Badge(token: token)
 			        self.init(badge: badge)
 			    }
@@ -1243,7 +1243,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		        self.init(key: nil)
 		    }
 
-		    internal init(key: Key? = nil) {
+		    internal init(key: Key?) {
 		        let badge = Badge(key: key)
 		        self.init(badge: badge)
 		    }
@@ -1281,7 +1281,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		        self.init(key: nil)
 		    }
 
-		    internal init(key: Key? = nil) {
+		    internal init(key: Key?) {
 		        let badge = Badge(key: key)
 		        self.init(badge: badge)
 		    }
@@ -1359,7 +1359,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        self.init(auth: nil)
 			    }
 
-			    internal init(auth: (any (Auth & Sendable))? = nil) {
+			    internal init(auth: (any (Auth & Sendable))?) {
 			        let badge = Badge(auth: auth)
 			        self.init(badge: badge)
 			    }
@@ -1389,7 +1389,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        self.init(palette: nil)
 			    }
 
-			    internal init(palette: [String: Theme]? = nil) {
+			    internal init(palette: [String: Theme]?) {
 			        let badge = Badge(palette: palette)
 			        self.init(badge: badge)
 			    }
@@ -1421,7 +1421,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        self.init(values: nil)
 			    }
 
-			    internal init(values: [3 of Int]? = nil) {
+			    internal init(values: [3 of Int]?) {
 			        let badge = Badge(values: values)
 			        self.init(badge: badge)
 			    }
@@ -2026,7 +2026,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 	        self.init(theme: nil)
 	    }
 
-	    package init(theme: Hub.Theme? = nil) {
+	    package init(theme: Hub.Theme?) {
 	        let badge = Badge()
 	        self.init(theme: theme, badge: badge)
 	    }
@@ -2087,9 +2087,9 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_defaultsSeamsOwnOnlyIfAvailableReceiveToNil_whenCallerInSamePackageHoldsValue(integration: MultiModuleIntegration) async throws {
-		// B3.16, B4.31: `Service`'s own only-if-available `theme` defaults to `nil` on its `package` tier, which the
-		// `public` tier calls passing `nil`; `App`, in the same package, calls the `package` tier passing `theme`.
+	mutating func generate_passesNilForSeamsOwnOnlyIfAvailableReceiveFromPublicTier_whenCallerInSamePackageHoldsValue(integration: MultiModuleIntegration) async throws {
+		// B3.16, B4.31: `Service`'s own only-if-available `theme` is a parameter of its `package` tier, which the `public`
+		// tier calls passing `nil`; `App`, in the same package, calls the `package` tier passing `theme`.
 		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.ownReceiveModules(appPackage: "Shop", provider: .forwardedByCaller), integration: integration, filesToDelete: &filesToDelete)
 		#expect(output.modules["Feature"]?.generatedFiles == Self.generatedFiles(of: "Feature", sourceFile: "Service", Self.ownReceiveService, under: integration))
 		#expect(output.modules["App"]?.generatedFiles == Self.generatedFiles(of: "App", sourceFile: "Root", """
@@ -2234,7 +2234,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        self.init(theme: nil)
 			    }
 
-			    package init(theme: Hub.Theme? = nil) {
+			    package init(theme: Hub.Theme?) {
 			        let badge = Badge(theme: theme)
 			        self.init(badge: badge)
 			    }
@@ -2460,7 +2460,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 		        self.init(theme: nil)
 		    }
 
-		    package init(theme: Hub.Theme? = nil) {
+		    package init(theme: Hub.Theme?) {
 		        let badge = Badge(theme: theme)
 		        self.init(badge: badge)
 		    }
@@ -2566,7 +2566,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        self.init(session: nil, theme: nil)
 			    }
 
-			    package init(session: Session? = nil, theme: Theme? = nil) {
+			    package init(session: Session?, theme: Theme?) {
 			        func __safeDI_service() -> Service {
 			            _ = Service.__safeDI_Service_05FA4E47A7B6869F.self // If this line does not compile, compile the code SafeDI generates for module Base into Base: under Bazel, add Base's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 			            return Service(session: session, theme: theme)
@@ -3019,7 +3019,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 			        self.init(analytics: analytics, handler: nil, theme: nil)
 			    }
 
-			    package init(analytics: Analytics, handler: Handler? = nil, theme: Theme? = nil) {
+			    package init(analytics: Analytics, handler: Handler?, theme: Theme?) {
 			        let badge = Badge(analytics: analytics, theme: theme, handler: handler)
 			        self.init(badge: badge)
 			    }
@@ -4463,7 +4463,7 @@ struct SafeDIToolSeamAccessProofTests: ~Copyable {
 	        self.init(theme: nil)
 	    }
 
-	    package init(theme: Theme? = nil) {
+	    package init(theme: Theme?) {
 	        let badge = Badge(theme: theme)
 	        self.init(badge: badge)
 	    }
