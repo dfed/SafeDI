@@ -2588,6 +2588,144 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesForwardedPropertyToReceiver_whenTypeBuiltInsideDeclarationOfItsLabelForwardsIt() async throws {
+		// Before, `C`'s receive of `a` was rejected as a receive of the `A` still being built around it, though `B`'s
+		// forwarded `a` is the nearest declaration of the label.
+		let fixture = Self.forwardedNearerDeclarationFixture(mockedTypes: [])
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_a() -> A {
+			            func __safeDI_bBuilder(a: A) -> B {
+			                let c = C(a: a)
+			                return B(a: a, c: c)
+			            }
+			            let bBuilder = Instantiator<B> {
+			                __safeDI_bBuilder(a: $0)
+			            }
+			            return A(bBuilder: bBuilder)
+			        }
+			        let a: A = __safeDI_a()
+			        self.init(a: a)
+			    }
+			}
+			""",
+		])
+		// `C` receives the `A` `B` is handed.
+		try expectValuesAgree(of: fixture, output: output, knownRight: [
+			"Root+SafeDI.swift": Self.forwardedNearerDeclarationKnownRight,
+		], probes: [Self.forwardedNearerDeclarationProbe])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_passesForwardedPropertyToReceiver_whenTypeBuiltInsideDeclarationOfItsLabelForwardsIt() async throws {
+		let fixture = Self.forwardedNearerDeclarationFixture(mockedTypes: ["Root", "B"])
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.mockFiles == [
+			"B+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension B {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            c: ((A) -> C)? = nil
+			        ) {
+			            self.c = c
+			        }
+
+			        let c: ((A) -> C)?
+			    }
+
+			    static func mock(
+			        a: A,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> B {
+			        let c = if let safeDIBuilder = safeDIOverrides.c { safeDIBuilder(a) } else { C(a: a) }
+			        return B(a: a, c: c)
+			    }
+			}
+			#endif
+
+			#if DEBUG
+			extension B {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            c: ((A) -> C)? = nil,
+			            _ safeDIBuilder: ((A, C) -> B)? = nil
+			        ) {
+			            self.c = c
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let c: ((A) -> C)?
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((A, C) -> B)?
+			    }
+			}
+			#endif
+			""",
+			"Root+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Root {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            a: A.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.a = a
+			        }
+
+			        let a: A.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Root {
+			        func __safeDI_a() -> A {
+			            func __safeDI_bBuilder(a: A) -> B {
+			                let c = if let safeDIBuilder = safeDIOverrides.a.bBuilder.c { safeDIBuilder(a) } else { C(a: a) }
+			                return if let safeDIBuilder = safeDIOverrides.a.bBuilder.safeDIBuilder { safeDIBuilder(a, c) } else { B(a: a, c: c) }
+			            }
+			            let bBuilder = Instantiator<B> {
+			                __safeDI_bBuilder(a: $0)
+			            }
+			            return if let safeDIBuilder = safeDIOverrides.a.safeDIBuilder { safeDIBuilder(bBuilder) } else { A(bBuilder: bBuilder) }
+			        }
+			        let a: A = __safeDI_a()
+			        return Root(a: a)
+			    }
+			}
+			#endif
+			""",
+		])
+		try expectValuesAgree(of: fixture, output: output, knownRight: [
+			"Root+SafeDI.swift": Self.forwardedNearerDeclarationKnownRight + """
+
+
+			extension Root {
+			    static func mock() -> Root {
+			        Root()
+			    }
+			}
+
+			extension B {
+			    static func mock(a: A) -> B {
+			        B(a: a, c: C(a: a))
+			    }
+			}
+			""",
+		], probes: [
+			"{ let a = Root.mock().a; return a.bBuilder.instantiate(a) }()",
+			"{ let a = Root().a; return B.mock(a: a) }()",
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_passesConstantToReceiverAsBefore_whenRootEntersCycleAtInstantiatorAndSiblingReceivesLabel() async throws {
 		let output = try await executeSafeDIToolTest(swiftFileContent: Self.receiverBesideCloserFixture(rootDeclaration: "@Instantiated let cBuilder: Instantiator<C>", mockedType: nil), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(output.generatedFiles == [
@@ -3154,6 +3292,30 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 			settingsFlowDeclaration.map { Self.type("SettingsFlow", $0, conformances: ", Flow") } ?? Self.type("SettingsFlow", conformances: ", Flow"),
 		]
 	}
+
+	/// `Root` instantiates `a: A`, whose `bBuilder: Instantiator<B>` builds a `B` that forwards `a: A` and instantiates a
+	/// `C` that receives it, with `mockedTypes` generating mocks.
+	private static func forwardedNearerDeclarationFixture(mockedTypes: Set<String>) -> [String] {
+		let attributes = { (name: String) in mockedTypes.contains(name) ? "(generateMock: true)" : "" }
+		return [
+			Self.type("Root", attributes: mockedTypes.contains("Root") ? "(isRoot: true, generateMock: true)" : "(isRoot: true)", "@Instantiated let a: A"),
+			Self.type("A", "@Instantiated let bBuilder: Instantiator<B>"),
+			Self.type("B", attributes: attributes("B"), "@Forwarded let a: A", "@Instantiated let c: C"),
+			Self.type("C", "@Received let a: A"),
+		]
+	}
+
+	/// What `forwardedNearerDeclarationFixture` builds from `Root()`, written by hand.
+	private static let forwardedNearerDeclarationKnownRight = """
+	extension Root {
+	    public convenience init() {
+	        self.init(a: A(bBuilder: Instantiator<B> { a in B(a: a, c: C(a: a)) }))
+	    }
+	}
+	"""
+
+	/// A `B` built by `forwardedNearerDeclarationFixture`'s root's `bBuilder` from the root's own `a`.
+	private static let forwardedNearerDeclarationProbe = "{ let a = Root().a; return a.bBuilder.instantiate(a) }()"
 
 	/// What the flow family with `SettingsFlow`'s `flow` built again for `LoggedInFlow` builds from `Root()`, written by hand.
 	private static let shadowedClosedOnFlowKnownRight = """
