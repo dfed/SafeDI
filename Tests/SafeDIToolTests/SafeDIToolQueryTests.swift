@@ -1688,6 +1688,9 @@ struct SafeDIToolQueryTests: ~Copyable {
 
 		Required parameters of `A.mock()` that no @Instantiable declaration removes:
 		  (none)
+
+		Defaulted parameters of `A.mock()` that no @Instantiable declaration removes:
+		  (none)
 		""")
 	}
 

@@ -2669,7 +2669,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_0D9D2BA27642383C.self
+		            _ = Service.__safeDI_Service_0D9D2BA27642383C.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_A_userService) -> AnyUserService {
 		                let analytics = scope.analytics
 		                func __safeDI_userService() -> LoopingUserService {
@@ -2693,7 +2693,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_7500534FB78C7309.self
+		            _ = Service.__safeDI_Service_7500534FB78C7309.self // If this line does not compile, compile the code SafeDI generates for module Feature into Feature: under Bazel, add Feature's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes.
 		            func __safeDI_userServiceBuilderBuilder(_ scope: Service.SafeDIScope_A_userServiceBuilder) -> ErasedInstantiator<(), AnyUserService> {
 		                let analytics = scope.analytics
 		                func __safeDI_userServiceBuilder() -> LoopingUserService {
