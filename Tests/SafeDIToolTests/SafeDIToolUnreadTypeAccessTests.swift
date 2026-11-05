@@ -2462,9 +2462,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_recordsPlainTypeUnderForcedMockCondition_whenItSharesBlockWithMockOnlyExtension() async throws {
 		// IF11b: a block that holds a `mockOnly` extension is read as if the mock condition were active, and so is the plain
-		// declaration beside it: `Theme` is `package`, which the `package` tier takes, and nothing asserts `DEBUG`. The empty
-		// line in the `public` tier's parameter list, which takes nothing, is a known leftover of how a tier renders an empty
-		// list; it compiles.
+		// declaration beside it: `Theme` is `package`, which the `package` tier takes, and nothing asserts `DEBUG`.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				Self.kit(),
@@ -2479,9 +2477,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		#expect(output.modules["Feature"]?.generatedFiles == ["Feature.swift": generatedFileHeader + Self.importLines(["Kit"]) + """
 		#if DEBUG
 		extension Screen {
-		    public static func mock(
-
-		    ) -> Screen {
+		    public static func mock() -> Screen {
 		        Screen.mock(theme: nil)
 		    }
 

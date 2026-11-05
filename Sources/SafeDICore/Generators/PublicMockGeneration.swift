@@ -1033,11 +1033,18 @@ extension ScopeGenerator {
 			) {
 				lines.append(marker)
 			}
-			lines.append("\(indent)\(attributesPrefix)\(tier == .internal ? "" : "\(tier.spelledOnGeneratedDeclaration) ")static func mock(")
-			lines.append(parameters.map { parameter in
-				"\(bodyIndent)\(parameter.name.spelledAsArgumentLabel): \(parameter.typeSource)\(parameter.defaultSource.map { " = \($0)" } ?? "")"
-			}.joined(separator: ",\n"))
-			lines.append("\(indent)) -> \(returnType) {")
+			let declarationPrefix = "\(indent)\(attributesPrefix)\(tier == .internal ? "" : "\(tier.spelledOnGeneratedDeclaration) ")static func mock("
+			// Only the `public` tier can take nothing, when every parameter is narrower: each narrower tier takes a parameter
+			// of its own level.
+			if parameters.isEmpty {
+				lines.append("\(declarationPrefix)) -> \(returnType) {")
+			} else {
+				lines.append(declarationPrefix)
+				lines.append(parameters.map { parameter in
+					"\(bodyIndent)\(parameter.name.spelledAsArgumentLabel): \(parameter.typeSource)\(parameter.defaultSource.map { " = \($0)" } ?? "")"
+				}.joined(separator: ",\n"))
+				lines.append("\(indent)) -> \(returnType) {")
+			}
 			if index == plan.tiers.count - 1 {
 				lines.append(contentsOf: narrowestBody)
 			} else {
