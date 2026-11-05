@@ -2857,9 +2857,10 @@ struct SafeDIToolGraphFuzzerTests {
 
 	// MARK: Seeds
 
-	/// The ordinary suite's batch: seeds 12, 25, 62, 99, 304, 582, 691, 705, 731, 930, 1079, 2420, 2611, and 3360, whose graphs
+	/// The ordinary suite's batch: seeds 12, 25, 62, 99, 304, 582, 691, 705, 731, 930, 2314, 2420, 2611, and 3360, whose graphs
 	/// the tool accepts, with the same results under every `GraphFuzzerRenaming`, and which between them exercise every feature
-	/// (seed 1079's graph has a required erased rename of a forwarded optional dependency; seed 25's
+	/// (seed 2314's graph has a required erased rename of an optional alias, which a type its host instantiates receives only
+	/// if available; seed 25's
 	/// graph has a chain of aliases through an `onlyIfAvailable` alias; seed 731's has a chain through an
 	/// `onlyIfAvailable` alias of a sibling's optional form; seed 2420's has such a chain through a child scope; the graphs of
 	/// seeds 582 and 705 receive a constant of a type that is not `@Instantiable` beneath the type that instantiates it;
@@ -2875,7 +2876,7 @@ struct SafeDIToolGraphFuzzerTests {
 	/// whose label the tree also receives by value, as the mocked type does (3360). It is small because compiling generated code is what the fuzzer costs; ci.yml fuzzes the whole corpus on
 	/// every pull request. Compiling the batch is one `swiftc` invocation when nothing fails, and comparing its values
 	/// one compile and one link.
-	static let smokeSeeds: [UInt64] = [12, 14, 25, 40, 62, 99, 304, 466, 582, 691, 705, 731, 930, 1_079, 2_420, 2_611, 3_360, 4_224, 4_516]
+	static let smokeSeeds: [UInt64] = [12, 14, 25, 40, 62, 99, 304, 466, 582, 691, 705, 731, 930, 2_314, 2_420, 2_611, 3_360, 4_224, 4_516]
 
 	static let smokeAndKnownIssueFixtureHash: UInt64 = 0x9E4B259D9032C592
 

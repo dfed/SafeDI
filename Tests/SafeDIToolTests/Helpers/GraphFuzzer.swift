@@ -2590,9 +2590,11 @@ enum GraphFuzzerGenerator {
 		/// Now and then gives a type of the graph an erased rename of an optional property provided above every path to
 		/// it, of a type of the graph: `@Received(fulfilledByDependencyNamed: "t3", ofType: T3?.self,
 		/// erasedToConcreteExistential: true) let anyT3OptionalAlias: AnyT3?`, required, or now and then `onlyIfAvailable`,
-		/// and usually a receive of it, required or `onlyIfAvailable`, on a type the host instantiates. The rename is `nil`
-		/// where the property is and wraps it otherwise, whatever binding the property has: a forwarded optional, an
-		/// optional alias, or, in a mock, a value the mock builds, takes as a parameter, or is forwarded. `aliasProperty`
+		/// and, in about half of the graphs that draw it, a receive of it, required or `onlyIfAvailable`, on a type of the
+		/// graph the host instantiates: a host that instantiates one, when there is one, is chosen seven times in ten, and
+		/// such a host always gets a receiver; most hosts instantiate none. The rename
+		/// is `nil` where the property is and wraps it otherwise, whatever binding the property has: a forwarded optional,
+		/// an optional alias, or, in a mock, a value the mock builds, takes as a parameter, or is forwarded. `aliasProperty`
 		/// never aliases an optional property and the passes that spell `ofType: X?.self` never erase, so no other pass
 		/// draws it. It is drawn after every other base pass, and `erasedOptionalRenameRandom` draws only for it, so every
 		/// other graph is drawn as before.
@@ -2601,62 +2603,90 @@ enum GraphFuzzerGenerator {
 			var declarations = declarations
 			let graphTypeIndexByName = Dictionary(uniqueKeysWithValues: (0..<typeCount).map { (typeName($0), $0) })
 			/// The optional properties of a type of the graph, each the only type its label is provided with, that are
-			/// provided above every path to the type at `typeIndex` and that it does not declare a property under.
-			func candidates(forHostTypeIndex typeIndex: Int, hostIndex: Int) -> [ProvidedProperty] {
-				propertiesProvidedAboveEveryPath(to: typeIndex).filter { candidate in
-					candidate.isOptional
-						&& graphTypeIndexByName[String(candidate.type.dropLast())] != nil
-						&& provided.allSatisfy { $0.label != candidate.label || $0.type == candidate.type }
-						&& !declarations[hostIndex].properties.contains { $0.label == candidate.label }
+			/// provided above every path to the type at `typeIndex` and that it does not declare a property under, each with
+			/// the index of its type.
+			func candidates(forHostTypeIndex typeIndex: Int, hostIndex: Int) -> [ErasedOptionalRenameSource] {
+				propertiesProvidedAboveEveryPath(to: typeIndex).compactMap { candidate -> ErasedOptionalRenameSource? in
+					guard candidate.isOptional,
+					      let sourceTypeIndex = graphTypeIndexByName[String(candidate.type.dropLast())],
+					      provided.allSatisfy({ $0.label != candidate.label || $0.type == candidate.type }),
+					      !declarations[hostIndex].properties.contains(where: { $0.label == candidate.label })
+					else { return nil }
+					return ErasedOptionalRenameSource(property: candidate, typeIndex: sourceTypeIndex)
 				}
+			}
+			/// The indices of the declarations of the types of the graph, other than itself, that the type at `hostIndex`
+			/// instantiates.
+			func receiverIndices(ofHostAt hostIndex: Int) -> [Int] {
+				declarations[hostIndex].properties
+					.filter { $0.attribute.hasPrefix("@Instantiated") }
+					.map(Self.builtTypeName(of:))
+					.filter { $0 != declarations[hostIndex].name && graphTypeIndexByName[$0] != nil }
+					.compactMap { name in declarations.firstIndex { $0.name == name } }
 			}
 			// The host: a type of the graph that has such a property, chosen at random among those that have one and whose
 			// code is generated – a type a root reaches, or a type whose mock is generated – so that the rename is built.
-			let hosts = (0..<typeCount).compactMap { typeIndex -> (typeIndex: Int, index: Int, candidates: [ProvidedProperty])? in
+			let hosts = (0..<typeCount).compactMap { typeIndex -> ErasedOptionalRenameHost? in
 				guard let index = declarations.firstIndex(where: { $0.name == typeName(typeIndex) }),
 				      reachableFromRoots.contains(typeIndex) || declarations[index].instantiableArguments.contains("generateMock: true")
 				else { return nil }
-				let candidates = candidates(forHostTypeIndex: typeIndex, hostIndex: index)
-				return candidates.isEmpty ? nil : (typeIndex, index, candidates)
+				let sources = candidates(forHostTypeIndex: typeIndex, hostIndex: index)
+				return sources.isEmpty ? nil : ErasedOptionalRenameHost(
+					typeIndex: typeIndex,
+					index: index,
+					sources: sources,
+					receiverIndices: receiverIndices(ofHostAt: index),
+				)
 			}
 			guard !hosts.isEmpty else { return declarations }
-			let host = erasedOptionalRenameRandom.element(of: hosts)
-			let hostTypeIndex = host.typeIndex
-			let hostIndex = host.index
-			let source = erasedOptionalRenameRandom.element(of: host.candidates)
-			guard let sourceTypeIndex = graphTypeIndexByName[String(source.type.dropLast())] else { return declarations }
-			let label = "anyT\(sourceTypeIndex)OptionalAlias"
-			guard !declarations[hostIndex].properties.contains(where: { $0.label == label }) else { return declarations }
+			// Seven times in ten, a host that instantiates a type of the graph, when one does, so that the rename is received
+			// beneath it.
+			let hostsWithReceivers = hosts.filter { !$0.receiverIndices.isEmpty }
+			let host: ErasedOptionalRenameHost = if !hostsWithReceivers.isEmpty, erasedOptionalRenameRandom.percentChance(70) {
+				erasedOptionalRenameRandom.element(of: hostsWithReceivers)
+			} else {
+				erasedOptionalRenameRandom.element(of: hosts)
+			}
+			let source = erasedOptionalRenameRandom.element(of: host.sources)
+			let label = "anyT\(source.typeIndex)OptionalAlias"
 			let isOnlyIfAvailable = erasedOptionalRenameRandom.percentChance(30)
 			let alias = PropertyDeclaration(
-				attribute: "@Received(fulfilledByDependencyNamed: \"\(source.label)\", ofType: \(source.type).self, erasedToConcreteExistential: true\(isOnlyIfAvailable ? ", onlyIfAvailable: true" : ""))",
+				attribute: "@Received(fulfilledByDependencyNamed: \"\(source.property.label)\", ofType: \(source.property.type).self, erasedToConcreteExistential: true\(isOnlyIfAvailable ? ", onlyIfAvailable: true" : ""))",
 				label: label,
-				type: erasedTypeName(sourceTypeIndex) + "?",
+				type: erasedTypeName(source.typeIndex) + "?",
 			)
-			declarations[hostIndex].properties.append(alias)
+			declarations[host.index].properties.append(alias)
 			if !isOnlyIfAvailable {
-				recordRequirement(of: source, receiverIndex: hostTypeIndex)
+				recordRequirement(of: source.property, receiverIndex: host.typeIndex)
 			}
-			// Usually, a receive of the rename on a type of the graph the host instantiates, other than itself.
-			let receiverIndices = declarations[hostIndex].properties
-				.filter { $0.attribute.hasPrefix("@Instantiated") }
-				.map(Self.builtTypeName(of:))
-				.filter { $0 != declarations[hostIndex].name && graphTypeIndexByName[$0] != nil }
-				.compactMap { name in declarations.firstIndex { $0.name == name } }
-			if erasedOptionalRenameRandom.percentChance(70), !receiverIndices.isEmpty {
-				let receiverIndex = erasedOptionalRenameRandom.element(of: receiverIndices)
-				if !declarations[receiverIndex].properties.contains(where: { $0.label == label }) {
-					declarations[receiverIndex].properties.append(PropertyDeclaration(
-						attribute: erasedOptionalRenameRandom.percentChance(70) ? "@Received" : "@Received(onlyIfAvailable: true)",
-						label: label,
-						type: alias.type,
-					))
-				}
-			}
+			// A receive of the rename on a type of the graph the host instantiates, other than itself.
+			guard !host.receiverIndices.isEmpty else { return declarations }
+			// No type declares the label yet: only this pass, which runs once, spells `OptionalAlias`.
+			let receiverIndex = erasedOptionalRenameRandom.element(of: host.receiverIndices)
+			declarations[receiverIndex].properties.append(PropertyDeclaration(
+				attribute: erasedOptionalRenameRandom.percentChance(70) ? "@Received" : "@Received(onlyIfAvailable: true)",
+				label: label,
+				type: alias.type,
+			))
 			return declarations
 		}
 
 		private static let erasedOptionalRenameRandomSeedMask: UInt64 = 0x6572617365644F70
+
+		/// An optional property `addingErasedRenamesOfOptionalDependencies` can rename, with the index of its type.
+		private struct ErasedOptionalRenameSource {
+			let property: ProvidedProperty
+			let typeIndex: Int
+		}
+
+		/// A type `addingErasedRenamesOfOptionalDependencies` can give the rename: its type index, the index of its
+		/// declaration, the properties it can rename, and the declarations of the types of the graph it instantiates.
+		private struct ErasedOptionalRenameHost {
+			let typeIndex: Int
+			let index: Int
+			let sources: [ErasedOptionalRenameSource]
+			let receiverIndices: [Int]
+		}
 
 		/// Now and then adds a chain of aliases through an `onlyIfAvailable` alias to a type of the graph: a second
 		/// alias, required or `onlyIfAvailable`, of an `onlyIfAvailable` alias the type declares (or is given here, of a
