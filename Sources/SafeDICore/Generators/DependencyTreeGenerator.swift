@@ -257,7 +257,11 @@ public actor DependencyTreeGenerator {
 		additionalMocksToGenerate: Set<String> = [],
 	) async throws -> MockGenerationResult {
 		var receivedPropertiesCache = ReceivedPropertiesCache()
-		let mockScopes = try await mockScopes(additionalMocksToGenerate: additionalMocksToGenerate, receivedPropertiesCache: &receivedPropertiesCache)
+		let mockScopes = try await mockScopes(
+			additionalMocksToGenerate: additionalMocksToGenerate,
+			mockEmittingModule: emittingModuleToCheck,
+			receivedPropertiesCache: &receivedPropertiesCache,
+		)
 		let typeDescriptionToScopeMap = mockScopes.typeDescriptionToScopeMap
 		let flatParameterMockDefaults = mockScopes.flatParameterMockDefaults
 
@@ -354,9 +358,10 @@ public actor DependencyTreeGenerator {
 			throw error
 		}
 		// From here on, the module's mock roots are handled together. These passes gate emitting the module's
-		// mocks and read nothing a single root's report needs, so `requirements(forTypeNamed:generatesMock:)`
-		// deliberately does not run them. A check that decides whether one root can be generated belongs in
-		// `createMockRoot`, which that method and the loop above share.
+		// mocks and read nothing a single root's report needs, so
+		// `requirements(forTypeNamed:generatesMock:mockEmittingModule:)` deliberately does not run them. A check that
+		// decides whether one root can be generated belongs in `createMockRoot`, which that method and the loop above
+		// share.
 		try await validateSendableBuildersCaptureNoNonSendableWrapper(inTreesRootedAt: mockRoots)
 
 		// Compute the global cycle edges across all mock-reachable types. Per-tree
@@ -439,8 +444,8 @@ public actor DependencyTreeGenerator {
 			return results
 		}
 
-		// The second whole-module gate, not run by `requirements(forTypeNamed:generatesMock:)`; see the note above
-		// `validateSendableBuildersCaptureNoNonSendableWrapper`.
+		// The second whole-module gate, not run by `requirements(forTypeNamed:generatesMock:mockEmittingModule:)`; see
+		// the note above `validateSendableBuildersCaptureNoNonSendableWrapper`.
 		let nodesReadingConfiguration = try await validateConfigurationsAreBuiltOneWay(mockRoots: mockRoots, cycleEdges: cycleEdges)
 
 		let rootedTypeNames = Set(generatedRoots.map(\.root.typeDescription.asSource))
@@ -595,12 +600,21 @@ public actor DependencyTreeGenerator {
 	/// each `SafeDIMockConfiguration` is built one way – gate emitting the module's mocks and change nothing in
 	/// the report, so they are deliberately not run here: a module they reject has no generated mock for the
 	/// report to disagree with, and `generate` reports them with their fix-its.
-	/// - Parameter generatesMock: Whether `mock()` is generated for the type, so that a hand-written method named
-	///   `mock` is rejected as `generateMockCode` rejects it. Otherwise such a method is the type's mock, which
-	///   the root is built with.
-	public func requirements(forTypeNamed typeName: String, generatesMock: Bool) async throws -> TypeRequirements? {
+	/// - Parameters:
+	///   - generatesMock: Whether `mock()` is generated for the type, so that a hand-written method named `mock` is
+	///     rejected as `generateMockCode` rejects it. Otherwise such a method is the type's mock, which the root is
+	///     built with.
+	///   - mockEmittingModule: The module that generates the type's mock, whose access to each hand-written mock
+	///     decides, as in that module's `generateMockCode`, which flat parameters of `mock()` default to one
+	///     (`flatParameterMockDefaults(in:emittingModule:)`), or `nil` when no one module is known to generate it: every
+	///     hand-written mock is then taken to be callable. No other access is checked.
+	public func requirements(forTypeNamed typeName: String, generatesMock: Bool, mockEmittingModule: EmittingModule?) async throws -> TypeRequirements? {
 		var receivedPropertiesCache = ReceivedPropertiesCache()
-		let mockScopes = try await mockScopes(additionalMocksToGenerate: [typeName], receivedPropertiesCache: &receivedPropertiesCache)
+		let mockScopes = try await mockScopes(
+			additionalMocksToGenerate: [typeName],
+			mockEmittingModule: constructsOnlyPublicDeclarations ? nil : mockEmittingModule,
+			receivedPropertiesCache: &receivedPropertiesCache,
+		)
 		// The type's own entry in the scope map, which `generateMockCode` builds each mock root from. The name is
 		// matched as `additionalMocksToGenerate` matches it, and the entry is chosen by type, never by map order.
 		guard let (concreteType, scope) = mockScopes.typeDescriptionToScopeMap
@@ -617,7 +631,8 @@ public actor DependencyTreeGenerator {
 			// exists only because the type is listed, so removing it from the list is also a fix.
 			generatedMockReason: generatesMock ? (instantiable.generatesMock ? .generateMock : .additionalMocksToGenerate) : nil,
 			mockScopes: mockScopes,
-			// The query reports what a type needs whichever module assembles it, so it checks no module's access.
+			// The query reports what a type needs, not what keeps a module from compiling its mock, so it checks no
+			// module's access here; `mockEmittingModule` decides only which flat parameters default.
 			emittingModule: nil,
 			receivedPropertiesCache: &receivedPropertiesCache,
 			childrenRequiringEachOtherValidation: &childrenRequiringEachOtherValidation,
@@ -795,7 +810,8 @@ public actor DependencyTreeGenerator {
 		/// `@Instantiated` property's type has no declaration (`createMockTypeDescriptionToScopeMapping`). `nil` when the
 		/// module declares no public mock.
 		var publicMockTypeDescriptionToScopeMap: [TypeDescription: Scope]?
-		/// The hand-written mock a flat parameter of `mock()` of each type defaults to (`flatParameterMockDefaults(in:)`).
+		/// The hand-written mock a flat parameter of `mock()` of each type defaults to
+		/// (`flatParameterMockDefaults(in:emittingModule:)`).
 		let flatParameterMockDefaults: [TypeDescription: ScopeGenerator.FlatParameterMockDefault]
 		/// Where each concrete type's hand-written methods named `mock` are declared.
 		let handWrittenMockLocationsByConcreteType: [TypeDescription: Set<Dependency.DeclarationLocation?>]
@@ -808,9 +824,13 @@ public actor DependencyTreeGenerator {
 	}
 
 	/// Builds the mock scope map and validates it, and collects what every mock root is built with.
-	/// - Parameter additionalMocksToGenerate: The names of the types whose mocks are generated because they are listed.
+	/// - Parameters:
+	///   - additionalMocksToGenerate: The names of the types whose mocks are generated because they are listed.
+	///   - mockEmittingModule: The module the mocks compile in, whose access to each hand-written mock decides which
+	///     flat parameters default to one, or `nil` when no access needs checking (`emittingModuleToCheck`).
 	private func mockScopes(
 		additionalMocksToGenerate: Set<String>,
+		mockEmittingModule: EmittingModule?,
 		receivedPropertiesCache: inout ReceivedPropertiesCache,
 	) async throws -> MockScopes {
 		// Build a map of erased wrapper types → concrete fulfilling types.
@@ -914,7 +934,7 @@ public actor DependencyTreeGenerator {
 			publicMockTypeDescriptionToScopeMap: typeDescriptionToFulfillingInstantiableMap.values.contains(where: { $0.generateMock == .public })
 				? createMockTypeDescriptionToScopeMapping(publicMockCalls: publicMockCalls, buildsHoles: true)
 				: nil,
-			flatParameterMockDefaults: flatParameterMockDefaults(in: typeDescriptionToScopeMap),
+			flatParameterMockDefaults: flatParameterMockDefaults(in: typeDescriptionToScopeMap, emittingModule: mockEmittingModule),
 			handWrittenMockLocationsByConcreteType: handWrittenMockLocationsByConcreteType,
 		)
 	}
@@ -922,11 +942,13 @@ public actor DependencyTreeGenerator {
 	/// The hand-written mock a flat parameter of `mock()` – a `@Forwarded` property of the mocked type, or a received
 	/// dependency the mock cannot build – defaults to, by the parameter's type: the one a mock tree builds a property of
 	/// the type with, the scope map's hand-written mock for the type (the type's own, or a `mockOnly` declaration's that
-	/// holds the slot), when it takes no required argument and this module can call it, which is the check of every
+	/// holds the slot), when it takes no required argument and `emittingModule` can call it, which is the check of every
 	/// construction of a mock (`inaccessibleConstructions`), asked rather than reported. Another module's public mock that
 	/// a tree calls in place of building the type is not hand-written, so no parameter defaults to it.
-	/// - Parameter typeDescriptionToScopeMap: The mock scope map.
-	private func flatParameterMockDefaults(in typeDescriptionToScopeMap: [TypeDescription: Scope]) -> [TypeDescription: ScopeGenerator.FlatParameterMockDefault] {
+	/// - Parameters:
+	///   - typeDescriptionToScopeMap: The mock scope map.
+	///   - emittingModule: The module the mock compiles in, or `nil` when no construction needs checking.
+	private func flatParameterMockDefaults(in typeDescriptionToScopeMap: [TypeDescription: Scope], emittingModule: EmittingModule?) -> [TypeDescription: ScopeGenerator.FlatParameterMockDefault] {
 		var flatParameterMockDefaults = [TypeDescription: ScopeGenerator.FlatParameterMockDefault]()
 		// Each type's default is decided by its own scope, so the order of the map decides nothing.
 		for (type, scope) in typeDescriptionToScopeMap {
@@ -935,7 +957,7 @@ public actor DependencyTreeGenerator {
 			      let mockInitializer = instantiable.mockInitializer,
 			      mockInitializer.arguments.allSatisfy(\.hasDefaultValue),
 			      instantiable.mockReturnTypeIsCompatible(withPropertyType: type),
-			      canConstructWithMockMethod(instantiable)
+			      canConstructWithMockMethod(instantiable, from: emittingModule)
 			else { continue }
 			flatParameterMockDefaults[type] = ScopeGenerator.FlatParameterMockDefault(
 				concreteType: instantiable.concreteInstantiable,
@@ -947,10 +969,10 @@ public actor DependencyTreeGenerator {
 		return flatParameterMockDefaults
 	}
 
-	/// Whether the module this generator emits code for can construct `instantiable` with its hand-written mock method,
-	/// as `inaccessibleConstructions` judges every construction: always, when no construction needs checking.
-	private func canConstructWithMockMethod(_ instantiable: Instantiable) -> Bool {
-		guard let emittingModule = emittingModuleToCheck else { return true }
+	/// Whether `emittingModule` can construct `instantiable` with its hand-written mock method, as
+	/// `inaccessibleConstructions` judges every construction: always, when no construction needs checking.
+	private func canConstructWithMockMethod(_ instantiable: Instantiable, from emittingModule: EmittingModule?) -> Bool {
+		guard let emittingModule else { return true }
 		return Self.inaccessibleConstructions(
 			[Construction(instantiable: instantiable, usesMockMethod: true, referenceLocation: nil, isSeamLeaf: false, extendedTypes: extendedTypeDeclarations)],
 			from: emittingModule,
@@ -983,15 +1005,17 @@ public actor DependencyTreeGenerator {
 
 	/// The mock root of `instantiable`, the instantiable `mockRootInstantiable(for:scope:)` returned for `scope`,
 	/// once the type is known to be one a mock can be generated for. Every check that decides whether one mock
-	/// root can be generated belongs here, so that `generateMockCode` and `requirements(forTypeNamed:generatesMock:)`
-	/// run the same ones; a pass that needs every mock root at once goes after `generateMockCode`'s loop instead.
+	/// root can be generated belongs here, so that `generateMockCode` and
+	/// `requirements(forTypeNamed:generatesMock:mockEmittingModule:)` run the same ones; a pass that needs every mock
+	/// root at once goes after `generateMockCode`'s loop instead.
 	/// - Parameters:
 	///   - generatedMockReason: Why the project generates `mock()` for the type, or `nil` when it does not, so that a
 	///     hand-written method named `mock` is the type's mock rather than a collision.
 	///   - emittingModule: The module the mock's code compiles in, whose access to each type the mock constructs is
-	///     checked, or `nil` when no module emits the mock: `requirements(forTypeNamed:generatesMock:)` reports what
-	///     a type needs whichever module assembles it, so it checks no access. This is the one check of a single
-	///     mock root that the two callers do not share.
+	///     checked, or `nil` when no module emits the mock: `requirements(forTypeNamed:generatesMock:mockEmittingModule:)`
+	///     reports what a type needs, not what keeps one module from compiling its mock, so it checks no access. This is
+	///     the one check of a single mock root that the two callers do not share; the access that decides which flat
+	///     parameters default is asked of `mockScopes` instead, by both.
 	///   - promotedScopesValidatedForHiddenReceives: See `createMockRootScopeGenerator`.
 	private func createMockRoot(
 		for instantiable: Instantiable,
@@ -3591,7 +3615,7 @@ public actor DependencyTreeGenerator {
 		if let memoizedPublicMockPlanScopes {
 			mockScopes = memoizedPublicMockPlanScopes
 		} else {
-			mockScopes = try await self.mockScopes(additionalMocksToGenerate: [], receivedPropertiesCache: &receivedPropertiesCache)
+			mockScopes = try await self.mockScopes(additionalMocksToGenerate: [], mockEmittingModule: emittingModuleToCheck, receivedPropertiesCache: &receivedPropertiesCache)
 			memoizedPublicMockPlanScopes = mockScopes
 		}
 		let rootMockScopes = mockScopes.forMockRoot(declaredInstantiable)
@@ -5703,8 +5727,8 @@ public actor DependencyTreeGenerator {
 			promotedScopesValidatedForHiddenReceives.formUnion(promotedScopeIdentifiersToValidate)
 		}
 
-		// `mock()` defaults a flat parameter only to a hand-written mock this module can call (`flatParameterMockDefaults(in:)`),
-		// so the defaults construct nothing that is checked here.
+		// `mock()` defaults a flat parameter only to a hand-written mock this module can call
+		// (`flatParameterMockDefaults(in:emittingModule:)`), so the defaults construct nothing that is checked here.
 		if let emittingModule {
 			// The mock of a type declared in this module refers to its tree from the type's declaration; the mock of a
 			// type this module lists in `additionalMocksToGenerate`, from the `#SafeDIConfiguration` that lists it.

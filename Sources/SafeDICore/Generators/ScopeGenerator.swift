@@ -3418,7 +3418,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// The hand-written mock a flat parameter of `mock()` – a `@Forwarded` property of the mocked type, or a received
 	/// dependency the mock cannot build – defaults to: the one the mock scope map builds a property of the parameter's
 	/// type with, when it takes no required argument and the module generating the mock can call it
-	/// (`DependencyTreeGenerator.flatParameterMockDefaults(in:)`).
+	/// (`DependencyTreeGenerator.flatParameterMockDefaults(in:emittingModule:)`).
 	struct FlatParameterMockDefault: Sendable {
 		/// The concrete type whose hand-written mock the default calls.
 		let concreteType: TypeDescription

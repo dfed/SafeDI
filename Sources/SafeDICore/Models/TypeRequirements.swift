@@ -23,7 +23,7 @@
 /// has to pass. `SafeDITool query` reports it twice, over the declarations with every hand-written mock removed
 /// for what the type needs in production, and over every declaration for what its mock needs, so that a project
 /// can be assembled from exactly the modules one type needs. See
-/// `DependencyTreeGenerator.requirements(forTypeNamed:generatesMock:)`.
+/// `DependencyTreeGenerator.requirements(forTypeNamed:generatesMock:mockEmittingModule:)`.
 public struct TypeRequirements: Equatable, Sendable {
 	// MARK: Initialization
 

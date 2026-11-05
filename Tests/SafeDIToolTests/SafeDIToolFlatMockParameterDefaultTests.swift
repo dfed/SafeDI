@@ -952,6 +952,53 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_reportsForwardedProtocolAsRequired_whenFakesMockIsInternalToAnotherModule() async throws {
+		// `FeatureModule` generates the mock and cannot call the fake's `internal` mock, so, as `generate` emits it, the
+		// mock takes `service` without a default and calls nothing `TestSupport` declares.
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Screen",
+			modules: [
+				QueryTestModule("FeatureModule", [Self.serviceProtocol, Self.screenForwarding("Service")]),
+				QueryTestModule("TestSupport", [Self.fakeService(mockModifier: "")]),
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.result.mock?.generatedIn == ["FeatureModule"])
+		#expect(output.result.mock?.forwardedParameters == [
+			TypeReport.ForwardedParameter(label: "service", type: "Service", defaultExpression: nil),
+		])
+		#expect(output.result.mock?.modules == [
+			output.module("FeatureModule", [
+				output.instantiable("Screen", in: "FeatureModule", file: 1),
+			]),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func query_reportsForwardedProtocolAsDefaulted_whenInternalFakeIsInModuleThatListsTheType() async throws {
+		// `AppModule` generates the mock, because its configuration lists `Screen`, and declares the fake, so it can call
+		// the fake's `internal` mock.
+		let output = try await executeSafeDIToolQuery(
+			typeName: "Screen",
+			modules: [
+				QueryTestModule("AppModule", [Self.fakeService(mockModifier: "")], swiftFileContentByFilePath: [
+					"SafeDIConfiguration.swift": #"#SafeDIConfiguration(additionalMocksToGenerate: ["Screen"])"#,
+				]),
+				QueryTestModule("FeatureModule", [Self.serviceProtocol, Self.screenForwarding("Service", generateMock: false)]),
+			],
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.result.mock?.generatedIn == ["AppModule"])
+		#expect(output.result.mock?.forwardedParameters == [
+			TypeReport.ForwardedParameter(label: "service", type: "Service", defaultExpression: "FakeService.mock()"),
+		])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func query_reportsReceivedTypeWithForwardedPropertiesAsDefaulted_whenItsHandWrittenMockDefaultsIt() async throws {
 		let output = try await executeSafeDIToolQuery(
 			typeName: "Consumer",
@@ -1068,12 +1115,18 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 	private static let serviceProtocol = "public protocol Service {}"
 
 	/// A `mockOnly` fake that fulfills `Service`, whose mock takes nothing.
-	private static let fakeService = """
-	@Instantiable(fulfillingAdditionalTypes: [Service.self], mockOnly: true)
-	public final class FakeService: Service {
-	    public static func mock() -> FakeService { FakeService() }
+	private static let fakeService = fakeService(mockModifier: "public ")
+
+	/// A `mockOnly` fake that fulfills `Service`, whose mock takes nothing and spells `mockModifier` (an empty string
+	/// for `internal`).
+	private static func fakeService(mockModifier: String) -> String {
+		"""
+		@Instantiable(fulfillingAdditionalTypes: [Service.self], mockOnly: true)
+		public final class FakeService: Service {
+		    \(mockModifier)static func mock() -> FakeService { FakeService() }
+		}
+		"""
 	}
-	"""
 
 	/// A production conformer of `Service`, with `mock` in its body when given one.
 	private static func defaultService(mock: String?) -> String {
@@ -1085,10 +1138,10 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		"""
 	}
 
-	/// A type with a generated mock that forwards `service` of `type` and stores it.
-	private static func screenForwarding(_ type: String) -> String {
+	/// A type that forwards `service` of `type` and stores it, with a generated mock unless `generateMock` is `false`.
+	private static func screenForwarding(_ type: String, generateMock: Bool = true) -> String {
 		"""
-		@Instantiable(generateMock: true)
+		@Instantiable\(generateMock ? "(generateMock: true)" : "")
 		public final class Screen: Instantiable {
 		    public init(service: \(type)) {
 		        self.service = service

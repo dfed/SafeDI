@@ -146,10 +146,22 @@ struct QueryNeeds: AsyncParsableCommand {
 			// A hand-written mock is the root's mock only when the project generates none; otherwise a method named
 			// `mock` is rejected, as `generate` rejects it.
 			let generatesMock = mockKind != .handWritten
+			// The module that generates the mock decides which hand-written mocks it can call, and so which of the mock's
+			// flat parameters default to one, as its run of `generate` decides it. Several modules can each generate a
+			// mock of their own, and a mock that would be generated has no module yet: then every hand-written mock is
+			// taken to be callable.
+			let mockEmittingModule: DependencyTreeGenerator.EmittingModule? = if mockKind == .generated,
+			                                                                     generatingModuleNames.count == 1,
+			                                                                     let generatingModule = parsedModules.first(where: { $0.includedModule.name == generatingModuleNames[0] })
+			{
+				generatingModule.emittingModule(attributionsByFilePath: attributionsByFilePath)
+			} else {
+				nil
+			}
 			// What the type's mock needs, or would need: built from every declaration.
 			let mockReport: TypeReport.MockReport
 			if let mockKind {
-				guard let mockRequirements = try await mockGenerator.requirements(forTypeNamed: typeName, generatesMock: generatesMock) else {
+				guard let mockRequirements = try await mockGenerator.requirements(forTypeNamed: typeName, generatesMock: generatesMock, mockEmittingModule: mockEmittingModule) else {
 					let fulfilledBy = Set(typeDescriptionToFulfillingInstantiableMap.filter { $0.key.asSource == typeName }.map(\.value.concreteInstantiable.asSource)).sorted()
 					throw QueryError.noInstantiableNamed(
 						typeName,
@@ -170,7 +182,7 @@ struct QueryNeeds: AsyncParsableCommand {
 					reason: "`\(typeName)` has no mock: no module generates `\(typeName).\(InstantiableVisitor.mockMethodName)()`, and a hand-written `\(typeName).\(InstantiableVisitor.mockMethodName)` that returns another type would collide with a generated one, so no #\(SafeDIConfigurationVisitor.macroName) can list `\(typeName)` in `additionalMocksToGenerate`.",
 				))
 			}
-			guard let productionRequirements = try await productionGenerator.requirements(forTypeNamed: typeName, generatesMock: generatesMock) else {
+			guard let productionRequirements = try await productionGenerator.requirements(forTypeNamed: typeName, generatesMock: generatesMock, mockEmittingModule: nil) else {
 				throw QueryError.onlyMockOnlyDeclarationNamed(typeName)
 			}
 			typeReports.append(TypeReport(productionRequirements, mockReport: mockReport, attributionsByFilePath: attributionsByFilePath))
@@ -339,6 +351,7 @@ struct ParsedQueryModule {
 				activeCompilationConditions: activeCompilationConditions,
 			)
 			// Every file the directory holds belongs to the module, whose package the query does not know.
+			identity = ModuleIdentity(moduleName: includedModule.name, packageName: nil)
 			moduleInfo = parsed.module.moduleInfo.declaringEveryInstantiable(in: DeclaringModule(moduleName: includedModule.name, packageName: nil))
 			configuration = parsed.module.configuration
 			// Each file is reported under the `--include` argument that named the module, as that argument was given.
@@ -366,7 +379,9 @@ struct ParsedQueryModule {
 				throw QueryError.moduleInfoNotReadable(path: path, reason: "\(error) \(BinaryFile.unreadableFileExplanation)")
 			}
 			// Every declaration the file holds belongs to the module, named, with its package, as the build that wrote the
-			// file named them, if that build did. The query checks no access, so it only carries them.
+			// file named them, if that build did. They decide only which hand-written mocks a module that generates a
+			// mock can call.
+			identity = ModuleIdentity(moduleName: readModuleInfo.moduleName ?? includedModule.name, packageName: readModuleInfo.packageName)
 			moduleInfo = readModuleInfo.declaringEveryInstantiable(in: DeclaringModule(
 				moduleName: readModuleInfo.moduleName ?? includedModule.name,
 				packageName: readModuleInfo.packageName,
@@ -386,10 +401,26 @@ struct ParsedQueryModule {
 	}
 
 	let includedModule: IncludedModule
+	/// The module as its declarations record it: named, and in a package only when a module info file records one.
+	let identity: ModuleIdentity
 	let moduleInfo: ModuleInfo
 	let configuration: SafeDIConfiguration?
 	/// The files whose declarations the module holds, each with how the report attributes it, sorted by path.
 	let fileAttributions: [(filePath: String, attribution: FileAttribution)]
+
+	/// The module as the code it generates compiles in, as far as the query knows it: its own files are those the query
+	/// attributes to it. Only whether it can call a hand-written mock is asked of it, so the parts of a run that report an
+	/// error are left empty.
+	func emittingModule(attributionsByFilePath: [String: FileAttribution]) -> DependencyTreeGenerator.EmittingModule {
+		let moduleName = includedModule.name
+		return DependencyTreeGenerator.EmittingModule(
+			identity: identity,
+			isOwnFile: { filePath in attributionsByFilePath[filePath]?.moduleName == moduleName },
+			isReadableFile: { _ in false },
+			additionalMocksToGenerateLocation: nil,
+			moduleNamesReadByRunOfModule: { _ in [] },
+		)
+	}
 }
 
 /// The module a file the query read belongs to, and how the report spells the file.
