@@ -220,6 +220,16 @@ public struct InstantiableMacro: MemberMacro {
 					changes: Self.removeArgument(labeled: "isRoot", from: instantiableMacro, on: declaration),
 				))
 			}
+			if isMockOnly,
+			   let instantiableMacro = declaration.attributes.instantiableMacro,
+			   instantiableMacro.mockAttributes != nil
+			{
+				context.diagnose(Diagnostic(
+					node: Syntax(instantiableMacro),
+					error: FixableInstantiableError.mockAttributesOnMockOnly,
+					changes: Self.removeArgument(labeled: "mockAttributes", from: instantiableMacro, on: declaration),
+				))
+			}
 			if visitor.generatesDependencyTree, visitor.isRoot,
 			   let instantiableMacro = declaration.attributes.instantiableMacro
 			{
@@ -897,6 +907,16 @@ public struct InstantiableMacro: MemberMacro {
 					node: Syntax(instantiableMacro),
 					error: FixableInstantiableError.mockOnlyWithIsRoot,
 					changes: Self.removeArgument(labeled: "isRoot", from: instantiableMacro, on: declaration),
+				))
+			}
+			if isMockOnly,
+			   let instantiableMacro = declaration.attributes.instantiableMacro,
+			   instantiableMacro.mockAttributes != nil
+			{
+				context.diagnose(Diagnostic(
+					node: Syntax(instantiableMacro),
+					error: FixableInstantiableError.mockAttributesOnMockOnly,
+					changes: Self.removeArgument(labeled: "mockAttributes", from: instantiableMacro, on: declaration),
 				))
 			}
 			if isMockOnly, visitor.mockFunctionSyntax == nil {
@@ -2014,7 +2034,7 @@ public struct InstantiableMacro: MemberMacro {
 		on declaration: some SyntaxProtocol,
 	) -> [FixIt.Change] {
 		var fixedAttribute = attribute
-		// safedi-source-rule: allow forceUnwrap — callers remove `generateMock` or `isRoot` only from an attribute whose `generateMockValue` or `isRootValue` read it from labeled arguments.
+		// safedi-source-rule: allow forceUnwrap — callers remove an argument only from an attribute whose accessor for its label (`generateMockValue`, `isRootValue`, `generateDependencyTree`, `mockAttributes`) read it from labeled arguments.
 		let arguments = LabeledExprListSyntax(attribute.arguments!)!
 		// safedi-source-rule: allow forceUnwrap — the arguments hold `label`, for the reason above.
 		let targetIndex = arguments.firstIndex(where: { $0.label?.text == label })!

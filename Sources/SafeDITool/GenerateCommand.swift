@@ -525,6 +525,8 @@ struct Generate: AsyncParsableCommand {
 					fulfilledBy: typeDescriptionToFulfillingInstantiableMap,
 					orDeclaredAmong: Set(dependentModuleInfo.flatMap(\.instantiableTypeNamesInAnyClause) + module.instantiableTypeNamesInAnyClause),
 				)
+				// A type whose only declaration is `mockOnly` has its mock already: the hand-written one.
+				try sourceConfiguration?.validateAdditionalMocksToGenerate(namingMockOnlyDeclarationsIn: typeDescriptionToFulfillingInstantiableMap)
 				// A type another module generates a public mock for is called there, never generated here.
 				try sourceConfiguration?.validateAdditionalMocksToGenerate(
 					namingPublicMocksOf: typeDescriptionToFulfillingInstantiableMap.values.filter { instantiable in
@@ -1602,6 +1604,31 @@ extension SafeDIConfiguration {
 }
 
 extension SafeDIConfiguration {
+	/// Reports each `additionalMocksToGenerate` entry that names a type whose every declaration SafeDI read is `mockOnly`,
+	/// in name order: that declaration's hand-written mock is the type's mock, so a `mock()` generated for it could only
+	/// call the hand-written one. A production declaration that a `mockOnly` one merges into, under any of the type's
+	/// keys, is not `mockOnly`, so such a type's mock is generated as before.
+	func validateAdditionalMocksToGenerate(namingMockOnlyDeclarationsIn typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]) throws(AdditionalMocksNameMockOnlyDeclarationError) {
+		let listedTypeNames = Set(additionalMocksToGenerate)
+		var declarationsByTypeName = [String: [Instantiable]]()
+		for instantiable in typeDescriptionToFulfillingInstantiableMap.values where listedTypeNames.contains(instantiable.concreteInstantiable.asSource) {
+			declarationsByTypeName[instantiable.concreteInstantiable.asSource, default: []].append(instantiable)
+		}
+		// The declarations of one type under its several keys are one declaration, so they name one mock method.
+		let mockMethodNameByTypeName = declarationsByTypeName.compactMapValues { declarations in
+			declarations.allSatisfy(\.mockOnly) ? declarations.compactMap(\.customMockName).min() ?? InstantiableVisitor.mockMethodName : nil
+		}
+		guard !mockMethodNameByTypeName.isEmpty else { return }
+		throw AdditionalMocksNameMockOnlyDeclarationError(sourceDiagnostics: mockMethodNameByTypeName.keys.sorted().map { typeName in
+			let mockMethodName = mockMethodNameByTypeName[typeName, default: InstantiableVisitor.mockMethodName]
+			return SourceDiagnostic(
+				severity: .error,
+				location: declarationLocation,
+				message: "This #\(SafeDIConfigurationVisitor.macroName) lists `\(typeName)` in \(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel), but the only @\(InstantiableVisitor.macroName) declaration of `\(typeName)` SafeDI read is `mockOnly: true`, so its hand-written `\(mockMethodName)()` is already its mock. Remove `\(typeName)` from \(SafeDIConfigurationVisitor.additionalMocksToGenerateArgumentLabel) and call `\(typeName).\(mockMethodName)()`; or, if a production @\(InstantiableVisitor.macroName) declaration of `\(typeName)` is in another module, make that module one SafeDI reads for this target: add its target to this target's `dependencies` in `Package.swift`, list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, or list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist.",
+			)
+		})
+	}
+
 	/// Reports each `additionalMocksToGenerate` entry that names a type whose public mock (`generateMock: .public`) another
 	/// module generates: that module's `mock()` is the type's mock, and a second one here would make every call ambiguous.
 	/// - Parameter publicMockTypes: The declarations of other modules that set `generateMock: .public`.
@@ -1624,6 +1651,12 @@ extension SafeDIConfiguration {
 /// A `#SafeDIConfiguration` lists, in `additionalMocksToGenerate`, types no `@Instantiable` declaration declares.
 /// Each diagnostic names one such type, in name order.
 struct AdditionalMocksNameNoInstantiableError: SourceLocatedError {
+	let sourceDiagnostics: [SourceDiagnostic]
+}
+
+/// A `#SafeDIConfiguration` lists, in `additionalMocksToGenerate`, types whose every declaration SafeDI read is `mockOnly`.
+/// Each diagnostic names one such type, in name order.
+struct AdditionalMocksNameMockOnlyDeclarationError: SourceLocatedError {
 	let sourceDiagnostics: [SourceDiagnostic]
 }
 

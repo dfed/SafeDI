@@ -346,7 +346,7 @@ A tree calls a `generateDependencyTree: true` type’s generated initializer fro
 public final class Root: Instantiable { … }
 ```
 
-Each argument must be a string literal. When a [`mockOnly` declaration](#splitting-production-and-mock-declarations) gives a type with a production declaration its hand-written mock, the generated `mock()` takes the production declaration’s attributes, not the `mockOnly` declaration’s.
+Each argument must be a string literal. When a [`mockOnly` declaration](#splitting-production-and-mock-declarations) gives a type with a production declaration its hand-written mock, the generated `mock()` takes the production declaration’s attributes, not the `mockOnly` declaration’s, so the `@Instantiable` macro warns at `mockAttributes` on a `mockOnly` declaration, with a fix-it that removes it.
 
 None of these arguments changes the `@Sendable` function in which SafeDI builds a `SendableInstantiator`, `SendableErasedInstantiator`, or `SendableLazilyInstantiated` dependency; see [`Sendable` wrappers](#sendable-wrappers) for what that function requires, and for when a non-`Sendable` twin with these attributes helps.
 
@@ -1083,7 +1083,7 @@ For the first, use the `additionalMocksToGenerate` parameter on [`#SafeDIConfigu
 )
 ```
 
-This generates a `mock()` method for each listed type in the current module, even though the type is defined elsewhere. The type must be `@Instantiable` in its home module, but `generateMock: true` is not required there unless that home module also wants to generate its own mock.
+This generates a `mock()` method for each listed type in the current module, even though the type is defined elsewhere. The type must be `@Instantiable` in its home module, but `generateMock: true` is not required there unless that home module also wants to generate its own mock. Do not list a type whose only declaration SafeDI reads is [`mockOnly`](#the-mockonly-parameter): its hand-written mock is its mock, and SafeDI reports such an entry as an error at the `#SafeDIConfiguration`. Call the hand-written method instead, or name it `mock` and drop `customMockName`, so that existing calls of `mock()` keep compiling.
 
 List each type by its declared name, with enclosing types and without the module (`Outer.Inner`, not `MyModule.Outer.Inner`).
 
