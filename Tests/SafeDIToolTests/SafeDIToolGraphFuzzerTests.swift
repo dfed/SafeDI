@@ -160,7 +160,7 @@ struct SafeDIToolGraphFuzzerTests {
 		// package – among those the tool accepts, so that the batch compiles each module of a split graph and the callers
 		// of each package configuration.
 		let drawFeatures = acceptedResults.reduce(into: Set<GraphFuzzerSeamDrawFeature>()) { $0.formUnion(GraphFuzzerFeature.seamDrawFeatures(of: $1.fixture)) }
-		#expect(Set([GraphFuzzerSeamDrawFeature.moduleSplit, .otherPackageCaller, .samePackageCallerRunWithoutPackageName, .seamModuleRunWithoutPackageName]).subtracting(drawFeatures).sorted() == [])
+		#expect(Set([GraphFuzzerSeamDrawFeature.moduleSplit, .otherPackageCaller, .samePackageCallerRunWithoutPackageName, .seamModuleRunWithoutPackageName, .seamDependency, .seamDependencyChain]).subtracting(drawFeatures).sorted() == [])
 		// Every roll of `addingHoleShapes` beyond its base draw that draws a shape the tool accepts, in an accepted graph.
 		#expect(Set([
 			GraphFuzzerSeamDrawFeature.holeCrossPackage,
@@ -190,6 +190,24 @@ struct SafeDIToolGraphFuzzerTests {
 			return GraphFuzzerFeature.seamOutputFeatures(of: result.fixture, generatedFiles: generatedFiles).contains(.unreadTypeComment)
 		})
 		#expect(results.contains { !$0.isAccepted && $0.failure == nil }, "Rejected none of \(Self.seamSmokeSeeds.count) graphs")
+	}
+
+	@Test(arguments: [(UInt64(153), GraphFuzzerGeneratorFeature.generateDependencyTree), (163, .generateDependencyTree), (98, .generateMockPublic), (208, .generateMockPublic)])
+	func seamDependencyDraw_importsOnlyTheModuleBeneath_whenDeclarationsMoveOrAChainIsDrawnBeneathSeamsModule(seed: UInt64, feature: GraphFuzzerGeneratorFeature) throws {
+		// Each module of the chain beneath the seam's module imports only the module beneath it, and a caller only the seam's
+		// module, so that under the module-info flow a caller reads the chain only through the seam's module's view.
+		let fixture = GraphFuzzerGenerator.fixture(forSeed: seed, features: [feature])
+		let modules = try #require(fixture.modules)
+		for (module, content) in zip(modules, fixture.swiftFileContent) {
+			let importedModuleNames = content.split(separator: "\n").filter { $0.hasPrefix("import Fuzz") }.map { String($0.dropFirst("import ".count)) }
+			#expect(importedModuleNames == module.dependencies.filter(modules.contains).map(\.name), "Seed \(seed), \(module.name)")
+		}
+		let drawn = GraphFuzzerSeamDependencyDraw.drawn(in: fixture)
+		// Seed 208 moves a declaration beside its chain.
+		let expected: [UInt64: (movesDeclaration: Bool, drawsChain: Bool)] = [153: (true, false), 163: (false, true), 98: (true, false), 208: (true, true)]
+		#expect(drawn.movesDeclaration == expected[seed]?.movesDeclaration)
+		#expect(drawn.drawsChain == expected[seed]?.drawsChain)
+		#expect(Set(modules).isSuperset(of: drawn.drawsChain ? [.seamDependency, .seamDependencyBase, .seamDependencyLeaf] : [.seamDependency]))
 	}
 
 	@Test
@@ -2991,9 +3009,11 @@ struct SafeDIToolGraphFuzzerTests {
 	/// them, every roll of `addingHoleShapes` with an accepted variant (with seeds 19, 98, 605 and 743); a split graph that
 	/// declares a type in a flag's clause in the seam's module (`recordedInFlagClause`), which the two integrations agree
 	/// on once the plugin flow's assertions about that module's block are excused (seed 326); and a graph it rejects, which
-	/// `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` checks. The union of the batches the hole rolls and the
-	/// seam tests' draws were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
-	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 92, 98, 180, 196, 277, 326, 605, 609, 743]
+	/// `seamSmokeSeeds_exerciseSeamFeature_inGraphsTheToolAccepts` checks; and declarations moved beneath the seam's module
+	/// (seed 153) and a chain of seams through the three modules beneath it (seed 163), which a caller computes from the
+	/// seam's module's view (`GraphFuzzerSeamDependencyDraw`). The union of the batches the hole rolls and the seam tests'
+	/// draws were each pinned with. Pinned by `seamSmokeAndKnownIssueFixtureHash`.
+	static let seamSmokeSeeds: [UInt64] = [0, 1, 16, 19, 31, 92, 98, 153, 163, 180, 196, 277, 326, 605, 609, 743]
 
 	static let seamSmokeAndKnownIssueFixtureHash: UInt64 = 0x9D453428B7158C47
 
@@ -3085,6 +3105,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.otherPackageCaller: 221,
 		.samePackageCallerRunWithoutPackageName: 53,
 		.seamModuleRunWithoutPackageName: 62,
+		.seamDependency: 42,
+		.seamDependencyChain: 56,
 		.hole: 331,
 		.holeOwnedBySeam: 75,
 		.holeProtocolInMarkerFreeFile: 166,
@@ -3312,12 +3334,14 @@ struct SafeDIToolGraphFuzzerTests {
 	/// (seed 211); a consumer in another package only and a differing mock condition (seed 253); a configuration's
 	/// module-level forwarder of a default's provider, and a hole's builder passed up into a `@Sendable` builder function
 	/// (seed 551); a third tier (seed 215); the comment naming a type SafeDI reads no declaration of (seed 10) – a graph the
-	/// public tier rejects (seed 7), and a graph of the configuration order's known issue (seed 23). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
+	/// public tier rejects (seed 7), and a graph of the configuration order's known issue (seed 23); declarations moved
+	/// beneath the declaring module (seed 98) and a chain of public mocks through the three modules beneath it (seed 208),
+	/// which a consumer computes from the declaring module's view (`GraphFuzzerSeamDependencyDraw`). Between them its passing graphs show every output feature `publicMockCorpusOutputFeatureMinimumShares` pins,
 	/// which `publicMockSmokeSeeds_exercisePublicMockFeature_inGraphsTheToolAccepts` checks. Pinned by
 	/// `publicMockSmokeAndKnownIssueFixtureHash`.
-	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 142, 151, 197, 211, 215, 253, 551]
+	static let publicMockSmokeSeeds: [UInt64] = [0, 7, 10, 23, 43, 46, 98, 142, 151, 197, 208, 211, 215, 253, 551]
 
-	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x09A11AE2874B8BEE
+	static let publicMockSmokeAndKnownIssueFixtureHash: UInt64 = 0x6CA43C5A2417BE97
 
 	/// Seeds in `0..<publicMockCorpusSeedCount` whose graphs fail today, by shape. Every seed is the feature's own: the
 	/// draw shares no graph with the base corpus.
@@ -3450,6 +3474,8 @@ struct SafeDIToolGraphFuzzerTests {
 		.optionalDefaultOfPublicType: 267,
 		.optionalDefaultOfUnprovenType: 325,
 		.otherPackageConsumerModuleOnly: 301,
+		.seamDependency: 35,
+		.seamDependencyChain: 31,
 		.packageInitializer: 797,
 		.plainTypeOnlyDefaultArgumentsName: 325,
 		.plainTypeOnlyPackageInitializersTake: 214,

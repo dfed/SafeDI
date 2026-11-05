@@ -118,6 +118,18 @@ struct DifferentialValuePath {
 	}
 
 	let modules: [DifferentialValueModule]
+
+	/// The names of the path's modules `module` depends on, directly or through another, in the path's order: the
+	/// modules a compile of it searches, since a module's compiled interface names the modules it imports.
+	func moduleNames(dependedOnBy module: DifferentialValueModule) -> [String] {
+		var names = Set<String>()
+		var pending = module.dependencyModuleNames
+		while let name = pending.popLast() {
+			guard names.insert(name).inserted else { continue }
+			pending += modules.first { $0.name == name }?.dependencyModuleNames ?? []
+		}
+		return modules.map(\.name).filter(names.contains)
+	}
 }
 
 /// The contract a fixture follows so that the comparator sees whether the generated code built a lazily instantiated
@@ -743,7 +755,7 @@ enum DifferentialValueOracle {
 				moduleName: module.name,
 				packageName: module.packageName,
 				emitsModule: true,
-				moduleSearchPaths: module.dependencyModuleNames.compactMap { moduleDirectoriesByName[$0] },
+				moduleSearchPaths: path.moduleNames(dependedOnBy: module).compactMap { moduleDirectoriesByName[$0] },
 				enablesTesting: true,
 				parsesAsLibrary: true,
 			)
