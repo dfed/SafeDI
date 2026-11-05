@@ -2176,6 +2176,12 @@ public actor DependencyTreeGenerator {
 			let seam: Instantiable
 			let kind: Kind
 
+			/// Whether the seam's `generateMock: .public` requires `tier`, the tier an omission is reported at, to be
+			/// `public`, which no narrower seam removes.
+			private func publicMockRequires(_ tier: AccessLevel) -> Bool {
+				seam.generateMock == .public && tier == .public
+			}
+
 			/// What `read` is, why a seam cannot give it inline's value, and what to do instead.
 			private static func message(for read: ScopeGenerator.UncreatedAliasRead) -> String {
 				let alias = read.uncreatedAlias
@@ -2269,7 +2275,10 @@ public actor DependencyTreeGenerator {
 					case .required:
 						.ownReceived
 					}
-					let requiredBy = tier == parameterLevel ? "" : ", which \(seamName)'s `\(tier.spelledOnGeneratedDeclaration)` access requires,"
+					// What requires the tier: the seam's access, or its public mock, in a sentence of its own.
+					let isRequiredByPublicMock = publicMockRequires(tier)
+					let requiredBy = isRequiredByPublicMock ? "" : ", which \(seamName)'s `\(tier.spelledOnGeneratedDeclaration)` access requires,"
+					let publicMockRequirement = isRequiredByPublicMock ? " " + SeamAccessExplanation.publicMockRequirementSentence(seam: seam.concreteInstantiable) : ""
 					let causeText = cause.map { " " + SeamAccessExplanation.causeSentence($0, receivers: treeReceivers.map(\.asExplanationReceiver)) } ?? ""
 					let remedies = SeamAccessExplanation.tierRemedies(
 						cause: cause,
@@ -2279,8 +2288,9 @@ public actor DependencyTreeGenerator {
 						parameter: parameter,
 						receivers: treeReceivers.map(\.asExplanationReceiver),
 						parameterKind: parameterKind,
+						seamAccessIsRequiredByPublicMock: isRequiredByPublicMock,
 					)
-					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(parameter.asSource)`, which \(takers), and cannot pass `nil` for it, since it is required.\(causeText) \(remedies)"
+					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(parameter.asSource)`, which \(takers), and cannot pass `nil` for it, since it is required.\(publicMockRequirement)\(causeText) \(remedies)"
 					declarationNotes = SeamAccessExplanation.declarationNotes(for: cause, neededLevel: tier)
 				case let .moduleInfoMissing(moduleName, missingModuleName):
 					receivers = []
@@ -2312,7 +2322,10 @@ public actor DependencyTreeGenerator {
 					// the place of a pass-through's.
 					receivers = []
 					let module = seam.moduleName.map { "module `\($0)`" } ?? "this module"
-					let requiredBy = tier == hole.tierAccess ? "" : ", which \(seamName)'s `\(tier.spelledOnGeneratedDeclaration)` access requires,"
+					// What requires the tier: the seam's access, or its public mock, in a sentence of its own.
+					let isRequiredByPublicMock = publicMockRequires(tier)
+					let requiredBy = isRequiredByPublicMock ? "" : ", which \(seamName)'s `\(tier.spelledOnGeneratedDeclaration)` access requires,"
+					let publicMockRequirement = isRequiredByPublicMock ? " " + SeamAccessExplanation.publicMockRequirementSentence(seam: seam.concreteInstantiable) : ""
 					let causeText = hole.accessCause.map { " " + SeamAccessExplanation.causeSentence($0, receivers: []) } ?? ""
 					let remedies = SeamAccessExplanation.tierRemedies(
 						cause: hole.accessCause,
@@ -2322,8 +2335,9 @@ public actor DependencyTreeGenerator {
 						parameter: Property(label: hole.builderLabel, typeDescription: hole.builderType(qualifiedBy: hole.scopeSeamType)),
 						receivers: [],
 						parameterKind: .builder(fulfilledType: hole.instantiatedType, seamModuleName: seam.moduleName, isPassedUp: hole.innerSeamType != nil),
+						seamAccessIsRequiredByPublicMock: isRequiredByPublicMock,
 					)
-					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(hole.builderLabel): \(hole.builderType(qualifiedBy: hole.scopeSeamType).asSource)`, the builder for `\(hole.ownerType.asSource)`'s `\(hole.property.asSource)`, which no @Instantiable declaration that \(module) can see fulfills.\(causeText) \(remedies)"
+					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(hole.builderLabel): \(hole.builderType(qualifiedBy: hole.scopeSeamType).asSource)`, the builder for `\(hole.ownerType.asSource)`'s `\(hole.property.asSource)`, which no @Instantiable declaration that \(module) can see fulfills.\(publicMockRequirement)\(causeText) \(remedies)"
 					declarationNotes = SeamAccessExplanation.declarationNotes(for: hole.accessCause, neededLevel: tier)
 				case let .parameters(.initializerRedeclared(parameters, handWrittenInitializer)):
 					receivers = []

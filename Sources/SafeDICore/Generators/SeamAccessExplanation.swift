@@ -97,7 +97,9 @@ enum SeamAccessExplanation {
 
 	/// The remedies for a tier of `seam` at `neededLevel` that cannot take `parameter`, whose type `cause` proves at
 	/// `parameterLevel`, in the order a reader can follow them: the cause's own, the mention, declaring the seam
-	/// narrower, the receive's own, and declaring the tree on a narrower type.
+	/// narrower, the receive's own, and declaring the tree on a narrower type. When `seamAccessIsRequiredByPublicMock`,
+	/// the seam cannot be narrower, so that remedy is left out, and receiving a pass-through only if available, the
+	/// cheaper of the receive's own, comes before building it inside the tree.
 	static func tierRemedies(
 		cause: TypeAccessProof.Cause?,
 		neededLevel: AccessLevel,
@@ -106,6 +108,7 @@ enum SeamAccessExplanation {
 		parameter: Property,
 		receivers: [Receiver],
 		parameterKind: ParameterKind,
+		seamAccessIsRequiredByPublicMock: Bool,
 	) -> String {
 		var remedies = [String]()
 		if case let .unproven(type)? = cause, case .passThrough = parameterKind {
@@ -114,7 +117,9 @@ enum SeamAccessExplanation {
 		}
 		remedies += causeRemedies(cause, neededLevel: neededLevel)
 		let parameterLevelText = "`\(parameterLevel.spelledOnGeneratedDeclaration)`"
-		remedies.append("declare \(name(seam)) \(parameterLevelText)")
+		if !seamAccessIsRequiredByPublicMock {
+			remedies.append("declare \(name(seam)) \(parameterLevelText)")
+		}
 		switch parameterKind {
 		case .ownForwarded:
 			break
@@ -126,6 +131,9 @@ enum SeamAccessExplanation {
 			if let aliasProperty = receivers.first(where: { $0.aliasProperty != nil })?.aliasProperty, receivers.count == 1 {
 				remedies.append("receive `\(aliasProperty.label)` with `onlyIfAvailable: true` and an optional type")
 			} else if receivers.contains(where: \.isInstantiateMethodParameter) {
+				remedies.append("build `\(parameter.label)` inside the tree")
+			} else if seamAccessIsRequiredByPublicMock {
+				remedies.append("receive `\(parameter.label)` with `onlyIfAvailable: true` and an optional type")
 				remedies.append("build `\(parameter.label)` inside the tree")
 			} else {
 				remedies.append("build `\(parameter.label)` inside the tree or receive it with `onlyIfAvailable: true` and an optional type")
@@ -268,6 +276,13 @@ enum SeamAccessExplanation {
 		} else {
 			AccessLevel.level(satisfying: omission.seamCall.requirement)
 		}
+	}
+
+	/// What a tier omission's error says, after its first sentence, when `generateMock: .public` requires `seam` to be
+	/// `public`: the seam's widest tier is `public` for a reason SafeDI can see, which no narrower seam removes. Worded as
+	/// that requirement, never as why the type is `public`: a seam may be `public` by design.
+	static func publicMockRequirementSentence(seam: TypeDescription) -> String {
+		"`generateMock: .public` requires \(name(seam)) to be `public`, so its generated initializer is `public` too."
 	}
 
 	/// What a module must declare so that `seam` needs no builder for `fulfilledType`: a fulfilling declaration in a
