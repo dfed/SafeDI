@@ -373,4 +373,3 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 		] + otherTypes
 	}
 }
-
