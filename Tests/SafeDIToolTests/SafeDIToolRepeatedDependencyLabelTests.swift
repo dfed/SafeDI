@@ -129,12 +129,49 @@ struct SafeDIToolRepeatedDependencyLabelTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtLaterDeclaration_whenDependencyIsDeclaredTwiceOutsideEveryConditionalBlock() async {
+		// A copy-paste the compiler rejects too, as an invalid redeclaration, after SafeDITool has run: the error leads with
+		// the remedy that applies without an `#if`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Feature.swift"]):7:5: error: `Feature` declares the dependency `tracker` more than once. Declare it once: if each clause of an `#if` that only the compiler decides, such as `#if os(iOS)`, declares it, declare it outside the `#if`, since SafeDI reads every clause.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(generateMock: true)
+					public final class Feature: Instantiable {
+					    public init(tracker: Tracker) {
+					        fatalError("SafeDI doesn't inspect the initializer body")
+					    }
+					    @Received let tracker: Tracker
+					    @Received let tracker: Tracker
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Tracker: Instantiable {
+					    public init() {}
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorAtLaterDeclaration_whenDependencyIsDeclaredInEachClauseOfPlatformCondition() async {
 		// Both the compiler and the macro accept this, because each compilation sees one clause.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Feature.swift"]):10:5: error: `Feature` declares the dependency `tracker` more than once. SafeDI reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`, so a dependency declared in each clause counts twice. Declare it once, outside the `#if`.
+				\(fixtures["Feature.swift"]):10:5: error: `Feature` declares the dependency `tracker` more than once. Declare it once: if each clause of an `#if` that only the compiler decides, such as `#if os(iOS)`, declares it, declare it outside the `#if`, since SafeDI reads every clause.
 				"""
 			},
 		) {
@@ -184,7 +221,7 @@ struct SafeDIToolRepeatedDependencyLabelTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Feature.swift"]):10:5: error: `Feature` declares the dependency `tracker` more than once. SafeDI reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`, so a dependency declared in each clause counts twice. Declare it once, outside the `#if`.
+				\(fixtures["Feature.swift"]):10:5: error: `Feature` declares the dependency `tracker` more than once. Declare it once: if each clause of an `#if` that only the compiler decides, such as `#if os(iOS)`, declares it, declare it outside the `#if`, since SafeDI reads every clause.
 				\(fixtures["Feature.swift"]):14:5: error: `Feature` has dependencies `caf\u{E9}` (U+0063 U+0061 U+0066 U+00E9) and `cafe\u{301}` (U+0063 U+0061 U+0066 U+0065 U+0301), which look the same but are encoded differently, so SafeDI cannot tell them apart. The @Instantiable macro rejects such names. Rename one of them.
 				"""
 			},

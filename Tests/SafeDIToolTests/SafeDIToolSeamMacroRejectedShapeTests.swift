@@ -51,7 +51,7 @@ struct SafeDIToolSeamMacroRejectedShapeTests: ~Copyable {
 		// `Panel`'s parameters by property and meet two.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Panel.swift"]):11:5: error: `Panel` declares the dependency `x` more than once. SafeDI reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`, so a dependency declared in each clause counts twice. Declare it once, outside the `#if`.
+			\(fixtures["Panel.swift"]):11:5: error: `Panel` declares the dependency `x` more than once. Declare it once: if each clause of an `#if` that only the compiler decides, such as `#if os(iOS)`, declares it, declare it outside the `#if`, since SafeDI reads every clause.
 			"""
 		}) {
 			try await executeSafeDIToolTest(swiftFileContent: Self.rootFixture(declarations: ["@Instantiated let token: Secret", "@Instantiated let x: X", "@Instantiated let screen: Screen"]) + [Self.screen] + Self.panelAndChild + Self.plainTypes, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
@@ -65,7 +65,7 @@ struct SafeDIToolSeamMacroRejectedShapeTests: ~Copyable {
 		// initializer that takes `x` twice.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Panel.swift"]):11:5: error: `Panel` declares the dependency `x` more than once. SafeDI reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`, so a dependency declared in each clause counts twice. Declare it once, outside the `#if`.
+			\(fixtures["Panel.swift"]):11:5: error: `Panel` declares the dependency `x` more than once. Declare it once: if each clause of an `#if` that only the compiler decides, such as `#if os(iOS)`, declares it, declare it outside the `#if`, since SafeDI reads every clause.
 			"""
 		}) {
 			try await executeSafeDIToolTest(swiftFileContent: Self.rootFixture(declarations: ["@Instantiated let x: X"]) + Self.panelAndChild + Self.plainTypes, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)

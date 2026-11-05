@@ -2445,7 +2445,9 @@ public actor DependencyTreeGenerator {
 				} else if !earlierName.utf8.elementsEqual(laterName.utf8) {
 					"`\(declaringType.asSource)` has dependencies `\(earlierName)` (\(earlierName.codePoints)) and `\(laterName)` (\(laterName.codePoints)), which look the same but are encoded differently, so SafeDI cannot tell them apart. The @\(InstantiableVisitor.macroName) macro rejects such names. Rename one of them."
 				} else {
-					"`\(declaringType.asSource)` declares the dependency `\(laterName)` more than once. SafeDI reads every clause of an `#if` that only the compiler decides, such as `#if os(iOS)`, so a dependency declared in each clause counts twice. Declare it once, outside the `#if`."
+					// One wording for both causes, since a dependency does not record whether an `#if` encloses it: a copy-paste,
+					// which the compiler rejects too, and one declaration in each clause of an `#if` only the compiler decides.
+					"`\(declaringType.asSource)` declares the dependency `\(laterName)` more than once. Declare it once: if each clause of an `#if` that only the compiler decides, such as `#if os(iOS)`, declares it, declare it outside the `#if`, since SafeDI reads every clause."
 				}
 			}
 		}
