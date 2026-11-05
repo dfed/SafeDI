@@ -36,7 +36,7 @@ let project = Project(
 				"CFBundleDisplayName": "Example Tuist Integration",
 				"LSApplicationCategoryType": "public.app-category.productivity",
 			]),
-			sources: SourceFilesList(globs: [
+			sources: .sourceFilesList(globs: [
 				.glob("ExampleTuistIntegration/**/*.swift"),
 				SafeDI.generatedSource,
 			]),
