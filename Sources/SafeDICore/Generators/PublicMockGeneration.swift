@@ -1180,13 +1180,22 @@ struct PublicMockFinding: Hashable, Sendable {
 	static func omittedRequiredParameter(_ parameter: OmittedRequiredParameter, of instantiable: Instantiable) -> PublicMockFinding {
 		let typeName = "`\(instantiable.concreteInstantiable.asSource)`"
 		let receiverNames = parameter.receivers.map(\.declaringType).uniqued().map { "`\($0.asSource)`" }
+		// A lone receiver that receives the parameter through an alias of it, which names the alias.
+		let aliasReceiver = parameter.receivers.count == 1 ? parameter.receivers.first.flatMap { receiver in
+			receiver.dependency.source.fulfillingProperty.map { _ in (declaringType: receiver.declaringType, aliasProperty: receiver.dependency.property) }
+		} : nil
+		let receivedTaker = if let aliasReceiver {
+			"which the initializer of `\(aliasReceiver.declaringType.asSource)` receives through its alias `\(aliasReceiver.aliasProperty.label)` (`fulfilledByDependencyNamed: \"\(parameter.property.label)\"`)"
+		} else if receiverNames.count > 1 {
+			"which the initializers of \(receiverNames.joinedAsList) receive"
+		} else {
+			"which the initializer of \(receiverNames.first ?? typeName) receives"
+		}
 		let taker = switch parameter.kind {
 		case .forwarded:
 			"which \(typeName) forwards"
 		case .received:
-			receiverNames.count > 1
-				? "which the initializers of \(receiverNames.joinedAsList) receive"
-				: "which the initializer of \(receiverNames.first ?? typeName) receives"
+			receivedTaker
 		case .instantiated:
 			"which \(receiverNames.first ?? typeName) instantiates and no `@Instantiable` declaration this module sees fulfills"
 		case let .builder(hole):
@@ -1198,20 +1207,12 @@ struct PublicMockFinding: Hashable, Sendable {
 			parameter.property.asSource
 		}
 		let causeText = SeamAccessExplanation.causeSentence(parameter.cause, receivers: [])
-		// A `mockOnly` mock of a type declared inside an `#if` block proves it, and lets the mock build a type it receives
-		// or forwards, whose parameter then defaults to `nil`.
-		let mockOnlyMockLetsMockBuildType = switch parameter.kind {
-		case .forwarded, .received:
-			true
-		case .instantiated, .builder:
-			false
-		}
-		var remedies = SeamAccessExplanation.causeRemedies(parameter.cause, neededLevel: .public, mockOnlyMockLetsMockBuildType: mockOnlyMockLetsMockBuildType)
+		var remedies = SeamAccessExplanation.causeRemedies(parameter.cause, neededLevel: .public)
 		switch parameter.kind {
 		case .forwarded where parameter.cause.leavesOutMockOnlyMockOfType:
 			remedies.append("give `\(parameter.cause.type.asSource)` a `mockOnly` mock")
 		case .received:
-			remedies.append("receive it with `onlyIfAvailable: true` and an optional type")
+			remedies.append("receive \(aliasReceiver.map { "`\($0.aliasProperty.label)`" } ?? "it") with `onlyIfAvailable: true` and an optional type")
 		case .forwarded, .instantiated:
 			break
 		case let .builder(hole):
@@ -1220,7 +1221,7 @@ struct PublicMockFinding: Hashable, Sendable {
 			let module = instantiable.moduleName.map { "module `\($0)`" } ?? "this module"
 			remedies.append("declare in \(module), or a module it depends on, a `mockOnly` `@\(InstantiableVisitor.macroName)` type that fulfills `\(holeType)` (`@\(InstantiableVisitor.macroName)(fulfillingAdditionalTypes: [\(holeType).self], mockOnly: true)`), which the mock builds instead of taking `\(hole.builderLabel)`, leaving production's hole as it is")
 		}
-		if case let .signatures(_, _, provers, _, _) = parameter.cause {
+		if case let .signatures(_, _, provers, _) = parameter.cause {
 			// The members that prove the type, by name, each of which proves it at the level it spells.
 			for prover in provers where prover.cap == nil {
 				remedies.append("make \(prover.name) `public`")
@@ -1279,7 +1280,7 @@ extension ScopeGenerator {
 		let parameters = await mockRootParameters(instantiable: instantiable)
 		let ownModules: Set<String?> = [context.moduleName, instantiable.moduleName]
 		let receiverModulesByLabel = Self.receiverModules(in: parameters.parameterTree, context: context)
-		let receiversByLabel = Self.receivers(in: parameters.parameterTree, mockedType: instantiable)
+		let treeReceivers = Self.treeReceivers(in: parameters.parameterTree, mockedType: instantiable)
 		var omittedParameters = [PublicMockFinding.OmittedRequiredParameter]()
 		func check(_ property: Property, kind: PublicMockFinding.OmittedRequiredParameter.Kind) {
 			let isForwarded = if case .forwarded = kind {
@@ -1295,7 +1296,8 @@ extension ScopeGenerator {
 				kind: kind,
 				level: access.level,
 				cause: cause,
-				receivers: isForwarded ? [] : receiversByLabel[property.label, default: []].filter { $0.dependency.property.label == property.label },
+				// An alias receives the property it is fulfilled by.
+				receivers: isForwarded ? [] : treeReceivers.filter { ($0.dependency.source.fulfillingProperty ?? $0.dependency.property).label == property.label },
 			))
 		}
 		let constructionDefaultLabels = Set((parameters.rootConstructionInitializer?.arguments ?? []).filter(\.hasDefaultValue).map(\.innerLabel))
@@ -1329,19 +1331,20 @@ extension ScopeGenerator {
 	/// The declarations in `items`' tree that receive or instantiate a dependency, by its label, in tree order: the
 	/// mocked type's own first.
 	static func receivers(in items: [MockTreeItem], mockedType: Instantiable) -> [String: [(declaringType: TypeDescription, dependency: Dependency)]] {
-		var receiversByLabel = [String: [(declaringType: TypeDescription, dependency: Dependency)]]()
-		for dependency in mockedType.dependencies {
-			receiversByLabel[dependency.property.label, default: []].append((mockedType.concreteInstantiable, dependency))
-		}
+		Dictionary(grouping: treeReceivers(in: items, mockedType: mockedType)) { $0.dependency.property.label }
+	}
+
+	/// Each dependency a declaration in `items`' tree declares, with that declaration, in tree order: the mocked type's
+	/// own first.
+	static func treeReceivers(in items: [MockTreeItem], mockedType: Instantiable) -> [(declaringType: TypeDescription, dependency: Dependency)] {
+		var receivers = mockedType.dependencies.map { (declaringType: mockedType.concreteInstantiable, dependency: $0) }
 		// Depth first, in tree order, on a stack of its own, since a mock tree can be as deep as the module has types.
 		var nodesToVisit = Array(items.propertyNodes.reversed())
 		while let node = nodesToVisit.popLast() {
-			for dependency in node.dependencies {
-				receiversByLabel[dependency.property.label, default: []].append((node.concreteType, dependency))
-			}
+			receivers += node.dependencies.map { (declaringType: node.concreteType, dependency: $0) }
 			nodesToVisit.append(contentsOf: node.propertyChildren.reversed())
 		}
-		return receiversByLabel
+		return receivers
 	}
 }
 
@@ -1446,7 +1449,7 @@ extension ScopeGenerator.PublicMockTierOmission {
 		let causeText = parameter.accessCause.map { " " + SeamAccessExplanation.causeSentence($0, receivers: receivers.map { SeamAccessExplanation.Receiver(declaringType: $0.declaringType, aliasProperty: nil, isInstantiateMethodParameter: false) }) } ?? ""
 		var remedies = [String]()
 		let unverifiedPackage = call.requirement == .packageUnverified ? ", or `public` if the two modules are in different packages" : ""
-		if case let .signatures(_, _, provers, _, _)? = parameter.accessCause, let first = provers.first, first.cap == nil {
+		if case let .signatures(_, _, provers, _)? = parameter.accessCause, let first = provers.first, first.cap == nil {
 			remedies.append("widen \(first.name) to `\(neededLevel.spelledOnGeneratedDeclaration)`\(unverifiedPackage)")
 		}
 		remedies += SeamAccessExplanation.causeRemedies(parameter.accessCause, neededLevel: neededLevel)

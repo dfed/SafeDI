@@ -177,14 +177,12 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 					        self.theme = theme
 					    }
 
-					    @Received(onlyIfAvailable: true) public let theme: Theme?
+					    @Received(onlyIfAvailable: true) package let theme: Theme?
 					}
 
-					#if canImport(Foundation)
-					public struct Theme: Sendable {
-					    public init() {}
+					package struct Theme: Sendable {
+					    package init() {}
 					}
-					#endif
 					""",
 					"""
 					@Instantiable
@@ -219,27 +217,27 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 
 					@Instantiable(isRoot: true)
 					public final class MidRoot: Instantiable {
-					    public init(shellBuilder: Instantiator<MidShell>) {
+					    package init(shellBuilder: Instantiator<MidShell>) {
 					        self.shellBuilder = shellBuilder
 					    }
 
-					    @Instantiated public let shellBuilder: Instantiator<MidShell>
+					    @Instantiated package let shellBuilder: Instantiator<MidShell>
 					}
 					""",
 					"""
 					import Feature
 
 					@Instantiable
-					public final class MidShell: Instantiable {
-					    public init(theme: Theme, title: String, service: Service) {
+					package final class MidShell: Instantiable {
+					    package init(theme: Theme, title: String, service: Service) {
 					        self.theme = theme
 					        self.title = title
 					        self.service = service
 					    }
 
-					    @Forwarded public let theme: Theme
-					    @Forwarded public let title: String
-					    @Instantiated public let service: Service
+					    @Forwarded package let theme: Theme
+					    @Forwarded package let title: String
+					    @Instantiated package let service: Service
 					}
 					""",
 				],
@@ -358,14 +356,12 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 					        self.theme = theme
 					    }
 
-					    @Received(onlyIfAvailable: true) public let theme: Theme?
+					    @Received(onlyIfAvailable: true) let theme: Theme?
 					}
 
-					#if canImport(Foundation)
-					public struct Theme: Sendable {
-					    public init() {}
+					struct Theme: Sendable {
+					    init() {}
 					}
-					#endif
 					""",
 					"""
 					@Instantiable
@@ -417,8 +413,8 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 					        self.service = service
 					    }
 
-					    @Forwarded public let title: String
-					    @Instantiated public let service: Service
+					    @Forwarded package let title: String
+					    @Instantiated package let service: Service
 					}
 					""",
 				],
@@ -539,14 +535,12 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 					        self.theme = theme
 					    }
 
-					    @Received(onlyIfAvailable: true) public let theme: Theme?
+					    @Received(onlyIfAvailable: true) package let theme: Theme?
 					}
 
-					#if canImport(Foundation)
-					public struct Theme: Sendable {
-					    public init() {}
+					package struct Theme: Sendable {
+					    package init() {}
 					}
-					#endif
 					""",
 					"""
 					@Instantiable
@@ -581,27 +575,27 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 
 					@Instantiable(isRoot: true)
 					public final class MidRoot: Instantiable {
-					    public init(shellBuilder: Instantiator<MidShell>) {
+					    package init(shellBuilder: Instantiator<MidShell>) {
 					        self.shellBuilder = shellBuilder
 					    }
 
-					    @Instantiated public let shellBuilder: Instantiator<MidShell>
+					    @Instantiated package let shellBuilder: Instantiator<MidShell>
 					}
 					""",
 					"""
 					import Feature
 
 					@Instantiable
-					public final class MidShell: Instantiable {
-					    public init(theme: Theme, title: String, service: Service) {
+					package final class MidShell: Instantiable {
+					    package init(theme: Theme, title: String, service: Service) {
 					        self.theme = theme
 					        self.title = title
 					        self.service = service
 					    }
 
-					    @Forwarded public let theme: Theme
-					    @Forwarded public let title: String
-					    @Instantiated public let service: Service
+					    @Forwarded package let theme: Theme
+					    @Forwarded package let title: String
+					    @Instantiated package let service: Service
 					}
 					""",
 				],
@@ -722,14 +716,12 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 					        self.theme = theme
 					    }
 
-					    @Received(onlyIfAvailable: true) public let theme: Theme?
+					    @Received(onlyIfAvailable: true) package let theme: Theme?
 					}
 
-					#if canImport(Foundation)
-					public struct Theme: Sendable {
-					    public init() {}
+					package struct Theme: Sendable {
+					    package init() {}
 					}
-					#endif
 					""",
 					"""
 					@Instantiable
@@ -741,11 +733,9 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 					    @Received(onlyIfAvailable: true) let color: Color?
 					}
 
-					#if canImport(Foundation)
-					public struct Color: Sendable {
-					    public init() {}
+					struct Color: Sendable {
+					    init() {}
 					}
-					#endif
 					""",
 					"""
 					@Instantiable(generateDependencyTree: true)
@@ -1302,14 +1292,12 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 	        self.theme = theme
 	    }
 
-	    @Received(onlyIfAvailable: true) public let theme: Theme?
+	    @Received(onlyIfAvailable: true) package let theme: Theme?
 	}
 
-	#if canImport(Foundation)
-	public struct Theme: Sendable {
-	    public init() {}
+	package struct Theme: Sendable {
+	    package init() {}
 	}
-	#endif
 	"""
 	private static let header = """
 	@Instantiable
@@ -1326,25 +1314,25 @@ struct SafeDIToolSeamTierTests: ~Copyable {
 
 	@Instantiable(isRoot: true)
 	public final class MidRoot: Instantiable {
-	    public init(shellBuilder: Instantiator<MidShell>) {
+	    package init(shellBuilder: Instantiator<MidShell>) {
 	        self.shellBuilder = shellBuilder
 	    }
 
-	    @Instantiated public let shellBuilder: Instantiator<MidShell>
+	    @Instantiated package let shellBuilder: Instantiator<MidShell>
 	}
 	"""
 	private static let midShell = """
 	import Feature
 
 	@Instantiable
-	public final class MidShell: Instantiable {
-	    public init(theme: Theme, title: String, service: Service) {
+	package final class MidShell: Instantiable {
+	    package init(theme: Theme, title: String, service: Service) {
 	        self.theme = theme
 	        self.title = title
 	        self.service = service
 	    }
 
-	    @Forwarded public let theme: Theme
+	    @Forwarded package let theme: Theme
 	    @Forwarded public let title: String
 	    @Instantiated public let service: Service
 	}

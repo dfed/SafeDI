@@ -105,6 +105,7 @@ func performScan(
 		configurationFilePaths: Set(allFilePathsByName.keys.filter(isMockScoped)),
 		activeCompilationConditions: activeCompilationConditions,
 		keepsTypeDeclarationsOtherModulesCanName: keepsTypeDeclarationsOtherModulesCanName,
+		isReadingModuleFile: isMockScoped,
 	)
 	let evaluator = parsedModule.conditionalCompilationEvaluator
 
@@ -116,6 +117,8 @@ func performScan(
 	// clause of every `#if` block: `generate` writes a file without code for one that is inactive.
 	// Only the module's own files decide its mocks and configuration.
 	let mockScopedFileScans = fileScans.filter { isMockScoped($0.path) }
+	// The names of the types whose plain declarations the module keeps, as `parseModule` kept them.
+	let moduleKeptTypeNames = keptPlainTypeNames(of: fileScans)
 	let moduleOutputFileDeclarations = mockScopedFileScans.reduce(into: OutputFileDeclarations()) { moduleOutputFileDeclarations, fileScan in
 		moduleOutputFileDeclarations.formUnion(fileScan.outputFileDeclarations)
 	}
@@ -149,7 +152,7 @@ func performScan(
 			excludingInputFilesAt: allFilePaths,
 			namedBy: projectFilePaths,
 			conditionalCompilation: evaluator,
-			keepingDeclarationsOfTypesNamed: keptPlainTypeNames(of: fileScans),
+			keepingDeclarationsOfTypesNamed: moduleKeptTypeNames,
 		)
 		// Parsed only to plan outputs: the module these conditions select does not include them, nor their plain
 		// declarations.
@@ -158,7 +161,7 @@ func performScan(
 			excludingInputFilesAt: allFilePaths,
 			namedBy: projectFilePaths,
 			conditionalCompilation: evaluator,
-			keepingDeclarationsOfTypesNamed: [],
+			keepingDeclarationsOfTypesNamed: KeptPlainTypeNames(mentioning: []),
 		).map(\.fileScan)
 	}
 
@@ -275,6 +278,8 @@ func performScan(
 		csvInputPaths: inputFilePaths.sorted(),
 		additionalInputAbsolutePaths: configuredAdditionalInputFiles,
 		additionalDirectories: additionalDirectories,
+		keptPlainTypeNames: moduleKeptTypeNames,
+		additionalKeptPlainTypeNames: moduleKeptTypeNames.union(keptPlainTypeNames(of: additionalFileScans.map(\.fileScan))),
 		activeCompilationConditions: activeCompilationConditions.sorted(),
 	)
 	// Cache write is best-effort. A full disk or other transient FS
@@ -307,12 +312,18 @@ func parseAdditionalDirectoryFiles(
 	excludingInputFilesAt inputFilePaths: Set<ProjectFilePath>,
 	namedBy projectFilePaths: ProjectFilePaths?,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
-	keepingDeclarationsOfTypesNamed moduleTypeNames: Set<String>,
+	keepingDeclarationsOfTypesNamed moduleTypeNames: KeptPlainTypeNames,
 ) async throws -> [CachedFileScan] {
 	let filePathsToParse = filePaths.subtracting(inputFilePaths)
 	let fileScansByName = try await Dictionary(
 		// safedi-source-rule: allow uniqueKeysWithValues — `parseSwiftFilesDeclaringTypes` walks each path of a set once, and names each scan by the path it walked.
-		uniqueKeysWithValues: parseSwiftFilesDeclaringTypes(Set(filePathsToParse.map(\.path)), conditionalCompilation: evaluator, keepingDeclarationsOfTypesNamed: moduleTypeNames).map { ($0.path, $0) },
+		uniqueKeysWithValues: parseSwiftFilesDeclaringTypes(
+			Set(filePathsToParse.map(\.path)),
+			conditionalCompilation: evaluator,
+			keepingDeclarationsOfTypesNamed: moduleTypeNames,
+			// A file reached through `additionalDirectoriesToInclude` is another module's.
+			isReadingModuleFile: { _ in false },
+		).map { ($0.path, $0) },
 	)
 	// A file that does not mention SafeDI, and declares no type that the module or these files mention, is not walked, so it
 	// contributes nothing.
@@ -381,6 +392,15 @@ struct CachedScannedModuleInfo: Codable {
 	/// during freshness checks so files added to those directories between scan and generate correctly
 	/// invalidate the cache, and warns about an entry from which scan could read no Swift file.
 	let additionalDirectories: [AdditionalDirectory]
+	/// The names of the types whose plain declarations scan kept in the module's files (`keptPlainTypeNames(of:)`), which
+	/// those files' declarations name. `generate` keeps the declarations of these types in a module file it walks again,
+	/// and asserts the decisions that select them, as scan did: a walk after which the module's declarations mention other
+	/// types than scan's did parses the module afresh instead.
+	let keptPlainTypeNames: KeptPlainTypeNames
+	/// The names of the types whose plain declarations scan kept in the files `additionalDirectoriesToInclude` adds: those
+	/// the module's files name, and those the added files' declarations name, which a file `generate` walks again keeps
+	/// as scan did.
+	let additionalKeptPlainTypeNames: KeptPlainTypeNames
 	/// Every compilation condition the scan treated as active. `generate` reuses a file's cached scan
 	/// only when its own conditions give each of the scan's `consultedCompilationConditions` the value
 	/// this set gives it, because walking the file again would then find the same. Other conditions

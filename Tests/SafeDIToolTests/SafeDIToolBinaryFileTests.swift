@@ -1257,6 +1257,7 @@ extension ModuleInfo: BinarySample {}
 extension ImportStatement: BinarySample {}
 extension FileVisitor.ImportSegment: BinarySample {}
 extension ConditionalCompilationDecision: BinarySample {}
+extension KeptPlainTypeNames: BinarySample {}
 extension SafeDIConfiguration: BinarySample {}
 extension Instantiable: BinarySample {}
 extension Instantiable.DeclarationType: BinarySample {}

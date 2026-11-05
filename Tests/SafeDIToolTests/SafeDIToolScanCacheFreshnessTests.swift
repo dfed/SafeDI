@@ -324,46 +324,220 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func scan_cachesTypeDeclarationInsideConditionalBlock_whenDeclarationsInitializerMentionsIt() async throws {
-		// B7: `Token` is declared inside an `#if` block, once in each clause, in a file whose text holds a SafeDI marker: each
-		// record is cached marked as such, with its spelled level.
-		let project = try await scannedProject(alongside: Self.conditionalTokenFiles)
+	mutating func generate_readsSelectedClauseFromRewalk_whenScanLackedFlagAndGenerateHasIt() async throws {
+		// IF18: scan selected the `#else` clause; `generate`, given `FLAG`, walks the file again and reads the `package`
+		// declaration, as a scan with `FLAG` would have.
+		let files = try await generatedFilesFromRewalk(of: ["Badge.swift": Self.tokenInEachClauseOfFlag + Self.badgeSeam], scannedWith: [], generatedWith: ["FLAG"])
+		#expect(files.cached == files.reference)
+		#expect(files.cached["Badge+SafeDI.swift"] == generatedFileHeader + Self.activeAssertion("FLAG") + Self.packageTierBadge)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsSelectedClauseFromRewalk_whenScanHadFlagAndGenerateLacksIt() async throws {
+		// IF18: scan selected the `#if` clause; `generate`, without `FLAG`, reads the `public` declaration.
+		let files = try await generatedFilesFromRewalk(of: ["Badge.swift": Self.tokenInEachClauseOfFlag + Self.badgeSeam], scannedWith: ["FLAG"], generatedWith: [])
+		#expect(files.cached == files.reference)
+		#expect(files.cached["Badge+SafeDI.swift"] == generatedFileHeader + Self.inactiveAssertion("FLAG") + Self.publicTierBadge)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsSelectedClauseFromRewalk_whenMarkerFreeFileDeclaresTypeInsideFlagBlock() async throws {
+		// IF18: `Token.swift` holds no SafeDI marker, but the conditions its block consults make it a file `generate` parses
+		// again rather than skips.
+		let files = try await generatedFilesFromRewalk(of: ["Badge.swift": Self.badgeSeam, "Token.swift": Self.tokenInEachClauseOfFlag], scannedWith: [], generatedWith: ["FLAG"])
+		#expect(files.cached == files.reference)
+		#expect(files.cached["Badge+SafeDI.swift"] == generatedFileHeader + Self.activeAssertion("FLAG") + Self.packageTierBadge)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsSelectedClauseFromRewalk_whenFlagBlockIsNestedInPlatformBlock() async throws {
+		// IF18: the platform block declares `Token` in no clause directly, but the `FLAG` block nested in it does, so the
+		// outer block's walk consults `FLAG` too.
+		let token = "#if canImport(Foundation)\n#if FLAG\npackage struct Token {}\n#else\npublic struct Token {}\n#endif\n#endif\n\n"
+		let files = try await generatedFilesFromRewalk(of: ["Badge.swift": token + Self.badgeSeam], scannedWith: [], generatedWith: ["FLAG"])
+		#expect(files.cached == files.reference)
+		#expect(files.cached["Badge+SafeDI.swift"] == generatedFileHeader + Self.activeAssertion("FLAG") + Self.packageTierBadge)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsSelectedClauseFromRewalk_whenPlatformBlockIsNestedInFlagBlock() async throws {
+		// IF18: the platform block in the clause `FLAG` selects is read whole.
+		let token = "#if FLAG\n#if canImport(Foundation)\npackage struct Token {}\n#endif\n#else\npublic struct Token {}\n#endif\n\n"
+		let files = try await generatedFilesFromRewalk(of: ["Badge.swift": token + Self.badgeSeam], scannedWith: [], generatedWith: ["FLAG"])
+		#expect(files.cached == files.reference)
+		#expect(files.cached["Badge+SafeDI.swift"] == generatedFileHeader + Self.activeAssertion("FLAG") + Self.packageTierBadge)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_readsSelectedClauseFromRewalk_whenFlagBlockHoldsImportAndTypeDeclaration() async throws {
+		// IF18: a block that holds an import is read again for its imports alone only when it declares no plain type.
+		let token = "#if FLAG\nimport Foundation\npackage struct Token {}\n#else\npublic struct Token {}\n#endif\n\n"
+		let files = try await generatedFilesFromRewalk(of: ["Badge.swift": token + Self.badgeSeam], scannedWith: [], generatedWith: ["FLAG"])
+		#expect(files.cached == files.reference)
+		#expect(files.cached["Badge+SafeDI.swift"] == generatedFileHeader + "#if canImport(Foundation)\nimport Foundation\n#endif\n\n" + Self.activeAssertion("FLAG") + Self.packageTierBadge)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_parsesAfresh_whenRewalkedFileStopsMentioningTypeScanKept() async throws {
+		// IF18: under `FLAG`, `Holder` mentions `Token`, so scan kept `Token.swift`'s declarations and asserted the `OTHER`
+		// decision that skips them; without `FLAG`, nothing mentions `Token`, so a fresh parse reads no declaration of it
+		// and asserts nothing about `OTHER`, though `Token.swift` itself consults no condition that changed.
+		let files = try await generatedFilesFromCacheAndAfresh(
+			of: [
+				"Badge.swift": Self.badgeBuildingCache,
+				"Holder.swift": Self.holderMentioningTokenUnderFlag,
+				"Token.swift": "#if OTHER\npackage struct Token {}\n#else\npublic struct Token {}\n#endif",
+			],
+			scannedWith: ["FLAG"],
+			generatedWith: [],
+		)
+		#expect(files.cached == files.fresh)
+		#expect(files.cached["Badge+SafeDI.swift"] == generatedFileHeader + Self.inactiveAssertion("FLAG") + Self.badgeBuildingCacheTiers)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_parsesAfresh_whenRewalkedFileStopsMentioningInstantiableTypeNameGuardedNestedTypeShares() async throws {
+		// IF18: `Token` is a top-level `@Instantiable` type, whose own declaration proves it, and `Outer.Token`, which the
+		// module keeps since `Outer` encloses an `@Instantiable` type, is declared under `#if OTHER`. Under `FLAG`, `Holder`
+		// mentions `Token`, so scan asserted the `OTHER` decision that skips `Outer.Token`; without `FLAG`, nothing
+		// mentions `Token`, so a fresh parse asserts nothing about `OTHER`, and `generate` parses afresh too, though
+		// `Outer.swift` consults no condition that changed.
+		let files = try await generatedFilesFromCacheAndAfresh(
+			of: [
+				"Badge.swift": Self.badgeBuildingCache,
+				"Holder.swift": Self.holderMentioningTokenUnderFlag,
+				"Outer.swift": "public enum Outer {\n    @Instantiable\n    public struct Inner: Instantiable {\n        public init() {}\n    }\n\n    #if OTHER\n    struct Token {}\n    #endif\n}",
+				"Token.swift": "@Instantiable\npublic struct Token: Instantiable {\n    public init() {}\n}",
+			],
+			scannedWith: ["FLAG"],
+			generatedWith: [],
+		)
+		#expect(files.cached == files.fresh)
+		#expect(files.cached["Badge+SafeDI.swift"] == generatedFileHeader + Self.inactiveAssertion("FLAG") + Self.badgeBuildingCacheTiers)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_parsesAfresh_whenRewalkedFileStartsMentioningTypeScanDidNotKeep() async throws {
+		// IF18: the reverse: under `FLAG`, `Holder` mentions `Token`, which scan, without it, did not keep, so `generate`
+		// parses afresh and asserts the `OTHER` decision that skips `Token`'s declaration.
+		let files = try await generatedFilesFromCacheAndAfresh(
+			of: [
+				"Badge.swift": Self.badgeBuildingCache,
+				"Holder.swift": Self.holderMentioningTokenUnderFlag,
+				"Token.swift": "#if OTHER\npackage struct Token {}\n#else\npublic struct Token {}\n#endif",
+			],
+			scannedWith: [],
+			generatedWith: ["FLAG"],
+		)
+		#expect(files.cached == files.fresh)
+		#expect(files.cached["Badge+SafeDI.swift"] == generatedFileHeader + Self.activeAssertion("FLAG") + Self.inactiveAssertion("OTHER") + Self.badgeBuildingCacheTiers)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsModuleFilesByModuleNames_whenOnlyAdditionalDirectoryFileMentionsTypeOfRewalkedFile() async throws {
+		// IF18: only `Extra`'s `Reader`, which `Feature` reads through `additionalDirectoriesToInclude`, mentions `Token`. A
+		// fresh parse keeps the declarations of a module file by the names the module's own declarations mention, so it
+		// drops `Gadget.swift`'s `Token` and asserts nothing about `FLAG`; `generate`, walking `Gadget.swift` again for
+		// `STAGING`, keeps what a fresh parse keeps.
+		let files = try await generatedFilesFromCacheAndAfresh(
+			of: [
+				"Badge.swift": Self.badgeBuildingCache,
+				"Gadget.swift": """
+				#if FLAG
+				package struct Token {}
+				#endif
+
+				#if STAGING
+				@Instantiable
+				public struct Gadget: Instantiable {
+				    public init() {}
+				}
+				#endif
+				""",
+				"SafeDIConfiguration.swift": "#SafeDIConfiguration(additionalDirectoriesToInclude: [\"$ADDITIONAL_DIRECTORY\"])\n",
+			],
+			additionalDirectoryFiles: [
+				"Reader.swift": "public struct Token {}\n\n@Instantiable\npublic struct Reader: Instantiable {\n    public init(token: Token) {\n        self.token = token\n    }\n\n    @Forwarded let token: Token\n}",
+			],
+			scannedWith: ["FLAG"],
+			generatedWith: ["FLAG", "STAGING"],
+		)
+		#expect(files.cached == files.fresh)
+		#expect(files.cached["Badge+SafeDI.swift"] == generatedFileHeader + Self.activeAssertion("STAGING") + Self.badgeBuildingCacheTiers)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_assertsNothingAboutAdditionalDirectorysInternalType_whenItWalksTheFileAgain() async throws {
+		// IF18: `Reader.swift`, which `Feature` reads through `additionalDirectoriesToInclude`, declares `Token` `internal`
+		// under `FLAG` and mentions it, so its scan consults `FLAG`, and `generate`, which reports `FLAG`, walks it again.
+		// The file is another module's, whose `internal` declaration no mention in `Feature` names, so neither that walk nor
+		// a fresh parse asserts `FLAG`.
+		let files = try await generatedFilesFromCacheAndAfresh(
+			of: [
+				"Badge.swift": Self.badgeBuildingCache,
+				"SafeDIConfiguration.swift": "#SafeDIConfiguration(additionalDirectoriesToInclude: [\"$ADDITIONAL_DIRECTORY\"])\n",
+			],
+			additionalDirectoryFiles: [
+				"Reader.swift": "#if FLAG\nstruct Token {}\n#endif\n\n@Instantiable\npublic struct Reader: Instantiable {\n    public init(token: Token?) {\n        self.token = token\n    }\n\n    @Received(onlyIfAvailable: true) let token: Token?\n}",
+			],
+			scannedWith: [],
+			generatedWith: ["FLAG"],
+		)
+		#expect(files.cached == files.fresh)
+		#expect(files.cached["Badge+SafeDI.swift"] == generatedFileHeader + Self.badgeBuildingCacheTiers)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func scan_cachesNoRecordOfSkippedClause_whenFlagIsNotReported() async throws {
+		// IF18: without `FLAG`, scan records the `#else` clause's declaration alone.
+		let project = try await scannedProject(alongside: ["Badge.swift": Self.tokenInEachClauseOfFlag + Self.badgeSeam])
 
 		let cache = try CachedScannedModuleInfo(scanCacheData: Data(contentsOf: scannedModuleInfoURL(forManifestPath: project.manifestFile.path)))
-		#expect(cache.moduleInfo.plainTypeDeclarations.map(\.typeDescription) == [.simple(name: "Token"), .simple(name: "Token")])
-		#expect(cache.moduleInfo.plainTypeDeclarations.map(\.isInsideConditionalBlock) == [true, true])
-		#expect(cache.moduleInfo.plainTypeDeclarations.map(\.access.level) == [.package, .package])
-		#expect(cache.moduleInfo.plainTypeDeclarations.map(\.sourceFilePath) == ["Badge.swift", "Badge.swift"])
+		let badgeScan = try #require(cache.conditionSensitiveFileScans.first { $0.fileScan.path == "Badge.swift" })
+		#expect(badgeScan.fileScan.plainTypeDeclarations.map(\.typeDescription) == [.simple(name: "Token")])
+		#expect(badgeScan.fileScan.plainTypeDeclarations.map(\.access.level) == [.public])
+		#expect(badgeScan.fileScan.plainTypeDeclarations.map(\.access.declarationStartLocation?.line) == [4])
+		#expect(badgeScan.fileScan.consultedCompilationConditions == ["FLAG"])
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_parsesAfresh_whenFileDeclaringTypeInsideConditionalBlockChanges() async throws {
-		// B7: editing the file whose `#if` block declares `Token` reads it again rather than the records scan cached.
-		let project = try await scannedProject(alongside: Self.conditionalTokenFiles)
-		let badgeFile = project.directory.appendingPathComponent("Badge.swift")
-		try Self.conditionalTokenFiles["Badge.swift", default: ""].replacingOccurrences(of: "#if FLAG\npackage struct Token {}", with: "#if FLAG\npublic struct Token {}").write(to: badgeFile, atomically: true, encoding: .utf8)
-		try FileModificationTime(seconds: 0, nanoseconds: 0).apply(toItemAtPath: badgeFile.path)
+	mutating func scan_cachesPlainDeclarationDecisionsWithNames_whenBlockDeclaresTypeADeclarationMentions() async throws {
+		// IF18: `Badge` mentions `Token`, so the decision that selects the clause declaring it is cached among the file's
+		// decisions, which every generated file asserts.
+		let project = try await scannedProject(alongside: ["Badge.swift": Self.tokenInEachClauseOfFlag + Self.badgeSeam])
 
-		await assertThrowsError(project.rootNotInManifestMessage) {
-			try await project.generate()
-		}
+		let cache = try CachedScannedModuleInfo(scanCacheData: Data(contentsOf: scannedModuleInfoURL(forManifestPath: project.manifestFile.path)))
+		let badgeScan = try #require(cache.conditionSensitiveFileScans.first { $0.fileScan.path == "Badge.swift" })
+		#expect(badgeScan.fileScan.conditionalCompilationDecisions == [ConditionalCompilationDecision(condition: "FLAG", isActive: false)])
+		#expect(badgeScan.fileScan.plainTypeDeclarationDecisions.isEmpty)
+		#expect(cache.keptPlainTypeNames == KeptPlainTypeNames(outermostTypeNames: ["Badge", "Cache", "Root", "Token"], mentionedTypeNames: ["Cache", "Token"], extendedTypeNames: []))
+		#expect(cache.additionalKeptPlainTypeNames == cache.keptPlainTypeNames)
 	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func scan_cachesTheSameDeclarationsInsideConditionalBlock_whenScannedWithEitherConditionSet() async throws {
-		// B7b: a declaration inside an `#if` block is recorded from every clause, so scanning without `FLAG` and with it
-		// records the same declarations, which `generate` can reuse under either condition set.
-		let withoutFlag = try await scannedProject(alongside: Self.conditionalTokenFiles)
-		let withFlag = try await scannedAgain(withoutFlag, activeCompilationConditions: ["FLAG"])
+	mutating func scan_dropsPlainDeclarationDecisionsAndConsultsNothing_whenNothingMentionsTheType() async throws {
+		// IF18: no declaration mentions `Unrelated`, so the module keeps no declaration of it, whichever clause is selected:
+		// the decision that skips it is not asserted, and the file consults no condition, so `generate` never walks it
+		// again for `FLAG`.
+		let project = try await scannedProject(alongside: ["Badge.swift": "#if FLAG\nstruct Unrelated {}\n#endif\n\n" + Self.badgeSeam, "Token.swift": "public struct Token {}"])
 
-		let cacheWithoutFlag = try CachedScannedModuleInfo(scanCacheData: Data(contentsOf: scannedModuleInfoURL(forManifestPath: withoutFlag.manifestFile.path)))
-		let cacheWithFlag = try CachedScannedModuleInfo(scanCacheData: Data(contentsOf: scannedModuleInfoURL(forManifestPath: withFlag.manifestFile.path)))
-		#expect(cacheWithFlag.moduleInfo.plainTypeDeclarations.count == 2)
-		#expect(cacheWithoutFlag.moduleInfo.plainTypeDeclarations == cacheWithFlag.moduleInfo.plainTypeDeclarations)
-		try await withoutFlag.generate(activeCompilationConditions: ["FLAG"])
-		try await withFlag.generate()
+		let cache = try CachedScannedModuleInfo(scanCacheData: Data(contentsOf: scannedModuleInfoURL(forManifestPath: project.manifestFile.path)))
+		#expect(cache.conditionSensitiveFileScans.isEmpty)
+		#expect(cache.moduleInfo.conditionalCompilationDecisions.isEmpty)
+		#expect(cache.moduleInfo.plainTypeDeclarations.map(\.typeDescription) == [.simple(name: "Token")])
 	}
 
 	@Test
@@ -394,27 +568,126 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
-	/// A `package` type declared inside an `#if` block of a file that also declares a type whose initializer mentions it.
-	private static let conditionalTokenFiles = [
-		"Badge.swift": """
-		#if FLAG
-		package struct Token {}
-		#else
-		package struct Token {
-		    let value: Int
-		}
+	/// `Token`, declared `package` when `FLAG` is active and `public` otherwise, followed by a blank line.
+	private static let tokenInEachClauseOfFlag = "#if FLAG\npackage struct Token {}\n#else\npublic struct Token {}\n#endif\n\n"
+
+	/// The seam `Badge`, which receives `token` only if available and builds `Cache`.
+	private static let badgeSeam = """
+	@Instantiable(generateDependencyTree: true)
+	public struct Badge: Instantiable {
+	    init(token: Token?, cache: Cache) {
+	        self.token = token
+	        self.cache = cache
+	    }
+
+	    @Received(onlyIfAvailable: true) let token: Token?
+	    @Instantiated let cache: Cache
+	}
+
+	@Instantiable
+	struct Cache: Instantiable {
+	    init() {}
+	}
+	"""
+
+	/// The seam `Badge`, which builds `Cache` and mentions no other type, and `Cache`.
+	private static let badgeBuildingCache = """
+	@Instantiable(generateDependencyTree: true)
+	public struct Badge: Instantiable {
+	    init(cache: Cache) {
+	        self.cache = cache
+	    }
+
+	    @Instantiated let cache: Cache
+	}
+
+	@Instantiable
+	struct Cache: Instantiable {
+	    init() {}
+	}
+	"""
+
+	/// `badgeBuildingCache`'s generated initializers, after its file's header and assertions.
+	private static let badgeBuildingCacheTiers = """
+	extension Badge {
+	    public init() {
+	        let cache = Cache()
+	        self.init(cache: cache)
+	    }
+	}
+
+	extension Badge {
+	    public enum __safeDI_Badge_CBF29CE484222325 {}
+	}
+	"""
+
+	/// `Holder`, whose initializer mentions `Token` only when `FLAG` is active.
+	private static let holderMentioningTokenUnderFlag = """
+	@Instantiable
+	public struct Holder: Instantiable {
+	    #if FLAG
+	    public init(token: Token?) {
+	        self.token = token
+	    }
+
+	    @Received(onlyIfAvailable: true) let token: Token?
+	    #else
+	    public init() {}
+	    #endif
+	}
+	"""
+
+	/// `Badge`'s generated initializers, after its file's header and assertions, when `Token` is `package`.
+	private static let packageTierBadge = """
+	extension Badge {
+	    public init() {
+	        self.init(token: nil)
+	    }
+
+	    package init(token: Token? = nil) {
+	        let cache = Cache()
+	        self.init(token: token, cache: cache)
+	    }
+	}
+
+	extension Badge {
+	    public enum __safeDI_Badge_16885A1AAD60582A {}
+	}
+	"""
+
+	/// `Badge`'s generated initializers, after its file's header and assertions, when `Token` is `public`.
+	private static let publicTierBadge = """
+	extension Badge {
+	    public init(token: Token? = nil) {
+	        let cache = Cache()
+	        self.init(token: token, cache: cache)
+	    }
+	}
+
+	extension Badge {
+	    public enum __safeDI_Badge_029593DA1BB2FBD5 {}
+	}
+	"""
+
+	/// The compile-time assertion a generated file carries for a `#if <condition>` the tool evaluated as active.
+	private static func activeAssertion(_ condition: String) -> String {
+		"""
+		#if !(\(condition))
+		#error("SafeDI scanned this module assuming `#if \(condition)` was active, but it is inactive in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
 		#endif
 
-		@Instantiable
-		public struct Badge: Instantiable {
-		    init(token: Token) {
-		        self.token = token
-		    }
+		""" + "\n"
+	}
 
-		    @Received let token: Token
-		}
-		""",
-	]
+	/// The compile-time assertion a generated file carries for a `#if <condition>` the tool evaluated as inactive.
+	private static func inactiveAssertion(_ condition: String) -> String {
+		"""
+		#if \(condition)
+		#error("SafeDI scanned this module assuming `#if \(condition)` was inactive, but it is active in this compilation. Report the conditions this target compiles with to SafeDITool, as the \\"Reporting active conditions\\" section of the SafeDI manual describes for your build system.")
+		#endif
+
+		""" + "\n"
+	}
 
 	/// A protocol in a file of its own, which mentions no SafeDI marker, and a declaration whose initializer mentions it.
 	private static let mentionedProtocolFiles = [
@@ -519,28 +792,89 @@ struct SafeDIToolScanCacheFreshnessTests: ~Copyable {
 		)
 	}
 
-	/// `project`, scanned again under `activeCompilationConditions` into a manifest and cache of its own, so that the two
-	/// caches name the same files.
+	/// What `generate` writes under `generatedWith` for module `Feature`, holding `files`, which the SwiftPM plugin scans
+	/// under `scannedWith` and whose build settings then report `generatedWith`, from scan's cache, which walks again each
+	/// file whose block consults a condition the two sets give different values; and what it writes for a scan under
+	/// `generatedWith`, which walks nothing again.
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	private mutating func scannedAgain(_ project: ScannedProject, activeCompilationConditions: [String]) async throws -> ScannedProject {
-		let outputDirectory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
-		try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
-		let manifestFile = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString + ".json")
-		filesToDelete += [outputDirectory, manifestFile, scannedModuleInfoURL(forManifestPath: manifestFile.path)]
+	private mutating func generatedFilesFromRewalk(of files: [String: String], scannedWith scanConditions: [String], generatedWith generateConditions: [String]) async throws -> (cached: [String: String], reference: [String: String]) {
+		let buildSettingArguments = [
+			"--build-setting-active-compilation-conditions=[\(generateConditions.joined(separator: " "))]",
+			"--build-setting-other-swift-flags=[]",
+		]
+		let cached = try await executeSafeDIToolMultiModuleTest(
+			modules: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContentByFilePath: files, activeCompilationConditions: scanConditions, buildSettingArguments: buildSettingArguments, verificationCompilationConditions: generateConditions)],
+			integration: .swiftPackagePlugin,
+			filesToDelete: &filesToDelete,
+		)
+		let reference = try await executeSafeDIToolMultiModuleTest(
+			modules: [ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContentByFilePath: files, activeCompilationConditions: generateConditions, buildSettingArguments: buildSettingArguments)],
+			integration: .swiftPackagePlugin,
+			filesToDelete: &filesToDelete,
+		)
+		return (cached.modules["Feature"]?.generatedFiles ?? [:], reference.modules["Feature"]?.generatedFiles ?? [:])
+	}
+
+	/// What `generate` writes under `generatedWith` for a project holding `Root.swift` and `files`, from a cache `scan` wrote
+	/// under `scannedWith`, and what it writes for the same manifest once that cache is gone, which it parses afresh. Each
+	/// file's `$ADDITIONAL_DIRECTORY` names a directory outside the target holding `additionalDirectoryFiles`, which the
+	/// input CSV does not list. As the plugin's, the CSV's paths are relative to the project root, which is the working
+	/// directory, so a fresh parse names each file as the manifest does.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	private mutating func generatedFilesFromCacheAndAfresh(
+		of files: [String: String],
+		additionalDirectoryFiles: [String: String] = [:],
+		scannedWith scanConditions: [String],
+		generatedWith generateConditions: [String],
+	) async throws -> (cached: [String: String], fresh: [String: String]) {
+		let projectRoot = FileManager.default.currentDirectoryPath
+		let fixtureDirectory = ".build/SafeDIToolTestFixtures/\(UUID().uuidString)"
+		let fixtureURL = URL(fileURLWithPath: projectRoot).appendingPathComponent(fixtureDirectory)
+		filesToDelete.append(fixtureURL)
+		let outputDirectory = fixtureURL.appendingPathComponent("Output")
+		for directory in ["Target", "Extra", "Output"] {
+			try FileManager.default.createDirectory(at: fixtureURL.appendingPathComponent(directory), withIntermediateDirectories: true)
+		}
+		for (fileName, content) in additionalDirectoryFiles {
+			try content.write(to: fixtureURL.appendingPathComponent("Extra").appendingPathComponent(fileName), atomically: true, encoding: .utf8)
+		}
+		var inputFilePaths = ["\(fixtureDirectory)/Target/Root.swift"]
+		try Self.rootContent.write(to: fixtureURL.appendingPathComponent("Target/Root.swift"), atomically: true, encoding: .utf8)
+		for fileName in files.keys.sorted() {
+			try files[fileName]?
+				.replacingOccurrences(of: "$ADDITIONAL_DIRECTORY", with: "\(fixtureDirectory)/Extra")
+				.write(to: fixtureURL.appendingPathComponent("Target").appendingPathComponent(fileName), atomically: true, encoding: .utf8)
+			inputFilePaths.append("\(fixtureDirectory)/Target/\(fileName)")
+		}
+		let swiftFileCSV = fixtureURL.appendingPathComponent("Inputs.csv")
+		try inputFilePaths.joined(separator: ",").write(to: swiftFileCSV, atomically: true, encoding: .utf8)
+		// The scan cache lies beside the manifest, inside the fixture directory.
+		let manifestFile = fixtureURL.appendingPathComponent("Manifest.json")
 
 		try await Scan.parse([
-			"--input-sources-file", project.swiftFileCSV.path,
-			"--project-root", project.directory.path,
+			"--input-sources-file", swiftFileCSV.path,
+			"--project-root", projectRoot,
 			"--output-directory", outputDirectory.path,
 			"--manifest-file", manifestFile.path,
-			"--active-compilation-conditions",
-		] + activeCompilationConditions).run()
-		return ScannedProject(
-			directory: project.directory,
-			rootFile: project.rootFile,
-			targetFile: project.targetFile,
-			swiftFileCSV: project.swiftFileCSV,
-			manifestFile: manifestFile,
-		)
+		] + (scanConditions.isEmpty ? [] : ["--active-compilation-conditions"] + scanConditions)).run()
+		func generatedFiles() async throws -> [String: String] {
+			// The build settings, which replace the conditions the manifest records, as Swift Build expands them.
+			try await Generate.parse([
+				swiftFileCSV.path,
+				"--swift-manifest", manifestFile.path,
+				"--build-setting-active-compilation-conditions=[\(generateConditions.joined(separator: " "))]",
+				"--build-setting-other-swift-flags=[]",
+			]).run()
+			let manifest = try JSONDecoder().decode(SafeDIToolManifest.self, from: Data(contentsOf: manifestFile))
+			var generatedFiles = [String: String]()
+			for outputFilePath in (manifest.dependencyTreeGeneration + manifest.mockGeneration).map(\.outputFilePath) {
+				generatedFiles[(outputFilePath as NSString).lastPathComponent] = try String(contentsOfFile: outputFilePath, encoding: .utf8)
+			}
+			return generatedFiles
+		}
+		let cached = try await generatedFiles()
+		try FileManager.default.removeItem(at: scannedModuleInfoURL(forManifestPath: manifestFile.path))
+		let fresh = try await generatedFiles()
+		return (cached, fresh)
 	}
 }

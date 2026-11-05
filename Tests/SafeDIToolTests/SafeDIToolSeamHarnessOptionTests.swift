@@ -42,26 +42,20 @@ struct SafeDIToolSeamHarnessOptionTests: ~Copyable {
 
 	// MARK: Fixtures
 
-	/// A plain public model type, not `@Instantiable`, so no declaration of its own proves its access.
-	private static let theme = unrecordedTypeDeclaration("""
-	public struct Theme {
-	    public init() {}
-	}
-	""")
-
-	/// `App`'s root, which builds `Shell` through an instantiator, so that `Shell` can forward `theme`.
+	/// `App`'s root, which builds `Shell` through an instantiator, so that `Shell` can forward `theme: [3 of Int]`, a
+	/// spelling SafeDI cannot read, which only the mentions prove.
 	private static let shellForwardingTheme = """
 	import Feature
 	import SafeDI
 
 	@Instantiable
 	public struct Shell: Instantiable {
-	    public init(theme: Theme, service: Service) {
+	    public init(theme: [3 of Int], service: Service) {
 	        self.theme = theme
 	        self.service = service
 	    }
 
-	    @Forwarded let theme: Theme
+	    @Forwarded let theme: [3 of Int]
 	    @Instantiated let service: Service
 	}
 
@@ -85,8 +79,8 @@ struct SafeDIToolSeamHarnessOptionTests: ~Copyable {
 		// it. Built inline, `Badge` would be handed `theme`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Shell.swift"]):11:5: error: `Shell` provides `theme: Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App`, which SafeDI cannot tell is in the same package, can call, does not take it: `Service` takes `theme` only on its `internal` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `package`, or `public` if the two modules are in different packages; mention `Theme` in a `package` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `package` `mockOnly` mock (`@Instantiable(mockOnly: true) package extension Theme { package static func mock() -> Theme }`), which proves `Theme` `package`; or stop providing `theme` on this path.
-			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: Theme?` here.
+			\(fixtures["App"]!["Shell.swift"]):11:5: error: `Shell` provides `theme: [3 of Int]`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App`, which SafeDI cannot tell is in the same package, can call, does not take it: `Service` takes `theme` only on its `internal` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `package`, or `public` if the two modules are in different packages; mention `[3 of Int]` in a `package` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
+			\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -95,15 +89,14 @@ struct SafeDIToolSeamHarnessOptionTests: ~Copyable {
 						name: "Feature",
 						packageName: "Shop",
 						swiftFileContent: [
-							Self.theme,
 							"""
 							@Instantiable
 							public struct Badge: Instantiable {
-							    internal init(theme: Theme?) {
+							    internal init(theme: [3 of Int]?) {
 							        self.theme = theme
 							    }
 
-							    @Received(onlyIfAvailable: true) let theme: Theme?
+							    @Received(onlyIfAvailable: true) let theme: [3 of Int]?
 							}
 							""",
 							seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),

@@ -245,11 +245,9 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 					packageName: "Shop",
 					swiftFileContent: [
 						"""
-						#if canImport(Foundation)
-						public struct Theme {
-						    public init() {}
+						package struct Theme {
+						    package init() {}
 						}
-						#endif
 						""",
 						"""
 						@Instantiable
@@ -272,8 +270,8 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 						import Feature
 
 						@Instantiable
-						public struct Shell: Instantiable {
-						    public init(theme: Theme, service: Service) {
+						package struct Shell: Instantiable {
+						    package init(theme: Theme, service: Service) {
 						        self.theme = theme
 						        self.service = service
 						    }
@@ -282,7 +280,7 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 						    @Instantiated let service: Service
 						}
 						""",
-						Self.appRoot(declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"]),
+						Self.appRoot(declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"]).replacingOccurrences(of: "public init(", with: "package init("),
 					],
 					dependencies: ["Feature"],
 					omitsPackageName: true,

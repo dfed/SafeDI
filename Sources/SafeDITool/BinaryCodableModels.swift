@@ -41,6 +41,8 @@ extension CachedScannedModuleInfo: BinarySchemaMember {
 				BinaryLayoutField("csvInputPaths", \.csvInputPaths),
 				BinaryLayoutField("additionalInputAbsolutePaths", \.additionalInputAbsolutePaths),
 				BinaryLayoutField("additionalDirectories", \.additionalDirectories),
+				BinaryLayoutField("keptPlainTypeNames", \.keptPlainTypeNames),
+				BinaryLayoutField("additionalKeptPlainTypeNames", \.additionalKeptPlainTypeNames),
 				BinaryLayoutField("activeCompilationConditions", \.activeCompilationConditions),
 			],
 			unwrittenProperties: [],
@@ -58,6 +60,8 @@ extension CachedScannedModuleInfo: BinarySchemaMember {
 			csvInputPaths: reader.read(),
 			additionalInputAbsolutePaths: reader.read(),
 			additionalDirectories: reader.read(),
+			keptPlainTypeNames: reader.read(),
+			additionalKeptPlainTypeNames: reader.read(),
 			activeCompilationConditions: reader.read(),
 		)
 	}
@@ -72,6 +76,8 @@ extension CachedScannedModuleInfo: BinarySchemaMember {
 		writer.write(csvInputPaths)
 		writer.write(additionalInputAbsolutePaths)
 		writer.write(additionalDirectories)
+		writer.write(keptPlainTypeNames)
+		writer.write(additionalKeptPlainTypeNames)
 		writer.write(activeCompilationConditions)
 	}
 }
@@ -140,8 +146,12 @@ extension FileScan: BinarySchemaMember {
 				BinaryLayoutField("importOnlyConsultedCompilationConditions", \.importOnlyConsultedCompilationConditions),
 				BinaryLayoutField("outputFileDeclarations", \.outputFileDeclarations),
 				BinaryLayoutField("plainTypeDeclarations", \.plainTypeDeclarations),
+				BinaryLayoutField("keptGuardedPlainTypeNames", \.keptGuardedPlainTypeNames),
 			],
-			unwrittenProperties: [],
+			// A cached scan is one whose module kept its plain type declarations
+			// (`FileScan.keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesPackageCanName:isInReadingModule:)`),
+			// which leaves no block undecided.
+			unwrittenProperties: ["plainTypeDeclarationDecisions"],
 		)
 	}
 
@@ -159,6 +169,8 @@ extension FileScan: BinarySchemaMember {
 			importOnlyConsultedCompilationConditions: reader.read(),
 			outputFileDeclarations: reader.read(),
 			plainTypeDeclarations: reader.read(),
+			plainTypeDeclarationDecisions: [],
+			keptGuardedPlainTypeNames: reader.read(),
 		)
 	}
 
@@ -175,6 +187,7 @@ extension FileScan: BinarySchemaMember {
 		writer.write(importOnlyConsultedCompilationConditions)
 		writer.write(outputFileDeclarations)
 		writer.write(plainTypeDeclarations)
+		writer.write(keptGuardedPlainTypeNames)
 	}
 }
 
@@ -369,6 +382,33 @@ extension ConditionalCompilationDecision: BinarySchemaMember {
 	}
 }
 
+extension KeptPlainTypeNames: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("outermostTypeNames", \.outermostTypeNames),
+				BinaryLayoutField("mentionedTypeNames", \.mentionedTypeNames),
+				BinaryLayoutField("extendedTypeNames", \.extendedTypeNames),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(
+			outermostTypeNames: reader.read(),
+			mentionedTypeNames: reader.read(),
+			extendedTypeNames: reader.read(),
+		)
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(outermostTypeNames)
+		writer.write(mentionedTypeNames)
+		writer.write(extendedTypeNames)
+	}
+}
+
 extension SafeDIConfiguration: BinarySchemaMember {
 	static var binaryLayout: BinaryLayout<Self> {
 		.structure(
@@ -555,7 +595,6 @@ extension PlainTypeDeclaration: BinarySchemaMember {
 				BinaryLayoutField("access", \.access),
 				BinaryLayoutField("enclosingTypeAccess", \.enclosingTypeAccess),
 				BinaryLayoutField("enclosingExtensionAccess", \.enclosingExtensionAccess),
-				BinaryLayoutField("isInsideConditionalBlock", \.isInsideConditionalBlock),
 				BinaryLayoutField("moduleName", \.moduleName),
 				BinaryLayoutField("packageName", \.packageName),
 				BinaryLayoutField("sourceFilePath", \.sourceFilePath),
@@ -570,7 +609,6 @@ extension PlainTypeDeclaration: BinarySchemaMember {
 			access: reader.read(),
 			enclosingTypeAccess: reader.read(),
 			enclosingExtensionAccess: reader.read() as AccessDeclaration?,
-			isInsideConditionalBlock: reader.read(),
 			moduleName: reader.read() as String?,
 			packageName: reader.read() as String?,
 			sourceFilePath: reader.read() as String?,
@@ -589,7 +627,6 @@ extension PlainTypeDeclaration: BinarySchemaMember {
 			writer.write(access)
 			writer.write(enclosingTypeAccess)
 			writer.write(enclosingExtensionAccess)
-			writer.write(isInsideConditionalBlock)
 			writer.write(moduleName)
 			writer.write(packageName)
 			writer.write(sourceFilePath)

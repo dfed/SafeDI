@@ -323,54 +323,12 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenPublicMockedTypeIsDeclaredInUnspelledExtensionOfTypeWithoutEntry() async {
-		// M1.25: `Panel` is a non-exact entry inside an unspelled extension of `Feed`, which has no entry, so nothing raises it
-		// from `internal`, and its initializer proves `Theme` only at `internal`. Cause (v).
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Panel.swift"]):12:33: error: SafeDI cannot generate the public mock of `Feed.Panel`: its `public` tier, which `generateMock: .public` requires, cannot take `theme: Theme`, which the initializer of `Feed.Panel` receives, and cannot pass `nil` for it, since it is required. `Theme` is `internal` as far as SafeDI can tell: `Feed.Panel` is declared inside an extension of `Feed` that spells no access level, and `Feed` is declared inside an `#if` block, from which SafeDI takes no access level, so `Feed.Panel`'s initializer proves its parameter types only at `internal`. If `Feed` can be `public`, spell the extension's access level (`public extension Feed { … }`, dropping the modifier on `Panel` that Swift then reports as redundant; the compiler rejects a level wider than `Feed`'s), or declare `Panel` in `Feed`'s body or at top level; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; receive it with `onlyIfAvailable: true` and an optional type; or use `generateMock: .internal`.
-			\(fixtures["Panel.swift"]):18:9: note: `Feed.Panel` receives `theme: Theme` here.
-			"""
-		}) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					#if canImport(Foundation)
-					public enum Feed {}
-					#endif
-
-					#if canImport(Foundation)
-					public struct Theme {
-					    public init() {}
-					}
-					#endif
-
-					extension Feed {
-					    @Instantiable(generateMock: .public)
-					    public struct Panel: Instantiable {
-					        public init(theme: Theme) {
-					            self.theme = theme
-					        }
-
-					        @Received let theme: Theme
-					    }
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenPublicMockedTreeReceivesPlainTypeOnlyNarrowerInitializersMention() async {
 		// M2.9b, M2.10: a received parameter nothing builds is required. Cause (ii), with a note at the receive.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):1:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `token: Token`, which the initializer of `TokenCache` receives, and cannot pass `nil` for it, since it is required. `Token` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`TokenCache.init(token:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Token` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Token { public static func mock() -> Token }`), which proves `Token` `public` and lets the mock build it; receive it with `onlyIfAvailable: true` and an optional type; make `TokenCache.init(token:)` `public`; or use `generateMock: .internal`.
-			\(fixtures["TokenCache.swift"]):7:5: note: `TokenCache` receives `token: Token` here.
+			\(fixtures["Service.swift"]):1:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `token: [3 of Int]`, which the initializer of `TokenCache` receives, and cannot pass `nil` for it, since it is required. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`TokenCache.init(token:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; receive it with `onlyIfAvailable: true` and an optional type; make `TokenCache.init(token:)` `public`; or use `generateMock: .internal`.
+			\(fixtures["TokenCache.swift"]):7:5: note: `TokenCache` receives `token: [3 of Int]` here.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
@@ -388,14 +346,13 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 					"""
 					@Instantiable
 					public struct TokenCache: Instantiable {
-					    init(token: Token) {
+					    init(token: [3 of Int]) {
 					        self.token = token
 					    }
 
-					    @Received let token: Token
+					    @Received let token: [3 of Int]
 					}
 					""",
-					unrecordedTypeDeclaration("public struct Token {\n    public init() {}\n}"),
 				],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
@@ -1698,9 +1655,13 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// instantiation.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):1:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `thingBuilder`, which returns `Thing` for the hole `thing`, and cannot pass `nil` for it, since it is required. `Thing` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Service.init(left:right:thing:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Thing` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Thing` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Thing { public static func mock() -> Thing }`), which proves `Thing` `public`; declare in this module, or a module it depends on, a `mockOnly` `@Instantiable` type that fulfills `Thing` (`@Instantiable(fulfillingAdditionalTypes: [Thing.self], mockOnly: true)`), which the mock builds instead of taking `thingBuilder`, leaving production's hole as it is; make `Service.init(left:right:thing:)` `public`; or use `generateMock: .internal`.
+			\(fixtures["Service.swift"]):1:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `thingBuilder`, which returns `Thing` for the hole `thing`, and cannot pass `nil` for it, since it is required. `Thing` is declared `internal`. Declare `Thing` `public`; declare in this module, or a module it depends on, a `mockOnly` `@Instantiable` type that fulfills `Thing` (`@Instantiable(fulfillingAdditionalTypes: [Thing.self], mockOnly: true)`), which the mock builds instead of taking `thingBuilder`, leaving production's hole as it is; or use `generateMock: .internal`.
+			\(fixtures["Thing.swift"]):1:1: note: `Thing` is declared `internal` here.
+			\(fixtures["Thing.swift"]):1:1-1:1: fixit: public\(" ")
 			\(fixtures["Service.swift"]):10:5: note: `Service` instantiates `thing: Thing` here.
-			\(fixtures["Service.swift"]):1:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `token: Token`, which the initializers of `Left` and `Right` receive, and cannot pass `nil` for it, since it is required. `Token` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Left.init(token:)`, `Right.init(token:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Token` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Token { public static func mock() -> Token }`), which proves `Token` `public` and lets the mock build it; receive it with `onlyIfAvailable: true` and an optional type; make `Left.init(token:)` `public`; make `Right.init(token:)` `public`; or use `generateMock: .internal`.
+			\(fixtures["Service.swift"]):1:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `token: Token`, which the initializers of `Left` and `Right` receive, and cannot pass `nil` for it, since it is required. `Token` is declared `internal`. Declare `Token` `public`; receive it with `onlyIfAvailable: true` and an optional type; or use `generateMock: .internal`.
+			\(fixtures["Token.swift"]):1:1: note: `Token` is declared `internal` here.
+			\(fixtures["Token.swift"]):1:1-1:1: fixit: public\(" ")
 			\(fixtures["Left.swift"]):7:5: note: `Left` receives `token: Token` here.
 			\(fixtures["Right.swift"]):7:5: note: `Right` receives `token: Token` here.
 			"""
@@ -1741,8 +1702,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 					    @Received let token: Token
 					}
 					""",
-					unrecordedTypeDeclaration("struct Token {}"),
-					unrecordedTypeDeclaration("struct Thing {}"),
+					"struct Token {}",
+					"struct Thing {}",
 				],
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
@@ -1757,8 +1718,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	mutating func generate_generatesPublicAndPackageTiers_whenCanonicalServiceTakesPackageParameter() async throws {
 		// M2.2, M3.14, M3.18, M3.18b, M4.1, M4.2, M5.5, M5.3, M6.1, M6.3, M6.3b: the canonical `Service`. Its public tier
 		// omits the package `session`, which its package tier takes; `name` and `policy` are fields of `SafeDIOverrides`,
-		// `policy` internal since only a default-valued argument names `Policy`, whose declaration, inside an `#if` block,
-		// SafeDI does not read; another package calls the public tier.
+		// `policy` `package`, as `Policy`'s declaration is; another package calls the public tier.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.canonicalModules(appCaller: Self.canonicalAppCaller),
 			integration: .moduleInfo,
@@ -1831,21 +1791,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			            analytics: (() -> Analytics)? = nil,
 			            session: (() -> Session)? = nil,
 			            tokenCache: __safeDI_Core_TokenCache_MockConfiguration = .init(),
-			            name: String? = Service.__safeDI_publicMockDefault_name()
-			        ) {
-			            self.logger = logger
-			            self.analytics = analytics
-			            self.session = session
-			            self.tokenCache = tokenCache
-			            self.name = name
-			            self.policy = Service.__safeDI_publicMockDefault_policy()
-			        }
-
-			        init(
-			            logger: __safeDI_Core_FakeLogger_MockConfiguration = .init(),
-			            analytics: (() -> Analytics)? = nil,
-			            session: (() -> Session)? = nil,
-			            tokenCache: __safeDI_Core_TokenCache_MockConfiguration = .init(),
 			            name: String? = Service.__safeDI_publicMockDefault_name(),
 			            policy: Policy? = Service.__safeDI_publicMockDefault_policy()
 			        ) {
@@ -1864,7 +1809,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			        /// The default of `Service`'s `name` unless set; `.init(name: nil)` passes `nil`.
 			        public let name: String?
 			        /// The default of `Service`'s `policy` unless set; `.init(policy: nil)` passes `nil`.
-			        let policy: Policy?
+			        package let policy: Policy?
 			    }
 
 			    public static func mock(
@@ -3136,22 +3081,21 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenHoleTypeOnlyPackageInitializerMentions() async {
-		// M2.12b, M7.1b: only `Service`'s `package` initializer mentions `UserService`, so its builder is `package`, and
-		// the public tier cannot take it.
+		// M2.12b, M7.1b: `UserService` is `package`, so its builder is `package`, and the public tier cannot take it.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):7:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `userServiceBuilder`, which returns `UserService` for the hole `userService`, and cannot pass `nil` for it, since it is required. `UserService` is `package` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `package` (`Service.init(userService:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `UserService` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `UserService` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension UserService { public static func mock() -> UserService }`), which proves `UserService` `public`; declare in this module, or a module it depends on, a `mockOnly` `@Instantiable` type that fulfills `UserService` (`@Instantiable(fulfillingAdditionalTypes: [UserService.self], mockOnly: true)`), which the mock builds instead of taking `userServiceBuilder`, leaving production's hole as it is; make `Service.init(userService:)` `public`; or use `generateMock: .internal`.
-			\(fixtures["Service.swift"]):13:5: note: `Service` instantiates `userService: UserService` here.
+			\(fixtures["Service.swift"]):5:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `userServiceBuilder`, which returns `UserService` for the hole `userService`, and cannot pass `nil` for it, since it is required. `UserService` is declared `package`. Declare `UserService` `public`; declare in this module, or a module it depends on, a `mockOnly` `@Instantiable` type that fulfills `UserService` (`@Instantiable(fulfillingAdditionalTypes: [UserService.self], mockOnly: true)`), which the mock builds instead of taking `userServiceBuilder`, leaving production's hole as it is; or use `generateMock: .internal`.
+			\(fixtures["Service.swift"]):1:1: note: `UserService` is declared `package` here.
+			\(fixtures["Service.swift"]):1:1-1:8: fixit: public
+			\(fixtures["Service.swift"]):11:5: note: `Service` instantiates `userService: UserService` here.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
-					#if canImport(Foundation)
-					public final class UserService {
-					    public init() {}
+					package final class UserService {
+					    package init() {}
 					}
-					#endif
 
 					@Instantiable(generateMock: .public)
 					public struct Service: Instantiable {
@@ -3174,17 +3118,13 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	mutating func generate_buildsMockOnlyStubInPlaceOfTakingBuilder_whenDeclaringModuleDeclaresStubThatFulfillsHole() async throws {
 		// BZ-6: the remedy the error above names. A `mockOnly` stub in `Core` fulfills the hole's type, so `Service`'s
 		// mock builds the stub and takes no builder, while production still has the hole; another package calls it.
-		// `UserService` is declared inside an `#if` block, as the error above declares it, so SafeDI reads no declaration
-		// of it and proves it `package` from `Service`'s initializer alone: a plain `public` declaration would prove it
-		// `public`, and the public tier would take the builder with no stub. The override for the stub is therefore
-		// `package`, beside a `public init()`.
+		// `UserService` is `package`, as the error above declares it: a `public` one would let the public tier take the
+		// builder with no stub. The override for the stub is therefore `package`, beside a `public init()`.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Core", packageName: "pkg", swiftFileContent: [
 					"""
-					#if canImport(Foundation)
-					public protocol UserService {}
-					#endif
+					package protocol UserService {}
 
 					@Instantiable(generateMock: .public)
 					public struct Service: Instantiable {
@@ -6578,16 +6518,16 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// R7: an array of an internal type nothing fulfills is a required parameter no public tier can take.
 		await assertThrowsError(diagnostics: { fixtures in
 			"""
-			\(fixtures["Service.swift"]):5:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `secrets: [Secret]`, which `Service` instantiates and no `@Instantiable` declaration this module sees fulfills, and cannot pass `nil` for it, since it is required. `Secret` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Service.init(secrets:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Secret` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Secret` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Secret { public static func mock() -> Secret }`), which proves `Secret` `public`; make `Service.init(secrets:)` `public`; or use `generateMock: .internal`.
-			\(fixtures["Service.swift"]):11:5: note: `Service` instantiates `secrets: [Secret]` here.
+			\(fixtures["Service.swift"]):3:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `secrets: [Secret]`, which `Service` instantiates and no `@Instantiable` declaration this module sees fulfills, and cannot pass `nil` for it, since it is required. `Secret` is declared `internal`. Declare `Secret` `public`; or use `generateMock: .internal`.
+			\(fixtures["Service.swift"]):1:1: note: `Secret` is declared `internal` here.
+			\(fixtures["Service.swift"]):1:1-1:1: fixit: public\(" ")
+			\(fixtures["Service.swift"]):9:5: note: `Service` instantiates `secrets: [Secret]` here.
 			"""
 		}) {
 			try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
-					#if canImport(Foundation)
 					struct Secret {}
-					#endif
 
 					@Instantiable(generateMock: .public)
 					public struct Service: Instantiable {
@@ -7075,8 +7015,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// initializer mentions; `Screen` forwards `filter`, which the inline mock would hand `TokenCache`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Screen.swift"]):11:5: error: `Screen` provides `filter: Filter`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `Filter` is `package` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `Filter` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Filter` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Filter { public static func mock() -> Filter }`), which proves `Filter` `public`; or stop providing `filter` on this path.
-			\(fixtures["Core"]!["Service.swift"]):15:5: note: `TokenCache` receives `filter: Filter?` here.
+			\(fixtures["App"]!["Screen.swift"]):11:5: error: `Screen` provides `filter: [3 of Int]`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
+			\(fixtures["Core"]!["Service.swift"]):9:5: note: `TokenCache` receives `filter: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -7084,19 +7024,13 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 					ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": """
 					import SafeDI
 
-					#if canImport(Foundation)
-					public struct Filter {
-					    public init() {}
-					}
-					#endif
-
 					@Instantiable
 					package struct TokenCache: Instantiable {
-					    package init(filter: Filter?) {
+					    package init(filter: [3 of Int]?) {
 					        self.filter = filter
 					    }
 
-					    @Received(onlyIfAvailable: true) let filter: Filter?
+					    @Received(onlyIfAvailable: true) let filter: [3 of Int]?
 					}
 
 					@Instantiable(generateMock: .public)
@@ -7114,12 +7048,12 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 					@Instantiable(generateMock: true)
 					public struct Screen: Instantiable {
-					    public init(filter: Filter, service: Service) {
+					    public init(filter: [3 of Int], service: Service) {
 					        self.filter = filter
 					        self.service = service
 					    }
 
-					    @Forwarded let filter: Filter
+					    @Forwarded let filter: [3 of Int]
 					    @Received let service: Service
 					}
 					"""], dependencies: ["Core"]),
@@ -7137,8 +7071,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// `Core`'s package, reaches the tier `package` access reaches, the public one, which omits `filter`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Screen.swift"]):11:5: error: `Screen` provides `filter: Filter`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App`, which SafeDI cannot tell is in the same package, can call, does not take it: `Service.mock` takes `filter` only on its `internal` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `Filter` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `internal` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `package`, or `public` if the two modules are in different packages; mention `Filter` in a `package` initializer, `instantiate(…)` or mock method SafeDI records; give `Filter` a `package` `mockOnly` mock (`@Instantiable(mockOnly: true) package extension Filter { package static func mock() -> Filter }`), which proves `Filter` `package`; or stop providing `filter` on this path.
-			\(fixtures["Core"]!["Service.swift"]):15:5: note: `TokenCache` receives `filter: Filter?` here.
+			\(fixtures["App"]!["Screen.swift"]):11:5: error: `Screen` provides `filter: [3 of Int]`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App`, which SafeDI cannot tell is in the same package, can call, does not take it: `Service.mock` takes `filter` only on its `internal` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `internal` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `package`, or `public` if the two modules are in different packages; mention `[3 of Int]` in a `package` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
+			\(fixtures["Core"]!["Service.swift"]):9:5: note: `TokenCache` receives `filter: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -7146,19 +7080,13 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 					ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": """
 					import SafeDI
 
-					#if canImport(Foundation)
-					public struct Filter {
-					    public init() {}
-					}
-					#endif
-
 					@Instantiable
 					struct TokenCache: Instantiable {
-					    init(filter: Filter?) {
+					    init(filter: [3 of Int]?) {
 					        self.filter = filter
 					    }
 
-					    @Received(onlyIfAvailable: true) let filter: Filter?
+					    @Received(onlyIfAvailable: true) let filter: [3 of Int]?
 					}
 
 					@Instantiable(generateMock: .public)
@@ -7176,12 +7104,12 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 					@Instantiable(generateMock: true)
 					public struct Screen: Instantiable {
-					    public init(filter: Filter, service: Service) {
+					    public init(filter: [3 of Int], service: Service) {
 					        self.filter = filter
 					        self.service = service
 					    }
 
-					    @Forwarded let filter: Filter
+					    @Forwarded let filter: [3 of Int]
 					    @Received let service: Service
 					}
 					"""], dependencies: ["Core"], omitsPackageName: true),
@@ -7195,7 +7123,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsPublicMockFirst_whenProviderOfOmittedValueIsDeclaredFirstAndReceivesItOnlyIfAvailable() async throws {
-		// M2.23c, `filter` declared first: `AppFilter`'s receive of `service` orders `service` first, so the leaf's soft
+		// M2.23c, `filter` declared first: `Hub.Filter`'s receive of `service` orders `service` first, so the leaf's soft
 		// edge on `filter` would close a cycle and is dropped; `filter` is not yet built where `service` is, and no
 		// value is omitted, as the inline mock passes `TokenCache` `nil`.
 		let output = try await executeSafeDIToolMultiModuleTest(
@@ -7207,6 +7135,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		#if canImport(Core)
 		import Core
 		#endif
+		#if canImport(Hubs)
+		import Hubs
+		#endif
 		#if canImport(SafeDI)
 		import SafeDI
 		#endif
@@ -7217,22 +7148,22 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		    struct SafeDIOverrides {
 		        init(
 		            service: Service.SafeDIOverrides = .init(),
-		            filter: ((Service?) -> FilterProtocol)? = nil
+		            filter: ((Service?) -> Hub.Filter)? = nil
 		        ) {
 		            self.service = service
 		            self.filter = filter
 		        }
 
 		        let service: Service.SafeDIOverrides
-		        let filter: ((Service?) -> FilterProtocol)?
+		        let filter: ((Service?) -> Hub.Filter)?
 		    }
 
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        _ = Service.__safeDI_Service_mock_A107C7CF39C5CB30.self
+		        _ = Service.__safeDI_Service_mock_4DBCFD53033F6143.self
 		        let service = Service.mock(safeDIOverrides: safeDIOverrides.service)
-		        let filter: FilterProtocol = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { AppFilter(service: service) }
+		        let filter = if let safeDIBuilder = safeDIOverrides.filter { safeDIBuilder(service) } else { Hub.Filter(service: service) }
 		        return Screen(filter: filter, service: service)
 		    }
 		}
@@ -7248,8 +7179,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// the call would pass `nil` for the value the inline mock hands `TokenCache`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Screen.swift"]):21:5: error: `Screen` provides `filter: any FilterProtocol`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `FilterProtocol` is `package` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `FilterProtocol` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `FilterProtocol` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension FilterProtocol { public static func mock() -> FilterProtocol }`), which proves `FilterProtocol` `public`; or stop providing `filter` on this path.
-			\(fixtures["Core"]!["Service.swift"]):13:5: note: `TokenCache` receives `filter: (any FilterProtocol)?` here.
+			\(fixtures["App"]!["Screen.swift"]):13:5: error: `Screen` provides `filter: Hub.Filter`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `Hub.Filter` is `package` as far as SafeDI can tell: it is declared inside an extension of `Hub`, and every initializer, `instantiate(…)` and mock method SafeDI records that mentions it is `package` (`TokenCache.init(filter:)`). If `Hub` can be `public`, spell the extension's access level (`public extension Hub { … }`, dropping the modifier on `Filter` that Swift then reports as redundant; the compiler rejects a level wider than `Hub`'s), or declare `Filter` in `Hub`'s body or at top level; mention `Hub.Filter` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
+			\(fixtures["Core"]!["Service.swift"]):10:5: note: `TokenCache` receives `filter: Hub.Filter?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -7602,8 +7533,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// but no tier of `Outer`'s mock takes it, since the tier of `Service`'s mock that `Outer`'s tree calls omits it.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["AppRoot.swift"]):12:5: error: `AppRoot` provides `filter: Filter`, but no mock SafeDI generated for `Outer` takes it: `Outer`'s mock tree calls the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `Mid` can call, which takes `filter` only on its `package` tier, so calling it would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `Filter` is `package` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `Filter` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Filter` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Filter { public static func mock() -> Filter }`), which proves `Filter` `public`; or stop providing `filter` on this path.
-			\(fixtures["Core"]!["Service.swift"]):15:5: note: `TokenCache` receives `filter: Filter?` here.
+			\(fixtures["App"]!["AppRoot.swift"]):12:5: error: `AppRoot` provides `filter: [3 of Int]`, but no mock SafeDI generated for `Outer` takes it: `Outer`'s mock tree calls the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `Mid` can call, which takes `filter` only on its `package` tier, so calling it would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
+			\(fixtures["Core"]!["Service.swift"]):9:5: note: `TokenCache` receives `filter: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -8549,22 +8480,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsErrorNamingProverAndOfferingMockOnlyMock_whenPublicMockReceivesTypeDeclaredInsideConditionalBlock() async {
-		// EOU-3: `UserService`'s own `public` declaration proves it, while `Session` is declared inside an `#if` block, so
-		// only `Service`'s own `internal` initializer mentions it: the error names that initializer, and offers the
-		// `mockOnly` mock that proves `Session` and lets the mock build it.
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Service.swift"]):1:29: error: SafeDI cannot generate the public mock of `Service`: its `public` tier, which `generateMock: .public` requires, cannot take `session: Session`, which the initializer of `Service` receives, and cannot pass `nil` for it, since it is required. `Session` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in this module or on a type that receives it is `internal` (`Service.init(userService:session:tokenCache:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Session` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Session` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Session { public static func mock() -> Session }`), which proves `Session` `public` and lets the mock build it; receive it with `onlyIfAvailable: true` and an optional type; make `Service.init(userService:session:tokenCache:)` `public`; or use `generateMock: .internal`.
-			\(fixtures["Service.swift"]):10:5: note: `Service` receives `session: Session` here.
-			"""
-		}) {
-			try await executeSafeDIToolTest(swiftFileContent: Self.serviceReceivingSession(alongside: []), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesOptionalReceivedParameter_whenPublicMockOnlyExtensionMocksTypeDeclaredInsideConditionalBlock() async throws {
 		// EOU-3's twin: the `public` `mockOnly` extension proves `Session` `public`, and the mock builds it.
 		let output = try await executeSafeDIToolTest(
@@ -8727,11 +8642,11 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	}
 
 	/// A public `Service` whose public mock receives the `public` protocol `UserService` and `Session`, which is declared
-	/// inside an `#if` block, beside `otherFiles`.
+	/// `public` inside a platform-conditioned block, beside `otherFiles`.
 	private static func serviceReceivingSession(alongside otherFiles: [String]) -> [String] {
 		[
 			"public protocol UserService: AnyObject {\n    var name: String { get }\n}",
-			unrecordedTypeDeclaration("public final class Session {\n    public init() {}\n}"),
+			platformConditionedDeclaration("public final class Session {\n    public init() {}\n}"),
 			"""
 			@Instantiable(generateMock: .public)
 			public struct Service: Instantiable {
@@ -9379,11 +9294,9 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	    package init() {}
 	}
 
-	#if canImport(Foundation)
 	package struct Policy {
 	    package static let standard = Policy()
 	}
-	#endif
 
 	enum Defaults {
 	    static let capacity = 10
@@ -9459,24 +9372,22 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 	/// M2.23c's modules: `AppFilter` provides `filter` and receives `service` only if available, and `Service`'s public
 	/// tier omits `filter`, which `TokenCache` receives only if available.
 	private static func softEdgeModules(screenDeclaresFilterFirst: Bool) -> [ModuleFixture] {
-		let filterDeclaration = "@Instantiated let filter: any FilterProtocol"
+		let filterDeclaration = "@Instantiated let filter: Hub.Filter"
 		let serviceDeclaration = "@Instantiated let service: Service"
 		let declarations = screenDeclaresFilterFirst ? [filterDeclaration, serviceDeclaration] : [serviceDeclaration, filterDeclaration]
 		return [
-			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": """
+			hubsModule,
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Filter.swift": hubTheme(named: "Filter", declarations: ["@Received(onlyIfAvailable: true) let service: Service?"]), "Service.swift": """
+			import Hubs
 			import SafeDI
-
-			#if canImport(Foundation)
-			public protocol FilterProtocol {}
-			#endif
 
 			@Instantiable
 			package struct TokenCache: Instantiable {
-			    package init(filter: (any FilterProtocol)?) {
+			    package init(filter: Hub.Filter?) {
 			        self.filter = filter
 			    }
 
-			    @Received(onlyIfAvailable: true) let filter: (any FilterProtocol)?
+			    @Received(onlyIfAvailable: true) let filter: Hub.Filter?
 			}
 
 			@Instantiable(generateMock: .public)
@@ -9487,23 +9398,15 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 
 			    @Instantiated let tokenCache: TokenCache
 			}
-			"""]),
+			"""], dependencies: ["Hubs"]),
 			ModuleFixture(name: "App", packageName: "app", swiftFileContentByFilePath: ["Screen.swift": """
 			import Core
+			import Hubs
 			import SafeDI
-
-			@Instantiable(fulfillingAdditionalTypes: [FilterProtocol.self])
-			public struct AppFilter: FilterProtocol, Instantiable {
-			    public init(service: Service?) {
-			        self.service = service
-			    }
-
-			    @Received(onlyIfAvailable: true) let service: Service?
-			}
 
 			@Instantiable(generateMock: true)
 			public struct Screen: Instantiable {
-			    public init(filter: any FilterProtocol, service: Service) {
+			    public init(filter: Hub.Filter, service: Service) {
 			        self.filter = filter
 			        self.service = service
 			    }
@@ -9511,32 +9414,30 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			    \(declarations[0])
 			    \(declarations[1])
 			}
-			"""], dependencies: ["Core"]),
+			"""], dependencies: ["Core", "Hubs"]),
 		]
 	}
 
 	/// M8.33d's modules: `Mid.Outer`, a public mock in another package, builds `Core.Service` through its public tier,
 	/// which omits `filter`; `App.AppRoot` builds `Outer` through its public mock.
+	/// `filter` is the `package` `Filter` `Core` declares, which `App` does not name, or, when `appRootForwardsFilter`,
+	/// `[3 of Int]`, a spelling SafeDI cannot read, which `App` forwards while SafeDI proves it only `package`.
 	private static func chainModules(appRootForwardsFilter: Bool) -> [ModuleFixture] {
-		let appRootFilter = appRootForwardsFilter ? "\n    @Forwarded let filter: Filter" : ""
-		let appRootInitializer = appRootForwardsFilter ? "public init(filter: Filter, outer: Outer) {\n        self.filter = filter\n        self.outer = outer\n    }" : "public init(outer: Outer) {\n        self.outer = outer\n    }"
+		let filterType = appRootForwardsFilter ? "[3 of Int]" : "Filter"
+		let filterDeclaration = appRootForwardsFilter ? "" : "package struct Filter {\n    package init() {}\n}\n\n"
+		let appRootFilter = appRootForwardsFilter ? "\n    @Forwarded let filter: [3 of Int]" : ""
+		let appRootInitializer = appRootForwardsFilter ? "public init(filter: [3 of Int], outer: Outer) {\n        self.filter = filter\n        self.outer = outer\n    }" : "public init(outer: Outer) {\n        self.outer = outer\n    }"
 		return [
 			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": """
 			import SafeDI
 
-			#if canImport(Foundation)
-			public struct Filter {
-			    public init() {}
-			}
-			#endif
-
-			@Instantiable
+			\(filterDeclaration)@Instantiable
 			package struct TokenCache: Instantiable {
-			    package init(filter: Filter?) {
+			    package init(filter: \(filterType)?) {
 			        self.filter = filter
 			    }
 
-			    @Received(onlyIfAvailable: true) let filter: Filter?
+			    @Received(onlyIfAvailable: true) let filter: \(filterType)?
 			}
 
 			@Instantiable(generateMock: .public)

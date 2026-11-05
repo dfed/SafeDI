@@ -24,18 +24,16 @@
 /// is also the access of the type, which proves the access of a parameter of a generated initializer or mock that names
 /// it (`TypeAccessProof`).
 ///
-/// A declaration outside every `#if` block is recorded with the access its chain spells, directly inside an extension or
-/// not: its access is then the same whatever the conditions, so a file's record needs no condition to be reused. A
-/// declaration inside an `#if` block is recorded from every clause, with its spelled chain, and marked
-/// `isInsideConditionalBlock`: the clause the compiler selects decides whether it exists, so SafeDI takes no access level
-/// from it, and records it so that a mention of its name is not taken for a type SafeDI reads no declaration of.
+/// A declaration is recorded with the access its chain spells, directly inside an extension or not, from each clause of
+/// an `#if` block `FileVisitor` scans: the clause the reported conditions select, and every clause of a block a platform
+/// condition decides, any of which the compiler may select. A type declared in several such clauses has several records,
+/// and counts as the narrowest of their levels. A declaration in a clause the conditions skip is not recorded.
 public struct PlainTypeDeclaration: Codable, Hashable, Sendable {
 	public init(
 		typeDescription: TypeDescription,
 		access: AccessDeclaration,
 		enclosingTypeAccess: [AccessDeclaration],
 		enclosingExtensionAccess: AccessDeclaration? = nil,
-		isInsideConditionalBlock: Bool = false,
 		moduleName: String? = nil,
 		packageName: String? = nil,
 		sourceFilePath: String? = nil,
@@ -44,7 +42,6 @@ public struct PlainTypeDeclaration: Codable, Hashable, Sendable {
 		self.access = access
 		self.enclosingTypeAccess = enclosingTypeAccess
 		self.enclosingExtensionAccess = enclosingExtensionAccess
-		self.isInsideConditionalBlock = isInsideConditionalBlock
 		self.moduleName = moduleName
 		self.packageName = packageName
 		self.sourceFilePath = sourceFilePath
@@ -61,9 +58,6 @@ public struct PlainTypeDeclaration: Codable, Hashable, Sendable {
 	/// The access of the extension the outermost of those declarations is directly inside, or `nil` outside every
 	/// extension, as `Instantiable.enclosingExtensionAccess` records it.
 	public let enclosingExtensionAccess: AccessDeclaration?
-	/// Whether the declaration is inside an `#if` block, in any clause. SafeDI takes no access level from such a
-	/// declaration (`TypeAccessProof`), but records its spelled chain so that its access can be read later.
-	public let isInsideConditionalBlock: Bool
 	/// The module that declares the declaration's file, or `nil` when SafeDITool does not know it.
 	public var moduleName: String?
 	/// The package of the module that declares the declaration's file, or `nil` when SafeDITool does not know it.

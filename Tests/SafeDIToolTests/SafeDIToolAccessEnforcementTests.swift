@@ -3290,9 +3290,96 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}
 	}
 
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsNamespaceDeclaredInSelectedClause_whenConstructingModuleCannotSeeIt(integration: MultiModuleIntegration) async {
+		// IF16: `Space` is declared `package` in the clause `FLAG` selects, which SafeDI reads as any declaration outside a
+		// block: `App`, in another package, is told to widen it, where the compiler would report the generated file.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let spacePath = switch integration {
+			case .moduleInfo:
+				fixtures["Core"]!["Space.swift"]
+			case .swiftPackagePlugin:
+				NormalizedFilePath(fixtures["Core"]!.compilerPath(of: "Space.swift")).path
+			}
+			return """
+			\(spacePath):2:1: error: `Space`, which encloses `Space.Shelf`, is `package`, so module `App`, in another package, cannot construct `Space.Shelf` in the code SafeDI generates. Make `Space` `public` to fix.
+			\(spacePath):2:1-2:8: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.shelfInSpaceModules(space: "#if FLAG\npackage enum Space {}\n#endif", conditions: ["FLAG"]),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsNarrowestNamespace_whenPlatformClausesDeclareItAtDifferentLevels(integration: MultiModuleIntegration) async {
+		// IF16b: the compiler may select either clause, so the construction check reads the narrower declaration of `Space`.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let spacePath = switch integration {
+			case .moduleInfo:
+				fixtures["Core"]!["Space.swift"]
+			case .swiftPackagePlugin:
+				NormalizedFilePath(fixtures["Core"]!.compilerPath(of: "Space.swift")).path
+			}
+			return """
+			\(spacePath):2:1: error: `Space`, which encloses `Space.Shelf`, is `package`, so module `App`, in another package, cannot construct `Space.Shelf` in the code SafeDI generates. Make `Space` `public` to fix.
+			\(spacePath):2:1-2:8: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.shelfInSpaceModules(space: "#if os(Linux)\npackage enum Space {}\n#else\npublic enum Space {}\n#endif", conditions: []),
+				integration: integration,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_reportsFirstNamespaceInSourceOrder_whenPlatformClausesDeclareItAtLevelsThatCountAlike() async {
+		// IF16c: `Space`'s clauses declare it `internal` and `fileprivate`, both of which count as `internal`, so the
+		// construction check reads the first in source order rather than the one whose spelled level sorts first.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let spacePath = fixtures["Core"]!["Space.swift"]
+			return """
+			\(spacePath):2:1: error: `Space`, which encloses `Space.Shelf`, is `internal`, so module `App`, in another package, cannot construct `Space.Shelf` in the code SafeDI generates. Make `Space` `public` to fix.
+			\(spacePath):2:1-2:1: fixit: public\(" ")
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: [
+						"Space.swift": "#if os(Linux)\nenum Space {}\n#else\nfileprivate enum Space {}\n#endif\n\npublic protocol Storage {}\n\nextension Space {\n    @Instantiable(fulfillingAdditionalTypes: [Storage.self])\n    public final class Shelf: Instantiable, Storage {\n        public init() {}\n    }\n}",
+					]),
+					ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Core\n\n@Instantiable(isRoot: true)\npublic struct Root: Instantiable {\n    public init(storage: any Storage) {\n        self.storage = storage\n    }\n\n    @Instantiated let storage: any Storage\n}"], dependencies: ["Core"]),
+				],
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// `Core`, whose `Space.swift` is `space` and whose `Shelf.swift` declares `Space.Shelf` inside an extension of
+	/// `Space`, fulfilling `Storage`, and `App`, in another package, whose root instantiates `Storage`; both run with
+	/// `conditions`.
+	private static func shelfInSpaceModules(space: String, conditions: [String]) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: [
+				"Space.swift": space,
+				"Shelf.swift": "public protocol Storage {}\n\nextension Space {\n    @Instantiable(fulfillingAdditionalTypes: [Storage.self])\n    public final class Shelf: Instantiable, Storage {\n        public init() {}\n    }\n}",
+			], activeCompilationConditions: conditions),
+			ModuleFixture(name: "App", packageName: "Other", swiftFileContent: ["import Core\n\n@Instantiable(isRoot: true)\npublic struct Root: Instantiable {\n    public init(storage: any Storage) {\n        self.storage = storage\n    }\n\n    @Instantiated let storage: any Storage\n}"], dependencies: ["Core"], activeCompilationConditions: conditions),
+		]
+	}
 
 	/// An `internal` `Service` with a `package` initializer, so that only the type keeps another module from
 	/// constructing it.

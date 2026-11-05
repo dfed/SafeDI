@@ -98,6 +98,7 @@ enum BinaryFile {
 			ImportStatement.self,
 			FileVisitor.ImportSegment.self,
 			ConditionalCompilationDecision.self,
+			KeptPlainTypeNames.self,
 			SafeDIConfiguration.self,
 			Instantiable.self,
 			Instantiable.DeclarationType.self,

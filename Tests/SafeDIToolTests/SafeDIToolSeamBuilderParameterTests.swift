@@ -2738,17 +2738,19 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsTierOmitsBuilder_whenHolesOwnerTakesItAtNarrowerAccessThanSeamsTier() async {
-		// C5.2, H2: only `Profile`'s `package` initializer mentions `UserService`, so the builder is `package` as far as
-		// SafeDI can tell, and `Service`'s `public` initializer cannot take it, which every tier takes.
+		// C5.2, H2: `UserService` is `package`, so the builder is `package`, and `Service`'s `public` initializer cannot take
+		// it, which every tier takes.
 		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
 			"""
-			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `userServiceBuilder: @escaping (Service.SafeDIScope_Profile_userService) -> any UserService`, the builder for `Profile`'s `userService: any UserService`, which no @Instantiable declaration that module `Feature` can see fulfills. `UserService` is `package` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Profile.init(userService:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `UserService` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `UserService` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension UserService { public static func mock() -> UserService }`), which proves `UserService` `public`; declare `Service` `package`; make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service`'s tree builds it; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["Service.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Service`: its generated `public` initializer, which `Service`'s `public` access requires, cannot take `userServiceBuilder: @escaping (Service.SafeDIScope_Profile_userService) -> any UserService`, the builder for `Profile`'s `userService: any UserService`, which no @Instantiable declaration that module `Feature` can see fulfills. `UserService` is declared `package`. Declare `UserService` `public`; declare `Service` `package`; make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service`'s tree builds it; or declare the dependency tree on a `package` type that instantiates `Service`.
+			\(fixtures["Feature"]!["UserService.swift"]):1:1: note: `UserService` is declared `package` here.
+			\(fixtures["Feature"]!["UserService.swift"]):1:1-1:8: fixit: public
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.modules(
 					feature: [
-						unrecordedTypeDeclaration(Self.userServiceProtocol),
+						"package protocol UserService {}",
 						seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]).replacingOccurrences(of: "public init(", with: "package init("),
 						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let profile: Profile"]),
 					],
@@ -2971,23 +2973,23 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsFillReadsValueTheScopeDoesNotCarry_whenFillInOtherModuleReadsFieldOnlyInternalInitializerMentions() async {
-		// C6.5: only `Screen`'s `internal` initializer mentions `Token`, so the struct carries `token` at `internal`
+		// C6.5: only `Screen`'s `internal` initializer mentions `[3 of Int]`, so the struct carries `token` at `internal`
 		// access, which `App` cannot read.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["TokenUserService.swift"]):9:5: error: `TokenUserService` receives `token: Token`, which the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` carries only at `internal` access, and module `App` is not module `Feature`. `Token` is `internal` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Screen.init(token:profile:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `Token` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Token` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Token { public static func mock() -> Token }`), which proves `Token` `public`; or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service`'s tree builds it.
-			\(fixtures["Feature"]!["Screen.swift"]):8:5: note: `Screen` declares `token: Token` here.
+			\(fixtures["App"]!["TokenUserService.swift"]):9:5: error: `TokenUserService` receives `token: [3 of Int]`, which the scope SafeDI hands the builder for `Profile`'s `userService: any UserService` carries only at `internal` access, and module `App` is not module `Feature`. `[3 of Int]` is `internal` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `internal` (`Screen.init(token:profile:)`); a mention on any other declaration matches it by name alone, so it does not count. Mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or make an @Instantiable declaration that fulfills `UserService` one module `Feature` reads, so `Service`'s tree builds it.
+			\(fixtures["Feature"]!["Screen.swift"]):8:5: note: `Screen` declares `token: [3 of Int]` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: Self.modules(
 					feature: [
-						Self.userServiceProtocol + "\n" + unrecordedTypeDeclaration("public struct Token {\n    public init() {}\n}"),
+						Self.userServiceProtocol,
 						seamFixtureType(named: "Profile", declarations: ["@Instantiated let userService: any UserService"]),
-						seamFixtureType(named: "Screen", declarations: ["@Forwarded let token: Token", "@Instantiated let profile: Profile"]).replacingOccurrences(of: "public init(", with: "init("),
+						seamFixtureType(named: "Screen", declarations: ["@Forwarded let token: [3 of Int]", "@Instantiated let profile: Profile"]).replacingOccurrences(of: "public init(", with: "init("),
 						seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let screenBuilder: Instantiator<Screen>"]),
 					],
-					app: [Self.fulfillingType(named: "TokenUserService", fulfilling: "UserService", declarations: ["@Received let token: Token"]), Self.canonicalRoot],
+					app: [Self.fulfillingType(named: "TokenUserService", fulfilling: "UserService", declarations: ["@Received let token: [3 of Int]"]), Self.canonicalRoot],
 				),
 				integration: .moduleInfo,
 				filesToDelete: &filesToDelete,
@@ -3743,7 +3745,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 	/// `Root` instantiates `logger` and `flow`. The visible modules hold `app` in `Feature`, which builds every value inline.
 	private static func reenteredFlowModules(flowDeclarations: [String] = [], app: [String]) -> (modules: [ModuleFixture], visibleModules: [ModuleFixture]) {
 		let feature = [
-			unrecordedTypeDeclaration("public protocol Router {}"),
+			platformConditionedDeclaration("public protocol Router {}"),
 			seamFixtureType(named: "Logger", isFinalClass: true, declarations: []),
 			seamFixtureType(named: "Profile", isFinalClass: true, declarations: ["@Instantiated let router: any Router"]),
 			seamFixtureType(named: "Flow", isSeam: true, isFinalClass: true, declarations: flowDeclarations + ["@Instantiated let profileBuilder: Instantiator<Profile>"]),

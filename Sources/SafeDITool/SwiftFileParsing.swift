@@ -78,8 +78,8 @@ struct ModuleInfo: Codable {
 	let configurations: [SafeDIConfiguration]
 	/// The files with syntax errors, sorted.
 	let filesWithUnexpectedNodes: [String]?
-	/// How each `#if` condition guarding SafeDI declarations was evaluated, sorted and without duplicates.
-	/// Generated code asserts these at compile time.
+	/// How each `#if` condition guarding SafeDI declarations, or a plain type declaration the module keeps, was evaluated,
+	/// sorted and without duplicates. Generated code asserts these at compile time.
 	let conditionalCompilationDecisions: [ConditionalCompilationDecision]
 	/// The type each `@Instantiable` declaration in the module's files declares, in any clause of any `#if` block
 	/// whatever the conditions, sorted and without duplicates. Unlike `instantiables`, these include the declarations
@@ -96,9 +96,10 @@ struct ModuleInfo: Codable {
 	/// The names of the modules the module `generate` generated code for depends on directly, as the build system
 	/// lists them, sorted and without duplicates. Empty when the build system did not say.
 	let dependencyModuleNames: [String]
-	/// The declarations of types that are not `@Instantiable`, outside every `#if` block and every extension, of the types
-	/// whose declarations SafeDI reads (`parseModule`), in the files SafeDI parses and in each file it would otherwise
-	/// skip that may declare one, ordered as `instantiables` is. Each records the module that declares it.
+	/// The declarations of types that are not `@Instantiable`, outside every `#if` block or in a clause the conditions
+	/// select, directly inside an extension or not, of the types whose declarations SafeDI reads (`parseModule`), in the
+	/// files SafeDI parses and in each file it would otherwise skip that may declare one, ordered as `instantiables` is.
+	/// Each records the module that declares it.
 	let plainTypeDeclarations: [PlainTypeDeclaration]
 }
 
@@ -300,6 +301,9 @@ func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<Nor
 ///     of its package can name – those declared `package` – are kept too, wherever they are, for a run that writes the
 ///     module's info without a target graph: the modules that read that info cannot tell which of its types they will
 ///     name. A `public` or `open` one proves nothing a module that reads no declaration of the type would not prove.
+///   - isReadingModuleFile: Whether the file at a path among `filePaths` is one of the module's own files, rather than one
+///     of a module it depends on: a mention in the module names an `internal` declaration of its own files only, so a
+///     decision about another module's is that module's to assert.
 /// - Returns: The module, and what each file contributed to it.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func parseModule(
@@ -307,6 +311,7 @@ func parseModule(
 	configurationFilePaths: Set<String>,
 	activeCompilationConditions: Set<String>,
 	keepsTypeDeclarationsOtherModulesCanName: Bool = false,
+	isReadingModuleFile: (String) -> Bool = { _ in true },
 ) async throws -> (module: ParsedModule, fileScans: [FileScan]) {
 	let defaultEvaluator = ConditionalCompilationEvaluator(activeCompilationConditions: activeCompilationConditions)
 
@@ -364,7 +369,8 @@ func parseModule(
 	// types enclosing `@Instantiable` types, whose nested types a member names unqualified, come from every clause of
 	// every `#if` block; the mentioned types' names from the declarations these conditions select, which `generate`
 	// checks scan's names cover (`keptPlainTypeNames(of:)`). Only the declarations of those types, and of the types
-	// nested in them, are kept: no other plain declaration bounds or proves anything.
+	// nested in them, are kept, and only the decisions of the blocks that could declare one are asserted: no other plain
+	// declaration bounds or proves anything.
 	let keptTypeNames = keptPlainTypeNames(of: finalFileScans)
 	var mayDeclareTypesNamedBySkippedFilePath = walkedFiles.mayDeclareTypesNamedBySkippedFilePath
 	for file in conventionalConfigurationFileReads {
@@ -376,12 +382,18 @@ func parseModule(
 	let skippedFilePathsMentioningPackageAccessModifier = walkedFiles.skippedFilePathsMentioningPackageAccessModifier
 		.union(conventionalConfigurationFileReads.filter(\.read.mayDeclareTypeOtherModulesCanName).map(\.path))
 	let moduleFileScans = try await (finalFileScans + walkFilesDeclaringTypes(
-		among: Set(mayDeclareTypesNamedBySkippedFilePath.filter { !$0.value.isDisjoint(with: keptTypeNames) }.map(\.key))
+		among: Set(mayDeclareTypesNamedBySkippedFilePath.filter { !$0.value.isDisjoint(with: keptTypeNames.outermostTypeNames) }.map(\.key))
 			.union(skippedFilePathsMentioningPackageAccessModifier)
 			.sorted(),
 		conditionalCompilation: evaluator,
 	))
-	.map { $0.keepingPlainTypeDeclarations(ofTypesWithin: keptTypeNames, keepingThoseOtherModulesPackageCanName: keepsTypeDeclarationsOtherModulesCanName) }
+	.map { fileScan in
+		fileScan.keepingPlainTypeDeclarations(
+			ofTypesWithin: keptTypeNames,
+			keepingThoseOtherModulesPackageCanName: keepsTypeDeclarationsOtherModulesCanName,
+			isInReadingModule: isReadingModuleFile(fileScan.path),
+		)
+	}
 	return (
 		ParsedModule(
 			moduleInfo: ModuleInfo(moduleFileScans),
@@ -394,36 +406,42 @@ func parseModule(
 }
 
 /// Parses files that belong to an already-configured module, such as those reached through
-/// `#SafeDIConfiguration(additionalDirectoriesToInclude:)`, with the module's evaluator, and the files among them that
-/// mention no SafeDI marker but may declare a type the module or the parsed files mention: one whose plain declaration
-/// proves the access of a parameter SafeDI generates, which a type of another module SafeDI reads no declaration of
-/// would count as `public`. Each file keeps the plain declarations of those types alone, as `parseModule` keeps them.
-/// - Parameter moduleTypeNames: The names of the types the module's other declarations mention (`keptPlainTypeNames(of:)`).
+/// `#SafeDIConfiguration(additionalDirectoriesToInclude:)` or those of the module whose scan `generate` walks again, with
+/// the module's evaluator, and the files among them that mention no SafeDI marker but may declare a type the module or
+/// the parsed files mention: one whose plain declaration proves the access of a parameter SafeDI generates, which a type
+/// of another module SafeDI reads no declaration of would count as `public`. Each file keeps the plain declarations of
+/// those types alone, as `parseModule` keeps them.
+/// - Parameters:
+///   - moduleTypeNames: The names of the types the module's other declarations mention (`keptPlainTypeNames(of:)`).
+///   - keepsTypeDeclarationsOtherModulesCanName: Whether the plain declarations that only another module of the package
+///     can name are kept too, wherever they are, as `parseModule` keeps them for a run that writes the module's info
+///     without a target graph.
+///   - isReadingModuleFile: Whether the file at a path among `filePaths` is one of the module's own files, as
+///     `parseModule` asks it.
 /// - Returns: What each file that mentions SafeDI, or declares such a type, contributes to the module.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func parseSwiftFilesDeclaringTypes(
 	_ filePaths: Set<String>,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
-	keepingDeclarationsOfTypesNamed moduleTypeNames: Set<String>,
+	keepingDeclarationsOfTypesNamed moduleTypeNames: KeptPlainTypeNames,
+	keepsTypeDeclarationsOtherModulesCanName: Bool = false,
+	isReadingModuleFile: (String) -> Bool,
 ) async throws -> [FileScan] {
-	let walkedFiles = try await walkFiles(named: filePaths, conditionalCompilation: evaluator)
+	let walkedFiles = try await walkFiles(named: filePaths, conditionalCompilation: evaluator, findingPackageAccessModifier: keepsTypeDeclarationsOtherModulesCanName)
 	let keptTypeNames = moduleTypeNames.union(keptPlainTypeNames(of: walkedFiles.fileScans))
 	return try await (walkedFiles.fileScans + walkFilesDeclaringTypes(
-		among: walkedFiles.mayDeclareTypesNamedBySkippedFilePath.filter { !$0.value.isDisjoint(with: keptTypeNames) }.map(\.key),
+		among: Set(walkedFiles.mayDeclareTypesNamedBySkippedFilePath.filter { !$0.value.isDisjoint(with: keptTypeNames.outermostTypeNames) }.map(\.key))
+			.union(walkedFiles.skippedFilePathsMentioningPackageAccessModifier)
+			.sorted(),
 		conditionalCompilation: evaluator,
 	))
-	.map { $0.keepingPlainTypeDeclarations(ofTypesWithin: keptTypeNames, keepingThoseOtherModulesPackageCanName: false) }
-}
-
-/// Parses files that belong to an already-configured module, such as those reached through
-/// `#SafeDIConfiguration(additionalDirectoriesToInclude:)`, with the module's evaluator.
-/// - Returns: What each file that mentions SafeDI contributes to the module.
-@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-func parseSwiftFiles(
-	_ filePaths: Set<String>,
-	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
-) async throws -> [FileScan] {
-	try await walkFiles(named: filePaths, conditionalCompilation: evaluator).fileScans
+	.map { fileScan in
+		fileScan.keepingPlainTypeDeclarations(
+			ofTypesWithin: keptTypeNames,
+			keepingThoseOtherModulesPackageCanName: keepsTypeDeclarationsOtherModulesCanName,
+			isInReadingModule: isReadingModuleFile(fileScan.path),
+		)
+	}
 }
 
 // MARK: - Private
@@ -450,8 +468,21 @@ struct FileScan: Codable, Sendable {
 	/// which are the same whatever the conditions.
 	let outputFileDeclarations: OutputFileDeclarations
 	/// The file's declarations of types that are not `@Instantiable` (`FileVisitor.plainTypeDeclarations`), outside every
-	/// `#if` block and inside one in every clause, which are the same whatever the conditions.
+	/// `#if` block and in the clauses the conditions select, which `consultedCompilationConditions` cover once the module
+	/// keeps them (`keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesPackageCanName:isInReadingModule:)`).
 	let plainTypeDeclarations: [PlainTypeDeclaration]
+	/// How the conditions of the file's `#if` blocks that declare a plain type and guard nothing else SafeDI reads were
+	/// evaluated, with the conditions each consulted and the types it declares (`FileVisitor.plainTypeDeclarationDecisions`),
+	/// until `keepingPlainTypeDeclarations(ofTypesWithin:keepingThoseOtherModulesPackageCanName:isInReadingModule:)` adds
+	/// the conditions of the blocks that could declare a declaration the module keeps to `consultedCompilationConditions`
+	/// and asserts the decisions a read resolves by, among `conditionalCompilationDecisions`, and drops the rest.
+	let plainTypeDeclarationDecisions: [GuardedPlainTypeNames]
+	/// The own name of each type that a block of `plainTypeDeclarationDecisions` with decisions declares, in any clause,
+	/// whose declaration the module keeps, sorted and without duplicates: whether a declaration mentions that name decides
+	/// whether the block's decisions are asserted (`KeptPlainTypeNames.assertsDecisions(about:isInReadingModule:)`), so
+	/// `generate` parses the module afresh when a mention of one appears or goes away, even of a name a top-level
+	/// `@Instantiable` type shares. Empty until the module keeps its plain declarations.
+	let keptGuardedPlainTypeNames: [String]
 
 	/// Whether any compilation condition decided what the file contributed. A file whose scan consults
 	/// none contributes the same whatever conditions are supplied.
@@ -477,33 +508,59 @@ struct FileScan: Codable, Sendable {
 		)
 	}
 
-	/// This scan, keeping the declarations of `plainTypeDeclarations` whose outermost type is named one of
-	/// `outermostTypeNames`, and, when `keepingThoseOtherModulesPackageCanName`, those declared `package`, inside an `#if`
-	/// block or not. A `public` or `open` declaration of a type no declaration of the module mentions is not kept: a type
-	/// no declaration SafeDI reads declares counts as `public` (`TypeAccessProof`), so another module proves it the same
-	/// without the record.
-	fileprivate func keepingPlainTypeDeclarations(ofTypesWithin outermostTypeNames: Set<String>, keepingThoseOtherModulesPackageCanName: Bool) -> FileScan {
-		replacingPlainTypeDeclarations(with: plainTypeDeclarations.filter { plainTypeDeclaration in
-			plainTypeDeclaration.typeDescription.outermostTypeName.map(outermostTypeNames.contains) == true
-				|| (keepingThoseOtherModulesPackageCanName && TypeAccessProof.normalized(plainTypeDeclaration.levelBeforeExtendedTypeCap) == .package)
-		})
-	}
-
-	/// This scan, contributing `plainTypeDeclarations`.
-	func replacingPlainTypeDeclarations(with plainTypeDeclarations: [PlainTypeDeclaration]) -> FileScan {
-		FileScan(
+	/// This scan, keeping the declarations of `plainTypeDeclarations` of the types `keptTypeNames` keeps, and, when
+	/// `keepingThoseOtherModulesPackageCanName`, those declared `package`. A `public` or `open` declaration of a type no
+	/// declaration of the module mentions is not kept: a type no declaration SafeDI reads declares counts as `public`
+	/// (`TypeAccessProof`), so another module proves it the same without the record.
+	///
+	/// Each block of `plainTypeDeclarationDecisions` that declares, in any clause, a type such a declaration could be of
+	/// decides which of them are read, so its conditions join `consultedCompilationConditions`; the conditions of the rest
+	/// decide nothing the module reads. Its decisions are asserted, among `conditionalCompilationDecisions`, when a read
+	/// the access check makes can resolve to such a declaration (`KeptPlainTypeNames.assertsDecisions(about:isInReadingModule:)`),
+	/// or, when `keepingThoseOtherModulesPackageCanName`, the declaration is `package`, which a module that reads the
+	/// module's info can name.
+	/// - Parameter isInReadingModule: Whether the file is one of the module's own, whose `internal` declarations a mention
+	///   in the module names; a mention in another module names only a declaration that is `package` or wider.
+	func keepingPlainTypeDeclarations(ofTypesWithin keptTypeNames: KeptPlainTypeNames, keepingThoseOtherModulesPackageCanName: Bool, isInReadingModule: Bool) -> FileScan {
+		var decisions = conditionalCompilationDecisions
+		var consultedCompilationConditions = consultedCompilationConditions
+		var keptGuardedTypeNames = Set(keptGuardedPlainTypeNames)
+		for guardedNames in plainTypeDeclarationDecisions {
+			let keptTypes = guardedNames.declaredTypes.filter { declaredType in
+				keptTypeNames.outermostTypeNames.contains(declaredType.outermostName)
+					|| (keepingThoseOtherModulesPackageCanName && declaredType.level == .package)
+			}
+			guard !keptTypes.isEmpty else { continue }
+			consultedCompilationConditions.formUnion(guardedNames.consultedConditions)
+			if !guardedNames.decisions.isEmpty {
+				keptGuardedTypeNames.formUnion(keptTypes.map(\.name))
+			}
+			guard keptTypes.contains(where: { declaredType in
+				keptTypeNames.assertsDecisions(about: declaredType, isInReadingModule: isInReadingModule)
+					|| (keepingThoseOtherModulesPackageCanName && declaredType.level == .package)
+			}) else { continue }
+			for decision in guardedNames.decisions where !decisions.contains(decision) {
+				decisions.append(decision)
+			}
+		}
+		return FileScan(
 			path: path,
 			imports: imports,
 			mockImports: mockImports,
 			instantiables: instantiables,
 			configurations: configurations,
 			encounteredUnexpectedNodes: encounteredUnexpectedNodes,
-			conditionalCompilationDecisions: conditionalCompilationDecisions,
+			conditionalCompilationDecisions: decisions,
 			consultedCompilationConditions: consultedCompilationConditions,
 			importSegments: importSegments,
 			importOnlyConsultedCompilationConditions: importOnlyConsultedCompilationConditions,
 			outputFileDeclarations: outputFileDeclarations,
-			plainTypeDeclarations: plainTypeDeclarations,
+			plainTypeDeclarations: plainTypeDeclarations.filter { plainTypeDeclaration in
+				plainTypeDeclaration.typeDescription.outermostTypeName.map(keptTypeNames.outermostTypeNames.contains) == true
+					|| (keepingThoseOtherModulesPackageCanName && TypeAccessProof.normalized(plainTypeDeclaration.levelBeforeExtendedTypeCap) == .package)
+			},
+			plainTypeDeclarationDecisions: [],
+			keptGuardedPlainTypeNames: keptGuardedTypeNames.sorted(),
 		)
 	}
 
@@ -522,6 +579,8 @@ struct FileScan: Codable, Sendable {
 			importOnlyConsultedCompilationConditions: importOnlyConsultedCompilationConditions,
 			outputFileDeclarations: outputFileDeclarations,
 			plainTypeDeclarations: plainTypeDeclarations,
+			plainTypeDeclarationDecisions: plainTypeDeclarationDecisions,
+			keptGuardedPlainTypeNames: keptGuardedPlainTypeNames,
 		)
 	}
 
@@ -552,6 +611,8 @@ struct FileScan: Codable, Sendable {
 				plainTypeDeclaration.sourceFilePath = path
 				return plainTypeDeclaration
 			},
+			plainTypeDeclarationDecisions: plainTypeDeclarationDecisions,
+			keptGuardedPlainTypeNames: keptGuardedPlainTypeNames,
 		)
 	}
 }
@@ -654,16 +715,83 @@ extension [SafeDIConfiguration] {
 	}
 }
 
-/// The names of the types whose plain declarations a module parsed into `fileScans` keeps: each type an extension that
-/// is or holds an `@Instantiable` extends and the outermost type enclosing each `@Instantiable` type, in any clause,
-/// and each type its declarations mention (`mentionedTypeNames(of:)`). A member of an `@Instantiable` type can name a
-/// type nested in it, or in a type enclosing it, by the nested type's own name, which a public mock's configuration
-/// qualifies from that type's declaration (`TypeAccessProof.qualifyingNestedTypes(in:writtenWithin:)`).
-func keptPlainTypeNames(of fileScans: [FileScan]) -> Set<String> {
+/// The names of the types whose plain declarations a module parsed into `fileScans` keeps, and of those a read the access
+/// check makes resolves by (`KeptPlainTypeNames`).
+func keptPlainTypeNames(of fileScans: [FileScan]) -> KeptPlainTypeNames {
 	let outputFileDeclarations = fileScans.map(\.outputFileDeclarations)
-	return Set(outputFileDeclarations.flatMap(\.extendedTypeNames))
-		.union(outputFileDeclarations.flatMap(\.instantiableTypeNames).compactMap(outermostTypeName(ofTypeNamed:)))
-		.union(mentionedTypeNames(of: fileScans.flatMap(\.instantiables)))
+	return KeptPlainTypeNames(
+		extendedTypeNames: Set(outputFileDeclarations.flatMap(\.extendedTypeNames)),
+		instantiableOutermostTypeNames: Set(outputFileDeclarations.flatMap(\.instantiableTypeNames).compactMap(outermostTypeName(ofTypeNamed:))),
+		mentionedTypeNames: mentionedTypeNames(of: fileScans.flatMap(\.instantiables)),
+	)
+}
+
+/// The names of the types whose plain declarations a module keeps, and of those a read the access check makes resolves by.
+struct KeptPlainTypeNames: Codable, Equatable, Sendable {
+	/// - Parameters:
+	///   - extendedTypeNames: The outermost name of each type an extension that is or holds an `@Instantiable`
+	///     declaration extends, in any clause (`OutputFileDeclarations.extendedTypeNames`).
+	///   - instantiableOutermostTypeNames: The outermost name of each type enclosing an `@Instantiable` type, or of the
+	///     type itself, in any clause.
+	///   - mentionedTypeNames: Every name of each type the module's declarations mention (`mentionedTypeNames(of:)`).
+	init(extendedTypeNames: Set<String>, instantiableOutermostTypeNames: Set<String>, mentionedTypeNames: Set<String>) {
+		self.init(
+			outermostTypeNames: extendedTypeNames.union(instantiableOutermostTypeNames).union(mentionedTypeNames),
+			mentionedTypeNames: mentionedTypeNames,
+			extendedTypeNames: extendedTypeNames,
+		)
+	}
+
+	/// - Parameters:
+	///   - outermostTypeNames: The outermost names of the types whose plain declarations the module keeps, which hold
+	///     `mentionedTypeNames` and `extendedTypeNames`.
+	///   - mentionedTypeNames: Every name of each type the module's declarations mention.
+	///   - extendedTypeNames: The outermost name of each type an extension that is or holds an `@Instantiable`
+	///     declaration extends.
+	init(outermostTypeNames: Set<String>, mentionedTypeNames: Set<String>, extendedTypeNames: Set<String>) {
+		self.outermostTypeNames = outermostTypeNames
+		self.mentionedTypeNames = mentionedTypeNames
+		self.extendedTypeNames = extendedTypeNames
+	}
+
+	/// The names of the types whose plain declarations the module keeps when only `mentionedTypeNames` are mentioned: the
+	/// declarations a mention can resolve to.
+	init(mentioning mentionedTypeNames: Set<String>) {
+		self.init(extendedTypeNames: [], instantiableOutermostTypeNames: [], mentionedTypeNames: mentionedTypeNames)
+	}
+
+	/// The outermost names of the types whose plain declarations the module keeps, with the types nested in them: each
+	/// type an extension that is or holds an `@Instantiable` extends and the outermost type enclosing each `@Instantiable`
+	/// type, in any clause, and each type its declarations mention. A member of an `@Instantiable` type can name a type
+	/// nested in it, or in a type enclosing it, by the nested type's own name, which a public mock's configuration
+	/// qualifies from that type's declaration (`TypeAccessProof.qualifyingNestedTypes(in:writtenWithin:)`).
+	let outermostTypeNames: Set<String>
+	/// Every name of each type the module's declarations mention, the outermost and each nested one: the names a mention
+	/// resolves to a plain declaration by.
+	let mentionedTypeNames: Set<String>
+	/// The outermost name of each type an extension that is or holds an `@Instantiable` declaration extends, in any
+	/// clause: a declaration of it, or of a type nested in it, bounds the types the extension declares.
+	let extendedTypeNames: Set<String>
+
+	/// These names and those of `other`.
+	func union(_ other: KeptPlainTypeNames) -> KeptPlainTypeNames {
+		KeptPlainTypeNames(
+			outermostTypeNames: outermostTypeNames.union(other.outermostTypeNames),
+			mentionedTypeNames: mentionedTypeNames.union(other.mentionedTypeNames),
+			extendedTypeNames: extendedTypeNames.union(other.extendedTypeNames),
+		)
+	}
+
+	/// Whether a read the access check makes can resolve to a kept declaration of `declaredType`, so that the decisions
+	/// that select the clause declaring it are asserted: a mention of its own name, or the extension of a type it is or is
+	/// nested in. A mention in the module names the module's own declarations, and another module's only when they are
+	/// `package` or wider, so a declaration in another module's file (`isInReadingModule` false) that is narrower is no
+	/// declaration this module's reads resolve to: that module's own run asserts its decisions.
+	func assertsDecisions(about declaredType: GuardedPlainTypeNames.DeclaredType, isInReadingModule: Bool) -> Bool {
+		outermostTypeNames.contains(declaredType.outermostName)
+			&& (mentionedTypeNames.contains(declaredType.name) || extendedTypeNames.contains(declaredType.outermostName))
+			&& (declaredType.level >= .package || isInReadingModule)
+	}
 }
 
 /// The outermost name of the type `typeName` spells, as `OutputFileDeclarations.instantiableTypeNames` records a type.
@@ -771,9 +899,9 @@ private enum WalkedSwiftFile: Sendable {
 /// What each file at `filePaths` contributes: files `walkFiles(named:conditionalCompilation:findingPackageAccessModifier:)`
 /// did not parse, since their text mentions no SafeDI marker, but whose text may declare a type whose plain declaration
 /// SafeDI reads.
-/// Each contributes its declarations of types that are not `@Instantiable` (`FileVisitor.plainTypeDeclarations`), which
-/// depend on no condition. Nothing else is taken from such a file, not even its syntax errors, as
-/// SafeDI otherwise reads nothing of it.
+/// Each contributes its declarations of types that are not `@Instantiable` (`FileVisitor.plainTypeDeclarations`) in the
+/// clauses the conditions select, with the conditions and decisions that selected them. Nothing else is taken from such a
+/// file, not even its syntax errors, as SafeDI otherwise reads nothing of it.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 private func walkFilesDeclaringTypes(
 	among filePaths: [String],
@@ -799,11 +927,13 @@ private func walkFilesDeclaringTypes(
 					configurations: [],
 					encounteredUnexpectedNodes: false,
 					conditionalCompilationDecisions: [],
-					consultedCompilationConditions: [],
+					consultedCompilationConditions: fileVisitor.consultedCompilationConditions,
 					importSegments: [],
 					importOnlyConsultedCompilationConditions: [],
 					outputFileDeclarations: OutputFileDeclarations(),
 					plainTypeDeclarations: fileVisitor.plainTypeDeclarations,
+					plainTypeDeclarationDecisions: fileVisitor.plainTypeDeclarationDecisions,
+					keptGuardedPlainTypeNames: [],
 				)
 				.relocated(to: filePath)
 			}
@@ -978,6 +1108,8 @@ private func walk(
 		importOnlyConsultedCompilationConditions: fileVisitor.importOnlyConsultedCompilationConditions,
 		outputFileDeclarations: fileVisitor.outputFileDeclarations,
 		plainTypeDeclarations: fileVisitor.plainTypeDeclarations,
+		plainTypeDeclarationDecisions: fileVisitor.plainTypeDeclarationDecisions,
+		keptGuardedPlainTypeNames: [],
 	)
 	.relocated(to: filePath)
 	return fileScan.declaresSafeDIContent ? fileScan : fileScan.replacingImports(with: [], mockImports: [])

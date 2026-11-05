@@ -504,7 +504,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.tierOmissionModules(appPackage: "Other", appFiles: [
 				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
 				seamFixtureType(named: "A", declarations: ["@Instantiated let service: Service", "@Instantiated let midBuilder: Instantiator<Mid>", "@Instantiated let detourBuilder: Instantiator<Detour>"]),
-				seamFixtureType(named: "Mid", declarations: ["@Forwarded let theme: any Theme", "@Instantiated let aBuilder: Instantiator<A>"]),
+				seamFixtureType(named: "Mid", declarations: ["@Forwarded let theme: [3 of Int]", "@Instantiated let aBuilder: Instantiator<A>"]),
 				seamFixtureType(named: "Detour", declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
 			]), integration: .moduleInfo, filesToDelete: &filesToDelete)
 		}
@@ -514,16 +514,16 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorAtScopeBetweenAlone_whenScopeDeclaringFunctionBuildsItsDeclarationAfterCallingIt() async {
 		// `Root`'s `theme` receives `aBuilder`, so it is built after it, and `Root`'s call of `A`'s builder function passes `nil`:
-		// only `Mid`'s cycle-closing scope passes the function a `theme` that `Service`'s `public` tier omits.
+		// only `Mid`'s cycle-closing scope passes the function a `theme` that `Service`'s `public` tier omits. `AppTheme`, in
+		// another package, conforms to `Hub.Space.Theme`, which SafeDI proves narrower than `public` (`hubSpaceThemeModules`).
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			Self.tierOmissionError(provider: "Mid", fixtures)
+			Self.hubSpaceThemeTierOmissionError(provider: "Mid", fixtures)
 		}) {
-			try await executeSafeDIToolMultiModuleTest(modules: Self.tierOmissionModules(appPackage: "Other", appFiles: [
-				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let theme: any Theme"]),
-				seamFixtureType(named: "AppTheme", declarations: ["@Received let aBuilder: Instantiator<A>"], conformances: ", Theme")
-					.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Theme.self])\n"),
+			try await executeSafeDIToolMultiModuleTest(modules: Self.hubSpaceThemeModules(appPackage: "Other", appFiles: [
+				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>", "@Instantiated let theme: any Hub.Space.Theme"]),
+				Self.appTheme(declarations: ["@Received let aBuilder: Instantiator<A>"]),
 				seamFixtureType(named: "A", declarations: ["@Instantiated let service: Service", "@Instantiated let midBuilder: Instantiator<Mid>"]),
-				seamFixtureType(named: "Mid", declarations: ["@Forwarded let theme: any Theme", "@Instantiated let aBuilder: Instantiator<A>"]),
+				seamFixtureType(named: "Mid", declarations: ["@Forwarded let theme: any Hub.Space.Theme", "@Instantiated let aBuilder: Instantiator<A>"]),
 			]), integration: .moduleInfo, filesToDelete: &filesToDelete)
 		}
 	}
@@ -540,11 +540,11 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		}) {
 			try await executeSafeDIToolMultiModuleTest(modules: Self.tierOmissionModules(appPackage: "Other", appFiles: [
 				seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let shellBuilder: Instantiator<Shell>"]),
-				seamFixtureType(named: "Shell", declarations: ["@Forwarded let theme: any Theme", "@Instantiated let aBuilder: Instantiator<A>"]),
+				seamFixtureType(named: "Shell", declarations: ["@Forwarded let theme: [3 of Int]", "@Instantiated let aBuilder: Instantiator<A>"]),
 				seamFixtureType(named: "A", declarations: ["@Instantiated let bBuilder: Instantiator<B>", "@Instantiated let xBuilder: Instantiator<X>"]),
-				seamFixtureType(named: "X", declarations: ["@Forwarded let theme: any Theme", "@Instantiated let aBuilder: Instantiator<A>"]),
+				seamFixtureType(named: "X", declarations: ["@Forwarded let theme: [3 of Int]", "@Instantiated let aBuilder: Instantiator<A>"]),
 				seamFixtureType(named: "B", declarations: ["@Instantiated let service: Service", "@Instantiated let midBuilder: Instantiator<Mid>"]),
-				seamFixtureType(named: "Mid", declarations: ["@Forwarded let theme: any Theme", "@Instantiated let bBuilder: Instantiator<B>"]),
+				seamFixtureType(named: "Mid", declarations: ["@Forwarded let theme: [3 of Int]", "@Instantiated let bBuilder: Instantiator<B>"]),
 			]), integration: .moduleInfo, filesToDelete: &filesToDelete)
 		}
 	}
@@ -552,21 +552,18 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_callsTierPassingNothing_whenCycleClosingScopeIsBuiltInsideTreeOfDeclarationBetween() async throws {
-		// The cycle closes inside the tree of `Mid`'s `theme`, which is still being built there, so the cycle-closing scope passes
-		// `nil`, as `Root` does: no call holds a value the `public` tier omits. The values agree with a build in `Feature`'s
-		// package, whose `package` tier takes `theme`.
-		let appFiles = [
-			seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
-			seamFixtureType(named: "A", declarations: ["@Instantiated let service: Service", "@Instantiated let midBuilder: Instantiator<Mid>"]),
-			seamFixtureType(named: "Mid", declarations: ["@Instantiated let theme: any Theme"]),
-			seamFixtureType(named: "AppTheme", declarations: ["@Instantiated let aBuilder: Instantiator<A>"], conformances: ", Theme")
-				.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Theme.self])\n"),
-		]
-		let modules = Self.tierOmissionModules(appPackage: "Other", appFiles: appFiles)
+		// The cycle closes inside the tree of `Mid`'s `theme`, which is still being built there, so the cycle-closing scope
+		// passes `nil`, as `Root` does: no call holds a value the `public` tier omits. `Hub.Space.Theme` is `public`, but SafeDI
+		// proves it narrower (`hubSpaceThemeModules`), so `Service`'s `public` tier omits `theme`. The values agree with a
+		// build in `Feature`'s package.
+		let modules = Self.hubSpaceThemeModules(appPackage: "Other", appFiles: Self.cycleBetweenAppFiles)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Feature)
 		import Feature
+		#endif
+		#if canImport(Hubs)
+		import Hubs
 		#endif
 		#if canImport(SafeDI)
 		import SafeDI
@@ -574,9 +571,9 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 
 		extension Root {
 		    public init() {
-		        func __safeDI_aBuilder(theme: (any Theme)?) -> A {
+		        func __safeDI_aBuilder(theme: (any Hub.Space.Theme)?) -> A {
 		            func __safeDI_service() -> Service {
-		                _ = Service.__safeDI_Service_27F6F01DC5D0EF8E.self
+		                _ = Service.__safeDI_Service_F43E4BD26B22682A.self
 		                return Service()
 		            }
 		            let service: Service = __safeDI_service()
@@ -587,7 +584,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		                    }
 		                    return AppTheme(aBuilder: aBuilder)
 		                }
-		                let theme: any Theme = __safeDI_theme()
+		                let theme: any Hub.Space.Theme = __safeDI_theme()
 		                return Mid(theme: theme)
 		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
@@ -602,7 +599,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		"""])
 		guard compileVerificationIsEnabled else { return }
 		#expect(try #require(output.compilation).failure == nil)
-		let samePackageModules = Self.tierOmissionModules(appPackage: "Shop", appFiles: appFiles)
+		let samePackageModules = Self.hubSpaceThemeModules(appPackage: "Shop", appFiles: Self.cycleBetweenAppFiles)
 		let samePackageOutput = try await executeSafeDIToolMultiModuleTest(modules: samePackageModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		try expectDifferentialValuesAgree(
 			feature: Self.differentialValuePath(of: output, modules: modules),
@@ -746,8 +743,8 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		// `TokenCache`, in the tree of the `public` mock of `Service` that `A`'s builder function calls, which omits `filter`.
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
 			"""
-			\(fixtures["App"]!["Mid.swift"]):11:5: error: `Mid` provides `filter: Filter`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `Filter` is `package` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `Filter` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Filter` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Filter { public static func mock() -> Filter }`), which proves `Filter` `public`; or stop providing `filter` on this path.
-			\(fixtures["Core"]!["Service.swift"]):15:5: note: `TokenCache` receives `filter: Filter?` here.
+			\(fixtures["App"]!["Mid.swift"]):11:5: error: `Mid` provides `filter: [3 of Int]`, but the `public` mock SafeDI generated for `Service` in module `Core`, the narrowest one module `App` can call, does not take it: `Service.mock` takes `filter` only on its `package` tier, so this call would pass `nil` to `TokenCache`, which the inline mock would hand `filter`. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Core` or on a type that receives it is `package` (`TokenCache.init(filter:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `TokenCache.init(filter:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `filter` on this path.
+			\(fixtures["Core"]!["Service.swift"]):9:5: note: `TokenCache` receives `filter: [3 of Int]?` here.
 			"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
@@ -755,19 +752,13 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 					ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: ["Service.swift": """
 					import SafeDI
 
-					#if canImport(Foundation)
-					public struct Filter {
-					    public init() {}
-					}
-					#endif
-
 					@Instantiable
 					package struct TokenCache: Instantiable {
-					    package init(filter: Filter?) {
+					    package init(filter: [3 of Int]?) {
 					        self.filter = filter
 					    }
 
-					    @Received(onlyIfAvailable: true) let filter: Filter?
+					    @Received(onlyIfAvailable: true) let filter: [3 of Int]?
 					}
 
 					@Instantiable(generateMock: .public)
@@ -783,7 +774,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 						seamFixtureType(named: "Screen", declarations: ["@Instantiated let aBuilder: Instantiator<A>"])
 							.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(generateMock: true)\n"),
 						seamFixtureType(named: "A", declarations: ["@Instantiated let service: Service", "@Instantiated let midBuilder: Instantiator<Mid>"]),
-						seamFixtureType(named: "Mid", declarations: ["@Forwarded let filter: Filter", "@Instantiated let aBuilder: Instantiator<A>"]),
+						seamFixtureType(named: "Mid", declarations: ["@Forwarded let filter: [3 of Int]", "@Instantiated let aBuilder: Instantiator<A>"]),
 					].map { "import Core\nimport SafeDI\n\n" + $0 }, dependencies: ["Core"]),
 				],
 				integration: .moduleInfo,
@@ -990,19 +981,23 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		// `Service`'s `public` mock omits `filter`, and `A`'s builder function takes it, since `Mid` declares it before the cycle closes
 		// on `A`. The cycle closes inside the tree of `Mid`'s `filter`, which is still being built there, so the cycle-closing scope
 		// passes `nil`, as `Screen`'s mock does, which binds nothing for `filter`: no call holds a value the mock omits. The mock twin
-		// of `generate_callsTierPassingNothing_whenCycleClosingScopeIsBuiltInsideTreeOfDeclarationBetween`. The values agree with a
-		// build in `Core`'s package, whose mock builds `Service`'s tree and takes `filter` as an override.
+		// of `generate_callsTierPassingNothing_whenCycleClosingScopeIsBuiltInsideTreeOfDeclarationBetween`. `AppFilter`, in another
+		// package, conforms to `Hub.Space.FilterProtocol`, which SafeDI proves narrower than `public` (`hubSpaceFilterModules`).
+		// The values agree with a build in `Core`'s package, whose mock builds `Service`'s tree and takes `filter` as an override.
 		let appFiles = [
 			Self.screen(generateMock: "true"),
 			Self.aCallingPublicMock,
 			Self.midInstantiatingFilter,
 			Self.appFilter,
 		]
-		let modules = Self.publicMockLazyCycleModules(core: Self.coreWhosePublicMockOmitsFilter, appFiles: appFiles)
+		let modules = Self.hubSpaceFilterModules(appFiles: appFiles)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Core)
 		import Core
+		#endif
+		#if canImport(Hubs)
+		import Hubs
 		#endif
 		#if canImport(SafeDI)
 		import SafeDI
@@ -1024,17 +1019,17 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_aBuilder(filter: (any FilterProtocol)?) -> A {
-		            _ = Service.__safeDI_Service_mock_A107C7CF39C5CB30.self
+		        func __safeDI_aBuilder(filter: (any Hub.Space.FilterProtocol)?) -> A {
+		            _ = Service.__safeDI_Service_mock_4D061AF06C28784E.self
 		            let service = Service.mock(safeDIOverrides: safeDIOverrides.aBuilder.service)
 		            func __safeDI_midBuilder() -> Mid {
-		                func __safeDI_filter() -> FilterProtocol {
+		                func __safeDI_filter() -> Hub.Space.FilterProtocol {
 		                    let aBuilder = Instantiator<A> {
 		                        __safeDI_aBuilder(filter: nil)
 		                    }
 		                    return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.filter.safeDIBuilder { safeDIBuilder(aBuilder) } else { AppFilter(aBuilder: aBuilder) }
 		                }
-		                let filter: FilterProtocol = __safeDI_filter()
+		                let filter: Hub.Space.FilterProtocol = __safeDI_filter()
 		                return if let safeDIBuilder = safeDIOverrides.aBuilder.midBuilder.safeDIBuilder { safeDIBuilder(filter) } else { Mid(filter: filter) }
 		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
@@ -1068,7 +1063,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    struct SafeDIMockConfiguration {
 		        init(
 		            filter: AppFilter.SafeDIMockConfiguration = .init(),
-		            _ safeDIBuilder: ((any FilterProtocol) -> Mid)? = nil
+		            _ safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)? = nil
 		        ) {
 		            self.filter = filter
 		            self.safeDIBuilder = safeDIBuilder
@@ -1076,7 +1071,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 
 		        let filter: AppFilter.SafeDIMockConfiguration
 		        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
-		        let safeDIBuilder: ((any FilterProtocol) -> Mid)?
+		        let safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)?
 		    }
 		}
 
@@ -1103,7 +1098,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		""" + "\n"])
 		guard compileVerificationIsEnabled else { return }
 		#expect(try #require(output.compilation).failure == nil)
-		let samePackageModules = Self.publicMockLazyCycleModules(core: Self.coreWhosePublicMockOmitsFilter, appPackage: "pkg", appFiles: appFiles)
+		let samePackageModules = Self.hubSpaceFilterModules(appPackage: "pkg", appFiles: appFiles)
 		let samePackageOutput = try await executeSafeDIToolMultiModuleTest(modules: samePackageModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		try expectDifferentialValuesAgree(
 			feature: Self.differentialValuePath(of: output, modules: modules),
@@ -1117,19 +1112,24 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func publicMock_passesNilWhereClosedOnFunctionIsDeclared_whenEveryCallOfPublicMockOmitsLabel() async throws {
 		// `Screen`'s `public` mock takes, as its own parameter, a label its calls of other modules' `public` mocks take. Its one call
-		// omits `filter`, so it takes none, binds nothing for `filter`, and passes `A`'s builder function `nil`. The values agree with
-		// a build in `Core`'s package, whose mock builds `Service`'s tree and takes `filter` as a parameter.
+		// omits `filter`, so it takes none, binds nothing for `filter`, and passes `A`'s builder function `nil`. `AppFilter`, in
+		// another package, conforms to `Hub.Space.FilterProtocol`, which SafeDI proves narrower than `public`
+		// (`hubSpaceFilterModules`). The values agree with a build in `Core`'s package, whose mock builds `Service`'s tree and
+		// takes `filter` as a parameter of its `internal` tier.
 		let appFiles = [
 			Self.screen(generateMock: ".public"),
 			Self.aCallingPublicMock,
 			Self.midInstantiatingFilter,
 			Self.appFilter,
 		]
-		let modules = Self.publicMockLazyCycleModules(core: Self.coreWhosePublicMockOmitsFilter, appFiles: appFiles)
+		let modules = Self.hubSpaceFilterModules(appFiles: appFiles)
 		let output = try await executeSafeDIToolMultiModuleTest(modules: modules, integration: .moduleInfo, filesToDelete: &filesToDelete)
 		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
 		#if canImport(Core)
 		import Core
+		#endif
+		#if canImport(Hubs)
+		import Hubs
 		#endif
 		#if canImport(SafeDI)
 		import SafeDI
@@ -1151,17 +1151,17 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		    public static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        func __safeDI_aBuilder(filter: (any FilterProtocol)?) -> A {
-		            _ = Service.__safeDI_Service_mock_A107C7CF39C5CB30.self
+		        func __safeDI_aBuilder(filter: (any Hub.Space.FilterProtocol)?) -> A {
+		            _ = Service.__safeDI_Service_mock_4D061AF06C28784E.self
 		            let service = Service.mock(safeDIOverrides: safeDIOverrides.aBuilder.service)
 		            func __safeDI_midBuilder() -> Mid {
-		                func __safeDI_filter() -> FilterProtocol {
+		                func __safeDI_filter() -> Hub.Space.FilterProtocol {
 		                    let aBuilder = Instantiator<A> {
 		                        __safeDI_aBuilder(filter: nil)
 		                    }
 		                    return AppFilter.__safeDI_init(aBuilder: aBuilder, safeDIBuilder: safeDIOverrides.aBuilder.midBuilder.filter.safeDIBuilder)
 		                }
-		                let filter: FilterProtocol = __safeDI_filter()
+		                let filter: Hub.Space.FilterProtocol = __safeDI_filter()
 		                return Mid.__safeDI_init(filter: filter, safeDIBuilder: safeDIOverrides.aBuilder.midBuilder.safeDIBuilder)
 		            }
 		            let midBuilder = Instantiator<Mid>(__safeDI_midBuilder)
@@ -1201,8 +1201,15 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		/// Configuration for how `Mid` is constructed within the public mock trees of module `App`.
 		public struct __safeDI_App_Mid_MockConfiguration {
 		    public init(
+		        filter: __safeDI_App_AppFilter_MockConfiguration = .init()
+		    ) {
+		        self.filter = filter
+		        self.safeDIBuilder = nil
+		    }
+
+		    init(
 		        filter: __safeDI_App_AppFilter_MockConfiguration = .init(),
-		        _ safeDIBuilder: ((any FilterProtocol) -> Mid)? = nil
+		        _ safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)? = nil
 		    ) {
 		        self.filter = filter
 		        self.safeDIBuilder = safeDIBuilder
@@ -1210,11 +1217,11 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 
 		    public let filter: __safeDI_App_AppFilter_MockConfiguration
 		    /// Overrides how `Mid` is constructed. Parameters match the type’s initializer or custom mock method.
-		    public let safeDIBuilder: ((any FilterProtocol) -> Mid)?
+		    let safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)?
 		}
 
 		extension Mid {
-		    static func __safeDI_init(filter: any FilterProtocol, safeDIBuilder: ((any FilterProtocol) -> Mid)?) -> Mid {
+		    static func __safeDI_init(filter: any Hub.Space.FilterProtocol, safeDIBuilder: ((any Hub.Space.FilterProtocol) -> Mid)?) -> Mid {
 		        if let safeDIBuilder { safeDIBuilder(filter) } else { Mid(filter: filter) }
 		    }
 		}
@@ -1246,7 +1253,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 		""" + "\n"])
 		guard compileVerificationIsEnabled else { return }
 		#expect(try #require(output.compilation).failure == nil)
-		let samePackageModules = Self.publicMockLazyCycleModules(core: Self.coreWhosePublicMockOmitsFilter, appPackage: "pkg", appFiles: appFiles)
+		let samePackageModules = Self.hubSpaceFilterModules(appPackage: "pkg", appFiles: appFiles)
 		let samePackageOutput = try await executeSafeDIToolMultiModuleTest(modules: samePackageModules, integration: .moduleInfo, compileVerification: .skipped, filesToDelete: &filesToDelete)
 		try expectDifferentialValuesAgree(
 			feature: Self.differentialValuePath(of: output, modules: modules),
@@ -1668,26 +1675,67 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 
 	private var filesToDelete: [URL]
 
-	/// `Feature`'s public seam `Service`, whose `Badge` receives the public protocol `Theme` only if available on a `package`
-	/// initializer, the only declaration that mentions `Theme` that SafeDI reads, and `App`, in package `appPackage`, with
-	/// `appFiles`.
+	/// `Feature`'s public seam `Service`, whose `Badge` receives `theme: [3 of Int]` only if available on a `package`
+	/// initializer, the only declaration that mentions `[3 of Int]`, a spelling SafeDI cannot read, and `App`, in package
+	/// `appPackage`, with `appFiles`. A module in another package can name the type, while SafeDI proves it only `package`.
 	private static func tierOmissionModules(appPackage: String, appFiles: [String]) -> [ModuleFixture] {
 		[
 			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
-				unrecordedTypeDeclaration("public protocol Theme {}"),
-				"@Instantiable\npublic struct Badge: Instantiable {\n    package init(theme: (any Theme)?) {\n        self.theme = theme\n    }\n\n    @Received(onlyIfAvailable: true) let theme: (any Theme)?\n}",
+				"@Instantiable\npublic struct Badge: Instantiable {\n    package init(theme: [3 of Int]?) {\n        self.theme = theme\n    }\n\n    @Received(onlyIfAvailable: true) let theme: [3 of Int]?\n}",
 				seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
 			]),
 			ModuleFixture(name: "App", packageName: appPackage, swiftFileContent: appFiles.map { "import Feature\nimport SafeDI\n\n" + $0 }, dependencies: ["Feature"]),
 		]
 	}
 
+	/// `Feature`, in package `Shop`, whose public seam `Service` instantiates `Badge`, which receives
+	/// `theme: (any Hub.Space.Theme)?` only if available on its `package` initializer, and `App`, in package `appPackage`,
+	/// with `appFiles`. `Hub.Space.Theme` is a `public` protocol in an extension of `Hub.Space`, which `Feature` declares
+	/// `@Instantiable` in an extension of another module's `Hub` (`hubTheme(named:declarations:)`): SafeDI proves
+	/// `Hub.Space`, and so the protocol, narrower than `public`, while a module in another package can conform to it.
+	private static func hubSpaceThemeModules(appPackage: String, appFiles: [String]) -> [ModuleFixture] {
+		[
+			hubsModule,
+			ModuleFixture(name: "Feature", packageName: "Shop", swiftFileContent: [
+				"import Hubs\n\n@Instantiable\npublic struct Badge: Instantiable {\n    package init(theme: (any Hub.Space.Theme)?) {\n        self.theme = theme\n    }\n\n    @Received(onlyIfAvailable: true) let theme: (any Hub.Space.Theme)?\n}",
+				seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"]),
+				hubTheme(named: "Space"),
+				"import Hubs\n\nextension Hub.Space {\n    public protocol Theme {}\n}",
+			], dependencies: ["Hubs"]),
+			ModuleFixture(name: "App", packageName: appPackage, swiftFileContent: appFiles.map { "import Feature\nimport Hubs\nimport SafeDI\n\n" + $0 }, dependencies: ["Feature", "Hubs"]),
+		]
+	}
+
+	/// `App`'s files for `hubSpaceThemeModules` in which `A`, `Mid` and `AppTheme` form a lazy cycle through the tree of
+	/// `Mid`'s `theme`.
+	private static let cycleBetweenAppFiles = [
+		seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+		seamFixtureType(named: "A", declarations: ["@Instantiated let service: Service", "@Instantiated let midBuilder: Instantiator<Mid>"]),
+		seamFixtureType(named: "Mid", declarations: ["@Instantiated let theme: any Hub.Space.Theme"]),
+		appTheme(declarations: ["@Instantiated let aBuilder: Instantiator<A>"]),
+	]
+
+	/// `AppTheme`, with `declarations`, which fulfills `Hub.Space.Theme`.
+	private static func appTheme(declarations: [String]) -> String {
+		seamFixtureType(named: "AppTheme", declarations: declarations, conformances: ", Hub.Space.Theme")
+			.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Hub.Space.Theme.self])\n")
+	}
+
+	/// The error a call of `Service`'s `public` tier in a tree of `hubSpaceThemeModules` reports for the `theme` `provider`
+	/// forwards, its first declaration.
+	private static func hubSpaceThemeTierOmissionError(provider: String, _ fixtures: [String: FixturePaths]) -> String {
+		"""
+		\(fixtures["App"]!["\(provider).swift"]):12:5: error: `\(provider)` provides `theme: any Hub.Space.Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `internal` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Hub.Space.Theme` is nested in `Hub.Space`, which is `internal` as far as SafeDI can tell: it is declared inside an extension of `Hub` that spells no access level, which SafeDI counts as `internal`, since it reads `Hub`'s access only from a declaration of `Hub` in the same module that is outside every extension, or inside an extension of a type it reads the same way. If `Hub` can be `public`, spell the extension's access level (`public extension Hub { … }`, dropping the modifier on `Space` that Swift then reports as redundant; the compiler rejects a level wider than `Hub`'s), or declare `Space` in `Hub`'s body or at top level; mention `Hub.Space` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
+		\(fixtures["Feature"]!["Badge.swift"]):9:5: note: `Badge` receives `theme: (any Hub.Space.Theme)?` here.
+		"""
+	}
+
 	/// The error a call of `Service`'s `public` tier in a tree of `tierOmissionModules` reports for the `theme` `provider`
 	/// forwards, its first declaration.
 	private static func tierOmissionError(provider: String, _ fixtures: [String: FixturePaths]) -> String {
 		"""
-		\(fixtures["App"]!["\(provider).swift"]):11:5: error: `\(provider)` provides `theme: any Theme`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `Theme` is `package` as far as SafeDI can tell: it is declared inside an `#if` block, from which SafeDI takes no access level, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `Theme` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; give `Theme` a `public` `mockOnly` mock (`@Instantiable(mockOnly: true) public extension Theme { public static func mock() -> Theme }`), which proves `Theme` `public`; or stop providing `theme` on this path.
-		\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: (any Theme)?` here.
+		\(fixtures["App"]!["\(provider).swift"]):11:5: error: `\(provider)` provides `theme: [3 of Int]`, but the `public` initializer SafeDI generated for `Service` in module `Feature`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feature` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
+		\(fixtures["Feature"]!["Badge.swift"]):7:5: note: `Badge` receives `theme: [3 of Int]?` here.
 		"""
 	}
 
@@ -1772,8 +1820,8 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 
 	/// `Core`'s file for a lazy cycle around a call of `Service`'s `public` mock: `Service`'s initializer is `package`, so a module
 	/// of another package calls the mock rather than building `Service`'s tree, in which `TokenCache` receives `filter: Filter?`
-	/// only if available on a `public` initializer, so the `public` mock takes `filter`. `Filter` is declared inside an `#if`
-	/// block, where SafeDI records no declaration of it.
+	/// only if available on a `public` initializer, so the `public` mock takes `filter`. `Filter` is declared `public` in
+	/// every clause of a platform-conditioned block, which SafeDI reads as it reads a declaration outside every block.
 	private static let coreWhosePublicMockTakesFilter = """
 	import SafeDI
 
@@ -1832,22 +1880,36 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 	}
 	"""
 
-	/// `coreWhosePublicMockTakesFilter` with `TokenCache` receiving `filter: (any FilterProtocol)?` on a `package` initializer, the
-	/// only declaration that mentions `FilterProtocol` that SafeDI reads, so the `public` mock omits `filter`.
-	private static let coreWhosePublicMockOmitsFilter = """
-	import SafeDI
+	/// `hubsModule`; `Core`, in package `pkg`, with `coreWhosePublicMockOmitsFilter` as its file `Service.swift`, and
+	/// `Hub.Space` and `Hub.Space.FilterProtocol`, a `public` protocol in an extension of `Hub.Space`, which `Core` declares
+	/// `@Instantiable` in an extension of another module's `Hub` (`hubTheme(named:declarations:)`): SafeDI proves
+	/// `Hub.Space`, and so the protocol, narrower than `public`, while a module in another package can conform to it; and
+	/// `App`, in package `appPackage`, with `appFiles`.
+	private static func hubSpaceFilterModules(appPackage: String = "app", appFiles: [String]) -> [ModuleFixture] {
+		[
+			hubsModule,
+			ModuleFixture(name: "Core", packageName: "pkg", swiftFileContentByFilePath: [
+				"Service.swift": coreWhosePublicMockOmitsFilter,
+				"Space.swift": hubTheme(named: "Space"),
+				"FilterProtocol.swift": "import Hubs\n\nextension Hub.Space {\n    public protocol FilterProtocol {}\n}",
+			], dependencies: ["Hubs"]),
+			ModuleFixture(name: "App", packageName: appPackage, swiftFileContent: appFiles.map { "import Core\nimport Hubs\nimport SafeDI\n\n" + $0 }, dependencies: ["Core", "Hubs"]),
+		]
+	}
 
-	#if canImport(Foundation)
-	public protocol FilterProtocol {}
-	#endif
+	/// `Core`'s `Service.swift` for `hubSpaceFilterModules`: `coreWhosePublicMockTakesFilter` with `TokenCache` receiving
+	/// `filter: (any Hub.Space.FilterProtocol)?` on a `package` initializer, so the `public` mock omits `filter`.
+	private static let coreWhosePublicMockOmitsFilter = """
+	import Hubs
+	import SafeDI
 
 	@Instantiable
 	package struct TokenCache: Instantiable {
-	    package init(filter: (any FilterProtocol)?) {
+	    package init(filter: (any Hub.Space.FilterProtocol)?) {
 	        self.filter = filter
 	    }
 
-	    @Received(onlyIfAvailable: true) let filter: (any FilterProtocol)?
+	    @Received(onlyIfAvailable: true) let filter: (any Hub.Space.FilterProtocol)?
 	}
 
 	@Instantiable(generateMock: .public)
@@ -1868,7 +1930,7 @@ struct SafeDIToolSeamLazyCycleTests: ~Copyable {
 
 	private static let aCallingPublicMock = seamFixtureType(named: "A", declarations: ["@Instantiated let service: Service", "@Instantiated let midBuilder: Instantiator<Mid>"])
 	private static let midForwardingFilter = seamFixtureType(named: "Mid", declarations: ["@Forwarded let filter: Filter", "@Instantiated let aBuilder: Instantiator<A>"])
-	private static let midInstantiatingFilter = seamFixtureType(named: "Mid", declarations: ["@Instantiated let filter: any FilterProtocol"])
-	private static let appFilter = seamFixtureType(named: "AppFilter", declarations: ["@Instantiated let aBuilder: Instantiator<A>"], conformances: ", FilterProtocol")
-		.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [FilterProtocol.self])\n")
+	private static let midInstantiatingFilter = seamFixtureType(named: "Mid", declarations: ["@Instantiated let filter: any Hub.Space.FilterProtocol"])
+	private static let appFilter = seamFixtureType(named: "AppFilter", declarations: ["@Instantiated let aBuilder: Instantiator<A>"], conformances: ", Hub.Space.FilterProtocol")
+		.replacingOccurrences(of: "@Instantiable\n", with: "@Instantiable(fulfillingAdditionalTypes: [Hub.Space.FilterProtocol.self])\n")
 }
