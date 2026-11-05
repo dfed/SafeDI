@@ -7055,7 +7055,10 @@ public actor DependencyTreeGenerator {
 			else { return nil }
 			return index
 		} else {
-			// Nearly every dependency repeats no entry, so the type its scope builds is found only for one that might.
+			// Nearly every dependency repeats no entry, so the type its scope builds is found only for one that might. A
+			// dependency with no built scope matches no entry: no input has one beside an entry of its property, since an
+			// instantiated type nothing fulfills is rejected before scopes exist, and a dependency a mock cannot build shares
+			// no property with an entry built from a scope.
 			guard propertyStack.contains(receivedForms[0]) else { return nil }
 			let builtType = scope.propertiesToGenerate.first { $0.property == fulfillingProperty }?.builtScope?.instantiable.concreteInstantiable
 			return propertyStack.indices.first { propertyStack[$0] == receivedForms[0] && concreteTypeStack[$0] == builtType }
@@ -8499,7 +8502,10 @@ public actor DependencyTreeGenerator {
 		///   - mockRootForwardedProperties: See `isHanded`.
 		///   - nearestDeclaration: The nearest declaration of a label above the scope whose receives the walk starts from,
 		///     as `indexOfEntryClosedOn` reads it: a receive of a property on `instantiationStack` that a nearer declaration
-		///     fulfills is walked as a property not on it.
+		///     fulfills is walked as a property not on it. A property received transitively, by the scope of a type the walk
+		///     follows, is judged with this scope's declarations rather than those where that type is built: that scope is
+		///     validated with its own, so this walk accepts nothing it would reject, and only which of two diagnostics is
+		///     reported first can follow from it.
 		func validateNoCycleInReceivedProperties(
 			_ requiredReceivedProperties: [Scope.RequiredReceivedProperty],
 			directParent: TypeDescription,
