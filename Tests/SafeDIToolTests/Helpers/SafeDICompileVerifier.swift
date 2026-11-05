@@ -54,6 +54,7 @@ func verifyGeneratedCodeCompiles(
 	generatedFiles: [String: String],
 	activeCompilationConditions: [String] = [],
 	mockConditionalCompilation: String?,
+	compilerSettings: VerificationCompilerSettings = VerificationCompilerSettings(),
 	filesToDelete: inout [URL],
 	sourceLocation: SourceLocation = #_sourceLocation,
 ) throws {
@@ -68,6 +69,7 @@ func verifyGeneratedCodeCompiles(
 			generatedFiles: generatedFiles,
 			activeCompilationConditions: activeCompilationConditions,
 			mockConditionalCompilation: mockConditionalCompilation,
+			compilerSettings: compilerSettings,
 		),
 		moduleSearchPaths: [],
 		emitsModule: false,
@@ -138,6 +140,19 @@ private func locateBuildArtifacts(sourceLocation: SourceLocation) -> SafeDIBuild
 	return artifacts
 }
 
+/// How the compiler that verifies a module is configured beyond the conditions it defines: the language mode, the
+/// upcoming features it enables, and whether each file is given `import SafeDI`.
+struct VerificationCompilerSettings {
+	/// The `-swift-version` the module compiles in.
+	var swiftLanguageMode = "6"
+	/// The upcoming features the compile enables, each passed as `-enable-upcoming-feature`.
+	var upcomingFeatures = [String]()
+	/// Whether `stageCompileSources` prepends `import SafeDI` to every file. A fixture that spells its own import of
+	/// SafeDI, as one that gives an import an access level must, since an import without one beside it is ambiguous,
+	/// passes `false`, and its generated files import SafeDI as the fixture's files do.
+	var prependsSafeDIImport = true
+}
+
 /// What one module's compile is given: its sources, which `stageCompileSources` stages, and how the compiler
 /// names the module.
 struct ModuleCompileSources {
@@ -156,6 +171,8 @@ struct ModuleCompileSources {
 	/// Whether the compile defines `DEBUG` and the mock condition, as a debug build does, rather than compile as a
 	/// release build, where neither is defined, so mock-only content and generated mocks are not compiled.
 	var definesDebug = true
+	/// The language mode, upcoming features, and staging of the compile.
+	var compilerSettings = VerificationCompilerSettings()
 }
 
 /// Why a module did not compile.
@@ -257,6 +274,7 @@ private func compileModule(
 	let staged = try stageCompileSources(
 		inputSwiftFiles: module.inputSwiftFiles,
 		generatedFiles: module.generatedFiles,
+		prependsSafeDIImport: module.compilerSettings.prependsSafeDIImport,
 		filesToDelete: &filesToDelete,
 	)
 	// Generated mock code is wrapped in `#if <mockConditionalCompilation>`, so define that condition
@@ -273,6 +291,8 @@ private func compileModule(
 			emitsModule: emitsModule,
 			moduleSearchPaths: moduleSearchPaths,
 			definesDebug: module.definesDebug,
+			swiftLanguageMode: module.compilerSettings.swiftLanguageMode,
+			upcomingFeatures: module.compilerSettings.upcomingFeatures,
 		)
 	}
 
@@ -515,24 +535,27 @@ struct StagedCompileSources {
 /// because SafeDITool propagates user imports into generated output, so adding it to the fixture
 /// would rewrite every test's expected output to include a `#if canImport(SafeDI)` block. Generated
 /// files reference SafeDI types but carry no imports in production, where they sit in the same
-/// target as the user's code, which imports SafeDI once.
+/// target as the user's code, which imports SafeDI once. A caller whose fixtures spell their own import of SafeDI
+/// passes `prependsSafeDIImport: false`.
 func stageCompileSources(
 	inputSwiftFiles: [URL],
 	generatedFiles: [String: String],
+	prependsSafeDIImport: Bool = true,
 	filesToDelete: inout [URL],
 ) throws -> StagedCompileSources {
+	let prependedImport = prependsSafeDIImport ? "import SafeDI\n" : ""
 	let scratchDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("safedi-verify-\(UUID().uuidString)")
 	try FileManager.default.createDirectory(at: scratchDirectory, withIntermediateDirectories: true)
 	filesToDelete.append(scratchDirectory)
 
 	let inputCompileFiles = try inputSwiftFiles.enumerated().map { index, sourceFile in
 		let destination = scratchDirectory.appendingPathComponent("input_\(index)_\(sourceFile.lastPathComponent)")
-		try ("import SafeDI\n" + String(contentsOf: sourceFile, encoding: .utf8)).write(to: destination, atomically: true, encoding: .utf8)
+		try (prependedImport + String(contentsOf: sourceFile, encoding: .utf8)).write(to: destination, atomically: true, encoding: .utf8)
 		return destination
 	}
 	let generatedCompileFiles = try generatedFiles.map { fileName, contents in
 		let destination = scratchDirectory.appendingPathComponent(fileName)
-		try ("import SafeDI\n" + contents).write(to: destination, atomically: true, encoding: .utf8)
+		try (prependedImport + contents).write(to: destination, atomically: true, encoding: .utf8)
 		return destination
 	}
 	return StagedCompileSources(
@@ -567,6 +590,8 @@ func stageCompileSources(
 ///     rather than a script that defines `main`, which a link into an executable would duplicate.
 ///   - definesDebug: Whether to define `DEBUG`, as a debug build does; a release build defines neither it nor any
 ///     condition `activeCompilationConditions` spells `DEBUG`.
+///   - swiftLanguageMode: The `-swift-version` to compile in.
+///   - upcomingFeatures: The upcoming features to enable, each passed as `-enable-upcoming-feature`.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 func compileSwift(
 	sources: [URL],
@@ -580,6 +605,8 @@ func compileSwift(
 	enablesTesting: Bool = false,
 	parsesAsLibrary: Bool = false,
 	definesDebug: Bool = true,
+	swiftLanguageMode: String = "6",
+	upcomingFeatures: [String] = [],
 ) throws -> SwiftCompileResult {
 	var arguments = swiftCompilerCommand.arguments
 	arguments.append(contentsOf: [
@@ -594,8 +621,11 @@ func compileSwift(
 	}
 	arguments.append(contentsOf: [
 		"-load-plugin-executable", "\(artifacts.safeDIMacrosToolPath.path)#SafeDIMacros",
-		"-swift-version", "6",
+		"-swift-version", swiftLanguageMode,
 	])
+	for upcomingFeature in upcomingFeatures {
+		arguments.append(contentsOf: ["-enable-upcoming-feature", upcomingFeature])
+	}
 	if definesDebug {
 		arguments.append("-DDEBUG")
 	}

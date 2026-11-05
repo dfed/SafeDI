@@ -33,6 +33,8 @@ public actor DependencyTreeGenerator {
 	///   - plainTypeDeclarations: The declarations of types that are not `@Instantiable` in the modules whose
 	///     declarations SafeDITool read, each with the module that declares it, among which the declaration of a type
 	///     an extension extends bounds the types declared in or by that extension.
+	///   - writtenImportAccessLevels: The access levels the files SafeDI read spell on their imports, the module's own
+	///     apart from its dependencies', which decide the level each generated import spells.
 	public init(
 		importStatements: [ImportStatement],
 		mockImportStatements: [ImportStatement],
@@ -41,9 +43,17 @@ public actor DependencyTreeGenerator {
 		emittingModule: EmittingModule? = nil,
 		seams: SeamResolution = .none,
 		plainTypeDeclarations: [PlainTypeDeclaration] = [],
+		writtenImportAccessLevels: GeneratedImportAccess.WrittenLevels = .none,
 	) {
 		self.importStatements = importStatements
 		self.mockImportStatements = mockImportStatements
+		importAccess = GeneratedImportAccess(
+			writtenLevels: writtenImportAccessLevels,
+			instantiables: typeDescriptionToFulfillingInstantiableMap.values,
+			plainTypeDeclarations: plainTypeDeclarations,
+			emittingModuleName: emittingModule?.identity.moduleName,
+			isOwnFile: emittingModule?.isOwnFile,
+		)
 		self.typeDescriptionToFulfillingInstantiableMap = typeDescriptionToFulfillingInstantiableMap
 		self.aliasDeclarationReferences = aliasDeclarationReferences
 		self.emittingModule = emittingModule
@@ -124,19 +134,36 @@ public actor DependencyTreeGenerator {
 		public let mockConfigurationCode: String?
 	}
 
-	/// The file header to prepend to each generated dependency-tree file.
-	public var fileHeader: String {
-		Self.fileHeader(importing: importStatements)
+	/// The code a generated file holds, which decides what its header imports.
+	public enum GeneratedFileContent: Sendable {
+		/// Dependency-tree code.
+		case dependencyTree(code: String)
+		/// Mock code, as each generated mock file and the shared mock configuration file hold, which only builds in
+		/// which `mockConditionalCompilation` is active compile, or every build when it is `nil`.
+		case mock(code: String, mockConditionalCompilation: String?)
+		/// Both dependency-tree code and mock code, as one file that holds a module's whole output does.
+		case dependencyTreeAndMock(dependencyTreeCode: String, mockCode: String, mockConditionalCompilation: String?)
 	}
 
-	/// The file header to prepend to each generated mock file and to the shared mock configuration file.
-	public var mockFileHeader: String {
-		Self.fileHeader(importing: mockImportStatements)
-	}
-
-	/// The file header to prepend to one file that holds both generated dependency-tree code and generated mock code.
-	public var dependencyTreeAndMockFileHeader: String {
-		Self.fileHeader(importing: importStatements + mockImportStatements)
+	/// The file header to prepend to a generated file whose code is `content`: the imports `content` needs, each spelling
+	/// the access level the file's declarations need where they compile (`GeneratedImportAccess`).
+	public func fileHeader(for content: GeneratedFileContent) -> String {
+		switch content {
+		case let .dependencyTree(code):
+			Self.fileHeader(importing: imports(importStatements, forUnconditionalCode: code, mockCode: nil))
+		case let .mock(code, mockConditionalCompilation):
+			if let mockConditionalCompilation {
+				Self.fileHeader(importing: imports(mockImportStatements, forUnconditionalCode: "", mockCode: (code, mockConditionalCompilation)))
+			} else {
+				Self.fileHeader(importing: imports(mockImportStatements, forUnconditionalCode: code, mockCode: nil))
+			}
+		case let .dependencyTreeAndMock(dependencyTreeCode, mockCode, mockConditionalCompilation):
+			if let mockConditionalCompilation {
+				Self.fileHeader(importing: imports(importStatements + mockImportStatements, forUnconditionalCode: dependencyTreeCode, mockCode: (mockCode, mockConditionalCompilation)))
+			} else {
+				Self.fileHeader(importing: imports(importStatements + mockImportStatements, forUnconditionalCode: dependencyTreeCode + "\n\n" + mockCode, mockCode: nil))
+			}
+		}
 	}
 
 	public func generatePerRootCodeTrees() async throws -> [GeneratedRoot] {
@@ -2654,6 +2681,8 @@ public actor DependencyTreeGenerator {
 
 	private let importStatements: [ImportStatement]
 	private let mockImportStatements: [ImportStatement]
+	/// How the imports of each generated file spell their access levels.
+	private let importAccess: GeneratedImportAccess
 	private let typeDescriptionToFulfillingInstantiableMap: [TypeDescription: Instantiable]
 	private let aliasDeclarationReferences: AliasDeclarationReferences
 	private let emittingModule: EmittingModule?
@@ -5215,38 +5244,55 @@ public actor DependencyTreeGenerator {
 		return leaf
 	}
 
-	private static func fileHeader(importing importStatements: [ImportStatement]) -> String {
-		let imports = imports(importStatements)
+	private static func fileHeader(importing imports: String) -> String {
 		let importsWhitespace = imports.isEmpty ? "" : "\n"
 		return "// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.\n// Any modifications made to this file will be overwritten on subsequent builds.\n// Please refrain from editing this file directly.\n\(importsWhitespace)\(imports)\(importsWhitespace)\n"
 	}
 
-	private static func imports(_ importStatements: [ImportStatement]) -> String {
-		importStatements
-			.reduce(into: [String: Set<ImportStatement>]()) { partialResult, importStatement in
-				var importsForModuleName = partialResult[importStatement.moduleName, default: []]
-				importsForModuleName.insert(importStatement)
-				partialResult[importStatement.moduleName] = importsForModuleName
-			}
-			.flatMap {
+	/// The imports of a generated file whose code is `unconditionalCode`, which every build compiles, and `mockCode`, which
+	/// only builds in which its condition is active compile, from `importStatements`, each spelling the access level
+	/// `importAccess` decides.
+	private func imports(
+		_ importStatements: [ImportStatement],
+		forUnconditionalCode unconditionalCode: String,
+		mockCode: (code: String, condition: String)?,
+	) -> String {
+		// An import's level is the generated file's to decide, so imports that differ only in level are one.
+		let importStatementsByModuleName = importStatements.reduce(into: [String: Set<ImportStatement>]()) { partialResult, importStatement in
+			partialResult[importStatement.moduleName, default: []].insert(importStatement.withoutAccessLevel)
+		}
+		let namedTypes: GeneratedImportAccess.FileNamedTypes? = if importAccess.spellsAccessLevels {
+			GeneratedImportAccess.FileNamedTypes(
+				unconditional: importAccess.namedTypes(inGeneratedCode: unconditionalCode),
+				underMockCondition: mockCode.map { mockCode in (mockCode.condition, importAccess.namedTypes(inGeneratedCode: mockCode.code)) },
+			)
+		} else {
+			nil
+		}
+		let importedModuleNames = Set(importStatementsByModuleName.keys)
+		return importStatementsByModuleName
+			.flatMap { moduleName, importStatements in
 				// A module imported whole in several ways is imported the way that asks for least: without
 				// attributes if any file imports it so, and otherwise with the attributes that sort first,
 				// which puts `@testable`, an error where the module is not built for testing, after the others.
-				if let wholeModuleImport = $0.value
+				let writtenImportStatements = if let wholeModuleImport = importStatements
 					.filter({ $0.kind.isEmpty && $0.type.isEmpty })
 					.min(by: { $0.attributeToGenerate < $1.attributeToGenerate })
 				{
 					[wholeModuleImport]
 				} else {
-					Array($0.value)
+					Array(importStatements)
 				}
-			}
-			.map {
-				"""
-				#if canImport(\($0.moduleName))
-				\($0.asSource)
-				#endif
-				"""
+				// Every import of one module in a file spells the same level, as the compiler requires.
+				let spelling = namedTypes.map { namedTypes in
+					importAccess.spelling(
+						ofImportOf: moduleName,
+						isExported: writtenImportStatements.contains(where: \.isExported),
+						namedTypes: namedTypes,
+						importedModuleNames: importedModuleNames,
+					)
+				} ?? .noLevel
+				return writtenImportStatements.map(spelling.source(of:))
 			}
 			.sorted()
 			.joined(separator: "\n")

@@ -27,6 +27,12 @@ extension DeclModifierListSyntax {
 		})
 	}
 
+	/// The level the first access modifier names, or `nil` when none does: what an import spells, which unlike a
+	/// declaration has no level when it spells none, since `InternalImportsByDefault` decides what that means.
+	var accessLevel: AccessLevel? {
+		lazy.compactMap { AccessLevel($0.name.tokenKind) }.first
+	}
+
 	/// The access these modifiers spell on the declaration that `keyword` introduces: the level the first access
 	/// modifier names, or `internal` when none does. The compiler rejects a detail, such as `(set)`, on the access
 	/// modifier of every declaration SafeDI reads, so a modifier is read by its name alone.

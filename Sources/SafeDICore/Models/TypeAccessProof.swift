@@ -609,17 +609,7 @@ public struct TypeAccessProof: Sendable {
 	/// keeps the comment that names such types (`unreadTypes(namedBy:mentionedFrom:)`) from naming these on nearly every
 	/// generated `public` declaration. A module's own declaration of one of these names is what a mention names, and is
 	/// read as any plain declaration is.
-	private static let allowlistedNames: Set<String> = [
-		"Int", "Bool", "String", "Double", "Void", "Optional", "Array", "Dictionary", "Set",
-		"Instantiator", "ErasedInstantiator", "SendableInstantiator", "SendableErasedInstantiator", "LazilyInstantiated", "SendableLazilyInstantiated",
-		"Result", "Error", "Never", "Float", "Int8", "Int16", "Int32", "Int64", "UInt", "UInt8", "UInt16", "UInt32", "UInt64",
-		"Character", "Substring", "AnyHashable", "Range", "ClosedRange", "Duration", "Clock", "ContinuousClock", "SuspendingClock",
-		"Date", "URL", "UUID", "Decimal", "TimeInterval", "Data", "Calendar", "Locale", "TimeZone", "Bundle", "UserDefaults",
-		"NotificationCenter", "FileManager", "JSONEncoder", "JSONDecoder", "URLSession", "URLRequest", "URLComponents",
-		"OperationQueue", "ProcessInfo", "DateFormatter", "NumberFormatter", "ISO8601DateFormatter", "IndexPath", "IndexSet",
-		"CharacterSet", "DispatchQueue",
-		"Any", "AnyObject", "Sendable", "Actor", "Hashable", "Equatable", "Comparable", "Codable", "Encodable", "Decodable", "Identifiable",
-	]
+	private static let allowlistedNames = WellKnownTypeNames.swift.union(WellKnownTypeNames.foundation).union(WellKnownTypeNames.safeDI)
 
 	private static func isAllowlisted(_ type: TypeDescription) -> Bool {
 		switch type {

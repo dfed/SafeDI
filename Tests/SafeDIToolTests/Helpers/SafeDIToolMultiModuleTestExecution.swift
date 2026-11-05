@@ -74,6 +74,7 @@ struct ModuleFixture {
 	///     can import it, but under `.moduleInfo` no `.safedi` of it exists, so they read none of its declarations.
 	///     Under `.swiftPackagePlugin` the plugin reads every first-party module's files, so the module SafeDI does not
 	///     read is a checkout package's (`isCheckoutPackage`), whose own run plans nothing.
+	///   - compilerSettings: The language mode, upcoming features, and staging of the module's compile.
 	init(
 		name: String,
 		packageName: String,
@@ -90,8 +91,10 @@ struct ModuleFixture {
 		omitsPackageName: Bool = false,
 		isReleaseConfiguration: Bool = false,
 		runsSafeDI: Bool = true,
+		compilerSettings: VerificationCompilerSettings = VerificationCompilerSettings(),
 	) {
 		self.name = name
+		self.compilerSettings = compilerSettings
 		self.runsSafeDI = runsSafeDI
 		self.isReleaseConfiguration = isReleaseConfiguration
 		self.omitsModuleName = omitsModuleName
@@ -130,6 +133,8 @@ struct ModuleFixture {
 	let isReleaseConfiguration: Bool
 	/// Whether the tool runs for the module: see `init`.
 	let runsSafeDI: Bool
+	/// The language mode, upcoming features, and staging of the module's compile.
+	let compilerSettings: VerificationCompilerSettings
 
 	/// The conditions the tool is given: `activeCompilationConditions`, with `NDEBUG` in place of `DEBUG` in a release
 	/// build.
@@ -560,6 +565,7 @@ func executeSafeDIToolMultiModuleTest(
 					activeCompilationConditions: module.fixture.verificationCompilationConditions ?? module.fixture.toolCompilationConditions,
 					mockConditionalCompilation: module.fixture.mockConditionalCompilation,
 					definesDebug: !module.fixture.isReleaseConfiguration,
+					compilerSettings: module.fixture.compilerSettings,
 				)
 			},
 			recordsIssues: compileVerification == .recordingIssues,

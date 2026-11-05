@@ -472,8 +472,8 @@ struct FileScan: Codable, Sendable {
 		}
 		let segmentImports = importSegments.map { $0.imports(evaluatedWith: evaluator) }
 		return replacingImports(
-			with: segmentImports.flatMap(\.imports),
-			mockImports: segmentImports.flatMap(\.mockImports),
+			with: segmentImports.flatMap(\.imports).map { $0.spelled(in: path) },
+			mockImports: segmentImports.flatMap(\.mockImports).map { $0.spelled(in: path) },
 		)
 	}
 
@@ -525,12 +525,12 @@ struct FileScan: Codable, Sendable {
 		)
 	}
 
-	/// This scan, with the file and everything declared in it named by `path`.
+	/// This scan, with the file and everything declared in it named by `path`, the imports that spell a level included.
 	func relocated(to path: String) -> FileScan {
 		FileScan(
 			path: path,
-			imports: imports,
-			mockImports: mockImports,
+			imports: imports.map { $0.spelled(in: path) },
+			mockImports: mockImports.map { $0.spelled(in: path) },
 			instantiables: instantiables.map {
 				var instantiable = $0
 				instantiable.sourceFilePath = path
@@ -630,9 +630,16 @@ extension ModuleInfo {
 extension [ImportStatement] {
 	/// These imports, each listed once, in an order that depends only on the imports themselves.
 	fileprivate func sortedWithoutDuplicates() -> [ImportStatement] {
-		Set(self).sorted {
-			($0.moduleName, $0.type, $0.kind, $0.attribute) < ($1.moduleName, $1.type, $1.kind, $1.attribute)
-		}
+		Set(self).sorted { $0.sortKey.lexicographicallyPrecedes($1.sortKey) }
+	}
+}
+
+extension ImportStatement {
+	/// What orders imports: every field, so that the order depends only on the imports themselves.
+	fileprivate var sortKey: [String] {
+		let accessLevel: String = accessLevel?.spelling ?? ""
+		let sourceFilePath: String = sourceFilePath ?? ""
+		return [moduleName, type, kind, attribute, accessLevel, sourceFilePath]
 	}
 }
 
