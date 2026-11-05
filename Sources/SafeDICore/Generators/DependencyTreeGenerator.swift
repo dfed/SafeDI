@@ -2940,7 +2940,7 @@ public actor DependencyTreeGenerator {
 		checkingSeamTrees seamTrees: [(instantiable: Instantiable, scope: Scope)] = [],
 	) throws -> [(typeDescription: TypeDescription, scope: Scope)] {
 		guard let emittingModule else { return rootScopes }
-		// A project whose types are all `public` has no construction to check; a seam call is checked regardless.
+		// A project whose types are all `public` has no construction to check.
 		let checksConstructions = !constructsOnlyPublicDeclarations
 		var rootScopesToGenerate = [(typeDescription: TypeDescription, scope: Scope)]()
 		var rootsOfOtherModules = [Instantiable]()
