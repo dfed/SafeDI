@@ -825,10 +825,11 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 
 		let generatedFiles = try #require(output.modules["Caller"]).generatedFiles
 		let header = generatedFileHeader + ["App", "Models", "TestSupport"].map { "#if canImport(\($0))\nimport \($0)\n#endif" }.joined(separator: "\n") + "\n\n"
-		// The plugin's flow cannot tell whether the declaring module applies the plugin, so its call says to.
-		let pluginComment = switch integration {
+		// The plugin's flow cannot tell whether the declaring module applies the plugin, so its call says to; the module
+		// info flow's call says how each integration that writes module info compiles App's generated code into App.
+		let seamCallComment = switch integration {
 		case .moduleInfo:
-			""
+			" // If this line does not compile, compile the code SafeDI generates for module App into App: under Bazel, add App's safedi_compile rule to the srcs of its swift_library; under Tuist, add SafeDI.generatedSource to the sources of its target; in a custom build, compile the file its SafeDITool generate run writes."
 		case .swiftPackagePlugin:
 			" // If this line does not compile, add the SafeDI plugin to the target that declares Consumer."
 		}
@@ -849,7 +850,7 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		    static func mock(
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
-		        _ = Consumer.__safeDI_Consumer_mock_D4A974D59A93702C.self\(pluginComment)
+		        _ = Consumer.__safeDI_Consumer_mock_D4A974D59A93702C.self\(seamCallComment)
 		        let consumer = if let safeDIBuilder = safeDIOverrides.consumer { safeDIBuilder(nil) } else { Consumer.mock(session: nil) }
 		        return Screen(consumer: consumer)
 		    }
@@ -869,8 +870,7 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 	@Test(arguments: MultiModuleIntegration.allCases)
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_takesPackageReceivedTypeOnPackageTier_whenItsPackageMockInAnotherModuleOfThePackageDefaultsIt(integration: MultiModuleIntegration) async throws {
-		// The default lets the `public` tier pass `nil` for the `package` `Session`, which it cannot take. The empty line in
-		// the `public` tier's parameter list is how a tier that takes nothing renders today; it compiles.
+		// The default lets the `public` tier pass `nil` for the `package` `Session`, which it cannot take.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: Self.modulesReceivingSessionMockedInTestSupport(sessionAccess: "package", previewAccess: "package"),
 			integration: integration,
@@ -881,9 +881,7 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 		#expect(generatedFiles == Self.appMockFiles(under: integration, imports: ["Models", "TestSupport"], mockedTypeName: "Consumer", code: """
 		#if DEBUG
 		extension Consumer {
-		    public static func mock(
-
-		    ) -> Consumer {
+		    public static func mock() -> Consumer {
 		        Consumer.mock(session: nil)
 		    }
 
