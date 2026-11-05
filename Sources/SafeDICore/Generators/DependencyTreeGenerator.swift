@@ -3078,33 +3078,14 @@ public actor DependencyTreeGenerator {
 
 	/// The declarations of the type an extension extends that bound a type the extension declares – a type declared
 	/// inside the extension, or the type an `@Instantiable` extension declares – when the extended type is declared in
-	/// the same module, outside every extension: the code that names the declared type names the extended type too, so
-	/// the extended type's declaration, and those enclosing it in its file, must be as visible as the construction
-	/// needs. The extended type's own `@Instantiable` declaration is read when it has one, and otherwise its plain
-	/// declaration outside every `#if` block and extension (`PlainTypeDeclaration`), which `scan` records, is looked up
-	/// among the declarations of the module that declares the extension: an extension in another module of a type
-	/// narrower than that module cannot be written. Empty for any other declaration, and for an extended type SafeDI
-	/// does not record, which the compiler reports.
+	/// the same module: the code that names the declared type names the extended type too, so the extended type's
+	/// declaration, and those enclosing it in its file, must be as visible as the construction needs, and so must the
+	/// declarations that bound the extended type when it is declared inside an extension itself, and so on
+	/// (`ExtendedTypeDeclarations.accessNeeds(boundingTypesAnExtensionOf:declaresInModuleNamed:fromFileAt:)`), outermost
+	/// first. Empty for any other declaration.
 	fileprivate static func extendedTypeAccessNeeds(of instantiable: Instantiable, in extendedTypes: ExtendedTypeDeclarations) -> [AccessNeed] {
-		var extendedType: TypeDescription? = instantiable.concreteInstantiable
-		if instantiable.enclosingExtensionAccess != nil {
-			// A type declared inside an extension: the outermost type enclosing it in its file is directly inside it.
-			for _ in 0...instantiable.enclosingTypeAccess.count {
-				extendedType = extendedType?.popNested
-			}
-		} else if !instantiable.declarationType.isExtension {
-			return []
-		}
-		guard let extendedType, let moduleName = instantiable.moduleName else { return [] }
-		if let extended = extendedTypes.instantiables[extendedType],
-		   extended.concreteInstantiable == extendedType,
-		   !extended.declarationType.isExtension
-		{
-			guard extended.enclosingExtensionAccess == nil, extended.moduleName == moduleName else { return [] }
-			return extended.accessNeeds(constructingWithMockMethod: false).filter { $0.declaration.declaredType != nil }
-		} else {
-			return extendedTypes.plainTypeDeclaration(of: extendedType, inModuleNamed: moduleName, preferringFileAt: instantiable.sourceFilePath)?.accessNeeds ?? []
-		}
+		guard let extendedType = instantiable.extendedType, let moduleName = instantiable.moduleName else { return [] }
+		return extendedTypes.accessNeeds(boundingTypesAnExtensionOf: extendedType, declaresInModuleNamed: moduleName, fromFileAt: instantiable.sourceFilePath)
 	}
 
 	/// The declarations whose access decides whether a call of a seam's generated initializer compiles: the seam's type
@@ -9661,18 +9642,45 @@ extension DependencyTreeGenerator {
 		init(instantiables: [TypeDescription: Instantiable], plainTypeDeclarations: [PlainTypeDeclaration]) {
 			self.instantiables = instantiables
 			var plainTypeDeclarationsByModuleAndType = [ModuleAndType: [PlainTypeDeclaration]]()
-			// Only a declaration outside every extension has an access the construction check reads: one inside an
-			// extension is capped by a type declared elsewhere, which the compiler checks.
-			for plainTypeDeclaration in plainTypeDeclarations where plainTypeDeclaration.enclosingExtensionAccess == nil {
+			for plainTypeDeclaration in plainTypeDeclarations {
 				// A declaration whose module SafeDITool does not know bounds no extension's types, as an `@Instantiable`
 				// declaration of the extended type does not.
 				guard let moduleName = plainTypeDeclaration.moduleName else { continue }
-				plainTypeDeclarationsByModuleAndType[ModuleAndType(moduleName: moduleName, typeDescription: plainTypeDeclaration.typeDescription), default: []].append(plainTypeDeclaration)
+				plainTypeDeclarationsByModuleAndType[ModuleAndType(moduleName: moduleName, type: plainTypeDeclaration.typeDescription), default: []].append(plainTypeDeclaration)
 			}
 			self.plainTypeDeclarationsByModuleAndType = plainTypeDeclarationsByModuleAndType
 		}
 
 		let instantiables: [TypeDescription: Instantiable]
+
+		/// The declarations whose access bounds the types an extension of `extendedType` in the module named `moduleName`,
+		/// in the file at `sourceFilePath`, declares, outermost first: those of `extendedType`'s declaration in that module
+		/// and the type declarations enclosing it in its file – its `@Instantiable` declaration when it has one, and
+		/// otherwise its plain declaration (`plainTypeDeclaration(of:inModuleNamed:preferringFileAt:)`) – and, when that
+		/// declaration is itself inside an extension, the declarations that bound the types that extension declares, found
+		/// the same way from the declaration's file, and so on. A type the module does not declare ends the walk, and the
+		/// compiler checks it: an extension of a type another module declares narrower than the extension's module can see
+		/// cannot be written, and a declaration of the type's name in another module could be a namesake of the extended
+		/// type, the narrowest of which would then fail a construction that compiles. Each type the walk follows is the one
+		/// before it without at least its last name, so the walk ends.
+		func accessNeeds(boundingTypesAnExtensionOf extendedType: TypeDescription, declaresInModuleNamed moduleName: String, fromFileAt sourceFilePath: String?) -> [AccessNeed] {
+			var accessNeeds = [AccessNeed]()
+			var link: (type: TypeDescription, sourceFilePath: String?)? = (extendedType, sourceFilePath)
+			while case let (type, sourceFilePath)? = link {
+				if let extended = instantiables[type], extended.concreteInstantiable == type, !extended.declarationType.isExtension {
+					// An `@Instantiable` extended type of another module ends the walk too.
+					guard extended.moduleName == moduleName else { break }
+					accessNeeds = extended.accessNeeds(constructingWithMockMethod: false).filter { $0.declaration.declaredType != nil } + accessNeeds
+					link = extended.extendedType.map { ($0, extended.sourceFilePath) }
+				} else if let declaration = plainTypeDeclaration(of: type, inModuleNamed: moduleName, preferringFileAt: sourceFilePath) {
+					accessNeeds = declaration.accessNeeds + accessNeeds
+					link = declaration.extendedType.map { ($0, declaration.sourceFilePath) }
+				} else {
+					link = nil
+				}
+			}
+			return accessNeeds
+		}
 
 		/// The plain declaration of `type` in the module named `moduleName`: among those in the file at `sourceFilePath`
 		/// when that file declares one, as a `private` type of one file can share its name with a type of another,
@@ -9683,7 +9691,7 @@ extension DependencyTreeGenerator {
 		/// within a file in source order. `nil` when there is none, which leaves the extended type to the compiler, as an
 		/// unrecorded one is.
 		func plainTypeDeclaration(of type: TypeDescription, inModuleNamed moduleName: String, preferringFileAt sourceFilePath: String?) -> PlainTypeDeclaration? {
-			let candidates = plainTypeDeclarationsByModuleAndType[ModuleAndType(moduleName: moduleName, typeDescription: type)] ?? []
+			let candidates = plainTypeDeclarationsByModuleAndType[ModuleAndType(moduleName: moduleName, type: type)] ?? []
 			// Two declarations whose files are unknown are not known to share one.
 			let inPreferredFile = candidates.filter { sourceFilePath != nil && $0.sourceFilePath == sourceFilePath }
 			return (inPreferredFile.isEmpty ? candidates.filter(\.isVisibleOutsideItsFile) : inPreferredFile)
@@ -9694,9 +9702,16 @@ extension DependencyTreeGenerator {
 				.element
 		}
 
+		/// A module and a type, by the key a plain declaration of the type is recorded under
+		/// (`TypeDescription.plainDeclarationKey`).
 		private struct ModuleAndType: Hashable {
+			init(moduleName: String, type: TypeDescription) {
+				self.moduleName = moduleName
+				typeKey = type.plainDeclarationKey
+			}
+
 			let moduleName: String
-			let typeDescription: TypeDescription
+			let typeKey: String
 		}
 
 		private let plainTypeDeclarationsByModuleAndType: [ModuleAndType: [PlainTypeDeclaration]]
@@ -9737,6 +9752,23 @@ extension DependencyTreeGenerator.EmittingModule {
 			declaredIn: ModuleIdentity(moduleName: instantiable.moduleName, packageName: instantiable.packageName),
 			isOwnFile: instantiable.sourceFilePath.map(isOwnFile) ?? false,
 		)
+	}
+}
+
+// MARK: - Instantiable
+
+extension Instantiable {
+	/// The type the extension this declaration is inside extends – the type enclosing the outermost type declaration of
+	/// its file, which is directly inside the extension – or, for an `@Instantiable` extension, the type it declares; `nil`
+	/// for a declaration outside every extension.
+	fileprivate var extendedType: TypeDescription? {
+		if declarationType.isExtension {
+			concreteInstantiable
+		} else if enclosingExtensionAccess != nil {
+			(0...enclosingTypeAccess.count).reduce(concreteInstantiable as TypeDescription?) { type, _ in type?.popNested }
+		} else {
+			nil
+		}
 	}
 }
 

@@ -38,8 +38,9 @@ public struct GuardedPlainTypeNames: Codable, Hashable, Sendable {
 	/// A type an `#if` block declares in some clause, as far as deciding whether a read resolves to it needs.
 	public struct DeclaredType: Codable, Hashable, Comparable, Sendable {
 		/// - Parameters:
-		///   - name: The type's own name, the last of its chain.
-		///   - outermostName: The name of the outermost type enclosing it, or its own when nothing encloses it.
+		///   - name: The type's own name, the last of its chain, without the backticks it was written with.
+		///   - outermostName: The name of the outermost type enclosing it, or its own when nothing encloses it, without
+		///     the backticks it was written with.
 		///   - level: The level its declaration gives it before the type an enclosing extension extends caps it
 		///     (`PlainTypeDeclaration.levelBeforeExtendedTypeCap`), normalized (`TypeAccessProof.normalized(_:)`).
 		public init(name: String, outermostName: String, level: AccessLevel) {

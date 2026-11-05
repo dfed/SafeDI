@@ -138,7 +138,45 @@ struct SafeDIToolMarkerSearchTests: ~Copyable {
 		#expect(output.moduleInfo.filesWithUnexpectedNodes == [output.fixtures["Broken.swift"]])
 	}
 
+	@Test(arguments: [
+		// The name in backticks after whitespace, directly after the keyword, and on the keyword's next line.
+		(text: "package struct `Token` {}", names: ["Token"]),
+		(text: "struct`Token`{}", names: ["Token"]),
+		(text: "enum\n    `Token` {}", names: ["Token"]),
+		// A raw identifier, whose backticks enclose a space.
+		(text: "struct `My Token` {}", names: ["My Token"]),
+		// No closing backtick: the name ends at the end of the text, or of its line.
+		(text: "typealias `Token", names: ["Token"]),
+		(text: "struct `Token\nstruct Other {}", names: ["Token", "Other"]),
+	] as [(text: String, names: Set<String>)])
+	func typeDeclarationWords_findsNameInBackticks_whenItFollowsTypeKeyword(text: String, names: Set<String>) {
+		// D3.6: a backtick keeps the name after the keyword, and is no part of it.
+		#expect(Self.typeDeclarationWords(of: text).namesFollowingKeywords == names)
+	}
+
+	@Test(arguments: [
+		"let `class` = 1",
+		"func make(`struct`: Int, `enum`: Token) {}",
+		"for `enum` in kinds {}",
+	])
+	func typeDeclarationWords_findsNoName_whenKeywordIsInBackticks(text: String) {
+		// D3.4: a keyword in backticks is a name, which introduces no declaration.
+		#expect(Self.typeDeclarationWords(of: text).namesFollowingKeywords.isEmpty)
+	}
+
+	@Test
+	func typeDeclarationWords_findsNoPackageModifier_whenPackageIsInBackticks() {
+		// `package` in backticks is a name, never the access modifier.
+		#expect(!Self.typeDeclarationWords(of: "let `package` = Package()").mayDeclareTypeOtherModulesCanName)
+	}
+
 	// MARK: Private
 
 	private var filesToDelete: [URL]
+
+	/// What the text search finds in `text`.
+	private static func typeDeclarationWords(of text: String) -> TypeDeclarationWords {
+		var text = text
+		return text.withUTF8(\.typeDeclarationWords)
+	}
 }

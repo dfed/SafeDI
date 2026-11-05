@@ -36,7 +36,7 @@ extension String {
 	}
 
 	/// This name without the backticks it was written with, as prose names it: `` `inout` `` is `inout`.
-	var spelledWithoutBackticks: String {
+	public var spelledWithoutBackticks: String {
 		String(filter { $0 != "`" })
 	}
 

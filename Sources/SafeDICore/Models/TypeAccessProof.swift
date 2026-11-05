@@ -851,10 +851,10 @@ extension TypeAccessProof {
 		///     declarations, a mention can spell before a type's name.
 		///   - isOwnFile: Whether a file is one of the run's own files.
 		init(_ plainTypeDeclarations: [PlainTypeDeclaration], entryTypes: Set<TypeDescription>, moduleNames: Set<String>, isOwnFile: (@Sendable (String) -> Bool)?) {
-			var declarationsByType = [TypeDescription: [PlainTypeDeclaration]]()
+			var declarationsByType = [String: [PlainTypeDeclaration]]()
 			// A declaration no other file can name is never what a mention in another file names.
 			for declaration in plainTypeDeclarations.sortedByDeclaration() where declaration.isVisibleOutsideItsFile {
-				declarationsByType[declaration.typeDescription, default: []].append(declaration)
+				declarationsByType[declaration.typeDescription.plainDeclarationKey, default: []].append(declaration)
 			}
 			self.declarationsByType = declarationsByType
 			self.entryTypes = entryTypes
@@ -878,12 +878,12 @@ extension TypeAccessProof {
 			if let moduleName = type.outermostTypeName,
 			   moduleNames.contains(moduleName),
 			   !entryTypes.contains(.simple(name: moduleName)),
-			   declarationsByType[.simple(name: moduleName)] == nil,
+			   declarationsByType[TypeDescription.simple(name: moduleName).plainDeclarationKey] == nil,
 			   let typeInModule = type.droppingOutermostType
 			{
-				return (declarationsByType[typeInModule] ?? []).filter { $0.moduleName == moduleName }
+				return (declarationsByType[typeInModule.plainDeclarationKey] ?? []).filter { $0.moduleName == moduleName }
 			} else {
-				let declarations = declarationsByType[type] ?? []
+				let declarations = declarationsByType[type.plainDeclarationKey] ?? []
 				let mentioningModuleDeclarations = declarations.filter { mentioningModule.declares($0, isOwnFile: isOwnFile) }
 				return mentioningModuleDeclarations.isEmpty
 					? declarations.filter { declaration in
@@ -894,7 +894,8 @@ extension TypeAccessProof {
 			}
 		}
 
-		private let declarationsByType: [TypeDescription: [PlainTypeDeclaration]]
+		/// The declarations, by the type each declares (`TypeDescription.plainDeclarationKey`).
+		private let declarationsByType: [String: [PlainTypeDeclaration]]
 		private let entryTypes: Set<TypeDescription>
 		private let moduleNames: Set<String>
 	}
