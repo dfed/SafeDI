@@ -3257,7 +3257,6 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 		}
 	}
 
-
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_throwsErrorOfferingToKeepOne_whenTwoFilesGuardTypeWithSamePlatformCondition() async {
@@ -3296,6 +3295,7 @@ struct SafeDIToolConditionalCompilationTests: ~Copyable {
 			)
 		}
 	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_throwsErrorKeepingOneDeclaration_whenOnlyOneDuplicateIsInsidePlatformBlock() async {
