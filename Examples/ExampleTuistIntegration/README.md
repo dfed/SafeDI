@@ -42,7 +42,11 @@ recompiles it on the next `xcodebuild`, no `tuist generate` round-trip.
 
 ## Copying this into your own project
 
-1. Add the plugin to your `Tuist.swift`:
+1. Add the plugin to your `Tuist.swift`, at the commit of the SafeDI version
+   you depend on, which
+   `git ls-remote https://github.com/dfed/SafeDI refs/tags/<version>` prints
+   (the manual's [Tuist](../../Documentation/Manual.md#tuist) section says why
+   not `tag:`):
 
    ```swift
    let tuist = Tuist(
@@ -50,7 +54,7 @@ recompiles it on the next `xcodebuild`, no `tuist generate` round-trip.
            plugins: [
                .git(
                    url: "https://github.com/dfed/SafeDI",
-                   tag: "<version>",
+                   sha: "<commit>",
                    directory: "TuistPlugins/SafeDITuist",
                ),
            ],
@@ -82,9 +86,9 @@ phase; a target with buildable folders compiles the file without it, but its
 script reads the file only when it next runs for another change.
 
 Bumping SafeDI: edit the version in `Tuist/Package.swift`, and the plugin's
-`tag:` in `Tuist.swift` to match. The runtime library and the `SafeDITool`
-binary the plugin invokes follow from the package pin; the script that
-invokes the tool comes from the plugin tag. Bump both together: a plugin
+`sha:` in `Tuist.swift` to that version's commit. The runtime library and the
+`SafeDITool` binary the plugin invokes follow from the package pin; the script
+that invokes the tool comes from the plugin commit. Bump both together: a plugin
 older than `2.1.0` does not forward compilation conditions, so a newer
 `SafeDITool` would treat every bare `#if` condition as inactive.
 

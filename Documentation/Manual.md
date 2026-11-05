@@ -1286,17 +1286,19 @@ A build that takes SafeDI from a checkout of its repository rather than from a r
 
 #### Tuist
 
-SafeDI’s `SafeDITuist` plugin runs `SafeDITool` in a script phase of each target, before the target compiles. Declare the plugin in `Tuist.swift`, at the tag of the SafeDI version you depend on:
+SafeDI’s `SafeDITuist` plugin runs `SafeDITool` in a script phase of each target, before the target compiles. Declare the plugin in `Tuist.swift`, at the commit of the SafeDI version you depend on, which `git ls-remote https://github.com/dfed/SafeDI refs/tags/<version>` prints:
 
 ```swift
 let tuist = Tuist(
     project: .tuist(
         plugins: [
-            .git(url: "https://github.com/dfed/SafeDI", tag: "<version>", directory: "TuistPlugins/SafeDITuist"),
+            .git(url: "https://github.com/dfed/SafeDI", sha: "<commit>", directory: "TuistPlugins/SafeDITuist"),
         ]
     )
 )
 ```
+
+Tuist cannot load the plugin by `tag:`, because for a tag it first reads `Plugin.swift` at the repository’s root, not in `directory:`, to download a release asset SafeDI does not publish.
 
 Depend on SafeDI in `Tuist/Package.swift`, so that `tuist install` fetches the SafeDI library and the prebuilt `SafeDITool` the plugin runs:
 
@@ -1312,7 +1314,7 @@ In `Project.swift`, `import SafeDITuist`, and give each target that declares Saf
 .target(
     name: "App",
     // …
-    sources: SourceFilesList(globs: [
+    sources: .sourceFilesList(globs: [
         .glob("App/**/*.swift"),
         SafeDI.generatedSource,
     ]),
@@ -1326,7 +1328,7 @@ In `Project.swift`, `import SafeDITuist`, and give each target that declares Saf
 ),
 ```
 
-`module` names the directory, under the one that holds `Project.swift`, whose Swift files the script passes to `SafeDITool`, and the target’s `.safedi` file, so it must be distinct across the workspace’s projects (name the sources directory after the module, as the example’s `Projects/Subproject/Subproject/` does). `dependencies` lists the `module` of each target whose `@Instantiable` types this target uses; each must run the script too and be a dependency of this target, so that it writes its `.safedi` file first. A target that calls a [seam](#generating-a-dependency-tree-per-module) or [public mock](#public-mocks) of another module also lists the modules that module depends on, since the generated initializer or mock depends on what they declare. Give every first-party target the script, even one that declares no `@Instantiable` type, and list it in the `dependencies` of every target whose seam or public mock names one of its types; [Adopting SafeDI in a large codebase](#adopting-safedi-in-a-large-codebase) says why. The script runs the `SafeDITool` that `tuist install` unpacks into `Tuist/.build` beside the workspace’s `Tuist/Package.swift`; the script looks for that directory from the one that holds `Project.swift` upward, so a project in a subdirectory of the workspace, such as `Projects/Feature/Project.swift`, finds it too. The script also passes the target’s `SWIFT_ACTIVE_COMPILATION_CONDITIONS`, its module name, and its `SWIFT_PACKAGE_NAME` when it sets one (see [Access levels](#access-levels)), and writes the generated code to `SafeDIGenerated.swift`, whose path never changes, so a change to your SafeDI declarations needs a build, not `tuist generate`. A new Swift file does need `tuist generate`, which lists it among the script’s inputs: a target with buildable folders compiles the file without it, but its script reads the file only when it next runs for another change. Keep the plugin’s tag and the package’s version in step, and run `tuist install` and `tuist generate` after changing them. You can see this integration in practice in the [ExampleTuistIntegration](../Examples/ExampleTuistIntegration) project.
+`module` names the directory, under the one that holds `Project.swift`, whose Swift files the script passes to `SafeDITool`, and the target’s `.safedi` file, so it must be distinct across the workspace’s projects (name the sources directory after the module, as the example’s `Projects/Subproject/Subproject/` does). `dependencies` lists the `module` of each target whose `@Instantiable` types this target uses; each must run the script too and be a dependency of this target, so that it writes its `.safedi` file first. A target that calls a [seam](#generating-a-dependency-tree-per-module) or [public mock](#public-mocks) of another module also lists the modules that module depends on, since the generated initializer or mock depends on what they declare. Give every first-party target the script, even one that declares no `@Instantiable` type, and list it in the `dependencies` of every target whose seam or public mock names one of its types; [Adopting SafeDI in a large codebase](#adopting-safedi-in-a-large-codebase) says why. The script runs the `SafeDITool` that `tuist install` unpacks into `Tuist/.build` beside the workspace’s `Tuist/Package.swift`; the script looks for that directory from the one that holds `Project.swift` upward, so a project in a subdirectory of the workspace, such as `Projects/Feature/Project.swift`, finds it too. The script also passes the target’s `SWIFT_ACTIVE_COMPILATION_CONDITIONS`, its module name, and its `SWIFT_PACKAGE_NAME` when it sets one (see [Access levels](#access-levels)), and writes the generated code to `SafeDIGenerated.swift`, whose path never changes, so a change to your SafeDI declarations needs a build, not `tuist generate`. A new Swift file does need `tuist generate`, which lists it among the script’s inputs: a target with buildable folders compiles the file without it, but its script reads the file only when it next runs for another change. Keep the plugin’s commit and the package’s version in step, and run `tuist install` and `tuist generate` after changing them. You can see this integration in practice in the [ExampleTuistIntegration](../Examples/ExampleTuistIntegration) project.
 
 #### Custom build system integration
 

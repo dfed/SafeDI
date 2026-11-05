@@ -19,7 +19,7 @@ let project = Project(
 			bundleId: "com.safedi.ExampleTuistIntegration.Subproject",
 			deploymentTargets: .macOS("14.0"),
 			infoPlist: .default,
-			sources: SourceFilesList(globs: [
+			sources: .sourceFilesList(globs: [
 				.glob("Subproject/**/*.swift"),
 				SafeDI.generatedSource,
 			]),
