@@ -259,6 +259,14 @@ public struct Instantiable: Codable, Hashable, Sendable {
 			|| mockReturnType == .simple(name: "Self", generics: [])
 	}
 
+	/// Whether an `#if` block whose condition names something only the compiler decides – a platform condition such as
+	/// `os(iOS)` or `canImport(UIKit)`, or a feature flag such as `$Macros` – encloses the declaration. SafeDI reads
+	/// every clause of such a block, so a type declared once in each clause is declared more than once in what SafeDI
+	/// reads, though only once in what the compiler compiles. Syntax alone decides it, so it is the same whatever
+	/// conditions the file is walked with: a walk that reaches the declaration at all records the same value, which keeps
+	/// scan's cache sound without any condition joining `consultedCompilationConditions`.
+	public var isInsideCompilerDecidedBlock = false
+
 	/// The path to the source file that declared this Instantiable, as the build system supplied it.
 	/// `scan` rewrites it to a project-relative form so cached module info matches manifest entries;
 	/// `declarationLocation.filePath` keeps the path exactly as parsed for diagnostics.

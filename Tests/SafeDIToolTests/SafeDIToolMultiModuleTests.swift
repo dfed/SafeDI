@@ -837,6 +837,69 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 		#expect(inputsOnlyResult.stderr.contains("Root.swift:8:92: error: SafeDI always creates an @Instantiated property, so its type must not be optional. Declare `service: AnyService`, or receive it with `@Received(onlyIfAvailable: true)` where it may be absent. (from macro 'Instantiated')"), "Unexpected compiler output \(inputsOnlyResult.stderr)")
 	}
 
+	@Test(arguments: MultiModuleIntegration.allCases, [false, true])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func multiModuleTest_throwsDuplicateErrorNamingClausesOnlyWhenEveryDuplicateIsInPlatformBlock_whenTwoModulesDeclareType(integration: MultiModuleIntegration, declaresInPlatformBlocks: Bool) async {
+		// Whether a declaration is inside an `#if` that only the compiler decides travels in module info, so a module
+		// that reads another's `.safedi` words the error as one that reads its files does.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			func path(of fileName: String, in moduleName: String) -> String {
+				switch integration {
+				case .moduleInfo:
+					fixtures[moduleName]![fileName]
+				case .swiftPackagePlugin:
+					NormalizedFilePath(fixtures[moduleName]!.compilerPath(of: fileName)).path
+				}
+			}
+			let message = if declaresInPlatformBlocks {
+				"error: Found multiple @Instantiable types or extensions that fulfill `Haptics`. Each is declared inside an `#if` that only the compiler decides, such as `#if os(iOS)`, and SafeDI reads every clause. If no build compiles more than one of them, fulfill `Haptics` with one @Instantiable declaration outside the `#if`, and put the platform difference inside its body or its `instantiate(…)` method. Otherwise, keep one, and remove `Haptics` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
+			} else {
+				"error: Found multiple @Instantiable types or extensions that fulfill `Haptics`. Each type can be fulfilled by only one @Instantiable declaration, across all modules. Keep one, and remove `Haptics` from the others’ `fulfillingAdditionalTypes` or remove their @Instantiable."
+			}
+			let line = declaresInPlatformBlocks ? 2 : 1
+			return """
+			\(path(of: "Haptics.swift", in: "App")):\(line):1: \(message)
+			\(path(of: "Haptics.swift", in: "Core")):\(line):1: \(message)
+			"""
+		}) {
+			func haptics(inBlockOf condition: String) -> String {
+				let declaration = """
+				@Instantiable
+				public struct Haptics: Instantiable {
+				    public init() {}
+				}
+				"""
+				return declaresInPlatformBlocks ? "#if \(condition)\n\(declaration)\n#endif" : declaration
+			}
+			try await executeSafeDIToolMultiModuleTest(
+				modules: [
+					ModuleFixture(
+						name: "Core",
+						packageName: "Devices",
+						swiftFileContentByFilePath: ["Haptics.swift": haptics(inBlockOf: "os(iOS)")],
+					),
+					ModuleFixture(
+						name: "App",
+						packageName: "Devices",
+						swiftFileContentByFilePath: [
+							"Haptics.swift": haptics(inBlockOf: "!os(iOS)"),
+							"Root.swift": """
+							@Instantiable(isRoot: true)
+							public struct Root: Instantiable {
+							    public init() {}
+							}
+							""",
+						],
+						dependencies: ["Core"],
+					),
+				],
+				integration: integration,
+				compileVerification: .skipped,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: Private
 
 	/// The lines a generated file repeats for a fixture's `import <moduleName>`.
