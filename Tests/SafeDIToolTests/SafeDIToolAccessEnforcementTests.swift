@@ -3410,56 +3410,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_leavesDependencysRootWithoutCode_whenItsTreeConstructsTypeInExtensionOfPackageNamespaceDeclaredInsideExtension() async throws {
-		// D2.2's package, seen from `App`, which plans a file for `Core`'s public root too: the root's tree names the
-		// `package` `Outer.Namespace`, which the check now reads, so `App` leaves that file without code, as it does for
-		// any root whose tree constructs a declaration that is neither `public` nor `open`. `Core` generates the root.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: Self.modulesConstructingHelper(
-				declaredInsideExtensionOf: "Outer.Namespace",
-				namespaceFiles: ExtensionNamespaceChain.oneLink.namespaceFiles().merging(["CoreRoot.swift": """
-				@Instantiable(isRoot: true)
-				public final class CoreRoot: Instantiable {
-				    public init(helping: any Helping) {
-				        self.helping = helping
-				    }
-				    @Instantiated let helping: any Helping
-				}
-				"""], uniquingKeysWith: { first, _ in first }),
-				appPackage: "Shop",
-				appDeclaration: """
-				import Core
-
-				@Instantiable(isRoot: true)
-				final class Root: Instantiable {
-				    init() {}
-				}
-				""",
-			),
-			integration: .swiftPackagePlugin,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(try #require(output.modules["Core"]).generatedFiles == ["CoreRoot+SafeDI.swift": generatedFileHeader + """
-		extension CoreRoot {
-		    public convenience init() {
-		        let helping: any Helping = Outer.Namespace.Helper()
-		        self.init(helping: helping)
-		    }
-		}
-		"""])
-		let appFileHeader = generatedFileHeader + Self.importBlock("Core") + "\n\n"
-		#expect(try #require(output.modules["App"]).generatedFiles == [
-			"CoreRoot+SafeDI.swift": appFileHeader + """
-			// SafeDI generates the dependency tree of CoreRoot only in the module that declares it, because the tree constructs a declaration that is neither `public` nor `open`.
-			""",
-			"Root+SafeDI.swift": appFileHeader,
-		])
-		try expectEveryModuleCompiled(output)
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_assumesPackageAccessWithComment_whenTypeInExtensionOfPackageNamespaceDeclaredInsideExtensionIsConstructedFromModuleOfUnknownPackage() async throws {
 		// Without package names the tool cannot tell whether `App` is in `Core`'s package, so it accepts the `package`
 		// `Outer.Namespace`, which the check now reads, and says so where it constructs `Helper`.

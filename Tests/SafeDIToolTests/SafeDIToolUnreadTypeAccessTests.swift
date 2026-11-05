@@ -1409,7 +1409,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(token: nil)
 		    }
 
-		    package init(token: Token? = nil) {
+		    package init(token: Token?) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
 		    }
@@ -1490,7 +1490,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(token: nil)
 		    }
 
-		    internal init(token: Token? = nil) {
+		    internal init(token: Token?) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
 		    }
@@ -1517,7 +1517,7 @@ struct SafeDIToolUnreadTypeAccessTests: ~Copyable {
 		        self.init(token: nil)
 		    }
 
-		    package init(token: Token? = nil) {
+		    package init(token: Token?) {
 		        let cache = Cache()
 		        self.init(token: token, cache: cache)
 		    }
