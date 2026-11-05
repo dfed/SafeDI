@@ -374,7 +374,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenModuleInfoOutputIsGivenWithoutModuleName() async throws {
+	mutating func generate_throwsError_whenModuleInfoOutputIsGivenWithoutModuleName() async {
 		// Cell 8: a module info file names the module it describes.
 		await assertThrowsError("'--module-info-output' requires '--module-name': a module info file names the module it describes.") {
 			try await Generate.parse(["Sources.csv", "--module-info-output", "Module.safedi"]).generate()

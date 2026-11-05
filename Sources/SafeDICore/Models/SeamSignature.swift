@@ -802,6 +802,7 @@ public struct SeamResolution: Sendable {
 			carriesUnreadTypeComment: carriesUnreadTypeComment,
 		)
 	}
+
 	/// Whether the modules that call this module's seams compute their signatures from the build system's target
 	/// graph, which lists the files of each target: under the SwiftPM plugin, every seam's tree must then reach only
 	/// declarations the graph attributes to a module, since a caller cannot see a declaration in a directory this

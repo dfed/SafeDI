@@ -1169,7 +1169,6 @@ struct Generate: AsyncParsableCommand {
 		return viewDeclaringModules
 	}
 
-
 	/// The declarations a module sees, as `seamResolution` reads them for the seams and public mocks it declares.
 	private struct VisibleDeclarations {
 		let instantiables: [TypeDescription: Instantiable]

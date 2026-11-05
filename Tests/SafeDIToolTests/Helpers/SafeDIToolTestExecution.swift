@@ -390,6 +390,7 @@ struct TestOutput {
 	var moduleInfo: ModuleInfo? {
 		moduleInfoFile?.module
 	}
+
 	let moduleInfoOutputPath: String?
 	/// The fixture files written for `swiftFileContent`, looked up by file name.
 	let fixtures: FixturePaths

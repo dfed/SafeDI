@@ -3379,8 +3379,7 @@ public actor DependencyTreeGenerator {
 					leavingOut: typesLeftOut,
 				)
 			}
-			guard !Self.inaccessibleConstructions(constructions, from: emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty else { continue }
-			guard let ownPlan = try await foreignPublicMockPlan(of: type, declaredBy: foreignPublicMock, moduleNamesReadByRunOfModule: emittingModule.moduleNamesReadByRunOfModule) else { continue }
+			guard !Self.inaccessibleConstructions(constructions, from: emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty, let ownPlan = try await foreignPublicMockPlan(of: type, declaredBy: foreignPublicMock, moduleNamesReadByRunOfModule: emittingModule.moduleNamesReadByRunOfModule) else { continue }
 			let requirement = AccessLevel.required(toConstructFrom: emittingModule.identity, declaredIn: foreignPublicMock.declaringModule, isOwnFile: false)
 			// The narrowest tier the module reaches: every module reaches the `public` one.
 			let tier = ownPlan.plan.tiers.last { $0.satisfies(requirement) } ?? .public

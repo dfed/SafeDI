@@ -222,6 +222,7 @@ struct ModuleTestOutput {
 	var moduleInfo: ModuleInfo? {
 		moduleInfoFile?.module
 	}
+
 	let moduleInfoOutputPath: String?
 	/// The manifest `scan` wrote, which only `.swiftPackagePlugin` runs.
 	let scanManifest: SafeDIToolManifest?
