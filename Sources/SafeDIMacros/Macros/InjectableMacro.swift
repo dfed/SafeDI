@@ -249,7 +249,7 @@ public struct InjectableMacro: PeerMacro {
 			let article = wrapperTypeName.first.map { "AEIOU".contains($0) } == true ? "an" : "a"
 			return Self(
 				id: "forwardedWrapper",
-				message: "`@Forwarded` on \(article) `\(wrapperTypeName)` property is deprecated and will be an error in SafeDI 3.0: receive the `\(wrapperTypeName)` with `@Received` from the ancestor that declares it, or forward the value it builds.",
+				message: "`@Forwarded` on \(article) `\(wrapperTypeName)` property is deprecated and will be an error in SafeDI 3.0: declare it `@Instantiated` on this type, or receive it with `@Received` from an ancestor that declares it, or forward the value it builds.",
 			)
 		}
 

@@ -396,7 +396,13 @@ With more than one `@Forwarded` property, `instantiate(_:)` takes them as one tu
 
 Forwarded property types do not need to be decorated with the `@Instantiable` macro. A forwarded value comes from outside the tree, so SafeDI does not follow the `@Received` dependencies of its type.
 
-Forwarding one of SafeDI’s wrappers – an [`Instantiator`](#instantiator), [`ErasedInstantiator`](#erasedinstantiator), or [`LazilyInstantiated`](#lazilyinstantiated), or one of their [`Sendable` twins](#sendable-wrappers) – is deprecated, and SafeDI 3.0 rejects it; the `@Forwarded` macro warns at such a property. Receive the wrapper with `@Received` from the ancestor that declares it, or forward the value it builds. A wrapper type of your own is a plain forwarded value, which the types beneath receive and read themselves.
+Forwarding one of SafeDI’s wrappers – an [`Instantiator`](#instantiator), [`ErasedInstantiator`](#erasedinstantiator), or [`LazilyInstantiated`](#lazilyinstantiated), or one of their [`Sendable` twins](#sendable-wrappers) – is deprecated, and SafeDI 3.0 rejects it; the `@Forwarded` macro warns at such a property. Instead:
+
+- **Let SafeDI build it:** make the type the wrapper builds `@Instantiable`, forward what that type needs, and declare the wrapper `@Instantiated` on this type. A `LazilyInstantiated` declared this way still builds nothing until its instance is first read.
+- **Receive it:** declare the wrapper `@Received`, fulfilled by an ancestor that declares it.
+- **Forward the value:** forward the value the wrapper builds, which then exists as soon as this type does.
+
+A closure, or a wrapper type of your own, is a plain forwarded value, which the types beneath receive and call or read themselves: forward one to build a value SafeDI cannot build later, or more than once.
 
 ### @Received
 

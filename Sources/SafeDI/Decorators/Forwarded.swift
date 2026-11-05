@@ -26,6 +26,6 @@
 ///
 /// Note that the access level of the dependency in the above example does not affect the dependency tree – a `private` dependency can still be `@Received` by `@Instantiable`-decorated types further down the dependency tree.
 ///
-/// Forwarding an `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, `SendableErasedInstantiator`, `LazilyInstantiated`, or `SendableLazilyInstantiated` is deprecated, and SafeDI 3.0 rejects it: receive the wrapper with `@Received` from the ancestor that declares it, or forward the value it builds.
+/// Forwarding an `Instantiator`, `SendableInstantiator`, `ErasedInstantiator`, `SendableErasedInstantiator`, `LazilyInstantiated`, or `SendableLazilyInstantiated` is deprecated, and SafeDI 3.0 rejects it: declare the wrapper `@Instantiated` on this type and forward what the type it builds needs, or receive the wrapper with `@Received` from an ancestor that declares it, or forward the value it builds.
 @attached(peer)
 public macro Forwarded() = #externalMacro(module: "SafeDIMacros", type: "InjectableMacro")

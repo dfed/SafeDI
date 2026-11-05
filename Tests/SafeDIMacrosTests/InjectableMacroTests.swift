@@ -147,7 +147,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`@Forwarded` on an `Instantiator` property is deprecated and will be an error in SafeDI 3.0: receive the `Instantiator` with `@Received` from the ancestor that declares it, or forward the value it builds.",
+						message: "`@Forwarded` on an `Instantiator` property is deprecated and will be an error in SafeDI 3.0: declare it `@Instantiated` on this type, or receive it with `@Received` from an ancestor that declares it, or forward the value it builds.",
 						line: 2,
 						column: 34,
 						severity: .warning,
@@ -172,7 +172,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`@Forwarded` on a `SendableInstantiator` property is deprecated and will be an error in SafeDI 3.0: receive the `SendableInstantiator` with `@Received` from the ancestor that declares it, or forward the value it builds.",
+						message: "`@Forwarded` on a `SendableInstantiator` property is deprecated and will be an error in SafeDI 3.0: declare it `@Instantiated` on this type, or receive it with `@Received` from an ancestor that declares it, or forward the value it builds.",
 						line: 2,
 						column: 34,
 						severity: .warning,
@@ -197,7 +197,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`@Forwarded` on an `ErasedInstantiator` property is deprecated and will be an error in SafeDI 3.0: receive the `ErasedInstantiator` with `@Received` from the ancestor that declares it, or forward the value it builds.",
+						message: "`@Forwarded` on an `ErasedInstantiator` property is deprecated and will be an error in SafeDI 3.0: declare it `@Instantiated` on this type, or receive it with `@Received` from an ancestor that declares it, or forward the value it builds.",
 						line: 2,
 						column: 34,
 						severity: .warning,
@@ -222,7 +222,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`@Forwarded` on a `SendableErasedInstantiator` property is deprecated and will be an error in SafeDI 3.0: receive the `SendableErasedInstantiator` with `@Received` from the ancestor that declares it, or forward the value it builds.",
+						message: "`@Forwarded` on a `SendableErasedInstantiator` property is deprecated and will be an error in SafeDI 3.0: declare it `@Instantiated` on this type, or receive it with `@Received` from an ancestor that declares it, or forward the value it builds.",
 						line: 2,
 						column: 34,
 						severity: .warning,
@@ -247,7 +247,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`@Forwarded` on a `LazilyInstantiated` property is deprecated and will be an error in SafeDI 3.0: receive the `LazilyInstantiated` with `@Received` from the ancestor that declares it, or forward the value it builds.",
+						message: "`@Forwarded` on a `LazilyInstantiated` property is deprecated and will be an error in SafeDI 3.0: declare it `@Instantiated` on this type, or receive it with `@Received` from an ancestor that declares it, or forward the value it builds.",
 						line: 2,
 						column: 35,
 						severity: .warning,
@@ -272,7 +272,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`@Forwarded` on a `SendableLazilyInstantiated` property is deprecated and will be an error in SafeDI 3.0: receive the `SendableLazilyInstantiated` with `@Received` from the ancestor that declares it, or forward the value it builds.",
+						message: "`@Forwarded` on a `SendableLazilyInstantiated` property is deprecated and will be an error in SafeDI 3.0: declare it `@Instantiated` on this type, or receive it with `@Received` from an ancestor that declares it, or forward the value it builds.",
 						line: 2,
 						column: 35,
 						severity: .warning,
@@ -297,7 +297,7 @@ import Testing
 				""",
 				diagnostics: [
 					DiagnosticSpec(
-						message: "`@Forwarded` on a `LazilyInstantiated` property is deprecated and will be an error in SafeDI 3.0: receive the `LazilyInstantiated` with `@Received` from the ancestor that declares it, or forward the value it builds.",
+						message: "`@Forwarded` on a `LazilyInstantiated` property is deprecated and will be an error in SafeDI 3.0: declare it `@Instantiated` on this type, or receive it with `@Received` from an ancestor that declares it, or forward the value it builds.",
 						line: 2,
 						column: 35,
 						severity: .warning,
