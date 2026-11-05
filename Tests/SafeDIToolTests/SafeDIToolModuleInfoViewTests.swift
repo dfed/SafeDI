@@ -960,17 +960,17 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 	/// is taken by value, and its guard hashes no deferral.
 	private static func appCallingFeedScreen(guardHash: String = "F046DCFB1718557F") -> String {
 		generatedFileHeader + importBlock("Core") + "\n" + importBlock("Feed") + "\n" + importBlock("Session") + "\n\n" + """
-	extension Root {
-	    public init() {
-	        func __safeDI_feedScreen() -> FeedScreen {
-	            _ = FeedScreen.__safeDI_FeedScreen_\(guardHash).self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "FeedScreen", declaringModule: "Feed"))
-	            return FeedScreen(token: nil)
-	        }
-	        let feedScreen: FeedScreen = __safeDI_feedScreen()
-	        self.init(feedScreen: feedScreen)
-	    }
-	}
-	"""
+		extension Root {
+		    public init() {
+		        func __safeDI_feedScreen() -> FeedScreen {
+		            _ = FeedScreen.__safeDI_FeedScreen_\(guardHash).self\(MultiModuleIntegration.moduleInfo.seamCallComment(type: "FeedScreen", declaringModule: "Feed"))
+		            return FeedScreen(token: nil)
+		        }
+		        let feedScreen: FeedScreen = __safeDI_feedScreen()
+		        self.init(feedScreen: feedScreen)
+		    }
+		}
+		"""
 	}
 
 	/// `appCallingFeedScreen` as the SwiftPM plugin generates it, whose call carries the plugin comment.
