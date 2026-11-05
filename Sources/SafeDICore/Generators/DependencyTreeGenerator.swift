@@ -6560,7 +6560,7 @@ public actor DependencyTreeGenerator {
 					walkedScopes.append((validatedScope: validatedScope, parentIndex: parentIndex))
 					let walkedScopeIndex = walkedScopes.count - 1
 					if case let renamesContradictingOwnProperties = renamesContradictingOwnProperties(in: scope),
-					          !renamesContradictingOwnProperties.isEmpty
+					   !renamesContradictingOwnProperties.isEmpty
 					{
 						// The walk in `validatePropertiesAreFulfillable` reports these for every scope it reaches, so only a
 						// scope in the tree of a dependency a mock promotes, which that walk does not reach, reports them here.
