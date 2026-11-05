@@ -7946,7 +7946,6 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		}
 	}
 
-
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsErrorOfferingToPassPackage_whenConsumerToldNoPackageProvidesValueThatPackageTierTakes() async {
@@ -8002,6 +8001,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 			)
 		}
 	}
+
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_buildsPublicMockFirst_whenProviderOfOmittedValueIsDeclaredFirstAndReceivesItOnlyIfAvailable() async throws {
