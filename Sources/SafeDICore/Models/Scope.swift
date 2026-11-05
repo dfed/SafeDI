@@ -294,7 +294,7 @@ final class Scope: Hashable {
 	}
 
 	/// The properties this scope always creates: those it instantiates or is forwarded. No alias of this scope renames
-	/// another (SafeDITool rejects that before it builds scopes), so no alias is among them.
+	/// another (SafeDITool rejects that before it validates a tree that builds the scope), so no alias is among them.
 	private lazy var unconditionallyCreatedProperties = Set(
 		instantiable
 			.dependencies
@@ -1179,9 +1179,9 @@ private struct ScopeGeneratorUnderConstruction {
 	/// instantiates, or forwards – a seam's root's own forwarded properties included – or declares by an alias that is
 	/// created whenever `scope` is, is not `nil` there, so every form of its label leaves the set, while an
 	/// `onlyIfAvailable` alias of a property in the set may be `nil` itself, so both of its forms join it. No alias of
-	/// `scope` renames another (SafeDITool rejects that before it builds scopes). A received property declares nothing.
-	/// Each property is held by its exact form, so that an alias of exactly a required optional parameter, which the set
-	/// never holds, is created.
+	/// `scope` renames another (SafeDITool rejects that before it validates a tree that builds the scope). A received
+	/// property declares nothing. Each property is held by its exact form, so that an alias of exactly a required
+	/// optional parameter, which the set never holds, is created.
 	private static func runtimeOptionalProperties(
 		declaredBy scope: Scope,
 		enclosedBy enclosingRuntimeOptionalProperties: Set<Property>,

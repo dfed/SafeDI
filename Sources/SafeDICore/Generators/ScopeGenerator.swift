@@ -305,9 +305,10 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var requiredOnlyIfAvailableAliasProperties = Set<Property>()
 		var requiredOnlyIfAvailableAliasFulfillingProperties = Set<Property>()
 		// An `onlyIfAvailable` alias's generator requires nothing, so its scope finds which of its aliases a receiver
-		// requires. No alias of a scope renames another (SafeDITool rejects that before it builds scopes), so a child's
-		// requirement is the only way. An alias whose property only a mock's override of an `onlyIfAvailable` receive
-		// provides is never required: a receiver that requires it is handed the override where it is not created.
+		// requires. No alias of a scope renames another (SafeDITool rejects that before it validates a tree that builds
+		// the scope), so a child's requirement is the only way. An alias whose property only a mock's override of an
+		// `onlyIfAvailable` receive provides is never required: a receiver that requires it is handed the override
+		// where it is not created.
 		for case let (aliasProperty?, fulfillingProperty?) in propertiesToGenerate.lazy
 			.filter({ !$0.aliasPropertyIsProvidedOnlyByOnlyIfAvailableOverride })
 			.map({ ($0.property, $0.onlyIfAvailableAliasFulfillingProperty) })
@@ -1327,8 +1328,8 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 	/// where the alias is not created, which the seam cannot see: every other dependency that reads its property and
 	/// finds the alias as the closest declaration of its label – a receive in its declaring type's tree, a nested seam's
 	/// parameter standing for the receives in that seam's tree, an alias in that type's tree (no alias of the declaring
-	/// type renames another of its aliases, which SafeDITool rejects before it builds scopes) – and, except for the seam
-	/// type's own aliases, an alias whose
+	/// type renames another of its aliases, which SafeDITool rejects before it validates a tree that builds the type) –
+	/// and, except for the seam type's own aliases, an alias whose
 	/// declaring type's builder also declares the alias's property, exactly or unwrapped, other than the alias's
 	/// fulfilling property, which inline is what the parent's `isGeneratedBefore` hands the declaring type in the
 	/// alias's place. Empty for every tree that is not a seam's.
@@ -1461,9 +1462,9 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 				reason: enclosingAlias?.reason ?? reason,
 			)
 		}
-		// No alias reads another of this scope's aliases: SafeDITool rejects a rename of another rename of one declaration
-		// before it builds scopes. The type built in place of an uncreated alias reads it where the scope that builds this
-		// one declares its property too.
+		// No alias reads another of this scope's aliases: SafeDITool rejects a rename of another rename of one
+		// declaration before it validates a tree that builds the scope. The type built in place of an uncreated alias
+		// reads it where the scope that builds this one declares its property too.
 		for dependency in instantiable.dependencies {
 			// Inline, the scope that builds this type passes it the property of an earlier child declaring the alias's
 			// property, exactly or unwrapped, where the alias is not created (its `isGeneratedBefore`), the only route by

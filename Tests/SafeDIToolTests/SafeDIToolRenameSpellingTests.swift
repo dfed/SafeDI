@@ -444,6 +444,72 @@ struct SafeDIToolRenameSpellingTests: ~Copyable {
 		])
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsPlainError_whenOnlyAGeneratedMockBuildsARenameOfARenameOfItsAncestorOnlyIfAvailable() async {
+		// No root builds `Child`, so the mock's validation is the first to read it.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Child.swift"]):5:5: error: `b: X?` is renamed from `a`, which `Child` also renames. The @Instantiable macro rejects a rename of another rename of the same declaration. Rename the property the renames start from instead. SafeDITool also rejects such renames where `#if` blocks that are active together declare them, or clauses of a condition only the compiler decides, such as `os(iOS)`, which SafeDITool reads together; there, give the rename `a` another label.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					Self.ownerOfX,
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(a: X?, b: X?) { self.a = a; self.b = b }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let a: X?
+					    @Received(fulfilledByDependencyNamed: "a", ofType: X?.self) let b: X?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func mock_throwsPlainError_whenAGeneratedMockReceivesATypeThatRenamesARenameOfItsAncestor() async {
+		// The mock builds `Provider` beside `x` because `Child` receives it. Validation follows that receive to
+		// `Provider` before the mock promotes it, so it must not read the renames first.
+		await assertThrowsError(
+			diagnostics: { fixtures in
+				"""
+				\(fixtures["Provider.swift"]):5:5: error: `b: X` is renamed from `a`, which `Provider` also renames. The @Instantiable macro rejects a rename of another rename of the same declaration. Rename the property the renames start from instead. SafeDITool also rejects such renames where `#if` blocks that are active together declare them, or clauses of a condition only the compiler decides, such as `os(iOS)`, which SafeDITool reads together; there, give the rename `a` another label.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					Self.ownerOfX,
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(provider: Provider) { self.provider = provider }
+					    @Received let provider: Provider
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Provider: Instantiable {
+					    public init(a: X, b: X) { self.a = a; self.b = b }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self) let a: X
+					    @Received(fulfilledByDependencyNamed: "a", ofType: X.self) let b: X
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
+		}
+	}
+
 	// MARK: A rename of a dependency to itself
 
 	@Test
@@ -629,6 +695,21 @@ struct SafeDIToolRenameSpellingTests: ~Copyable {
 
 	    @Instantiated let session: Session
 	    @Instantiated let profile: Profile
+	}
+	"""
+
+	/// A type that generates its mock and builds an `x: X`, which builds a `Child`, so that `Child` is built inside `x`.
+	private static let ownerOfX = """
+	@Instantiable(generateMock: true)
+	public final class Owner: Instantiable {
+	    public init(x: X) { self.x = x }
+	    @Instantiated let x: X
+	}
+
+	@Instantiable
+	public final class X: Instantiable {
+	    public init(child: Child) { self.child = child }
+	    @Instantiated let child: Child
 	}
 	"""
 
