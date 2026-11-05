@@ -3632,28 +3632,27 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_assumesPackageAccessWithComment_whenTypeInExtensionOfPackageNamespaceDeclaredInsideExtensionIsConstructedFromModuleOfUnknownPackage() async throws {
-		// Without package names the tool cannot tell whether `App` is in `Core`'s package, so it accepts the `package`
-		// `Outer.Namespace`, which the check now reads, and says so where it constructs `Helper`.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: Self.modulesConstructingHelper(
-				declaredInsideExtensionOf: "Outer.Namespace",
-				namespaceFiles: ExtensionNamespaceChain.oneLink.namespaceFiles(),
-				appPackage: "Shop",
-				omitsPackageNames: true,
-			),
-			integration: .moduleInfo,
-			filesToDelete: &filesToDelete,
-		)
-		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + """
-		extension Root {
-		    public init() {
-		        let helping: any Helping = Outer.Namespace.Helper() // SafeDI could not verify that Outer.Namespace.Helper is in this package; `package` access is assumed.
-		        self.init(helping: helping)
-		    }
+	mutating func generate_throwsErrorOfferingToPassPackages_whenTypeInExtensionOfPackageNamespaceDeclaredInsideExtensionIsConstructedFromModuleToldNoPackage() async {
+		// `App` and `Core` are named and told no package, so each has none: the `package` `Outer.Namespace`, which the check
+		// reads, needs `public`, and the error also offers passing the packages if the modules are compiled with one.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let namespacePath = Self.declarationPath(of: "Namespace.swift", in: "Core", fixtures: fixtures, under: .moduleInfo)
+			return """
+			\(namespacePath):2:5: error: `Outer.Namespace`, which encloses `Outer.Namespace.Helper`, is `package`, so module `App`, in another package, cannot construct `Outer.Namespace.Helper` in the code SafeDI generates. Make `Outer.Namespace` `public` to fix, or pass the packages of modules `App` and `Core` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+			\(namespacePath):2:5-2:12: fixit: public
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(
+				modules: Self.modulesConstructingHelper(
+					declaredInsideExtensionOf: "Outer.Namespace",
+					namespaceFiles: ExtensionNamespaceChain.oneLink.namespaceFiles(),
+					appPackage: "Shop",
+					omitsPackageNames: true,
+				),
+				integration: .moduleInfo,
+				filesToDelete: &filesToDelete,
+			)
 		}
-		"""])
-		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
