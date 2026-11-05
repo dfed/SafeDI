@@ -731,7 +731,7 @@ func keptPlainTypeNames(of fileScans: [FileScan]) -> KeptPlainTypeNames {
 	let outputFileDeclarations = fileScans.map(\.outputFileDeclarations)
 	return KeptPlainTypeNames(
 		extendedTypeNames: Set(outputFileDeclarations.flatMap(\.extendedTypeNames).map(\.spelledWithoutBackticks)),
-		instantiableChainTypeNames: Set(outputFileDeclarations.flatMap(\.instantiableTypeNames).flatMap(namesAlongChain(ofTypeNamed:))),
+		instantiableChainTypeNames: Set(outputFileDeclarations.flatMap(\.instantiableTypeNames).flatMap(namesBoundingType(named:))),
 		mentionedTypeNames: mentionedTypeNames(of: fileScans.flatMap(\.instantiables)),
 	)
 }
@@ -744,8 +744,8 @@ struct KeptPlainTypeNames: Codable, Equatable, Sendable {
 	/// - Parameters:
 	///   - extendedTypeNames: The outermost name of each type an extension that is or holds an `@Instantiable`
 	///     declaration extends, in any clause (`OutputFileDeclarations.extendedTypeNames`).
-	///   - instantiableChainTypeNames: Every name along the chain of each `@Instantiable` type, in any clause: the
-	///     outermost type enclosing it, each type nested between, and its own.
+	///   - instantiableChainTypeNames: The names along the chain of each `@Instantiable` type that can bound it, in any
+	///     clause: the outermost type enclosing it, or its own name when nothing does, and each type nested between.
 	///   - mentionedTypeNames: Every name of each type the module's declarations mention (`mentionedTypeNames(of:)`).
 	init(extendedTypeNames: Set<String>, instantiableChainTypeNames: Set<String>, mentionedTypeNames: Set<String>) {
 		self.init(
@@ -778,9 +778,9 @@ struct KeptPlainTypeNames: Codable, Equatable, Sendable {
 	/// type, in any clause, and each type its declarations mention. A member of an `@Instantiable` type can name a type
 	/// nested in it, or in a type enclosing it, by the nested type's own name, which a public mock's configuration
 	/// qualifies from that type's declaration (`TypeAccessProof.qualifyingNestedTypes(in:writtenWithin:)`). A file without
-	/// a SafeDI marker is parsed when it may declare a type of one of these names (`parseModule`), so they also hold every
-	/// other name along each `@Instantiable` type's chain: a namespace an extension declaring the type extends can be
-	/// declared inside another extension, in a file that names only the namespace, and bounds the type
+	/// a SafeDI marker is parsed when it may declare a type of one of these names (`parseModule`), so they also hold each
+	/// name between the outermost and each `@Instantiable` type: a namespace an extension declaring the type extends can
+	/// be declared inside another extension, in a file that names only the namespace, and bounds the type
 	/// (`DependencyTreeGenerator.extendedTypeAccessNeeds(of:in:)`).
 	let outermostTypeNames: Set<String>
 	/// Every name of each type the module's declarations mention, the outermost and each nested one: the names a mention
@@ -811,9 +811,12 @@ struct KeptPlainTypeNames: Codable, Equatable, Sendable {
 	}
 }
 
-/// Every name along the chain of the type `typeName` spells – the outermost type's, each nested type's, and its own – as
-/// `OutputFileDeclarations.instantiableTypeNames` records a type.
-private func namesAlongChain(ofTypeNamed typeName: String) -> [String] {
+/// The names along the chain of the type `typeName` spells, as `OutputFileDeclarations.instantiableTypeNames` records a
+/// type, that can bound it: the outermost type's and each nested type's, without its own unless it is the outermost. The
+/// construction check reads a declaration of each type enclosing it, never another declaration of its own name
+/// (`DependencyTreeGenerator.extendedTypeAccessNeeds(of:in:)`), and a top-level type's name keeps the declarations of
+/// the types nested in it.
+private func namesBoundingType(named typeName: String) -> [String] {
 	var parser = Parser(typeName)
 	var names = [String]()
 	var remainingType: TypeDescription? = TypeSyntax.parse(from: &parser).typeDescription
@@ -821,7 +824,7 @@ private func namesAlongChain(ofTypeNamed typeName: String) -> [String] {
 		names.append(name.spelledWithoutBackticks)
 		remainingType = type.droppingOutermostType
 	}
-	return names
+	return names.count > 1 ? Array(names.dropLast()) : names
 }
 
 /// Every name of each type the dependencies – an alias's fulfilling property among them –, initializer or
@@ -1063,8 +1066,9 @@ private let safeDIMarkers = [
 extension UnsafeBufferPointer<UInt8> {
 	/// The words of these bytes, Swift source, that type declarations may begin with (`TypeDeclarationWords`): a word is
 	/// a run of ASCII letters, digits, and underscores, and bytes of non-ASCII characters, the bytes an identifier is
-	/// spelled with, and a name in backticks is what they enclose, up to the closing backtick or the end of its line, a
-	/// space of a raw identifier included. A name in backticks is never a keyword: `` `class` `` introduces nothing.
+	/// spelled with, and a name in backticks is what a backtick and the closing backtick on its line enclose, a space of a
+	/// raw identifier included. A name in backticks is never a keyword: `` `class` `` introduces nothing. A backtick
+	/// without a closing one on its line is an ordinary byte, so the words after it on its line are still read.
 	var typeDeclarationWords: TypeDeclarationWords {
 		var found = TypeDeclarationWords()
 		var index = startIndex
@@ -1085,17 +1089,11 @@ extension UnsafeBufferPointer<UInt8> {
 				if word.count == packageAccessModifier.count, packageAccessModifier.elementsEqual(word) {
 					found.mayDeclareTypeOtherModulesCanName = true
 				}
-			} else if self[index] == backtickByte {
-				let nameStart = index + 1
-				var nameEnd = nameStart
-				while nameEnd < endIndex, self[nameEnd] != backtickByte, self[nameEnd] != UInt8(ascii: "\n") {
-					nameEnd += 1
-				}
+			} else if self[index] == backtickByte, let nameEnd = closingBacktickIndexOnLine(ofBacktickAt: index) {
 				if followsTypeKeyword {
-					found.namesFollowingKeywords.insert(String(decoding: UnsafeBufferPointer(rebasing: self[nameStart..<nameEnd]), as: UTF8.self))
+					found.namesFollowingKeywords.insert(String(decoding: UnsafeBufferPointer(rebasing: self[(index + 1)..<nameEnd]), as: UTF8.self))
 				}
 				followsTypeKeyword = false
-				// Past the closing backtick, the line's end, or the end of the text.
 				index = nameEnd + 1
 			} else {
 				followsTypeKeyword = followsTypeKeyword && self[index].isWhitespaceByte
@@ -1103,6 +1101,21 @@ extension UnsafeBufferPointer<UInt8> {
 			}
 		}
 		return found
+	}
+
+	/// The index of the backtick that closes the one at `openingIndex` on the same line, or `nil` when the line has none:
+	/// a name in backticks spans no line break and holds no backtick, so a backtick without a closing one on its line, as
+	/// in a string literal holding one, encloses nothing.
+	private func closingBacktickIndexOnLine(ofBacktickAt openingIndex: Int) -> Int? {
+		var index = openingIndex + 1
+		while index < endIndex, self[index] != UInt8(ascii: "\n") {
+			if self[index] == backtickByte {
+				return index
+			} else {
+				index += 1
+			}
+		}
+		return nil
 	}
 
 	/// Whether these bytes contain `bytes`, which must not be empty, in a row.

@@ -145,13 +145,25 @@ struct SafeDIToolMarkerSearchTests: ~Copyable {
 		(text: "enum\n    `Token` {}", names: ["Token"]),
 		// A raw identifier, whose backticks enclose a space.
 		(text: "struct `My Token` {}", names: ["My Token"]),
-		// No closing backtick: the name ends at the end of the text, or of its line.
-		(text: "typealias `Token", names: ["Token"]),
-		(text: "struct `Token\nstruct Other {}", names: ["Token", "Other"]),
 	] as [(text: String, names: Set<String>)])
 	func typeDeclarationWords_findsNameInBackticks_whenItFollowsTypeKeyword(text: String, names: Set<String>) {
 		// D3.6: a backtick keeps the name after the keyword, and is no part of it.
 		#expect(Self.typeDeclarationWords(of: text).namesFollowingKeywords == names)
+	}
+
+	@Test(arguments: [
+		// No closing backtick on its line: the backtick encloses nothing, and a declaration after it is read.
+		(text: "typealias `Token", names: [], findsPackage: false),
+		(text: "struct `Token\nstruct Other {}", names: ["Other"], findsPackage: false),
+		(text: "let tick = \"`\"; package struct Token {}", names: ["Token"], findsPackage: true),
+		// The closing backtick is on a later line: the backtick there opens a name of its own.
+		(text: "let tick = \"`\"\npackage struct `Token` {}", names: ["Token"], findsPackage: true),
+	] as [(text: String, names: Set<String>, findsPackage: Bool)])
+	func typeDeclarationWords_readsLaterDeclaration_whenBacktickHasNoClosingBacktickOnItsLine(text: String, names: Set<String>, findsPackage: Bool) {
+		// A backtick without a closing one on its line is an ordinary byte, so the search stays a superset.
+		let words = Self.typeDeclarationWords(of: text)
+		#expect(words.namesFollowingKeywords == names)
+		#expect(words.mayDeclareTypeOtherModulesCanName == findsPackage)
 	}
 
 	@Test(arguments: [

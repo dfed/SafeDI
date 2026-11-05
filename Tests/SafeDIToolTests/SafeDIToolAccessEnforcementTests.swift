@@ -3410,6 +3410,102 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_leavesDependencysRootWithoutCode_whenItsTreeConstructsTypeInExtensionOfPackageNamespaceDeclaredInsideExtension() async throws {
+		// D2.2's package, seen from `App`, which plans a file for `Core`'s public root too: the root's tree names the
+		// `package` `Outer.Namespace`, which the check now reads, so `App` leaves that file without code, as it does for
+		// any root whose tree constructs a declaration that is neither `public` nor `open`. `Core` generates the root.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesConstructingHelper(
+				declaredInsideExtensionOf: "Outer.Namespace",
+				namespaceFiles: ExtensionNamespaceChain.oneLink.namespaceFiles().merging(["CoreRoot.swift": """
+				@Instantiable(isRoot: true)
+				public final class CoreRoot: Instantiable {
+				    public init(helping: any Helping) {
+				        self.helping = helping
+				    }
+				    @Instantiated let helping: any Helping
+				}
+				"""], uniquingKeysWith: { first, _ in first }),
+				appPackage: "Shop",
+				appDeclaration: """
+				import Core
+
+				@Instantiable(isRoot: true)
+				final class Root: Instantiable {
+				    init() {}
+				}
+				""",
+			),
+			integration: .swiftPackagePlugin,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(try #require(output.modules["Core"]).generatedFiles == ["CoreRoot+SafeDI.swift": generatedFileHeader + """
+		extension CoreRoot {
+		    public convenience init() {
+		        let helping: any Helping = Outer.Namespace.Helper()
+		        self.init(helping: helping)
+		    }
+		}
+		"""])
+		let appFileHeader = generatedFileHeader + Self.importBlock("Core") + "\n\n"
+		#expect(try #require(output.modules["App"]).generatedFiles == [
+			"CoreRoot+SafeDI.swift": appFileHeader + """
+			// SafeDI generates the dependency tree of CoreRoot only in the module that declares it, because the tree constructs a declaration that is neither `public` nor `open`.
+			""",
+			"Root+SafeDI.swift": appFileHeader,
+		])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_assumesPackageAccessWithComment_whenTypeInExtensionOfPackageNamespaceDeclaredInsideExtensionIsConstructedFromModuleOfUnknownPackage() async throws {
+		// Without package names the tool cannot tell whether `App` is in `Core`'s package, so it accepts the `package`
+		// `Outer.Namespace`, which the check now reads, and says so where it constructs `Helper`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesConstructingHelper(
+				declaredInsideExtensionOf: "Outer.Namespace",
+				namespaceFiles: ExtensionNamespaceChain.oneLink.namespaceFiles(),
+				appPackage: "Shop",
+				omitsPackageNames: true,
+			),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + Self.importBlock("Core") + "\n\n" + """
+		extension Root {
+		    public init() {
+		        let helping: any Helping = Outer.Namespace.Helper() // SafeDI could not verify that Outer.Namespace.Helper is in this package; `package` access is assumed.
+		        self.init(helping: helping)
+		    }
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_keepsNoDeclarationNamedLikeNestedInstantiable_whenMarkerFreeFileDeclaresTypeOfItsOwnName() async throws {
+		// The names that keep plain declarations hold those bounding `Outer.Namespace.Helper`, `Outer` and `Namespace`, and
+		// not `Helper`'s own: the check reads no other declaration of that name, so `Core` neither parses nor carries the
+		// unrelated internal `Helper`, in a file without a marker and without the word `package`.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: Self.modulesConstructingHelper(
+				declaredInsideExtensionOf: "Outer.Namespace",
+				namespaceFiles: ExtensionNamespaceChain.oneLink.namespaceFiles().merging(["Unrelated.swift": "struct Helper {}"], uniquingKeysWith: { first, _ in first }),
+				appPackage: "Shop",
+			),
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Outer.Namespace", "Outer"])
+		#expect(output.modules["App"]?.generatedFiles == Self.rootFiles(under: .moduleInfo, constructing: "Outer.Namespace.Helper"))
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_constructsTypeInExtensionOfNamespaceDeclaredInsideExtensionOfTypeOfModuleSafeDIDoesNotRead_whichThenFailsToCompile() async throws {
 		// D2.4: `Kit` does not run SafeDI, so the check follows `Outer.Namespace`, `public`, to `Outer`, of which it reads no
 		// declaration, and stops there: the compiler reports in the generated file that `App`, in another package, cannot
@@ -3680,12 +3776,13 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		appDeclaration: String = rootInstantiatingHelping,
 		conditions: [String] = [],
 		deletesCoreFiles: Bool = false,
+		omitsPackageNames: Bool = false,
 	) -> [ModuleFixture] {
 		let helperFile: String = helperFilePrefix + helperSource(declaredInsideExtensionOf: extendedType, attribute: helperAttribute, dependencies: helperDependencies)
 		let coreFiles: [String: String] = ["Outer.swift": outerDeclaration, "Helper.swift": helperFile].merging(namespaceFiles, uniquingKeysWith: { first, _ in first })
 		return [
-			ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: coreFiles, activeCompilationConditions: conditions, deletesSwiftFilesAfterRunning: deletesCoreFiles),
-			ModuleFixture(name: "App", packageName: appPackage, swiftFileContentByFilePath: ["Root.swift": appDeclaration], dependencies: ["Core"], activeCompilationConditions: conditions),
+			ModuleFixture(name: "Core", packageName: "Shop", swiftFileContentByFilePath: coreFiles, activeCompilationConditions: conditions, deletesSwiftFilesAfterRunning: deletesCoreFiles, omitsPackageName: omitsPackageNames),
+			ModuleFixture(name: "App", packageName: appPackage, swiftFileContentByFilePath: ["Root.swift": appDeclaration], dependencies: ["Core"], activeCompilationConditions: conditions, omitsPackageName: omitsPackageNames),
 		]
 	}
 
