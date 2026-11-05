@@ -26,9 +26,9 @@ import Testing
 /// A type inside a seam's tree that requires an `onlyIfAvailable` alias of a pass-through: inline, the caller builds the
 /// alias's fulfilling property before the branch that builds the receiver, so the alias is bound from it. The seam's
 /// signature carries that requirement on the pass-through (`SeamSignature.Parameter.requiredThroughAlias`), which stays
-/// optional and defaults to `nil`, so the caller orders the property it passes before the seam exactly as inline orders
-/// it before the receiver's branch, and reports the same cycle where it cannot. Each cell sits beside the inline build of
-/// the same graph.
+/// optional and received only if available, so the caller orders the property it passes before the seam exactly as
+/// inline orders it before the receiver's branch, and reports the same cycle where it cannot. Each cell sits beside the
+/// inline build of the same graph.
 struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 	// MARK: Initialization
 
@@ -67,7 +67,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Token? = nil) {
+			    public convenience init(token: Token?) {
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
 			            let authToken: Token? = token
@@ -134,7 +134,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Token? = nil) {
+			    public convenience init(token: Token?) {
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
 			            let authToken: Token? = token
@@ -215,7 +215,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Inner+SafeDI.swift": generatedFileHeader + """
 			extension Inner {
-			    public convenience init(token: Token? = nil) {
+			    public convenience init(token: Token?) {
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
 			            let authToken: Token? = token
@@ -247,7 +247,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Token? = nil) {
+			    public convenience init(token: Token?) {
 			        func __safeDI_inner() -> Inner {
 			            _ = Inner.__safeDI_Inner_52027BDD0707DACE.self
 			            return Inner(token: token)
@@ -312,7 +312,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 		#expect(try #require(output.modules["Feature"]).generatedFiles == [
 			integration == .moduleInfo ? "Feature.swift" : "Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Token? = nil) {
+			    public convenience init(token: Token?) {
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(detailPath)", line: 8)
 			            let authToken: Token? = token
@@ -340,7 +340,7 @@ struct SafeDIToolSeamRequiredAliasTests: ~Copyable {
 			    public convenience init() {
 			        let token = Token()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_52027BDD0707DACE.self\(integration == .moduleInfo ? "" : " // If this line does not compile, add the SafeDI plugin to the target that declares Screen.")
+			            _ = Screen.__safeDI_Screen_52027BDD0707DACE.self\(integration.seamCallComment(type: "Screen", declaringModule: "Feature"))
 			            return Screen(token: token)
 			        }
 			        let screen: Screen = __safeDI_screen()

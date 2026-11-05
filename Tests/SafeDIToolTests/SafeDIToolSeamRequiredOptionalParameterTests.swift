@@ -1031,7 +1031,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(other: Secret? = nil, token: Secret?) {
+			    public convenience init(other: Secret?, token: Secret?) {
 			        let right = Right(token: token)
 			        func __safeDI_left() -> Left {
 			            #sourceLocation(file: "\(output.fixtures["Left.swift"])", line: 8)

@@ -1821,7 +1821,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(`default`: Token? = nil, token: Token? = nil) {
+			    public init(`default`: Token?, token: Token?) {
 			        func __safeDI_session() -> Session {
 			            #sourceLocation(file: "\(output.fixtures["Session.swift"])", line: 8)
 			            let current: Token? = `default`
@@ -4682,7 +4682,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token: Token? = nil) {
+			    public init(token: Token?) {
 			        func __safeDI_first() -> First {
 			            #sourceLocation(file: "\(output.fixtures["First.swift"])", line: 8)
 			            let authToken: Token? = token
@@ -4797,7 +4797,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token: Token? = nil) {
+			    public init(token: Token?) {
 			        func __safeDI_session() -> Session {
 			            #sourceLocation(file: "\(output.fixtures["Session.swift"])", line: 8)
 			            let anyToken: AnyToken? = (token as Token?).map { AnyToken($0) }
@@ -7661,7 +7661,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Panel+SafeDI.swift": generatedFileHeader + """
 			extension Panel {
-			    public init(token: Token? = nil) {
+			    public init(token: Token?) {
 			        func __safeDI_screenBuilder() -> Screen {
 			            _ = Screen.__safeDI_Screen_029593DA1BB2FBD5.self
 			            return Screen(token: token)
@@ -7690,7 +7690,7 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token: Token? = nil) {
+			    public init(token: Token?) {
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
 			            let authToken: Token? = token
