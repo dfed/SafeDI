@@ -2380,7 +2380,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 						packageName: "Shop",
 						swiftFileContent: [Self.packageService],
 						omitsPackageName: true,
-						compilerReceivesOmittedPackageName: true,
 					),
 					Self.app(inPackage: "Shop"),
 				],
@@ -2412,7 +2411,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 						swiftFileContent: [Self.rootInstantiating("Service")],
 						dependencies: ["Feature"],
 						omitsPackageName: true,
-						compilerReceivesOmittedPackageName: true,
 					),
 				],
 				integration: .moduleInfo,
@@ -2442,7 +2440,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 						packageName: "Shop",
 						swiftFileContent: [Self.packageService],
 						omitsPackageName: true,
-						compilerReceivesOmittedPackageName: true,
 					),
 					ModuleFixture(
 						name: "App",
@@ -2529,7 +2526,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 							""",
 						],
 						omitsPackageName: true,
-						compilerReceivesOmittedPackageName: true,
 					),
 					ModuleFixture(
 						name: "App",
@@ -3248,7 +3244,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
-					Self.featureExtendingNamespace(inPackage: "Shop", declaredAs: "package enum Space {}", omitsPackageName: true, compilerReceivesOmittedPackageName: true),
+					Self.featureExtendingNamespace(inPackage: "Shop", declaredAs: "package enum Space {}", omitsPackageName: true),
 					ModuleFixture(
 						name: "App",
 						packageName: "Shop",
@@ -4512,7 +4508,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		shelfFileDeclaration: String? = nil,
 		alongside otherFiles: [String: String] = [:],
 		omitsPackageName: Bool = false,
-		compilerReceivesOmittedPackageName: Bool = false,
 	) -> ModuleFixture {
 		let importLine = importedModuleName.map { "import \($0)\n\n" } ?? ""
 		// Split for Swift 6.2 on Linux, which times out type-checking the single expression.
@@ -4545,7 +4540,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			swiftFileContentByFilePath: swiftFileContentByFilePath,
 			dependencies: dependencies,
 			omitsPackageName: omitsPackageName,
-			compilerReceivesOmittedPackageName: compilerReceivesOmittedPackageName,
 		)
 	}
 

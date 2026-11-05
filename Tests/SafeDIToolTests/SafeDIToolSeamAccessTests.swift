@@ -128,7 +128,6 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 							seamFixtureType(named: "Gauge", declarations: []),
 						],
 						omitsPackageName: true,
-						compilerReceivesOmittedPackageName: true,
 					),
 					ModuleFixture(
 						name: "App",
@@ -195,7 +194,6 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 							""",
 						],
 						omitsPackageName: true,
-						compilerReceivesOmittedPackageName: true,
 					),
 					ModuleFixture(
 						name: "App",
@@ -273,7 +271,6 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 						],
 						dependencies: ["Feature"],
 						omitsPackageName: true,
-						compilerReceivesOmittedPackageName: true,
 					),
 				],
 				integration: .moduleInfo,

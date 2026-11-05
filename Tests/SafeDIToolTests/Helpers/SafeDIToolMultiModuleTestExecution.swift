@@ -89,7 +89,6 @@ struct ModuleFixture {
 		deletesSwiftFilesAfterRunning: Bool = false,
 		omitsModuleName: Bool = false,
 		omitsPackageName: Bool = false,
-		compilerReceivesOmittedPackageName: Bool = false,
 		isReleaseConfiguration: Bool = false,
 		runsSafeDI: Bool = true,
 		compilerSettings: VerificationCompilerSettings = VerificationCompilerSettings(),
@@ -100,7 +99,6 @@ struct ModuleFixture {
 		self.isReleaseConfiguration = isReleaseConfiguration
 		self.omitsModuleName = omitsModuleName
 		self.omitsPackageName = omitsPackageName
-		self.compilerReceivesOmittedPackageName = compilerReceivesOmittedPackageName
 		self.packageName = packageName
 		self.swiftFileContent = swiftFileContent
 		self.swiftFileContentByFilePath = swiftFileContentByFilePath
@@ -132,9 +130,6 @@ struct ModuleFixture {
 	/// `SWIFT_PACKAGE_NAME`. `.swiftPackagePlugin` reads the package from the target graph and compiles the module in it,
 	/// since SwiftPM gives every module a package.
 	let omitsPackageName: Bool
-	/// Whether a module that `omitsPackageName` is still compiled with `-package-name`, as a hand-wired build that does not
-	/// tell SafeDI the package it compiles the module in.
-	let compilerReceivesOmittedPackageName: Bool
 	/// Whether the module is built as a release build is: see `init`.
 	let isReleaseConfiguration: Bool
 	/// Whether the tool runs for the module: see `init`.
@@ -575,7 +570,7 @@ func executeSafeDIToolMultiModuleTest(
 			writtenModules.map { module in
 				ModuleCompileSources(
 					moduleName: module.fixture.name,
-					packageName: integration == .moduleInfo && module.fixture.omitsPackageName && !module.fixture.compilerReceivesOmittedPackageName ? nil : module.fixture.packageName,
+					packageName: integration == .moduleInfo && module.fixture.omitsPackageName ? nil : module.fixture.packageName,
 					dependencyModuleNames: module.transitiveDependencies,
 					inputSwiftFiles: module.swiftFiles,
 					generatedFiles: outputs[module.fixture.name]!.generatedFiles,
