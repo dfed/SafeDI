@@ -417,6 +417,226 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		try expectEveryModuleCompiled(output)
 	}
 
+	// MARK: Tests – Access and spelling read through a view
+
+	@Test(arguments: [(MultiModuleIntegration.moduleInfo, false), (.moduleInfo, true), (.swiftPackagePlugin, false)])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_throwsErrorAtProvider_whenTierComputedFromViewOmitsValueCallerInAnotherPackageProvides(integration: MultiModuleIntegration, listsCore: Bool) async {
+		// Cell 7: `Feed`'s seam `Service` builds `Core`'s `Badge`, whose `package` initializer is the widest that mentions
+		// `[3 of Int]`, so SafeDI proves the type `package` and `Service`'s `public` tier omits `theme`. `App`, in another
+		// package, reads `Badge` from `Feed`'s view when it lists `Feed` alone: its `Screen`, which provides `theme`, gets the
+		// error a run that reads `Core`'s own file reports, and no error names a module info `App` was not given. A view
+		// carries no positions, so the note at `Badge`'s receive names no line until `App` lists `Core` too.
+		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
+			let screenPath: String
+			let badgeNoteLocation: String
+			switch integration {
+			case .moduleInfo:
+				screenPath = fixtures["App"]!["Screen.swift"]
+				badgeNoteLocation = listsCore ? "\(fixtures["Core"]!["Badge.swift"]):7:5: " : ""
+			case .swiftPackagePlugin:
+				screenPath = NormalizedFilePath(fixtures["App"]!.compilerPath(of: "Screen.swift")).path
+				badgeNoteLocation = "\(NormalizedFilePath(fixtures["Core"]!.compilerPath(of: "Badge.swift")).path):7:5: "
+			}
+			return """
+			\(screenPath):11:5: error: `Screen` provides `theme: [3 of Int]`, but the `public` initializer SafeDI generated for `Service` in module `Feed`, the narrowest one module `App` can call, does not take it: `Service` takes `theme` only on its `package` initializer, so this call would pass `nil` to `Badge`, which the tree would hand `theme` were it built inline. `[3 of Int]` is `package` as far as SafeDI can tell: SafeDI cannot read its spelling, and every initializer, `instantiate(…)` and mock method that mentions it in module `Feed` or on a type that receives it is `package` (`Badge.init(theme:)`); a mention on any other declaration matches it by name alone, so it does not count. Widen `Badge.init(theme:)` to `public`; mention `[3 of Int]` in a `public` initializer, `instantiate(…)` or mock method SafeDI records; or stop providing `theme` on this path.
+			\(badgeNoteLocation)note: `Badge` receives `theme: [3 of Int]?` here.
+			"""
+		}) {
+			try await executeSafeDIToolMultiModuleTest(modules: Self.packageMentionChain(appPackage: "Other", appDependencies: listsCore ? ["Core", "Feed"] : ["Feed"]), integration: integration, filesToDelete: &filesToDelete)
+		}
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_passesValueToPackageTierComputedFromView_whenCallerSharesSeamsPackage(integration: MultiModuleIntegration) async throws {
+		// Cell 7's twin: `App` in `Service`'s package calls its `package` tier, which takes `theme`, so `Screen`'s `theme`
+		// reaches `Badge`, as when `App` lists `Core` too.
+		let output = try await executeSafeDIToolMultiModuleTest(modules: Self.packageMentionChain(appPackage: "Shop"), integration: integration, filesToDelete: &filesToDelete)
+		let fileName = integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift"
+		let pluginComment = integration == .moduleInfo ? "" : " // If this line does not compile, add the SafeDI plugin to the target that declares Service."
+		#expect(output.modules["App"]?.generatedFiles == [fileName: generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feed") + "\n" + Self.importBlock("SafeDI") + "\n\n" + """
+		extension Root {
+		    public init() {
+		        func __safeDI_screenBuilder(theme: [3 of Int]) -> Screen {
+		            func __safeDI_service() -> Service {
+		                _ = Service.__safeDI_Service_427021F4005D89EC.self\(pluginComment)
+		                return Service(theme: theme)
+		            }
+		            let service: Service = __safeDI_service()
+		            return Screen(theme: theme, service: service)
+		        }
+		        let screenBuilder = Instantiator<Screen> {
+		            __safeDI_screenBuilder(theme: $0)
+		        }
+		        self.init(screenBuilder: screenBuilder)
+		    }
+		}
+		"""])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_callsPublicMockAsItsModuleComputesIt_whenAnotherFileOfModuleDeclaresPrivateTypeOfExtendedTypesName(integration: MultiModuleIntegration) async throws {
+		// Cell 25: `Core` declares the public mock `Space.Panel` in an extension of `Kit`'s `public` `Space`, and another of
+		// its files declares a `private` `Space`, invisible where the extension is. Whether `Panel` can have a public mock
+		// depends on which `Space` the extension extends: `Kit`'s, as `Core`'s own run finds, so `Feed`'s public mock calls
+		// `Panel`'s. `App` lists `Feed` alone and computes both plans through `Feed`'s view, which keeps each declaration's
+		// file and level, so its call is the one it makes when it lists `Core` too. (The extended type bounds a public mock,
+		// not a seam's parameter, whose type's own declaration decides its tier.)
+		let modules = { (appDependencies: [String]) in
+			[
+				ModuleFixture(name: "Kit", packageName: "Toolkit", swiftFileContentByFilePath: ["Space.swift": "// The design system's namespace.\npublic enum Space {}"]),
+				ModuleFixture(name: "Core", packageName: "Base", swiftFileContentByFilePath: [
+					"Panel.swift": """
+					import Kit
+
+					extension Space {
+					    @Instantiable(generateMock: .public)
+					    public final class Panel: Instantiable {
+					        init() {}
+					    }
+					}
+					""",
+					"Palette.swift": """
+					// A file-private type that shares the extended type's name.
+					private enum Space {
+					    static let accent = 4
+					}
+
+					@Instantiable
+					public struct Palette: Instantiable {
+					    public init() {
+					        accent = Space.accent
+					    }
+
+					    let accent: Int
+					}
+					""",
+				], dependencies: ["Kit"]),
+				ModuleFixture(name: "Feed", packageName: "Feed", swiftFileContentByFilePath: ["FeedService.swift": """
+				import Core
+				import Kit
+
+				@Instantiable(generateMock: .public)
+				public final class FeedService: Instantiable {
+				    init(panel: Space.Panel) {
+				        self.panel = panel
+				    }
+
+				    @Instantiated private let panel: Space.Panel
+				}
+				"""], dependencies: ["Core", "Kit"]),
+				ModuleFixture(name: "App", packageName: "App", swiftFileContentByFilePath: ["AppFeature.swift": """
+				import Feed
+
+				@Instantiable(generateMock: true)
+				public final class AppFeature: Instantiable {
+				    public init(feedService: FeedService) {
+				        self.feedService = feedService
+				    }
+
+				    @Instantiated private let feedService: FeedService
+				}
+				"""], dependencies: appDependencies),
+			]
+		}
+		let viewOutput = try await executeSafeDIToolMultiModuleTest(modules: modules(["Feed"]), integration: integration, filesToDelete: &filesToDelete)
+		let directOutput = try await executeSafeDIToolMultiModuleTest(modules: modules(["Core", "Feed", "Kit"]), integration: integration, filesToDelete: &filesToDelete)
+		#expect(viewOutput.modules["App"]?.generatedFiles == directOutput.modules["App"]?.generatedFiles)
+		let imports = generatedFileHeader + Self.importBlock("Core") + "\n" + Self.importBlock("Feed") + "\n" + Self.importBlock("Kit")
+		let pluginComment = integration == .moduleInfo ? "" : " // If this line does not compile, add the SafeDI plugin to the target that declares FeedService."
+		// `App`'s mock calls `FeedService`'s, which calls `Space.Panel`'s, under the enum `Feed` generated.
+		let appMock = imports + "\n\n" + """
+		#if DEBUG
+		extension AppFeature {
+		    /// Overrides for the mock dependency tree.
+		    struct SafeDIOverrides {
+		        init(
+		            feedService: FeedService.SafeDIOverrides = .init()
+		        ) {
+		            self.feedService = feedService
+		        }
+
+		        let feedService: FeedService.SafeDIOverrides
+		    }
+
+		    static func mock(
+		        safeDIOverrides: SafeDIOverrides = .init()
+		    ) -> AppFeature {
+		        _ = FeedService.__safeDI_FeedService_mock_51799E6AA5E7B634.self\(pluginComment)
+		        let feedService = FeedService.mock(safeDIOverrides: safeDIOverrides.feedService)
+		        return AppFeature(feedService: feedService)
+		    }
+		}
+		#endif
+		"""
+		#expect(viewOutput.modules["App"]?.generatedFiles == (integration == .moduleInfo
+				? ["App.swift": appMock]
+				: ["AppFeature+SafeDIMock.swift": appMock, "SafeDIMockConfiguration.swift": imports + "\n\n"]))
+		try expectEveryModuleCompiled(viewOutput)
+	}
+
+	@Test(arguments: MultiModuleIntegration.allCases)
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_computesSeamFromViewAsSeamsModuleComputesIt_whenParameterTypesAreNestedAndModuleQualified(integration: MultiModuleIntegration) async throws {
+		// Cell 26: `Feed`'s seam `FeedScreen` builds its nested `Settings`, spelled unqualified, which receives `Session`'s
+		// `Token` only if available, spelled `Session.Token`, qualified by its module. `Mid`'s seam `MidScreen` builds a
+		// `FeedScreen`, and `App`, listing `Mid` alone, computes both signatures through `Mid`'s view: the nested
+		// computation normalizes `Feed`'s declarations as `Feed`'s run did, so the call is the one `App` makes when it lists
+		// every module.
+		let modules = { (appDependencies: [String]) in
+			[
+				ModuleFixture(name: "Session", packageName: "Base", swiftFileContent: ["public struct Token {\n    public init() {}\n}"]),
+				ModuleFixture(name: "Feed", packageName: "Base", swiftFileContent: [
+					"""
+					import Session
+
+					@Instantiable(generateDependencyTree: true)
+					public struct FeedScreen: Instantiable {
+					    public init(settings: Settings) {
+					        self.settings = settings
+					    }
+
+					    @Instantiated let settings: Settings
+
+					    @Instantiable
+					    public struct Settings: Instantiable {
+					        public init(token: Session.Token?) {
+					            self.token = token
+					        }
+
+					        @Received(onlyIfAvailable: true) let token: Session.Token?
+					    }
+					}
+					""",
+				], dependencies: ["Session"]),
+				ModuleFixture(name: "Mid", packageName: "Base", swiftFileContent: ["import Feed\n\n" + seamFixtureType(named: "MidScreen", isSeam: true, declarations: ["@Instantiated let feedScreen: FeedScreen"])], dependencies: ["Feed"]),
+				ModuleFixture(name: "App", packageName: "App", swiftFileContent: ["import Mid\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let midScreen: MidScreen"])], dependencies: appDependencies),
+			]
+		}
+		let viewOutput = try await executeSafeDIToolMultiModuleTest(modules: modules(["Mid"]), integration: integration, filesToDelete: &filesToDelete)
+		let directOutput = try await executeSafeDIToolMultiModuleTest(modules: modules(["Feed", "Mid", "Session"]), integration: integration, filesToDelete: &filesToDelete)
+		#expect(viewOutput.modules["App"]?.generatedFiles == directOutput.modules["App"]?.generatedFiles)
+		let fileName = integration == .moduleInfo ? "App.swift" : "Root+SafeDI.swift"
+		let pluginComment = integration == .moduleInfo ? "" : " // If this line does not compile, add the SafeDI plugin to the target that declares MidScreen."
+		// `token` passes through `MidScreen` and `FeedScreen` to `FeedScreen.Settings`, which receives it only if available.
+		#expect(viewOutput.modules["App"]?.generatedFiles == [fileName: generatedFileHeader + Self.importBlock("Feed") + "\n" + Self.importBlock("Mid") + "\n" + Self.importBlock("Session") + "\n\n" + """
+		extension Root {
+		    public init() {
+		        func __safeDI_midScreen() -> MidScreen {
+		            _ = MidScreen.__safeDI_MidScreen_01ECDD494F42846B.self\(pluginComment)
+		            return MidScreen(token: nil)
+		        }
+		        let midScreen: MidScreen = __safeDI_midScreen()
+		        self.init(midScreen: midScreen)
+		    }
+		}
+		"""])
+		try expectEveryModuleCompiled(viewOutput)
+	}
+
 	// MARK: Tests – Names
 
 	@Test
@@ -616,6 +836,22 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 					isRoot: true,
 					declarations: ["@Instantiated let feedScreen: FeedScreen"] + (rootAlsoBuildsClock ? ["@Instantiated let clock: Clock"] : []) + (rootAlsoBuildsSession ? ["@Instantiated let session: Session"] : []),
 				),
+			], dependencies: appDependencies),
+		]
+	}
+
+	/// `Core`, in package `Shop`, declares `Badge`, whose `package` initializer receives `theme: [3 of Int]?` only if
+	/// available; `Feed`, in `Shop`, declares the seam `Service`, which builds a `Badge`; `App`, in `appPackage`, lists
+	/// `appDependencies`, and its `Screen`, which `Root` builds through an instantiator, forwards `theme` and builds a `Service`.
+	private static func packageMentionChain(appPackage: String, appDependencies: [String] = ["Feed"]) -> [ModuleFixture] {
+		[
+			ModuleFixture(name: "Core", packageName: "Shop", swiftFileContent: [
+				"@Instantiable\npublic struct Badge: Instantiable {\n    package init(theme: [3 of Int]?) {\n        self.theme = theme\n    }\n\n    @Received(onlyIfAvailable: true) let theme: [3 of Int]?\n}",
+			]),
+			ModuleFixture(name: "Feed", packageName: "Shop", swiftFileContent: ["import Core\n\n" + seamFixtureType(named: "Service", isSeam: true, declarations: ["@Instantiated let badge: Badge"])], dependencies: ["Core"]),
+			ModuleFixture(name: "App", packageName: appPackage, swiftFileContent: [
+				"import Feed\nimport SafeDI\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let screenBuilder: Instantiator<Screen>"]),
+				"import Feed\nimport SafeDI\n\n" + seamFixtureType(named: "Screen", declarations: ["@Forwarded let theme: [3 of Int]", "@Instantiated let service: Service"]),
 			], dependencies: appDependencies),
 		]
 	}
