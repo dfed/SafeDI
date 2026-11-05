@@ -1583,7 +1583,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["DefaultAuthService.swift"]):13:5: error: Dependency cycle: `AuthService` -> `AuthService`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `authService: AuthService` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
+				\(fixtures["DefaultAuthService.swift"]):13:5: error: Dependency cycle: `AuthService` -> `AuthService`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `authService: AuthService` to an instantiator.
 				\(fixtures["DefaultAuthService.swift"]):5:1: note: `AuthService` is part of the cycle
 				"""
 			},
@@ -2729,7 +2729,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):3:5: error: Dependency cycle: `A` -> `B` -> `C` -> `A`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `a: A` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
+				\(fixtures["C.swift"]):3:5: error: Dependency cycle: `A` -> `B` -> `C` -> `A`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `a: A`, `b: B`, `c: C` to an instantiator.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
@@ -2760,54 +2760,6 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 					@Instantiable
 					public final class C: Instantiable {
 					    @Instantiated let a: A
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_reportsNextDependencyThatClosesCycle_whenReportedDependencyIsChangedToInstantiator() async {
-		// The cycle `A -> B -> C -> A` of the test above, with `a` on `C` changed to an `Instantiator` as its error
-		// says: the cycle is entered from `Root`, so it now closes at `b` on `A`, which the error names in turn.
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["A.swift"]):3:5: error: Dependency cycle: `B` -> `C` -> `Instantiator<A>` -> `B`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `b: B` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
-				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
-				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
-				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public final class Root: Instantiable {
-					    @Instantiated let a: A
-					}
-					""",
-					"""
-					@Instantiable
-					public final class A: Instantiable {
-					    @Instantiated let b: B
-					}
-					""",
-					"""
-					@Instantiable
-					public final class B: Instantiable {
-					    @Instantiated let c: C
-					}
-					""",
-					"""
-					@Instantiable
-					public final class C: Instantiable {
-					    @Instantiated let a: Instantiator<A>
 					}
 					""",
 				],
@@ -3091,7 +3043,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["A.swift"]):3:5: error: Dependency cycle: `B` -> `C` -> `A` -> `B`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `b: B` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
+				\(fixtures["A.swift"]):3:5: error: Dependency cycle: `B` -> `C` -> `A` -> `B`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `b: B`, `c: C`, `a2: A` to an instantiator.
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
@@ -4205,7 +4157,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				// Each root and its cycle take fifteen lines.
 				suffixes.enumerated().map { index, suffix in
 					"""
-					\(fixtures["Root000.swift"]):\(15 * index + 14):5: error: Dependency cycle: `Partner\(suffix)` -> `Other\(suffix)` -> `Partner\(suffix)`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `partner: Partner\(suffix)` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
+					\(fixtures["Root000.swift"]):\(15 * index + 14):5: error: Dependency cycle: `Partner\(suffix)` -> `Other\(suffix)` -> `Partner\(suffix)`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `partner: Partner\(suffix)`, `other: Other\(suffix)` to an instantiator.
 					\(fixtures["Root000.swift"]):\(15 * index + 6):1: note: `Partner\(suffix)` is part of the cycle
 					\(fixtures["Root000.swift"]):\(15 * index + 11):1: note: `Other\(suffix)` is part of the cycle
 					"""
@@ -4870,18 +4822,10 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_throwsError_whenPartiallyLazyInstantiationCycleExists() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["C.swift"]):7:5: error: Dependency cycle: `A` -> `B` -> `Instantiator<C>` -> `A`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `a: A` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
-				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
-				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
-				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
+	mutating func run_writesConstantThatCallsEnclosingBuilder_whenPartiallyLazyInstantiationCycleExists() async throws {
+		// `C`'s `a` closes the cycle `a -> b -> cBuilder -> a`, which an instantiator defers, by calling the function `Root`
+		// builds `a` with.
+			let output = try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
 					@Instantiable(isRoot: true)
@@ -4927,7 +4871,29 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
-		}
+
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public init() {
+			        func __safeDI_a() -> A {
+			            func __safeDI_b() -> B {
+			                func __safeDI_cBuilder() -> C {
+			                    let a: A = __safeDI_a()
+			                    return C(a: a)
+			                }
+			                let cBuilder = Instantiator<C>(__safeDI_cBuilder)
+			                return B(cBuilder: cBuilder)
+			            }
+			            let b: B = __safeDI_b()
+			            return A(b: b)
+			        }
+			        let a: A = __safeDI_a()
+			        self.init(a: a)
+			    }
+			}
+			""",
+		])
 	}
 
 	// MARK: Diagnostic Format Tests
@@ -5063,7 +5029,7 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):7:5: error: Dependency cycle: `A` -> `BProtocol` -> `A`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `a: A` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
+				\(fixtures["B.swift"]):7:5: error: Dependency cycle: `A` -> `BProtocol` -> `A`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `a: A`, `b: BProtocol` to an instantiator.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				"""
 			},

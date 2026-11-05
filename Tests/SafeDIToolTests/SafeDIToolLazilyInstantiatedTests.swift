@@ -2348,7 +2348,7 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["B.swift"]):7:5: error: Dependency cycle: `A` -> `B` -> `A`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `a: LazilyInstantiated<A>` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`, `b: LazilyInstantiated<B>` is validated as `b: B`.
+				\(fixtures["B.swift"]):7:5: error: Dependency cycle: `A` -> `B` -> `A`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `a: A`, `b: B` to an instantiator. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `a: LazilyInstantiated<A>` is validated as `a: A`, `b: LazilyInstantiated<B>` is validated as `b: B`.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				"""
@@ -2597,17 +2597,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_throwsError_whenCycleEnteredThroughLazilyInstantiatedPropertyContainsInstantiator() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["A.swift"]):7:5: error: Dependency cycle: `B` -> `Instantiator<A>` -> `B`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `b: LazilyInstantiated<B>` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too. A lazily instantiated dependency is created once, so it cannot break a dependency cycle: `b: LazilyInstantiated<B>` is validated as `b: B`.
-				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
-				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
+	mutating func run_handsEnclosingBuilderToWrapper_whenCycleEnteredThroughLazilyInstantiatedPropertyContainsInstantiator() async throws {
+		// `A`'s `b` closes the cycle `b -> aBuilder -> b`, which an instantiator defers, by handing the function `Root` builds
+		// `b` with to its wrapper.
+			let output = try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
 					@Instantiable(isRoot: true)
@@ -2643,7 +2636,25 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
-		}
+
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_b() -> B {
+			            func __safeDI_aBuilder() -> A {
+			                let b = LazilyInstantiated<B>(__safeDI_b)
+			                return A(b: b)
+			            }
+			            let aBuilder = Instantiator<A>(__safeDI_aBuilder)
+			            return B(aBuilder: aBuilder)
+			        }
+			        let b = LazilyInstantiated<B>(__safeDI_b)
+			        self.init(b: b)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test

@@ -442,6 +442,8 @@ final class Scope: Hashable {
 			scope: self,
 			property: property,
 			propertyStack: propertyStack,
+			concreteTypeStack: propertyStack.map { _ in nil },
+			propertiesBeingBuilt: propertyStack,
 			receivableProperties: receivableProperties,
 			lazilyInstantiatedInstanceProperties: lazilyInstantiatedInstanceProperties,
 			alwaysAvailableProperties: alwaysAvailableProperties,
@@ -506,10 +508,18 @@ final class Scope: Hashable {
 /// A scope whose generator `Scope.createScopeGenerator` is creating, with what the generator is created from once
 /// the generators of the scopes it creates exist.
 private struct ScopeGeneratorUnderConstruction {
+	/// - Parameters:
+	///   - concreteTypeStack: The concrete types of the scopes `propertyStack`'s properties are built for, beside it, or
+	///     `nil` for a property of a fill's stack (`SeamSignature.Hole.fillPropertyStack`), which records none.
+	///   - propertiesBeingBuilt: Those of `propertyStack` whose declaration is the nearest of its property on the path to
+	///     this scope: still being built here. A scope between that declares the same property – one that closes a cycle,
+	///     or one built for another concrete type – is what a receive of it here is passed.
 	init(
 		scope: Scope,
 		property: Property?,
 		propertyStack: [Property],
+		concreteTypeStack: [TypeDescription?],
+		propertiesBeingBuilt: [Property],
 		receivableProperties: Set<Property>,
 		lazilyInstantiatedInstanceProperties: Set<Property>,
 		alwaysAvailableProperties: Set<Property>,
@@ -533,23 +543,47 @@ private struct ScopeGeneratorUnderConstruction {
 		cycleParameterLabelsBeingBuilt: Set<String>,
 	) {
 		var childPropertyStack = propertyStack
-		let isPropertyCycle: Bool
+		var childConcreteTypeStack = concreteTypeStack
+		// What this scope's own receives and the scopes it builds find still being built: this scope's own property, and
+		// those being built around it that it does not declare again itself.
+		var childPropertiesBeingBuilt = propertiesBeingBuilt.isEmpty ? propertiesBeingBuilt : propertiesBeingBuilt.filter {
+			!scope.createdProperties.contains($0) && !scope.declaredLazilyInstantiatedInstanceProperties.contains($0)
+		}
+		// The index on `propertyStack` of the entry this scope repeats when it closes a cycle, and of the declaration that
+		// entry is: they differ where the entry is the instance a lazily instantiated declaration offers.
+		var closedOnEntryIndex: Int?
+		var closedOnDeclarationIndex: Int?
 		// The labels of the parameters with a form no declaration creates that a scope in the body of the innermost function
 		// taking them is built as, this one included (see `childCycleParameterLabelsBeingBuilt`): found here, as
 		// `childPropertyStack` is.
 		var cycleParameterLabelsBeingBuilt = cycleParameterLabelsBeingBuilt
 		if let property {
-			isPropertyCycle = propertyStack.contains(property)
+			// A scope closes a cycle where validation finds one: it repeats a declaration of the same property, as cycle
+			// validation sees it (a lazily instantiated property as the constant it stands for), built for the same
+			// concrete type. An entry of a fill's stack records no type and is matched by its property alone.
+			let validatedProperty = property.asValidatedForDependencyCycles
+			let concreteType = scope.instantiable.concreteInstantiable
+			closedOnEntryIndex = propertyStack.indices.first {
+				propertyStack[$0].asValidatedForDependencyCycles == validatedProperty && (concreteTypeStack[$0] ?? concreteType) == concreteType
+			}
+			// A lazily instantiated declaration's instance is on the stack just inside the declaration.
+			closedOnDeclarationIndex = closedOnEntryIndex.map { index in
+				propertyStack.indices.contains(index + 1) && propertyStack[index + 1].asLazilyInstantiatedInstanceProperty == propertyStack[index] ? index + 1 : index
+			}
 			childPropertyStack.insert(property, at: 0)
+			childConcreteTypeStack.insert(concreteType, at: 0)
+			childPropertiesBeingBuilt.insert(property, at: 0)
 			if let instanceProperty = property.asLazilyInstantiatedInstanceProperty {
 				childPropertyStack.insert(instanceProperty, at: 0)
+				childConcreteTypeStack.insert(concreteType, at: 0)
+				childPropertiesBeingBuilt.insert(instanceProperty, at: 0)
 			}
 			if cycleParameterFormsNoDeclarationCreates.contains(where: { $0.label == property.label }) {
 				cycleParameterLabelsBeingBuilt.insert(property.label)
 			}
-		} else {
-			isPropertyCycle = false
 		}
+		let closedOnProperty = closedOnDeclarationIndex.map { propertyStack[$0] }
+		let isPropertyCycle = closedOnProperty != nil
 		// The parameters of this scope's builder function that the pass before found, when a lazy cycle closes on it,
 		// or those of the function a cycle-closing scope refers to. Nearly every scope has neither.
 		let ownCycleParameters = if !isPropertyCycle, property != nil {
@@ -557,11 +591,7 @@ private struct ScopeGeneratorUnderConstruction {
 		} else {
 			[CycleParameter]()
 		}
-		let closedOnContext = if isPropertyCycle, let property {
-			cycleParameterContexts[property]
-		} else {
-			CycleParameterContext?.none
-		}
+		let closedOnContext = closedOnProperty.flatMap { cycleParameterContexts[$0] }
 		let enclosingScopeReceivableProperties = receivableProperties
 		var receivableProperties = receivableProperties.union(scope.createdProperties)
 		// The parameters this scope passes the builder function a lazy cycle closes on that are unavailable where it
@@ -637,7 +667,7 @@ private struct ScopeGeneratorUnderConstruction {
 				// received optional property as the non-optional value it builds, so a receive of either form of
 				// it is unavailable inside the tree it builds.
 				let unwrappedProperty = property.asUnwrappedProperty
-				return childPropertyStack.contains {
+				return childPropertiesBeingBuilt.contains {
 					$0.label == unwrappedProperty.label && $0.typeDescription.unwrapped == unwrappedProperty.typeDescription
 				}
 			} else {
@@ -654,8 +684,8 @@ private struct ScopeGeneratorUnderConstruction {
 							|| lazilyInstantiatedInstanceProperties.contains(property),
 					) && !(cycleParameterLabelsBeingBuilt.contains(property.label) && cycleParameterFormsNoDeclarationCreates.contains(property))
 				}
-				let propertyIsAvailableInParentStack = isReceivable(property) && !childPropertyStack.contains(property)
-				let unwrappedPropertyIsAvailableInParentStack = isReceivable(property.asUnwrappedProperty) && !childPropertyStack.contains(property.asUnwrappedProperty)
+				let propertyIsAvailableInParentStack = isReceivable(property) && !childPropertiesBeingBuilt.contains(property)
+				let unwrappedPropertyIsAvailableInParentStack = isReceivable(property.asUnwrappedProperty) && !childPropertiesBeingBuilt.contains(property.asUnwrappedProperty)
 				return !(propertyIsAvailableInParentStack || unwrappedPropertyIsAvailableInParentStack)
 			}
 		}
@@ -664,7 +694,7 @@ private struct ScopeGeneratorUnderConstruction {
 			// the function declares, or else the function's own parameter, which is always in scope. A declaration that
 			// does not provide the parameter's form, or that is still being built around this scope, is unavailable. The
 			// function takes no parameter of this scope's own label (see `ScopeGenerator.foundCycleParameters`).
-			let propertiesBuiltBetween = childPropertyStack.dropFirst().prefix { $0 != property }
+			let propertiesBuiltBetween = propertyStack.prefix(closedOnEntryIndex ?? 0)
 			for parameter in closedOnContext.parameters where !parameter.isRequired {
 				guard let declaredForms = closedOnContext.nearestDeclaredForms(ofLabel: parameter.property.label) else { continue }
 				let providingForm = declaredForms.contains(parameter.property) ? parameter.property : parameter.property.asUnwrappedProperty
@@ -742,6 +772,8 @@ private struct ScopeGeneratorUnderConstruction {
 		// A scope that closes a cycle creates no children.
 		propertiesToGenerate = isPropertyCycle ? [] : scope.propertiesToGenerate
 		self.childPropertyStack = childPropertyStack
+		self.childConcreteTypeStack = childConcreteTypeStack
+		self.childPropertiesBeingBuilt = childPropertiesBeingBuilt
 		self.enclosingScopeReceivableProperties = enclosingScopeReceivableProperties
 		self.receivableProperties = receivableProperties
 		self.lazilyInstantiatedInstanceProperties = lazilyInstantiatedInstanceProperties
@@ -812,6 +844,7 @@ private struct ScopeGeneratorUnderConstruction {
 		self.fill = fill
 		self.erasedToConcreteExistential = erasedToConcreteExistential
 		self.isPropertyCycle = isPropertyCycle
+		self.closedOnProperty = closedOnProperty
 		self.forMockGeneration = forMockGeneration
 		self.startsCodeGeneration = startsCodeGeneration
 		self.buildsWithHandWrittenMocks = buildsWithHandWrittenMocks
@@ -885,6 +918,8 @@ private struct ScopeGeneratorUnderConstruction {
 			scope: scope,
 			property: hole.property,
 			propertyStack: hole.fillPropertyStack,
+			concreteTypeStack: hole.fillPropertyStack.map { _ in nil },
+			propertiesBeingBuilt: hole.fillPropertyStack,
 			// A value the fill takes from the caller's scope is available as it would be to a pass-through of the call:
 			// one the caller's path is still building is not, so a receive of it only if available is passed `nil`.
 			receivableProperties: childReceivableProperties.filter { !fieldLabels.contains($0.label) && !childPropertyStack.contains($0) }.union(fieldForms),
@@ -946,6 +981,8 @@ private struct ScopeGeneratorUnderConstruction {
 				scope: scope,
 				property: property,
 				propertyStack: childPropertyStack,
+				concreteTypeStack: childConcreteTypeStack,
+				propertiesBeingBuilt: childPropertiesBeingBuilt,
 				receivableProperties: childReceivableProperties,
 				lazilyInstantiatedInstanceProperties: childLazilyInstantiatedInstanceProperties,
 				alwaysAvailableProperties: alwaysAvailableProperties,
@@ -1037,6 +1074,7 @@ private struct ScopeGeneratorUnderConstruction {
 			forwardedLazilyInstantiatedInstanceProperties: scope.forwardedLazilyInstantiatedInstanceProperties,
 			erasedToConcreteExistential: erasedToConcreteExistential,
 			isPropertyCycle: isPropertyCycle,
+			closedOnProperty: closedOnProperty,
 			constructionComments: scope.constructionComments,
 			seamCall: scope.seamCall,
 			publicMockCall: scope.publicMockCall,
@@ -1102,6 +1140,11 @@ private struct ScopeGeneratorUnderConstruction {
 	/// The index in `propertiesToGenerate` of the next property to create a generator for.
 	private var nextPropertyIndex = 0
 	private let childPropertyStack: [Property]
+	/// The concrete types of the scopes `childPropertyStack`'s properties are built for, beside it (see
+	/// `init(scope:property:propertyStack:concreteTypeStack:…)`).
+	private let childConcreteTypeStack: [TypeDescription?]
+	/// What the scopes this scope builds find still being built (see `init(scope:property:propertyStack:concreteTypeStack:propertiesBeingBuilt:…)`).
+	private let childPropertiesBeingBuilt: [Property]
 	/// The properties the scopes enclosing this one make receivable.
 	private let enclosingScopeReceivableProperties: Set<Property>
 	/// `enclosingScopeReceivableProperties` and the properties this scope creates.
@@ -1240,6 +1283,8 @@ private struct ScopeGeneratorUnderConstruction {
 	private var nextFillIndex = 0
 	private let erasedToConcreteExistential: Bool
 	private let isPropertyCycle: Bool
+	/// The declaration this scope repeats when it closes a cycle (see `ScopeGenerator.closedOnProperty`), or `nil`.
+	private let closedOnProperty: Property?
 	private let forMockGeneration: Bool
 	private let startsCodeGeneration: Bool
 

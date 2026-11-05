@@ -40,17 +40,10 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_throwsError_whenPartiallyLazyCycleThroughInstantiatorBoundary() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
-				"""
-				\(fixtures["CachedItem.swift"]):7:5: error: Dependency cycle: `Player` -> `Instantiator<CachedItem>` -> `Player`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `player: Player` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
-				\(fixtures["Player.swift"]):1:1: note: `Player` is part of the cycle
-				\(fixtures["CachedItem.swift"]):1:1: note: `CachedItem` is part of the cycle
-				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
+	mutating func mock_closesCycleWithConstantCallingEnclosingBuilder_whenPartiallyLazyCycleCrossesInstantiatorBoundary() async throws {
+		// `CachedItem.mock(name:)` builds `player`, whose instantiator builds a `CachedItem` again, whose `player` closes the
+		// cycle by calling the function the mock builds `player` with.
+		let output = try await executeSafeDIToolTest(
 				swiftFileContent: [
 					"""
 					@Instantiable(generateMock: true)
@@ -76,7 +69,114 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 				buildSwiftOutputDirectory: true,
 				filesToDelete: &filesToDelete,
 			)
-		}
+
+		#expect(output.generatedFiles == [
+			"CachedItem+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension CachedItem {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            player: Player.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.player = player
+			        }
+
+			        let player: Player.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        name: String,
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> CachedItem {
+			        func __safeDI_player() -> Player {
+			            func __safeDI_cachedItemBuilder(name: String) -> CachedItem {
+			                let player: Player = __safeDI_player()
+			                return CachedItem(player: player, name: name)
+			            }
+			            let cachedItemBuilder = Instantiator<CachedItem> {
+			                __safeDI_cachedItemBuilder(name: $0)
+			            }
+			            return if let safeDIBuilder = safeDIOverrides.player.safeDIBuilder { safeDIBuilder(cachedItemBuilder) } else { Player(cachedItemBuilder: cachedItemBuilder) }
+			        }
+			        let player: Player = __safeDI_player()
+			        return CachedItem(player: player, name: name)
+			    }
+			}
+			#endif
+
+			#if DEBUG
+			extension CachedItem {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            player: Player.SafeDIMockConfiguration = .init(),
+			            _ safeDIBuilder: ((Player, String) -> CachedItem)? = nil
+			        ) {
+			            self.player = player
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        let player: Player.SafeDIMockConfiguration
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Player, String) -> CachedItem)?
+			    }
+			}
+			#endif
+			""",
+			"Player+SafeDIMock.swift": generatedFileHeader + """
+			#if DEBUG
+			extension Player {
+			    /// Overrides for the mock dependency tree.
+			    struct SafeDIOverrides {
+			        init(
+			            cachedItemBuilder: CachedItem.SafeDIMockConfiguration = .init()
+			        ) {
+			            self.cachedItemBuilder = cachedItemBuilder
+			        }
+
+			        let cachedItemBuilder: CachedItem.SafeDIMockConfiguration
+			    }
+
+			    static func mock(
+			        safeDIOverrides: SafeDIOverrides = .init()
+			    ) -> Player {
+			        func __safeDI_cachedItemBuilder(name: String) -> CachedItem {
+			            func __safeDI_player() -> Player {
+			                let cachedItemBuilder = Instantiator<CachedItem> {
+			                    __safeDI_cachedItemBuilder(name: $0)
+			                }
+			                return if let safeDIBuilder = safeDIOverrides.cachedItemBuilder.player.safeDIBuilder { safeDIBuilder(cachedItemBuilder) } else { Player(cachedItemBuilder: cachedItemBuilder) }
+			            }
+			            let player: Player = __safeDI_player()
+			            return if let safeDIBuilder = safeDIOverrides.cachedItemBuilder.safeDIBuilder { safeDIBuilder(player, name) } else { CachedItem(player: player, name: name) }
+			        }
+			        let cachedItemBuilder = Instantiator<CachedItem> {
+			            __safeDI_cachedItemBuilder(name: $0)
+			        }
+			        return Player(cachedItemBuilder: cachedItemBuilder)
+			    }
+			}
+			#endif
+
+			#if DEBUG
+			extension Player {
+			    /// Configuration for how this type is constructed within a mock tree.
+			    struct SafeDIMockConfiguration {
+			        init(
+			            _ safeDIBuilder: ((Instantiator<CachedItem>) -> Player)? = nil
+			        ) {
+			            self.safeDIBuilder = safeDIBuilder
+			        }
+
+			        /// Overrides how this type is constructed. Parameters match the type’s initializer or custom mock method. When `nil`, the default generated construction function is used.
+			        let safeDIBuilder: ((Instantiator<CachedItem>) -> Player)?
+			    }
+			}
+			#endif
+			""",
+			"SafeDIMockConfiguration.swift": emptyMockConfigurationFileOutput,
+		])
 	}
 
 	@Test
@@ -85,7 +185,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["C.swift"]):4:5: error: Dependency cycle: `A` -> `B` -> `C` -> `A`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `a: A` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
+				\(fixtures["C.swift"]):4:5: error: Dependency cycle: `A` -> `B` -> `C` -> `A`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `a: A`, `b: B`, `c: C` to an instantiator.
 				\(fixtures["A.swift"]):1:1: note: `A` is part of the cycle
 				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
 				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
@@ -2197,7 +2297,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["SelfReferencing.swift"]):4:5: error: Dependency cycle: `SelfReferencing` -> `SelfReferencing`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `selfReferencing: SelfReferencing` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
+				\(fixtures["SelfReferencing.swift"]):4:5: error: Dependency cycle: `SelfReferencing` -> `SelfReferencing`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `selfReferencing: SelfReferencing` to an instantiator.
 				\(fixtures["SelfReferencing.swift"]):1:1: note: `SelfReferencing` is part of the cycle
 				"""
 			},
@@ -3191,7 +3291,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 				// Each type and its partner take ten lines.
 				suffixes.enumerated().map { index, suffix in
 					"""
-					\(fixtures["Mock000.swift"]):\(10 * index + 4):5: error: Dependency cycle: `Partner\(suffix)` -> `Mock\(suffix)` -> `Partner\(suffix)`. SafeDI accepts a dependency cycle only if the dependency that closes it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change `partner: Partner\(suffix)` to an instantiator; SafeDI then reports any other dependency in the cycle that must change too.
+					\(fixtures["Mock000.swift"]):\(10 * index + 4):5: error: Dependency cycle: `Partner\(suffix)` -> `Mock\(suffix)` -> `Partner\(suffix)`. SafeDI accepts a dependency cycle when one of the dependencies that instantiate along it is an @Instantiated instantiator, such as an `Instantiator` or `ErasedInstantiator`, which builds its type each time it is called. Change one of `partner: Partner\(suffix)`, `mock: Mock\(suffix)` to an instantiator.
 					\(fixtures["Mock000.swift"]):\(10 * index + 6):1: note: `Partner\(suffix)` is part of the cycle
 					\(fixtures["Mock000.swift"]):\(10 * index + 1):1: note: `Mock\(suffix)` is part of the cycle
 					"""
