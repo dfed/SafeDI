@@ -533,7 +533,10 @@ struct FixturePaths {
 	}
 
 	/// The path a build system hands the compiler for the named fixture when a build tool plugin runs the tool:
-	/// absolute, beginning with the fixture directory as the build system reports it.
+	/// absolute, beginning with the fixture directory as the build system reports it. `run()` prints a diagnostic at
+	/// this path, but a diagnostic `generate()` returns names the file as scan's cache does, normalized under the
+	/// resolved root, which `NormalizedFilePath(compilerPath(of:)).path` spells when the fixture directory is reported
+	/// resolved. The two differ on Apple platforms in a checkout under `/private/tmp`, since normalizing drops `/private`.
 	func compilerPath(of fileName: String, sourceLocation: SourceLocation = #_sourceLocation) -> String {
 		path(of: fileName, in: compilerPathsByFileName, sourceLocation: sourceLocation)
 	}

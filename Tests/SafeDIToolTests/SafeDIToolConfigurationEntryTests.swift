@@ -262,7 +262,7 @@ struct SafeDIToolConfigurationEntryTests: ~Copyable {
 		)
 
 		#expect(output.warnings.map(\.formatted) == [
-			"\(output.fixtures.compilerPath(of: "SafeDIConfiguration.swift")):1:1: warning: This #SafeDIConfiguration lists `\(missingDirectory)` in additionalDirectoriesToInclude, but nothing exists at `\(missingDirectory)`, so SafeDI reads no Swift files from it. Correct the path, or remove it from additionalDirectoriesToInclude.",
+			"\(NormalizedFilePath(output.fixtures.compilerPath(of: "SafeDIConfiguration.swift")).path):1:1: warning: This #SafeDIConfiguration lists `\(missingDirectory)` in additionalDirectoriesToInclude, but nothing exists at `\(missingDirectory)`, so SafeDI reads no Swift files from it. Correct the path, or remove it from additionalDirectoriesToInclude.",
 		])
 	}
 
@@ -502,7 +502,7 @@ struct SafeDIToolConfigurationEntryTests: ~Copyable {
 	mutating func generate_throwsError_whenAdditionalMockNamesNoInstantiableTypeAndGenerateScansForItself() async {
 		await assertThrowsError(
 			diagnostics: { fixtures in
-				"\(fixtures.compilerPath(of: "SafeDIConfiguration.swift")):1:1: error: This #SafeDIConfiguration lists `Unknown` in additionalMocksToGenerate, but no @Instantiable declaration SafeDI read declares `Unknown`, so SafeDI cannot generate its mock. Correct the name to that of an @Instantiable type, or remove `Unknown` from additionalMocksToGenerate."
+				"\(NormalizedFilePath(fixtures.compilerPath(of: "SafeDIConfiguration.swift")).path):1:1: error: This #SafeDIConfiguration lists `Unknown` in additionalMocksToGenerate, but no @Instantiable declaration SafeDI read declares `Unknown`, so SafeDI cannot generate its mock. Correct the name to that of an @Instantiable type, or remove `Unknown` from additionalMocksToGenerate."
 			},
 		) {
 			try await executeSafeDIToolTest(
