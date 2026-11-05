@@ -24,7 +24,7 @@ import SafeDI
 ///
 /// A different `@Instantiable` fulfills `EventLogger` in debug and release builds, so SafeDITool
 /// has to know whether `DEBUG` is active to pick the right one. `DEBUG` reaches SafeDITool through the SafeDITuist plugin, which forwards the target's
-/// `SWIFT_ACTIVE_COMPILATION_CONDITIONS` build setting; Tuist's default Debug configuration sets `DEBUG` there.
+/// `SWIFT_ACTIVE_COMPILATION_CONDITIONS` and `OTHER_SWIFT_FLAGS` build settings; Tuist's default Debug configuration sets `DEBUG` in the first.
 public protocol EventLogger {
 	func record(_ event: String)
 }
