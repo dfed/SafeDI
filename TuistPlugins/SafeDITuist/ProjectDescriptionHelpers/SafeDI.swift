@@ -16,14 +16,18 @@ import ProjectDescription
 //   add to a target's `sources`. Always at
 //   `$(DERIVED_FILE_DIR)/SafeDIGenerated.swift`. Adding or removing
 //   `@Instantiable` declarations doesn't change this path — it just
-//   changes the file's contents — so Tuist regeneration is *not*
-//   required after annotation changes.
+//   changes the file's contents — so a change to a file the target
+//   already lists needs a build, not `tuist generate`. A new Swift file
+//   needs `tuist generate`, which makes it one of the script's inputs
+//   (see `preCompileScript`).
 //
 // Both helpers depend on the SafeDIToolBinary artifact bundle that
 // `tuist install` resolves via `Tuist/Package.swift`. The bundle
 // path is implementation detail of the plugin; consumers just need
 // SafeDI declared as a package in `Tuist/Package.swift` with its
-// default `prebuilt` trait so the bundle is downloaded.
+// default `prebuilt` trait so the bundle is downloaded. The script
+// finds the bundle from any project of the workspace, including one
+// in a subdirectory (`Projects/Feature/Project.swift`).
 
 public enum SafeDI {
 	/// The single generated-Swift source entry to add to a target's
@@ -54,17 +58,26 @@ public enum SafeDI {
 	///
 	/// The helper assumes the target's Swift sources live under
 	/// `$SRCROOT/<module>/**/*.swift`. That single glob feeds both the
-	/// script's `inputPaths` (so Xcode reruns the phase only when those
-	/// files change) and the script's own `find` of files to pass to
-	/// `SafeDITool generate`. If your module's sources don't fit that
-	/// shape, build the `TargetScript.pre` yourself rather than risk
-	/// drift between the two — Xcode would skip rebuilds when files
-	/// outside `inputPaths` changed but the script still read them.
+	/// script's `inputPaths` and the script's own `find` of files to pass
+	/// to `SafeDITool generate`. Tuist expands the glob when `tuist
+	/// generate` runs, so the inputs are the files that existed then:
+	/// Xcode reruns the phase when one of them changes, and a Swift file
+	/// added since is read only when the phase next runs for another
+	/// change. After adding a file, run `tuist generate`, which a target
+	/// with buildable folders also needs: it compiles the new file
+	/// without it, but its phase does not run for the file. If your
+	/// module's sources don't fit that shape, build the
+	/// `TargetScript.pre` yourself rather than risk drift between the
+	/// two — Xcode would skip rebuilds when files outside `inputPaths`
+	/// changed but the script still read them.
 	///
 	/// - Parameters:
 	///   - module: Directory under `$SRCROOT` holding the target's
 	///     Swift sources. Also the basename of the module-info
-	///     artifact this target emits.
+	///     artifact this target emits, so it must be distinct across
+	///     the workspace's projects (name the sources directory after
+	///     the module, as the example's `Projects/Subproject/Subproject/`
+	///     does).
 	///   - dependencies: Modules whose `.safedi` artifacts this target
 	///     consumes. Each resolves to
 	///     `$(BUILT_PRODUCTS_DIR)/SafeDI/<name>.safedi`. Tuist target
@@ -139,12 +152,26 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 			;;
 	esac
 
-	artifact_bundle="$SRCROOT/Tuist/.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle"
+	# `tuist install` unpacks SafeDITool into `Tuist/.build` beside
+	# `Tuist/Package.swift`, in the workspace's root. A project in a
+	# subdirectory (`Projects/Feature/Project.swift`) has that
+	# subdirectory as its `$SRCROOT`, so look in the nearest directory,
+	# from `$SRCROOT` up, that holds `Tuist/Package.swift`.
+	tuist_root="$SRCROOT"
+	while [ ! -f "$tuist_root/Tuist/Package.swift" ]; do
+		parent_directory=$(dirname "$tuist_root")
+		if [ "$parent_directory" = "$tuist_root" ]; then
+			echo "error: SafeDI plugin: no Tuist/Package.swift found in $SRCROOT or any directory above it. Depend on SafeDI in the workspace's Tuist/Package.swift, and run \\`tuist install\\` to fetch SafeDITool." >&2
+			exit 5
+		fi
+		tuist_root="$parent_directory"
+	done
+	artifact_bundle="$tuist_root/Tuist/.build/artifacts/safedi/SafeDIToolBinary/SafeDITool.artifactbundle"
 	safedi_tool="$artifact_bundle/$tool_variant/bin/SafeDITool"
 
 	if [ ! -x "$safedi_tool" ]; then
 		echo "error: SafeDI plugin: SafeDITool not found at $safedi_tool" >&2
-		echo "       run \\`tuist install\\` to fetch it." >&2
+		echo "       run \\`tuist install\\` in $tuist_root to fetch it." >&2
 		exit 5
 	fi
 
@@ -218,33 +245,38 @@ private func scriptBody(module: String, dependencies: [String]) -> String {
 		set -- "$@" --dependent-module-info-file-path "$dependency_csv"
 	fi
 
+	# SafeDITool releases before an option existed reject it, so a
+	# plugin newer than the pinned binary forwards an option only when
+	# the binary's help, read once here, advertises it.
+	generate_help=$("$safedi_tool" generate --help) || generate_help=""
+
 	# Forward the target's active compilation conditions so SafeDITool
 	# scans the same `#if` clauses swiftc compiles. Xcode exports the
 	# build setting space-separated, so it is left unquoted to word-split.
-	# SafeDITool releases before the option existed reject it, so a
-	# plugin newer than the pinned binary only forwards when the binary
-	# advertises the option.
-	if [ -n "${SWIFT_ACTIVE_COMPILATION_CONDITIONS:-}" ] \\
-		&& "$safedi_tool" generate --help | grep -q -- '--active-compilation-conditions'; then
-		# shellcheck disable=SC2086
-		set -- "$@" --active-compilation-conditions $SWIFT_ACTIVE_COMPILATION_CONDITIONS
+	if [ -n "${SWIFT_ACTIVE_COMPILATION_CONDITIONS:-}" ]; then
+		case "$generate_help" in
+			*--active-compilation-conditions*)
+				# shellcheck disable=SC2086
+				set -- "$@" --active-compilation-conditions $SWIFT_ACTIVE_COMPILATION_CONDITIONS
+				;;
+		esac
 	fi
 
 	# Name the module this target compiles and its package, which
 	# SafeDITool records in this target's `.safedi` artifact, beside the
-	# modules the dependencies' `.safedi` artifacts record. SafeDITool
-	# releases before the options existed reject them, so they are
-	# forwarded only when the binary advertises them. The package is
-	# named only when the target sets `SWIFT_PACKAGE_NAME`, which Xcode
-	# passes the compiler as `-package-name`.
-	if "$safedi_tool" generate --help | grep -q -- '--module-name'; then
-		if [ -n "${PRODUCT_MODULE_NAME:-}" ]; then
-			set -- "$@" --module-name "$PRODUCT_MODULE_NAME"
-		fi
-		if [ -n "${SWIFT_PACKAGE_NAME:-}" ]; then
-			set -- "$@" --package-name "$SWIFT_PACKAGE_NAME"
-		fi
-	fi
+	# modules the dependencies' `.safedi` artifacts record. The package
+	# is named only when the target sets `SWIFT_PACKAGE_NAME`, which
+	# Xcode passes the compiler as `-package-name`.
+	case "$generate_help" in
+		*--module-name*)
+			if [ -n "${PRODUCT_MODULE_NAME:-}" ]; then
+				set -- "$@" --module-name "$PRODUCT_MODULE_NAME"
+			fi
+			if [ -n "${SWIFT_PACKAGE_NAME:-}" ]; then
+				set -- "$@" --package-name "$SWIFT_PACKAGE_NAME"
+			fi
+			;;
+	esac
 
 	"$safedi_tool" generate "$@"
 

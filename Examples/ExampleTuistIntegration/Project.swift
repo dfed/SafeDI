@@ -11,7 +11,13 @@ import SafeDITuist
 //
 // Adding/removing `@Instantiable` declarations changes the contents
 // of `SafeDIGenerated.swift` but not its path, so Xcode picks them
-// up on the next build. No `tuist generate` round-trip required.
+// up on the next build. No `tuist generate` round-trip required,
+// except after adding a Swift file, which `tuist generate` makes an
+// input of the script phase.
+//
+// The `Subproject` framework this app depends on is declared in
+// `Projects/Subproject/Project.swift`, a project in a subdirectory of
+// the workspace (see `Workspace.swift`).
 //
 // Bumping SafeDI: edit `Tuist/Package.swift` only.
 
@@ -20,24 +26,6 @@ let project = Project(
 	// Treating warnings as errors makes CI fail on a warning in SafeDI's generated code.
 	settings: .settings(base: ["SWIFT_TREAT_WARNINGS_AS_ERRORS": "YES"]),
 	targets: [
-		.target(
-			name: "Subproject",
-			destinations: [.mac],
-			product: .framework,
-			bundleId: "com.safedi.ExampleTuistIntegration.Subproject",
-			deploymentTargets: .macOS("14.0"),
-			infoPlist: .default,
-			sources: SourceFilesList(globs: [
-				.glob("Subproject/**/*.swift"),
-				SafeDI.generatedSource,
-			]),
-			scripts: [
-				SafeDI.preCompileScript(module: "Subproject"),
-			],
-			dependencies: [
-				.external(name: "SafeDI"),
-			],
-		),
 		.target(
 			name: "ExampleTuistIntegration",
 			destinations: [.mac],
@@ -64,7 +52,7 @@ let project = Project(
 				),
 			],
 			dependencies: [
-				.target(name: "Subproject"),
+				.project(target: "Subproject", path: "Projects/Subproject"),
 				.external(name: "SafeDI"),
 			],
 		),
