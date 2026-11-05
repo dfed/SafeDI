@@ -203,14 +203,15 @@ struct SafeDIToolSeamHarnessOptionTests: ~Copyable {
 		#endif
 
 		extension Service {
-		    public init(token: Token) {
-		        let badge = Badge(token: token)
+		    public init(token __safeDI_token: @autoclosure @escaping () -> Token) {
+		        let token = LazilyInstantiated<Token>(__safeDI_token)
+		        let badge = Badge(token: token.instance)
 		        self.init(badge: badge)
 		    }
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_1EB503BFA23A82BA {}
+		    public enum __safeDI_Service_F2F345803C710CE2 {}
 		}
 		"""
 		switch integration {

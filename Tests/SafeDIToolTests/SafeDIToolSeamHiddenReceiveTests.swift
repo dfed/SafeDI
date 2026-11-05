@@ -173,7 +173,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_0A0B087775B360DD.self
+			            _ = Screen.__safeDI_Screen_8E2073A8FADADC31.self
 			            return Screen(user: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -195,7 +195,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_0A0B087775B360DD {}
+			    public enum __safeDI_Screen_8E2073A8FADADC31 {}
 			}
 			""",
 		])
@@ -305,7 +305,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			    public init() {
 			        let token = Secret()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+			            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 			            return Screen(token: token)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -318,7 +318,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			    public init(token: Secret?) {
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-			            let token: (any Auth)? = token
+			            let token: (any Auth)? = token.instance
 			            #sourceLocation()
 			            return Detail(token: token)
 			        }
@@ -328,7 +328,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_D306FBD537400E08 {}
+			    public enum __safeDI_Screen_B4509263952C7814 {}
 			}
 			""",
 		])
@@ -368,7 +368,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			extension Root {
 			    public init() {
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+			            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 			            return Screen(token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -381,7 +381,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			    public init(token: Secret?) {
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-			            let token: (any Auth)? = token
+			            let token: (any Auth)? = token.instance
 			            #sourceLocation()
 			            return Detail(token: token)
 			        }
@@ -391,7 +391,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_D306FBD537400E08 {}
+			    public enum __safeDI_Screen_B4509263952C7814 {}
 			}
 			""",
 		])
@@ -429,7 +429,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			    public init() {
 			        let token = Secret()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_AC3B2DB59BEF585F.self
+			            _ = Screen.__safeDI_Screen_55AF83B7D12DE285.self
 			            return Screen(token: token)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -439,21 +439,22 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public init(token: Secret) {
+			    public init(token __safeDI_token_: @autoclosure @escaping () -> Secret) {
+			        let token = LazilyInstantiated<Secret>(__safeDI_token_)
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-			            let token: (any Auth)? = token
+			            let token: (any Auth)? = token.instance
 			            #sourceLocation()
 			            return Detail(token: token)
 			        }
 			        let detail: Detail = __safeDI_detail()
-			        let consumer = Consumer(token: token)
+			        let consumer = Consumer(token: token.instance)
 			        self.init(detail: detail, consumer: consumer)
 			    }
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_AC3B2DB59BEF585F {}
+			    public enum __safeDI_Screen_55AF83B7D12DE285 {}
 			}
 			""",
 		])
@@ -493,7 +494,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			    public init() {
 			        let token = Secret()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+			            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 			            return Screen(token: token)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -506,7 +507,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			    public init(token: Secret?) {
 			        func __safeDI_detail() -> Detail {
 			            #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-			            let auth: (any Auth)? = token
+			            let auth: (any Auth)? = token.instance
 			            #sourceLocation()
 			            return Detail(auth: auth)
 			        }
@@ -516,7 +517,7 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_D306FBD537400E08 {}
+			    public enum __safeDI_Screen_B4509263952C7814 {}
 			}
 			""",
 		])

@@ -745,10 +745,10 @@ struct SafeDIToolGraphFuzzerTests {
 	}
 
 	@Test
-	func isEagerInstanceRead_exemptsOnlyTheMarkedRead_whenSeamCallReadsInstanceEarlierThanInline() {
-		// The eager read of a wrapper's instance at a seam call, which the Manual lists under "Where a seam differs from
-		// building its tree inline": the seam build describes the instance with the marker, and otherwise exactly as the
-		// inline build does. Another instance is a defect, marker or not.
+	func isEagerInstanceRead_exemptsOnlyTheMarkedRead_whenHoleStructReadsInstanceEarlierThanInline() {
+		// The eager read of a wrapper's instance where a seam builds a hole's struct, which the Manual lists under "Where
+		// a seam differs from building its tree inline": the seam build describes the instance with the marker, and
+		// otherwise exactly as the inline build does. Another instance is a defect, marker or not.
 		let eagerRead = DifferentialValueDifference(probe: "S1_Root0()", path: ["<13>.instance"], feature: "<13>.instance: <11> S1_User (built before the probe's value) (seen)", knownRight: "<13>.instance: <11> S1_User (seen)")
 		let otherInstance = DifferentialValueDifference(probe: "S1_Root0()", path: ["<13>.instance"], feature: "<13>.instance: <12> S1_User (built before the probe's value)", knownRight: "<13>.instance: <11> S1_User (seen)")
 		let otherValue = DifferentialValueDifference(probe: "S1_Root0()", path: ["<1> S1_Root0", "user"], feature: "user: <2> S1_User (built before the probe's value)", knownRight: "user: <2> S1_User")

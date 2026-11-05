@@ -57,7 +57,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -71,7 +71,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                let reader = Reader(authToken: authToken)
 				                return Detail(authToken: authToken, reader: reader)
@@ -85,7 +85,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -95,7 +95,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				    public convenience init() {
 				        let token = Secret()
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 				            return Screen(token: token)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -109,7 +109,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                let reader = Reader(authToken: authToken)
 				                return Detail(authToken: authToken, reader: reader)
@@ -123,7 +123,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -133,7 +133,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				    public convenience init() {
 				        let authToken = Secret()
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -147,7 +147,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                let reader = Reader(authToken: authToken)
 				                return Detail(authToken: authToken, reader: reader)
@@ -161,7 +161,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -263,7 +263,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			    public convenience init() {
 			        let authToken = Secret()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_FB491D24AFABFDFD.self
+			            _ = Screen.__safeDI_Screen_6E468B4B8486B073.self
 			            return Screen(authToken: nil, token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -277,7 +277,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Secret? = token
+			                let authToken: Secret? = token.instance
 			                #sourceLocation()
 			                let reader = Reader(authToken: authToken)
 			                return Detail(authToken: authToken, reader: reader)
@@ -291,7 +291,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_FB491D24AFABFDFD {}
+			    public enum __safeDI_Screen_6E468B4B8486B073 {}
 			}
 			""",
 		])
@@ -339,7 +339,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			    public convenience init() {
 			        let authToken = Secret()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+			            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 			            return Screen(token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -351,7 +351,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			extension Screen {
 			    public convenience init(token: Secret?) {
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
-			        let authToken: Secret? = token
+			        let authToken: Secret? = token.instance
 			        #sourceLocation()
 			        let reader = Reader(authToken: authToken)
 			        self.init(authToken: authToken, reader: reader)
@@ -359,7 +359,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_D306FBD537400E08 {}
+			    public enum __safeDI_Screen_B4509263952C7814 {}
 			}
 			""",
 		])
@@ -398,7 +398,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+			            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 			            return Screen(token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -412,7 +412,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_leftBuilder(authToken: Secret) -> Left {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Secret? = token
+			                let authToken: Secret? = token.instance
 			                #sourceLocation()
 			                let reader = Reader(authToken: authToken)
 			                return Detail(authToken: authToken, reader: reader)
@@ -428,7 +428,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_D306FBD537400E08 {}
+			    public enum __safeDI_Screen_B4509263952C7814 {}
 			}
 			""",
 		])
@@ -479,7 +479,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        }
 			        let authToken = LazilyInstantiated<Secret>(__safeDI_authToken)
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_DF7375BC2D6F1E4F.self
+			            _ = Screen.__safeDI_Screen_131C47A42A64DCB9.self
 			            return Screen(authToken: authToken, token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -493,7 +493,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Secret? = token
+			                let authToken: Secret? = token.instance
 			                #sourceLocation()
 			                let reader = Reader(authToken: authToken)
 			                return Detail(authToken: authToken, reader: reader)
@@ -507,7 +507,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_DF7375BC2D6F1E4F {}
+			    public enum __safeDI_Screen_131C47A42A64DCB9 {}
 			}
 			""",
 		])
@@ -557,7 +557,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			    public convenience init() {
 			        let authToken = Label()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_51851D47281EAF8C.self
+			            _ = Screen.__safeDI_Screen_0E87E1CD109C6C50.self
 			            return Screen(authToken: authToken, token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -571,7 +571,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Secret? = token
+			                let authToken: Secret? = token.instance
 			                #sourceLocation()
 			                let reader = Reader(authToken: authToken)
 			                return Detail(authToken: authToken, reader: reader)
@@ -585,7 +585,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_51851D47281EAF8C {}
+			    public enum __safeDI_Screen_0E87E1CD109C6C50 {}
 			}
 			""",
 		])
@@ -929,7 +929,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			    public convenience init() {
 			        let authToken = Secret()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+			            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 			            return Screen(token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -943,7 +943,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Secret? = token
+			                let authToken: Secret? = token.instance
 			                #sourceLocation()
 			                func __safeDI_reader() -> Reader {
 			                    #sourceLocation(file: "\(output.fixtures["Reader.swift"])", line: 7)
@@ -963,7 +963,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_D306FBD537400E08 {}
+			    public enum __safeDI_Screen_B4509263952C7814 {}
 			}
 			""",
 		])
@@ -1017,7 +1017,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -1032,7 +1032,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				            let authToken = Secret()
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -1045,7 +1045,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -1055,7 +1055,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				    public convenience init() {
 				        let token = Secret()
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 				            return Screen(token: token)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -1070,7 +1070,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				            let authToken = Secret()
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -1083,7 +1083,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -1159,7 +1159,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+			            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 			            return Screen(token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -1177,7 +1177,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			                #sourceLocation()
 			                func __safeDI_detail() -> Detail {
 			                    #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-			                    let authToken: Secret? = token
+			                    let authToken: Secret? = token.instance
 			                    #sourceLocation()
 			                    return Detail(authToken: authToken)
 			                }
@@ -1193,7 +1193,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_D306FBD537400E08 {}
+			    public enum __safeDI_Screen_B4509263952C7814 {}
 			}
 			""",
 		])
@@ -1332,7 +1332,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+			            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 			            return Screen(token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -1347,7 +1347,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			            let authToken: Auth = Secret()
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-			                let authToken: (any Auth)? = token
+			                let authToken: (any Auth)? = token.instance
 			                #sourceLocation()
 			                return Detail(authToken: authToken)
 			            }
@@ -1360,7 +1360,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_D306FBD537400E08 {}
+			    public enum __safeDI_Screen_B4509263952C7814 {}
 			}
 			""",
 		])
@@ -1408,7 +1408,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -1422,7 +1422,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -1435,7 +1435,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -1445,7 +1445,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				    public convenience init() {
 				        let token = Secret()
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 				            return Screen(token: token)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -1459,7 +1459,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -1472,7 +1472,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -1482,7 +1482,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				    public convenience init() {
 				        let authToken = Secret()
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -1496,7 +1496,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -1509,7 +1509,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -1607,7 +1607,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -1621,7 +1621,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_leftBuilder(authToken: Secret) -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -1636,7 +1636,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -1646,7 +1646,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				    public convenience init() {
 				        let token = Secret()
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 				            return Screen(token: token)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -1660,7 +1660,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_leftBuilder(authToken: Secret) -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -1675,7 +1675,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -1685,7 +1685,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				    public convenience init() {
 				        let authToken = Secret()
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -1699,7 +1699,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_leftBuilder(authToken: Secret) -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -1714,7 +1714,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -1821,7 +1821,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -1845,13 +1845,13 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				            return Left(token: token, detail: detail)
 				        }
 				        let left: Left = __safeDI_left()
-				        let right = Right(token: token)
+				        let right = Right(token: token.instance)
 				        self.init(left: left, right: right)
 				    }
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -1861,7 +1861,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				    public convenience init() {
 				        let token = Secret()
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 				            return Screen(token: token)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -1885,13 +1885,13 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				            return Left(token: token, detail: detail)
 				        }
 				        let left: Left = __safeDI_left()
-				        let right = Right(token: token)
+				        let right = Right(token: token.instance)
 				        self.init(left: left, right: right)
 				    }
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -1901,7 +1901,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				    public convenience init() {
 				        let authToken = Secret()
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -1925,13 +1925,13 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				            return Left(token: token, detail: detail)
 				        }
 				        let left: Left = __safeDI_left()
-				        let right = Right(token: token)
+				        let right = Right(token: token.instance)
 				        self.init(left: left, right: right)
 				    }
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -2040,7 +2040,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			    public convenience init() {
 			        let authToken = Secret()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+			            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 			            return Screen(token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -2054,7 +2054,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Secret? = token
+			                let authToken: Secret? = token.instance
 			                #sourceLocation()
 			                func __safeDI_mid() -> Mid {
 			                    let authToken = Secret()
@@ -2073,7 +2073,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_D306FBD537400E08 {}
+			    public enum __safeDI_Screen_B4509263952C7814 {}
 			}
 			""",
 		])
@@ -2274,7 +2274,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			    public convenience init() {
 			        let token = Secret()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_AC3B2DB59BEF585F.self
+			            _ = Screen.__safeDI_Screen_55AF83B7D12DE285.self
 			            return Screen(token: token)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -2284,11 +2284,12 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret) {
+			    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret) {
+			        let token = LazilyInstantiated<Secret>(__safeDI_token)
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Secret = token
+			                let authToken: Secret = token.instance
 			                #sourceLocation()
 			                let reader = Reader(authToken: authToken)
 			                return Detail(authToken: authToken, reader: reader)
@@ -2302,7 +2303,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_AC3B2DB59BEF585F {}
+			    public enum __safeDI_Screen_55AF83B7D12DE285 {}
 			}
 			""",
 		])
@@ -2347,7 +2348,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			    public convenience init() {
 			        let token = Secret()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_AC3B2DB59BEF585F.self
+			            _ = Screen.__safeDI_Screen_55AF83B7D12DE285.self
 			            return Screen(token: token)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -2357,9 +2358,10 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret) {
+			    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret) {
+			        let token = LazilyInstantiated<Secret>(__safeDI_token)
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
-			        let authToken: Secret = token
+			        let authToken: Secret = token.instance
 			        #sourceLocation()
 			        let reader = Reader(authToken: authToken)
 			        self.init(authToken: authToken, reader: reader)
@@ -2367,7 +2369,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_AC3B2DB59BEF585F {}
+			    public enum __safeDI_Screen_55AF83B7D12DE285 {}
 			}
 			""",
 		])
@@ -2406,7 +2408,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			    public convenience init() {
 			        let token = Secret()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_AC3B2DB59BEF585F.self
+			            _ = Screen.__safeDI_Screen_55AF83B7D12DE285.self
 			            return Screen(token: token)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -2416,11 +2418,12 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			""",
 			"Screen+SafeDI.swift": generatedFileHeader + """
 			extension Screen {
-			    public convenience init(token: Secret) {
+			    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret) {
+			        let token = LazilyInstantiated<Secret>(__safeDI_token)
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Secret = token
+			                let authToken: Secret = token.instance
 			                #sourceLocation()
 			                let reader = Reader(authToken: authToken)
 			                return Detail(authToken: authToken, reader: reader)
@@ -2434,7 +2437,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_AC3B2DB59BEF585F {}
+			    public enum __safeDI_Screen_55AF83B7D12DE285 {}
 			}
 			""",
 		])
@@ -2576,7 +2579,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -2588,15 +2591,15 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Screen {
 				    public convenience init(token: Secret?) {
 				        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
-				        let authToken: Secret? = token
+				        let authToken: Secret? = token.instance
 				        #sourceLocation()
-				        let reader = Reader(token: token)
+				        let reader = Reader(token: token.instance)
 				        self.init(authToken: authToken, reader: reader)
 				    }
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -2606,7 +2609,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				    public convenience init() {
 				        let token = Secret()
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 				            return Screen(token: token)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -2618,15 +2621,15 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Screen {
 				    public convenience init(token: Secret?) {
 				        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
-				        let authToken: Secret? = token
+				        let authToken: Secret? = token.instance
 				        #sourceLocation()
-				        let reader = Reader(token: token)
+				        let reader = Reader(token: token.instance)
 				        self.init(authToken: authToken, reader: reader)
 				    }
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -2636,7 +2639,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				    public convenience init() {
 				        let authToken = Secret()
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -2648,15 +2651,15 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Screen {
 				    public convenience init(token: Secret?) {
 				        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
-				        let authToken: Secret? = token
+				        let authToken: Secret? = token.instance
 				        #sourceLocation()
-				        let reader = Reader(token: token)
+				        let reader = Reader(token: token.instance)
 				        self.init(authToken: authToken, reader: reader)
 				    }
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -2736,7 +2739,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_hostBuilder(token: Secret?) -> Host {
 			            func __safeDI_screen() -> Screen {
-			                _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+			                _ = Screen.__safeDI_Screen_B4509263952C7814.self
 			                return Screen(token: token)
 			            }
 			            let screen: Screen = __safeDI_screen()
@@ -2755,7 +2758,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-			                let authToken: Secret? = token
+			                let authToken: Secret? = token.instance
 			                #sourceLocation()
 			                return Detail(authToken: authToken)
 			            }
@@ -2768,7 +2771,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_D306FBD537400E08 {}
+			    public enum __safeDI_Screen_B4509263952C7814 {}
 			}
 			""",
 		])
@@ -2819,7 +2822,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			    public convenience init() {
 			        let authToken = Secret()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+			            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 			            return Screen(token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -2831,7 +2834,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			extension Screen {
 			    public convenience init(token: Secret?) {
 			        #sourceLocation(file: "\(output.fixtures["Screen.swift"])", line: 8)
-			        let authToken: Secret? = token
+			        let authToken: Secret? = token.instance
 			        #sourceLocation()
 			        let detail = Detail()
 			        self.init(authToken: authToken, detail: detail)
@@ -2839,7 +2842,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_D306FBD537400E08 {}
+			    public enum __safeDI_Screen_B4509263952C7814 {}
 			}
 			""",
 		])
@@ -2877,7 +2880,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			extension Root {
 			    public convenience init() {
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+			            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 			            return Screen(token: nil)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -2891,7 +2894,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Secret? = token
+			                let authToken: Secret? = token.instance
 			                #sourceLocation()
 			                let reader = Reader(authToken: authToken)
 			                return Detail(authToken: authToken, reader: reader)
@@ -2903,7 +2906,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_right() -> Right {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Secret? = token
+			                let authToken: Secret? = token.instance
 			                #sourceLocation()
 			                let reader = Reader(authToken: authToken)
 			                return Detail(authToken: authToken, reader: reader)
@@ -2917,7 +2920,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_D306FBD537400E08 {}
+			    public enum __safeDI_Screen_B4509263952C7814 {}
 			}
 			""",
 		])
@@ -2975,7 +2978,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_2B72C0D922CD6E2A.self
+				            _ = Screen.__safeDI_Screen_2731E5BD7905B02A.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -2989,7 +2992,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-				                let authToken: (any Auth)? = token
+				                let authToken: (any Auth)? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3002,7 +3005,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_2B72C0D922CD6E2A {}
+				    public enum __safeDI_Screen_2731E5BD7905B02A {}
 				}
 				""",
 			],
@@ -3011,7 +3014,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D0C1971522FE69A9.self
+				            _ = Screen.__safeDI_Screen_07A8E74107B73DEF.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -3025,7 +3028,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-				                let authToken: (() -> Void)? = token
+				                let authToken: (() -> Void)? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3038,7 +3041,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D0C1971522FE69A9 {}
+				    public enum __safeDI_Screen_07A8E74107B73DEF {}
 				}
 				""",
 			],
@@ -3047,7 +3050,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_4D4CEA4E424D94E0.self
+				            _ = Screen.__safeDI_Screen_7F06DA20B0BA902C.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -3061,7 +3064,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-				                let authToken: Feature.Secret? = token
+				                let authToken: Feature.Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3074,7 +3077,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_4D4CEA4E424D94E0 {}
+				    public enum __safeDI_Screen_7F06DA20B0BA902C {}
 				}
 				""",
 			],
@@ -3083,7 +3086,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_DE48F91F10B71AD3.self
+				            _ = Screen.__safeDI_Screen_812D795DFD0785F5.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -3097,7 +3100,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-				                let authToken: SecretID? = token
+				                let authToken: SecretID? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3110,7 +3113,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_DE48F91F10B71AD3 {}
+				    public enum __safeDI_Screen_812D795DFD0785F5 {}
 				}
 				""",
 			],
@@ -3119,7 +3122,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -3133,7 +3136,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3146,7 +3149,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -3155,7 +3158,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_2A974997353A33F7.self
+				            _ = Screen.__safeDI_Screen_68E4D108DB078941.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -3169,7 +3172,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-				                let authToken: (@Sendable () -> Void)? = token
+				                let authToken: (@Sendable () -> Void)? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3182,7 +3185,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_2A974997353A33F7 {}
+				    public enum __safeDI_Screen_68E4D108DB078941 {}
 				}
 				""",
 			],
@@ -3191,7 +3194,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D0C1971522FE69A9.self
+				            _ = Screen.__safeDI_Screen_07A8E74107B73DEF.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -3205,7 +3208,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-				                let authToken: (() -> Void)? = token
+				                let authToken: (() -> Void)? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3218,7 +3221,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D0C1971522FE69A9 {}
+				    public enum __safeDI_Screen_07A8E74107B73DEF {}
 				}
 				""",
 			],
@@ -3227,7 +3230,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_CF6EE32C08F6AC90.self
+				            _ = Screen.__safeDI_Screen_7924774E7C66D2BC.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -3241,7 +3244,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-				                let authToken: (a: Int, b: String)? = token
+				                let authToken: (a: Int, b: String)? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3254,7 +3257,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_CF6EE32C08F6AC90 {}
+				    public enum __safeDI_Screen_7924774E7C66D2BC {}
 				}
 				""",
 			],
@@ -3263,7 +3266,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_4A6C7C62A36072DB.self
+				            _ = Screen.__safeDI_Screen_E57ACD99785DC2BD.self
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -3277,7 +3280,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 7)
-				                let authToken: Box<Secret>? = token
+				                let authToken: Box<Secret>? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3290,7 +3293,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_4A6C7C62A36072DB {}
+				    public enum __safeDI_Screen_E57ACD99785DC2BD {}
 				}
 				""",
 			],
@@ -3534,7 +3537,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(detailPath)", line: 8)
-			                let authToken: Secret? = token
+			                let authToken: Secret? = token.instance
 			                #sourceLocation()
 			                let reader = Reader(authToken: authToken)
 			                return Detail(authToken: authToken, reader: reader)
@@ -3548,7 +3551,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_D306FBD537400E08 {}
+			    public enum __safeDI_Screen_B4509263952C7814 {}
 			}
 			""",
 		])
@@ -3575,7 +3578,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(detailPath)", line: 8)
-			                let authToken: Secret? = token
+			                let authToken: Secret? = token.instance
 			                #sourceLocation()
 			                let reader = Reader(authToken: authToken)
 			                return Detail(authToken: authToken, reader: reader)
@@ -3589,7 +3592,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_D306FBD537400E08 {}
+			    public enum __safeDI_Screen_B4509263952C7814 {}
 			}
 			""",
 		])
@@ -3615,7 +3618,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(detailPath)", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3628,7 +3631,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -3639,7 +3642,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(detailPath)", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3652,7 +3655,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -3663,7 +3666,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(detailPath)", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3676,7 +3679,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -3687,7 +3690,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(detailPath)", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3700,7 +3703,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -3711,7 +3714,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(detailPath)", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3724,7 +3727,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -3735,7 +3738,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(detailPath)", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3748,7 +3751,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -3821,7 +3824,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				    public convenience init() {
 				        let authToken = Secret()
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -3839,7 +3842,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -3858,7 +3861,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				    public convenience init() {
 				        let token = Secret()
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
 				            return Screen(token: token)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -3892,7 +3895,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				            let authToken = Label()
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(detailPath)", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3905,7 +3908,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -3917,7 +3920,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				            let authToken = Label()
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(detailPath)", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3930,7 +3933,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -3942,7 +3945,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				            let authToken = Label()
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(detailPath)", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3955,7 +3958,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -3967,7 +3970,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				            let authToken = Label()
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(detailPath)", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -3980,7 +3983,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -3992,7 +3995,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				            let authToken = Label()
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(detailPath)", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -4005,7 +4008,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -4017,7 +4020,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				            let authToken = Label()
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(detailPath)", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -4030,7 +4033,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -4103,7 +4106,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				    public convenience init() {
 				        let authToken = Secret()
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -4121,7 +4124,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				extension Root {
 				    public convenience init() {
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
 				            return Screen(token: nil)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -4140,7 +4143,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				    public convenience init() {
 				        let token = Secret()
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
 				            return Screen(token: token)
 				        }
 				        let screen: Screen = __safeDI_screen()
@@ -4177,7 +4180,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(detailPath)", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -4190,7 +4193,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -4205,7 +4208,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(detailPath)", line: 7)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                return Detail(authToken: authToken)
 				            }
@@ -4218,7 +4221,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				}
 
 				extension Screen {
-				    public enum __safeDI_Screen_D306FBD537400E08 {}
+				    public enum __safeDI_Screen_B4509263952C7814 {}
 				}
 				""",
 			],
@@ -4260,7 +4263,7 @@ struct SafeDIToolSeamUncreatedAliasTests: ~Copyable {
 				    public convenience init() {
 				        let token = Secret()
 				        func __safeDI_screen() -> Screen {
-				            _ = Screen.__safeDI_Screen_D306FBD537400E08.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
+				            _ = Screen.__safeDI_Screen_B4509263952C7814.self // If this line does not compile, add the SafeDI plugin to the target that declares Screen.
 				            return Screen(token: token)
 				        }
 				        let screen: Screen = __safeDI_screen()

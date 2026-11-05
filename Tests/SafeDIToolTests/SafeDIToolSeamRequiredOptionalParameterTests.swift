@@ -832,17 +832,18 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 		#expect(output.dependencyTreeFiles == [
 			"Inner+SafeDI.swift": generatedFileHeader + """
 			extension Inner {
-			    public convenience init(token: Secret?) {
+			    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+			        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 			        func __safeDI_left() -> Left {
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
-			                let authToken: Secret? = token
+			                let authToken: Secret? = token.instance
 			                #sourceLocation()
 			                let reader = Reader(authToken: authToken)
 			                return Detail(authToken: authToken, reader: reader)
 			            }
 			            let detail: Detail = __safeDI_detail()
-			            return Left(token: token, detail: detail)
+			            return Left(token: token.instance, detail: detail)
 			        }
 			        let left: Left = __safeDI_left()
 			        self.init(left: left)
@@ -850,7 +851,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			}
 
 			extension Inner {
-			    public enum __safeDI_Inner_4BDBF64A8A90FDCE {}
+			    public enum __safeDI_Inner_C10331417AC12746 {}
 			}
 			""",
 			"Root+SafeDI.swift": generatedFileHeader + """
@@ -875,7 +876,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			extension Screen {
 			    public convenience init(token: Secret?) {
 			        func __safeDI_inner() -> Inner {
-			            _ = Inner.__safeDI_Inner_4BDBF64A8A90FDCE.self
+			            _ = Inner.__safeDI_Inner_C10331417AC12746.self
 			            return Inner(token: token)
 			        }
 			        let inner: Inner = __safeDI_inner()
@@ -1016,7 +1017,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			    public convenience init() {
 			        func __safeDI_hostBuilder(token: Secret?) -> Host {
 			            func __safeDI_screen() -> Screen {
-			                _ = Screen.__safeDI_Screen_BE1331602C59DC7C.self
+			                _ = Screen.__safeDI_Screen_CDE8197F32EDFC92.self
 			                return Screen(other: nil, token: token)
 			            }
 			            let screen: Screen = __safeDI_screen()
@@ -1035,7 +1036,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			        let right = Right(token: token)
 			        func __safeDI_left() -> Left {
 			            #sourceLocation(file: "\(output.fixtures["Left.swift"])", line: 8)
-			            let token: Secret? = other
+			            let token: Secret? = other.instance
 			            #sourceLocation()
 			            func __safeDI_detail() -> Detail {
 			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
@@ -1053,7 +1054,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_BE1331602C59DC7C {}
+			    public enum __safeDI_Screen_CDE8197F32EDFC92 {}
 			}
 			""",
 		])
@@ -1112,7 +1113,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			    public convenience init() {
 			        let token = Secret()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+			            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 			            return Screen(token: token)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -1126,7 +1127,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_sub() -> Sub {
 			                #sourceLocation(file: "\(output.fixtures["Sub.swift"])", line: 7)
-			                let authToken: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
+			                let authToken: AnyAuth? = (token.instance as Secret?).map { AnyAuth($0) }
 			                #sourceLocation()
 			                return Sub(authToken: authToken)
 			            }
@@ -1139,7 +1140,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_D306FBD537400E08 {}
+			    public enum __safeDI_Screen_B4509263952C7814 {}
 			}
 			""",
 		])
@@ -1183,7 +1184,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			    public convenience init() {
 			        let token = Secret()
 			        func __safeDI_screen() -> Screen {
-			            _ = Screen.__safeDI_Screen_D306FBD537400E08.self
+			            _ = Screen.__safeDI_Screen_B4509263952C7814.self
 			            return Screen(token: token)
 			        }
 			        let screen: Screen = __safeDI_screen()
@@ -1197,7 +1198,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_sub() -> Sub {
 			                #sourceLocation(file: "\(output.fixtures["Sub.swift"])", line: 7)
-			                let authToken: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
+			                let authToken: AnyAuth? = (token.instance as Secret?).map { AnyAuth($0) }
 			                #sourceLocation()
 			                return Sub(authToken: authToken)
 			            }
@@ -1210,7 +1211,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			}
 
 			extension Screen {
-			    public enum __safeDI_Screen_D306FBD537400E08 {}
+			    public enum __safeDI_Screen_B4509263952C7814 {}
 			}
 			""",
 		])
@@ -1450,17 +1451,18 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			.moduleInfo: [
 				"Core.swift": generatedFileHeader + """
 				extension Inner {
-				    public convenience init(token: Secret?) {
+				    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(try #require(output.modules["Core"]).fixtures.compilerPath(of: "Detail.swift"))", line: 8)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                let reader = Reader(authToken: authToken)
 				                return Detail(authToken: authToken, reader: reader)
 				            }
 				            let detail: Detail = __safeDI_detail()
-				            return Left(token: token, detail: detail)
+				            return Left(token: token.instance, detail: detail)
 				        }
 				        let left: Left = __safeDI_left()
 				        self.init(left: left)
@@ -1468,24 +1470,25 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 				}
 
 				extension Inner {
-				    public enum __safeDI_Inner_4BDBF64A8A90FDCE {}
+				    public enum __safeDI_Inner_C10331417AC12746 {}
 				}
 				""",
 			],
 			.swiftPackagePlugin: [
 				"Inner+SafeDI.swift": generatedFileHeader + """
 				extension Inner {
-				    public convenience init(token: Secret?) {
+				    public convenience init(token __safeDI_token: @autoclosure @escaping () -> Secret?) {
+				        let token = LazilyInstantiated<Secret?>(__safeDI_token)
 				        func __safeDI_left() -> Left {
 				            func __safeDI_detail() -> Detail {
 				                #sourceLocation(file: "\(try #require(output.modules["Core"]).fixtures.compilerPath(of: "Detail.swift"))", line: 8)
-				                let authToken: Secret? = token
+				                let authToken: Secret? = token.instance
 				                #sourceLocation()
 				                let reader = Reader(authToken: authToken)
 				                return Detail(authToken: authToken, reader: reader)
 				            }
 				            let detail: Detail = __safeDI_detail()
-				            return Left(token: token, detail: detail)
+				            return Left(token: token.instance, detail: detail)
 				        }
 				        let left: Left = __safeDI_left()
 				        self.init(left: left)
@@ -1493,7 +1496,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 				}
 
 				extension Inner {
-				    public enum __safeDI_Inner_4BDBF64A8A90FDCE {}
+				    public enum __safeDI_Inner_C10331417AC12746 {}
 				}
 				""",
 			],
@@ -1570,7 +1573,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 				extension Screen {
 				    public convenience init(token: Secret?) {
 				        func __safeDI_inner() -> Inner {
-				            _ = Inner.__safeDI_Inner_4BDBF64A8A90FDCE.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
+				            _ = Inner.__safeDI_Inner_C10331417AC12746.self // If this line does not compile, add the SafeDI plugin to the target that declares Inner.
 				            return Inner(token: token)
 				        }
 				        let inner: Inner = __safeDI_inner()

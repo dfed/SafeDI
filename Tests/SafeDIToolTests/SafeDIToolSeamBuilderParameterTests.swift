@@ -2784,7 +2784,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_BF0D39F5BAEB8EC2 {}
+		    public enum __safeDI_Service_40A2FB101D2CA51A {}
 		}
 
 		extension Tray {
@@ -3000,9 +3000,9 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		    package init(theme: Theme?, userServiceBuilder __safeDI_userServiceBuilder: @escaping (SafeDIScope_Profile_userService) -> any UserService) {
 		        let session = Session()
 		        let badge = Badge()
-		        let banner = Banner(theme: theme)
+		        let banner = Banner(theme: theme.instance)
 		        func __safeDI_profile() -> Profile {
-		            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(theme: theme, session: session, badge: badge, banner: banner))
+		            let userService: any UserService = __safeDI_userServiceBuilder(SafeDIScope_Profile_userService(theme: theme.instance, session: session, badge: badge, banner: banner))
 		            return Profile(userService: userService)
 		        }
 		        let profile: Profile = __safeDI_profile()
@@ -3011,7 +3011,7 @@ struct SafeDIToolSeamBuilderParameterTests: ~Copyable {
 		}
 
 		extension Service {
-		    public enum __safeDI_Service_B4D4F4AEEBDE5D00 {}
+		    public enum __safeDI_Service_5C79F878EBDCCED8 {}
 		}
 		"""])
 		expectGeneratedFiles(output.modules["Same"]?.generatedFiles, ["Same.swift": generatedFileHeader + """
