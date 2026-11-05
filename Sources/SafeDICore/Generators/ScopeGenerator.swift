@@ -4782,6 +4782,7 @@ actor ScopeGenerator: CustomStringConvertible, Sendable {
 		var cycleNodeKey: String {
 			"\(instantiatedTypeDescription.asSource) fulfilled by \(concreteType.asSource)"
 		}
+
 		/// The `cycleClosedOnDeclarations` of the scope this node was built from.
 		let cycleClosedOnDeclarations: Set<ScopeGenerator.BuiltDeclaration>
 		/// The `isReferencedByCycleClosingScope` of the scope this node was built from.

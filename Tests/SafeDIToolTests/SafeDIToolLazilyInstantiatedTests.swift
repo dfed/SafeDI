@@ -2600,42 +2600,42 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 	mutating func run_handsEnclosingBuilderToWrapper_whenCycleEnteredThroughLazilyInstantiatedPropertyContainsInstantiator() async throws {
 		// `A`'s `b` closes the cycle `b -> aBuilder -> b`, which an instantiator defers, by handing the function `Root` builds
 		// `b` with to its wrapper.
-			let output = try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public final class Root: Instantiable {
-					    public init(b: LazilyInstantiated<B>) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(b: LazilyInstantiated<B>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let b: LazilyInstantiated<B>
-					}
-					""",
-					"""
-					@Instantiable
-					public final class B: Instantiable {
-					    public init(aBuilder: Instantiator<A>) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Instantiated let b: LazilyInstantiated<B>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class B: Instantiable {
+				    public init(aBuilder: Instantiator<A>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let aBuilder: Instantiator<A>
-					}
-					""",
-					"""
-					@Instantiable
-					public final class A: Instantiable {
-					    public init(b: LazilyInstantiated<B>) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Instantiated let aBuilder: Instantiator<A>
+				}
+				""",
+				"""
+				@Instantiable
+				public final class A: Instantiable {
+				    public init(b: LazilyInstantiated<B>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let b: LazilyInstantiated<B>
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
+				    @Instantiated let b: LazilyInstantiated<B>
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
 
 		#expect(output.generatedFiles == [
 			"Root+SafeDI.swift": generatedFileHeader + """

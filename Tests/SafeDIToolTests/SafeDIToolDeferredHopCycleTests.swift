@@ -3286,10 +3286,10 @@ struct SafeDIToolDeferredHopCycleTests: ~Copyable {
 	/// `settingsFlow`, with `settingsFlowDeclaration`, when given, declared by `SettingsFlow`.
 	private static func flowFixture(rootAttributes: String, settingsAttributes: String, loggedInFlowAttributes: String = "", settingsFlow: String, settingsFlowDeclaration: String? = nil) -> [String] {
 		[
-			Self.type("Root", attributes: rootAttributes, #"@Instantiated(fulfilledByType: "LoggedInFlow") let flow: Flow"#) + "\n\npublic protocol Flow: AnyObject {}",
-			Self.type("LoggedInFlow", attributes: loggedInFlowAttributes, "@Instantiated let settingsBuilder: Instantiator<Settings>", conformances: ", Flow"),
-			Self.type("Settings", attributes: settingsAttributes, settingsFlow),
-			settingsFlowDeclaration.map { Self.type("SettingsFlow", $0, conformances: ", Flow") } ?? Self.type("SettingsFlow", conformances: ", Flow"),
+			type("Root", attributes: rootAttributes, #"@Instantiated(fulfilledByType: "LoggedInFlow") let flow: Flow"#) + "\n\npublic protocol Flow: AnyObject {}",
+			type("LoggedInFlow", attributes: loggedInFlowAttributes, "@Instantiated let settingsBuilder: Instantiator<Settings>", conformances: ", Flow"),
+			type("Settings", attributes: settingsAttributes, settingsFlow),
+			settingsFlowDeclaration.map { Self.type("SettingsFlow", $0, conformances: ", Flow") } ?? type("SettingsFlow", conformances: ", Flow"),
 		]
 	}
 

@@ -44,31 +44,31 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 		// `CachedItem.mock(name:)` builds `player`, whose instantiator builds a `CachedItem` again, whose `player` closes the
 		// cycle by calling the function the mock builds `player` with.
 		let output = try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(generateMock: true)
-					public struct Player: Instantiable {
-					    public init(cachedItemBuilder: Instantiator<CachedItem>) {
-					        self.cachedItemBuilder = cachedItemBuilder
-					    }
-					    @Instantiated let cachedItemBuilder: Instantiator<CachedItem>
-					}
-					""",
-					"""
-					@Instantiable(generateMock: true)
-					public struct CachedItem: Instantiable {
-					    public init(player: Player, name: String) {
-					        self.player = player
-					        self.name = name
-					    }
-					    @Instantiated let player: Player
-					    @Forwarded let name: String
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
+			swiftFileContent: [
+				"""
+				@Instantiable(generateMock: true)
+				public struct Player: Instantiable {
+				    public init(cachedItemBuilder: Instantiator<CachedItem>) {
+				        self.cachedItemBuilder = cachedItemBuilder
+				    }
+				    @Instantiated let cachedItemBuilder: Instantiator<CachedItem>
+				}
+				""",
+				"""
+				@Instantiable(generateMock: true)
+				public struct CachedItem: Instantiable {
+				    public init(player: Player, name: String) {
+				        self.player = player
+				        self.name = name
+				    }
+				    @Instantiated let player: Player
+				    @Forwarded let name: String
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
 
 		#expect(output.generatedFiles == [
 			"CachedItem+SafeDIMock.swift": generatedFileHeader + """

@@ -4825,52 +4825,52 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	mutating func run_writesConstantThatCallsEnclosingBuilder_whenPartiallyLazyInstantiationCycleExists() async throws {
 		// `C`'s `a` closes the cycle `a -> b -> cBuilder -> a`, which an instantiator defers, by calling the function `Root`
 		// builds `a` with.
-			let output = try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public struct Root: Instantiable {
-					    public init(a: A) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
+				"""
+				@Instantiable(isRoot: true)
+				public struct Root: Instantiable {
+				    public init(a: A) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let a: A
-					}
-					""",
-					"""
-					@Instantiable
-					public struct A: Instantiable {
-					    public init(b: B) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Instantiated let a: A
+				}
+				""",
+				"""
+				@Instantiable
+				public struct A: Instantiable {
+				    public init(b: B) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let b: B
-					}
-					""",
-					"""
-					@Instantiable
-					public struct B: Instantiable {
-					    public init(cBuilder: Instantiator<C>) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Instantiated let b: B
+				}
+				""",
+				"""
+				@Instantiable
+				public struct B: Instantiable {
+				    public init(cBuilder: Instantiator<C>) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let cBuilder: Instantiator<C>
-					}
-					""",
-					"""
-					@Instantiable
-					public struct C: Instantiable {
-					    public init(a: A) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Instantiated let cBuilder: Instantiator<C>
+				}
+				""",
+				"""
+				@Instantiable
+				public struct C: Instantiable {
+				    public init(a: A) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let a: A
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
+				    @Instantiated let a: A
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
 
 		#expect(output.generatedFiles == [
 			"Root+SafeDI.swift": generatedFileHeader + """
