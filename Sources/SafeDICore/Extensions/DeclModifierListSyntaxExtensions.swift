@@ -21,15 +21,44 @@
 import SwiftSyntax
 
 extension DeclModifierListSyntax {
+	/// The modifiers of a declaration that a fix-it adds: the modifier that sets `accessLevel`, when it is not `nil`,
+	/// followed by `static` when `isStatic` is `true`, each followed by a space. `open` is spelled `public`, since an
+	/// initializer or a static method cannot be `open`.
+	/// - Parameter accessLevel: `public`, `package`, or `internal` from every caller, which clamps the level: generated
+	///   code in another file cannot call a `fileprivate` or `private` declaration.
+	public init(ofAddedDeclarationWithAccess accessLevel: AccessLevel?, isStatic: Bool) {
+		self.init(
+			[
+				accessLevel.map { accessLevel in
+					let keyword: Keyword = switch accessLevel {
+					case .open, .public:
+						.public
+					case .package:
+						.package
+					case .internal:
+						.internal
+					case .fileprivate:
+						.fileprivate
+					case .private:
+						.private
+					}
+					return DeclModifierSyntax(name: .keyword(keyword), trailingTrivia: .space)
+				},
+				isStatic ? DeclModifierSyntax(name: .keyword(.static), trailingTrivia: .space) : nil,
+			].compactMap(\.self),
+		)
+	}
+
 	public var staticModifier: Element? {
 		first(where: { modifier in
 			modifier.name.text == "static"
 		})
 	}
 
-	/// The level the first access modifier names, or `nil` when none does: what an import spells, which unlike a
-	/// declaration has no level when it spells none, since `InternalImportsByDefault` decides what that means.
-	var accessLevel: AccessLevel? {
+	/// The level the first access modifier names, or `nil` when none does, which is not always `internal`: an import
+	/// with no level means what `InternalImportsByDefault` decides, and a member of an extension takes the default its
+	/// extension's modifier sets.
+	public var spelledAccessLevel: AccessLevel? {
 		lazy.compactMap { AccessLevel($0.name.tokenKind) }.first
 	}
 

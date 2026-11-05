@@ -935,7 +935,7 @@ public enum TypeDescription: Codable, Hashable, Comparable, Sendable {
 
 	/// The names of a simple or nested type from the outermost, such as `["Child", "Config"]` for `Child.Config`, or
 	/// `nil` for any other type, such as the `[Config]` of `[Config].Element`.
-	private var namePath: [String]? {
+	public var namePath: [String]? {
 		switch self {
 		case let .simple(name, _):
 			[name]
