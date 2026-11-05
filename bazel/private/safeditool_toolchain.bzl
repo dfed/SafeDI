@@ -27,13 +27,17 @@ per prebuilt binary (`//bazel:extensions.bzl`).""",
 )
 
 # The script `resolved_safeditool` writes, which runs SafeDITool from the
-# script's runfiles. `bazel run` starts an executable in its runfiles tree, so
-# a relative path among the arguments would resolve there, and names the
-# directory it was run from in `BUILD_WORKING_DIRECTORY`; the script changes to
-# that directory, so that a path resolves as it was typed. Nothing but
-# `bazel run` sets the variable, so anywhere else the script runs SafeDITool in
-# the directory it was started in. `%SAFEDITOOL_RUNFILES_PATH%` is replaced by
-# the path of SafeDITool in the runfiles tree.
+# script's runfiles: the tree beside the script, the one `RUNFILES_DIR` names,
+# or, when the script is itself a runfile of another executable that runs it,
+# the tree that holds it, which `bazel run` names in no variable. `bazel run`
+# starts an executable in its runfiles tree, so a relative path among the
+# arguments would resolve there, and names the directory it was run from in
+# `BUILD_WORKING_DIRECTORY`; the script changes to that directory, so that a
+# path resolves as it was typed. Only `bazel run` sets the variable, and a
+# program it starts passes it on, so the script also changes directory when
+# such a program runs it; anywhere else the script runs SafeDITool in the
+# directory it was started in. `%SAFEDITOOL_RUNFILES_PATH%` is replaced by the
+# path of SafeDITool in the runfiles tree.
 _RUN_SAFEDITOOL_SCRIPT = """#!/bin/sh
 set -eu
 case "$0" in
@@ -45,8 +49,13 @@ if [ -d "$executable.runfiles" ]; then
 elif [ -n "${RUNFILES_DIR:-}" ]; then
     runfiles_directory="$RUNFILES_DIR"
 else
-    echo "error: found no runfiles beside $executable to run SafeDITool from." >&2
-    exit 1
+    case "$executable" in
+        *.runfiles/*) runfiles_directory="${executable%%.runfiles/*}.runfiles" ;;
+        *)
+            echo "error: found no runfiles beside $executable to run SafeDITool from." >&2
+            exit 1
+            ;;
+    esac
 fi
 case "$runfiles_directory" in
     /*) ;;
