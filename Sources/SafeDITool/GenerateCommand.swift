@@ -1655,7 +1655,7 @@ struct Generate: AsyncParsableCommand {
 	/// - Throws: When a file cannot be read.
 	private func loadSafeDIModuleInfo() async throws -> [(file: ModuleInfoFile, path: String)] {
 		let moduleInfoURLs = try moduleInfoURLs
-		let moduleInfoFiles = try await withThrowingTaskGroup(
+		return try await withThrowingTaskGroup(
 			of: (index: Int, file: ModuleInfoFile).self,
 			returning: [(file: ModuleInfoFile, path: String)].self,
 		) { taskGroup in
@@ -1676,7 +1676,6 @@ struct Generate: AsyncParsableCommand {
 				.sorted { $0.index < $1.index }
 				.map { (file: $0.file, path: moduleInfoURLs[$0.index].path) }
 		}
-		return moduleInfoFiles
 	}
 
 	/// Where `--module-info-output` writes the module's info, and the module it names, or `nil` when the run writes none.
