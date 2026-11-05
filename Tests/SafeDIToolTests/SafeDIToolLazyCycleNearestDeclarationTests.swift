@@ -1830,7 +1830,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesParameterInPlaceOfUncreatedAlias_whenScopeAboveClosedOnFunctionInstantiatesLabel() async throws {
+	mutating func generate_passesNearerAliasToFunctionBuiltAgain_whenScopeAboveClosedOnFunctionInstantiatesLabel() async throws {
 		// `Root`'s `renamed` is the nearest declaration of the alias's label above the function, but `Mid`'s alias is a nearer
 		// one, bound from `Mid`'s `x`, which is built first and passed `nil` for the alias it waits on. `Mid` and the `A` built
 		// again are handed `Mid`'s alias.
@@ -1919,7 +1919,7 @@ struct SafeDIToolLazyCycleNearestDeclarationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesRequiredParameterInPlaceOfUncreatedAlias_whenScopeAboveClosedOnFunctionAliasesLabel() async throws {
+	mutating func generate_passesNearerAliasToRequiredParameter_whenScopeAboveClosedOnFunctionAliasesLabel() async throws {
 		// `A` requires `renamed`, which `Root`'s alias provides above the function, so the parameter is required. `Mid`'s
 		// alias is a nearer declaration of the label, bound from `Mid`'s `x`, and the `A` built again is handed it.
 		let fixture = Self.aliasOfParameterLabelFixture(

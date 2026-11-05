@@ -5158,8 +5158,7 @@ struct SafeDIToolMockGenerationErrorTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_throwsError_whenReceiverRequiresOnlyIfAvailableAliasOfOnlyIfAvailableAliasOfOptionalFormOfSiblingThatReceivesTheReceiversAncestorAndMockRootPromotesTheSecondAliasProperty() async {
 		// Parent.mock() builds `b`, `x`, and the promoted `z: X`. D requires E's `onlyIfAvailable` alias `z` of C's
-		// `onlyIfAvailable` alias `y` of `x: X?`, so where `y` is not created, D is handed the promoted `z`, which must
-		// then be built before `b`; but it requires `b`.
+		// `onlyIfAvailable` alias `y` of `x: X?`, so `x` must be built before `b`; but X requires `b`.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""

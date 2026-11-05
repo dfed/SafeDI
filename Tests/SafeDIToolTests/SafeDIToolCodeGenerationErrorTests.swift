@@ -7422,9 +7422,8 @@ struct SafeDIToolCodeGenerationErrorTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_onCodeWithRequiredReceiveOfOnlyIfAvailableAliasOfOnlyIfAvailableAliasOfOptionalFormOfSiblingThatReceivesTheReceiversAncestor_throwsErrorWhenEnclosingScopeProvidesTheSecondAliasProperty() async {
-		// D requires E's `onlyIfAvailable` alias `z` of C's `onlyIfAvailable` alias `y` of `x: X?`, and P declares `z: X`,
-		// a required alias of `x`, so where `y` is not created, D is handed P's `z`, which must be built before `b`; but it
-		// is assigned from `x`, which requires `b`.
+		// D requires E's `onlyIfAvailable` alias `z` of C's `onlyIfAvailable` alias `y` of `x: X?`, so `x` must be built
+		// before `b`; but X requires `b`. P's `z: X` is farther from D than E's alias, and changes nothing.
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""

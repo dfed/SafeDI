@@ -3362,19 +3362,6 @@ struct SafeDIToolGraphFuzzerTests {
 			signatures: [.renamedGraphDiffers(containing: "changes its generated dependency tree code")],
 			seeds: labelSortedPassThroughSeeds,
 		),
-		// The Manual's first two documented divergences, each a shape whose signatures every difference of a listed graph
-		// must match; a graph that also fails an inherited shape stays listed there, its documented difference exempted
-		// exactly (`documentedSeamValueDivergences`), as is every eager read of the third, which has no shape.
-		GraphFuzzerKnownIssue(
-			reason: "A caller whose tree holds only the optional form of an alias's fulfilling property passes it, and the seam creates the alias from it, where inline the alias is not created (the Manual's first documented divergence)",
-			signatures: [.seamBuildsOtherValuesThanInline(containing: "_Root0 > aliasSource)\n  known right: aliasAuth: nil"), .seamBuildsOtherValuesThanInline(containing: "_Root0 > aliasSource)\n  known right: aliasBearer: nil"), .seamBuildsOtherValuesThanInline(containing: "> aliasDetail > aliasToken:\n  feature:     aliasToken: <13> S843_AliasValue (seen, first at <1> S843_Root0 > aliasSource)\n  known right: aliasToken: nil")],
-			seeds: [430, 924],
-		),
-		GraphFuzzerKnownIssue(
-			reason: "The seam's own onlyIfAvailable alias is bound from its fulfilling parameter, where inline the seam is passed the property of the alias's label that the scope building the seam creates (the Manual's second documented divergence)",
-			signatures: [.seamBuildsOtherValuesThanInline(containing: "> aliasSeam > aliasAuth:\n  feature:     aliasAuth: nil")],
-			seeds: [698],
-		),
 		// A seed `knownIssues` lists under another shape, whose graph the seam's draw changes so that it fails this one, or
 		// whose base entry also documents a failure of the base corpus's value oracle, which the seam corpus does not run
 		// (471).

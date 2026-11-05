@@ -738,7 +738,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_passesEnclosingPropertyAndCreatesNoAlias_whenRootInstantiatesAliasesProperty() async throws {
+	mutating func generate_bindsAliasFromItsDependency_whenRootInstantiatesAliasesName() async throws {
 		let output = try await executeSafeDIToolTest(swiftFileContent: Self.rootInstantiatingAliasesProperty(generateMock: false), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 
 		#expect(output.dependencyTreeFiles == [
@@ -763,7 +763,7 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_passesEnclosingPropertyAndCreatesNoAlias_whenRootInstantiatesAliasesProperty() async throws {
+	mutating func mock_bindsAliasFromItsDependency_whenRootInstantiatesAliasesName() async throws {
 		let fixture = Self.rootInstantiatingAliasesProperty(generateMock: true)
 		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 
@@ -864,9 +864,10 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_passesPromotedDependencyInPlaceOfUncreatedAlias_whenTypeBesideLazyCycleRequiresAliasesLabel() async throws {
-		// `Other` requires `serviceAlias: Service`, which `Top` provides above `Holder` and `Holder`'s mock builds: a provider
-		// above `A`'s builder function, so `Mid` creates no alias, in production and in the mock alike.
+	mutating func mock_bindsAliasFromItsDependency_whenTypeBesideLazyCycleRequiresAliasesName() async throws {
+		// `Other` requires `serviceAlias: Service`, which `Top` provides above `Holder` and `Holder`'s mock builds, but `Mid`'s
+		// alias is the nearest declaration of `serviceAlias` inside the cycle, bound from `Mid`'s `service`, in production and
+		// in the mock alike.
 		let fixture = [
 			seamFixtureType(named: "Top", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let serviceAlias: Service", "@Instantiated let holder: Holder"]),
 			seamFixtureType(named: "Other", isFinalClass: true, declarations: ["@Received let serviceAlias: Service"]),
@@ -927,9 +928,9 @@ struct SafeDIToolMockOnlyIfAvailableAliasProviderTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_passesForwardedPropertyInPlaceOfUncreatedAlias_whenMockedTypeForwardsAliasesLabelAboveLazyCycle() async throws {
-		// `Holder` forwards `serviceAlias`, a provider above `A`'s builder function, so `Mid` creates no alias, in production
-		// and in the mock alike.
+	mutating func mock_bindsAliasFromItsDependency_whenMockedTypeForwardsAliasesNameAboveLazyCycle() async throws {
+		// `Holder` forwards `serviceAlias` above `A`'s builder function, but `Mid`'s alias is the nearest declaration of
+		// `serviceAlias` inside the cycle, bound from `Mid`'s `service`, in production and in the mock alike.
 		let fixture = [
 			seamFixtureType(named: "Top", isRoot: true, isFinalClass: true, declarations: ["@Instantiated let holderBuilder: Instantiator<Holder>"]),
 		] + Self.lazyCycleAroundAlias(mockedType: "Holder", fulfillingProperty: .constant, withSibling: false, mockedTypeDeclares: ["@Forwarded let serviceAlias: Service"])

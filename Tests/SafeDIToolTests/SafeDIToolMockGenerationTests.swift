@@ -8767,10 +8767,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_passesNilToOnlyIfAvailableReceiverOfAlias_whenAliasIsNotCreatedBecauseItsDependencyIsBuiltAfterIt() async throws {
-		// X requires `child`, so `x` is built after `child` and Child's `onlyIfAvailable`
-		// alias of `x` is not bound. Grand, built inside Child, receives the alias only if
-		// available and gets `nil`, as in production.
+	mutating func mock_passesNilToOnlyIfAvailableReceiverOfAlias_whenAliasesDependencyIsBuiltAfterIt() async throws {
+		// X requires `child`, so `x` is built after `child`, and Child's `onlyIfAvailable` alias of `x` is `nil`, which
+		// Grand, built inside Child, receives only if available, as in production.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -9825,10 +9824,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_passesEnclosingPropertyToOnlyIfAvailableReceiverOfAlias_whenAliasIsNotCreatedBecauseItsDependencyIsBuiltAfterItAndEnclosingScopeForwardsProperty() async throws {
-		// X requires `child`, so Child's `onlyIfAvailable` alias of `x` is not bound, but Parent
-		// forwards a `maybe` of the same type. Grand, built inside Child, resolves `maybe` to
-		// Parent's, as in production.
+	mutating func mock_passesNilToOnlyIfAvailableReceiverOfAlias_whenAliasesDependencyIsBuiltAfterItAndEnclosingScopeForwardsProperty() async throws {
+		// X requires `child`, so Child's `onlyIfAvailable` alias of `x` is `nil`, and Parent forwards a `maybe` of the same
+		// type. Grand, built inside Child, reads the alias, the nearest declaration of `maybe`, as in production.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -9922,10 +9920,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_passesMockRootPropertyToOnlyIfAvailableReceiverOfAlias_whenAliasIsNotCreatedBecauseItsDependencyIsBuiltAfterIt() async throws {
-		// X requires `child`, so Child's `onlyIfAvailable` alias of `x` is not bound, but Root
-		// receives `maybe` itself, which the mock binds from `SafeDIOverrides`. Grand, built
-		// inside Child, resolves `maybe` to that binding.
+	mutating func mock_passesNilToOnlyIfAvailableReceiverOfAlias_whenAliasesDependencyIsBuiltAfterItAndMockRootBindsItsName() async throws {
+		// X requires `child`, so Child's `onlyIfAvailable` alias of `x` is `nil`, and Root receives `maybe` itself, which the
+		// mock binds from `SafeDIOverrides`. Grand, built inside Child, reads the alias, the nearest declaration of `maybe`.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -15511,10 +15508,9 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_buildsPromotedProviderOfOnlyIfAvailableAliasPropertyBeforeTreeRequiringTheAlias_whenSiblingRequiresNothing() async throws {
+	mutating func mock_buildsAliasesDependencyBeforeTreeRequiringTheAlias_whenMockRootPromotesPropertyOfTheAliasesName() async throws {
 		// Parent.mock() builds `b`, `x`, and the promoted `y: X`. D requires C's `onlyIfAvailable` alias `y` of `x: X?`, so
-		// the mock builds `y` before `b`, in case `x` is unavailable in `b`'s tree, and `x` before `b` so that the alias is
-		// created. X requires nothing.
+		// the mock builds `x` before `b`, and the alias is bound from it. X requires nothing.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -15609,10 +15605,10 @@ struct SafeDIToolMockGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func mock_buildsPromotedProviderOfSecondAliasPropertyBeforeTreeRequiringOnlyIfAvailableAliasOfOnlyIfAvailableAlias_whenSiblingRequiresNothing() async throws {
+	mutating func mock_buildsFirstAliasesDependencyBeforeTreeRequiringOnlyIfAvailableAliasOfOnlyIfAvailableAlias_whenMockRootPromotesPropertyOfTheSecondAliasesName() async throws {
 		// Parent.mock() builds `b`, `x`, and the promoted `z: X`. D requires E's `onlyIfAvailable` alias `z` of C's
-		// `onlyIfAvailable` alias `y` of `x: X?`, so the mock builds `z` before `b`, in case `y` is not created in `b`'s
-		// tree, and `x` before `b` so that both aliases are created. X requires nothing.
+		// `onlyIfAvailable` alias `y` of `x: X?`, so the mock builds `x` before `b`, and both aliases are bound from it. X
+		// requires nothing.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""

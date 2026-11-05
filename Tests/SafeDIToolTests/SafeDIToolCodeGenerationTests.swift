@@ -7533,7 +7533,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_omitsOnlyIfAvailableAliasAndPassesNil_whenReceiverAliasesInstantiatorThatBuildsIt() async throws {
 		// C, built by `cBuilder`, aliases `cBuilder` only if available. The instantiator
-		// is still being built, so the alias is not created and C gets `nil`.
+		// is still being built, so the alias is `nil`, which C is passed.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -7896,10 +7896,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesConvenienceExtensionOnRootOfTree_passesNilToOnlyIfAvailableReceiverOfAlias_whenAliasIsNotCreatedBecauseItsDependencyIsUnavailable() async throws {
-		// Child aliases `missing` only if available, and nothing provides `missing`, so
-		// the alias is not created. Grand, built inside Child, receives the alias only if
-		// available and gets `nil`.
+	mutating func run_writesConvenienceExtensionOnRootOfTree_passesNilToOnlyIfAvailableReceiverOfAlias_whenAliasesDependencyIsUnavailable() async throws {
+		// Child aliases `missing` only if available, and nothing provides `missing`, so the alias is `nil`, which Grand,
+		// built inside Child, receives only if available.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -7960,10 +7959,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesConvenienceExtensionOnRootOfTree_passesNilToOnlyIfAvailableReceiverOfAlias_whenAliasIsNotCreatedBecauseItsDependencyIsBuiltAfterIt() async throws {
-		// X requires `child`, so `x` is built after `child` and Child's `onlyIfAvailable`
-		// alias of `x` is not created. Grand, built inside Child, receives the alias only
-		// if available and gets `nil`.
+	mutating func run_writesConvenienceExtensionOnRootOfTree_passesNilToOnlyIfAvailableReceiverOfAlias_whenAliasesDependencyIsBuiltAfterIt() async throws {
+		// X requires `child`, so `x` is built after `child`, and Child's `onlyIfAvailable` alias of `x` is `nil`, which
+		// Grand, built inside Child, receives only if available.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -9264,9 +9262,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesConvenienceExtensionOnRootOfTree_buildsEnclosingProviderFirst_whenRequiredReceiverOfAliasThatIsNotCreatedResolvesToIt() async throws {
-		// Child's `onlyIfAvailable` alias of `missing` is never created, so Grand's required
-		// receive of `maybe` resolves to Root's `maybe`, which is built before `child`.
+	mutating func run_writesConvenienceExtensionOnRootOfTree_passesNilToRequiredReceiverOfAlias_whenAliasesDependencyIsUnavailableAndRootDeclaresItsName() async throws {
+		// Child's `onlyIfAvailable` alias of `missing` is `nil`, and is the nearest declaration of `maybe` for Grand, which
+		// requires it. Root's `maybe` is farther, and orders nothing.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -9329,11 +9327,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesConvenienceExtensionOnRootOfTree_buildsEnclosingAliasFulfillingDependencyFirst_whenRequiredReceiverOfAliasThatIsNotCreatedResolvesToEnclosingAlias() async throws {
-		// Child's `onlyIfAvailable` alias of `missing` is never created, so Grand's required
-		// receive of `maybe` resolves to Parent's `onlyIfAvailable` alias of `x`, which must
-		// then be created: `x` is built before `parent`, and X, which receives `parent` only
-		// if available, gets `nil`.
+	mutating func run_writesConvenienceExtensionOnRootOfTree_passesNilToRequiredReceiverOfAlias_whenAliasesDependencyIsUnavailableAndEnclosingTypeAliasesItsName() async throws {
+		// Child's `onlyIfAvailable` alias of `missing` is `nil`, and is the nearest declaration of `maybe` for Grand, which
+		// requires it. Parent's `onlyIfAvailable` alias of `x` is farther, and requires nothing, so `parent` is built first
+		// and Parent's alias is `nil` too, as X receives `parent` only if available.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -9496,9 +9493,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesConvenienceExtensionOnRootOfTree_passesEnclosingPropertyToOnlyIfAvailableReceiverOfAlias_whenAliasIsNotCreatedAndEnclosingScopeInstantiatesUnwrappedProperty() async throws {
-		// Child's `onlyIfAvailable` alias `maybe: Greeter?` is not created, but Root
-		// instantiates `maybe: Greeter`. Grand, built inside Child, resolves `maybe` to Root's.
+	mutating func run_writesConvenienceExtensionOnRootOfTree_passesNilToOnlyIfAvailableReceiverOfAlias_whenAliasesDependencyIsUnavailableAndEnclosingScopeInstantiatesUnwrappedProperty() async throws {
+		// Child's `onlyIfAvailable` alias `maybe: Greeter?` is `nil`, and Root instantiates `maybe: Greeter`. Grand, built
+		// inside Child, reads the alias, the nearest declaration of `maybe`.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -9562,10 +9559,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesConvenienceExtensionOnRootOfTree_passesEnclosingPropertyToOnlyIfAvailableReceiverOfAlias_whenAliasIsNotCreatedBecauseItsDependencyIsBuiltAfterItAndEnclosingScopeForwardsProperty() async throws {
-		// X requires `child`, so Child's `onlyIfAvailable` alias of `x` is not created, but
-		// Parent forwards a `maybe` of the same type. Grand, built inside Child, resolves `maybe`
-		// to Parent's.
+	mutating func run_writesConvenienceExtensionOnRootOfTree_passesNilToOnlyIfAvailableReceiverOfAlias_whenAliasesDependencyIsBuiltAfterItAndEnclosingScopeForwardsProperty() async throws {
+		// X requires `child`, so Child's `onlyIfAvailable` alias of `x` is `nil`, and Parent forwards a `maybe` of the same
+		// type. Grand, built inside Child, reads the alias, the nearest declaration of `maybe`.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -9644,10 +9640,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesConvenienceExtensionOnRootOfTree_passesEnclosingAliasToOnlyIfAvailableReceiverOfAlias_whenAliasIsNotCreatedAndEnclosingAliasIsCreated() async throws {
-		// Child's `onlyIfAvailable` alias of `missing` is not created, but Parent's
-		// `onlyIfAvailable` alias of `greeter`, which Root builds, is. Grand, built inside Child,
-		// resolves `maybe` to Parent's alias.
+	mutating func run_writesConvenienceExtensionOnRootOfTree_passesNilToOnlyIfAvailableReceiverOfAlias_whenAliasesDependencyIsUnavailableAndEnclosingAliasIsBound() async throws {
+		// Child's `onlyIfAvailable` alias of `missing` is `nil`, while Parent's `onlyIfAvailable` alias of `greeter`, which
+		// Root builds, is bound. Grand, built inside Child, reads Child's alias, the nearest declaration of `maybe`.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -9726,9 +9721,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesConvenienceExtensionOnRootOfTree_passesNilToOnlyIfAvailableReceiverOfAlias_whenAliasAndEnclosingAliasAreNotCreated() async throws {
-		// Neither Parent's `onlyIfAvailable` alias of `otherMissing` nor Child's of `missing` is
-		// created, so nothing provides `maybe`: Child and Grand get `nil`.
+	mutating func run_writesConvenienceExtensionOnRootOfTree_passesNilToOnlyIfAvailableReceiverOfAlias_whenAliasAndEnclosingAliasAreBoundToNil() async throws {
+		// Parent's `onlyIfAvailable` alias of `otherMissing` and Child's of `missing` are both `nil`, so Child and Grand get
+		// `nil`.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -9807,9 +9802,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesConvenienceExtensionOnRootOfTree_passesNilToOnlyIfAvailableReceiverOfAlias_whenAliasIsNotCreatedAndEnclosingPropertyIsStillBeingBuilt() async throws {
-		// Child's `onlyIfAvailable` alias of `missing` is not created. Root's `maybe` has the
-		// same unwrapped type, but Child is built inside it, so Grand gets `nil`.
+	mutating func run_writesConvenienceExtensionOnRootOfTree_passesNilToOnlyIfAvailableReceiverOfAlias_whenAliasesDependencyIsUnavailableAndEnclosingPropertyIsStillBeingBuilt() async throws {
+		// Child's `onlyIfAvailable` alias of `missing` is `nil`. Root's `maybe` has the same unwrapped type, but Child is
+		// built inside it, and the alias is nearer anyway, so Grand gets `nil`.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -9876,9 +9871,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesConvenienceExtensionOnRootOfTree_passesEnclosingPropertyToOnlyIfAvailableReceiverOfAlias_whenAliasAndEnclosingAliasAreNotCreatedAndOuterScopeForwardsProperty() async throws {
-		// Neither Parent's nor Child's `onlyIfAvailable` alias of `maybe` is created, but Outer
-		// forwards a `maybe` of the same type. Child and Grand resolve `maybe` to Outer's.
+	mutating func run_writesConvenienceExtensionOnRootOfTree_passesNilToOnlyIfAvailableReceiverOfAlias_whenAliasAndEnclosingAliasAreBoundToNilAndOuterScopeForwardsProperty() async throws {
+		// Parent's and Child's `onlyIfAvailable` aliases of `maybe` are both `nil`, and Outer forwards a `maybe` of the same
+		// type. Child and Grand read Child's alias, the nearest declaration of `maybe`.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -14565,9 +14560,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func run_buildsEnclosingProviderOfOnlyIfAvailableAliasPropertyBeforeTreeRequiringTheAlias_whenRootDeclaresTheProviderLater() async throws {
-		// D requires C's `onlyIfAvailable` alias `y` of `x: X?`, and Root declares `y: X` too, so Root builds `y` before `b`,
-		// in case `x` is unavailable in `b`'s tree, and `x` before `b` so that the alias is created. X requires nothing.
+	mutating func run_buildsAliasesDependencyBeforeTreeRequiringTheAlias_whenRootDeclaresPropertyOfTheAliasesNameLater() async throws {
+		// D requires C's `onlyIfAvailable` alias `y` of `x: X?`, so Root builds `x` before `b`. Root's `y: X` is farther from D
+		// than the alias, and orders nothing. X requires nothing.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -14642,8 +14637,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	@Test
 	mutating func run_passesNilForOnlyIfAvailableReceiveOfOnlyIfAvailableAlias_whenRootProvidesTheAliasPropertyAfterTheTreeAndSiblingRequiresTheTree() async throws {
 		// D receives C's `onlyIfAvailable` alias `y` of `x: X?` only if available, and Root declares `y: X` too. Nothing
-		// requires `y`, so `b` is built first (X requires `b`), the alias is not created, and D is passed `nil`: Root's `y`
-		// is built after `b`.
+		// requires `y`, so `b` is built first (X requires `b`), the alias is `nil`, and D reads it, not Root's `y`.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -14893,10 +14887,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func run_buildsEnclosingProviderOfOnlyIfAvailableAliasPropertyBeforeTreeRequiringTheAlias_whenProviderIsDeclaredAfterTheTreeAndAliasFulfillingPropertyIsBuiltLater() async throws {
-		// Root builds `b` before `x`, since X receives `b` only if available, so C's `onlyIfAvailable` alias `y` of `x: X?`
-		// is not created in `b`'s tree, and D, which requires `y`, is handed B's `y: X`: B builds `y` before `c`, although
-		// it declares `y` after it.
+	mutating func run_buildsAliasesDependencyBeforeTreeRequiringTheAlias_whenItReceivesTheTreeOnlyIfAvailableAndEnclosingTypeDeclaresTheAliasesName() async throws {
+		// D requires C's `onlyIfAvailable` alias `y` of `x: X?`, so Root builds `x` before `b`, and X, which receives `b` only
+		// if available, is passed `nil`. B's `y: X` is farther from D than the alias, and orders nothing.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -14970,9 +14963,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func run_buildsEnclosingProviderOfSecondAliasPropertyBeforeTreeRequiringOnlyIfAvailableAliasOfOnlyIfAvailableAlias_whenProviderIsDeclaredAfterTheTreeAndAliasFulfillingPropertyIsBuiltLater() async throws {
+	mutating func run_buildsFirstAliasesDependencyBeforeTreeRequiringOnlyIfAvailableAliasOfOnlyIfAvailableAlias_whenItReceivesTheTreeOnlyIfAvailable() async throws {
 		// As above, with D requiring E's `onlyIfAvailable` alias `z` of C's `onlyIfAvailable` alias `y`, and B declaring
-		// `z: X`: neither alias is created, and B builds `z` before `c`.
+		// `z: X`: `x` is built before `b`, and both aliases are bound from it.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -15227,10 +15220,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func run_buildsEnclosingProviderOfFirstAliasPropertyBeforeTreeRequiringOnlyIfAvailableAliasOfOnlyIfAvailableAlias_whenRootProvidesTheSecondAliasProperty() async throws {
+	mutating func run_buildsFirstAliasesDependencyBeforeTreeRequiringOnlyIfAvailableAliasOfOnlyIfAvailableAlias_whenEnclosingTypesDeclareTheAliasesNames() async throws {
 		// D requires E's `onlyIfAvailable` alias `z` of C's `onlyIfAvailable` alias `y` of `x: X?`. B declares `y: X` and
-		// Root declares `z: X`. Where `y` is not created, `z` is created from B's `y`, so B builds `y` before `c`; Root's
-		// `z` is never handed to D, so nothing orders it. X requires nothing, so both aliases are created.
+		// Root declares `z: X`, both farther from D than the aliases, so neither orders anything: `x` is built before `b`, and
+		// both aliases are bound from it.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""

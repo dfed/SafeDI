@@ -7608,8 +7608,9 @@ enum GraphFuzzerOracle {
 	/// the known-right path the same graph with no seam and the files the tool generated for that; the probes are the
 	/// graph's roots and the generated mocks that take no required parameter. Each path is built from the graph drawn
 	/// storing every parameter, so the comparator sees every value the generated code passes; storing changes nothing
-	/// the tool generates. Each graph exempts its documented divergences (`documentedSeamValueDivergences`). The graphs
-	/// of one call are compared in one batch. Nothing is compared when `compileVerificationIsEnabled` is `false`.
+	/// the tool generates. Every eager read of a wrapper's instance at a seam call, the one documented divergence of
+	/// values, is exempted by its shape (`isEagerInstanceRead`). The graphs of one call are compared in one batch.
+	/// Nothing is compared when `compileVerificationIsEnabled` is `false`.
 	static func valueFailures(of toolRuns: [GraphFuzzerToolRuns]) throws -> [UInt64: GraphFuzzerFailure] {
 		try valueComparisons(of: toolRuns).failures
 	}
@@ -7654,7 +7655,7 @@ enum GraphFuzzerOracle {
 				feature: DifferentialValuePath(fixture: storingFixture, generatedFiles: seamFiles),
 				knownRight: DifferentialValuePath(fixture: storingFixture.withoutSeams, generatedFiles: inlineFiles),
 				probes: storingFixture.differentialValueProbes(generatedFiles: seamFiles),
-				exemptions: Self.documentedSeamValueDivergences(of: runs.fixture),
+				exemptions: [],
 			))
 		}
 		let visibleGraphs = visibleRuns.compactMap { runs -> DifferentialValueGraph? in
@@ -7747,28 +7748,6 @@ enum GraphFuzzerOracle {
 			}
 		}
 		return (failures, comparedValueOracleSeeds)
-	}
-
-	/// The differences between a seam build and its inline build that the Manual documents, stated exactly, which the
-	/// comparison of `fixture`'s graph exempts: the first divergence of the graphs that also fail an inherited
-	/// known-issue shape, so that the shape's seed stays listed there (the graphs that show the first or second
-	/// divergence and nothing else are known issues of the divergence's shape, which matches every difference of a
-	/// failure). Observed from the corpus run, as `seamCorpusSeedsOfOtherShapes` is. Every eager read of a wrapper's
-	/// instance at a seam call is exempted by its shape instead (`isEagerInstanceRead`).
-	static func documentedSeamValueDivergences(of fixture: GraphFuzzerFixture) -> [DifferentialValueDifference] {
-		switch fixture.seed {
-		case 833:
-			// The first documented divergence: the caller holds only the optional form of the alias's fulfilling
-			// property, and the seam creates the alias from it.
-			[DifferentialValueDifference(
-				probe: "S833_Root0()",
-				path: ["<1> S833_Root0", "aliasSeam", "aliasLeft", "aliasDetail", "aliasAuth"],
-				feature: "aliasAuth: <13> S833_AliasValue (seen, first at <1> S833_Root0 > aliasSource)",
-				knownRight: "aliasAuth: nil",
-			)]
-		default:
-			[]
-		}
 	}
 
 	/// Whether `difference` is the eager read of a wrapper's instance at a seam call that the Manual lists under "Where a
