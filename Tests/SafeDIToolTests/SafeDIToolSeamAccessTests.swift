@@ -155,23 +155,23 @@ struct SafeDIToolSeamAccessTests: ~Copyable {
 			let servicePath = fixtures["Feature"]!["Service.swift"]
 			return seam
 				? """
-			\(panelPath):2:1: error: `Panel` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Panel` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
-			\(panelPath):2:1-2:8: fixit: public
-			\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
-			\(servicePath):2:1-2:8: fixit: public
-			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
-			\(servicePath):3:5-3:12: fixit: public
-			"""
+				\(panelPath):2:1: error: `Panel` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Panel` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+				\(panelPath):2:1-2:8: fixit: public
+				\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+				\(servicePath):2:1-2:8: fixit: public
+				\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+				\(servicePath):3:5-3:12: fixit: public
+				"""
 				: """
-			\(panelPath):2:1: error: `Panel` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Panel` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
-			\(panelPath):2:1-2:8: fixit: public
-			\(panelPath):3:5: error: `Panel`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`, or declare `Panel` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
-			\(panelPath):3:5-3:12: fixit: public
-			\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
-			\(servicePath):2:1-2:8: fixit: public
-			\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
-			\(servicePath):3:5-3:12: fixit: public
-			"""
+				\(panelPath):2:1: error: `Panel` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Panel` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+				\(panelPath):2:1-2:8: fixit: public
+				\(panelPath):3:5: error: `Panel`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`, or declare `Panel` with `generateDependencyTree: true`, so that module `Feature` generates its tree and this module calls the initializer it generates.
+				\(panelPath):3:5-3:12: fixit: public
+				\(servicePath):2:1: error: `Service` is `package`, so module `App`, in another package, cannot construct it in the code SafeDI generates. Make `Service` `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+				\(servicePath):2:1-2:8: fixit: public
+				\(servicePath):3:5: error: `Service`’s initializer is `package`, so module `App`, in another package, cannot call it in the code SafeDI generates. Make the initializer `public` to fix, or pass the packages of modules `App` and `Feature` to SafeDI (`package_name` on `safedi_swift_library`, `--package-name`) if they are compiled with `-package-name`.
+				\(servicePath):3:5-3:12: fixit: public
+				"""
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
