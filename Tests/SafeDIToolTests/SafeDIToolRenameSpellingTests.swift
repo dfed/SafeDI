@@ -48,7 +48,7 @@ struct SafeDIToolRenameSpellingTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):9:5: error: `sink: any LogSink` is renamed from `logger`, which `Child` also renames. The @Instantiable macro rejects a rename of another rename of the same declaration. Rename the property the renames start from instead.
+				\(fixtures["Child.swift"]):9:5: error: `sink: any LogSink` is renamed from `logger`, which `Child` also renames. The @Instantiable macro rejects a rename of another rename of the same declaration. Rename the property the renames start from instead. SafeDITool also rejects such renames where `#if` blocks that are active together declare them, or clauses of a condition only the compiler decides, such as `os(iOS)`, which SafeDITool reads together; there, give the rename `logger` another label.
 				"""
 			},
 		) {
@@ -80,7 +80,7 @@ struct SafeDIToolRenameSpellingTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):24:5: error: `sink: any LogSink` is renamed from `logger`, which `Child` also renames. The @Instantiable macro rejects a rename of another rename of the same declaration. Rename the property the renames start from instead.
+				\(fixtures["Child.swift"]):24:5: error: `sink: any LogSink` is renamed from `logger`, which `Child` also renames. The @Instantiable macro rejects a rename of another rename of the same declaration. Rename the property the renames start from instead. SafeDITool also rejects such renames where `#if` blocks that are active together declare them, or clauses of a condition only the compiler decides, such as `os(iOS)`, which SafeDITool reads together; there, give the rename `logger` another label.
 				"""
 			},
 		) {
@@ -229,7 +229,7 @@ struct SafeDIToolRenameSpellingTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Child.swift"]):14:5: error: `sink: any LogSink` is renamed from `logger`, which `Child` also renames. The @Instantiable macro rejects a rename of another rename of the same declaration. Rename the property the renames start from instead.
+				\(fixtures["Child.swift"]):14:5: error: `sink: any LogSink` is renamed from `logger`, which `Child` also renames. The @Instantiable macro rejects a rename of another rename of the same declaration. Rename the property the renames start from instead. SafeDITool also rejects such renames where `#if` blocks that are active together declare them, or clauses of a condition only the compiler decides, such as `os(iOS)`, which SafeDITool reads together; there, give the rename `logger` another label.
 				"""
 			},
 		) {
@@ -452,7 +452,7 @@ struct SafeDIToolRenameSpellingTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Profile.swift"]):4:5: error: `session: Session?` is renamed from itself, made optional only if available. The @Instantiable macro rejects this spelling of @Received(onlyIfAvailable: true). Receive it with @Received(onlyIfAvailable: true) instead.
+				\(fixtures["Profile.swift"]):4:5: error: `session: Session?` is renamed from itself only if available. The @Instantiable macro rejects this spelling of @Received(onlyIfAvailable: true). Receive it with @Received(onlyIfAvailable: true) instead.
 				"""
 			},
 		) {
@@ -479,7 +479,7 @@ struct SafeDIToolRenameSpellingTests: ~Copyable {
 		await assertThrowsError(
 			diagnostics: { fixtures in
 				"""
-				\(fixtures["Profile.swift"]):4:5: error: `session: Session?` is renamed from itself, made optional only if available. The @Instantiable macro rejects this spelling of @Received(onlyIfAvailable: true). Receive it with @Received(onlyIfAvailable: true) instead.
+				\(fixtures["Profile.swift"]):4:5: error: `session: Session?` is renamed from itself only if available. The @Instantiable macro rejects this spelling of @Received(onlyIfAvailable: true). Receive it with @Received(onlyIfAvailable: true) instead.
 				"""
 			},
 		) {

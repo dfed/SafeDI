@@ -2446,11 +2446,11 @@ public actor DependencyTreeGenerator {
 			private var message: String {
 				switch spelling {
 				case let .renameOfRename(sourceLabel, declaringType):
-					"`\(property.asSource)` is renamed from `\(sourceLabel.spelledWithoutBackticks)`, which `\(declaringType.asSource)` also renames. The @\(InstantiableVisitor.macroName) macro rejects a rename of another rename of the same declaration. Rename the property the renames start from instead."
+					"`\(property.asSource)` is renamed from `\(sourceLabel.spelledWithoutBackticks)`, which `\(declaringType.asSource)` also renames. The @\(InstantiableVisitor.macroName) macro rejects a rename of another rename of the same declaration. Rename the property the renames start from instead. SafeDITool also rejects such renames where `#if` blocks that are active together declare them, or clauses of a condition only the compiler decides, such as `os(iOS)`, which SafeDITool reads together; there, give the rename `\(sourceLabel.spelledWithoutBackticks)` another label."
 				case .renameOfItselfWithSameType:
 					"`\(property.asSource)` is renamed from itself with the same type, which renames nothing. The @\(InstantiableVisitor.macroName) macro rejects this rename. Receive it with @\(Dependency.Source.receivedRawValue) instead."
 				case .renameOfItselfOnlyIfAvailable:
-					"`\(property.asSource)` is renamed from itself, made optional only if available. The @\(InstantiableVisitor.macroName) macro rejects this spelling of @\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true). Receive it with @\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true) instead."
+					"`\(property.asSource)` is renamed from itself only if available. The @\(InstantiableVisitor.macroName) macro rejects this spelling of @\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true). Receive it with @\(Dependency.Source.receivedRawValue)(onlyIfAvailable: true) instead."
 				}
 			}
 		}
