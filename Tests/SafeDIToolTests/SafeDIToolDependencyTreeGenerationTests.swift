@@ -7756,6 +7756,61 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		}
 	}
 
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_namesFirstUnseenDeclaration_whenCallersSeeHolesWhereTheSeamsModuleSeesDeclarationsUnderTargetGraph() async {
+		// The callers cannot see `Logger` or `Alpha`, which the configuration's directory declares, so their computation
+		// of `Cache`'s generated initializer takes `token` and a builder for each: a call with those labels cannot reach
+		// the initializer `Cache` declares, which takes `token` alone, so the computation throws nothing and merely
+		// differs, and the first unseen declaration is named.
+		await assertThrowsError(diagnostics: { fixtures in
+			"\(fixtures["Cache.swift"]):1:1: error: SafeDI cannot generate the dependency tree of `Cache`: the initializer SafeDI generates for it depends on `Alpha`, which is declared in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see that declaration, so their calls would not match the initializer. Declare `Alpha` in a file of this module, or of a module it depends on."
+		}) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					#SafeDIConfiguration(
+					    additionalDirectoriesToInclude: ["$ADDITIONAL_DIRECTORY"]
+					)
+					""",
+					"""
+					@Instantiable(generateDependencyTree: true)
+					public struct Cache: Instantiable {
+					    public init(store: Store, logger: Logger, alpha: Alpha) {
+					        self.store = store
+					        self.logger = logger
+					        self.alpha = alpha
+					    }
+
+					    public init(token: Token) {
+					        self.init(store: Store(token: token), logger: Logger(token: token, name: Name()), alpha: Alpha(name: Name()))
+					    }
+
+					    @Instantiated let store: Store
+					    @Instantiated let logger: Logger
+					    @Instantiated let alpha: Alpha
+					}
+					""",
+					seamFixtureType(named: "Store", declarations: ["@Received let token: Token"]),
+					seamFixtureType(named: "Token", declarations: []),
+					seamFixtureType(named: "Name", declarations: []),
+				],
+				additionalDirectorySwiftFileContent: [
+					seamFixtureType(named: "Alpha", declarations: ["@Received let name: Name"]),
+					seamFixtureType(named: "Logger", declarations: ["@Received let token: Token", "@Received let name: Name"]),
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+				pluginTargetGraph: { inputSwiftFilePaths in
+					PluginTargetGraph(
+						target: PluginTargetGraph.Target(moduleName: "Core", packageID: "shop", sourceFilePaths: inputSwiftFilePaths, dependencyModuleNames: []),
+						dependencyTargets: [],
+					)
+				},
+			)
+		}
+	}
+
 	/// How `Feature.Screen`, `Core`'s seam, names `Logger`, which `Base` declares nested in `Feature`.
 	enum NestedTypeUse: String {
 		/// The seam's own `@Forwarded let logger: Logger`, built through an `Instantiator<Feature.Screen>` by `Detail`.
