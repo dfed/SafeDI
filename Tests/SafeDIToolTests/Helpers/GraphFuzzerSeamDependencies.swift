@@ -222,19 +222,16 @@ enum GraphFuzzerSeamDependencyDraw {
 		}
 		// Half the candidates, less those that name a declaration of the seam's module that stays.
 		var moved = Set(candidates.filter { _ in random.percentChance(50) })
-		func removeUnitsNamingDeclarations(notIn kept: inout Set<Int>, among scope: Set<Int>) {
-			var removedAny = true
-			while removedAny {
-				removedAny = false
-				for index in kept.sorted() where referencedNames[index].contains(where: { name in
-					(declaringUnitIndices[name] ?? []).contains { !kept.contains($0) && scope.contains($0) }
-				}) {
-					kept.remove(index)
-					removedAny = true
-				}
+		var removedAny = true
+		while removedAny {
+			removedAny = false
+			for index in moved.sorted() where referencedNames[index].contains(where: { name in
+				(declaringUnitIndices[name] ?? []).contains { !moved.contains($0) && units[$0].module == .seamModule }
+			}) {
+				moved.remove(index)
+				removedAny = true
 			}
 		}
-		removeUnitsNamingDeclarations(notIn: &moved, among: Set(units.indices.filter { units[$0].module == .seamModule }))
 		guard !moved.isEmpty else { return [] }
 		return units.indices.map { moved.contains($0) ? .seamDependency : nil }
 	}
