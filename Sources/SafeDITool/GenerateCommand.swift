@@ -979,7 +979,7 @@ struct Generate: AsyncParsableCommand {
 					missingDependencyModuleName: visible.missingDependencyModuleName,
 					visibleInstantiables: visible.instantiables,
 					visiblePlainTypeDeclarations: visible.plainTypeDeclarations,
-					callCarriesPluginComment: !visible.readFromModuleInfo,
+					callComment: visible.readFromModuleInfo ? .moduleInfo(declaringModuleName: moduleName) : .plugin,
 					// A module info holds the module's declarations as the module read them.
 					declaringModuleMockCondition: visible.readFromModuleInfo ? nil : visible.mockCondition,
 				)
@@ -993,7 +993,7 @@ struct Generate: AsyncParsableCommand {
 				missingDependencyModuleName: visible.missingDependencyModuleName,
 				visibleInstantiables: visible.instantiables,
 				visiblePlainTypeDeclarations: visible.plainTypeDeclarations,
-				callCarriesPluginComment: !visible.readFromModuleInfo,
+				callComment: visible.readFromModuleInfo ? .moduleInfo(declaringModuleName: moduleName) : .plugin,
 				declaringModuleMockCondition: visible.mockCondition,
 			)
 		}

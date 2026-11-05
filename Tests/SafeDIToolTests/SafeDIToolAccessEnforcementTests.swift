@@ -672,7 +672,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		    public enum __safeDI_Service_EEBD82F55D1C7D4A {}
 		}
 		"""
-		let pluginComment = integration == .swiftPackagePlugin ? " // If this line does not compile, add the SafeDI plugin to the target that declares Service." : ""
+		let pluginComment = integration.seamCallComment(type: "Service", declaringModule: "Core")
 		let rootCode = """
 		extension AppRoot {
 		    public init() {
@@ -837,7 +837,7 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		    public enum __safeDI_Service_CBF29CE484222325 {}
 		}
 		"""
-		let pluginComment = integration == .swiftPackagePlugin ? " // If this line does not compile, add the SafeDI plugin to the target that declares Service." : ""
+		let pluginComment = integration.seamCallComment(type: "Service", declaringModule: "Core")
 		let rootCode = """
 		extension Root {
 		    public convenience init() {
@@ -1049,9 +1049,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 			integration: integration,
 			filesToDelete: &filesToDelete,
 		)
-		let pluginComment = { (type: String) in
-			integration == .swiftPackagePlugin ? " // If this line does not compile, add the SafeDI plugin to the target that declares \(type)." : ""
-		}
 		let featureCode = """
 		extension Service {
 		    public struct SafeDIScope_Service_userService {}
@@ -1082,10 +1079,10 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_service() -> Service {
-		            _ = Service.__safeDI_Service_2567811726D4AD5E.self\(pluginComment("Service"))
+		            _ = Service.__safeDI_Service_2567811726D4AD5E.self\(integration.seamCallComment(type: "Service", declaringModule: "Feature"))
 		            func __safeDI_userServiceBuilder(_ scope: Service.SafeDIScope_Service_userService) -> any UserService {
 		                func __safeDI_userService() -> DefaultUserService {
-		                    _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self\(pluginComment("DefaultUserService"))
+		                    _ = DefaultUserService.__safeDI_DefaultUserService_CBF29CE484222325.self\(integration.seamCallComment(type: "DefaultUserService", declaringModule: "FeatureImpl"))
 		                    return DefaultUserService()
 		                }
 		                let userService: any UserService = __safeDI_userService()

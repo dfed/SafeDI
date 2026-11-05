@@ -290,12 +290,14 @@ struct SafeDIToolGraphFuzzerTests {
 	@Test
 	func integrationsDisagreeFailure_returnsNil_whenOutputsDifferOnlyByCommentsOneFlowWritesForWhatItCannotKnow() {
 		// A flow that cannot spell an alias's file as the compiler does refers to it with a comment, a seam call carries a
-		// comment where SafeDI cannot know the seam's module generated the initializer it calls, and a run without a target
-		// graph names the types it counts as `public` because it reads no declaration of them.
-		let withUnreadTypeComment = Self.rootInitializer.replacingOccurrences(
-			of: "    public convenience init() {",
-			with: "    // SafeDI counts `S31_Secret` as `public`: no module it reads declares it narrower. If `S31_Secret` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n    public convenience init() {",
-		)
+		// comment saying what each flow does when the call does not compile, and a run without a target graph names the
+		// types it counts as `public` because it reads no declaration of them.
+		let withUnreadTypeComment = Self.rootInitializer
+			.replacingOccurrences(
+				of: "    public convenience init() {",
+				with: "    // SafeDI counts `S31_Secret` as `public`: no module it reads declares it narrower. If `S31_Secret` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.\n    public convenience init() {",
+			)
+			.replacingOccurrences(of: "_ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self", with: "_ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self" + MultiModuleIntegration.moduleInfo.seamCallComment(type: "S31_Screen", declaringModule: "FuzzFeature"))
 		let withComments = Self.rootInitializer
 			.replacingOccurrences(of: "let authToken: S31_Secret = token", with: "let authToken: S31_Secret = token // Declared at Sources/FuzzApp/S31_Root.swift:8")
 			.replacingOccurrences(of: "_ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self", with: "_ = S31_Screen.__safeDI_S31_Screen_0123456789ABCDEF.self // If this line does not compile, add the SafeDI plugin to the target that declares S31_Screen.")

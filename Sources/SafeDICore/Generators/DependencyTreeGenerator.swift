@@ -3390,7 +3390,7 @@ public actor DependencyTreeGenerator {
 					}
 				},
 				guardTypeName: ownPlan.plan.guardTypeName,
-				carriesPluginComment: foreignPublicMock.callCarriesPluginComment,
+				comment: foreignPublicMock.callComment,
 				declaringModule: foreignPublicMock.declaringModule,
 				callerModule: emittingModule.identity,
 				requirement: requirement,
@@ -4634,7 +4634,7 @@ public actor DependencyTreeGenerator {
 						parameters: signature.parameters(ofTierAt: tier),
 						holes: signature.holes,
 						guardTypeName: signature.guardTypeName,
-						carriesPluginComment: seams.foreignSeams[instantiable.concreteInstantiable]?.callCarriesPluginComment ?? false,
+						comment: seams.foreignSeams[instantiable.concreteInstantiable]?.callComment ?? .noComment,
 						unreachableTierIsReported: unreachableTierIsReported,
 						omittedParameters: signature.parameters.filter { $0.tierAccess < tier },
 						noTierParameters: signature.noTierParameters,
