@@ -7858,7 +7858,11 @@ enum GraphFuzzerOracle {
 			case let .success(valueComparison):
 				// A public mock graph exempts the shape matrix's stated divergences, derived from its leaf calls.
 				let statedDivergences = isPublicMockGraph ? Self.statedPublicMockValueDivergences(in: valueComparison, of: runs) : []
-				let seamFiles: [String: String] = if case let .accepted(generatedFiles, _) = runs.firstOutcome { generatedFiles } else { [:] }
+				let seamFiles: [String: String] = if case let .accepted(generatedFiles, _) = runs.firstOutcome {
+					generatedFiles
+				} else {
+					[:]
+				}
 				let differences = valueComparison.differences.filter { difference in
 					!statedDivergences.contains(difference) && (isPublicMockGraph || !Self.isEagerInstanceRead(difference, inGraphWhoseSeamGenerated: seamFiles))
 				}
