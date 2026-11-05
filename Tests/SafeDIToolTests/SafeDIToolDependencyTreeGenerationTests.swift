@@ -2315,88 +2315,102 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenRootReachesSeamOfModuleWhoseDependencysModuleInfoIsNotGiven() async {
-		// A seam's signature is computed from what its module sees, which includes the modules its `.safedi` names,
-		// so a caller given only the seam's `.safedi` cannot compute it: reported at the seam, for a seam a tree
-		// reaches, with the remedy for each integration.
-		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			"""
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate a call to the initializer SafeDI generated for `Screen` in module `Feature`: that initializer takes what the type's dependency tree needs from the declarations `Feature` sees, which include module `Core`'s, and this run was not given `Core`'s SafeDI module info. Give this run every module `Feature` depends on: add `Core`'s `Core_safedi` target to this target's `safedi_deps` under Bazel (the `deps` of a hand-written `safedi_compile`), add `Core` to the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(
-						name: "Core",
-						packageName: "Shop",
-						swiftFileContent: [Self.loggerContent],
-					),
-					ModuleFixture(
-						name: "Feature",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							import Core
+	mutating func generate_callsSeam_whenRootListsOnlyTheSeamsModule() async throws {
+		// A seam's signature is computed from what its module sees, which its `.safedi` carries: a caller given only the
+		// seam's `.safedi` computes it. (Before every `.safedi` carried its view, this was an error naming `Core`.)
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(
+					name: "Core",
+					packageName: "Shop",
+					swiftFileContent: [Self.loggerContent],
+				),
+				ModuleFixture(
+					name: "Feature",
+					packageName: "Shop",
+					swiftFileContent: [
+						"""
+						import Core
 
-							@Instantiable(generateDependencyTree: true)
-							public struct Screen: Instantiable {
-							    public init(cache: Cache) {
-							        self.cache = cache
-							    }
+						@Instantiable(generateDependencyTree: true)
+						public struct Screen: Instantiable {
+						    public init(cache: Cache) {
+						        self.cache = cache
+						    }
 
-							    @Instantiated let cache: Cache
-							}
-							""",
-							"""
-							import Core
+						    @Instantiated let cache: Cache
+						}
+						""",
+						"""
+						import Core
 
-							@Instantiable
-							public struct Cache: Instantiable {
-							    public init(database: Database, logger: Logger?) {
-							        self.database = database
-							        self.logger = logger
-							    }
+						@Instantiable
+						public struct Cache: Instantiable {
+						    public init(database: Database, logger: Logger?) {
+						        self.database = database
+						        self.logger = logger
+						    }
 
-							    @Received let database: Database
-							    @Received(onlyIfAvailable: true) let logger: Logger?
-							}
-							""",
-							"""
-							@Instantiable
-							public struct Banner: Instantiable {
-							    public init() {}
-							}
-							""",
-							Self.databaseContent,
-						],
-						dependencies: ["Core"],
-					),
-					ModuleFixture(
-						name: "App",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							import Feature
+						    @Received let database: Database
+						    @Received(onlyIfAvailable: true) let logger: Logger?
+						}
+						""",
+						"""
+						@Instantiable
+						public struct Banner: Instantiable {
+						    public init() {}
+						}
+						""",
+						Self.databaseContent,
+					],
+					dependencies: ["Core"],
+				),
+				ModuleFixture(
+					name: "App",
+					packageName: "Shop",
+					swiftFileContent: [
+						"""
+						import Feature
 
-							@Instantiable(isRoot: true)
-							public struct Root: Instantiable {
-							    public init(database: Database, screen: Screen) {
-							        self.database = database
-							        self.screen = screen
-							    }
+						@Instantiable(isRoot: true)
+						public struct Root: Instantiable {
+						    public init(database: Database, screen: Screen) {
+						        self.database = database
+						        self.screen = screen
+						    }
 
-							    @Instantiated let database: Database
-							    @Instantiated let screen: Screen
-							}
-							""",
-						],
-						dependencies: ["Feature"],
-					),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
+						    @Instantiated let database: Database
+						    @Instantiated let screen: Screen
+						}
+						""",
+					],
+					dependencies: ["Feature"],
+				),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        let database = Database()
+		        func __safeDI_screen() -> Screen {
+		            _ = Screen.__safeDI_Screen_0514A8D5AAB19F68.self
+		            return Screen(database: database, logger: nil)
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        self.init(database: database, screen: screen)
+		    }
 		}
+		"""])
+		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -3344,97 +3358,113 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_reportsEachModulesSeams_whenTwoReachedModulesNameDependencyThisRunIsNotGiven() async {
-		// `App` reaches `Feature`'s seam, whose tree reaches `Core`'s, and both modules name `Base`, whose module info
-		// `App` is not given (`Feature`'s build needed it to compute `Core`'s seam, so its `.safedi` names it too):
-		// each module's seam is reported, in source order, before the inlined trees are found to need `Database`.
-		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			"""
-			\(fixtures["Core"]!["Cache.swift"]):3:1: error: SafeDI cannot generate a call to the initializer SafeDI generated for `Cache` in module `Core`: that initializer takes what the type's dependency tree needs from the declarations `Core` sees, which include module `Base`'s, and this run was not given `Base`'s SafeDI module info. Give this run every module `Core` depends on: add `Base`'s `Base_safedi` target to this target's `safedi_deps` under Bazel (the `deps` of a hand-written `safedi_compile`), add `Base` to the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`.
-			\(fixtures["Feature"]!["Screen.swift"]):3:1: error: SafeDI cannot generate a call to the initializer SafeDI generated for `Screen` in module `Feature`: that initializer takes what the type's dependency tree needs from the declarations `Feature` sees, which include module `Base`'s, and this run was not given `Base`'s SafeDI module info. Give this run every module `Feature` depends on: add `Base`'s `Base_safedi` target to this target's `safedi_deps` under Bazel (the `deps` of a hand-written `safedi_compile`), add `Base` to the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(
-						name: "Base",
-						packageName: "Shop",
-						swiftFileContent: [Self.databaseContent],
-					),
-					ModuleFixture(
-						name: "Core",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							import Base
+	mutating func generate_callsEachReachedModulesSeam_whenTwoReachedModulesDependOnModuleOnlyTheirViewsCarry() async throws {
+		// Cell 6 with two seam modules: `App` reaches `Feature`'s seam, whose tree reaches `Core`'s, and both modules depend on
+		// `Base`, which `App` does not list: each module's `.safedi` carries `Base`'s declarations, so `App` computes both
+		// signatures, which pass on `Store`'s `database: Database?`. (Before every `.safedi` carried its view, `App` had to list `Base`.)
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(
+					name: "Base",
+					packageName: "Shop",
+					swiftFileContent: [Self.databaseContent],
+				),
+				ModuleFixture(
+					name: "Core",
+					packageName: "Shop",
+					swiftFileContent: [
+						"""
+						import Base
 
-							@Instantiable(generateDependencyTree: true)
-							public struct Cache: Instantiable {
-							    public init(store: Store) {
-							        self.store = store
-							    }
+						@Instantiable(generateDependencyTree: true)
+						public struct Cache: Instantiable {
+						    public init(store: Store) {
+						        self.store = store
+						    }
 
-							    @Instantiated let store: Store
-							}
-							""",
-							"""
-							import Base
+						    @Instantiated let store: Store
+						}
+						""",
+						"""
+						import Base
 
-							@Instantiable
-							public struct Store: Instantiable {
-							    public init(database: Database) {
-							        self.database = database
-							    }
+						@Instantiable
+						public struct Store: Instantiable {
+						    public init(database: Database?) {
+						        self.database = database
+						    }
 
-							    @Received let database: Database
-							}
-							""",
-						],
-						dependencies: ["Base"],
-					),
-					ModuleFixture(
-						name: "Feature",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							import Core
+						    @Received(onlyIfAvailable: true) let database: Database?
+						}
+						""",
+					],
+					dependencies: ["Base"],
+				),
+				ModuleFixture(
+					name: "Feature",
+					packageName: "Shop",
+					swiftFileContent: [
+						"""
+						import Core
 
-							@Instantiable(generateDependencyTree: true)
-							public struct Screen: Instantiable {
-							    public init(cache: Cache) {
-							        self.cache = cache
-							    }
+						@Instantiable(generateDependencyTree: true)
+						public struct Screen: Instantiable {
+						    public init(cache: Cache) {
+						        self.cache = cache
+						    }
 
-							    @Instantiated let cache: Cache
-							}
-							""",
-						],
-						dependencies: ["Core", "Base"],
-					),
-					ModuleFixture(
-						name: "App",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							import Feature
+						    @Instantiated let cache: Cache
+						}
+						""",
+					],
+					dependencies: ["Core", "Base"],
+				),
+				ModuleFixture(
+					name: "App",
+					packageName: "Shop",
+					swiftFileContent: [
+						"""
+						import Feature
 
-							@Instantiable(isRoot: true)
-							public struct Root: Instantiable {
-							    public init(screen: Screen) {
-							        self.screen = screen
-							    }
+						@Instantiable(isRoot: true)
+						public struct Root: Instantiable {
+						    public init(screen: Screen) {
+						        self.screen = screen
+						    }
 
-							    @Instantiated let screen: Screen
-							}
-							""",
-						],
-						dependencies: ["Feature", "Core"],
-					),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
+						    @Instantiated let screen: Screen
+						}
+						""",
+					],
+					dependencies: ["Feature", "Core"],
+				),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Base)
+		import Base
+		#endif
+		#if canImport(Core)
+		import Core
+		#endif
+		#if canImport(Feature)
+		import Feature
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_screen() -> Screen {
+		            _ = Screen.__safeDI_Screen_C70D9378A6E61F91.self
+		            return Screen(database: nil)
+		        }
+		        let screen: Screen = __safeDI_screen()
+		        self.init(screen: screen)
+		    }
 		}
+		"""])
+		try expectEveryModuleCompiled(output)
 	}
 
 	// MARK: Receivers that leave the seam on some path
@@ -5103,107 +5133,65 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenSeamReachedAsItsAdditionalTypeIsOfModuleWhoseDependencysModuleInfoIsNotGiven() async {
-		// As above, under the `.safedi` flow, with `Core` naming `Base`, which `App` is not given: the seam
-		// reached as `any ServiceProtocol` is a reached seam, so the missing module info is reported.
-		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			"""
-			\(fixtures["Core"]!["Service.swift"]):3:1: error: SafeDI cannot generate a call to the initializer SafeDI generated for `Service` in module `Core`: that initializer takes what the type's dependency tree needs from the declarations `Core` sees, which include module `Base`'s, and this run was not given `Base`'s SafeDI module info. Give this run every module `Core` depends on: add `Base`'s `Base_safedi` target to this target's `safedi_deps` under Bazel (the `deps` of a hand-written `safedi_compile`), add `Base` to the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(
-						name: "Base",
-						packageName: "Shop",
-						swiftFileContent: [Self.loggerContent],
-					),
-					ModuleFixture(
-						name: "Core",
-						packageName: "Shop",
-						swiftFileContent: Self.coreServiceSeamFiles(cacheReceivesLogger: true),
-						dependencies: ["Base"],
-					),
-					ModuleFixture(
-						name: "App",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							import Core
+	mutating func generate_callsSeamReachedAsItsAdditionalType_whenCallerListsOnlyTheSeamsModule() async throws {
+		// The seam reached as `any ServiceProtocol`, of `Core`, which depends on `Base`, which `App` does not list:
+		// `Core`'s `.safedi` carries `Base`'s declarations, so `App` computes the signature.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				ModuleFixture(
+					name: "Base",
+					packageName: "Shop",
+					swiftFileContent: [Self.loggerContent],
+				),
+				ModuleFixture(
+					name: "Core",
+					packageName: "Shop",
+					swiftFileContent: Self.coreServiceSeamFiles(cacheReceivesLogger: true),
+					dependencies: ["Base"],
+				),
+				ModuleFixture(
+					name: "App",
+					packageName: "Shop",
+					swiftFileContent: [
+						"""
+						import Core
 
-							@Instantiable(isRoot: true)
-							public struct Root: Instantiable {
-							    public init(service: any ServiceProtocol) {
-							        self.service = service
-							    }
+						@Instantiable(isRoot: true)
+						public struct Root: Instantiable {
+						    public init(service: any ServiceProtocol) {
+						        self.service = service
+						    }
 
-							    @Instantiated let service: any ServiceProtocol
-							}
-							""",
-						],
-						dependencies: ["Core"],
-					),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
+						    @Instantiated let service: any ServiceProtocol
+						}
+						""",
+					],
+					dependencies: ["Core"],
+				),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+		#expect(output.modules["App"]?.generatedFiles == ["App.swift": generatedFileHeader + """
+		#if canImport(Base)
+		import Base
+		#endif
+		#if canImport(Core)
+		import Core
+		#endif
+
+		extension Root {
+		    public init() {
+		        func __safeDI_service() -> Service {
+		            _ = Service.__safeDI_Service_5F3FDE2D827DABB3.self
+		            return Service(logger: nil)
+		        }
+		        let service: any ServiceProtocol = __safeDI_service()
+		        self.init(service: service)
+		    }
 		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenItsTreeInstantiatesDeclarationOfModuleInfoNamingNoModule() async {
-		// `Base`'s module info was written without `--module-name`, so the modules that call `Cache` compute its
-		// signature without `Logger`, which `Store` instantiates: for them `Store`'s `logger` is a hole, whose builder
-		// `Cache`'s generated initializer would take, while `Core`, which sees `Logger`, builds it. The calls would not
-		// match the initializer, so `Core` reports `Cache`, naming `Logger`.
-		await assertThrowsMultiModuleError(inModule: "Core", diagnostics: { fixtures in
-			"\(fixtures["Core"]!["Cache.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Cache`: the initializer SafeDI generates for it depends on `Logger`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`."
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(
-						name: "Base",
-						packageName: "Shop",
-						swiftFileContent: [Self.loggerContent],
-						omitsModuleName: true,
-					),
-					ModuleFixture(
-						name: "Core",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							import Base
-
-							@Instantiable(generateDependencyTree: true)
-							public struct Cache: Instantiable {
-							    public init(store: Store) {
-							        self.store = store
-							    }
-
-							    @Instantiated let store: Store
-							}
-							""",
-							"""
-							import Base
-
-							@Instantiable
-							public struct Store: Instantiable {
-							    public init(logger: Logger) {
-							        self.logger = logger
-							    }
-
-							    @Instantiated let logger: Logger
-							}
-							""",
-						],
-						dependencies: ["Base"],
-					),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
+		"""])
+		try expectEveryModuleCompiled(output)
 	}
 
 	@Test
@@ -5280,108 +5268,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	// MARK: What a seam's callers see
 
-	/// `Base`, whose module info names no module, declares `Feature.Logger`; `Core` declares `Feature.Screen`, a
-	/// seam that receives `logger: Logger`, which the declarations `Core` sees qualify as `Feature.Logger`.
-	private static func receivedNestedTypeModules(coreOmitsModuleName: Bool) -> [ModuleFixture] {
-		[
-			ModuleFixture(
-				name: "Base",
-				packageName: "Shop",
-				swiftFileContent: [
-					"""
-					public enum Feature {}
-
-					public extension Feature {
-					    @Instantiable
-					    final class Logger: Instantiable {
-					        public init() {}
-					    }
-					}
-					""",
-				],
-				omitsModuleName: true,
-			),
-			ModuleFixture(
-				name: "Core",
-				packageName: "Shop",
-				swiftFileContent: [
-					"""
-					import Base
-
-					public extension Feature {
-					    @Instantiable(generateDependencyTree: true)
-					    final class Screen: Instantiable {
-					        public init(logger: Logger, detail: Detail) {
-					            self.logger = logger
-					            self.detail = detail
-					        }
-
-					        @Received let logger: Logger
-					        @Instantiated let detail: Detail
-					    }
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Detail: Instantiable {
-					    public init() {}
-					}
-					""",
-				],
-				dependencies: ["Base"],
-				omitsModuleName: coreOmitsModuleName,
-			),
-		]
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenSeamReceivesNestedTypeDeclaredInModuleInfoNamingNoModule() async {
-		// `Core` computes `Feature.Screen`'s parameter as `logger: Feature.Logger`, qualified by `Base`'s declaration;
-		// the modules that call it compute the signature from the modules `Core`'s module info names, which cannot
-		// name `Base`, and would spell the parameter `logger: Logger`: the two signatures differ, so `Core`'s run
-		// reports it at the seam, naming the declaration the callers cannot see.
-		await assertThrowsMultiModuleError(inModule: "Core", diagnostics: { fixtures in
-			"""
-			\(fixtures["Core"]!["Screen.swift"]):4:5: error: SafeDI cannot generate the dependency tree of `Feature.Screen`: the initializer SafeDI generates for it depends on `Feature.Logger`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: Self.receivedNestedTypeModules(coreOmitsModuleName: false),
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_generatesSeamWithoutCallersViewError_whenSeamsOwnModuleInfoNamesNoModule() async throws {
-		// `Core`'s own module info names no module, so every caller builds `Feature.Screen` inline and no caller
-		// computes its signature: nothing can disagree with `Core`'s, which is not checked against the callers' view
-		// and generates the initializer without an error, whatever `Base`'s module info names.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: Self.receivedNestedTypeModules(coreOmitsModuleName: true),
-			integration: .moduleInfo,
-			filesToDelete: &filesToDelete,
-		)
-		#expect(output.modules.mapValues(\.generatedFiles) == [
-			"Base": ["Base.swift": generatedFileHeader],
-			"Core": ["Core.swift": generatedFileHeader + Self.importBlock("Base") + "\n\n" + """
-			extension Feature.Screen {
-			    public convenience init(logger: Feature.Logger) {
-			        let detail = Detail()
-			        self.init(logger: logger, detail: detail)
-			    }
-			}
-
-			extension Feature.Screen {
-			    public enum __safeDI_Feature_Screen_931B46051C26329C {}
-			}
-			"""],
-		])
-	}
-
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenSeamReceivesNestedTypeDeclaredInAdditionalDirectoryUnderTargetGraph() async {
@@ -5449,9 +5335,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func generate_throwsError_whenDependentModuleInfoWasWrittenAgainstOtherDeclarationsOfItsDependency() async throws {
 		// `Core`'s module info was written by a run that saw `Base` as it was then, in which `Reader` received
-		// `token: Token`; `App`'s run reads that module info beside a `Base` in which `Reader` receives
-		// `token: String`, and computes `Screen`'s signature from the two: a label collision `Core`'s own run did not
-		// have, reported in `App`'s run at the seam, as `Core`'s module info locates it.
+		// `token: Token`; `App`'s run reads that module info beside a `Base` in which `Reader` receives `token: String`.
+		// `Core`'s `.safedi` carries `Base` as it read it, which differs from `Base`'s own `.safedi`: an error naming both
+		// files, before any signature is computed from either (cell 2b's twin).
 		func baseModule(readerReceives type: String) -> ModuleFixture {
 			ModuleFixture(
 				name: "Base",
@@ -5518,11 +5404,9 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		let coreModuleInfoPath = try #require(core.moduleInfoOutputPath)
 
 		await assertThrowsMultiModuleError(inModule: "App", diagnostics: { fixtures in
-			"""
-			\(core.fixtures["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: its tree receives `token` as `token: Token` on `Detail` and `token: String` on `Reader`, and the generated initializer takes each property the tree receives from outside the seam as one parameter named after it. Rename one of the properties, or @Instantiated one of them inside the tree.
-			\(core.fixtures["Detail.swift"]):9:5: note: `Detail` receives `token: Token` here.
-			\(fixtures["Base"]!["Reader.swift"]):7:5: note: `Reader` receives `token: String` here.
-			"""
+			// The harness copies `Core`'s earlier module info beside the module infos of this run, under the fixture root.
+			let moduleInfoDirectory = URL(fileURLWithPath: fixtures["Base"]!["Reader.swift"]).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("ModuleInfo").path
+			return "SafeDI was given two module infos that describe module `Base` differently: `\(moduleInfoDirectory)/Base.safedi` and `\(moduleInfoDirectory)/Core.safedi` were written against two different builds of `Base`. Build `Base` and the modules that depend on it again, so that every module info is written against the current one."
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
 				modules: [
@@ -7717,70 +7601,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 
 	// MARK: What a seam's callers see: the call shape
 
-	/// `Feature`'s seam `Cache` instantiates `Store`, declared in `Feature`, and `Logger`, declared in `Base`, whose
-	/// module info names no module; both receive `token: Token`, which `Core` declares. `Cache` is nested in the
-	/// internal enum `Internals`, so its effective access is `internal`, when `cacheIsInternal`; `Store` is nested in
-	/// the internal enum `Helpers`, so its initializer's effective access is `internal` however it is spelled, when
-	/// `storeIsInternal`. `Logger`'s initializer is `public`.
-	private static func sharedReceiveModules(cacheIsInternal: Bool = false, storeIsInternal: Bool = false) -> [ModuleFixture] {
-		func nested(_ declaration: String, in enumName: String?) -> String {
-			guard let enumName else { return declaration }
-			return "internal enum \(enumName) {\n" + declaration.split(separator: "\n", omittingEmptySubsequences: false).map { $0.isEmpty ? "" : "    \($0)" }.joined(separator: "\n") + "\n}"
-		}
-		let storeType = storeIsInternal ? "Helpers.Store" : "Store"
-		return [
-			ModuleFixture(
-				name: "Base",
-				packageName: "Shop",
-				swiftFileContent: [
-					"""
-					import Core
-
-					@Instantiable
-					public struct Logger: Instantiable {
-					    public init(token: Token) {
-					        self.token = token
-					    }
-
-					    @Received let token: Token
-					}
-					""",
-				],
-				dependencies: ["Core"],
-				omitsModuleName: true,
-			),
-			ModuleFixture(
-				name: "Feature",
-				packageName: "Shop",
-				swiftFileContent: [
-					"import Base\nimport Core\n\n" + nested("""
-					@Instantiable(generateDependencyTree: true)
-					public struct Cache: Instantiable {
-					    public init(store: \(storeType), logger: Logger) {
-					        self.store = store
-					        self.logger = logger
-					    }
-
-					    @Instantiated let store: \(storeType)
-					    @Instantiated let logger: Logger
-					}
-					""", in: cacheIsInternal ? "Internals" : nil),
-					"import Core\n\n" + nested("""
-					@Instantiable
-					public struct Store: Instantiable {
-					    public init(token: Token) {
-					        self.token = token
-					    }
-
-					    @Received let token: Token
-					}
-					""", in: storeIsInternal ? "Helpers" : nil),
-				],
-				dependencies: ["Base", "Core"],
-			),
-		]
-	}
-
 	private static let coreTokenModule = ModuleFixture(
 		name: "Core",
 		packageName: "Shop",
@@ -7793,46 +7613,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			""",
 		],
 	)
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenUnseenDeclarationReceivesWhatSeenDeclarationReceives() async {
-		// `Logger`, which the callers cannot see and `Cache` instantiates, receives `token` as `Store` does: the parameter
-		// agrees, but for the callers `logger` is a hole, whose builder `Cache`'s initializer would take, so `Feature`
-		// reports `Cache`, naming `Logger`.
-		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-			"\(fixtures["Feature"]!["Cache.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Cache`: the initializer SafeDI generates for it depends on `Logger`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`."
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [Self.coreTokenModule] + Self.sharedReceiveModules() + [
-					ModuleFixture(
-						name: "App",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							import Core
-							import Feature
-
-							@Instantiable(isRoot: true)
-							public struct Root: Instantiable {
-							    public init(token: Token, cache: Cache) {
-							        self.token = token
-							        self.cache = cache
-							    }
-
-							    @Instantiated let token: Token
-							    @Instantiated let cache: Cache
-							}
-							""",
-						],
-						dependencies: ["Core", "Feature"],
-					),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -7897,528 +7677,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 						dependencyTargets: [],
 					)
 				},
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenUnseenReceiverOfInternalSeamIsInstantiatedInItsTree() async {
-		// `Logger`'s `public init` proves `token` public, `Helpers.Store`'s initializer, internal by nesting, internal: the
-		// parameter's tier access is `internal` in both views, capped at the seam's type, but for the callers, who cannot
-		// see `Logger`, `logger` is a hole, so `Feature` reports `Internals.Cache`, naming `Logger`.
-		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-			"\(fixtures["Feature"]!["Cache.swift"]):5:5: error: SafeDI cannot generate the dependency tree of `Internals.Cache`: the initializer SafeDI generates for it depends on `Logger`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`."
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [Self.coreTokenModule] + Self.sharedReceiveModules(cacheIsInternal: true, storeIsInternal: true),
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_reportsOnlySeamWhoseCallersViewComputationThrows_whenAnotherSeamReachesNothingUnseen() async {
-		// `Screen`'s `Detail` receives `logger: Logger` and `Panel` `logger: Feature.Logger`, one type in this run's
-		// view, which qualifies `Logger` by `Base`'s declaration, and two in the callers', which cannot: their
-		// computation of `Screen` throws, and `Screen` alone is reported. `Cache` instantiates `Store` and nothing
-		// unseen.
-		await assertThrowsMultiModuleError(inModule: "Core", diagnostics: { fixtures in
-			"""
-			\(fixtures["Core"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: the initializer SafeDI generates for it depends on `Feature.Logger`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(
-						name: "Base",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							public enum Feature {}
-
-							public extension Feature {
-							    @Instantiable
-							    final class Logger: Instantiable {
-							        public init() {}
-							    }
-							}
-							""",
-						],
-						omitsModuleName: true,
-					),
-					ModuleFixture(
-						name: "Core",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							import Base
-
-							@Instantiable(generateDependencyTree: true)
-							public final class Screen: Instantiable {
-							    public init(detail: Feature.Detail, panel: Panel) {
-							        self.detail = detail
-							        self.panel = panel
-							    }
-
-							    @Instantiated let detail: Feature.Detail
-							    @Instantiated let panel: Panel
-							}
-							""",
-							"""
-							import Base
-
-							extension Feature {
-							    @Instantiable
-							    public final class Detail: Instantiable {
-							        public init(logger: Logger) {
-							            self.logger = logger
-							        }
-
-							        @Received let logger: Logger
-							    }
-							}
-							""",
-							"""
-							import Base
-
-							@Instantiable
-							public final class Panel: Instantiable {
-							    public init(logger: Feature.Logger) {
-							        self.logger = logger
-							    }
-
-							    @Received let logger: Feature.Logger
-							}
-							""",
-							"""
-							@Instantiable(generateDependencyTree: true)
-							public final class Cache: Instantiable {
-							    public init(store: Store) {
-							        self.store = store
-							    }
-
-							    @Instantiated let store: Store
-							}
-							""",
-							"""
-							@Instantiable
-							public final class Store: Instantiable {
-							    public init() {}
-							}
-							""",
-						],
-						dependencies: ["Base"],
-					),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesUnseenReceiver_whenUnseenTypeFulfillingItsParameterIsDeclaredBeforeIt() async {
-		// `Token` and `Zeta`, which receives `token`, are both unseen by the callers, and `Token` is declared first: the
-		// receiver is named, since `Token`'s absence alone changes nothing a caller passes.
-		await assertThrowsMultiModuleError(inModule: "Core", diagnostics: { fixtures in
-			"""
-			\(fixtures["Core"]!["Cache.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Cache`: the initializer SafeDI generates for it depends on `Zeta`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(name: "AModels", packageName: "Shop", swiftFileContent: [seamFixtureType(named: "Token", declarations: [])], omitsModuleName: true),
-					ModuleFixture(
-						name: "BFeature",
-						packageName: "Shop",
-						swiftFileContent: ["import AModels\n\n" + seamFixtureType(named: "Zeta", declarations: ["@Received let token: Token"])],
-						dependencies: ["AModels"],
-						omitsModuleName: true,
-					),
-					ModuleFixture(
-						name: "Core",
-						packageName: "Shop",
-						swiftFileContent: ["import AModels\nimport BFeature\n\n" + seamFixtureType(named: "Cache", isSeam: true, declarations: ["@Instantiated let zeta: Zeta"])],
-						dependencies: ["AModels", "BFeature"],
-					),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesUnseenReceiverOfRedeclaredInitializersParameter_whenCallersGeneratedInitializerWouldRedeclareOne() async {
-		// Without `Logger`, which the callers cannot see, `Cache`'s generated initializer would take `token` alone, which
-		// the initializer `Cache` declares takes, so the callers' computation throws naming `token`: `Logger`, its unseen
-		// receiver, is named, not `Alpha`, declared before it, whose `name` the error does not name.
-		await assertThrowsMultiModuleError(inModule: "Feature", diagnostics: { fixtures in
-			"""
-			\(fixtures["Feature"]!["Cache.swift"]):5:1: error: SafeDI cannot generate the dependency tree of `Cache`: the initializer SafeDI generates for it depends on `Logger`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(name: "Core", packageName: "Shop", swiftFileContent: [seamFixtureType(named: "Token", declarations: []), seamFixtureType(named: "Name", declarations: [])]),
-					ModuleFixture(name: "ABase", packageName: "Shop", swiftFileContent: ["import Core\n\n" + seamFixtureType(named: "Alpha", declarations: ["@Received let name: Name"])], dependencies: ["Core"], omitsModuleName: true),
-					ModuleFixture(name: "BBase", packageName: "Shop", swiftFileContent: ["import Core\n\n" + seamFixtureType(named: "Logger", declarations: ["@Received let token: Token", "@Received let name: Name"])], dependencies: ["Core"], omitsModuleName: true),
-					ModuleFixture(
-						name: "Feature",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							import ABase
-							import BBase
-							import Core
-
-							@Instantiable(generateDependencyTree: true)
-							public struct Cache: Instantiable {
-							    public init(store: Store, logger: Logger, alpha: Alpha) {
-							        self.store = store
-							        self.logger = logger
-							        self.alpha = alpha
-							    }
-
-							    public init(token: Token) {
-							        self.init(store: Store(token: token), logger: Logger(token: token, name: Name()), alpha: Alpha(name: Name()))
-							    }
-
-							    @Instantiated let store: Store
-							    @Instantiated let logger: Logger
-							    @Instantiated let alpha: Alpha
-							}
-							""",
-							"import Core\n\n" + seamFixtureType(named: "Store", declarations: ["@Received let token: Token"]),
-						],
-						dependencies: ["ABase", "BBase", "Core"],
-					),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test(arguments: [true, false])
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_reportsSeamReachingSeamCallersCannotCompute_whenCallersComputationOfReachedSeamThrowsOrDiffers(callersComputationThrows: Bool) async {
-		// The callers cannot see `Base`'s `Feature.Logger`, so they qualify `Detail`'s `logger` otherwise: beside
-		// `Panel`'s `logger: Feature.Logger` their computation of `Screen` throws, and without `Panel` it merely differs.
-		// Either way `Outer`, which passes `Screen`'s parameter through, is reported on its own call shape too.
-		await assertThrowsMultiModuleError(inModule: "Core", diagnostics: { fixtures in
-			"""
-			\(fixtures["Core"]!["Outer.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Outer`: the initializer SafeDI generates for it depends on `Feature.Logger`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`.
-			\(fixtures["Core"]!["Screen.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Screen`: the initializer SafeDI generates for it depends on `Feature.Logger`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(
-						name: "Base",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							public enum Feature {}
-
-							public extension Feature {
-							    @Instantiable
-							    final class Logger: Instantiable {
-							        public init() {}
-							    }
-							}
-							""",
-						],
-						omitsModuleName: true,
-					),
-					ModuleFixture(
-						name: "Core",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							import Base
-
-							extension Feature {
-							    @Instantiable
-							    public final class Detail: Instantiable {
-							        public init(logger: Logger) {
-							            self.logger = logger
-							        }
-
-							        @Received let logger: Logger
-							    }
-							}
-							""",
-							"import Base\n\n" + seamFixtureType(named: "Outer", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let screen: Screen"]),
-							"import Base\n\n" + seamFixtureType(named: "Screen", isSeam: true, isFinalClass: true, declarations: ["@Instantiated let detail: Feature.Detail"] + (callersComputationThrows ? ["@Instantiated let panel: Panel"] : [])),
-						] + (callersComputationThrows ? ["import Base\n\n" + seamFixtureType(named: "Panel", isFinalClass: true, declarations: ["@Received let logger: Feature.Logger"])] : []),
-						dependencies: ["Base"],
-					),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesUnseenDeclarationWhoseReceiveChangesSignature_whenSeamReachesSeveral() async {
-		// `Cache` instantiates `Alpha` and `Zeta`, both unseen by the callers: the callers' view leaves both out and
-		// takes no `token`, which `Zeta` receives, so `Zeta` is named, not `Alpha`, which sorts first and changes
-		// nothing a caller passes.
-		await assertThrowsMultiModuleError(inModule: "Core", diagnostics: { fixtures in
-			"""
-			\(fixtures["Core"]!["Cache.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Cache`: the initializer SafeDI generates for it depends on `Zeta`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(
-						name: "Base",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							@Instantiable
-							public final class Alpha: Instantiable {
-							    public init() {}
-							}
-							""",
-							"""
-							@Instantiable
-							public final class Zeta: Instantiable {
-							    public init(token: String) {
-							        self.token = token
-							    }
-
-							    @Received let token: String
-							}
-							""",
-						],
-						omitsModuleName: true,
-					),
-					ModuleFixture(
-						name: "Core",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							import Base
-
-							@Instantiable(generateDependencyTree: true)
-							public final class Cache: Instantiable {
-							    public init(zeta: Zeta, alpha: Alpha) {
-							        self.zeta = zeta
-							        self.alpha = alpha
-							    }
-
-							    @Instantiated let zeta: Zeta
-							    @Instantiated let alpha: Alpha
-							}
-							""",
-						],
-						dependencies: ["Base"],
-					),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesUnseenDeclarationDeclaredFirst_whenSeveralUnseenDeclarationsReceiveTheParameter() async {
-		// Six unseen types receive `token`, declared in one file in an order that neither their names nor the
-		// seam's tree keeps – `Echo` is declared first, `Alpha` sorts first, and `Cache` instantiates `Bravo` first –
-		// so the one named is the one declared first.
-		await assertThrowsMultiModuleError(inModule: "Core", diagnostics: { fixtures in
-			"""
-			\(fixtures["Core"]!["Cache.swift"]):3:1: error: SafeDI cannot generate the dependency tree of `Cache`: the initializer SafeDI generates for it depends on `Echo`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(
-						name: "Base",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							@Instantiable
-							public final class Echo: Instantiable {
-							    public init(token: String) {
-							        self.token = token
-							    }
-
-							    @Received let token: String
-							}
-
-							@Instantiable
-							public final class Alpha: Instantiable {
-							    public init(token: String) {
-							        self.token = token
-							    }
-
-							    @Received let token: String
-							}
-
-							@Instantiable
-							public final class Foxtrot: Instantiable {
-							    public init(token: String) {
-							        self.token = token
-							    }
-
-							    @Received let token: String
-							}
-
-							@Instantiable
-							public final class Charlie: Instantiable {
-							    public init(token: String) {
-							        self.token = token
-							    }
-
-							    @Received let token: String
-							}
-
-							@Instantiable
-							public final class Delta: Instantiable {
-							    public init(token: String) {
-							        self.token = token
-							    }
-
-							    @Received let token: String
-							}
-
-							@Instantiable
-							public final class Bravo: Instantiable {
-							    public init(token: String) {
-							        self.token = token
-							    }
-
-							    @Received let token: String
-							}
-							""",
-						],
-						omitsModuleName: true,
-					),
-					ModuleFixture(
-						name: "Core",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							import Base
-
-							@Instantiable(generateDependencyTree: true)
-							public final class Cache: Instantiable {
-							    public init(bravo: Bravo, delta: Delta, charlie: Charlie, foxtrot: Foxtrot, alpha: Alpha, echo: Echo) {
-							        self.bravo = bravo
-							        self.delta = delta
-							        self.charlie = charlie
-							        self.foxtrot = foxtrot
-							        self.alpha = alpha
-							        self.echo = echo
-							    }
-
-							    @Instantiated let bravo: Bravo
-							    @Instantiated let delta: Delta
-							    @Instantiated let charlie: Charlie
-							    @Instantiated let foxtrot: Foxtrot
-							    @Instantiated let alpha: Alpha
-							    @Instantiated let echo: Echo
-							}
-							""",
-						],
-						dependencies: ["Base"],
-					),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_namesUnseenDeclarationTheSeamReaches_whenEveryReceiverOfTheParameterIsSeen() async {
-		// `Cache` reaches `Reader`, which receives `token`, only through `Bridge`, which the callers cannot see: the
-		// callers' view leaves `Bridge` out and takes no `token`, but `Reader` and `Token` are `Common`'s, which the
-		// callers see, so the declaration named is the one the tree reaches that they cannot see.
-		await assertThrowsMultiModuleError(inModule: "Core", diagnostics: { fixtures in
-			"""
-			\(fixtures["Core"]!["Cache.swift"]):4:1: error: SafeDI cannot generate the dependency tree of `Cache`: the initializer SafeDI generates for it depends on `Bridge`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(
-						name: "Common",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							@Instantiable
-							public final class Reader: Instantiable {
-							    public init(token: Token) {
-							        self.token = token
-							    }
-
-							    @Received let token: Token
-							}
-							""",
-							"""
-							@Instantiable
-							public final class Token: Instantiable {
-							    public init() {}
-							}
-							""",
-						],
-					),
-					ModuleFixture(
-						name: "Base",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							import Common
-
-							@Instantiable
-							public final class Bridge: Instantiable {
-							    public init(reader: Reader) {
-							        self.reader = reader
-							    }
-
-							    @Instantiated let reader: Reader
-							}
-							""",
-						],
-						dependencies: ["Common"],
-						omitsModuleName: true,
-					),
-					ModuleFixture(
-						name: "Core",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							import Base
-							import Common
-
-							@Instantiable(generateDependencyTree: true)
-							public final class Cache: Instantiable {
-							    public init(bridge: Bridge) {
-							        self.bridge = bridge
-							    }
-
-							    @Instantiated let bridge: Bridge
-							}
-							""",
-						],
-						dependencies: ["Base", "Common"],
-					),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
 			)
 		}
 	}
@@ -8503,49 +7761,6 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 			}
 			""",
 		]
-	}
-
-	@Test(arguments: [NestedTypeUse.forwarded, .alias, .receivedInsideTree])
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenSeamNamesNestedTypeOfModuleInfoNamingNoModule(use: NestedTypeUse) async {
-		// A forwarded property, an alias's `ofType:`, and a receive inside the tree each put `Logger` in a parameter's
-		// type, which this run qualifies as `Feature.Logger` by `Base`'s declaration and the callers cannot: the
-		// call shapes differ, and the declaration that fulfills the parameter's type is named.
-		await assertThrowsMultiModuleError(inModule: "Core", diagnostics: { fixtures in
-			"""
-			\(fixtures["Core"]!["Screen.swift"]):4:5: error: SafeDI cannot generate the dependency tree of `Feature.Screen`: the initializer SafeDI generates for it depends on `Feature.Logger`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`.
-			"""
-		}) {
-			try await executeSafeDIToolMultiModuleTest(
-				modules: [
-					ModuleFixture(
-						name: "Base",
-						packageName: "Shop",
-						swiftFileContent: [
-							"""
-							public enum Feature {}
-
-							public extension Feature {
-							    @Instantiable
-							    final class Logger: Instantiable {
-							        public init() {}
-							    }
-							}
-							""",
-						],
-						omitsModuleName: true,
-					),
-					ModuleFixture(
-						name: "Core",
-						packageName: "Shop",
-						swiftFileContent: Self.nestedTypeUseFiles(use).map { "import Base\n\n" + $0 },
-						dependencies: ["Base"],
-					),
-				],
-				integration: .moduleInfo,
-				filesToDelete: &filesToDelete,
-			)
-		}
 	}
 
 	@Test(arguments: [NestedTypeUse.forwarded, .alias, .receivedInsideTree])
@@ -9445,6 +8660,14 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		case .swiftPackagePlugin:
 			NormalizedFilePath(fixtures[moduleName]!.compilerPath(of: fileName)).path
 		}
+	}
+
+	/// Expects every module to have compiled, when compile verification runs.
+	private func expectEveryModuleCompiled(_ output: MultiModuleTestOutput, sourceLocation: SourceLocation = #_sourceLocation) throws {
+		guard compileVerificationIsEnabled else { return }
+		let compilation = try #require(output.compilation, sourceLocation: sourceLocation)
+		#expect(compilation.modules.map(\.moduleName) == output.moduleNames, sourceLocation: sourceLocation)
+		#expect(compilation.failure == nil, sourceLocation: sourceLocation)
 	}
 
 	private static func importBlock(_ moduleName: String) -> String {

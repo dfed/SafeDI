@@ -194,7 +194,12 @@ struct QueryNeeds: AsyncParsableCommand {
 	/// configuration, and a module info file as a dependent module's. Ordered by name, whatever order their reads
 	/// finished in, which is the order their declarations are combined in.
 	func readIncludedModules() async throws -> [ParsedQueryModule] {
-		let includedModules = IncludedModule.modules(including: include, moduleInfo: moduleInfo)
+		// A module info file names the module it describes.
+		var recordedModuleNames = [String: String]()
+		for path in moduleInfo {
+			recordedModuleNames[path] = try ParsedQueryModule.readModuleInfoFile(at: path).moduleName
+		}
+		let includedModules = try IncludedModule.modules(including: include, moduleInfo: moduleInfo, recordedModuleNames: recordedModuleNames)
 		guard !includedModules.isEmpty else {
 			throw QueryError.noModuleIncluded
 		}
@@ -235,10 +240,8 @@ struct QueryNeeds: AsyncParsableCommand {
 
 /// A module named with `--include` or `--module-info`: what it is read from, and the arguments that name it.
 struct IncludedModule: Equatable {
-	/// The last component of the module's path, or as many of its trailing components as tell it apart from the
-	/// other modules, joined by `/`. A directory's path is the directory; a module info file's is its directory and
-	/// its file name without the `.safedi` extension and a trailing `_safedi`. A module info file whose path so
-	/// reads the same as another module's is named by its file name as spelled.
+	/// A directory's module is named by the last component of its path, or as many of its trailing components as tell it
+	/// apart from the other directories, joined by `/`. A module info file's module is the module the file records.
 	let name: String
 	let source: Source
 	/// The arguments that name the module, in the order they were given.
@@ -253,82 +256,66 @@ struct IncludedModule: Equatable {
 		case moduleInfo(NormalizedFilePath)
 	}
 
-	/// The extension of a module info file.
-	static let moduleInfoPathExtension = ".safedi"
-	/// What the Bazel macro appends to a library's name to name the rule that writes its module info file, and so
-	/// the file: a `safedi_swift_library` named `App` writes `App_safedi.safedi`.
-	static let bazelModuleInfoNameSuffix = "_safedi"
-
 	/// The modules the arguments name, ordered by name. Arguments naming one directory, or one file, are one module.
-	static func modules(including directoryPaths: [String], moduleInfo moduleInfoPaths: [String]) -> [IncludedModule] {
+	/// - Parameter recordedModuleNames: The module each `--module-info` argument's file records, by argument.
+	/// - Throws: When two module info files record one module, or a directory's module is named like a module a module
+	///   info file records: one module included twice.
+	static func modules(including directoryPaths: [String], moduleInfo moduleInfoPaths: [String], recordedModuleNames: [String: String]) throws(QueryError) -> [IncludedModule] {
 		struct Entry {
 			let source: Source
 			var paths: [String]
 			/// The components the module is named from, the last of which names the module on its own.
 			let nameComponents: [String]
-			/// The name that tells the module apart when every component of `nameComponents` is another module's.
-			let fallbackName: String
 		}
-		var entries = [Entry]()
+		var directoryEntries = [Entry]()
+		var moduleInfoEntries = [Entry]()
 		var entryIndexesBySource = [Source: Int]()
-		func add(_ path: String, source: Source, nameComponents: [String], fallbackName: String) {
-			if let index = entryIndexesBySource[source] {
-				entries[index].paths.append(path)
-			} else {
-				entryIndexesBySource[source] = entries.count
-				entries.append(Entry(source: source, paths: [path], nameComponents: nameComponents, fallbackName: fallbackName))
-			}
-		}
 		for path in directoryPaths {
 			// `generate --include` reads a Swift file named directly, as it reads the files of a directory.
 			let directorySpelling = path.hasSuffix(".swift") ? (path as NSString).deletingLastPathComponent : path
 			let spelling = directorySpelling.isEmpty ? "." : directorySpelling
 			let directory = NormalizedFilePath(spelling)
-			let components = directory.path.split(separator: "/").map(String.init)
-			add(path, source: .directory(directory, spelling: spelling), nameComponents: components, fallbackName: components.last ?? directory.path)
+			let source = Source.directory(directory, spelling: spelling)
+			if let index = entryIndexesBySource[source] {
+				directoryEntries[index].paths.append(path)
+			} else {
+				entryIndexesBySource[source] = directoryEntries.count
+				directoryEntries.append(Entry(source: source, paths: [path], nameComponents: directory.path.split(separator: "/").map(String.init)))
+			}
 		}
 		for path in moduleInfoPaths {
-			let file = NormalizedFilePath(path)
-			var components = file.path.split(separator: "/").map(String.init)
-			let fileName = components.popLast() ?? file.path
-			add(path, source: .moduleInfo(file), nameComponents: components + [Self.moduleName(ofModuleInfoFileNamed: fileName)], fallbackName: fileName)
+			let source = Source.moduleInfo(NormalizedFilePath(path))
+			if let index = entryIndexesBySource[source] {
+				moduleInfoEntries[index].paths.append(path)
+			} else {
+				entryIndexesBySource[source] = moduleInfoEntries.count
+				moduleInfoEntries.append(Entry(source: source, paths: [path], nameComponents: [recordedModuleNames[path] ?? path]))
+			}
 		}
 		// Two layouts need more than the last component: `Modules/Home/Sources` and `Modules/Settings/Sources`
-		// are `Home/Sources` and `Settings/Sources`. Distinct paths differ in some component, except a directory and
-		// a module info file that read alike (`Home` and `Home.safedi`), which the file's name as spelled tells apart.
+		// are `Home/Sources` and `Settings/Sources`. Distinct directories differ in some component.
 		func name(of components: [String], length: Int) -> String {
 			components.suffix(length).joined(separator: "/")
 		}
-		let longestNameComponentCount = entries.map(\.nameComponents.count).max() ?? 0
-		return entries
-			.map { entry in
-				var length = 1
-				while length < longestNameComponentCount,
-				      entries.filter({ name(of: $0.nameComponents, length: length) == name(of: entry.nameComponents, length: length) }).count > 1
-				{
-					length += 1
-				}
-				let isNamedApart = entries.filter { name(of: $0.nameComponents, length: length) == name(of: entry.nameComponents, length: length) }.count == 1
-				return IncludedModule(
-					name: isNamedApart ? name(of: entry.nameComponents, length: length) : entry.fallbackName,
-					source: entry.source,
-					paths: entry.paths,
-				)
+		let longestNameComponentCount = directoryEntries.map(\.nameComponents.count).max() ?? 0
+		let directoryModules = directoryEntries.map { entry in
+			var length = 1
+			while length < longestNameComponentCount,
+			      directoryEntries.filter({ name(of: $0.nameComponents, length: length) == name(of: entry.nameComponents, length: length) }).count > 1
+			{
+				length += 1
 			}
-			.sorted { $0.name < $1.name }
-	}
-
-	/// The module a module info file is named for: the file name without its `.safedi` extension, and without the
-	/// `_safedi` the Bazel macro appends. A file named by either alone keeps its name.
-	static func moduleName(ofModuleInfoFileNamed fileName: String) -> String {
-		var name = fileName
-		if name.hasSuffix(moduleInfoPathExtension), name.count > moduleInfoPathExtension.count {
-			name.removeLast(moduleInfoPathExtension.count)
+			return IncludedModule(name: name(of: entry.nameComponents, length: length), source: entry.source, paths: entry.paths)
 		}
-		if name.hasSuffix(bazelModuleInfoNameSuffix), name.count > bazelModuleInfoNameSuffix.count {
-			name.removeLast(bazelModuleInfoNameSuffix.count)
+		let moduleInfoModules = moduleInfoEntries.map { IncludedModule(name: $0.nameComponents[0], source: $0.source, paths: $0.paths) }
+		let moduleInfoModulesByName = Dictionary(grouping: moduleInfoModules, by: \.name)
+		if let (moduleName, modules) = moduleInfoModulesByName.filter({ $0.value.count > 1 }).min(by: { $0.key < $1.key }) {
+			throw .moduleInfoNamedTwice(moduleName: moduleName, paths: modules.flatMap(\.paths).sorted())
 		}
-		return name
+		if let directoryModule = directoryModules.filter({ moduleInfoModulesByName[$0.name] != nil }).min(by: { $0.name < $1.name }) {
+			throw .modulesShareName(moduleName: directoryModule.name, paths: (directoryModule.paths + (moduleInfoModulesByName[directoryModule.name] ?? []).flatMap(\.paths)).sorted())
+		}
+		return (directoryModules + moduleInfoModules).sorted { $0.name < $1.name }
 	}
 }
 
@@ -367,23 +354,13 @@ struct ParsedQueryModule {
 			}
 		case .moduleInfo:
 			let path = includedModule.paths[0]
-			guard FileManager.default.fileExists(atPath: path) else {
-				throw QueryError.moduleInfoNotReadable(path: path, reason: "No file exists at that path.")
-			}
-			// A file that cannot be opened reports the file system's error as `generate` does.
-			let data = try Data(contentsOf: path.asFileURL)
-			let readModuleInfo: ModuleInfo
-			do {
-				readModuleInfo = try ModuleInfo(moduleInfoData: data)
-			} catch {
-				throw QueryError.moduleInfoNotReadable(path: path, reason: "\(error) \(BinaryFile.unreadableFileExplanation)")
-			}
+			// The file's view of the modules it depends on is not read: the query includes every module it reads.
+			let readModuleInfo = try Self.readModuleInfoFile(at: path).module
 			// Every declaration the file holds belongs to the module, named, with its package, as the build that wrote the
-			// file named them, if that build did. They decide only which hand-written mocks a module that generates a
-			// mock can call.
-			identity = ModuleIdentity(moduleName: readModuleInfo.moduleName ?? includedModule.name, packageName: readModuleInfo.packageName)
+			// file named them. They decide only which hand-written mocks a module that generates a mock can call.
+			identity = ModuleIdentity(moduleName: includedModule.name, packageName: readModuleInfo.packageName)
 			moduleInfo = readModuleInfo.declaringEveryInstantiable(in: DeclaringModule(
-				moduleName: readModuleInfo.moduleName ?? includedModule.name,
+				moduleName: includedModule.name,
 				packageName: readModuleInfo.packageName,
 			))
 			// `parseModule` rejects a module with more than one configuration, so a module info file holds at most one.
@@ -397,6 +374,21 @@ struct ParsedQueryModule {
 			.map { filePath in
 				(filePath: filePath, attribution: FileAttribution(moduleName: includedModule.name, modulePaths: includedModule.paths, filePath: filePath))
 			}
+		}
+	}
+
+	/// The module info file at `path`, as given.
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	static func readModuleInfoFile(at path: String) throws -> ModuleInfoFile {
+		guard FileManager.default.fileExists(atPath: path) else {
+			throw QueryError.moduleInfoNotReadable(path: path, reason: "No file exists at that path.")
+		}
+		// A file that cannot be opened reports the file system's error as `generate` does.
+		let data = try Data(contentsOf: path.asFileURL)
+		do {
+			return try ModuleInfoFile(moduleInfoData: data)
+		} catch {
+			throw QueryError.moduleInfoNotReadable(path: path, reason: "\(error) \(BinaryFile.unreadableFileExplanation)")
 		}
 	}
 
@@ -447,6 +439,10 @@ enum QueryError: Error, CustomStringConvertible, Equatable {
 	/// The `--module-info` file at `path`, as given, could not be read, for `reason`.
 	case moduleInfoNotReadable(path: String, reason: String)
 	case fileInTwoModules(filePath: String, moduleNames: [String])
+	/// Two `--module-info` files, at `paths`, record the module `moduleName`.
+	case moduleInfoNamedTwice(moduleName: String, paths: [String])
+	/// An `--include` directory's module and a `--module-info` file's, at `paths`, are both named `moduleName`.
+	case modulesShareName(moduleName: String, paths: [String])
 	case filesWithUnexpectedNodes([String])
 	/// No declaration has the name. `fulfilledBy` holds the concrete types of the declarations that fulfill a type
 	/// of that name, and `similarlyNamed` the concrete types named most like it, both sorted.
@@ -463,6 +459,10 @@ enum QueryError: Error, CustomStringConvertible, Equatable {
 			"Could not read the SafeDI module info file at '\(path)': \(reason)"
 		case let .fileInTwoModules(filePath, moduleNames):
 			"The file '\(filePath)' is in two modules: \(moduleNames.map { "'\($0)'" }.joined(separator: " and ")). A file belongs to one module, so include directories and module info files that do not overlap."
+		case let .moduleInfoNamedTwice(moduleName, paths):
+			"The module info files \(paths.map { "'\($0)'" }.joined(separator: " and ")) both record module '\(moduleName)'. Name each module once."
+		case let .modulesShareName(moduleName, paths):
+			"\(paths.map { "'\($0)'" }.joined(separator: " and ")) are both module '\(moduleName)': a directory is named after its last path component, and a module info file after the module it records. Name each module once."
 		case let .filesWithUnexpectedNodes(filePaths):
 			"Compiler errors prevent SafeDI from reading these files:\n\t\(filePaths.joined(separator: "\n\t"))"
 		case let .noInstantiableNamed(typeName, fulfilledBy, similarlyNamed):
@@ -486,6 +486,10 @@ enum QueryError: Error, CustomStringConvertible, Equatable {
 			"moduleInfoNotReadable"
 		case .fileInTwoModules:
 			"fileInTwoModules"
+		case .moduleInfoNamedTwice:
+			"moduleInfoNamedTwice"
+		case .modulesShareName:
+			"modulesShareName"
 		case .filesWithUnexpectedNodes:
 			"filesWithUnexpectedNodes"
 		case .noInstantiableNamed:
@@ -571,6 +575,8 @@ struct QueryErrorReport: Encodable {
 				try errorContainer.encode([path], forKey: .paths)
 			case let .fileInTwoModules(filePath, _):
 				try errorContainer.encode([filePath], forKey: .paths)
+			case let .moduleInfoNamedTwice(_, paths), let .modulesShareName(_, paths):
+				try errorContainer.encode(paths, forKey: .paths)
 			case let .filesWithUnexpectedNodes(filePaths):
 				try errorContainer.encode(filePaths, forKey: .paths)
 			case .noModuleIncluded:

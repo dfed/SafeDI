@@ -1010,8 +1010,8 @@ extension TypeAccessProof {
 		/// (`Core.Theme`), where the view holds a module of that name and no type of it, names that module's declarations
 		/// of the rest. Otherwise the mentioning module's own declaration is what Swift resolves the name to, and without
 		/// one, a declaration another module declares `package` or wider: the only kind another module can name. A
-		/// declaration SafeDI knows no module of that is not in one of the run's own files – read from a module info that
-		/// names no module, or from a directory a configuration adds – is taken at its level when that is `package` or
+		/// declaration SafeDI knows no module of that is not in one of the run's own files – read from a directory a
+		/// configuration adds, or by a run of the Xcode project plugin – is taken at its level when that is `package` or
 		/// wider, whichever package it is in. Generic arguments name nothing a declaration records.
 		func candidates(named type: TypeDescription, mentionedFrom mentioningModule: MentioningModule) -> [PlainTypeDeclaration] {
 			guard let type = type.withoutGenericArguments else { return [] }

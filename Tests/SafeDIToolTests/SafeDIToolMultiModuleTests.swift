@@ -196,7 +196,7 @@ struct SafeDIToolMultiModuleTests: ~Copyable {
 		let middle = try #require(output.modules["Middle"])
 		let moduleInfoOutputPath = try #require(middle.moduleInfoOutputPath)
 		#expect(FileManager.default.fileExists(atPath: moduleInfoOutputPath))
-		let writtenModuleInfo = try ModuleInfo(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: moduleInfoOutputPath)))
+		let writtenModuleInfo = try ModuleInfoFile(moduleInfoData: Data(contentsOf: URL(fileURLWithPath: moduleInfoOutputPath)))
 		#expect(writtenModuleInfo.instantiables.map(\.concreteInstantiable.asSource) == ["Pump"])
 		#expect(try #require(middle.moduleInfo).instantiables.map(\.concreteInstantiable.asSource) == ["Pump"])
 	}

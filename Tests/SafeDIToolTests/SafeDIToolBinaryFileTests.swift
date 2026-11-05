@@ -165,8 +165,15 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		// is the reminder to write and read it too. Listing it changes the schema fingerprint, so caches written
 		// before the change are not read after it.
 		let project = try await scannedKitchenSinkProject()
+		// A module info file holds the module's declarations, as the cache does, and a view of other modules'.
+		let moduleInfoFile = ModuleInfoFile(module: project.scannedModuleInfo.moduleInfo, moduleName: "Kitchen", view: .empty)
+		let moduleInfoFileWithView = ModuleInfoFile(
+			module: project.scannedModuleInfo.moduleInfo,
+			moduleName: "Sink",
+			view: ModuleInfoView(moduleGraph: [moduleInfoFile.ownIdentity], declarations: [moduleInfoFile.ownEntry]),
+		)
 		var foundTypeNames = Set<String>()
-		for value in reflectedStructuresAndEnumerations(in: project.scannedModuleInfo) {
+		for value in reflectedStructuresAndEnumerations(in: project.scannedModuleInfo) + reflectedStructuresAndEnumerations(in: moduleInfoFileWithView) {
 			let typeName = String(reflecting: type(of: value))
 			foundTypeNames.insert(typeName)
 			guard let schemaMember = value as? any BinarySchemaMember else {
@@ -563,7 +570,7 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 		)
 
 		#expect {
-			try moduleInfo.moduleInfoData
+			try ModuleInfoFile(module: moduleInfo, moduleName: "Deep", view: .empty).moduleInfoData
 		} throws: { error in
 			// Named by its outermost type: spelling the nested type recurses as deeply as it nests.
 			"\(error)" == "SafeDI cannot write `Level0` to a module info file: a type its declaration names nests more than 128 types deep, which is more than SafeDI reads back. To fix this, declare a typealias for part of that type, so that no type in the declaration nests more than 128 types deep."
@@ -571,6 +578,34 @@ struct SafeDIToolBinaryFileTests: ~Copyable {
 	}
 
 	// MARK: Module info
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func ownEntry_holdsNoPositionAndEveryFact_whenModuleRecordsPositions() async throws {
+		// Cell 21: a view entry holds no line or column, so a position-only edit leaves every dependent's `.safedi`
+		// unchanged, and keeps every fact a signature reads: which file holds each declaration, and whether each spells an
+		// access modifier. A position field added later is caught here, and so is a fact stripped by mistake.
+		let module = try await scannedKitchenSinkProject().scannedModuleInfo.moduleInfo
+		let file = ModuleInfoFile(module: module, moduleName: "Kitchen", view: .empty)
+		func positions(in value: Any) -> [Any] {
+			reflectedStructuresAndEnumerations(in: value).filter { $0 is Dependency.DeclarationLocation || $0 is Dependency.SourceRange }
+		}
+		func spelledAccessModifiers(in value: Any) -> [Bool] {
+			reflectedStructuresAndEnumerations(in: value).compactMap { ($0 as? AccessDeclaration)?.spellsAccessModifier }
+		}
+		#expect(!positions(in: file.instantiables).isEmpty)
+		#expect(!positions(in: file.plainTypeDeclarations).isEmpty)
+		#expect(spelledAccessModifiers(in: file.instantiables).contains(true) && spelledAccessModifiers(in: file.instantiables).contains(false))
+
+		let entry = file.ownEntry
+		#expect(positions(in: entry).isEmpty)
+		#expect(entry.instantiables.map(\.sourceFilePath) == file.instantiables.map(\.sourceFilePath))
+		#expect(entry.plainTypeDeclarations.map(\.sourceFilePath) == file.plainTypeDeclarations.map(\.sourceFilePath))
+		#expect(spelledAccessModifiers(in: entry.instantiables) == spelledAccessModifiers(in: file.instantiables))
+		#expect(spelledAccessModifiers(in: entry.plainTypeDeclarations) == spelledAccessModifiers(in: file.plainTypeDeclarations))
+		#expect(entry.imports == file.imports)
+		#expect(entry.mockImports == file.mockImports)
+	}
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
@@ -1260,6 +1295,10 @@ extension CachedFileScan: BinarySample {}
 extension FileScan: BinarySample {}
 extension OutputFileDeclarations: BinarySample {}
 extension ModuleInfo: BinarySample {}
+extension ModuleInfoFile: BinarySample {}
+extension ModuleInfoView: BinarySample {}
+extension ViewedModuleIdentity: BinarySample {}
+extension ViewedModule: BinarySample {}
 extension ImportStatement: BinarySample {}
 extension FileVisitor.ImportSegment: BinarySample {}
 extension ConditionalCompilationDecision: BinarySample {}

@@ -24,11 +24,13 @@ two artifacts:
     single statically-known file. Add `[":<rule>"]` to a downstream
     `swift_library.srcs` to compile the generated code.
 
-  - `<rule>.safedi` — the module-info artifact. Cross-module
-    consumers list this rule's label in their own `safedi_compile`'s
+  - `<rule>.safedi` — the module-info artifact. A module that imports
+    this one lists this rule's label in its own `safedi_compile`'s
     `deps` (or `safedi_swift_library`'s `safedi_deps`) to reach
     `@Instantiable` types declared in this module without re-parsing
-    the sources.
+    the sources. The artifact also carries what a seam or public mock
+    of a module this one depends on needs, so a module never lists a
+    module it reaches only through another.
 
 This rule mirrors the Tuist plugin's `SafeDI.preCompileScript`
 helper, which writes the same two artifacts in one invocation. Doing
@@ -92,16 +94,17 @@ report fails the build with a message naming it.
 ## Modules and packages
 
 `safedi_compile` tells SafeDITool the name of the Swift module that
-compiles its output (`module_name`) and that module's package
-(`package_name`, which the compiler receives as `-package-name`).
-SafeDITool records them in the `.safedi` artifact, so a consumer knows
-which module and package declare each `@Instantiable` type, and
-records the module each `deps` entry's `.safedi` names as one of the
-module's dependencies. `safedi_swift_library` passes the module name
-its `swift_library` compiles: the `module_name` attribute, or the name
-rules_swift derives from the library's label. Give
-`safedi_swift_library` a `package_name` to compile the library with
-`-package-name`, which `package` declarations need.
+compiles its output (`module_name`, which is required) and that
+module's package (`package_name`, which the compiler receives as
+`-package-name`). SafeDITool records them in the `.safedi` artifact,
+so a consumer knows which module and package declare each
+`@Instantiable` type, and records the module each `deps` entry's
+`.safedi` names as one of the module's dependencies.
+`safedi_swift_library` passes the module name its `swift_library`
+compiles: the `module_name` attribute, or the name rules_swift derives
+from the library's label. Give `safedi_swift_library` a `package_name`
+to compile the library with `-package-name`, which `package`
+declarations need.
 
 ## Unsupported SafeDI features
 
@@ -212,8 +215,7 @@ def _safedi_compile_impl(ctx):
 
     # The module and package that declare this module's `@Instantiable`
     # types, which SafeDITool records in the `.safedi` artifact.
-    if ctx.attr.module_name:
-        arguments += ["--module-name", ctx.attr.module_name]
+    arguments += ["--module-name", ctx.attr.module_name]
     if ctx.attr.package_name:
         arguments += ["--package-name", ctx.attr.package_name]
     extra_inputs = []
@@ -262,9 +264,11 @@ Prefer `safedi_swift_library`, which declares this target and the
         "deps": attr.label_list(
             providers = [SafeDIInfo],
             default = [],
-            doc = """Other `safedi_compile` labels whose `.safedi`
-module-info artifacts this rule consumes for cross-module
-`@Instantiable` type resolution.""",
+            doc = """The `safedi_compile` labels of the modules this
+module imports, whose `.safedi` module-info artifacts this rule
+consumes for cross-module `@Instantiable` type resolution. Each
+`.safedi` carries what a seam or public mock of a module it depends on
+needs, so a module reached only through another is not listed.""",
         ),
         "defines": attr.string_list(
             default = [],
@@ -280,15 +284,13 @@ automatically in the `dbg` and `fastbuild` compilation modes, and
 condition; other options are ignored.""",
         ),
         "module_name": attr.string(
-            default = "",
+            mandatory = True,
             doc = """The name of the Swift module that compiles this
 rule's output: the wrapped `swift_library`'s `module_name`, or the
 name rules_swift derives from that library's label.
 `safedi_swift_library` passes it. SafeDITool records it in the
-`.safedi` artifact as the module that declares this module's
-`@Instantiable` types, and consumers of this rule record it as one of
-their dependencies. Without it, SafeDITool records no module for this
-rule's declarations, and consumers record no dependency on it.""",
+`.safedi` artifact, which names the module that declares its
+`@Instantiable` types and the modules it depends on.""",
         ),
         "package_name": attr.string(
             default = "",
@@ -336,8 +338,11 @@ def safedi_swift_library(
         name: The name of the `swift_library`.
         srcs: Swift sources in this module.
         safedi_deps: The `<name>_safedi` (or `safedi_compile`) labels of
-            other modules whose `@Instantiable` types this module uses.
-            List the libraries themselves in `deps`.
+            the modules this module imports. Each module's `.safedi`
+            carries what a seam or public mock of a module it depends
+            on needs, so a module this module reaches only through
+            another is not listed. List the libraries themselves in
+            `deps`.
         defines: Passed to both targets.
         copts: Passed to both targets. `safedi_compile` reads only the
             `-D` flags.

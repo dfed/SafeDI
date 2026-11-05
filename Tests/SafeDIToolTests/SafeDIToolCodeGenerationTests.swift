@@ -11582,6 +11582,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let tool = try Generate.parse([
 			swiftFileCSV.relativePath,
 			"--module-info-output", moduleInfoOutput.relativePath,
+			"--module-name", "Example",
 			"--swift-manifest", manifestFile.relativePath,
 		])
 		try await tool.run()
@@ -12014,6 +12015,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 			let tool = try Generate.parse([
 				swiftFileCSV.relativePath,
 				"--module-info-output", moduleInfoOutput.relativePath,
+				"--module-name", "Example",
 				"--swift-manifest", manifestFile.relativePath,
 			])
 			try await tool.run()
@@ -12809,6 +12811,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		let tool = try Generate.parse([
 			swiftFileCSV.relativePath,
 			"--module-info-output", moduleInfoOutput.relativePath,
+			"--module-name", "Example",
 			"--output-directory", outputDirectory.path,
 		])
 		try await tool.run()

@@ -43,6 +43,14 @@ extension Data {
 	func write(toPath filePath: String) throws {
 		try write(to: filePath.asFileURL)
 	}
+
+	/// Writes these bytes to `filePath` unless the file there already holds exactly them, so its modification time moves
+	/// only when its content does: a build system that compares modification times, as Xcode does for a script phase's
+	/// outputs, then reruns what reads the file only when it changed.
+	func writeIfChanged(toPath filePath: String) throws {
+		guard (try? Data(contentsOf: filePath.asFileURL)) != self else { return }
+		try write(toPath: filePath)
+	}
 }
 
 extension String {

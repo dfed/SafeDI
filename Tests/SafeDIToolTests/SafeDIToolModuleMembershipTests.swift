@@ -114,10 +114,11 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_recordsEachModuleDependentModuleInfoNamesOnce_whenDependentModuleInfoNamesModulesOrNone() async throws {
-		// Two files record `Zebra`.
+	mutating func generate_recordsEachModuleDependentModuleInfoNamesOnce_whenTwoFilesHoldOneModule() async throws {
+		// Two files record `Zebra`: one module's `.safedi` at two paths, as a stale copy beside the current one holds the
+		// same bytes when nothing changed.
 		var dependentModuleInfoPaths = [String]()
-		for (index, moduleName) in ["Zebra", "Apple", "Zebra"].enumerated() {
+		for (index, moduleName) in ["Zebra", "Apple"].enumerated() {
 			let dependency = try await executeSafeDIToolTest(
 				swiftFileContent: [Self.instantiableContent(named: "Dependency\(index)")],
 				filesToDelete: &filesToDelete,
@@ -125,6 +126,10 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 			)
 			try dependentModuleInfoPaths.append(dependency.writtenModuleInfoOutputPath)
 		}
+		let copiedZebraPath = dependentModuleInfoPaths[0] + ".copy.safedi"
+		try FileManager.default.copyItem(atPath: dependentModuleInfoPaths[0], toPath: copiedZebraPath)
+		filesToDelete.append(URL(fileURLWithPath: copiedZebraPath))
+		dependentModuleInfoPaths.append(copiedZebraPath)
 
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [Self.instantiableContent(named: "Consumer")],
@@ -546,7 +551,7 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func queryNeeds_namesModuleByModuleInfoFileName_whenModuleInfoRecordsAnotherModuleName() async throws {
+	mutating func queryNeeds_namesModuleByRecordedName_whenModuleInfoFileIsNamedOtherwise() async throws {
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [Self.instantiableContent(named: "Engine")],
 			filesToDelete: &filesToDelete,
@@ -556,9 +561,53 @@ struct SafeDIToolModuleMembershipTests: ~Copyable {
 
 		let report = try await QueryNeeds.parse(["Engine", "--module-info", output.writtenModuleInfoOutputPath]).query()
 
-		// A module info file is named after its file, as before it recorded the name of its module.
-		let fileName = try ((output.writtenModuleInfoOutputPath as NSString).lastPathComponent as NSString).deletingPathExtension
-		#expect(report.types.map { $0.modules.map(\.name) } == [[fileName]])
+		// Cell 11: a module info file is named after the module it records, whatever the file is called.
+		#expect(report.types.map { $0.modules.map(\.name) } == [["EngineModule"]])
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func queryNeeds_throwsError_whenTwoModuleInfoFilesRecordOneModule() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.instantiableContent(named: "Engine")],
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Engines"],
+		)
+		let path = try output.writtenModuleInfoOutputPath
+		let copiedPath = path + ".copy.safedi"
+		try FileManager.default.copyItem(atPath: path, toPath: copiedPath)
+		filesToDelete.append(URL(fileURLWithPath: copiedPath))
+
+		do {
+			_ = try await QueryNeeds.parse(["Engine", "--module-info", path, copiedPath]).query()
+			Issue.record("Did not throw error!")
+		} catch let error as QueryError {
+			#expect(error == .moduleInfoNamedTwice(moduleName: "Engines", paths: [path, copiedPath].sorted()))
+			#expect(error.description == "The module info files \([path, copiedPath].sorted().map { "'\($0)'" }.joined(separator: " and ")) both record module 'Engines'. Name each module once.")
+		}
+	}
+
+	@Test
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func queryNeeds_throwsError_whenDirectoryIsNamedLikeModuleAModuleInfoFileRecords() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [Self.instantiableContent(named: "Engine")],
+			filesToDelete: &filesToDelete,
+			moduleMembershipArguments: ["--module-name", "Engines"],
+		)
+		let path = try output.writtenModuleInfoOutputPath
+		let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("Engines")
+		try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+		filesToDelete.append(directory.deletingLastPathComponent())
+		try Self.instantiableContent(named: "Pump").write(to: directory.appendingPathComponent("Pump.swift"), atomically: true, encoding: .utf8)
+
+		do {
+			_ = try await QueryNeeds.parse(["Engine", "--include", directory.path, "--module-info", path]).query()
+			Issue.record("Did not throw error!")
+		} catch let error as QueryError {
+			#expect(error == .modulesShareName(moduleName: "Engines", paths: [directory.path, path].sorted()))
+			#expect(error.kind == "modulesShareName")
+		}
 	}
 
 	@Test

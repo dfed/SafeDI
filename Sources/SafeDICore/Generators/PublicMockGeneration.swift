@@ -1148,27 +1148,23 @@ struct PublicMockFinding: Hashable, Sendable {
 	}
 
 	/// The modules that call the public mock of `instantiable` compute its signature from declarations that leave out
-	/// `declaration`, so their calls would not match the mock: a directory this module's configuration adds declares it
-	/// (`viaTargetGraph`), or a dependent module whose module info names no module does.
-	static func callersCannotSee(_ declaration: TypeDescription, of instantiable: Instantiable, viaTargetGraph: Bool) -> PublicMockFinding {
+	/// `declaration`, which a directory this module's configuration adds declares, so their calls would not match the mock.
+	static func callersCannotSee(_ declaration: TypeDescription, of instantiable: Instantiable) -> PublicMockFinding {
 		let typeName = instantiable.concreteInstantiable.asSource
 		let declarationName = declaration.asSource
-		let message = viaTargetGraph
-			? "SafeDI cannot generate the public mock of `\(typeName)`: its signature depends on `\(declarationName)`, which is declared in a directory this module's `#SafeDIConfiguration` adds, and the modules that call the mock cannot see that declaration, so their calls would not match the mock. Declare `\(declarationName)` in a file of this module, or of a module it depends on."
-			: "SafeDI cannot generate the public mock of `\(typeName)`: its signature depends on `\(declarationName)`, which is declared in a module whose SafeDI module info names no module, and the modules that call the mock, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the mock. Generate that module's module info with `--module-name`."
+		let message = "SafeDI cannot generate the public mock of `\(typeName)`: its signature depends on `\(declarationName)`, which is declared in a directory this module's `#SafeDIConfiguration` adds, and the modules that call the mock cannot see that declaration, so their calls would not match the mock. Declare `\(declarationName)` in a file of this module, or of a module it depends on."
 		return PublicMockFinding(sourceDiagnostics: [
 			SourceDiagnostic(severity: .error, location: instantiable.mockGenerationArgumentLocation, message: message),
 		])
 	}
 
-	/// The callers of `instantiable`'s public mock compute its signature without `declaration`, a plain declaration that
-	/// proves a parameter's type narrower than `public`, which they would count as `public`: reported at the declaration.
-	static func callersCannotSeePlainDeclaration(_ declaration: PlainTypeDeclaration, of instantiable: Instantiable, viaTargetGraph: Bool) -> PublicMockFinding {
+	/// The callers of `instantiable`'s public mock compute its signature without `declaration`, a plain declaration in a
+	/// directory this module's configuration adds that proves a parameter's type narrower than `public`, which they would
+	/// count as `public`: reported at the declaration.
+	static func callersCannotSeePlainDeclaration(_ declaration: PlainTypeDeclaration, of instantiable: Instantiable) -> PublicMockFinding {
 		let typeName = "`\(instantiable.concreteInstantiable.asSource)`"
 		let declarationName = "`\(declaration.typeDescription.asSource)`"
-		let message = viaTargetGraph
-			? "SafeDI cannot generate the public mock of \(typeName): it takes its parameters at the access this declaration of \(declarationName) proves, which is in a directory this module's `#SafeDIConfiguration` adds, and the modules that call the mock cannot see it, so they would count \(declarationName) as `public`, and their calls would not match the mock. Declare \(declarationName) in a file of this module, or of a module it depends on."
-			: "SafeDI cannot generate the public mock of \(typeName): it takes its parameters at the access this declaration of \(declarationName) proves, which is in a module whose SafeDI module info names no module, and the modules that call the mock, which compute its signature from the modules this module's module info names, cannot see it, so they would count \(declarationName) as `public`, and their calls would not match the mock. Generate that module's module info with `--module-name`."
+		let message = "SafeDI cannot generate the public mock of \(typeName): it takes its parameters at the access this declaration of \(declarationName) proves, which is in a directory this module's `#SafeDIConfiguration` adds, and the modules that call the mock cannot see it, so they would count \(declarationName) as `public`, and their calls would not match the mock. Declare \(declarationName) in a file of this module, or of a module it depends on."
 		return PublicMockFinding(sourceDiagnostics: [
 			SourceDiagnostic(severity: .error, location: declaration.access.declarationStartLocation ?? instantiable.mockGenerationArgumentLocation, message: message),
 		])

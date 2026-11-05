@@ -676,6 +676,7 @@ extension AccessDeclaration: BinarySchemaMember {
 		.structure(
 			fields: [
 				BinaryLayoutField("level", \.level),
+				BinaryLayoutField("spellsAccessModifier", \.spellsAccessModifier),
 				BinaryLayoutField("modifierRange", \.modifierRange),
 				BinaryLayoutField("declarationStartLocation", \.declarationStartLocation),
 				BinaryLayoutField("isExtension", \.isExtension),
@@ -687,6 +688,7 @@ extension AccessDeclaration: BinarySchemaMember {
 	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
 		try self.init(
 			level: reader.read(),
+			spellsAccessModifier: reader.read() as Bool,
 			modifierRange: reader.read() as Dependency.SourceRange?,
 			declarationStartLocation: reader.read() as Dependency.DeclarationLocation?,
 			isExtension: reader.read(),
@@ -695,6 +697,7 @@ extension AccessDeclaration: BinarySchemaMember {
 
 	func write(to writer: inout BinaryWriter) {
 		writer.write(level)
+		writer.write(spellsAccessModifier)
 		writer.write(modifierRange)
 		writer.write(declarationStartLocation)
 		writer.write(isExtension)
@@ -1205,5 +1208,145 @@ extension UnorderedEquatingCollection: BinaryCodable, BinarySchemaMember where E
 	/// The elements in the order the collection holds them.
 	fileprivate var elements: [Element] {
 		Array(self)
+	}
+}
+
+// MARK: - Module info files
+
+extension ModuleInfoFile: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("moduleName", \.moduleName),
+				BinaryLayoutField("packageName", \.packageName),
+				BinaryLayoutField("dependencyModuleNames", \.dependencyModuleNames),
+				BinaryLayoutField("imports", \.imports),
+				BinaryLayoutField("mockImports", \.mockImports),
+				BinaryLayoutField("instantiables", \.instantiables),
+				BinaryLayoutField("configurations", \.configurations),
+				BinaryLayoutField("filesWithUnexpectedNodes", \.filesWithUnexpectedNodes),
+				BinaryLayoutField("conditionalCompilationDecisions", \.conditionalCompilationDecisions),
+				BinaryLayoutField("instantiableTypeNamesInAnyClause", \.instantiableTypeNamesInAnyClause),
+				BinaryLayoutField("plainTypeDeclarations", \.plainTypeDeclarations),
+				BinaryLayoutField("view", \.view),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(
+			moduleName: reader.read(),
+			packageName: reader.read() as String?,
+			dependencyModuleNames: reader.read(),
+			imports: reader.read(),
+			mockImports: reader.read(),
+			instantiables: reader.read(),
+			configurations: reader.read(),
+			filesWithUnexpectedNodes: reader.read() as [String]?,
+			conditionalCompilationDecisions: reader.read(),
+			instantiableTypeNamesInAnyClause: reader.read(),
+			plainTypeDeclarations: reader.read(),
+			view: reader.read(),
+		)
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(moduleName)
+		writer.write(packageName)
+		writer.write(dependencyModuleNames)
+		writer.write(imports)
+		writer.write(mockImports)
+		writer.write(instantiables)
+		writer.write(configurations)
+		writer.write(filesWithUnexpectedNodes)
+		writer.write(conditionalCompilationDecisions)
+		writer.write(instantiableTypeNamesInAnyClause)
+		writer.write(plainTypeDeclarations)
+		writer.write(view)
+	}
+}
+
+extension ModuleInfoView: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("moduleGraph", \.moduleGraph),
+				BinaryLayoutField("declarations", \.declarations),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(moduleGraph: reader.read(), declarations: reader.read())
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(moduleGraph)
+		writer.write(declarations)
+	}
+}
+
+extension ViewedModuleIdentity: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("moduleName", \.moduleName),
+				BinaryLayoutField("packageName", \.packageName),
+				BinaryLayoutField("dependencyModuleNames", \.dependencyModuleNames),
+				BinaryLayoutField("mockConditionalCompilation", \.mockConditionalCompilation),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(
+			moduleName: reader.read(),
+			packageName: reader.read() as String?,
+			dependencyModuleNames: reader.read(),
+			mockConditionalCompilation: reader.read() as String?,
+		)
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(moduleName)
+		writer.write(packageName)
+		writer.write(dependencyModuleNames)
+		writer.write(mockConditionalCompilation)
+	}
+}
+
+extension ViewedModule: BinarySchemaMember {
+	static var binaryLayout: BinaryLayout<Self> {
+		.structure(
+			fields: [
+				BinaryLayoutField("moduleName", \.moduleName),
+				BinaryLayoutField("imports", \.imports),
+				BinaryLayoutField("mockImports", \.mockImports),
+				BinaryLayoutField("instantiables", \.instantiables),
+				BinaryLayoutField("plainTypeDeclarations", \.plainTypeDeclarations),
+			],
+			unwrittenProperties: [],
+		)
+	}
+
+	init(readingFrom reader: inout BinaryReader) throws(BinaryDecodingError) {
+		try self.init(
+			moduleName: reader.read(),
+			imports: reader.read(),
+			mockImports: reader.read(),
+			instantiables: reader.read(),
+			plainTypeDeclarations: reader.read(),
+		)
+	}
+
+	func write(to writer: inout BinaryWriter) {
+		writer.write(moduleName)
+		writer.write(imports)
+		writer.write(mockImports)
+		writer.write(instantiables)
+		writer.write(plainTypeDeclarations)
 	}
 }

@@ -37,6 +37,12 @@ public actor DependencyTreeGenerator {
 	///     apart from its dependencies', which decide the level each generated import spells.
 	///   - unreadImports: What the run knows of the modules a file imports that it read nothing of, or `nil` when it
 	///     cannot tell which modules it could have read.
+	///   - viewInstantiables: The declarations the module infos this run was given carry of modules whose module info it
+	///     was not given, which a seam or public mock of another module is computed from. They never fulfill a type of
+	///     this module's trees: they only attribute the types generated code names to the modules that declare them.
+	///   - viewPlainTypeDeclarations: The plain type declarations of those modules, which attribute types too.
+	///   - viewDeclaringModules: The module each type those declarations fulfill is declared in, with the module this
+	///     module reaches it through, which an error about a type no declaration this module reads fulfills names.
 	public init(
 		importStatements: [ImportStatement],
 		mockImportStatements: [ImportStatement],
@@ -48,15 +54,19 @@ public actor DependencyTreeGenerator {
 		writtenImportAccessLevels: GeneratedImportAccess.WrittenLevels = .none,
 		unreadImports: UnreadImports? = nil,
 		assertedActiveConditions: Set<String> = [],
+		viewInstantiables: [Instantiable] = [],
+		viewPlainTypeDeclarations: [PlainTypeDeclaration] = [],
+		viewDeclaringModules: [TypeDescription: ViewDeclaringModule] = [:],
 	) {
 		self.unreadImports = unreadImports
 		self.assertedActiveConditions = assertedActiveConditions
+		self.viewDeclaringModules = viewDeclaringModules
 		self.importStatements = importStatements
 		self.mockImportStatements = mockImportStatements
 		importAccess = GeneratedImportAccess(
 			writtenLevels: writtenImportAccessLevels,
-			instantiables: typeDescriptionToFulfillingInstantiableMap.values,
-			plainTypeDeclarations: plainTypeDeclarations,
+			instantiables: Array(typeDescriptionToFulfillingInstantiableMap.values) + viewInstantiables,
+			plainTypeDeclarations: plainTypeDeclarations + viewPlainTypeDeclarations,
 			emittingModuleName: emittingModule?.identity.moduleName,
 			isOwnFile: emittingModule?.isOwnFile,
 		)
@@ -95,6 +105,20 @@ public actor DependencyTreeGenerator {
 
 		public let integration: Integration
 		public let importedModuleNamesNotRead: @Sendable (_ filePath: String) -> [String]?
+	}
+
+	/// A module whose declarations a module info's view carries, which this module depends on through another module but
+	/// does not list, so none of its declarations fulfills a type of this module's trees.
+	public struct ViewDeclaringModule: Hashable, Sendable {
+		public init(moduleName: String, throughModuleName: String) {
+			self.moduleName = moduleName
+			self.throughModuleName = throughModuleName
+		}
+
+		/// The module that declares the type.
+		public let moduleName: String
+		/// The module this module lists whose module info carries that module's declarations.
+		public let throughModuleName: String
 	}
 
 	/// The module the generated code compiles in, which decides what access each declaration the generated code
@@ -1260,7 +1284,9 @@ public actor DependencyTreeGenerator {
 		/// No production declaration fulfills a type that properties instantiate. `fulfilledByMockOnlyDeclaration` is set
 		/// when a `mockOnly` declaration fulfills it; `unreadImports` names, for each file that declares such a property,
 		/// the modules it imports that the run read nothing of, or is `nil` when the run cannot tell.
-		case noInstantiableFound(TypeDescription, referencedBy: [LocatedProperty], fulfilledByMockOnlyDeclaration: Bool, unreadImports: UnreadImportsOfFiles?)
+		/// `viewDeclaringModule`, when set, is a module this module depends on through another, whose declaration of the
+		/// type a module info's view carries, though the module lists only the module it reaches it through.
+		case noInstantiableFound(TypeDescription, referencedBy: [LocatedProperty], fulfilledByMockOnlyDeclaration: Bool, unreadImports: UnreadImportsOfFiles?, viewDeclaringModule: ViewDeclaringModule?)
 		case unfulfillableProperties([UnfulfillableProperty])
 		/// Reported at the dependency of a root through which its tree calls a seam whose builder for a hole it cannot
 		/// fill, with a note at the hole's declaration where its file can be read. See `UnfilledHole`.
@@ -1317,10 +1343,6 @@ public actor DependencyTreeGenerator {
 		case publicMockTierOmitsProvidedValue([ScopeGenerator.PublicMockTierOmission])
 		/// A mock tree calls another module's public mock that is generated under another mock condition.
 		case publicMockUnderOtherMockCondition([ScopeGenerator.PublicMockCallUnderOtherMockCondition])
-		/// A mock tree must call the public mock of `type`, declared in module `moduleName`, whose signature this run
-		/// cannot compute: that module's module info names module `missingModuleName`, which this run was not given.
-		/// Reported at the earliest dependency of this module's declarations on the type.
-		case publicMockModuleInfoMissing(type: TypeDescription, moduleName: String, missingModuleName: String, referenceLocation: Dependency.DeclarationLocation?)
 		/// Reported at the dependency of a tree this module generates that calls a seam of another module whose files
 		/// this run read under a mock condition that module does not guard its mock-only declarations with. See
 		/// `SeamModuleMockConditionDifference`.
@@ -1452,12 +1474,6 @@ public actor DependencyTreeGenerator {
 					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
 			case let .publicMockCannotBeGenerated(findings):
 				SourceDiagnostic.joiningInSourceOrder(findings.map(\.sourceDiagnostics))
-			case let .publicMockModuleInfoMissing(type, moduleName, missingModuleName, referenceLocation):
-				[SourceDiagnostic(
-					severity: .error,
-					location: referenceLocation,
-					message: "SafeDI cannot generate a call to the public mock SafeDI generated for `\(type.asSource)` in module `\(moduleName)`, which this module's mocks cannot build inline: that mock's signature depends on the declarations `\(moduleName)` sees, which include module `\(missingModuleName)`'s, and this run was not given `\(missingModuleName)`'s SafeDI module info. Give this run every module `\(moduleName)` depends on: add `\(missingModuleName)`'s `\(missingModuleName)_safedi` target to this target's `safedi_deps` under Bazel (the `deps` of a hand-written `safedi_compile`), add `\(missingModuleName)` to the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`.",
-				)]
 			case let .publicMockUnderOtherMockCondition(calls):
 				// One diagnostic per dependency that leads to such a call, in source order.
 				calls
@@ -1496,7 +1512,7 @@ public actor DependencyTreeGenerator {
 						)
 					}
 					.sorted(by: SourceDiagnostic.precedesInSourceOrder)
-			case let .noInstantiableFound(typeDescription, referencedBy, fulfilledByMockOnlyDeclaration, unreadImports):
+			case let .noInstantiableFound(typeDescription, referencedBy, fulfilledByMockOnlyDeclaration, unreadImports, viewDeclaringModule):
 				// Sorted by location so the order never depends on map iteration.
 				referencedBy.map { locatedProperty in
 					SourceDiagnostic(
@@ -1511,6 +1527,7 @@ public actor DependencyTreeGenerator {
 									.flatMap { unreadImports.moduleNamesByFilePath[$0.filePath] }
 									.map { (integration: unreadImports.integration, moduleNames: $0) }
 							},
+							viewDeclaringModule: viewDeclaringModule,
 						),
 					)
 				}
@@ -1613,9 +1630,14 @@ public actor DependencyTreeGenerator {
 			referencingProperty: Property,
 			fulfilledByMockOnlyDeclaration: Bool,
 			unreadImports: (integration: UnreadImports.Integration, moduleNames: [String])?,
+			viewDeclaringModule: ViewDeclaringModule?,
 		) -> String {
 			let typeName = typeDescription.asSource
 			let reference = "`\(typeName)`, which @\(Dependency.Source.instantiatedRawValue) property `\(referencingProperty.asSource)` instantiates"
+			if let viewDeclaringModule {
+				// A module info's view names the module, though it fulfills no type of this module's trees: list it.
+				return "No @\(InstantiableVisitor.macroName) declaration of a module this module lists fulfills \(reference). `\(typeName)` is declared in `\(viewDeclaringModule.moduleName)`, which this module depends on through `\(viewDeclaringModule.throughModuleName)` but does not list; list `\(viewDeclaringModule.moduleName)` where this module lists `\(viewDeclaringModule.throughModuleName)`: add its target to this target's `dependencies` in `Package.swift`, list its `<name>_safedi` target in this target's `safedi_deps` under Bazel, or list its module in the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist."
+			}
 			guard !fulfilledByMockOnlyDeclaration else {
 				return "No production @\(InstantiableVisitor.macroName) declaration fulfills \(reference). A `mockOnly: true` declaration fulfills it, but is used only to generate mocks. Add a production @\(InstantiableVisitor.macroName) declaration that fulfills `\(typeName)`."
 			}
@@ -2016,10 +2038,12 @@ public actor DependencyTreeGenerator {
 					let access = "\(subject.hasPrefix("The ") ? "the " + subject.dropFirst(4) : subject) is `\(accessNeed.level.spelling)`"
 					// Whether a mock can call the public mock depends on the declaring module's name alone: a run that names no
 					// module calls the public mock of a module whose module info names it, and naming this run would not name
-					// the declaring module. A Swift package target's run reads that name from the target graph.
+					// the declaring module. A Swift package target's run reads that name from the target graph. A run that
+					// names its module reaches such a type only through a directory a `#SafeDIConfiguration` adds, or a file
+					// no target of the plugin's graph lists, since every module info names its module.
 					let message = emittingModuleIsUnknown
 						? "`\(type.asSource)` has a public `mock()`, but SafeDI does not know which module declares `\(type.asSource)`, so this run cannot call it, and \(access). Build these mocks in a Swift package target, or give this run the module info of the module that declares `\(type.asSource)`, written with `--module-name`."
-						: "`\(type.asSource)` has a public `mock()`, but it cannot be called from a module whose module info names no module, and \(access). Generate the module info of the module that declares `\(type.asSource)` with `--module-name`."
+						: "`\(type.asSource)` has a public `mock()`, but SafeDI does not know which module declares `\(type.asSource)`, so this run cannot call it, and \(access): it is declared in a directory a `#SafeDIConfiguration` adds, or in a file no target of the plugin's graph lists. Declare it in a file of a module SafeDI knows."
 					return SourceDiagnostic(
 						severity: .error,
 						location: readableDeclarationLocation ?? referenceLocation,
@@ -2170,9 +2194,6 @@ public actor DependencyTreeGenerator {
 			enum Kind {
 				/// The seam's generated initializer cannot take the parameters its tree needs, for the reason given.
 				case parameters(ParameterKind)
-				/// A tree reaches the seam, another module's, whose signature is computed from the declarations that
-				/// module sees, and this run was not given the declarations of `missingModuleName`, which it depends on.
-				case moduleInfoMissing(moduleName: String, missingModuleName: String)
 				/// The signatures of `seams`, which reach one another, changed on every pass up to the limit
 				/// (`seamSignatureComputationLimit(forComponentOf:)`), which the argument in `seamSignatures` says no
 				/// input reaches: a guard against a shape the argument misses, which is then reported rather than
@@ -2182,14 +2203,10 @@ public actor DependencyTreeGenerator {
 				/// computed over what this run sees, and `declaration` is one the callers cannot see: the build system's
 				/// target graph attributes it to no module, since it is in a directory this module's configuration adds.
 				case treeReachesDeclarationCallersCannotSee(declaration: TypeDescription)
-				/// As `treeReachesDeclarationCallersCannotSee`, where `declaration` was read from a dependent module info
-				/// that names no module, which this module's module info therefore cannot name to the callers.
-				case treeReachesDeclarationOfUnnamedModuleInfo(declaration: TypeDescription)
-				/// As `treeReachesDeclarationOfUnnamedModuleInfo` or, `viaTargetGraph`, `treeReachesDeclarationCallersCannotSee`,
-				/// where what the callers cannot see is the plain declaration (`PlainTypeDeclaration`) that proves the type of
-				/// a parameter they would take otherwise: without it, they count the type as one SafeDI reads no declaration
-				/// of, which is `public`. Reported at the declaration.
-				case treeReachesPlainDeclarationCallersCannotSee(declaration: PlainTypeDeclaration, viaTargetGraph: Bool)
+				/// As `treeReachesDeclarationCallersCannotSee`, where what the callers cannot see is the plain declaration
+				/// (`PlainTypeDeclaration`) that proves the type of a parameter they would take otherwise: without it, they
+				/// count the type as one SafeDI reads no declaration of, which is `public`. Reported at the declaration.
+				case treeReachesPlainDeclarationCallersCannotSee(declaration: PlainTypeDeclaration)
 				/// The seam's generated `initializerLevel` initializer names `namedType`, and `declaration`, of `namedType` or of
 				/// a type enclosing it, is one SafeDI read only because it takes `mockCondition` to be active: it is in a clause of
 				/// a block that guards mock-only declarations, which the selection of that condition picks
@@ -2283,27 +2300,17 @@ public actor DependencyTreeGenerator {
 					)
 					message = "SafeDI cannot generate the dependency tree of \(seamName): its generated `\(tier.spelledOnGeneratedDeclaration)` initializer\(requiredBy) cannot take `\(parameter.asSource)`, which \(takers), and cannot pass `nil` for it, since it is required.\(publicMockRequirement)\(causeText) \(remedies)"
 					declarationNotes = SeamAccessExplanation.declarationNotes(for: cause, neededLevel: tier)
-				case let .moduleInfoMissing(moduleName, missingModuleName):
-					receivers = []
-					message = "SafeDI cannot generate a call to the initializer SafeDI generated for \(seamName) in module `\(moduleName)`: that initializer takes what the type's dependency tree needs from the declarations `\(moduleName)` sees, which include module `\(missingModuleName)`'s, and this run was not given `\(missingModuleName)`'s SafeDI module info. Give this run every module `\(moduleName)` depends on: add `\(missingModuleName)`'s `\(missingModuleName)_safedi` target to this target's `safedi_deps` under Bazel (the `deps` of a hand-written `safedi_compile`), add `\(missingModuleName)` to the `dependencies:` of this target's `SafeDI.preCompileScript` under Tuist, or pass its `.safedi` file to `--dependent-module-info-file-path`."
 				case let .signaturesDidNotSettle(seams):
 					receivers = []
 					message = "SafeDI cannot generate the dependency tree of \(seamName): the generated initializers of \(seams.map { "`\($0.asSource)`" }.joined(separator: ", ")), which reach one another, took a parameter from one another on every pass up to the limit. This is a defect in SafeDI; report it with these types' declarations."
-				case let .treeReachesDeclarationOfUnnamedModuleInfo(declaration):
-					receivers = []
-					message = "SafeDI cannot generate the dependency tree of \(seamName): the initializer SafeDI generates for it depends on `\(declaration.asSource)`, which is declared in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see that declaration, so their calls would not match the initializer. Generate that module's module info with `--module-name`."
 				case let .treeReachesDeclarationCallersCannotSee(declaration):
 					receivers = []
 					message = "SafeDI cannot generate the dependency tree of \(seamName): the initializer SafeDI generates for it depends on `\(declaration.asSource)`, which is declared in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see that declaration, so their calls would not match the initializer. Declare `\(declaration.asSource)` in a file of this module, or of a module it depends on."
-				case let .treeReachesPlainDeclarationCallersCannotSee(declaration, viaTargetGraph):
+				case let .treeReachesPlainDeclarationCallersCannotSee(declaration):
 					receivers = []
 					location = declaration.access.declarationStartLocation ?? location
 					let typeName = "`\(declaration.typeDescription.asSource)`"
-					message = if viaTargetGraph {
-						"SafeDI cannot generate the dependency tree of \(seamName): the initializer SafeDI generates for it takes its parameters at the access this declaration of \(typeName) proves, which is in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see it, so they would count \(typeName) as `public`, and their calls would not match the initializer. Declare \(typeName) in a file of this module, or of a module it depends on."
-					} else {
-						"SafeDI cannot generate the dependency tree of \(seamName): the initializer SafeDI generates for it takes its parameters at the access this declaration of \(typeName) proves, which is in a module whose SafeDI module info names no module, and the modules that call that initializer, which compute its signature from the modules this module's module info names, cannot see it, so they would count \(typeName) as `public`, and their calls would not match the initializer. Generate that module's module info with `--module-name`."
-					}
+					message = "SafeDI cannot generate the dependency tree of \(seamName): the initializer SafeDI generates for it takes its parameters at the access this declaration of \(typeName) proves, which is in a directory this module's `#SafeDIConfiguration` adds, and the modules that call that initializer cannot see it, so they would count \(typeName) as `public`, and their calls would not match the initializer. Declare \(typeName) in a file of this module, or of a module it depends on."
 				case let .namesTypeDeclaredUnderMockCondition(namedType, declaration, mockCondition, levelWhereMockConditionIsInactive, initializerLevel):
 					receivers = []
 					location = declaration.access.declarationStartLocation ?? location
@@ -2803,6 +2810,8 @@ public actor DependencyTreeGenerator {
 	/// The declarations of types that are not `@Instantiable` this generator was given, which a generator computing
 	/// another module's view is given too.
 	private let plainTypeDeclarations: [PlainTypeDeclaration]
+	/// See `init`'s `viewDeclaringModules`.
+	private let viewDeclaringModules: [TypeDescription: ViewDeclaringModule]
 	/// The conditions every file this run generates asserts active (`ConditionalCompilationDecision`): its code never
 	/// compiles where one of them is inactive.
 	private let assertedActiveConditions: Set<String>
@@ -2986,7 +2995,7 @@ public actor DependencyTreeGenerator {
 		case withoutMock(TypeDescription, declaringModuleName: String?, needsPublicDeclaration: Bool, isSeam: Bool)
 		/// The type has a public mock, but SafeDI does not know which module declares it, and therefore cannot call it: the
 		/// type was read from a file no target graph or module name assigns to a module – as a target the Xcode project
-		/// plugin builds reads every other target's types – or from module info written without a module name.
+		/// plugin builds reads every other target's types, and as a directory a `#SafeDIConfiguration` adds is read.
 		/// `emittingModuleIsUnknown`, whether this run names no module, decides only the error's wording.
 		case publicMockOfUnknownModule(TypeDescription, emittingModuleIsUnknown: Bool)
 	}
@@ -3334,7 +3343,6 @@ public actor DependencyTreeGenerator {
 		guard !seams.foreignPublicMocks.isEmpty, let emittingModule = emittingModuleToCheck else { return [:] }
 		let foreignPublicMockTypes = Set(seams.foreignPublicMocks.keys)
 		var publicMockCalls = [TypeDescription: PublicMockCall]()
-		var moduleInfoMissingErrors = [DependencyTreeGeneratorError]()
 		var receivedPropertiesCache = ReceivedPropertiesCache()
 		for type in foreignPublicMockTypes.sorted() {
 			guard let foreignPublicMock = seams.foreignPublicMocks[type],
@@ -3372,17 +3380,6 @@ public actor DependencyTreeGenerator {
 				)
 			}
 			guard !Self.inaccessibleConstructions(constructions, from: emittingModule, extendedTypes: extendedTypeDeclarations).isEmpty else { continue }
-			if let moduleName = foreignPublicMock.declaringModule.moduleName, let missingModuleName = foreignPublicMock.missingDependencyModuleName {
-				// The mock must be called, and its signature cannot be computed without the module this run lacks.
-				let referenceLocation = typeDescriptionToFulfillingInstantiableMap.values
-					.filter { $0.sourceFilePath.map(emittingModule.isOwnFile) ?? false }
-					.flatMap(\.dependencies)
-					.filter { $0.property.typeDescription.asInstantiatedType == type || $0.asInstantiatedType == type }
-					.compactMap(\.declarationLocation)
-					.min(by: Dependency.DeclarationLocation.precedesInSourceOrder)
-				moduleInfoMissingErrors.append(.publicMockModuleInfoMissing(type: type, moduleName: moduleName, missingModuleName: missingModuleName, referenceLocation: referenceLocation))
-				continue
-			}
 			guard let ownPlan = try await foreignPublicMockPlan(of: type, declaredBy: foreignPublicMock, moduleNamesReadByRunOfModule: emittingModule.moduleNamesReadByRunOfModule) else { continue }
 			let requirement = AccessLevel.required(toConstructFrom: emittingModule.identity, declaredIn: foreignPublicMock.declaringModule, isOwnFile: false)
 			// The narrowest tier the module reaches: every module reaches the `public` one.
@@ -3438,24 +3435,19 @@ public actor DependencyTreeGenerator {
 				receiversByLabel: ownPlan.receiversByLabel,
 			)
 		}
-		if let error = DependencyTreeGeneratorError.reportingAll(of: moduleInfoMissingErrors) {
-			throw error
-		}
 		return publicMockCalls
 	}
 
 	/// The plan of the public mock that `foreignPublicMock`'s module generated for `type`, computed as that module
 	/// computed it, from the declarations it sees; `nil` when that module could not generate it, which its own run
-	/// reports, or when a module it depends on was not given to this run.
+	/// reports.
 	/// - Parameter moduleNamesReadByRunOfModule: See `EmittingModule.init`.
 	private func foreignPublicMockPlan(
 		of type: TypeDescription,
 		declaredBy foreignPublicMock: SeamResolution.ForeignPublicMock,
 		moduleNamesReadByRunOfModule: @escaping @Sendable (_ moduleName: String) -> Set<String>,
 	) async throws -> OwnPublicMockPlan? {
-		guard let moduleName = foreignPublicMock.declaringModule.moduleName,
-		      foreignPublicMock.missingDependencyModuleName == nil
-		else { return nil }
+		guard let moduleName = foreignPublicMock.declaringModule.moduleName else { return nil }
 		let generator: DependencyTreeGenerator
 		if let existingGenerator = publicMockGeneratorsByModuleName[moduleName] {
 			generator = existingGenerator
@@ -3479,7 +3471,9 @@ public actor DependencyTreeGenerator {
 					currentModuleMockCondition: foreignPublicMock.declaringModuleMockCondition,
 					generatedSeams: [],
 					foreignSeams: [:],
-					foreignPublicMocks: seams.foreignPublicMocks.filter { entry in
+					// Read from that module's view of the modules it depends on, or, under the target graph, from every
+					// module's.
+					foreignPublicMocks: seams.foreignDeclarations(seenByModuleNamed: moduleName).publicMocks.filter { entry in
 						entry.value.declaringModule.moduleName != moduleName && foreignPublicMock.visibleInstantiables[entry.key] != nil
 					},
 				),
@@ -3541,12 +3535,12 @@ public actor DependencyTreeGenerator {
 		let fulfillingTypes = differingParameters.compactMap { typeDescriptionToFulfillingInstantiableMap[$0.type.unwrapped.asInstantiatedType]?.concreteInstantiable }
 		let reachedTypes = Self.typesReachable(fromRoots: [type], in: typeDescriptionToFulfillingInstantiableMap)
 		return if let declaration = earliest(receivingTypes) ?? earliest(fulfillingTypes) ?? earliest(reachedTypes) {
-			PublicMockFinding.callersCannotSee(declaration, of: instantiable, viaTargetGraph: seams.callersComputeFromTargetGraph)
+			PublicMockFinding.callersCannotSee(declaration, of: instantiable)
 		} else {
 			// Without a plain declaration that proves a parameter, the callers count its type as one SafeDI reads no
 			// declaration of.
 			Self.earliestUnseenPlainDeclaration(provingAnyOf: differingParameters.map(\.accessCause)).map {
-				PublicMockFinding.callersCannotSeePlainDeclaration($0, of: instantiable, viaTargetGraph: seams.callersComputeFromTargetGraph)
+				PublicMockFinding.callersCannotSeePlainDeclaration($0, of: instantiable)
 			}
 		}
 	}
@@ -3809,41 +3803,42 @@ public actor DependencyTreeGenerator {
 		// Only the foreign seams this module's trees reach are computed, each from what its module sees, and a seam
 		// of a third module that such a module's visible trees reach before it, so the modules are computed in
 		// dependency order, each once, from an explicit stack: a module is pushed back under the modules it needs.
-		// A module whose `.safedi` names a dependency this run lacks is reported, at each of its seams, and not
-		// computed. A module whose seams reach one of its seams is reported too: its own build was given every
-		// module those seams need, and its `.safedi` names them all.
-		let foreignModulesByName = Dictionary(
-			grouping: seams.foreignSeams.sorted { $0.key < $1.key }.compactMap { entry in entry.value.declaringModule.moduleName.map { (moduleName: $0, type: entry.key, seam: entry.value) } },
-			by: \.moduleName,
-		).map { ReachedForeignModule(moduleName: $0.key, seams: $0.value.map { (type: $0.type, seam: $0.seam) }) }
-		func foreignModules(reachedFrom roots: Set<TypeDescription>, in instantiables: [TypeDescription: Instantiable], besides moduleName: String?) -> [ReachedForeignModule] {
+		// A module's own trees find the seams of the modules it sees, which are this run's direct dependencies' for
+		// this module's trees, and the declaring module's, from its view, for a computed module's: a seam this module
+		// reads only in a view is never matched against this module's own types.
+		var seamsByModuleName = [String: [TypeDescription: SeamResolution.ForeignSeam]]()
+		// A module's seams are read from one declaration of each, so every map that holds one holds the same.
+		let seenModuleMaps = (seams.foreignDeclarationsSeenByModule ?? [:]).sorted { $0.key < $1.key }.map(\.value.seams)
+		for foreignSeams in [seams.foreignSeams] + seenModuleMaps {
+			for (type, seam) in foreignSeams {
+				if let moduleName = seam.declaringModule.moduleName {
+					seamsByModuleName[moduleName, default: [:]][type] = seam
+				}
+			}
+		}
+		let foreignModulesByName = seamsByModuleName.map { moduleName, seamsByType in
+			ReachedForeignModule(moduleName: moduleName, seams: seamsByType.sorted { $0.key < $1.key }.map { (type: $0.key, seam: $0.value) })
+		}
+		func foreignModules(reachedFrom roots: Set<TypeDescription>, in instantiables: [TypeDescription: Instantiable], seenBy moduleName: String?) -> [ReachedForeignModule] {
+			let foreignSeams = moduleName.map { seams.foreignDeclarations(seenByModuleNamed: $0).seams } ?? seams.foreignSeams
 			// A reached key is looked up through the map, so a seam reached as one of its additional types counts,
 			// and a key the map does not hold – a type the module cannot see – reaches nothing.
-			let reachedModuleNames = Set(Self.typesReachable(fromRoots: roots, in: instantiables).compactMap { instantiables[$0].flatMap { seams.foreignSeams[$0.concreteInstantiable]?.declaringModule.moduleName } }).subtracting([moduleName].compactMap(\.self))
+			let reachedModuleNames = Set(Self.typesReachable(fromRoots: roots, in: instantiables).compactMap { instantiables[$0].flatMap { foreignSeams[$0.concreteInstantiable]?.declaringModule.moduleName } }).subtracting([moduleName].compactMap(\.self))
 			return foreignModulesByName.filter { reachedModuleNames.contains($0.moduleName) }.sorted { $0.moduleName < $1.moduleName }
 		}
 		var computedModules = Set<String>()
 		var expandedModules = Set<String>()
-		var modulesToCompute = Array(foreignModules(reachedFrom: reachableTypeDescriptions, in: typeDescriptionToFulfillingInstantiableMap, besides: nil).reversed())
+		var modulesToCompute = Array(foreignModules(reachedFrom: reachableTypeDescriptions, in: typeDescriptionToFulfillingInstantiableMap, seenBy: nil).reversed())
 		while let module = modulesToCompute.last {
 			guard !computedModules.contains(module.moduleName) else {
 				modulesToCompute.removeLast()
 				continue
 			}
 			let moduleSeam = module.seams[0].seam
-			if let missingModuleName = moduleSeam.missingDependencyModuleName {
-				// Every seam of the module is reported; `reportingAll` orders the errors by declaration location.
-				for seam in module.seams.compactMap({ typeDescriptionToFulfillingInstantiableMap[$0.type] }) {
-					errors.append(.seam(.init(seam: seam, kind: .moduleInfoMissing(moduleName: module.moduleName, missingModuleName: missingModuleName))))
-				}
-				modulesToCompute.removeLast()
-				computedModules.insert(module.moduleName)
-				continue
-			}
 			// A module's reached modules are pushed above it on its first visit only; on its second it is computed
 			// with the signatures found by then, so the loop ends whatever the module infos claim to reach.
 			if expandedModules.insert(module.moduleName).inserted {
-				let dependencies = foreignModules(reachedFrom: Set(module.seams.map(\.type)), in: moduleSeam.visibleInstantiables, besides: module.moduleName)
+				let dependencies = foreignModules(reachedFrom: Set(module.seams.map(\.type)), in: moduleSeam.visibleInstantiables, seenBy: module.moduleName)
 					.filter { !computedModules.contains($0.moduleName) }
 				if !dependencies.isEmpty {
 					modulesToCompute.append(contentsOf: dependencies.reversed())
@@ -3862,7 +3857,7 @@ public actor DependencyTreeGenerator {
 				aliasDeclarationReferences: aliasDeclarationReferences,
 				fixedSignatures: seamRoots.compactMapValues(\.self),
 				callerModule: moduleSeam.declaringModule,
-				seams: seams,
+				seams: seams.resolution(seenByModuleNamed: module.moduleName),
 				// Another module's own run checks its constructions; whether that check reports a call is not known
 				// here, so an omission such a call would let its seam skip is reported.
 				checkingModule: nil,
@@ -3918,8 +3913,7 @@ public actor DependencyTreeGenerator {
 			errors += Self.declarationsReadUnderMockCondition(namedBy: signature, of: seam, proof: ownComputation.proof, assertedActiveConditions: assertedActiveConditions)
 		}
 		// Each generated seam is computed again over the declarations its callers see, when those differ from this
-		// run's (a dependent module info that names no module; under the target graph, a directory the configuration
-		// adds). A seam whose call shape – what a call depends on, and the guard hashes: each parameter's label, type,
+		// run's (under the target graph, a directory the configuration adds). A seam whose call shape – what a call depends on, and the guard hashes: each parameter's label, type,
 		// tier access and default, and the tiers, never the receivers or the uncapped access – the callers compute
 		// otherwise, or cannot compute, is reported at the seam, naming a declaration the callers cannot see: one that
 		// declares a receiver of a parameter the callers would not take – where they could not compute it, one the
@@ -3960,12 +3954,7 @@ public actor DependencyTreeGenerator {
 					in: typeDescriptionToFulfillingInstantiableMap,
 					proof: ownComputation.proof,
 				) {
-					errors.append(.seam(.init(
-						seam: seam,
-						kind: seams.callersComputeFromTargetGraph
-							? .treeReachesDeclarationCallersCannotSee(declaration: declaration)
-							: .treeReachesDeclarationOfUnnamedModuleInfo(declaration: declaration),
-					)))
+					errors.append(.seam(.init(seam: seam, kind: .treeReachesDeclarationCallersCannotSee(declaration: declaration))))
 				} else if let plainDeclaration = Self.unseenPlainDeclarationToName(
 					ownSignature: ownSignature,
 					callersSignature: callersSignature,
@@ -3973,7 +3962,7 @@ public actor DependencyTreeGenerator {
 				) {
 					errors.append(.seam(.init(
 						seam: seam,
-						kind: .treeReachesPlainDeclarationCallersCannotSee(declaration: plainDeclaration, viaTargetGraph: seams.callersComputeFromTargetGraph),
+						kind: .treeReachesPlainDeclarationCallersCannotSee(declaration: plainDeclaration),
 					)))
 				}
 			}
@@ -9391,6 +9380,7 @@ public actor DependencyTreeGenerator {
 						},
 					)
 				},
+				viewDeclaringModule: typeDescriptionToFulfillingInstantiableMap[unbuildableTypeDescription] == nil ? viewDeclaringModules[unbuildableTypeDescription] : nil,
 			)
 		})
 	}

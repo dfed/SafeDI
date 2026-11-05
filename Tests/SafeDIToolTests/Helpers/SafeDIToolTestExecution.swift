@@ -353,7 +353,7 @@ func executeSafeDIToolTest(
 			#expect(generatedFiles.keys.sorted() == plannedOutputFilePaths.map { ($0 as NSString).lastPathComponent }.sorted())
 		}
 
-		let moduleInfo = try moduleInfoOutput.map { try ModuleInfo(moduleInfoData: Data(contentsOf: $0)) }
+		let moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
 		if let generatedFiles, !generatedFiles.isEmpty, !skipCompileVerification {
 			try verifyGeneratedCodeCompiles(
 				inputSwiftFiles: swiftFiles,
@@ -368,7 +368,7 @@ func executeSafeDIToolTest(
 		}
 
 		return try TestOutput(
-			moduleInfo: moduleInfo,
+			moduleInfoFile: moduleInfoFile,
 			moduleInfoOutputPath: moduleInfoOutput?.relativePath,
 			fixtures: fixtures,
 			warnings: generateOutput.warnings,
@@ -384,8 +384,12 @@ func executeSafeDIToolTest(
 
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 struct TestOutput {
-	/// The module info `generate` wrote, which it writes only for a test that names its module.
-	let moduleInfo: ModuleInfo?
+	/// The module info file `generate` wrote, which it writes only for a test that names its module.
+	let moduleInfoFile: ModuleInfoFile?
+	/// The module `moduleInfoFile` describes.
+	var moduleInfo: ModuleInfo? {
+		moduleInfoFile?.module
+	}
 	let moduleInfoOutputPath: String?
 	/// The fixture files written for `swiftFileContent`, looked up by file name.
 	let fixtures: FixturePaths

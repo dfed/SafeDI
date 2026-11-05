@@ -39,8 +39,9 @@ struct ModuleFixture {
 	///     source directory, for a file whose name matters, such as `SafeDIConfiguration.swift`.
 	///   - dependencies: The names of the modules this one depends on directly, each given before it. Each flow
 	///     derives from them what its build system derives: `.moduleInfo` reads exactly these modules' `.safedi`,
-	///     as Bazel lists a target's direct `deps`, so a module two levels down must be listed, as a Bazel or
-	///     Tuist user must list it; `.swiftPackagePlugin` lists the transitive closure's files in the CSV, as
+	///     as Bazel lists a target's direct `deps`, so a module two levels down whose types this module's own trees
+	///     build must be listed, as a Bazel or Tuist user lists a module the module imports, while a module a seam or
+	///     public mock of a listed module needs reaches it in that module's `.safedi`; `.swiftPackagePlugin` lists the transitive closure's files in the CSV, as
 	///     SwiftPM's `sourceModuleRecursiveDependencies` does. The module's compile can import the transitive
 	///     closure, as rules_swift propagates module visibility.
 	///   - isCheckoutPackage: Whether the module's package is one SwiftPM fetched, laid out under
@@ -122,8 +123,9 @@ struct ModuleFixture {
 	let verificationCompilationConditions: [String]?
 	let mockConditionalCompilation: String?
 	let deletesSwiftFilesAfterRunning: Bool
-	/// Whether `.moduleInfo` runs the module's `generate` without `--module-name`, as a custom script might, so its
-	/// `.safedi` names no module.
+	/// Whether `.moduleInfo` runs the module's `generate` without `--module-name`, as the Xcode project plugin runs it
+	/// for a target, so it writes no `.safedi`, which names its module: only a module no other module of the test
+	/// depends on can omit its name.
 	let omitsModuleName: Bool
 	/// Whether the module has no package under `.moduleInfo`: its `generate` runs without `--package-name` and its compile
 	/// passes no `-package-name`, as Bazel builds a library without `package_name` and Tuist a target without
@@ -215,7 +217,11 @@ struct ModuleTestOutput {
 	/// planned an output, as the plugin adds a build command only then.
 	let generateRan: Bool
 	/// The module's `.safedi`, which only `.moduleInfo` writes.
-	let moduleInfo: ModuleInfo?
+	let moduleInfoFile: ModuleInfoFile?
+	/// The module `moduleInfoFile` describes.
+	var moduleInfo: ModuleInfo? {
+		moduleInfoFile?.module
+	}
 	let moduleInfoOutputPath: String?
 	/// The manifest `scan` wrote, which only `.swiftPackagePlugin` runs.
 	let scanManifest: SafeDIToolManifest?
@@ -387,7 +393,7 @@ func executeSafeDIToolMultiModuleTest(
 			// The module is compiled, but nothing runs for it, and no `.safedi` of it exists.
 			outputs[moduleName] = ModuleTestOutput(
 				generateRan: false,
-				moduleInfo: nil,
+				moduleInfoFile: nil,
 				moduleInfoOutputPath: nil,
 				scanManifest: nil,
 				fixtures: FixturePaths(fileNames: module.fileNames, paths: module.swiftFiles.map(\.path), compilerPaths: module.swiftFiles.map(\.path)),
@@ -406,13 +412,13 @@ func executeSafeDIToolMultiModuleTest(
 			// the dependencies' declarations in module name order whatever order the test lists them in.
 			try FileManager.default.createDirectory(at: moduleInfoDirectory, withIntermediateDirectories: true)
 			let output = moduleInfoDirectory.appendingPathComponent("\(moduleName).safedi")
-			moduleInfoOutput = output
+			moduleInfoOutput = module.fixture.omitsModuleName ? nil : output
 			if let overridePath = moduleInfoOverrides[moduleName] {
 				// The module's info comes from the earlier run: nothing runs for it.
 				try FileManager.default.copyItem(atPath: overridePath, toPath: output.path)
 				outputs[moduleName] = ModuleTestOutput(
 					generateRan: false,
-					moduleInfo: try ModuleInfo(moduleInfoData: Data(contentsOf: output)),
+					moduleInfoFile: try ModuleInfoFile(moduleInfoData: Data(contentsOf: output)),
 					moduleInfoOutputPath: output.path,
 					scanManifest: nil,
 					fixtures: FixturePaths(fileNames: module.fileNames, paths: inputSwiftFilePaths, compilerPaths: compilerSwiftFilePaths),
@@ -429,12 +435,9 @@ func executeSafeDIToolMultiModuleTest(
 			if writesDOTTrees {
 				arguments += ["--dot-file-output", outputDirectory.appendingPathComponent("\(moduleName).dot").path]
 			}
-			arguments += [
-				"--module-info-output", output.path,
-				"--compiler-receives-input-paths-unchanged",
-			]
+			arguments.append("--compiler-receives-input-paths-unchanged")
 			if !module.fixture.omitsModuleName {
-				arguments += ["--module-name", moduleName]
+				arguments += ["--module-info-output", output.path, "--module-name", moduleName]
 			}
 			if !module.fixture.omitsPackageName {
 				arguments += ["--package-name", module.fixture.packageName]
@@ -541,8 +544,8 @@ func executeSafeDIToolMultiModuleTest(
 			}
 		}
 
-		let moduleInfo = try moduleInfoOutput.map { try ModuleInfo(moduleInfoData: Data(contentsOf: $0)) }
-		if let moduleInfo {
+		let moduleInfoFile = try moduleInfoOutput.map { try ModuleInfoFile(moduleInfoData: Data(contentsOf: $0)) }
+		if let moduleInfo = moduleInfoFile?.module {
 			expectMockConditionAgrees(configured: moduleInfo.configurations.first?.mockConditionalCompilation, fixture: module.fixture, sourceLocation: sourceLocation)
 		}
 		if module.fixture.deletesSwiftFilesAfterRunning {
@@ -552,7 +555,7 @@ func executeSafeDIToolMultiModuleTest(
 		}
 		outputs[moduleName] = ModuleTestOutput(
 			generateRan: generateArguments != nil,
-			moduleInfo: moduleInfo,
+			moduleInfoFile: moduleInfoFile,
 			moduleInfoOutputPath: moduleInfoOutput?.path,
 			scanManifest: scanManifest,
 			fixtures: fixtures,
@@ -647,7 +650,8 @@ private struct WrittenModule {
 }
 
 /// The transitive dependencies of each of `modules`, by module name, each in the order the modules were given.
-/// Throws when a module's name repeats, or a dependency does not name a module given before it.
+/// Throws when a module's name repeats, or a dependency does not name a module given before it or names one that omits
+/// its module name.
 private func transitiveDependenciesByModuleName(of modules: [ModuleFixture]) throws -> [String: [String]] {
 	let moduleNames = modules.map(\.name)
 	var transitiveDependencies = [String: [String]]()
@@ -659,6 +663,9 @@ private func transitiveDependenciesByModuleName(of modules: [ModuleFixture]) thr
 		for dependency in module.dependencies {
 			guard let dependencyDependencies = transitiveDependencies[dependency] else {
 				throw MultiModuleFixtureError(description: "Module \(module.name) depends on \(dependency), which must be listed before it.")
+			}
+			guard modules.first(where: { $0.name == dependency })?.omitsModuleName != true else {
+				throw MultiModuleFixtureError(description: "Module \(module.name) depends on \(dependency), which omits its module name and so writes no module info.")
 			}
 			dependencies.insert(dependency)
 			dependencies.formUnion(dependencyDependencies)
