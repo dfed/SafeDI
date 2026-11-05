@@ -98,13 +98,14 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 		try expectEveryModuleCompiled(output)
 	}
 
-	@Test
+	@Test(arguments: [false, true])
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsError_whenTwoModuleInfosDescribeOneModuleDifferently() async throws {
-		// Cell 2b: `Bar`'s `.safedi` was written against an earlier `Core`, `Feed`'s against the current one.
+	mutating func generate_throwsError_whenTwoModuleInfosDescribeOneModuleDifferently(corePackageChanged: Bool) async throws {
+		// Cell 2b: `Bar`'s `.safedi` was written against an earlier `Core`, `Feed`'s against the current one, whose
+		// declarations or whose package differ.
 		var earlierFilesToDelete = [URL]()
 		let earlier = try await executeSafeDIToolMultiModuleTest(
-			modules: Self.disagreementModules(coreTypeName: "Clock"),
+			modules: Self.disagreementModules(coreTypeName: "Clock", corePackageName: "Base"),
 			integration: .moduleInfo,
 			compileVerification: .skipped,
 			filesToDelete: &earlierFilesToDelete,
@@ -118,7 +119,7 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 			return "SafeDI was given two module infos that describe module `Core` differently: `\(moduleInfoDirectory)/Bar.safedi` and `\(moduleInfoDirectory)/Feed.safedi` were written against two different builds of `Core`. Build `Core` and the modules that depend on it again, so that every module info is written against the current one."
 		}) {
 			try await executeSafeDIToolMultiModuleTest(
-				modules: Self.disagreementModules(coreTypeName: "Calendar"),
+				modules: Self.disagreementModules(coreTypeName: corePackageChanged ? "Clock" : "Calendar", corePackageName: corePackageChanged ? "Moved" : "Base"),
 				integration: .moduleInfo,
 				compileVerification: .skipped,
 				moduleInfoOverrides: ["Bar": staleBarModuleInfo],
@@ -513,9 +514,9 @@ struct SafeDIToolModuleInfoViewTests: ~Copyable {
 	}
 
 	/// `Feed` and `Bar` each declare a seam that builds `Core`'s type named `coreTypeName`; `App` lists both.
-	private static func disagreementModules(coreTypeName: String) -> [ModuleFixture] {
+	private static func disagreementModules(coreTypeName: String, corePackageName: String) -> [ModuleFixture] {
 		[
-			ModuleFixture(name: "Core", packageName: "Base", swiftFileContent: [seamFixtureType(named: coreTypeName, isFinalClass: true, declarations: [])]),
+			ModuleFixture(name: "Core", packageName: corePackageName, swiftFileContent: [seamFixtureType(named: coreTypeName, isFinalClass: true, declarations: [])]),
 			ModuleFixture(name: "Bar", packageName: "Base", swiftFileContent: ["import Core\n\n" + seamFixtureType(named: "BarScreen", isSeam: true, declarations: ["@Instantiated let value: \(coreTypeName)"])], dependencies: ["Core"]),
 			ModuleFixture(name: "Feed", packageName: "Base", swiftFileContent: ["import Core\n\n" + seamFixtureType(named: "FeedScreen", isSeam: true, declarations: ["@Instantiated let value: \(coreTypeName)"])], dependencies: ["Core"]),
 			ModuleFixture(name: "App", packageName: "App", swiftFileContent: ["import Bar\nimport Feed\n\n" + seamFixtureType(named: "Root", isRoot: true, declarations: ["@Instantiated let barScreen: BarScreen", "@Instantiated let feedScreen: FeedScreen"])], dependencies: ["Bar", "Feed"]),

@@ -1148,29 +1148,27 @@ struct Generate: AsyncParsableCommand {
 	private static func viewDeclaringModules(of viewOnlyDeclarations: [ViewedModule], in moduleInfoView: MergedModuleInfoView) -> [TypeDescription: DependencyTreeGenerator.ViewDeclaringModule] {
 		guard !viewOnlyDeclarations.isEmpty else { return [:] }
 		// Breadth first from the modules the run was given, in name order, so each module is reached by the first of the
-		// shortest paths.
-		var throughModuleNameByModuleName = [String: String]()
+		// shortest paths. Every module a view carries declarations of is in the module graph the views carry, which
+		// reaches it from a module the run was given.
+		var viewDeclaringModules = [TypeDescription: DependencyTreeGenerator.ViewDeclaringModule]()
+		var reachedModuleNames = moduleInfoView.directModuleNames
 		var modulesToVisit = moduleInfoView.directModuleNames.sorted().map { (moduleName: $0, throughModuleName: $0) }
 		var visitIndex = 0
 		while visitIndex < modulesToVisit.count {
 			let (moduleName, throughModuleName) = modulesToVisit[visitIndex]
 			visitIndex += 1
-			for dependencyModuleName in moduleInfoView.identitiesByModuleName[moduleName]?.dependencyModuleNames ?? [] where throughModuleNameByModuleName[dependencyModuleName] == nil && !moduleInfoView.directModuleNames.contains(dependencyModuleName) {
-				throughModuleNameByModuleName[dependencyModuleName] = throughModuleName
+			for dependencyModuleName in moduleInfoView.identitiesByModuleName[moduleName]?.dependencyModuleNames ?? [] where reachedModuleNames.insert(dependencyModuleName).inserted {
 				modulesToVisit.append((moduleName: dependencyModuleName, throughModuleName: throughModuleName))
-			}
-		}
-		var viewDeclaringModules = [TypeDescription: DependencyTreeGenerator.ViewDeclaringModule]()
-		for entry in viewOnlyDeclarations {
-			guard let throughModuleName = throughModuleNameByModuleName[entry.moduleName] else { continue }
-			for instantiable in entry.instantiables where !instantiable.mockOnly {
-				for instantiableType in instantiable.instantiableTypes {
-					viewDeclaringModules[instantiableType] = DependencyTreeGenerator.ViewDeclaringModule(moduleName: entry.moduleName, throughModuleName: throughModuleName)
+				for instantiable in moduleInfoView.declarationsByModuleName[dependencyModuleName]?.instantiables ?? [] where !instantiable.mockOnly {
+					for instantiableType in instantiable.instantiableTypes {
+						viewDeclaringModules[instantiableType] = DependencyTreeGenerator.ViewDeclaringModule(moduleName: dependencyModuleName, throughModuleName: throughModuleName)
+					}
 				}
 			}
 		}
 		return viewDeclaringModules
 	}
+
 
 	/// The declarations a module sees, as `seamResolution` reads them for the seams and public mocks it declares.
 	private struct VisibleDeclarations {
