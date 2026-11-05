@@ -25,9 +25,8 @@ import Testing
 
 /// Shapes of a seam the `@Instantiable` macro rejects, which `generate` – run before the compiler expands the macro –
 /// reports with a plain error at the declaration rather than relying on the macro: a seam whose tree repeats a
-/// dependency label, which the generated tier would repeat and the uncreated-alias walk keys parameters by, and a
-/// `mockOnly` declaration that is also a seam, which has no tree of its own. These fixtures are the one exception to
-/// fixtures the macro accepts.
+/// dependency label, which the generated tier would repeat, and a `mockOnly` declaration that is also a seam, which
+/// has no tree of its own. These fixtures are the one exception to fixtures the macro accepts.
 struct SafeDIToolSeamMacroRejectedShapeTests: ~Copyable {
 	// MARK: Initialization
 
