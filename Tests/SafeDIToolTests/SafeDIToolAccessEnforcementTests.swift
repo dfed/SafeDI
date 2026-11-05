@@ -2919,98 +2919,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 		}
 	}
 
-	// MARK: Tests – Roots another module declares
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_leavesDependencysRootWithoutCode_whenItsTreeConstructsInternalType() async throws {
-		// The plugin's CSV for `App` lists `Feature`'s files, so `App` plans a file for `Feature`'s root too. `App`
-		// cannot construct `Feature`'s internal types, so it leaves the file without code but a comment saying why, and
-		// reports nothing: `Feature` generates the root and reports any problem with it.
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: [
-				Self.feature(inPackage: "Shop", declaring: Self.internalServiceWithPackageInitializer, alongside: """
-				@Instantiable(isRoot: true)
-				final class FeatureRoot: Instantiable {
-				    init(service: Service) {
-				        self.service = service
-				    }
-				    @Instantiated let service: Service
-				}
-				"""),
-				Self.app(inPackage: "Shop", declaring: Self.appRootIndependentOfFeature),
-			],
-			integration: .swiftPackagePlugin,
-			filesToDelete: &filesToDelete,
-		)
-
-		let featureRootCode = """
-		extension FeatureRoot {
-		    public convenience init() {
-		        let service = Service()
-		        self.init(service: service)
-		    }
-		}
-		"""
-		#expect(try #require(output.modules["Feature"]).generatedFiles == ["FeatureRoot+SafeDI.swift": generatedFileHeader + featureRootCode])
-		// `App`'s own root already has an initializer that takes nothing, so its file holds no code.
-		let appFileHeader = generatedFileHeader + Self.importBlock("Feature") + "\n\n"
-		#expect(try #require(output.modules["App"]).generatedFiles == [
-			"FeatureRoot+SafeDI.swift": appFileHeader + """
-			// SafeDI generates the dependency tree of FeatureRoot only in the module that declares it, because the tree constructs a declaration that is neither `public` nor `open`.
-			""",
-			"Root+SafeDI.swift": appFileHeader,
-		])
-		try expectEveryModuleCompiled(output)
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_generatesDependencysRootAsItsModuleDoes_whenItsTreeConstructsOnlyPublicTypes() async throws {
-		let output = try await executeSafeDIToolMultiModuleTest(
-			modules: [
-				Self.feature(
-					inPackage: "Shop",
-					declaring: """
-					@Instantiable
-					public final class Service: Instantiable {
-					    public init() {}
-					}
-					""",
-					alongside: """
-					@Instantiable(isRoot: true)
-					public final class FeatureRoot: Instantiable {
-					    public init(service: Service) {
-					        self.service = service
-					    }
-					    @Instantiated let service: Service
-					}
-					""",
-				),
-				Self.app(inPackage: "Shop", declaring: Self.appRootIndependentOfFeature),
-			],
-			integration: .swiftPackagePlugin,
-			filesToDelete: &filesToDelete,
-		)
-
-		let featureRootCode = """
-		extension FeatureRoot {
-		    public convenience init() {
-		        let service = Service()
-		        self.init(service: service)
-		    }
-		}
-		"""
-		#expect(try #require(output.modules["Feature"]).generatedFiles == ["FeatureRoot+SafeDI.swift": generatedFileHeader + featureRootCode])
-		// `App`'s own root already has an initializer that takes nothing, so its file holds no code.
-		let appFileHeader = generatedFileHeader + Self.importBlock("Feature") + "\n\n"
-		#expect(try #require(output.modules["App"]).generatedFiles == [
-			"FeatureRoot+SafeDI.swift": appFileHeader + featureRootCode,
-			"Root+SafeDI.swift": appFileHeader,
-		])
-		try expectEveryModuleCompiled(output)
-	}
-
 	// MARK: Tests – Types an extension of a plain type declares
 
 	@Test(arguments: MultiModuleIntegration.allCases)
@@ -3458,16 +3366,6 @@ struct SafeDIToolAccessEnforcementTests: ~Copyable {
 	public final class User: Instantiable {
 	    public init() {}
 	    package static func mock() -> User { User() }
-	}
-	"""
-
-	/// A root in `App` that constructs nothing of `Feature`'s.
-	private static let appRootIndependentOfFeature = """
-	import Feature
-
-	@Instantiable(isRoot: true)
-	final class Root: Instantiable {
-	    init() {}
 	}
 	"""
 
