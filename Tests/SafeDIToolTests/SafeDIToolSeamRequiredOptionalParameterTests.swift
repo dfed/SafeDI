@@ -932,19 +932,50 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_throwsHiddenPropertyError_whenSeamsOwnForwardedPropertyIsOptionalAndAliasSpellsUnwrappedForm() async throws {
-		// An alias of the unwrapped form beneath the seam's own forwarded `token: Secret?` is the hidden-label error at the
-		// seam, from its own chain, whatever any caller holds; inline reports a hidden receive only from a root that provides
-		// the property, and here passes `nil`. Nothing of the label may be uncreated.
+	mutating func generate_bindsAliasOfUnwrappedFormFromSeamsOwnOptionalForwardedProperty_asInlineDoes() async throws {
+		// An `onlyIfAvailable` alias of `token: Secret` reads the seam's own forwarded `token: Secret?`, its optional form,
+		// as an `onlyIfAvailable` alias reads either form of its fulfilling property: the seam and inline bind it alike.
 		let fixture = Self.fixture(rootBuilds: "@Instantiated let screenBuilder: Instantiator<Screen>", screen: ["@Forwarded let token: Secret?", "@Instantiated let left: Left"], detail: [Self.alias, "@Instantiated let reader: Reader"], reader: [Self.receive])
-		await assertThrowsError(diagnostics: { fixtures in
-			"""
-			\(fixtures["Detail.swift"]):8:5: error: @Received property `token: Secret` is hidden in chain: Screen -> Left -> Detail. `Screen` declares `token: Secret?` with the same label, so the types below `Screen` receive `token: Secret?` instead. Give `token: Secret?` on `Screen` a different label to fix.
-			\(fixtures["Screen.swift"]):8:5: note: `token: Secret?` is declared here
-			"""
-		}) {
-			try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
-		}
+		let output = try await executeSafeDIToolTest(swiftFileContent: fixture, buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
+		#expect(output.dependencyTreeFiles == [
+			"Root+SafeDI.swift": generatedFileHeader + """
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_screenBuilder(token: Secret?) -> Screen {
+			            _ = Screen.__safeDI_Screen_4BDBF64A8A90FDCE.self
+			            return Screen(token: token)
+			        }
+			        let screenBuilder = Instantiator<Screen> {
+			            __safeDI_screenBuilder(token: $0)
+			        }
+			        self.init(screenBuilder: screenBuilder)
+			    }
+			}
+			""",
+			"Screen+SafeDI.swift": generatedFileHeader + """
+			extension Screen {
+			    public convenience init(token: Secret?) {
+			        func __safeDI_left() -> Left {
+			            func __safeDI_detail() -> Detail {
+			                #sourceLocation(file: "\(output.fixtures["Detail.swift"])", line: 8)
+			                let authToken: Secret? = token
+			                #sourceLocation()
+			                let reader = Reader(authToken: authToken)
+			                return Detail(authToken: authToken, reader: reader)
+			            }
+			            let detail: Detail = __safeDI_detail()
+			            return Left(detail: detail)
+			        }
+			        let left: Left = __safeDI_left()
+			        self.init(token: token, left: left)
+			    }
+			}
+
+			extension Screen {
+			    public enum __safeDI_Screen_4BDBF64A8A90FDCE {}
+			}
+			""",
+		])
 		let inlineOutput = try await executeSafeDIToolTest(swiftFileContent: inlineFixture(fixture), buildSwiftOutputDirectory: true, filesToDelete: &filesToDelete)
 		#expect(inlineOutput.dependencyTreeFiles == [
 			"Root+SafeDI.swift": generatedFileHeader + """
@@ -953,9 +984,11 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			        func __safeDI_screenBuilder(token: Secret?) -> Screen {
 			            func __safeDI_left() -> Left {
 			                func __safeDI_detail() -> Detail {
-			                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
-			                    let reader = Reader(authToken: nil)
-			                    return Detail(authToken: nil, reader: reader)
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                    let authToken: Secret? = token
+			                    #sourceLocation()
+			                    let reader = Reader(authToken: authToken)
+			                    return Detail(authToken: authToken, reader: reader)
 			                }
 			                let detail: Detail = __safeDI_detail()
 			                return Left(detail: detail)
@@ -996,7 +1029,9 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			            func __safeDI_screen() -> Screen {
 			                let right = Right(token: token)
 			                func __safeDI_left() -> Left {
-			                    // Did not create `token: Secret?` because `other: Secret` is unavailable.
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Left.swift"])", line: 8)
+			                    let token: Secret? = nil
+			                    #sourceLocation()
 			                    func __safeDI_detail() -> Detail {
 			                        #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
 			                        let authToken: Secret? = token
@@ -1005,7 +1040,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			                        return Detail(authToken: authToken, reader: reader)
 			                    }
 			                    let detail: Detail = __safeDI_detail()
-			                    return Left(token: nil, detail: detail)
+			                    return Left(token: token, detail: detail)
 			                }
 			                let left: Left = __safeDI_left()
 			                return Screen(right: right, left: left)
@@ -1202,7 +1237,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			        func __safeDI_left() -> Left {
 			            func __safeDI_sub() -> Sub {
 			                #sourceLocation(file: "\(output.fixtures["Sub.swift"])", line: 7)
-			                let authToken: AnyAuth? = AnyAuth(token)
+			                let authToken: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
 			                #sourceLocation()
 			                return Sub(authToken: authToken)
 			            }
@@ -1228,7 +1263,7 @@ struct SafeDIToolSeamRequiredOptionalParameterTests: ~Copyable {
 			                func __safeDI_left() -> Left {
 			                    func __safeDI_sub() -> Sub {
 			                        #sourceLocation(file: "\(inlineOutput.fixtures["Sub.swift"])", line: 7)
-			                        let authToken: AnyAuth? = AnyAuth(token)
+			                        let authToken: AnyAuth? = (token as Secret?).map { AnyAuth($0) }
 			                        #sourceLocation()
 			                        return Sub(authToken: authToken)
 			                    }

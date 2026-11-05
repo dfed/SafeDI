@@ -9065,8 +9065,10 @@ struct SafeDIToolDependencyTreeGenerationTests: ~Copyable {
 		        func __safeDI_featureBuilder(token: Token?) -> Feature {
 		            func __safeDI_screen() -> Screen {
 		                func __safeDI_detail() -> Detail {
-		                    // Did not create `authToken: Token?` because `token: Token` is unavailable.
-		                    return Detail(authToken: nil)
+		                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+		                    let authToken: Token? = token
+		                    #sourceLocation()
+		                    return Detail(authToken: authToken)
 		                }
 		                let detail: Detail = __safeDI_detail()
 		                return Screen(detail: detail)

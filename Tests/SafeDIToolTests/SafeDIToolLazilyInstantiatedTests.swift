@@ -214,8 +214,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		    public convenience init() {
 		        func __safeDI_a() -> A {
 		            func __safeDI_b() -> B {
-		                // Did not create `renamedA: LazilyInstantiated<A>?` because `a: LazilyInstantiated<A>` is unavailable.
-		                return B(renamedA: nil)
+		                #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 4)
+		                let renamedA: LazilyInstantiated<A>? = nil
+		                #sourceLocation()
+		                return B(renamedA: renamedA)
 		            }
 		            let b: B = __safeDI_b()
 		            return A(b: b)
@@ -1519,9 +1521,9 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_passesNil_whenTypeBelowUncreatedAliasReceivesItsPropertyOnlyIfAvailableAndAncestorLazilyInstantiatesThatLabel() async throws {
-		// Parent’s `analytics` renames `legacyAnalytics`, which nothing provides, so it is not created. It still hides
-		// Root’s lazily instantiated `analytics`, whose instance would have to be read from the hidden property.
+	mutating func run_passesNil_whenTypeBelowAliasBoundToNilReceivesItsPropertyOnlyIfAvailableAndAncestorLazilyInstantiatesThatLabel() async throws {
+		// Parent’s `analytics` renames `legacyAnalytics`, which nothing provides, so it is `nil`. It hides Root’s lazily
+		// instantiated `analytics`, so Child reads it.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -1579,9 +1581,11 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        }
 		        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
 		        func __safeDI_parent() -> Parent {
-		            // Did not create `analytics: Analytics?` because `legacyAnalytics: Analytics` is unavailable.
-		            let child = Child(analytics: nil)
-		            return Parent(analytics: nil, child: child)
+		            #sourceLocation(file: "\(output.fixtures["Parent.swift"])", line: 7)
+		            let analytics: Analytics? = nil
+		            #sourceLocation()
+		            let child = Child(analytics: analytics)
+		            return Parent(analytics: analytics, child: child)
 		        }
 		        let parent: Parent = __safeDI_parent()
 		        self.init(analytics: analytics, parent: parent)
@@ -3081,60 +3085,77 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_throwsError_whenTypeBelowUncreatedAliasRequiresItsPropertyAndAncestorLazilyInstantiatesThatLabel() async {
-		await assertThrowsError(
-			diagnostics: { fixtures in
+	mutating func run_passesNil_whenTypeBelowAliasBoundToNilRequiresItsPropertyAndAncestorLazilyInstantiatesThatLabel() async throws {
+		let output = try await executeSafeDIToolTest(
+			swiftFileContent: [
 				"""
-				\(fixtures["Child.swift"]):7:5: error: @Received property `analytics: Analytics?` is not @Instantiated or @Forwarded in chain: Root -> Parent -> Child. `analytics: Analytics?` is created by `Parent` only if `legacyAnalytics: Analytics` is available, and `legacyAnalytics: Analytics` is not @Instantiated or @Forwarded in chain. Did you mean to receive this property with `onlyIfAvailable: true`?
-				\(fixtures["Child.swift"]):7:5-7:14: fixit: @Received(onlyIfAvailable: true)
+				@Instantiable(isRoot: true)
+				public final class Root: Instantiable {
+				    public init(analytics: LazilyInstantiated<Analytics>, parent: Parent) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
+
+				    @Instantiated let analytics: LazilyInstantiated<Analytics>
+				    @Instantiated let parent: Parent
+				}
+				""",
 				"""
-			},
-		) {
-			try await executeSafeDIToolTest(
-				swiftFileContent: [
-					"""
-					@Instantiable(isRoot: true)
-					public final class Root: Instantiable {
-					    public init(analytics: LazilyInstantiated<Analytics>, parent: Parent) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				@Instantiable
+				public final class Parent: Instantiable {
+				    public init(analytics: Analytics?, child: Child) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Instantiated let analytics: LazilyInstantiated<Analytics>
-					    @Instantiated let parent: Parent
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Parent: Instantiable {
-					    public init(analytics: Analytics?, child: Child) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received(fulfilledByDependencyNamed: "legacyAnalytics", ofType: Analytics.self, onlyIfAvailable: true) let analytics: Analytics?
+				    @Instantiated let child: Child
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Child: Instantiable {
+				    public init(analytics: Analytics?) {
+				        fatalError("SafeDI doesn't inspect the initializer body")
+				    }
 
-					    @Received(fulfilledByDependencyNamed: "legacyAnalytics", ofType: Analytics.self, onlyIfAvailable: true) let analytics: Analytics?
-					    @Instantiated let child: Child
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Child: Instantiable {
-					    public init(analytics: Analytics?) {
-					        fatalError("SafeDI doesn't inspect the initializer body")
-					    }
+				    @Received let analytics: Analytics?
+				}
+				""",
+				"""
+				@Instantiable
+				public final class Analytics: Instantiable {
+				    public init() {}
+				}
+				""",
+			],
+			buildSwiftOutputDirectory: true,
+			filesToDelete: &filesToDelete,
+		)
 
-					    @Received let analytics: Analytics?
-					}
-					""",
-					"""
-					@Instantiable
-					public final class Analytics: Instantiable {
-					    public init() {}
-					}
-					""",
-				],
-				buildSwiftOutputDirectory: true,
-				filesToDelete: &filesToDelete,
-			)
-		}
+		#expect(output.generatedFiles == [
+			"Root+SafeDI.swift": """
+			// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
+			// Any modifications made to this file will be overwritten on subsequent builds.
+			// Please refrain from editing this file directly.
+
+			extension Root {
+			    public convenience init() {
+			        func __safeDI_analytics() -> Analytics {
+			            Analytics()
+			        }
+			        let analytics = LazilyInstantiated<Analytics>(__safeDI_analytics)
+			        func __safeDI_parent() -> Parent {
+			            #sourceLocation(file: "\(output.fixtures["Parent.swift"])", line: 7)
+			            let analytics: Analytics? = nil
+			            #sourceLocation()
+			            let child = Child(analytics: analytics)
+			            return Parent(analytics: analytics, child: child)
+			        }
+			        let parent: Parent = __safeDI_parent()
+			        self.init(analytics: analytics, parent: parent)
+			    }
+			}
+			""",
+		])
 	}
 
 	@Test
@@ -4170,7 +4191,10 @@ struct SafeDIToolLazilyInstantiatedTests: ~Copyable {
 		        safeDIOverrides: SafeDIOverrides = .init()
 		    ) -> Screen {
 		        func __safeDI_nodeBuilder() -> Node {
-		            if let safeDIBuilder = safeDIOverrides.nodeBuilder { safeDIBuilder(nil) } else { Node(child: nil) }
+		            #sourceLocation(file: "\(output.fixtures["Node.swift"])", line: 7)
+		            let child: LazilyInstantiated<Node>? = nil
+		            #sourceLocation()
+		            return if let safeDIBuilder = safeDIOverrides.nodeBuilder { safeDIBuilder(child) } else { Node(child: child) }
 		        }
 		        let nodeBuilder = LazilyInstantiated<Node>(__safeDI_nodeBuilder)
 		        return Screen(nodeBuilder: nodeBuilder)

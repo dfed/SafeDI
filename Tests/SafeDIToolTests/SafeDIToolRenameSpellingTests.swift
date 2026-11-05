@@ -365,9 +365,13 @@ struct SafeDIToolRenameSpellingTests: ~Copyable {
 			        }
 			        let available: Available = __safeDI_available()
 			        func __safeDI_unavailable() -> Child {
-			            // Did not create `a: X?` because `x: X` is unavailable.
-			            // Did not create `b: X?` because `x: X` is unavailable.
-			            return Child(a: nil, b: nil)
+			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 8)
+			            let a: X? = nil
+			            #sourceLocation()
+			            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 9)
+			            let b: X? = nil
+			            #sourceLocation()
+			            return Child(a: a, b: b)
 			        }
 			        let unavailable: Child = __safeDI_unavailable()
 			        self.init(available: available, unavailable: unavailable)

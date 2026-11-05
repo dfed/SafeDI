@@ -7259,8 +7259,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_whenPropertyAliasIsOptionalAndMarkedOnlyIfAvailableAndItIsOnlyAvailableFromSiblingBuiltFromReceiversAncestor() async throws {
-		// As with the plain receive: Root builds `b` and `c`, C receives `b`, and
-		// Worker, built inside `b`, aliases `c` only if available.
+		// As with the plain receive: Root builds `b` and `c`, C receives `b`, and Worker, built inside `b`, aliases `c` only if
+		// available, so the alias is `nil`, and Worker is passed it.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -7308,8 +7308,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public convenience init() {
 		        func __safeDI_b() -> B {
 		            func __safeDI_worker() -> Worker {
-		                // Did not create `renamed: CProtocol?` because `c: C` is unavailable.
-		                return Worker(renamed: nil)
+		                #sourceLocation(file: "\(output.fixtures["Worker.swift"])", line: 6)
+		                let renamed: CProtocol? = nil
+		                #sourceLocation()
+		                return Worker(renamed: renamed)
 		            }
 		            let worker: Worker = __safeDI_worker()
 		            return B(worker: worker)
@@ -7561,8 +7563,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_cBuilder() -> C {
-		            // Did not create `renamed: Instantiator<C>?` because `cBuilder: Instantiator<C>` is unavailable.
-		            return C(renamed: nil)
+		            #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
+		            let renamed: Instantiator<C>? = nil
+		            #sourceLocation()
+		            return C(renamed: renamed)
 		        }
 		        let cBuilder = Instantiator<C>(__safeDI_cBuilder)
 		        self.init(cBuilder: cBuilder)
@@ -7941,9 +7945,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_child() -> Child {
-		            // Did not create `maybe: Greeter?` because `missing: DefaultGreeter` is unavailable.
-		            let grand = Grand(maybe: nil)
-		            return Child(maybe: nil, grand: grand)
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let maybe: Greeter? = nil
+		            #sourceLocation()
+		            let grand = Grand(maybe: maybe)
+		            return Child(maybe: maybe, grand: grand)
 		        }
 		        let child: Child = __safeDI_child()
 		        self.init(child: child)
@@ -8005,9 +8011,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_child() -> Child {
-		            // Did not create `maybe: Greeter?` because `x: X` is unavailable.
-		            let grand = Grand(maybe: nil)
-		            return Child(maybe: nil, grand: grand)
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let maybe: Greeter? = nil
+		            #sourceLocation()
+		            let grand = Grand(maybe: maybe)
+		            return Child(maybe: maybe, grand: grand)
 		        }
 		        let child: Child = __safeDI_child()
 		        let x = X(child: child)
@@ -9070,69 +9078,55 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesConvenienceExtensionOnRootOfTree_passesEnclosingPropertyToRequiredReceiverOfOnlyIfAvailableAlias_whenAliasRenamesPropertyBuiltFromReceiver() async throws {
-		// T requires `tProtocol`, which Child renames from `t`, the T being built. Root's
-		// `tProtocol` stands in for it, so Child does not create its alias and T gets Root's.
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
+	mutating func run_throwsError_whenTypeBuiltAsOnlyIfAvailableAliasesDependencyRequiresTheAliasAndEnclosingTypeDeclaresItsLabel() async {
+		// T requires `tProtocol`, which Child renames from `t`, the T being built. Child's alias is the nearest declaration of
+		// `tProtocol`, whatever Root declares, so `t` must be built before it and it before `t`: a dependency cycle.
+		await assertThrowsError(
+			diagnostics: { fixtures in
 				"""
-				public protocol TProtocol: AnyObject {}
+				\(fixtures["T.swift"]):4:5: error: Dependency cycle: @Instantiated `t: T` -> @Received `tProtocol: TProtocol?` -> @Received `t: T`. `t: T` is received while it is still being instantiated. `tProtocol: TProtocol?` renames `t: T` only if available, so a type that receives `tProtocol` without `onlyIfAvailable` must be built after `t: T`. Receive `tProtocol` with `@Received(onlyIfAvailable: true)` to be passed `nil` where `t: T` cannot be built first.
+				"""
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					public protocol TProtocol: AnyObject {}
 
-				@Instantiable(isRoot: true)
-				public final class Root: Instantiable {
-				    public init(other: Other, tProtocol: TProtocol?, child: Child) { self.other = other; self.tProtocol = tProtocol; self.child = child }
-				    @Instantiated let other: Other
-				    @Received(fulfilledByDependencyNamed: "other", ofType: Other.self) let tProtocol: TProtocol?
-				    @Instantiated let child: Child
-				}
-				""",
-				"""
-				@Instantiable
-				public final class Other: Instantiable, TProtocol {
-				    public init() {}
-				}
-				""",
-				"""
-				@Instantiable
-				public final class Child: Instantiable {
-				    public init(tProtocol: TProtocol?, t: T) { self.tProtocol = tProtocol; self.t = t }
-				    @Received(fulfilledByDependencyNamed: "t", ofType: T.self, onlyIfAvailable: true) let tProtocol: TProtocol?
-				    @Instantiated let t: T
-				}
-				""",
-				"""
-				@Instantiable
-				public final class T: Instantiable, TProtocol {
-				    public init(tProtocol: TProtocol?) { self.tProtocol = tProtocol }
-				    @Received let tProtocol: TProtocol?
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
-		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-		// Any modifications made to this file will be overwritten on subsequent builds.
-		// Please refrain from editing this file directly.
-
-		extension Root {
-		    public convenience init() {
-		        let other = Other()
-		        #sourceLocation(file: "\(output.fixtures["Root.swift"])", line: 7)
-		        let tProtocol: TProtocol? = other
-		        #sourceLocation()
-		        func __safeDI_child() -> Child {
-		            // Did not create `tProtocol: TProtocol?` because `t: T` is unavailable.
-		            let t = T(tProtocol: tProtocol)
-		            return Child(tProtocol: tProtocol, t: t)
-		        }
-		        let child: Child = __safeDI_child()
-		        self.init(other: other, tProtocol: tProtocol, child: child)
-		    }
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(other: Other, tProtocol: TProtocol?, child: Child) { self.other = other; self.tProtocol = tProtocol; self.child = child }
+					    @Instantiated let other: Other
+					    @Received(fulfilledByDependencyNamed: "other", ofType: Other.self) let tProtocol: TProtocol?
+					    @Instantiated let child: Child
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Other: Instantiable, TProtocol {
+					    public init() {}
+					}
+					""",
+					"""
+					@Instantiable
+					public final class Child: Instantiable {
+					    public init(tProtocol: TProtocol?, t: T) { self.tProtocol = tProtocol; self.t = t }
+					    @Received(fulfilledByDependencyNamed: "t", ofType: T.self, onlyIfAvailable: true) let tProtocol: TProtocol?
+					    @Instantiated let t: T
+					}
+					""",
+					"""
+					@Instantiable
+					public final class T: Instantiable, TProtocol {
+					    public init(tProtocol: TProtocol?) { self.tProtocol = tProtocol }
+					    @Received let tProtocol: TProtocol?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
 		}
-		""")
 	}
 
 	@Test
@@ -9270,81 +9264,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesConvenienceExtensionOnRootOfTree_passesEnclosingProviderToRequiredReceiverOfAlias_whenAliasIsNotCreatedBecauseItsDependencyIsUnavailable() async throws {
-		// Child's `onlyIfAvailable` alias of `missing` is not created, so Grand's required
-		// receive of `maybe` is fulfilled by the `maybe` Parent forwards.
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
-				"""
-				@Instantiable(isRoot: true)
-				public final class Root: Instantiable {
-				    public init(parentBuilder: Instantiator<Parent>) { self.parentBuilder = parentBuilder }
-				    @Instantiated let parentBuilder: Instantiator<Parent>
-				}
-				""",
-				"""
-				public protocol Greeter {}
-
-				@Instantiable
-				public final class DefaultGreeter: Instantiable, Greeter {
-				    public init() {}
-				}
-				""",
-				"""
-				@Instantiable
-				public final class Parent: Instantiable {
-				    public init(maybe: Greeter?, child: Child) { self.maybe = maybe; self.child = child }
-				    @Forwarded let maybe: Greeter?
-				    @Instantiated let child: Child
-				}
-				""",
-				"""
-				@Instantiable
-				public final class Child: Instantiable {
-				    public init(maybe: Greeter?, grand: Grand) { self.maybe = maybe; self.grand = grand }
-				    @Received(fulfilledByDependencyNamed: "missing", ofType: DefaultGreeter.self, onlyIfAvailable: true) let maybe: Greeter?
-				    @Instantiated let grand: Grand
-				}
-				""",
-				"""
-				@Instantiable
-				public final class Grand: Instantiable {
-				    public init(maybe: Greeter?) { self.maybe = maybe }
-				    @Received let maybe: Greeter?
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
-		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-		// Any modifications made to this file will be overwritten on subsequent builds.
-		// Please refrain from editing this file directly.
-
-		extension Root {
-		    public convenience init() {
-		        func __safeDI_parentBuilder(maybe: Greeter?) -> Parent {
-		            func __safeDI_child() -> Child {
-		                // Did not create `maybe: Greeter?` because `missing: DefaultGreeter` is unavailable.
-		                let grand = Grand(maybe: maybe)
-		                return Child(maybe: nil, grand: grand)
-		            }
-		            let child: Child = __safeDI_child()
-		            return Parent(maybe: maybe, child: child)
-		        }
-		        let parentBuilder = Instantiator<Parent> {
-		            __safeDI_parentBuilder(maybe: $0)
-		        }
-		        self.init(parentBuilder: parentBuilder)
-		    }
-		}
-		""")
-	}
-
-	@Test
-	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func run_writesConvenienceExtensionOnRootOfTree_buildsEnclosingProviderFirst_whenRequiredReceiverOfAliasThatIsNotCreatedResolvesToIt() async throws {
 		// Child's `onlyIfAvailable` alias of `missing` is never created, so Grand's required
 		// receive of `maybe` resolves to Root's `maybe`, which is built before `child`.
@@ -9393,13 +9312,15 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
-		        let maybe: Greeter = DefaultGreeter()
 		        func __safeDI_child() -> Child {
-		            // Did not create `maybe: Greeter?` because `missing: DefaultGreeter` is unavailable.
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let maybe: Greeter? = nil
+		            #sourceLocation()
 		            let grand = Grand(maybe: maybe)
 		            return Child(maybe: maybe, grand: grand)
 		        }
 		        let child: Child = __safeDI_child()
+		        let maybe: Greeter = DefaultGreeter()
 		        self.init(child: child, maybe: maybe)
 		    }
 		}
@@ -9473,13 +9394,14 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
-		        let x = X(parent: nil)
 		        func __safeDI_parent() -> Parent {
 		            #sourceLocation(file: "\(output.fixtures["Parent.swift"])", line: 4)
-		            let maybe: Greeter? = x
+		            let maybe: Greeter? = nil
 		            #sourceLocation()
 		            func __safeDI_child() -> Child {
-		                // Did not create `maybe: Greeter?` because `missing: DefaultGreeter` is unavailable.
+		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		                let maybe: Greeter? = nil
+		                #sourceLocation()
 		                let grand = Grand(maybe: maybe)
 		                return Child(maybe: maybe, grand: grand)
 		            }
@@ -9487,6 +9409,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		            return Parent(maybe: maybe, child: child)
 		        }
 		        let parent: Parent = __safeDI_parent()
+		        let x = X(parent: parent)
 		        self.init(x: x, parent: parent)
 		    }
 		}
@@ -9495,9 +9418,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesConvenienceExtensionOnRootOfTree_passesEnclosingPropertyToOnlyIfAvailableReceiverOfAlias_whenAliasIsNotCreatedAndEnclosingScopeForwardsProperty() async throws {
-		// Child's `onlyIfAvailable` alias of `missing` is not created, but Parent forwards a
-		// `maybe` of the same type. Grand, built inside Child, resolves `maybe` to Parent's.
+	mutating func run_passesAliasBoundToNilToOnlyIfAvailableReceiver_whenAliasesDependencyIsUnavailableAndEnclosingTypeForwardsItsLabel() async throws {
+		// Child's `onlyIfAvailable` alias of `missing` is `nil`, since nothing provides `missing`, and Parent forwards a `maybe`
+		// of the same type. Grand, built inside Child, reads the alias, the nearest declaration of `maybe`, so it is `nil`.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -9553,9 +9476,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public convenience init() {
 		        func __safeDI_parentBuilder(maybe: Greeter?) -> Parent {
 		            func __safeDI_child() -> Child {
-		                // Did not create `maybe: Greeter?` because `missing: DefaultGreeter` is unavailable.
+		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		                let maybe: Greeter? = nil
+		                #sourceLocation()
 		                let grand = Grand(maybe: maybe)
-		                return Child(maybe: nil, grand: grand)
+		                return Child(maybe: maybe, grand: grand)
 		            }
 		            let child: Child = __safeDI_child()
 		            return Parent(maybe: maybe, child: child)
@@ -9622,7 +9547,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public convenience init() {
 		        let maybe: Greeter = DefaultGreeter()
 		        func __safeDI_child() -> Child {
-		            // Did not create `maybe: Greeter?` because `missing: DefaultGreeter` is unavailable.
+		            #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		            let maybe: Greeter? = nil
+		            #sourceLocation()
 		            let grand = Grand(maybe: maybe)
 		            return Child(maybe: maybe, grand: grand)
 		        }
@@ -9696,9 +9623,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public convenience init() {
 		        func __safeDI_parentBuilder(maybe: Greeter?) -> Parent {
 		            func __safeDI_child() -> Child {
-		                // Did not create `maybe: Greeter?` because `x: X` is unavailable.
+		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		                let maybe: Greeter? = nil
+		                #sourceLocation()
 		                let grand = Grand(maybe: maybe)
-		                return Child(maybe: nil, grand: grand)
+		                return Child(maybe: maybe, grand: grand)
 		            }
 		            let child: Child = __safeDI_child()
 		            let x = X(child: child)
@@ -9779,7 +9708,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		            let maybe: Greeter? = greeter
 		            #sourceLocation()
 		            func __safeDI_child() -> Child {
-		                // Did not create `maybe: Greeter?` because `missing: DefaultGreeter` is unavailable.
+		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		                let maybe: Greeter? = nil
+		                #sourceLocation()
 		                let grand = Grand(maybe: maybe)
 		                return Child(maybe: maybe, grand: grand)
 		            }
@@ -9854,14 +9785,18 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public convenience init() {
 		        let greeter = DefaultGreeter()
 		        func __safeDI_parent() -> Parent {
-		            // Did not create `maybe: Greeter?` because `otherMissing: DefaultGreeter` is unavailable.
+		            #sourceLocation(file: "\(output.fixtures["Parent.swift"])", line: 4)
+		            let maybe: Greeter? = nil
+		            #sourceLocation()
 		            func __safeDI_child() -> Child {
-		                // Did not create `maybe: Greeter?` because `missing: DefaultGreeter` is unavailable.
-		                let grand = Grand(maybe: nil)
-		                return Child(maybe: nil, grand: grand)
+		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		                let maybe: Greeter? = nil
+		                #sourceLocation()
+		                let grand = Grand(maybe: maybe)
+		                return Child(maybe: maybe, grand: grand)
 		            }
 		            let child: Child = __safeDI_child()
-		            return Parent(maybe: nil, child: child)
+		            return Parent(maybe: maybe, child: child)
 		        }
 		        let parent: Parent = __safeDI_parent()
 		        self.init(greeter: greeter, parent: parent)
@@ -9923,9 +9858,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public convenience init() {
 		        func __safeDI_maybe() -> DefaultGreeter {
 		            func __safeDI_child() -> Child {
-		                // Did not create `maybe: Greeter?` because `missing: DefaultGreeter` is unavailable.
-		                let grand = Grand(maybe: nil)
-		                return Child(maybe: nil, grand: grand)
+		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		                let maybe: Greeter? = nil
+		                #sourceLocation()
+		                let grand = Grand(maybe: maybe)
+		                return Child(maybe: maybe, grand: grand)
 		            }
 		            let child: Child = __safeDI_child()
 		            return DefaultGreeter(child: child)
@@ -10005,14 +9942,18 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public convenience init() {
 		        func __safeDI_parentBuilder(maybe: Greeter?) -> Outer {
 		            func __safeDI_parent() -> Parent {
-		                // Did not create `maybe: Greeter?` because `otherMissing: DefaultGreeter` is unavailable.
+		                #sourceLocation(file: "\(output.fixtures["Parent.swift"])", line: 4)
+		                let maybe: Greeter? = nil
+		                #sourceLocation()
 		                func __safeDI_child() -> Child {
-		                    // Did not create `maybe: Greeter?` because `missing: DefaultGreeter` is unavailable.
+		                    #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		                    let maybe: Greeter? = nil
+		                    #sourceLocation()
 		                    let grand = Grand(maybe: maybe)
 		                    return Child(maybe: maybe, grand: grand)
 		                }
 		                let child: Child = __safeDI_child()
-		                return Parent(maybe: nil, child: child)
+		                return Parent(maybe: maybe, child: child)
 		            }
 		            let parent: Parent = __safeDI_parent()
 		            return Outer(maybe: maybe, parent: parent)
@@ -10028,10 +9969,8 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func run_writesConvenienceExtensionOnRootOfTree_passesEnclosingPropertyToRequiredReceiverOfAlias_whenAliasIsNotCreatedAndEnclosingScopeForwardsProperty() async throws {
-		// Child's `onlyIfAvailable` alias of `missing` is not created, but Parent forwards a
-		// `maybe` of the same type. Grand, built inside Child, requires `maybe` and resolves it
-		// to Parent's.
+	mutating func run_passesAliasBoundToNilToRequiredReceiver_whenAliasesDependencyIsUnavailableAndEnclosingTypeForwardsItsLabel() async throws {
+		// As above, with Grand requiring `maybe`: it reads the alias, `nil`, rather than the `maybe` Parent forwards.
 		let output = try await executeSafeDIToolTest(
 			swiftFileContent: [
 				"""
@@ -10087,9 +10026,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public convenience init() {
 		        func __safeDI_parentBuilder(maybe: Greeter?) -> Parent {
 		            func __safeDI_child() -> Child {
-		                // Did not create `maybe: Greeter?` because `missing: DefaultGreeter` is unavailable.
+		                #sourceLocation(file: "\(output.fixtures["Child.swift"])", line: 4)
+		                let maybe: Greeter? = nil
+		                #sourceLocation()
 		                let grand = Grand(maybe: maybe)
-		                return Child(maybe: nil, grand: grand)
+		                return Child(maybe: maybe, grand: grand)
 		            }
 		            let child: Child = __safeDI_child()
 		            return Parent(maybe: maybe, child: child)
@@ -10152,8 +10093,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_b() -> B {
-		            // Did not create `aRenamed: ARenamed?` because `a: A` is unavailable.
-		            return B(aRenamed: nil)
+		            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 7)
+		            let aRenamed: ARenamed? = nil
+		            #sourceLocation()
+		            return B(aRenamed: aRenamed)
 		        }
 		        let b: B = __safeDI_b()
 		        self.init(b: b)
@@ -10227,8 +10170,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		        func __safeDI_aBuilder() -> A {
 		            func __safeDI_c() -> C {
 		                func __safeDI_b() -> B {
-		                    // Did not create `cRenamed: CRenamed?` because `c: C` is unavailable.
-		                    return B(cRenamed: nil)
+		                    #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 7)
+		                    let cRenamed: CRenamed? = nil
+		                    #sourceLocation()
+		                    return B(cRenamed: cRenamed)
 		                }
 		                let b: B = __safeDI_b()
 		                return C(b: b)
@@ -10285,8 +10230,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public convenience init() {
 		        func __safeDI_a() -> A {
 		            func __safeDI_b() -> B {
-		                // Did not create `renamedA: A?` because `a: A` is unavailable.
-		                return B(renamedA: nil)
+		                #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 4)
+		                let renamedA: A? = nil
+		                #sourceLocation()
+		                return B(renamedA: renamedA)
 		            }
 		            let b: B = __safeDI_b()
 		            return A(b: b)
@@ -10462,8 +10409,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		        }
 		        let aBuilder = Instantiator<A>(__safeDI_aBuilder)
 		        func __safeDI_bBuilder() -> B {
-		            // Did not create `cRenamed: CRenamed?` because `c: C` is unavailable.
-		            return B(cRenamed: nil)
+		            #sourceLocation(file: "\(output.fixtures["B.swift"])", line: 7)
+		            let cRenamed: CRenamed? = nil
+		            #sourceLocation()
+		            return B(cRenamed: cRenamed)
 		        }
 		        let bBuilder = Instantiator<B>(__safeDI_bBuilder)
 		        self.init(aBuilder: aBuilder, bBuilder: bBuilder)
@@ -10724,8 +10673,10 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public init() {
 		        func __safeDI_consumer() -> Consumer {
-		            // Did not create `renamedService: Service?` because `service: Service` is unavailable.
-		            return Consumer(renamedService: nil)
+		            #sourceLocation(file: "\(output.fixtures["Consumer.swift"])", line: 7)
+		            let renamedService: Service? = nil
+		            #sourceLocation()
+		            return Consumer(renamedService: renamedService)
 		        }
 		        let consumer: Consumer = __safeDI_consumer()
 		        self.init(consumer: consumer)
@@ -14056,270 +14007,207 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func run_buildsSiblingAfterTreeDeclaringOnlyIfAvailableAliasOfItsOptionalForm_whenScopeForwardsTheAliasPropertyAndSiblingRequiresTheTree() async throws {
-		// D requires C's `onlyIfAvailable` alias `y` of `x: X?`, but S forwards `y: X`, so the alias is not created and
-		// D is handed S's `y`. `b`'s tree then needs nothing of `x`, and `x`, which requires `b`, is built after it.
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
+	mutating func run_throwsError_whenTreeRequiresOnlyIfAvailableAliasOfSiblingsOptionalFormThatRequiresTheTreeAndScopeForwardsTheAliasProperty() async {
+		// D requires C's `onlyIfAvailable` alias `y` of `x: X?`, and S forwards a `y: X` too. D reads C's alias, which is
+		// bound from S's `x`, so `x` must be built before `b`; but X requires `b`: a sibling cycle.
+		await assertThrowsError(
+			diagnostics: { fixtures in
 				"""
-				@Instantiable(isRoot: true)
-				public final class Root: Instantiable {
-				    public init(sBuilder: Instantiator<S>) { self.sBuilder = sBuilder }
-				    @Instantiated let sBuilder: Instantiator<S>
-				}
-				""",
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
-				@Instantiable
-				public final class S: Instantiable {
-				    public init(y: X, b: B, x: X) { self.y = y; self.b = b; self.x = x }
-				    @Forwarded let y: X
-				    @Instantiated let b: B
-				    @Instantiated let x: X
-				}
-				""",
-				"""
-				@Instantiable
-				public final class X: Instantiable {
-				    public init(b: B) { self.b = b }
-				    @Received let b: B
-				}
-				""",
-				"""
-				@Instantiable
-				public final class B: Instantiable {
-				    public init(c: C) { self.c = c }
-				    @Instantiated let c: C
-				}
-				""",
-				"""
-				@Instantiable
-				public final class C: Instantiable {
-				    public init(y: X?, d: D) { self.y = y; self.d = d }
-				    @Received(fulfilledByDependencyNamed: "x", ofType: X?.self, onlyIfAvailable: true) let y: X?
-				    @Instantiated let d: D
-				}
-				""",
-				"""
-				@Instantiable
-				public final class D: Instantiable {
-				    public init(y: X?) { self.y = y }
-				    @Received let y: X?
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
-		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-		// Any modifications made to this file will be overwritten on subsequent builds.
-		// Please refrain from editing this file directly.
-
-		extension Root {
-		    public convenience init() {
-		        func __safeDI_sBuilder(y: X) -> S {
-		            func __safeDI_b() -> B {
-		                func __safeDI_c() -> C {
-		                    // Did not create `y: X?` because `x: X?` is unavailable.
-		                    let d = D(y: y)
-		                    return C(y: nil, d: d)
-		                }
-		                let c: C = __safeDI_c()
-		                return B(c: c)
-		            }
-		            let b: B = __safeDI_b()
-		            let x = X(b: b)
-		            return S(y: y, b: b, x: x)
-		        }
-		        let sBuilder = Instantiator<S> {
-		            __safeDI_sBuilder(y: $0)
-		        }
-		        self.init(sBuilder: sBuilder)
-		    }
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(sBuilder: Instantiator<S>) { self.sBuilder = sBuilder }
+					    @Instantiated let sBuilder: Instantiator<S>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class S: Instantiable {
+					    public init(y: X, b: B, x: X) { self.y = y; self.b = b; self.x = x }
+					    @Forwarded let y: X
+					    @Instantiated let b: B
+					    @Instantiated let x: X
+					}
+					""",
+					"""
+					@Instantiable
+					public final class X: Instantiable {
+					    public init(b: B) { self.b = b }
+					    @Received let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(c: C) { self.c = c }
+					    @Instantiated let c: C
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(y: X?, d: D) { self.y = y; self.d = d }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X?.self, onlyIfAvailable: true) let y: X?
+					    @Instantiated let d: D
+					}
+					""",
+					"""
+					@Instantiable
+					public final class D: Instantiable {
+					    public init(y: X?) { self.y = y }
+					    @Received let y: X?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
 		}
-		""")
 	}
 
 	@Test
-	mutating func run_buildsSiblingAfterTreeDeclaringOnlyIfAvailableAliasOfIt_whenScopeForwardsTheAliasPropertyAndSiblingRequiresTheTree() async throws {
-		// As above, with the alias renaming the non-optional `x: X`, which the sibling declares exactly.
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
+	mutating func run_throwsError_whenTreeRequiresOnlyIfAvailableAliasOfSiblingThatRequiresTheTreeAndScopeForwardsTheAliasProperty() async {
+		// As above, with the alias renaming the non-optional `x: X`, which the sibling declares exactly. D reads C's alias,
+		// never S's forwarded `y`, so `x` must be built before `b`, which X requires: a sibling cycle.
+		await assertThrowsError(
+			diagnostics: { fixtures in
 				"""
-				@Instantiable(isRoot: true)
-				public final class Root: Instantiable {
-				    public init(sBuilder: Instantiator<S>) { self.sBuilder = sBuilder }
-				    @Instantiated let sBuilder: Instantiator<S>
-				}
-				""",
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: `B` -> `C` -> `X?` -> `X` -> `B`. `X` receives `b: B`, which is still being built when `X` is built. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
+				\(fixtures["B.swift"]):1:1: note: `B` is part of the cycle
+				\(fixtures["C.swift"]):1:1: note: `C` is part of the cycle
+				\(fixtures["X.swift"]):1:1: note: `X` is part of the cycle
 				"""
-				@Instantiable
-				public final class S: Instantiable {
-				    public init(y: X, b: B, x: X) { self.y = y; self.b = b; self.x = x }
-				    @Forwarded let y: X
-				    @Instantiated let b: B
-				    @Instantiated let x: X
-				}
-				""",
-				"""
-				@Instantiable
-				public final class X: Instantiable {
-				    public init(b: B) { self.b = b }
-				    @Received let b: B
-				}
-				""",
-				"""
-				@Instantiable
-				public final class B: Instantiable {
-				    public init(c: C) { self.c = c }
-				    @Instantiated let c: C
-				}
-				""",
-				"""
-				@Instantiable
-				public final class C: Instantiable {
-				    public init(y: X?, d: D) { self.y = y; self.d = d }
-				    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let y: X?
-				    @Instantiated let d: D
-				}
-				""",
-				"""
-				@Instantiable
-				public final class D: Instantiable {
-				    public init(y: X?) { self.y = y }
-				    @Received let y: X?
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
-		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-		// Any modifications made to this file will be overwritten on subsequent builds.
-		// Please refrain from editing this file directly.
-
-		extension Root {
-		    public convenience init() {
-		        func __safeDI_sBuilder(y: X) -> S {
-		            func __safeDI_b() -> B {
-		                func __safeDI_c() -> C {
-		                    // Did not create `y: X?` because `x: X` is unavailable.
-		                    let d = D(y: y)
-		                    return C(y: nil, d: d)
-		                }
-		                let c: C = __safeDI_c()
-		                return B(c: c)
-		            }
-		            let b: B = __safeDI_b()
-		            let x = X(b: b)
-		            return S(y: y, b: b, x: x)
-		        }
-		        let sBuilder = Instantiator<S> {
-		            __safeDI_sBuilder(y: $0)
-		        }
-		        self.init(sBuilder: sBuilder)
-		    }
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(sBuilder: Instantiator<S>) { self.sBuilder = sBuilder }
+					    @Instantiated let sBuilder: Instantiator<S>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class S: Instantiable {
+					    public init(y: X, b: B, x: X) { self.y = y; self.b = b; self.x = x }
+					    @Forwarded let y: X
+					    @Instantiated let b: B
+					    @Instantiated let x: X
+					}
+					""",
+					"""
+					@Instantiable
+					public final class X: Instantiable {
+					    public init(b: B) { self.b = b }
+					    @Received let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(c: C) { self.c = c }
+					    @Instantiated let c: C
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(y: X?, d: D) { self.y = y; self.d = d }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X.self, onlyIfAvailable: true) let y: X?
+					    @Instantiated let d: D
+					}
+					""",
+					"""
+					@Instantiable
+					public final class D: Instantiable {
+					    public init(y: X?) { self.y = y }
+					    @Received let y: X?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
 		}
-		""")
 	}
 
 	@Test
-	mutating func run_buildsSiblingAfterTreeDeclaringOnlyIfAvailableAliasOfItsOptionalForm_whenEnclosingScopeForwardsTheAliasPropertyAndSiblingRequiresTheTree() async throws {
-		// As above, with `y: X` forwarded by P, the scope enclosing S: D is handed P's `y`.
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
+	mutating func run_throwsError_whenTreeRequiresOnlyIfAvailableAliasOfSiblingsOptionalFormThatRequiresTheTreeAndEnclosingScopeForwardsTheAliasProperty() async {
+		// As above, with the type that forwards `y` enclosing the one that builds `x` and `b`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
 				"""
-				@Instantiable(isRoot: true)
-				public final class Root: Instantiable {
-				    public init(pBuilder: Instantiator<P>) { self.pBuilder = pBuilder }
-				    @Instantiated let pBuilder: Instantiator<P>
-				}
-				""",
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
-				@Instantiable
-				public final class P: Instantiable {
-				    public init(y: X, s: S) { self.y = y; self.s = s }
-				    @Forwarded let y: X
-				    @Instantiated let s: S
-				}
-				""",
-				"""
-				@Instantiable
-				public final class S: Instantiable {
-				    public init(b: B, x: X) { self.b = b; self.x = x }
-				    @Instantiated let b: B
-				    @Instantiated let x: X
-				}
-				""",
-				"""
-				@Instantiable
-				public final class X: Instantiable {
-				    public init(b: B) { self.b = b }
-				    @Received let b: B
-				}
-				""",
-				"""
-				@Instantiable
-				public final class B: Instantiable {
-				    public init(c: C) { self.c = c }
-				    @Instantiated let c: C
-				}
-				""",
-				"""
-				@Instantiable
-				public final class C: Instantiable {
-				    public init(y: X?, d: D) { self.y = y; self.d = d }
-				    @Received(fulfilledByDependencyNamed: "x", ofType: X?.self, onlyIfAvailable: true) let y: X?
-				    @Instantiated let d: D
-				}
-				""",
-				"""
-				@Instantiable
-				public final class D: Instantiable {
-				    public init(y: X?) { self.y = y }
-				    @Received let y: X?
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
-		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-		// Any modifications made to this file will be overwritten on subsequent builds.
-		// Please refrain from editing this file directly.
-
-		extension Root {
-		    public convenience init() {
-		        func __safeDI_pBuilder(y: X) -> P {
-		            func __safeDI_s() -> S {
-		                func __safeDI_b() -> B {
-		                    func __safeDI_c() -> C {
-		                        // Did not create `y: X?` because `x: X?` is unavailable.
-		                        let d = D(y: y)
-		                        return C(y: nil, d: d)
-		                    }
-		                    let c: C = __safeDI_c()
-		                    return B(c: c)
-		                }
-		                let b: B = __safeDI_b()
-		                let x = X(b: b)
-		                return S(b: b, x: x)
-		            }
-		            let s: S = __safeDI_s()
-		            return P(y: y, s: s)
-		        }
-		        let pBuilder = Instantiator<P> {
-		            __safeDI_pBuilder(y: $0)
-		        }
-		        self.init(pBuilder: pBuilder)
-		    }
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(pBuilder: Instantiator<P>) { self.pBuilder = pBuilder }
+					    @Instantiated let pBuilder: Instantiator<P>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class P: Instantiable {
+					    public init(y: X, s: S) { self.y = y; self.s = s }
+					    @Forwarded let y: X
+					    @Instantiated let s: S
+					}
+					""",
+					"""
+					@Instantiable
+					public final class S: Instantiable {
+					    public init(b: B, x: X) { self.b = b; self.x = x }
+					    @Instantiated let b: B
+					    @Instantiated let x: X
+					}
+					""",
+					"""
+					@Instantiable
+					public final class X: Instantiable {
+					    public init(b: B) { self.b = b }
+					    @Received let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(c: C) { self.c = c }
+					    @Instantiated let c: C
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(y: X?, d: D) { self.y = y; self.d = d }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X?.self, onlyIfAvailable: true) let y: X?
+					    @Instantiated let d: D
+					}
+					""",
+					"""
+					@Instantiable
+					public final class D: Instantiable {
+					    public init(y: X?) { self.y = y }
+					    @Received let y: X?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
 		}
-		""")
 	}
 
 	@Test
@@ -14605,103 +14493,75 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 	}
 
 	@Test
-	mutating func run_buildsSiblingAfterTreeDeclaringOnlyIfAvailableAliasOfOnlyIfAvailableAliasOfItsOptionalForm_whenScopeForwardsTheSecondAliasPropertyAndSiblingRequiresTheTree() async throws {
-		// D requires E's `onlyIfAvailable` alias `z` of C's `onlyIfAvailable` alias `y` of `x: X?`, but S forwards `z: X`,
-		// so neither alias is created and D is handed S's `z`. `b`'s tree then needs nothing of `x`, and `x`, which
-		// requires `b`, is built after it.
-		let output = try await executeSafeDIToolTest(
-			swiftFileContent: [
+	mutating func run_throwsError_whenTreeRequiresOnlyIfAvailableAliasOfOnlyIfAvailableAliasOfSiblingsOptionalFormThatRequiresTheTreeAndScopeForwardsTheSecondAliasProperty() async {
+		// As above, through a chain of two `onlyIfAvailable` aliases: D reads C's `z`, bound from B's `y`, bound from `x`.
+		await assertThrowsError(
+			diagnostics: { fixtures in
 				"""
-				@Instantiable(isRoot: true)
-				public final class Root: Instantiable {
-				    public init(sBuilder: Instantiator<S>) { self.sBuilder = sBuilder }
-				    @Instantiated let sBuilder: Instantiator<S>
-				}
-				""",
+				\(fixtures["X.swift"]):4:5: error: Dependency cycle: @Instantiated `b: B` -> @Received `x: X?` -> @Received `b: B`. `b: B` is received while it is still being instantiated. Remove this @Received property, or receive it with `onlyIfAvailable: true` and an optional type so that it is not required.
 				"""
-				@Instantiable
-				public final class S: Instantiable {
-				    public init(z: X, b: B, x: X) { self.z = z; self.b = b; self.x = x }
-				    @Forwarded let z: X
-				    @Instantiated let b: B
-				    @Instantiated let x: X
-				}
-				""",
-				"""
-				@Instantiable
-				public final class X: Instantiable {
-				    public init(b: B) { self.b = b }
-				    @Received let b: B
-				}
-				""",
-				"""
-				@Instantiable
-				public final class B: Instantiable {
-				    public init(c: C) { self.c = c }
-				    @Instantiated let c: C
-				}
-				""",
-				"""
-				@Instantiable
-				public final class C: Instantiable {
-				    public init(y: X?, e: E) { self.y = y; self.e = e }
-				    @Received(fulfilledByDependencyNamed: "x", ofType: X?.self, onlyIfAvailable: true) let y: X?
-				    @Instantiated let e: E
-				}
-				""",
-				"""
-				@Instantiable
-				public final class E: Instantiable {
-				    public init(z: X?, d: D) { self.z = z; self.d = d }
-				    @Received(fulfilledByDependencyNamed: "y", ofType: X?.self, onlyIfAvailable: true) let z: X?
-				    @Instantiated let d: D
-				}
-				""",
-				"""
-				@Instantiable
-				public final class D: Instantiable {
-				    public init(z: X?) { self.z = z }
-				    @Received let z: X?
-				}
-				""",
-			],
-			buildSwiftOutputDirectory: true,
-			filesToDelete: &filesToDelete,
-		)
-
-		#expect(try #require(output.generatedFiles?["Root+SafeDI.swift"]) == """
-		// This file was generated by the SafeDIGenerateDependencyTree build tool plugin.
-		// Any modifications made to this file will be overwritten on subsequent builds.
-		// Please refrain from editing this file directly.
-
-		extension Root {
-		    public convenience init() {
-		        func __safeDI_sBuilder(z: X) -> S {
-		            func __safeDI_b() -> B {
-		                func __safeDI_c() -> C {
-		                    // Did not create `y: X?` because `x: X?` is unavailable.
-		                    func __safeDI_e() -> E {
-		                        // Did not create `z: X?` because `y: X?` is unavailable.
-		                        let d = D(z: z)
-		                        return E(z: nil, d: d)
-		                    }
-		                    let e: E = __safeDI_e()
-		                    return C(y: nil, e: e)
-		                }
-		                let c: C = __safeDI_c()
-		                return B(c: c)
-		            }
-		            let b: B = __safeDI_b()
-		            let x = X(b: b)
-		            return S(z: z, b: b, x: x)
-		        }
-		        let sBuilder = Instantiator<S> {
-		            __safeDI_sBuilder(z: $0)
-		        }
-		        self.init(sBuilder: sBuilder)
-		    }
+			},
+		) {
+			try await executeSafeDIToolTest(
+				swiftFileContent: [
+					"""
+					@Instantiable(isRoot: true)
+					public final class Root: Instantiable {
+					    public init(sBuilder: Instantiator<S>) { self.sBuilder = sBuilder }
+					    @Instantiated let sBuilder: Instantiator<S>
+					}
+					""",
+					"""
+					@Instantiable
+					public final class S: Instantiable {
+					    public init(z: X, b: B, x: X) { self.z = z; self.b = b; self.x = x }
+					    @Forwarded let z: X
+					    @Instantiated let b: B
+					    @Instantiated let x: X
+					}
+					""",
+					"""
+					@Instantiable
+					public final class X: Instantiable {
+					    public init(b: B) { self.b = b }
+					    @Received let b: B
+					}
+					""",
+					"""
+					@Instantiable
+					public final class B: Instantiable {
+					    public init(c: C) { self.c = c }
+					    @Instantiated let c: C
+					}
+					""",
+					"""
+					@Instantiable
+					public final class C: Instantiable {
+					    public init(y: X?, e: E) { self.y = y; self.e = e }
+					    @Received(fulfilledByDependencyNamed: "x", ofType: X?.self, onlyIfAvailable: true) let y: X?
+					    @Instantiated let e: E
+					}
+					""",
+					"""
+					@Instantiable
+					public final class E: Instantiable {
+					    public init(z: X?, d: D) { self.z = z; self.d = d }
+					    @Received(fulfilledByDependencyNamed: "y", ofType: X?.self, onlyIfAvailable: true) let z: X?
+					    @Instantiated let d: D
+					}
+					""",
+					"""
+					@Instantiable
+					public final class D: Instantiable {
+					    public init(z: X?) { self.z = z }
+					    @Received let z: X?
+					}
+					""",
+				],
+				buildSwiftOutputDirectory: true,
+				filesToDelete: &filesToDelete,
+			)
 		}
-		""")
 	}
 
 	@Test
@@ -14760,7 +14620,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        let x = X()
-		        let y = X()
 		        func __safeDI_b() -> B {
 		            func __safeDI_c() -> C {
 		                #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
@@ -14773,6 +14632,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		            return B(c: c)
 		        }
 		        let b: B = __safeDI_b()
+		        let y = X()
 		        self.init(b: b, x: x, y: y)
 		    }
 		}
@@ -14838,9 +14698,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public convenience init() {
 		        func __safeDI_b() -> B {
 		            func __safeDI_c() -> C {
-		                // Did not create `y: X?` because `x: X?` is unavailable.
-		                let d = D(y: nil)
-		                return C(y: nil, d: d)
+		                #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
+		                let y: X? = nil
+		                #sourceLocation()
+		                let d = D(y: y)
+		                return C(y: y, d: d)
 		            }
 		            let c: C = __safeDI_c()
 		            return B(c: c)
@@ -14918,9 +14780,6 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		    public convenience init() {
 		        func __safeDI_p() -> P {
 		            let x = X()
-		            #sourceLocation(file: "\(output.fixtures["P.swift"])", line: 6)
-		            let y: X = x
-		            #sourceLocation()
 		            func __safeDI_b() -> B {
 		                func __safeDI_c() -> C {
 		                    #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
@@ -14933,6 +14792,9 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		                return B(c: c)
 		            }
 		            let b: B = __safeDI_b()
+		            #sourceLocation(file: "\(output.fixtures["P.swift"])", line: 6)
+		            let y: X = x
+		            #sourceLocation()
 		            return P(b: b, x: x, y: y)
 		        }
 		        let p: P = __safeDI_p()
@@ -15005,20 +14867,22 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        func __safeDI_p() -> P {
-		            let x = X()
-		            #sourceLocation(file: "\(output.fixtures["P.swift"])", line: 6)
-		            let y: X? = x
-		            #sourceLocation()
 		            func __safeDI_b() -> B {
 		                func __safeDI_c() -> C {
-		                    // Did not create `y: X?` because `q: X?` is unavailable.
+		                    #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
+		                    let y: X? = nil
+		                    #sourceLocation()
 		                    let d = D(y: y)
-		                    return C(y: nil, d: d)
+		                    return C(y: y, d: d)
 		                }
 		                let c: C = __safeDI_c()
 		                return B(c: c)
 		            }
 		            let b: B = __safeDI_b()
+		            let x = X()
+		            #sourceLocation(file: "\(output.fixtures["P.swift"])", line: 6)
+		            let y: X? = x
+		            #sourceLocation()
 		            return P(b: b, x: x, y: y)
 		        }
 		        let p: P = __safeDI_p()
@@ -15085,18 +14949,20 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        let x = X(b: nil)
 		        func __safeDI_b() -> B {
-		            let y = X(b: nil)
 		            func __safeDI_c() -> C {
-		                // Did not create `y: X?` because `x: X?` is unavailable.
+		                #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
+		                let y: X? = x
+		                #sourceLocation()
 		                let d = D(y: y)
-		                return C(y: nil, d: d)
+		                return C(y: y, d: d)
 		            }
 		            let c: C = __safeDI_c()
+		            let y = X(b: nil)
 		            return B(c: c, y: y)
 		        }
 		        let b: B = __safeDI_b()
-		        let x = X(b: b)
 		        self.init(x: x, b: b)
 		    }
 		}
@@ -15167,23 +15033,27 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 
 		extension Root {
 		    public convenience init() {
+		        let x = X(b: nil)
 		        func __safeDI_b() -> B {
-		            let z = X(b: nil)
 		            func __safeDI_c() -> C {
-		                // Did not create `y: X?` because `x: X?` is unavailable.
+		                #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
+		                let y: X? = x
+		                #sourceLocation()
 		                func __safeDI_e() -> E {
-		                    // Did not create `z: X?` because `y: X?` is unavailable.
+		                    #sourceLocation(file: "\(output.fixtures["E.swift"])", line: 4)
+		                    let z: X? = y
+		                    #sourceLocation()
 		                    let d = D(z: z)
-		                    return E(z: nil, d: d)
+		                    return E(z: z, d: d)
 		                }
 		                let e: E = __safeDI_e()
-		                return C(y: nil, e: e)
+		                return C(y: y, e: e)
 		            }
 		            let c: C = __safeDI_c()
+		            let z = X(b: nil)
 		            return B(c: c, z: z)
 		        }
 		        let b: B = __safeDI_b()
-		        let x = X(b: b)
 		        self.init(x: x, b: b)
 		    }
 		}
@@ -15422,9 +15292,7 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		extension Root {
 		    public convenience init() {
 		        let x = X()
-		        let z = X()
 		        func __safeDI_b() -> B {
-		            let y = X()
 		            func __safeDI_c() -> C {
 		                #sourceLocation(file: "\(output.fixtures["C.swift"])", line: 4)
 		                let y: X? = x
@@ -15440,9 +15308,11 @@ struct SafeDIToolCodeGenerationTests: ~Copyable {
 		                return C(y: y, e: e)
 		            }
 		            let c: C = __safeDI_c()
+		            let y = X()
 		            return B(c: c, y: y)
 		        }
 		        let b: B = __safeDI_b()
+		        let z = X()
 		        self.init(b: b, x: x, z: z)
 		    }
 		}

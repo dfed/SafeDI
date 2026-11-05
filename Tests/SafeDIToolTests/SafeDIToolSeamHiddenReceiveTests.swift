@@ -402,8 +402,10 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			    public init() {
 			        func __safeDI_screen() -> Screen {
 			            func __safeDI_detail() -> Detail {
-			                // Did not create `token: (any Auth)?` because `token: Secret` is unavailable.
-			                return Detail(token: nil)
+			                #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 7)
+			                let token: (any Auth)? = nil
+			                #sourceLocation()
+			                return Detail(token: token)
 			            }
 			            let detail: Detail = __safeDI_detail()
 			            return Screen(detail: detail)
@@ -566,9 +568,11 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			            func __safeDI_left() -> Left {
 			                let token = Token()
 			                func __safeDI_detail() -> Detail {
-			                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                    let authToken: Secret? = nil
+			                    #sourceLocation()
 			                    let reader = Reader(authToken: authToken)
-			                    return Detail(authToken: nil, reader: reader)
+			                    return Detail(authToken: authToken, reader: reader)
 			                }
 			                let detail: Detail = __safeDI_detail()
 			                return Left(token: token, detail: detail)
@@ -576,9 +580,11 @@ struct SafeDIToolSeamHiddenReceiveTests: ~Copyable {
 			            let left: Left = __safeDI_left()
 			            func __safeDI_right() -> Right {
 			                func __safeDI_detail() -> Detail {
-			                    // Did not create `authToken: Secret?` because `token: Secret` is unavailable.
+			                    #sourceLocation(file: "\(inlineOutput.fixtures["Detail.swift"])", line: 8)
+			                    let authToken: Secret? = nil
+			                    #sourceLocation()
 			                    let reader = Reader(authToken: authToken)
-			                    return Detail(authToken: nil, reader: reader)
+			                    return Detail(authToken: authToken, reader: reader)
 			                }
 			                let detail: Detail = __safeDI_detail()
 			                return Right(detail: detail)
