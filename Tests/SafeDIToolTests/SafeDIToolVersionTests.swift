@@ -42,4 +42,28 @@ struct SafeDIToolVersionTests {
 	func rootCommand_isSafeDITool_whenTheExecutableRunsIt() {
 		#expect(ObjectIdentifier(SafeDIToolCommandLine.rootCommand) == ObjectIdentifier(SafeDITool.self))
 	}
+
+	/// ArgumentParser builds the command with its `init()` to read its arguments when it renders help, as `safeditool --help` does.
+	@Test
+	func helpMessage_listsSubcommandsWithGenerateAsDefault_whenTheRootCommandRendersHelp() {
+		#expect(SafeDITool.helpMessage(columns: 80) == """
+		USAGE: safeditool <subcommand>
+
+		OPTIONS:
+		  --version               Show the version.
+		  -h, --help              Show help information.
+
+		SUBCOMMANDS:
+		  generate (default)      Generate SafeDI dependency tree and mock code.
+		  scan                    Scan Swift files to discover SafeDI roots and mocks,
+		                          producing a manifest for code generation.
+		  query                   Answer a question about the `@Instantiable` types in
+		                          a set of modules (beta).
+		  dump                    Print a `.safedi` module info file or the cache
+		                          `scan` writes for `generate` as JSON, or explain why
+		                          SafeDITool cannot read it.
+
+		  See 'safeditool help <subcommand>' for detailed help.
+		""")
+	}
 }
