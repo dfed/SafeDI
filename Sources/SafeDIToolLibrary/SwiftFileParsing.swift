@@ -297,11 +297,10 @@ func findSwiftFiles(inDirectories directories: [String]) async throws -> Set<Nor
 ///   - configurationFilePaths: The files that belong to the module itself, which are the only ones whose
 ///     `#SafeDIConfiguration` applies. In a multi-module input set these are the current target's files.
 ///   - activeCompilationConditions: The conditions supplied on the command line and through the manifest.
-///   - keepsTypeDeclarationsOtherModulesCanName: Whether the module's plain type declarations that another module can
-///     name – those `package` or wider at every level of their chain – are kept too, wherever they are and whatever the
-///     module's declarations mention, for a run that writes the module's info without a target graph: the modules that
-///     read that info cannot tell which of its types they will name, and a module that extends one of its namespaces
-///     names the types nested in it unqualified (`TypeAccessProof.NestedTypeQualifier`).
+///   - keepsTypeDeclarationsOtherModulesCanName: Whether the module's plain type declarations that a module reading its
+///     info needs – `package` ones, and nested ones `public` or `open` at every level of their chain
+///     (`isKeptForModulesReadingModuleInfo(level:isNested:)`) – are kept too, wherever they are and whatever the module's
+///     declarations mention, for a run that writes the module's info without a target graph.
 ///   - isReadingModuleFile: Whether the file at a path among `filePaths` is one of the module's own files, rather than one
 ///     of a module it depends on: a mention in the module names an `internal` declaration of its own files only, so a
 ///     decision about another module's is that module's to assert.
@@ -320,7 +319,7 @@ public func parseModule(
 		configurationFilePaths.contains(filePath) && SafeDIConfiguration.isInConventionalFile(atPath: filePath)
 	}
 	let conventionalConfigurationFileReads = try conventionalConfigurationFilePaths.sorted().map { filePath in
-		try (path: filePath, read: readSwiftFile(atPath: filePath, findingAccessModifiersOtherModulesCanName: keepsTypeDeclarationsOtherModulesCanName))
+		try (path: filePath, read: readSwiftFile(atPath: filePath, findingDeclarationsModulesReadingModuleInfoNeed: keepsTypeDeclarationsOtherModulesCanName))
 	}
 	let conventionalConfigurationFiles = conventionalConfigurationFileReads.compactMap { file in
 		file.read.syntaxTree.map { (path: file.path, syntaxTree: $0) }
@@ -338,7 +337,7 @@ public func parseModule(
 	let walkedFiles = try await walkFiles(
 		named: filePaths.subtracting(conventionalConfigurationFilePaths),
 		conditionalCompilation: firstPassEvaluator,
-		findingAccessModifiersOtherModulesCanName: keepsTypeDeclarationsOtherModulesCanName,
+		findingDeclarationsModulesReadingModuleInfoNeed: keepsTypeDeclarationsOtherModulesCanName,
 	)
 	let fileScans = (firstPassEvaluator == defaultEvaluator
 		? conventionalConfigurationFileScans
@@ -378,13 +377,13 @@ public func parseModule(
 		// A file that was parsed may declare no type of a name, and is not parsed again.
 		mayDeclareTypesNamedBySkippedFilePath[file.path] = file.read.mayDeclareTypesNamed
 	}
-	// A file that holds the word `package`, `public` or `open` is parsed whatever names the text search found in it: the
-	// search misses a name behind a comment, which a declaration other modules read can have.
-	let skippedFilePathsMentioningAccessModifiersOtherModulesCanName = walkedFiles.skippedFilePathsMentioningAccessModifiersOtherModulesCanName
-		.union(conventionalConfigurationFileReads.filter(\.read.mayDeclareTypeOtherModulesCanName).map(\.path))
+	// A file that may declare a type a module reading the module's info needs is parsed whatever names the text search
+	// found in it: the search misses a name behind a comment, which such a declaration can have.
+	let skippedFilePathsThatMayDeclareTypesModulesReadingModuleInfoNeed = walkedFiles.skippedFilePathsThatMayDeclareTypesModulesReadingModuleInfoNeed
+		.union(conventionalConfigurationFileReads.filter(\.read.mayDeclareTypeModulesReadingModuleInfoNeed).map(\.path))
 	let moduleFileScans = try await (finalFileScans + walkFilesDeclaringTypes(
 		among: Set(mayDeclareTypesNamedBySkippedFilePath.filter { !$0.value.isDisjoint(with: keptTypeNames.outermostTypeNames) }.map(\.key))
-			.union(skippedFilePathsMentioningAccessModifiersOtherModulesCanName)
+			.union(skippedFilePathsThatMayDeclareTypesModulesReadingModuleInfoNeed)
 			.sorted(),
 		conditionalCompilation: evaluator,
 	))
@@ -414,8 +413,9 @@ public func parseModule(
 /// those types alone, as `parseModule` keeps them.
 /// - Parameters:
 ///   - moduleTypeNames: The names of the types the module's other declarations mention (`keptPlainTypeNames(of:)`).
-///   - keepsTypeDeclarationsOtherModulesCanName: Whether the plain declarations that another module can name are kept
-///     too, wherever they are, as `parseModule` keeps them for a run that writes the module's info without a target graph.
+///   - keepsTypeDeclarationsOtherModulesCanName: Whether the plain declarations that a module reading the module's info
+///     needs are kept too, wherever they are, as `parseModule` keeps them for a run that writes the module's info without
+///     a target graph.
 ///   - isReadingModuleFile: Whether the file at a path among `filePaths` is one of the module's own files, as
 ///     `parseModule` asks it.
 /// - Returns: What each file that mentions SafeDI, or declares such a type, contributes to the module.
@@ -427,11 +427,11 @@ func parseSwiftFilesDeclaringTypes(
 	keepsTypeDeclarationsOtherModulesCanName: Bool = false,
 	isReadingModuleFile: (String) -> Bool,
 ) async throws -> [FileScan] {
-	let walkedFiles = try await walkFiles(named: filePaths, conditionalCompilation: evaluator, findingAccessModifiersOtherModulesCanName: keepsTypeDeclarationsOtherModulesCanName)
+	let walkedFiles = try await walkFiles(named: filePaths, conditionalCompilation: evaluator, findingDeclarationsModulesReadingModuleInfoNeed: keepsTypeDeclarationsOtherModulesCanName)
 	let keptTypeNames = moduleTypeNames.union(keptPlainTypeNames(of: walkedFiles.fileScans))
 	return try await (walkedFiles.fileScans + walkFilesDeclaringTypes(
 		among: Set(walkedFiles.mayDeclareTypesNamedBySkippedFilePath.filter { !$0.value.isDisjoint(with: keptTypeNames.outermostTypeNames) }.map(\.key))
-			.union(walkedFiles.skippedFilePathsMentioningAccessModifiersOtherModulesCanName)
+			.union(walkedFiles.skippedFilePathsThatMayDeclareTypesModulesReadingModuleInfoNeed)
 			.sorted(),
 		conditionalCompilation: evaluator,
 	))
@@ -519,18 +519,14 @@ public struct FileScan: Codable, Sendable {
 	}
 
 	/// This scan, keeping the declarations of `plainTypeDeclarations` of the types `keptTypeNames` keeps, and, when
-	/// `keepingThoseOtherModulesCanName`, those another module can name: `package` or wider at every level of their
-	/// chain (`PlainTypeDeclaration.levelBeforeExtendedTypeCap`), whatever the module's declarations mention. A type no
-	/// declaration SafeDI reads declares counts as `public` (`TypeAccessProof`), but a module that extends a namespace of
-	/// this module names the types nested in it unqualified, and qualifies them only by their records
-	/// (`TypeAccessProof.NestedTypeQualifier`).
+	/// `keepingThoseOtherModulesCanName`, those a module that reads the module's info needs whatever the module's
+	/// declarations mention (`isKeptForModulesReadingModuleInfo(level:isNested:)`).
 	///
 	/// Each block of `plainTypeDeclarationDecisions` that declares, in any clause, a type such a declaration could be of
 	/// decides which of them are read, so its conditions join `consultedCompilationConditions`; the conditions of the rest
 	/// decide nothing the module reads. Its decisions are asserted, among `conditionalCompilationDecisions`, when a read
 	/// the access check makes can resolve to such a declaration (`KeptPlainTypeNames.assertsDecisions(about:isInReadingModule:)`),
-	/// or, when `keepingThoseOtherModulesCanName`, the declaration is `package` or wider, which a module that reads the
-	/// module's info can name.
+	/// or, when `keepingThoseOtherModulesCanName`, the declaration is one a module that reads the module's info needs.
 	/// - Parameter isInReadingModule: Whether the file is one of the module's own, whose `internal` declarations a mention
 	///   in the module names; a mention in another module names only a declaration that is `package` or wider.
 	func keepingPlainTypeDeclarations(ofTypesWithin keptTypeNames: KeptPlainTypeNames, keepingThoseOtherModulesCanName: Bool, isInReadingModule: Bool) -> FileScan {
@@ -540,7 +536,7 @@ public struct FileScan: Codable, Sendable {
 		for guardedNames in plainTypeDeclarationDecisions {
 			let keptTypes = guardedNames.declaredTypes.filter { declaredType in
 				keptTypeNames.outermostTypeNames.contains(declaredType.outermostName)
-					|| (keepingThoseOtherModulesCanName && declaredType.level >= .package)
+					|| (keepingThoseOtherModulesCanName && isKeptForModulesReadingModuleInfo(level: declaredType.level, isNested: declaredType.isNested))
 			}
 			guard !keptTypes.isEmpty else { continue }
 			consultedCompilationConditions.formUnion(guardedNames.consultedConditions)
@@ -549,7 +545,7 @@ public struct FileScan: Codable, Sendable {
 			}
 			guard keptTypes.contains(where: { declaredType in
 				keptTypeNames.assertsDecisions(about: declaredType, isInReadingModule: isInReadingModule)
-					|| (keepingThoseOtherModulesCanName && declaredType.level >= .package)
+					|| (keepingThoseOtherModulesCanName && isKeptForModulesReadingModuleInfo(level: declaredType.level, isNested: declaredType.isNested))
 			}) else { continue }
 			for decision in guardedNames.decisions where !decisions.contains(decision) {
 				decisions.append(decision)
@@ -569,7 +565,10 @@ public struct FileScan: Codable, Sendable {
 			outputFileDeclarations: outputFileDeclarations,
 			plainTypeDeclarations: plainTypeDeclarations.filter { plainTypeDeclaration in
 				plainTypeDeclaration.typeDescription.outermostTypeName.map { keptTypeNames.outermostTypeNames.contains($0.spelledWithoutBackticks) } == true
-					|| (keepingThoseOtherModulesCanName && TypeAccessProof.normalized(plainTypeDeclaration.levelBeforeExtendedTypeCap) >= .package)
+					|| (keepingThoseOtherModulesCanName && isKeptForModulesReadingModuleInfo(
+						level: TypeAccessProof.normalized(plainTypeDeclaration.levelBeforeExtendedTypeCap),
+						isNested: plainTypeDeclaration.isNested,
+					))
 			},
 			plainTypeDeclarationDecisions: [],
 			keptGuardedPlainTypeNames: keptGuardedTypeNames.sorted(),
@@ -738,6 +737,25 @@ func keptPlainTypeNames(of fileScans: [FileScan]) -> KeptPlainTypeNames {
 	)
 }
 
+/// Whether a run that writes a module's info without a target graph keeps a plain declaration of the module at `level`,
+/// normalized (`TypeAccessProof.normalized(_:)`), whatever the module's declarations mention: the modules that read that
+/// info cannot tell which of its types they will name. It keeps one only another module of the package can name, wherever
+/// it is, and one nested in another type (`PlainTypeDeclaration.isNested`) that every module can name, `public` or `open`
+/// at every level of its chain: a module that extends the type enclosing it names it unqualified, and qualifies the name
+/// only by its record (`TypeAccessProof.NestedTypeQualifier`). A top-level `public` or `open` declaration needs no record:
+/// a type no declaration SafeDI reads declares counts as `public` (`TypeAccessProof`), and a mention spells it by its own
+/// name.
+func isKeptForModulesReadingModuleInfo(level: AccessLevel, isNested: Bool) -> Bool {
+	switch level {
+	case .package:
+		true
+	case .open, .public:
+		isNested
+	case .internal, .fileprivate, .private:
+		false
+	}
+}
+
 /// The names of the types whose plain declarations a module keeps, and of those a read the access check makes resolves by,
 /// each spelled without the backticks it was written with: Swift reads `` `Token` `` and `Token` as one name, so a
 /// declaration and a mention that spell it differently match (`GuardedPlainTypeNames.DeclaredType`, and
@@ -862,26 +880,26 @@ func mentionedTypeNames(of instantiables: [Instantiable]) -> Set<String> {
 	return mentionedTypeNames
 }
 
-/// What `walkFiles(named:conditionalCompilation:findingAccessModifiersOtherModulesCanName:)` found.
+/// What `walkFiles(named:conditionalCompilation:findingDeclarationsModulesReadingModuleInfoNeed:)` found.
 private struct WalkedFiles {
 	/// What each file that mentions SafeDI contributes.
 	var fileScans = [FileScan]()
 	/// The names each file that mentions no SafeDI marker may declare a type of (`ReadSwiftFile.mentionsNoSafeDI`), for
 	/// each such file that may declare one.
 	var mayDeclareTypesNamedBySkippedFilePath = [String: Set<String>]()
-	/// The files that mention no SafeDI marker and may declare a type another module can name
-	/// (`ReadSwiftFile.mayDeclareTypeOtherModulesCanName`).
-	var skippedFilePathsMentioningAccessModifiersOtherModulesCanName = Set<String>()
+	/// The files that mention no SafeDI marker and may declare a type a module reading the module's info needs
+	/// (`ReadSwiftFile.mayDeclareTypeModulesReadingModuleInfoNeed`).
+	var skippedFilePathsThatMayDeclareTypesModulesReadingModuleInfoNeed = Set<String>()
 }
 
 /// Reads, parses, and walks every file in parallel under its path, keeping what each file that mentions SafeDI
-/// contributes, and the names of the types each other file may declare, and, when `findingAccessModifiersOtherModulesCanName`,
-/// whether it may declare one another module can name.
+/// contributes, and the names of the types each other file may declare, and, when
+/// `findingDeclarationsModulesReadingModuleInfoNeed`, whether it may declare one a module reading the module's info needs.
 @available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 private func walkFiles(
 	named filePaths: Set<String>,
 	conditionalCompilation evaluator: ConditionalCompilationEvaluator,
-	findingAccessModifiersOtherModulesCanName: Bool = false,
+	findingDeclarationsModulesReadingModuleInfoNeed: Bool = false,
 ) async throws -> WalkedFiles {
 	try await withThrowingTaskGroup(
 		of: (path: String, read: WalkedSwiftFile).self,
@@ -889,11 +907,11 @@ private func walkFiles(
 	) { taskGroup in
 		for filePath in filePaths where !filePath.isEmpty {
 			taskGroup.addTask {
-				let read = try readSwiftFile(atPath: filePath, findingAccessModifiersOtherModulesCanName: findingAccessModifiersOtherModulesCanName)
+				let read = try readSwiftFile(atPath: filePath, findingDeclarationsModulesReadingModuleInfoNeed: findingDeclarationsModulesReadingModuleInfoNeed)
 				return if let syntaxTree = read.syntaxTree {
 					(filePath, .scanned(walk(syntaxTree, at: filePath, conditionalCompilation: evaluator)))
 				} else {
-					(filePath, .skipped(mayDeclareTypesNamed: read.mayDeclareTypesNamed, mayDeclareTypeOtherModulesCanName: read.mayDeclareTypeOtherModulesCanName))
+					(filePath, .skipped(mayDeclareTypesNamed: read.mayDeclareTypesNamed, mayDeclareTypeModulesReadingModuleInfoNeed: read.mayDeclareTypeModulesReadingModuleInfoNeed))
 				}
 			}
 		}
@@ -903,12 +921,12 @@ private func walkFiles(
 			switch file.read {
 			case let .scanned(fileScan):
 				walkedFiles.fileScans.append(fileScan)
-			case let .skipped(mayDeclareTypesNamed, mayDeclareTypeOtherModulesCanName):
+			case let .skipped(mayDeclareTypesNamed, mayDeclareTypeModulesReadingModuleInfoNeed):
 				if !mayDeclareTypesNamed.isEmpty {
 					walkedFiles.mayDeclareTypesNamedBySkippedFilePath[file.path] = mayDeclareTypesNamed
 				}
-				if mayDeclareTypeOtherModulesCanName {
-					walkedFiles.skippedFilePathsMentioningAccessModifiersOtherModulesCanName.insert(file.path)
+				if mayDeclareTypeModulesReadingModuleInfoNeed {
+					walkedFiles.skippedFilePathsThatMayDeclareTypesModulesReadingModuleInfoNeed.insert(file.path)
 				}
 			}
 		}
@@ -916,15 +934,16 @@ private func walkFiles(
 	}
 }
 
-/// What `walkFiles(named:conditionalCompilation:findingAccessModifiersOtherModulesCanName:)` found in one file.
+/// What `walkFiles(named:conditionalCompilation:findingDeclarationsModulesReadingModuleInfoNeed:)` found in one file.
 private enum WalkedSwiftFile: Sendable {
 	/// The file mentions SafeDI, and contributes this.
 	case scanned(FileScan)
-	/// The file mentions no SafeDI marker, and may declare types of these names, and one another module can name.
-	case skipped(mayDeclareTypesNamed: Set<String>, mayDeclareTypeOtherModulesCanName: Bool)
+	/// The file mentions no SafeDI marker, and may declare types of these names, and one a module reading the module's
+	/// info needs.
+	case skipped(mayDeclareTypesNamed: Set<String>, mayDeclareTypeModulesReadingModuleInfoNeed: Bool)
 }
 
-/// What each file at `filePaths` contributes: files `walkFiles(named:conditionalCompilation:findingAccessModifiersOtherModulesCanName:)`
+/// What each file at `filePaths` contributes: files `walkFiles(named:conditionalCompilation:findingDeclarationsModulesReadingModuleInfoNeed:)`
 /// did not parse, since their text mentions no SafeDI marker, but whose text may declare a type whose plain declaration
 /// SafeDI reads.
 /// Each contributes its declarations of types that are not `@Instantiable` (`FileVisitor.plainTypeDeclarations`) in the
@@ -985,16 +1004,16 @@ private struct ReadSwiftFile {
 	/// decides exactly. A declaration with a comment between the keyword and the name is not found. Empty for a parsed
 	/// file.
 	let mayDeclareTypesNamed: Set<String>
-	/// When its text mentions no SafeDI marker, and it was read for the declarations another module can name, whether
-	/// it may declare one: whether it holds the word `package`, `public` or `open`
-	/// (`TypeDeclarationWords.mayDeclareTypeOtherModulesCanName`). `false` otherwise.
-	var mayDeclareTypeOtherModulesCanName = false
+	/// When its text mentions no SafeDI marker, and it was read for the declarations a module reading the module's info
+	/// needs (`isKeptForModulesReadingModuleInfo(level:isNested:)`), whether it may declare one
+	/// (`UnsafeBufferPointer<UInt8>.mayDeclareTypeModulesReadingModuleInfoNeed(holdingWords:)`). `false` otherwise.
+	var mayDeclareTypeModulesReadingModuleInfoNeed = false
 }
 
 /// Reads the file at `filePath`, and parses it when its text shows it can declare something SafeDI scans for. When
-/// `findingAccessModifiersOtherModulesCanName`, a file it does not parse also records whether its text may declare a type
-/// another module can name.
-private func readSwiftFile(atPath filePath: String, findingAccessModifiersOtherModulesCanName: Bool) throws -> ReadSwiftFile {
+/// `findingDeclarationsModulesReadingModuleInfoNeed`, a file it does not parse also records whether its text may declare
+/// a type a module reading the module's info needs.
+private func readSwiftFile(atPath filePath: String, findingDeclarationsModulesReadingModuleInfoNeed: Bool) throws -> ReadSwiftFile {
 	var content = try String(contentsOfFile: filePath, encoding: .utf8)
 	// Searching the bytes rather than the characters is many times faster, and finds the markers wherever a
 	// character search does: no other sequence of characters is equivalent to these ASCII ones. It also finds a
@@ -1012,7 +1031,8 @@ private func readSwiftFile(atPath filePath: String, findingAccessModifiersOtherM
 			return ReadSwiftFile(
 				syntaxTree: nil,
 				mayDeclareTypesNamed: words.namesFollowingKeywords,
-				mayDeclareTypeOtherModulesCanName: findingAccessModifiersOtherModulesCanName && words.mayDeclareTypeOtherModulesCanName,
+				mayDeclareTypeModulesReadingModuleInfoNeed: findingDeclarationsModulesReadingModuleInfoNeed
+					&& source.mayDeclareTypeModulesReadingModuleInfoNeed(holdingWords: words),
 			)
 		}
 	}
@@ -1021,8 +1041,8 @@ private func readSwiftFile(atPath filePath: String, findingAccessModifiersOtherM
 /// The keywords that introduce a declaration of a type whose access SafeDI reads.
 private let typeDeclarationKeywords = ["enum", "struct", "class", "actor", "protocol", "typealias"].map { Array($0.utf8) }
 
-/// The access modifiers with which another module can name a declaration: `package`, `public`, and `open`.
-private let accessModifiersOtherModulesCanName = ["package", "public", "open"].map { Array($0.utf8) }
+/// The access modifier with which only another module of the same package can name a declaration.
+private let packageAccessModifier = Array("package".utf8)
 
 /// What `UnsafeBufferPointer<UInt8>.typeDeclarationWords` found in a file's text.
 struct TypeDeclarationWords {
@@ -1030,11 +1050,11 @@ struct TypeDeclarationWords {
 	/// whole word too: a word, or a name in backticks without them, as a mention of the type spells it
 	/// (`mentionedTypeNames(of:)`). A superset of the names of the types the text declares.
 	var namesFollowingKeywords = Set<String>()
-	/// Whether the text holds the word `package`, `public`, or `open`, one of which every declaration another module can
-	/// name holds – on itself, or on the extension it is directly inside, and each type enclosing it on its own –
-	/// wherever comments put it. A comment, a string literal, or a declaration of anything else can hold the word too, so
-	/// this is `true` whenever the text declares such a type, a superset that a parse decides.
-	var mayDeclareTypeOtherModulesCanName = false
+	/// Whether the text holds the word `package`, which every declaration only another module of the package can name
+	/// holds – on itself, on a type enclosing it, or on the extension it is directly inside – wherever comments put it. A
+	/// comment or a string literal can hold the word too, so this is `true` whenever the text declares such a type, a
+	/// superset that a parse decides.
+	var holdsPackageAccessModifier = false
 }
 
 extension UInt8 {
@@ -1053,6 +1073,17 @@ extension UInt8 {
 	fileprivate var isWhitespaceByte: Bool {
 		self == UInt8(ascii: " ") || self == UInt8(ascii: "\t") || self == UInt8(ascii: "\n") || self == UInt8(ascii: "\r")
 	}
+
+	/// Whether this byte ends a line of Swift source: a line feed or a carriage return.
+	fileprivate var isLineBreakByte: Bool {
+		self == UInt8(ascii: "\n") || self == UInt8(ascii: "\r")
+	}
+
+	/// Whether this byte separates tokens in Swift source without being one: whitespace, a vertical tab, a form feed, or
+	/// a null byte, which the compiler reads as whitespace.
+	fileprivate var separatesTokens: Bool {
+		isWhitespaceByte || self == 0x0B || self == 0x0C || self == 0x00
+	}
 }
 
 /// The byte of a backtick, which encloses a name: 0x60.
@@ -1060,6 +1091,56 @@ private let backtickByte: UInt8 = 0x60
 
 /// The bytes of a byte order mark, U+FEFF, in UTF-8.
 private let byteOrderMark: [UInt8] = [0xEF, 0xBB, 0xBF]
+
+/// The access modifiers with which every module can name a declaration: `public` and `open`.
+private let accessModifiersEveryModuleCanName = ["public", "open"].map { Array($0.utf8) }
+
+/// The keyword that introduces an extension.
+private let extensionKeyword = Array("extension".utf8)
+
+/// The keyword that introduces a class, and modifies a member a subclass can override.
+private let classKeyword = Array("class".utf8)
+
+/// The words after which `class` modifies a member rather than introducing a class: reserved words, which a class can be
+/// named only in backticks.
+private let membersClassModifies = ["func", "var", "let", "subscript"].map { Array($0.utf8) }
+
+/// The conditional compilation directives that start, continue, and end an `#if` block, without their `#`.
+private let conditionalCompilationBlockStart = Array("if".utf8)
+private let conditionalCompilationClauseStarts = ["elseif", "else"].map { Array($0.utf8) }
+private let conditionalCompilationBlockEnd = Array("endif".utf8)
+
+/// Where a byte of Swift source is, as `UnsafeBufferPointer<UInt8>.mayDeclareNestedTypeEveryModuleCanName` reads it.
+private enum NestedTypeSearchContext {
+	/// Certainly code: no comment, string literal, or regex literal holds the byte.
+	case code
+	/// A comment that ends at the end of its line.
+	case lineComment
+	/// A comment that ends after as many `*/` as `nesting`: block comments nest.
+	case blockComment(nesting: Int)
+	/// A single-line string literal that is not raw, outside its interpolations.
+	case string
+	/// A multi-line string literal that is not raw, outside its interpolations.
+	case multilineString
+	/// Bytes whose context the search does not know, to the end of their line: a regex literal, a string interpolation,
+	/// or what follows either can hold them. `mayContinuePastLine` is whether a delimiter that opens a region that can
+	/// continue onto the next line – `"""`, `/*`, or `#/` – is among them.
+	case unknownToEndOfLine(mayContinuePastLine: Bool)
+	/// Bytes whose context the search does not know, to the end of the text.
+	case unknownToEndOfText
+}
+
+/// What a word is to `UnsafeBufferPointer<UInt8>.mayDeclareNestedTypeEveryModuleCanName`.
+private enum NestedTypeSearchWord {
+	/// `public` or `open`.
+	case accessModifierEveryModuleCanName
+	/// `extension`.
+	case extensionKeyword
+	/// A keyword that introduces a type declaration whose access SafeDI reads (`typeDeclarationKeywords`).
+	case typeDeclarationKeyword
+	/// Any other word.
+	case other
+}
 
 /// The text that every file declaring SafeDI content contains.
 private let safeDIMarkers = [
@@ -1092,8 +1173,8 @@ extension UnsafeBufferPointer<UInt8> {
 				}
 				// Most words are not four to nine bytes long, which the comparisons need not see.
 				followsTypeKeyword = (4...9).contains(word.count) && typeDeclarationKeywords.contains { $0.elementsEqual(word) }
-				if (4...7).contains(word.count), accessModifiersOtherModulesCanName.contains(where: { $0.elementsEqual(word) }) {
-					found.mayDeclareTypeOtherModulesCanName = true
+				if word.count == packageAccessModifier.count, packageAccessModifier.elementsEqual(word) {
+					found.holdsPackageAccessModifier = true
 				}
 			} else if self[index] == backtickByte, let nameEnd = closingBacktickIndexOnLine(ofBacktickAt: index) {
 				if followsTypeKeyword {
@@ -1120,6 +1201,294 @@ extension UnsafeBufferPointer<UInt8> {
 			} else {
 				index += 1
 			}
+		}
+		return nil
+	}
+
+	/// Whether these bytes, Swift source whose words are `words` (`typeDeclarationWords`), may declare a type a module
+	/// reading the module's info needs (`isKeptForModulesReadingModuleInfo(level:isNested:)`): they hold the word
+	/// `package`, or may declare a nested type that is `public` or `open` (`mayDeclareNestedTypeEveryModuleCanName`).
+	func mayDeclareTypeModulesReadingModuleInfoNeed(holdingWords words: TypeDeclarationWords) -> Bool {
+		words.holdsPackageAccessModifier || mayDeclareNestedTypeEveryModuleCanName
+	}
+
+	/// Whether these bytes, Swift source, may declare a type nested in another that is `public` or `open` by its own
+	/// level: a type declaration keyword (`typeDeclarationKeywords`) inside braces that follows `public` or `open` with
+	/// only other modifiers, whitespace, and comments between, or that follows a `public` or `open` extension anywhere
+	/// before it. A superset, which a parse decides, of the texts that declare one, since such a declaration's keyword is
+	/// inside the braces of the type or extension enclosing it, and its own modifier – or, when it spells none, that of
+	/// the extension it is directly inside – is `public` or `open`. Attributes come before modifiers, so none is between.
+	///
+	/// The search reads comments and string literals, so that a brace or a word inside one counts for nothing, and the
+	/// depth of braces it counts bounds the depth in code from above: every `{` that may be code opens a brace, and only
+	/// a `}` that is certainly code closes one. Bytes it cannot place – after a `/` that may begin a regex literal, which
+	/// cannot begin with whitespace, or in a string interpolation that holds more than names, numbers, and operators –
+	/// may be code that closes no brace and ends no list of modifiers, to the end of their line, which no regex literal
+	/// without `#` and no interpolation of a single-line string literal continues past. When the line may open a region
+	/// that does (`"""`, `/*`, or `#/`), or the text holds a raw string literal or an extended regex literal, that
+	/// is so to the end of the text.
+	var mayDeclareNestedTypeEveryModuleCanName: Bool {
+		var context = NestedTypeSearchContext.code
+		// The upper bound of the depth of braces in code.
+		var braceDepthBound = 0
+		// The bound at the start of each `#if` block the search is in. Each clause of a block the compiler parses holds as
+		// many `}` as `{` in code, and starts at the depth of the block. A clause it does not parse, such as one
+		// `#if compiler(>=99)` guards, need not, so no `}` lowers the bound below the block's, and each clause restores it.
+		var braceDepthBoundsAtConditionalCompilationBlocks = [Int]()
+		// Whether `public` or `open` came after the last byte in code that ends a list of modifiers.
+		var followsAccessModifierEveryModuleCanName = false
+		// Whether a `public` or `open` extension came before: a member of it that spells no access is `public`.
+		var followsExtensionEveryModuleCanName = false
+		/// Reads `word`, which `isCertainlyCode` when the search knows its context, and returns whether it may introduce a
+		/// nested type declaration that is `public` or `open`.
+		func mayIntroduceNestedTypeEveryModuleCanName(_ word: NestedTypeSearchWord, isCertainlyCode: Bool) -> Bool {
+			switch word {
+			case .accessModifierEveryModuleCanName:
+				followsAccessModifierEveryModuleCanName = true
+				return false
+			case .extensionKeyword:
+				followsExtensionEveryModuleCanName = followsExtensionEveryModuleCanName || followsAccessModifierEveryModuleCanName
+				// A keyword in code ends the list of modifiers before it.
+				followsAccessModifierEveryModuleCanName = followsAccessModifierEveryModuleCanName && !isCertainlyCode
+				return false
+			case .typeDeclarationKeyword:
+				let mayIntroduce = braceDepthBound > 0 && (followsAccessModifierEveryModuleCanName || followsExtensionEveryModuleCanName)
+				followsAccessModifierEveryModuleCanName = followsAccessModifierEveryModuleCanName && !isCertainlyCode
+				return mayIntroduce
+			case .other:
+				return false
+			}
+		}
+
+		var index = starts(with: byteOrderMark) ? startIndex + byteOrderMark.count : startIndex
+		while index < endIndex {
+			let byte = self[index]
+			switch context {
+			case .code:
+				if byte.isIdentifierByte {
+					let wordEnd = endOfWord(startingAt: index)
+					guard !mayIntroduceNestedTypeEveryModuleCanName(nestedTypeSearchWord(from: index, to: wordEnd), isCertainlyCode: true) else {
+						return true
+					}
+					index = wordEnd
+				} else if byte == UInt8(ascii: "{") {
+					braceDepthBound += 1
+					followsAccessModifierEveryModuleCanName = false
+					index += 1
+				} else if byte == UInt8(ascii: "}") {
+					braceDepthBound = Swift.max(braceDepthBound - 1, braceDepthBoundsAtConditionalCompilationBlocks.last ?? 0)
+					followsAccessModifierEveryModuleCanName = false
+					index += 1
+				} else if byte == UInt8(ascii: "/") {
+					let nextByte = index + 1 < endIndex ? self[index + 1] : nil
+					if nextByte == UInt8(ascii: "/") {
+						context = .lineComment
+						index += 2
+					} else if nextByte == UInt8(ascii: "*") {
+						context = .blockComment(nesting: 1)
+						index += 2
+					} else if nextByte?.isWhitespaceByte ?? true {
+						// An operator: a regex literal cannot begin with whitespace.
+						followsAccessModifierEveryModuleCanName = false
+						index += 1
+					} else {
+						context = .unknownToEndOfLine(mayContinuePastLine: false)
+						index += 1
+					}
+				} else if byte == UInt8(ascii: "\"") {
+					let opensMultilineString = holdsMultilineStringDelimiter(at: index)
+					context = opensMultilineString ? .multilineString : .string
+					index += opensMultilineString ? 3 : 1
+				} else if byte == UInt8(ascii: "#") {
+					let directiveStart = index + 1
+					if directiveStart < endIndex, [UInt8(ascii: "#"), UInt8(ascii: "\""), UInt8(ascii: "/")].contains(self[directiveStart]) {
+						// A raw string literal or an extended regex literal, either of which can span lines.
+						context = .unknownToEndOfText
+						index += 1
+					} else {
+						let directiveEnd = endOfWord(startingAt: directiveStart)
+						let directive = UnsafeBufferPointer(rebasing: self[directiveStart..<directiveEnd])
+						if conditionalCompilationBlockStart.elementsEqual(directive) {
+							braceDepthBoundsAtConditionalCompilationBlocks.append(braceDepthBound)
+						} else if conditionalCompilationClauseStarts.contains(where: { $0.elementsEqual(directive) }) {
+							braceDepthBound = Swift.max(braceDepthBound, braceDepthBoundsAtConditionalCompilationBlocks.last ?? 0)
+						} else if conditionalCompilationBlockEnd.elementsEqual(directive) {
+							braceDepthBound = Swift.max(braceDepthBound, braceDepthBoundsAtConditionalCompilationBlocks.popLast() ?? 0)
+						}
+						index = directiveEnd
+					}
+				} else if byte == backtickByte {
+					// A name in backticks introduces nothing; a backtick without a closing one on its line encloses nothing.
+					index = closingBacktickIndexOnLine(ofBacktickAt: index).map { $0 + 1 } ?? index + 1
+				} else {
+					// Only whitespace, and the parentheses of a modifier's argument, can be between two modifiers.
+					if !byte.separatesTokens, byte != UInt8(ascii: "("), byte != UInt8(ascii: ")") {
+						followsAccessModifierEveryModuleCanName = false
+					}
+					index += 1
+				}
+			case .lineComment:
+				if byte.isLineBreakByte {
+					context = .code
+				}
+				index += 1
+			case let .blockComment(nesting):
+				let nextByte = index + 1 < endIndex ? self[index + 1] : nil
+				if byte == UInt8(ascii: "/"), nextByte == UInt8(ascii: "*") {
+					context = .blockComment(nesting: nesting + 1)
+					index += 2
+				} else if byte == UInt8(ascii: "*"), nextByte == UInt8(ascii: "/") {
+					context = nesting > 1 ? .blockComment(nesting: nesting - 1) : .code
+					index += 2
+				} else {
+					index += 1
+				}
+			case .string:
+				if byte == UInt8(ascii: "\"") {
+					context = .code
+					index += 1
+				} else if byte == UInt8(ascii: "\\"), index + 1 < endIndex, self[index + 1] == UInt8(ascii: "(") {
+					if let interpolationEnd = endOfInterpolationOfNamesNumbersAndOperators(openingParenthesisAt: index + 1) {
+						index = interpolationEnd + 1
+					} else {
+						context = .unknownToEndOfLine(mayContinuePastLine: false)
+						index += 1
+					}
+				} else if byte == UInt8(ascii: "\\"), index + 1 < endIndex, !self[index + 1].isLineBreakByte {
+					// An escaped character.
+					index += 2
+				} else if byte.isLineBreakByte || byte == UInt8(ascii: "\\") {
+					// A single-line string literal ends on its line, so the text is not Swift the search can read.
+					context = .unknownToEndOfText
+					index += 1
+				} else {
+					index += 1
+				}
+			case .multilineString:
+				if holdsMultilineStringDelimiter(at: index) {
+					context = .code
+					index += 3
+				} else if byte == UInt8(ascii: "\\"), index + 1 < endIndex, self[index + 1] == UInt8(ascii: "(") {
+					if let interpolationEnd = endOfInterpolationOfNamesNumbersAndOperators(openingParenthesisAt: index + 1) {
+						index = interpolationEnd + 1
+					} else {
+						// An interpolation can hold a multi-line string literal of its own, whose delimiter would end this one.
+						context = .unknownToEndOfText
+						index += 1
+					}
+				} else if byte == UInt8(ascii: "\\") {
+					// An escaped character, or a line break the backslash leaves out.
+					index += 2
+				} else {
+					index += 1
+				}
+			case let .unknownToEndOfLine(mayContinuePastLine):
+				if byte.isLineBreakByte {
+					context = mayContinuePastLine ? .unknownToEndOfText : .code
+					index += 1
+				} else if byte.isIdentifierByte {
+					let wordEnd = endOfWord(startingAt: index)
+					guard !mayIntroduceNestedTypeEveryModuleCanName(nestedTypeSearchWord(from: index, to: wordEnd), isCertainlyCode: false) else {
+						return true
+					}
+					index = wordEnd
+				} else {
+					braceDepthBound += byte == UInt8(ascii: "{") ? 1 : 0
+					if opensRegionThatCanContinuePastLine(at: index) {
+						context = .unknownToEndOfLine(mayContinuePastLine: true)
+					}
+					index += 1
+				}
+			case .unknownToEndOfText:
+				if byte.isIdentifierByte {
+					let wordEnd = endOfWord(startingAt: index)
+					guard !mayIntroduceNestedTypeEveryModuleCanName(nestedTypeSearchWord(from: index, to: wordEnd), isCertainlyCode: false) else {
+						return true
+					}
+					index = wordEnd
+				} else {
+					braceDepthBound += byte == UInt8(ascii: "{") ? 1 : 0
+					index += 1
+				}
+			}
+		}
+		return false
+	}
+
+	/// The index after the word that starts at `wordStart`: the run of identifier bytes there.
+	private func endOfWord(startingAt wordStart: Int) -> Int {
+		var wordEnd = wordStart
+		while wordEnd < endIndex, self[wordEnd].isIdentifierByte {
+			wordEnd += 1
+		}
+		return wordEnd
+	}
+
+	/// What the word from `wordStart` to `wordEnd` is to `mayDeclareNestedTypeEveryModuleCanName`. `class` before `func`,
+	/// `var`, `let`, or `subscript` and whitespace modifies a member, and introduces no type.
+	private func nestedTypeSearchWord(from wordStart: Int, to wordEnd: Int) -> NestedTypeSearchWord {
+		let word = UnsafeBufferPointer(rebasing: self[wordStart..<wordEnd])
+		// Most words are not four to nine bytes long, which the comparisons need not see.
+		return if !(4...9).contains(word.count) {
+			.other
+		} else if accessModifiersEveryModuleCanName.contains(where: { $0.elementsEqual(word) }) {
+			.accessModifierEveryModuleCanName
+		} else if extensionKeyword.elementsEqual(word) {
+			.extensionKeyword
+		} else if typeDeclarationKeywords.contains(where: { $0.elementsEqual(word) }),
+		          !classKeyword.elementsEqual(word) || !isMemberClassModifies(followingWhitespaceAfter: wordEnd)
+		{
+			.typeDeclarationKeyword
+		} else {
+			.other
+		}
+	}
+
+	/// Whether the word after `index` and the whitespace there is one `class` modifies (`membersClassModifies`).
+	private func isMemberClassModifies(followingWhitespaceAfter index: Int) -> Bool {
+		var wordStart = index
+		while wordStart < endIndex, self[wordStart].isWhitespaceByte {
+			wordStart += 1
+		}
+		let word = UnsafeBufferPointer(rebasing: self[wordStart..<endOfWord(startingAt: wordStart)])
+		return membersClassModifies.contains { $0.elementsEqual(word) }
+	}
+
+	/// Whether the bytes at `index` are `"""`, which opens and closes a multi-line string literal.
+	private func holdsMultilineStringDelimiter(at index: Int) -> Bool {
+		index + 2 < endIndex
+			&& self[index] == UInt8(ascii: "\"")
+			&& self[index + 1] == UInt8(ascii: "\"")
+			&& self[index + 2] == UInt8(ascii: "\"")
+	}
+
+	/// Whether the bytes at `index` open a region that can continue onto the next line, were they code: `"""`, a
+	/// multi-line string literal, `/*`, a block comment, or `#/`, an extended regex literal.
+	private func opensRegionThatCanContinuePastLine(at index: Int) -> Bool {
+		guard index + 1 < endIndex else { return false }
+		return holdsMultilineStringDelimiter(at: index)
+			|| (self[index] == UInt8(ascii: "/") && self[index + 1] == UInt8(ascii: "*"))
+			|| (self[index] == UInt8(ascii: "#") && self[index + 1] == UInt8(ascii: "/"))
+	}
+
+	/// The index of the `)` that closes the string interpolation whose `(` is at `openingIndex`, when what the
+	/// interpolation encloses holds only names, numbers, whitespace other than line breaks, and punctuation other than
+	/// `"`, `/`, `#`, `\`, backticks, and braces – no string literal, comment, regex literal, raw identifier, or closure
+	/// – so that its parentheses alone tell where it ends; `nil` otherwise.
+	private func endOfInterpolationOfNamesNumbersAndOperators(openingParenthesisAt openingIndex: Int) -> Int? {
+		var parenthesisDepth = 0
+		var index = openingIndex
+		while index < endIndex {
+			let byte = self[index]
+			if byte == UInt8(ascii: "(") {
+				parenthesisDepth += 1
+			} else if byte == UInt8(ascii: ")") {
+				parenthesisDepth -= 1
+				guard parenthesisDepth > 0 else { return index }
+			} else if [UInt8(ascii: "\""), UInt8(ascii: "/"), UInt8(ascii: "#"), UInt8(ascii: "\\"), backtickByte, UInt8(ascii: "{"), UInt8(ascii: "}")].contains(byte) || byte.isLineBreakByte {
+				return nil
+			}
+			index += 1
 		}
 		return nil
 	}

@@ -545,8 +545,8 @@ struct SafeDIToolGraphFuzzerTests {
 
 	@Test
 	func readTwinFailure_reportsComment_whenModuleReadingTwinThroughModuleInfoStillNamesTheReadType() throws {
-		// The module declaring the twin names it in a declaration, and a `.safedi` written without a target graph keeps
-		// every `public` declaration, so it keeps the twin's: a module that depends on it reads the twin there.
+		// The module declaring the twin names it in a declaration, so even a `.safedi` written without a target graph, which
+		// keeps no other top-level `public` declaration, keeps the twin's: a module that depends on it reads the twin there.
 		let fixture = try Self.readTwinFixture()
 		let runs = Self.readTwinRuns(
 			of: fixture,

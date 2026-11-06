@@ -3385,8 +3385,8 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		// M15.11, R15's primary cell: closures, `@Sendable` closures, an optional closure, a tuple, an array, an existential,
 		// a nested type, a closure typealias, another module's type and a plain public type, as forwarded, received,
 		// only-if-available and default-valued parameters, override members and configuration fields. Another package
-		// calls both tiers it can reach. `Base`'s `.safedi` records its `public` `BaseTheme`, so no comment names it; the
-		// `package` typealias `Handler` keeps `handler` off the `public` tier.
+		// calls both tiers it can reach. `Base`'s `BaseTheme` is `public`, which `Base`'s `.safedi` does not record, so the
+		// comment names it; the `package` typealias `Handler` keeps `handler` off the `public` tier.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				ModuleFixture(name: "Base", packageName: "pkg", swiftFileContentByFilePath: ["Analytics.swift": """
@@ -3607,6 +3607,7 @@ struct SafeDIToolPublicMockTests: ~Copyable {
 		        public let onCancel: (() -> Void)?
 		    }
 
+		    // SafeDI counts `BaseTheme` as `public`: no module it reads declares it narrower. If `BaseTheme` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies.
 		    public static func mock(
 		        inner2: Outer.Inner,
 		        onSelect: @escaping (String) -> Void,

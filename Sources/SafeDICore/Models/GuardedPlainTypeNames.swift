@@ -43,10 +43,12 @@ public struct GuardedPlainTypeNames: Codable, Hashable, Sendable {
 		///     the backticks it was written with.
 		///   - level: The level its declaration gives it before the type an enclosing extension extends caps it
 		///     (`PlainTypeDeclaration.levelBeforeExtendedTypeCap`), normalized (`TypeAccessProof.normalized(_:)`).
-		public init(name: String, outermostName: String, level: AccessLevel) {
+		///   - isNested: Whether the type is nested in another (`PlainTypeDeclaration.isNested`).
+		public init(name: String, outermostName: String, level: AccessLevel, isNested: Bool) {
 			self.name = name
 			self.outermostName = outermostName
 			self.level = level
+			self.isNested = isNested
 		}
 
 		/// The type's own name, the last of its chain: the name a member of a type enclosing it can mention it by.
@@ -56,9 +58,11 @@ public struct GuardedPlainTypeNames: Codable, Hashable, Sendable {
 		/// The level its declaration gives it, normalized: `public`, `package` or `internal`. A mention in another module
 		/// names the type only when it is `package` or wider.
 		public let level: AccessLevel
+		/// Whether the type is nested in another: inside a type declaration, or inside an extension.
+		public let isNested: Bool
 
 		public static func < (lhs: DeclaredType, rhs: DeclaredType) -> Bool {
-			(lhs.name, lhs.outermostName, lhs.level) < (rhs.name, rhs.outermostName, rhs.level)
+			(lhs.name, lhs.outermostName, lhs.level, lhs.isNested ? 1 : 0) < (rhs.name, rhs.outermostName, rhs.level, rhs.isNested ? 1 : 0)
 		}
 	}
 

@@ -1547,7 +1547,8 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_qualifiesTypeNestedInDependencysNamespace_whenDependencyDeclaresNoSafeDIContent(integration: MultiModuleIntegration) async throws {
 		// `Core` declares no SafeDI content, so its run writes its `.safedi` without mentioning `Constants`, and keeps its
-		// `public` declarations all the same: `Mode` inside `App`'s `Constants.Child` is `Core`'s `Constants.Mode`.
+		// nested `public` declarations all the same: `Mode` inside `App`'s `Constants.Child` is `Core`'s `Constants.Mode`.
+		// `Constants` itself is top-level, which `App` names as it is written, so the `.safedi` needs no record of it.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				Self.core(declaring: """
@@ -1575,7 +1576,7 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 		#endif
 		""")
 		if integration == .moduleInfo {
-			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Constants", "Constants.Mode"])
+			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Constants.Mode"])
 		}
 		try expectEveryModuleCompiled(output)
 	}
@@ -1612,7 +1613,7 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 		#endif
 		""")
 		if integration == .moduleInfo {
-			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Constants", "Constants.Mode"])
+			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Constants.Mode"])
 		}
 		try expectEveryModuleCompiled(output)
 	}
@@ -1621,7 +1622,7 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
 	mutating func mock_keepsTopLevelType_whenDependencysNamespaceNestsTypeOfSameNameNoOtherModuleCanName(integration: MultiModuleIntegration, nestedTypeModifier: String) async throws {
 		// `Core`'s `Constants.Mode` is `internal`, `fileprivate` or `private`, so `App` cannot name it: `Mode` inside
-		// `App`'s extension of `Constants` is `App`'s top-level `Mode`, and `Core`'s `.safedi` keeps `Constants` alone.
+		// `App`'s extension of `Constants` is `App`'s top-level `Mode`, and `Core`'s `.safedi` keeps no declaration.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
 				Self.core(declaring: """
@@ -1653,7 +1654,7 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 		#endif
 		""")
 		if integration == .moduleInfo {
-			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Constants"])
+			#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.isEmpty == true)
 		}
 		try expectEveryModuleCompiled(output)
 	}
@@ -1683,19 +1684,37 @@ struct SafeDIToolNamespaceNestedTypeTests: ~Copyable {
 
 	@Test
 	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
-	mutating func generate_writesDeclarationOfOpenClass_whenItsFileHoldsNoOtherAccessModifier() async throws {
-		// The text search that decides which files without a SafeDI marker to parse finds `open` as it finds `public` and
-		// `package`.
+	mutating func generate_writesDeclarationOfNestedOpenClass_whenItsFileHoldsNoOtherAccessModifier() async throws {
+		// The text search that decides which files without a SafeDI marker to parse finds a nested type after `open` as it
+		// finds one after `public`.
 		let output = try await executeSafeDIToolMultiModuleTest(
 			modules: [
-				Self.core(declaring: "open class Constants {}"),
+				Self.core(declaring: "public enum Constants {}", besides: ["Mode.swift": "extension Constants {\n    open class Mode {}\n}"]),
 			],
 			integration: .moduleInfo,
 			filesToDelete: &filesToDelete,
 		)
 
-		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Constants"])
+		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.typeDescription.asSource) == ["Constants.Mode"])
 		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.map(\.access.level) == [.open])
+		try expectEveryModuleCompiled(output)
+	}
+
+	@Test(arguments: ["public enum", "open class"])
+	@available(macOS 13.0, iOS 16.0, tvOS 16.0, watchOS 9.0, *)
+	mutating func generate_writesNoDeclarationOfTopLevelType_whenNothingInItsModuleMentionsIt(declaration: String) async throws {
+		// A module that reads `Core`'s `.safedi` names a top-level type as it is written, and counts a type it reads no
+		// declaration of as `public`, so a top-level `public` or `open` declaration nothing in `Core` mentions needs no
+		// record.
+		let output = try await executeSafeDIToolMultiModuleTest(
+			modules: [
+				Self.core(declaring: "\(declaration) Constants {\n    func make() {}\n}"),
+			],
+			integration: .moduleInfo,
+			filesToDelete: &filesToDelete,
+		)
+
+		#expect(output.modules["Core"]?.moduleInfo?.plainTypeDeclarations.isEmpty == true)
 		try expectEveryModuleCompiled(output)
 	}
 

@@ -92,6 +92,13 @@ public struct PlainTypeDeclaration: Codable, Hashable, Sendable {
 		}
 	}
 
+	/// Whether the declaration is nested in another type: inside a type declaration, or inside an extension, whose
+	/// extended type then encloses it. Code that names the enclosing type – in an extension of it, in another module too
+	/// – names this type by its own name, unqualified (`TypeAccessProof.NestedTypeQualifier`).
+	public var isNested: Bool {
+		!enclosingTypeAccess.isEmpty || enclosingExtensionAccess != nil
+	}
+
 	/// The type the extension the declaration is inside extends, or `nil` for a declaration outside every extension.
 	public var extendedType: TypeDescription? {
 		guard enclosingExtensionAccess != nil else { return nil }

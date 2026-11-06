@@ -282,8 +282,8 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 	mutating func generate_writesDeclarationsOtherModulesCanName_whenItScansForItself(isFlagActive: Bool) async throws {
 		// A run given `--output-directory` and no manifest scans for itself and reads the module from scan's cache. It
 		// writes module info without a target graph, as a run with `--combined-output` does, so it keeps the same
-		// declarations: those another module can name at every level of their chain, whatever the module mentions, with
-		// the decision of the `#if` block that holds one.
+		// declarations: the nested ones another module can name at every level of their chain, whatever the module
+		// mentions, with the decision of the `#if` block that holds one.
 		let directory = try temporaryDirectory()
 		let constantsFile = directory.appendingPathComponent("Constants.swift")
 		try """
@@ -324,7 +324,7 @@ struct SafeDIToolModuleInfoOutputTests: ~Copyable {
 		let scanningModuleInfo = try ModuleInfoFile(moduleInfoData: Data(contentsOf: scanningModuleInfoOutput))
 		let combinedModuleInfo = try ModuleInfoFile(moduleInfoData: Data(contentsOf: combinedModuleInfoOutput))
 
-		let expectedDeclarations = ["Constants", "Constants.Mode"] + (isFlagActive ? ["Constants.Tier"] : [])
+		let expectedDeclarations = ["Constants.Mode"] + (isFlagActive ? ["Constants.Tier"] : [])
 		#expect(scanningModuleInfo.plainTypeDeclarations.map(\.typeDescription.asSource) == expectedDeclarations)
 		#expect(combinedModuleInfo.plainTypeDeclarations.map(\.typeDescription.asSource) == expectedDeclarations)
 		let expectedDecisions = [ConditionalCompilationDecision(condition: "FLAG", isActive: isFlagActive)]

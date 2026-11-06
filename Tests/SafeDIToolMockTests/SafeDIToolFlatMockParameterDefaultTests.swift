@@ -725,12 +725,18 @@ struct SafeDIToolFlatMockParameterDefaultTests: ~Copyable {
 			filesToDelete: &filesToDelete,
 		)
 
-		// Both integrations read `Service`'s `public` declaration: the plugin from `Feature`'s files, a run without the
-		// plugin's target graph from `Feature`'s `.safedi`.
+		// A run without the plugin's target graph may not read every first-party module, so it says how it proves
+		// `Service` `public`, as it does for any type a public mock names.
+		let unreadTypeComment = switch integration {
+		case .moduleInfo:
+			"\n    // SafeDI counts `Service` as `public`: no module it reads declares it narrower. If `Service` is `package` in a first-party module, run SafeDI on that module and list it among this module's SafeDI dependencies."
+		case .swiftPackagePlugin:
+			""
+		}
 		let generatedFiles = try #require(output.modules["App"]).generatedFiles
 		#expect(generatedFiles == Self.appMockFiles(under: integration, imports: ["Feature", "TestSupport"], code: """
 		#if DEBUG
-		extension Screen {
+		extension Screen {\(unreadTypeComment)
 		    public static func mock(
 		        service: Service? = nil
 		    ) -> Screen {

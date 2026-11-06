@@ -184,6 +184,7 @@ struct PlainTypeNamesInAnyClause {
 				name: name.spelledWithoutBackticks,
 				outermostName: outermostName.spelledWithoutBackticks,
 				level: TypeAccessProof.normalized(declaration.levelBeforeExtendedTypeCap),
+				isNested: declaration.isNested,
 			))
 		}
 	}
